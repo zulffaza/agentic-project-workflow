@@ -4,7 +4,8 @@
      analysis/review/<topic>.review.md and approve there. Legend: 🤖 agent · 🧑 you. -->
 
 - **Status:** draft | in-review | approved
-- **Author:** <agent/you>   **Date:** <YYYY-MM-DD HH:MM>
+- **Author:** <agent/you>   **Provider:** <the agent/CLI this ran under, e.g. `kilo` / `claude`>
+- **Date:** <YYYY-MM-DD HH:MM>
 - **Context used:** <list the context/ files & INDEX rows this is based on>
 
 ## 1. Problem / goal

@@ -52,6 +52,7 @@ echo "  PW_HOME     = $PW_HOME"
 echo "  PW_PROJECTS = $PW_PROJECTS"
 echo "  PW_REPOS    = $PW_REPOS   (git repos live here; override with PW_REPOS=… ./bootstrap.sh)"
 echo "  providers   = ${PW_PROVIDERS[*]}   (from pw.config.sh)"
+echo "  memory      = ${PW_MEMORY:-none}   (optional; ${PW_MEMORY:+configured — }see tooling/memory.md)"
 echo
 
 # --- detect (enabled AND present on PATH) ------------------------------------

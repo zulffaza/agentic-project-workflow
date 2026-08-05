@@ -84,10 +84,12 @@ Next steps (each phase is gated by your review):
   3. /pw-analyze $slug        → writes analysis/, sets Status=analysis. Then review it:
      copy _REVIEW.template.md → analysis/review/<topic>.review.md, add items, /pw-review $slug,
      and sign off when satisfied.
-  4. /pw-breakdown $slug      → writes task/PLAN.md + T0n.md (needs analysis approved). Review the
-     same way (task/review/), sign off.
-  5. /pw-execute $slug        → orchestrates worktree executors, verifies, pushes + opens MRs.
-  6. /pw-close $slug          → tears down worktrees, seeds learnings, Status=done.
+  4. /pw-breakdown $slug      → writes task/PLAN.md + T0n.md (needs analysis approved). Review +
+     sign off task/review/PLAN.review.md — that PLAN sign-off is the ONLY hard gate. Per-task
+     reviews (task/review/T0n.review.md) are optional; add one only to send a task back.
+  5. /pw-execute $slug        → orchestrates worktree executors; stops at committed + verified.
+  6. /pw-ship $slug           → pushes branches + opens MRs (the explicit publish step).
+  7. /pw-close $slug          → tears down worktrees (safely), seeds learnings, Status=done.
   Check progress any time with /pw-status $slug.
 
 Full guide: $PW_HOME/README.md

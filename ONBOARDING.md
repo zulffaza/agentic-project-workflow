@@ -71,13 +71,24 @@ Re-run `./bootstrap.sh` any time (e.g. after `git pull`). Use `--force` to re-li
 Read [README.md](./README.md) — the full guide. The loop, once onboarded:
 
 ```
-/pw-new <slug>        scaffold a project        /pw-review <slug>     apply your review comments
-/pw-analyze <slug>    context → analysis        /pw-execute <slug>    orchestrate worktree runs
-/pw-breakdown <slug>  analysis → PLAN + tasks    /pw-close <slug>      verify, tear down, learn
-/pw-status <slug>     where am I / what's next   /pw-doctor [--fix]   check/repair install sync
+/pw-new <slug>        scaffold a project         /pw-review <slug>     apply your review comments
+/pw-analyze <slug>    context → analysis         /pw-execute <slug>    orchestrate worktree runs (commit + verify)
+/pw-breakdown <slug>  analysis → PLAN + tasks     /pw-ship <slug>       push branches + open MRs (publish)
+/pw-status <slug>     where am I / what's next    /pw-close <slug>      verify, tear down, learn
+                                                  /pw-doctor [--fix]    check/repair install sync
 ```
 
 Each phase is **gated by your review** — an agent stops and you sign off before the next phase.
+Only the **PLAN** sign-off is a hard gate for execution; per-task reviews are optional. `/pw-execute`
+stops at *committed + verified* — nothing is pushed until you explicitly run `/pw-ship`.
+
+## Memory (optional — not required)
+
+The pipeline records decisions in each project's README + LOG regardless, so **it works with no
+memory tool at all**. If you use one (EverOS, mem0, a notes repo, …), name it in `pw.config.sh`
+(`PW_MEMORY` / `PW_MEMORY_NOTES`) and agents will search it at analysis and seed it at close-out; if
+`PW_MEMORY=none` (the default), those steps are skipped silently and nothing blocks. See
+[`tooling/memory.md`](./tooling/memory.md).
 
 ## Register a new provider
 

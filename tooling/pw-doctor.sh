@@ -29,6 +29,7 @@ issues=0
 echo "pw-doctor — project-workflow sync check"
 echo "  PW_HOME   = $PW_HOME"
 echo "  providers = ${PW_PROVIDERS[*]}   (from pw.config.sh)"
+echo "  memory    = ${PW_MEMORY:-none}   (optional; see tooling/memory.md)"
 echo
 
 # --- config + env ------------------------------------------------------------

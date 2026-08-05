@@ -2,6 +2,8 @@
 
 - **Status:** draft | approved-for-execution
 - **Based on analysis:** <link to analysis/*.md that is approved>
+- **Produced by:** <provider the breakdown ran under, e.g. `kilo` / `claude`> — [🤖 agent records]
+  the default `Execute with:` provider for every task below (minimises agent-switching; see routing).
 - **Date:** <YYYY-MM-DD HH:MM>
 
 > This is the entry point for the executor agent. Read this whole file before spawning anything.
@@ -29,7 +31,10 @@ Every repo this project touches. Worktrees are created off these (real dirs in `
 Custom rules that shaped this breakdown, and per-task routing overrides. Seed these from
 `context/` or state them when you ask for the breakdown ("route the risky migration to opus",
 "do the mechanical bumps in KiloCode, not Claude Code"). The orchestrator honors what's here.
-- **Default agent/model:** <e.g. `sonnet` unless a task says otherwise>
+- **Default provider:** the provider named in **Produced by** above — tasks execute on the same
+  agent that did the breakdown unless a routing override below says otherwise. This keeps you from
+  switching agents mid-workflow.
+- **Default agent/model:** <e.g. `<produced-by>:sonnet` unless a task says otherwise>
 - **Routing overrides:** <e.g. "T05 → KiloCode (bulk mechanical); T03 → opus (ambiguous)">
 - **Sizing / splitting rules used:** <e.g. "one repo per task; split anything touching two repos">
 - <other custom rule that affected how tasks were cut>
@@ -95,5 +100,13 @@ with opus" / "with kilo:command_code/MiniMaxAI/MiniMax-M3"); the orchestrator re
 
 ## Execution strategy
 - Max parallelism: <n> concurrent executors.
-- How work exits: open a PR per task / leave branch for human PR / produce a patch. <choose>
+- **Same-provider tasks run as native sub-agents** (in-process, natively monitorable); a
+  different-provider task is shelled out to that CLI headlessly. Either way the executor **tees its
+  output to `worktree/<T0n>.log`** so you can `tail -f` any run in a window of your choosing.
+- **How work exits:** `/pw-execute` stops at *committed + verified*. Pushing branches and opening
+  MRs is a separate, explicit step — **`/pw-ship <slug> [task-ids]`** — so nothing goes outward
+  until you ask. Zero-change tasks never get a branch/MR.
+- **Gate:** only the **PLAN** sign-off (`task/review/PLAN.review.md → approved ✅`) is required to
+  execute. Per-task review is **optional** — add a `task/review/T0n.review.md` only when you want to
+  send a task back.
 - Rollback plan if a group fails: <…>

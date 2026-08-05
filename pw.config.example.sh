@@ -31,6 +31,15 @@ PW_PROVIDERS=(claude kilo)
 # lines. It does NOT constrain teammates who use a different kilo provider.
 PW_KILO_PROVIDER="command_code"
 
+# --- Memory (OPTIONAL — the workflow never depends on it) -------------------
+# The pipeline records decisions/learnings in each project's README + LOG regardless.
+# If you use a memory tool, name it here and (optionally) describe how to use it; if not,
+# leave "none" and agents skip all memory steps without blocking. See tooling/memory.md.
+#   PW_MEMORY="none"          # "none" (default) | "everos" | "mem0" | your tool's short name
+#   PW_MEMORY_NOTES=""        # free text: buckets/scopes/how the agent should search+seed it
+PW_MEMORY="none"
+PW_MEMORY_NOTES=""
+
 # --- Onboard a brand-new provider without touching the scripts --------------
 # Add its name to PW_PROVIDERS above, then define its four hooks here:
 #   myprov_bin()      { echo myprov-cli; }               # command to detect on PATH

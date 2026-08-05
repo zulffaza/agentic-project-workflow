@@ -29,7 +29,7 @@ git -C $PW_REPOS/<repo> worktree remove \
 
 > ⚠️ **KiloCode auto-approve can fail inside worktrees** — a worktree's `.git` is a file, not a
 > directory, so some plugin config loaders miss the git boundary. Drive execution from Claude
-> Code or approve manually if you hit this. (EverOS `personal`, 2026-07-27.)
+> Code or approve manually if you hit this. (observed 2026-07-27.)
 
 Nothing here is a source of truth — it's disposable working state. The truth is the commits on
 the branches in the real repos.

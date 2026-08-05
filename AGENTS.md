@@ -15,16 +15,19 @@ Check that everything is in sync any time: `tooling/pw-doctor.sh` ( `--fix` to r
 
 ## Driving a project
 Invoke the **`project-workflow` skill** for the working rules, then use the commands:
-`/pw-new` · `/pw-analyze` · `/pw-breakdown` · `/pw-review` · `/pw-execute` · `/pw-status` ·
-`/pw-close` · `/pw-doctor`. Full guide: **[README.md](./README.md)**. Every phase is **gated by a
-human sign-off** — don't skip a gate.
+`/pw-new` · `/pw-analyze` · `/pw-breakdown` · `/pw-review` · `/pw-execute` · `/pw-ship` ·
+`/pw-status` · `/pw-close` · `/pw-doctor`. Full guide: **[README.md](./README.md)**. Every phase is
+**gated by a human sign-off** — don't skip a gate. Only the **PLAN** sign-off gates execution
+(per-task reviews are optional); `/pw-execute` stops at committed + verified and `/pw-ship` is the
+separate, explicit publish (push + MR) step.
 
 ## Layout (this bundle = `$PW_HOME`)
 - **`template/`** — what a scaffolded project is made of (copied into each new project).
 - **`tooling/`** — the machinery: `scaffold.sh`, `gen-commands.sh`, `pw-lib.sh`, `pw-doctor.sh`,
-  `pw-common.sh`, `commands/` (canonical `/pw-*` sources), `providers.md`, `skill/`.
-- **`pw.config.sh`** — YOUR config (which CLIs, which models). The one file you edit; created from
-  `pw.config.example.sh` on first bootstrap, gitignored.
+  `pw-common.sh`, `pw-teardown.sh` (safe worktree removal), `commands/` (canonical `/pw-*` sources),
+  `providers.md`, `memory.md` (optional-memory policy), `skill/`.
+- **`pw.config.sh`** — YOUR config (which CLIs, which models, optional `PW_MEMORY`). The one file
+  you edit; created from `pw.config.example.sh` on first bootstrap, gitignored.
 
 ## Rules that keep it working
 - **Edit `pw.config.sh`, never the scripts**, to enable, override, or add a provider.

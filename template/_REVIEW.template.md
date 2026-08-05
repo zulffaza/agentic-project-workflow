@@ -1,7 +1,7 @@
 # Review: <doc.md>
 
 Reviewing: [<doc.md>](../<doc.md>)
-Gate: in-review | changes-requested | approved
+Gate: in-review
 
 <!--
 WHERE THIS LIVES — review files sit in a `review/` subdir next to the doc they review:
@@ -23,47 +23,72 @@ HOW THIS FILE WORKS — read before editing.
 - List everything still open in a project:  rtk grep -rln "🔴 open" .
 -->
 
+## Decision status — what moves, and who moves it
+Two independent dials. Don't confuse them:
+
+| Dial | Values | Who sets it |
+|------|--------|-------------|
+| **Per-item status** (each `Rn`) | `🔴 open` → `🟢 resolved` | 🤖 agent flips it after addressing your item. You never set this. |
+| **Per-question status** (each `Qn`) | `⏳ awaiting answer` → `✅ answered` | 🤖 agent flips it once it folds in your `↳ you:` answer. |
+| **Gate decision** (Sign-off table) | `in-review` · `changes-requested` · `approved ✅` | 🧑 **you only.** This is the dial that actually opens the next phase. |
+
+**So after you write review items, you do NOT set any item status** — you just leave them `🔴 open`
+and run `/pw-review`; the agent resolves them. The only status *you* decide is the **gate**, in the
+Sign-off table: add an `approved ✅` row when you're satisfied (that unlocks the next phase), or a
+`changes-requested` row to send it back for another pass.
+
 **Filled by:** [🧑 you] write Items + Open-question answers + the Sign-off. [🤖 agent] appends
-`↳ agent:` replies and flips status dots — and seeds Open-question rows (below) when it needs a
+`↳ agent:` replies, flips item/question status dots, and seeds Open-question rows when it needs a
 decision. Neither edits the other's text.
 
 ## Items
 
+<!-- ↓↓ WORKED EXAMPLE (delete this block once you get the idea) ↓↓
+### R1 · §3 Affected repos — 🔴 open (you, 2026-08-06 10:20)
+You listed `hera` as touched, but the Kafka toggle also lives in `common-config`. Add it to the
+repo table and say whether it needs its own task.
+
+  ↳ agent (2026-08-06 11:05): §3 — added a `common-config` row (config-only change); §7 — split
+     the "rough shape" bullet into two chunks so breakdown can give it its own task. Item resolved.
+### R1 · §3 Affected repos — 🟢 resolved (you, 2026-08-06 10:20)   ← agent flipped 🔴→🟢
+↑↑ END EXAMPLE ↑↑ -->
+
 ### R1 · <§section or anchor> — 🔴 open (you, <YYYY-MM-DD HH:MM>)
-<what needs to change, and why>
-
-<!-- After the agent addresses it, the item should read:
-
-### R1 · <§section> — 🟢 resolved (you, <YYYY-MM-DD HH:MM>)
-<your original comment, left untouched>
-  ↳ agent (<YYYY-MM-DD HH:MM>): <concrete summary — which section + what changed. e.g.
-     "§3: added a valas-service row; §4: noted its migration is gated on T02">
--->
+<what needs to change, and why. One concrete ask per item — split unrelated asks into R2, R3…>
 
 ## Open questions (agent asks → you answer)
 The agent seeds a `Qn` row here when it hits something it can't resolve (mirrors the analysis
 doc's §5). **You answer** with a `↳ you:` line; the agent then folds the answer into the doc and
 flips the row to ✅ answered. This is the QnA channel — don't answer inside the rewritten doc.
 
+<!-- ↓↓ WORKED EXAMPLE ↓↓
+### Q1 · §4 Approach — ⏳ awaiting answer (agent, 2026-08-06 09:50)
+Toggle default: should the flag ship **off** (opt-in, safest) or **on** (parity with today)?
+  ↳ you (2026-08-06 10:20): ship it OFF by default; we'll enable per-service after canary.
+### Q1 · §4 Approach — ✅ answered (agent, 2026-08-06 11:05)   ← agent flips after folding in
+  ↳ you (2026-08-06 10:20): ship it OFF by default; we'll enable per-service after canary.
+  ↳ agent (2026-08-06 11:05): folded into §4 — default flag value = off; added a canary note to §5.
+↑↑ END EXAMPLE ↑↑ -->
+
 ### Q1 · <§section> — ⏳ awaiting answer (agent, <YYYY-MM-DD HH:MM>)
 <the agent's question>
 <!-- You answer by adding, under the question:
-  ↳ you (<YYYY-MM-DD HH:MM>): <your decision/answer>
-Then the agent, next /pw-review pass, folds it in and rewrites the line to:
-### Q1 · <§section> — ✅ answered (agent, <YYYY-MM-DD HH:MM>)
-  ↳ you (…): <your answer, untouched>
-  ↳ agent (…): folded into §<n> — <what it changed based on your answer> -->
+  ↳ you (<YYYY-MM-DD HH:MM>): <your decision/answer>   -->
 
 ## Sign-off  (human only — an agent never writes here)
 
-Add a row **when you're satisfied this phase is complete** — that `approved ✅` row is what clears
-the gate for the next phase. Use date-time **to the minute**: review rounds often happen the same
-day, so a bare date can't order them.
+This table is the **gate**. Add a row **when you're satisfied this phase is complete** — that
+`approved ✅` row is what clears the gate for the next phase. Use date-time **to the minute**:
+review rounds often happen the same day, so a bare date can't order them.
 
 | Date-time (YYYY-MM-DD HH:MM) | By | Decision |
 |------------------------------|-----|----------|
 | | | in-review |
 
-<!-- Add a row with "approved ✅" to clear the gate for the next phase.
-     Reopening a phase later? Add a new "in-review" row (don't delete the old approval) and
-     bump the dashboard Status back — see base/README.md "Going back a phase". -->
+<!-- EXAMPLE of a cleared gate — your final row looks like:
+| 2026-08-06 11:30 | you | approved ✅ |
+
+- Not ready yet? Leave the `in-review` row, or add a `changes-requested` row and run /pw-review again.
+- Reopening a phase later? Add a new "in-review" row (don't delete the old approval), bump the
+  dashboard Status back with `pw-lib.sh status <slug> <phase> --rewind`, and re-run the phase.
+  See README "Going back a phase". -->

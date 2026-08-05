@@ -65,8 +65,8 @@ Blessed `command_code` models for this workflow. Add/remove rows freely; the ful
 > - **Git worktrees work headlessly** — the executor ran `git worktree add`, wrote the file, and
 >   committed inside the worktree. The documented "KiloCode auto-approve breaks in worktrees"
 >   gotcha is a *JetBrains-plugin* issue and does **not** affect the CLI.
-> - **The discipline travels:** the kilo run auto-invoked its `skill` tool (project-workflow) and
->   `everos_briefing` (MCP) — skill + memory reach the shelled-out executor.
+> - **The discipline travels:** the kilo run auto-invoked its `skill` tool (project-workflow) — the
+>   skill (and any configured memory MCP) reaches the shelled-out executor.
 > - **Result capture:** with `--format json`, the final `text` event part is the clean answer to
 >   scrape (e.g. `jq -r 'select(.part.type=="text").part.text' | tail -1`). Always also confirm
 >   the real git artifacts (branch/commit/Verify), not just the self-report.

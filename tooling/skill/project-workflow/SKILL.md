@@ -20,26 +20,34 @@ Phases are gated: a human approves after **analysis** (step 3) and after **task 
 
 ## Which phase am I in? → what to produce
 
-- **Analysis** (asked to analyze `context/`): **`search_memory` first** (`midtrans` for domain,
-  `personal` for workflow/tooling) before reasoning — fold in and cite what's relevant. Then write
-  `analysis/<topic>.md` from `analysis/_TEMPLATE.md`. Describe *what & why*, **confirmed** affected
-  repos (verify real state on the actual base branch, not a parked checkout), risks, options + a
-  recommendation. Do **not** cut tasks yet. Iterate with the human until approved.
+- **Analysis** (asked to analyze `context/`): **search memory first — only if a memory tool is
+  configured** (`PW_MEMORY`; see `tooling/memory.md`) — fold in and cite what's relevant; skip
+  silently if none. Then write `analysis/<topic>.md` from `analysis/_TEMPLATE.md` (record the
+  authoring `Provider:`). Describe *what & why*, **confirmed** affected repos (verify real state on
+  the actual base branch), risks, options + a recommendation. Do **not** cut tasks yet. **Last step:
+  set the dashboard one-liner + Status via `pw-lib.sh oneliner` + `status <slug> analysis`.** Iterate
+  with the human until approved.
 
 - **Breakdown** (asked to break analysis into tasks): produce
   1. `task/PLAN.md` (from `_TEMPLATE-orchestration-plan.md`) — repo manifest, global rules,
+     **Produced by** (the provider this breakdown ran under = default execution provider),
      dependency DAG, task table. **This is what the executor reads first.**
   2. `task/T01.md … Tnn.md` (from `_TEMPLATE-task.md`) — each **self-contained** (one repo, one
-     branch, one worktree, linked context, and a runnable `## Verify` block = its DoD).
+     branch, one worktree, linked context, a runnable `## Verify` block = its DoD). Write
+     **DETAILED `## Steps`** (exact file + exact change + exact command per step) so the executor
+     needs minimal independent reasoning — cheaper, more reliable. **Default each task's provider
+     to "Produced by"** so the human isn't forced to switch agents; only route elsewhere with a
+     `Why:`.
 
 - **Execution** (handed `task/PLAN.md`): act as **orchestrator** — read the DAG, spawn one
-  **executor** per task respecting `depends_on` (a task runs only when its deps are done), keep
-  the dashboard status column + `LOG.md` current. Never edit repo code as the orchestrator. Each
-  executor works in its own worktree, runs Verify, reports real output, and fills the task's
-  `## Result` block. **Commit is not the finish line:** after a task verifies, push its branch and
-  open an MR (confirm with the human before pushing — it's outward-facing), record the MR in the
-  task Result + dashboard Merge-requests table. Reject → `task/review/T0n.review.md` +
-  `Status: verify-failed` + re-run.
+  **executor** per task respecting `depends_on`, keep the dashboard status column + `LOG.md`
+  current. Never edit repo code as the orchestrator. **Same-provider tasks → spawn a native
+  in-process sub-agent** (natively monitorable); different-provider → shell out to that CLI
+  headlessly. **Tee each run to `worktree/<T0n>.log`** so the human can tail it. Each executor
+  works in its own worktree, runs Verify, reports real output, fills `## Result`. **Execution stops
+  at committed + verified** — pushing branches and opening MRs is the separate `/pw-ship` step
+  (nothing goes outward until asked). Reject → `Status: verify-failed` (+ optional
+  `task/review/T0n.review.md`) + re-run.
 
 ## Review feedback (per-artifact `.review.md`, in a `review/` subdir)
 Human feedback on any doc lives in a review file under a **`review/` subdir** beside it, NOT inline
@@ -48,6 +56,11 @@ Human feedback on any doc lives in a review file under a **`review/` subdir** be
 `task/T0n.md`→`task/review/T0n.review.md` (from `agentic-project-workflow/template/_REVIEW.template.md`). Rules you MUST follow:
 - **`/pw-review` is scoped to the current phase** (resolved from the dashboard `Status:`), not the
   whole project — process only that phase's `review/` dir, don't open every `.review.md`.
+- **`/pw-review` NEVER changes the dashboard `Status:`** — reviewing is not a phase transition.
+- **Task review is OPTIONAL.** Only the PLAN sign-off gates execution; per-task `T0n.review.md`
+  files exist only when the human sends a task back. If a task is flipped to `verify-failed` but has
+  **no** review file, create it from `_REVIEW.template.md` using the human's chat feedback, then
+  apply it — don't silently do nothing (a frequent confusion). If there's no feedback anywhere, ask.
 - Before editing any doc, read its `.review.md` first.
 - Apply each `🔴 open` item, append a `↳ agent:` reply, flip it to `🟢 resolved`. **Never edit or
   delete the human's comment text** — it's the source of truth for what was asked.
@@ -62,10 +75,10 @@ Human feedback on any doc lives in a review file under a **`review/` subdir** be
   it in the doc (`❓ Qn`) AND seed a `Qn` row in the review file's "## Open questions" section. The
   human answers with `↳ you:`; the next `/pw-review` folds the answer into the doc and flips the
   row to ✅ answered. Report unanswered `Qn` as blocking.
-- **MR feedback:** review comments left on the *MR itself* are handled by `/pw-execute` (fetch via
-  `glab`, fix in the worktree, reply on the thread) — but **always mirror the change into the
-  internal record** (task `## Result` + `task/review/` + `LOG.md`). The project dir stays the
-  source of truth even for MR-driven fixes.
+- **MR feedback:** review comments left on the *MR itself* are handled by `/pw-ship <slug> T0n
+  comments` (fetch via `glab`/`gh`, fix in the worktree, reply on the thread) — but **always mirror
+  the change into the internal record** (task `## Result` + `task/review/` + `LOG.md`). The project
+  dir stays the source of truth even for MR-driven fixes.
 - After a pass, report how many `🔴 open` items remain: `rtk grep -rln "🔴 open" <project>/`.
 
 **Who fills what** (put a `Filled by:` note on every table/form so it's unambiguous): 🤖 =
@@ -75,15 +88,22 @@ states. Agent-owned: analysis/plan/task docs, the dashboard `Status:`/tables, `#
 
 **Going back a phase (rewind):** to reopen an earlier phase, the human adds a fresh `🔴 open` item
 + a new `in-review` Sign-off row (old `approved ✅` stays as history) and bumps the dashboard
-`Status:` back; then re-run that phase's command and re-approve. Downstream artifacts stay on disk
-and get regenerated once the upstream phase is re-approved.
+`Status:` back **with the explicit rewind flag** (`pw-lib.sh status <slug> <phase> --rewind` — a
+plain `status` refuses to move backward, which is what stops accidental resets); then re-run that
+phase's command and re-approve. Downstream artifacts stay on disk and get regenerated once the
+upstream phase is re-approved.
 
 ## Status field + audit log (commands own these — via `pw-lib.sh`)
 Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-workflow/tooling/pw-lib.sh` (deterministic,
 phase-validated, portable across Claude Code + shelled-out kilo executors):
 - `pw-lib.sh status <slug> <phase>` — set the dashboard `Status:` (`context→analysis→breakdown→
-  executing→review→done`) and auto-log the change. Each `/pw-*` command runs this as its last step;
-  never leave Status stale or hand-maintained.
+  executing→review→done`) and auto-log the change. Each `/pw-*` command runs this as its
+  **mandatory last step** (analyze/breakdown/execute say "do NOT skip"); never leave Status stale or
+  hand-maintained. It **refuses a backward move** (guards against accidental resets like the phase
+  sliding back to `context`); pass `--rewind` to intentionally go back. `executing`↔`review` is not
+  backward (re-running a task is normal).
+- `pw-lib.sh oneliner <slug> "<text>"` — set the dashboard **One-liner** (the agent does this during
+  `/pw-analyze`, distilled from context/).
 - `pw-lib.sh log <slug> <actor> <msg>` — append one audit line to **`LOG.md`**
   (`YYYY-MM-DD HH:MM | actor | what`). Log phase transitions, executor spawns, commits, pushes,
   MRs, review passes, close-out.
@@ -96,6 +116,8 @@ phase-validated, portable across Claude Code + shelled-out kilo executors):
 Every task carries `Execute with: <provider>:<model-or-agent>` + `Why:` + `Story points:`, and
 optional `Effort:` (`low`/`medium`/`high`/`xhigh`/`max` → claude `--effort`, kilo `--variant`) +
 `Thinking:` (kilo `--thinking`). `PLAN.md` mirrors it in **Execute with** + **SP** columns.
+**Default the provider to the plan's "Produced by"** (the agent that did the breakdown) so a run
+doesn't force an agent switch; route a task to a different provider only with a stated `Why:`.
 **Claude aliases (`opus`/`sonnet`/…) follow the latest version — pin the full name
 (`claude-opus-4-8` vs `claude-opus-5`) for reproducibility.** Defaults: `claude:opus`=complex/risky,
 `claude:sonnet`=standard (most), `claude:haiku`=trivial mechanical; open-weight models route to
@@ -123,8 +145,10 @@ the maintainer's is `command_code`), e.g. `kilo:command_code/MiniMaxAI/MiniMax-M
 
 ## Slash commands (generated — one source of truth)
 Users drive phases with `/pw-*`: `/pw-new <slug>`, `/pw-analyze <slug> [focus]`,
-`/pw-breakdown <slug>`, `/pw-review <slug> [phase|path]` (scoped to the current phase),
-`/pw-execute <slug> [task-ids | "with <model/agent>"]`, `/pw-status <slug>`, `/pw-close <slug>`,
+`/pw-breakdown <slug>`, `/pw-review <slug> [phase|Tid|path]` (scoped to the current phase),
+`/pw-execute <slug> [task-ids | "with <model/agent>"]` (stops at committed + verified),
+`/pw-ship <slug> [task-ids] [comments]` (push + open MRs; the outward-facing publish step),
+`/pw-status <slug>`, `/pw-close <slug>`,
 `/pw-doctor [--fix]` (verify/repair that installed commands + skill match the bundle).
 The command files are **generated build artifacts** — the single source is
 `agentic-project-workflow/tooling/commands/*.md`, emitted per provider by `agentic-project-workflow/tooling/gen-commands.sh` (Claude →
@@ -153,16 +177,17 @@ git -C ~/IdeaProjects/<repo> worktree add \
   (can't even read the task file). Worktrees are fine via the CLI (`kilo run --auto` verified
   end-to-end); the "auto-approve breaks in worktrees" issue is the **JetBrains plugin**, not the CLI.
 - **Scaffolded project dirs** (`$PW_PROJECTS/<slug>/`) are **plain (not git repos)** by design —
-  version history lives in the real repos, and workflow learnings go to EverOS `personal` memory
-  (no `workspace-` bucket for them). The reusable **bundle itself IS a git repo** (so it's
-  shareable + reset-recoverable via `bootstrap.sh`); its own tooling changes are tracked there.
-  Distil durable learnings at close-out.
+  version history lives in the real repos, and workflow learnings go in the project's "Decisions &
+  learnings" section (and your memory tool at close-out, if `PW_MEMORY` names one). The reusable
+  **bundle itself IS a git repo** (so it's shareable + reset-recoverable via `bootstrap.sh`); its
+  own tooling changes are tracked there. Distil durable learnings at close-out.
 
 ## Learn + close (step 8 — `/pw-close`)
-After a run, `/pw-close`: verify all tasks `accepted`, **tear down worktrees**
-(`git worktree remove` + `prune`, don't delete branches/project dir), seed workflow-level learnings
-to EverOS `personal` (domain facts → `midtrans`; mark superseded facts `[SUPERSEDED]`), improve
-the bundle's `template/` files or this skill, set `Status: done`, and summarize MRs/leftovers. Don't save what
-the repos/commits already record. **`accepted` ≠ merged** — a project closes on verified + MR
-opened + human sign-off; open/on-hold MRs don't block close-out (record their state in the
-dashboard). Don't delete branches or the project dir.
+After a run, `/pw-close`: verify all tasks `accepted`, **tear down worktrees with the safe helper**
+(`tooling/pw-teardown.sh <project-dir>` — it won't remove the worktree you're standing in or a
+dirty one, the guard that stops an editor closing on you; don't delete branches/project dir), seed
+workflow-level learnings **if a memory tool is configured** (`PW_MEMORY`; mark superseded facts
+`[SUPERSEDED]`), improve the bundle's `template/` files or this skill, set `Status: done`, and
+summarize MRs/leftovers. Don't save what the repos/commits already record. **`accepted` ≠ merged**
+— a project closes on verified + MR opened + human sign-off; open/on-hold MRs don't block close-out
+(record their state in the dashboard). Don't delete branches or the project dir.

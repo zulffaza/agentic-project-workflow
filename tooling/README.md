@@ -7,20 +7,25 @@ The `/pw-*` slash commands are duplicated across agent tools (Claude Code, kilo,
 tooling/
 ├── scaffold.sh         ← creates a new project from ../template/
 ├── gen-commands.sh     ← stamps commands/ into each provider's format + location
-├── pw-lib.sh           ← mechanical helpers the commands call: status / log / phase
+├── pw-common.sh        ← shared plumbing (roots + config + provider hooks) for the scripts below
+├── pw-lib.sh           ← mechanical helpers the commands call: status / oneliner / log / phase
+├── pw-doctor.sh        ← checks installed skill + commands match this bundle (--fix repairs)
+├── pw-teardown.sh      ← safe worktree removal at close-out (won't nuke your CWD / dirty trees)
 ├── commands/           ← THE source of truth for /pw-* (provider-neutral)
 │   ├── pw-new.md        frontmatter: description, args, [agent]; body uses {{ARGS}} + {{PW_*}}
 │   ├── pw-analyze.md
-│   ├── … (pw-breakdown, pw-review, pw-execute, pw-status)
+│   ├── … (pw-breakdown, pw-review, pw-execute, pw-ship, pw-status, pw-doctor)
 │   └── pw-close.md
 ├── providers.md        ← agent provider registry (model → CLI, headless invocation) [🧑 you]
+├── memory.md           ← optional/pluggable memory policy (the pipeline works with none)
 ├── skill/project-workflow/SKILL.md   ← the shippable skill (bootstrap installs it per provider)
 └── README.md
 ```
 
 `pw-lib.sh` makes the load-bearing, format-sensitive steps deterministic instead of hand-edited
-prose — the `/pw-*` commands call `pw-lib.sh status|log|phase` rather than asking the agent to
-edit the dashboard `Status:` line or `LOG.md` by hand. Run `pw-lib.sh selftest` after changing it.
+prose — the `/pw-*` commands call `pw-lib.sh status|oneliner|log|phase` rather than asking the agent
+to edit the dashboard by hand. `status` refuses accidental backward phase moves (`--rewind` to
+intend one). Run `pw-lib.sh selftest` after changing it.
 
 `providers.md` is **not** generated — it's a config file you maintain (which CLI runs which
 model, and how to invoke it headlessly for cross-provider execution). See it to add a new
