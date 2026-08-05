@@ -1,0 +1,60 @@
+# workflow/ — command source of truth + generator
+
+The `/pw-*` slash commands are duplicated across agent tools (Claude Code, kilo, …), but you
+**maintain them in one place** here. The per-provider files are generated build artifacts.
+
+```
+workflow/
+├── commands/           ← THE source of truth (provider-neutral)
+│   ├── pw-new.md        frontmatter: description, args, [agent]; body uses {{ARGS}}
+│   ├── pw-analyze.md
+│   ├── … (pw-breakdown, pw-review, pw-execute, pw-status)
+│   └── pw-close.md      (one per phase)
+├── providers.md        ← agent provider registry (model → CLI, headless invocation) [🧑 you]
+├── pw-lib.sh           ← mechanical helpers the commands call: status / log / phase
+├── gen-commands.sh     ← stamps commands/ into each provider's format + location
+└── README.md
+```
+
+`pw-lib.sh` makes the load-bearing, format-sensitive steps deterministic instead of hand-edited
+prose — the `/pw-*` commands call `pw-lib.sh status|log|phase` rather than asking the agent to
+edit the dashboard `Status:` line or `LOG.md` by hand. Run `pw-lib.sh selftest` after changing it.
+
+`providers.md` is **not** generated — it's a config file you maintain (which CLI runs which
+model, and how to invoke it headlessly for cross-provider execution). See it to add a new
+model/provider.
+
+## Regenerate after any change
+Edit a file in `commands/`, then (`$PW_HOME` = the bundle dir; `bootstrap.sh` exports it):
+```bash
+$PW_HOME/workflow/gen-commands.sh
+```
+Outputs (overwritten each run):
+- **Claude Code** → `~/.claude/commands/*.md` (frontmatter `description` + `argument-hint`)
+- **kilo CLI** → `~/.config/kilo/command/*.md` (frontmatter `description` + `agent:` when set)
+
+`{{ARGS}}` is replaced with each provider's argument placeholder (both use `$ARGUMENTS` today).
+
+## Add a new agent provider
+In `gen-commands.sh`:
+1. Add its name to `PROVIDERS=(…)`.
+2. Add a `<provider>_outdir()` returning its commands directory.
+3. Add a `render_<provider>()` that prints the file in that provider's frontmatter format and
+   maps the `{{ARGS}}` placeholder to its argument syntax.
+4. Re-run the generator.
+
+That's the whole cost of onboarding a provider — the phase prompts themselves never get copied.
+
+## Canonical file format
+```markdown
+---
+description: <one line, becomes the command description>
+args: <argument hint, e.g. "<project-slug> [focus]">
+agent: <optional — a provider agent to run the command under, e.g. pw-orchestrator>
+---
+<prompt body, using {{ARGS}} where the invocation's arguments go>
+```
+
+> Agents (kilo `~/.config/kilo/agent/`, Claude Code's Task tool) are **not** generated from here —
+> they're few and provider-shaped. Only the `pw-orchestrator` coordinator is custom; executors
+> reuse existing agents (see `../sub-agent/README.md`).
