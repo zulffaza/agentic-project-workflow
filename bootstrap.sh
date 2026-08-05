@@ -44,15 +44,8 @@ if [ ! -f "$CONFIG" ] && [ "$MODE" != "check" ]; then
   cp "$PW_HOME/pw.config.example.sh" "$CONFIG"
   echo "created $CONFIG from the example — edit it to set your providers."
 fi
-# shellcheck source=/dev/null
-if [ -f "$CONFIG" ]; then . "$CONFIG"; else . "$PW_HOME/pw.config.example.sh"; fi
-declare -p PW_PROVIDERS >/dev/null 2>&1 || PW_PROVIDERS=(claude kilo)
-
-# built-in provider hooks (config-defined functions win — set only if undefined)
-declare -f claude_bin      >/dev/null 2>&1 || claude_bin()      { echo claude; }
-declare -f claude_skilldir >/dev/null 2>&1 || claude_skilldir() { echo "$HOME/.claude/skills"; }
-declare -f kilo_bin        >/dev/null 2>&1 || kilo_bin()        { echo kilo; }
-declare -f kilo_skilldir   >/dev/null 2>&1 || kilo_skilldir()   { echo "$HOME/.kilocode/skills"; }
+# shared plumbing: sources pw.config.sh + defines the built-in provider hooks
+. "$PW_HOME/tooling/pw-common.sh"
 
 echo "project-workflow bootstrap"
 echo "  PW_HOME     = $PW_HOME"
@@ -64,8 +57,8 @@ echo
 # --- detect (enabled AND present on PATH) ------------------------------------
 DETECTED=()
 for p in "${PW_PROVIDERS[@]}"; do
-  if ! declare -f "${p}_bin" >/dev/null 2>&1; then
-    echo "  ! provider '$p' has no ${p}_bin()/hooks — define them in pw.config.sh; skipping"
+  if ! pw_provider_has_hooks "$p"; then
+    echo "  ! provider '$p' is missing hooks (bin/skilldir/outdir/render) — define them in pw.config.sh; skipping"
     continue
   fi
   bin="$("${p}_bin")"

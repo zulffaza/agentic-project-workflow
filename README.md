@@ -5,7 +5,7 @@ pipeline: gather context → analyze → break into tasks → execute in isolate
 learn.
 
 Every project lives in its own directory under `IdeaProjects/projects/<project-slug>/` and is a
-copy of this `base/` structure. Spin one up with [`scaffold.sh`](./tooling/scaffold.sh):
+copy of the bundle's [`template/`](./template). Spin one up with [`scaffold.sh`](./tooling/scaffold.sh):
 
 ```bash
 $PW_HOME/tooling/scaffold.sh spring-boot-3-upgrade
@@ -30,14 +30,15 @@ Grouped so it's obvious what's machinery vs. what becomes a project:
 
 ```
 agentic-project-workflow/        ← this bundle ($PW_HOME)
-├── README.md · ONBOARDING.md    ← guides
+├── AGENTS.md · CLAUDE.md        ← AI-agent entrypoint (CLAUDE.md just imports AGENTS.md)
+├── README.md · ONBOARDING.md    ← guides (human + agent)
 ├── bootstrap.sh                 ← one-shot onboarding — run this first
 ├── pw.config.example.sh         ← copy → pw.config.sh; the one file YOU edit (providers)
 ├── template/                    ← what a scaffolded project is MADE OF (copied per project)
 │   ├── PROJECT.template.md · _REVIEW.template.md
 │   └── context/ · analysis/ · task/ · worktree/ · sub-agent/
 └── tooling/                     ← the MACHINERY (never copied into a project)
-    ├── scaffold.sh · gen-commands.sh · pw-lib.sh
+    ├── scaffold.sh · gen-commands.sh · pw-lib.sh · pw-doctor.sh · pw-common.sh
     ├── commands/                ← canonical /pw-* sources (generated per provider)
     ├── providers.md             ← provider registry
     └── skill/project-workflow/SKILL.md
@@ -323,6 +324,7 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | `/pw-execute <slug> [task-ids \| "with <model/agent>"]` | execution |
 | `/pw-status <slug>` | status |
 | `/pw-close <slug>` | learn + close-out |
+| `/pw-doctor [--fix]` | check (or repair) that installed commands + skill match this bundle |
 
 These exist for multiple agent tools (Claude Code, kilo, …) but are **not** maintained per tool.
 The single source is [`tooling/commands/*.md`](./tooling/) (provider-neutral, `{{ARGS}}`

@@ -1,5 +1,5 @@
 ---
-description: Scaffold a new agentic-workflow project from base/
+description: Scaffold a new agentic-workflow project from the bundle template
 args: <project-slug>
 ---
 Scaffold a new project for the phased multi-repo workflow. Arguments: {{ARGS}} (first token is
@@ -32,4 +32,4 @@ the project without reading the whole base guide. Cover, concisely:
    - then run **`/pw-analyze <slug>`**.
 
 Keep it a scannable orientation (headers/bullets), not a wall of text. Point to
-`../base/README.md` for the full guide and `/pw-status <slug>` to check state any time.
+`{{PW_HOME}}/README.md` for the full guide and `/pw-status <slug>` to check state any time.

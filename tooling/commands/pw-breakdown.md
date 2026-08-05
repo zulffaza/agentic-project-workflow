@@ -9,7 +9,7 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 First check the analysis gate: look for an `approved ✅` sign-off row in any
 `<project>/analysis/review/*.review.md`. If none, STOP and ask me to approve the analysis first.
 
-Then produce, from `projects/base/task/`:
+Then produce, from `{{PW_HOME}}/template/task/`:
 1. `<project>/task/PLAN.md` (from `_TEMPLATE-orchestration-plan.md`) — repo manifest, global
    rules, **breakdown rules / execution routing** (fold in any custom routing I gave, e.g. "run
    the mechanical bumps in KiloCode", "T03 → opus"), dependency DAG, and the task table

@@ -74,7 +74,7 @@ Read [README.md](./README.md) — the full guide. The loop, once onboarded:
 /pw-new <slug>        scaffold a project        /pw-review <slug>     apply your review comments
 /pw-analyze <slug>    context → analysis        /pw-execute <slug>    orchestrate worktree runs
 /pw-breakdown <slug>  analysis → PLAN + tasks    /pw-close <slug>      verify, tear down, learn
-/pw-status <slug>     where am I / what's next
+/pw-status <slug>     where am I / what's next   /pw-doctor [--fix]   check/repair install sync
 ```
 
 Each phase is **gated by your review** — an agent stops and you sign off before the next phase.
@@ -110,5 +110,5 @@ value you set (`PW_KILO_PROVIDER`) in `pw.config.sh` — it never constrains a t
 - **`providers.md` is machine/account-specific config**, not code — model IDs and available
   providers differ per person. Treat the committed version as a sensible starting roster; each
   person tunes their own.
-- **Project dirs are not committed here.** This repo is the reusable `base/` bundle only; the
+- **Project dirs are not committed here.** This repo is the reusable bundle only; the
   `<slug>` projects you scaffold live in `$PW_PROJECTS` (the bundle's parent) and are yours.

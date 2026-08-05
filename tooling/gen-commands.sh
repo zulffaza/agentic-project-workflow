@@ -4,41 +4,29 @@
 # and a body using the {{ARGS}} placeholder + {{PW_*}} path tokens.
 #
 # You do NOT edit this script to change providers — set PW_PROVIDERS (and any provider
-# hooks) in ../pw.config.sh. This script only defines the built-in defaults.
-# Provider command files are BUILD ARTIFACTS — never hand-edit them.
+# hooks) in ../pw.config.sh. Provider command files are BUILD ARTIFACTS — never hand-edit them.
+#
+# Usage: gen-commands.sh [--outdir DIR] [provider ...]
+#   --outdir DIR   write to DIR/<provider>/ instead of each provider's real dir (used by pw-doctor)
+#   provider ...   restrict to these providers (default: PW_PROVIDERS from config)
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # tooling/
 CANON_DIR="$HERE/commands"
-
-# --- roots (canonical bodies use {{PW_*}} tokens; we stamp real paths here) ---
 PW_HOME="$(cd "$HERE/.." && pwd)"                       # repo root (the bundle)
-PW_PROJECTS="${PW_PROJECTS:-$(cd "$PW_HOME/.." && pwd)}"
-PW_REPOS="${PW_REPOS:-$(cd "$PW_PROJECTS/.." && pwd)}"
+. "$HERE/pw-common.sh"                                  # roots + config + provider hooks
 
-# --- load local config (enabled providers + optional overrides) --------------
-if   [ -f "$PW_HOME/pw.config.sh" ];         then . "$PW_HOME/pw.config.sh"
-elif [ -f "$PW_HOME/pw.config.example.sh" ]; then . "$PW_HOME/pw.config.example.sh"
-fi
-declare -p PW_PROVIDERS >/dev/null 2>&1 || PW_PROVIDERS=(claude kilo)
-
-# --- built-in provider defaults (config-defined functions win) ---------------
-declare -f claude_outdir >/dev/null 2>&1 || claude_outdir() { echo "$HOME/.claude/commands"; }
-declare -f kilo_outdir   >/dev/null 2>&1 || kilo_outdir()   { echo "$HOME/.config/kilo/command"; }
-declare -f render_claude >/dev/null 2>&1 || render_claude() {
-  printf -- '---\ndescription: %s\n' "$desc"
-  [ -n "$args" ] && printf -- 'argument-hint: %s\n' "$args"
-  printf -- '---\n%s' "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
-}
-declare -f render_kilo >/dev/null 2>&1 || render_kilo() {
-  printf -- '---\ndescription: %s\n' "$desc"
-  [ -n "$agent" ] && printf -- 'agent: %s\n' "$agent"
-  printf -- '---\n%s' "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
-}
-
-# --- providers: CLI args > PW_PROVIDERS from config > fallback ----------------
+# --- args: --outdir DIR and/or an explicit provider list ---------------------
+OUTDIR_OVERRIDE=""
+ARGS_PROVIDERS=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --outdir) OUTDIR_OVERRIDE="$2"; shift 2 ;;
+    *) ARGS_PROVIDERS+=("$1"); shift ;;
+  esac
+done
 PROVIDERS=("${PW_PROVIDERS[@]}")
-if [ "$#" -gt 0 ]; then PROVIDERS=("$@"); fi
+[ "${#ARGS_PROVIDERS[@]}" -gt 0 ] && PROVIDERS=("${ARGS_PROVIDERS[@]}")
 
 # --- frontmatter/body helpers (parse the canonical file) ---------------------
 fm() {  # fm <file> <key> -> value of that frontmatter key (empty if absent)
@@ -55,7 +43,7 @@ body() {  # body <file> -> everything after the closing --- of frontmatter
 # --- drive -------------------------------------------------------------------
 count=0
 for prov in "${PROVIDERS[@]}"; do
-  outdir="$("${prov}_outdir")"
+  if [ -n "$OUTDIR_OVERRIDE" ]; then outdir="$OUTDIR_OVERRIDE/$prov"; else outdir="$("${prov}_outdir")"; fi
   mkdir -p "$outdir"
   for f in "$CANON_DIR"/*.md; do
     name="$(basename "$f" .md)"

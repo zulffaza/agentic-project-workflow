@@ -20,7 +20,8 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
    EverOS `personal`, and any reusable *domain* facts into `midtrans`. Do NOT save what the
    repos/commits already record (code, fixes, git history). Mark superseded facts with
    `[SUPERSEDED]` rather than duplicating.
-4. **Improve the template** if this run surfaced a workflow gap — note it, or edit `base/`.
+4. **Improve the template** if this run surfaced a workflow gap — note it, or edit the bundle
+   (`{{PW_HOME}}/template/` for project scaffolding, `{{PW_HOME}}/tooling/` for machinery).
 5. Close out via the helper, then summarize:
    ```bash
    {{PW_HOME}}/tooling/pw-lib.sh log <slug> close "closed — N MRs open, worktrees removed, memories seeded"
