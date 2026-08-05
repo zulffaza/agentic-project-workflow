@@ -17,7 +17,7 @@ Then produce, from `projects/base/task/`:
 2. One `<project>/task/T01.md … Tnn.md` per task (from `_TEMPLATE-task.md`), each self-contained,
    with a runnable `## Verify` block, an `Execute with: <provider>:<model-or-agent>` + `Why:`, a
    **`Story points:`** estimate, optional **`Effort:`**/**`Thinking:`**, and an empty `## Result`
-   block. `Execute with:` resolves to a provider CLI via `base/workflow/providers.md` (Claude
+   block. `Execute with:` resolves to a provider CLI via `{{PW_HOME}}/tooling/providers.md` (Claude
    models → Claude Code, open-weight → KiloCode, extendable). **Pin the Claude version** (full name
    like `claude-opus-4-8`, not the moving `opus` alias) on risky/reproducibility-sensitive tasks,
    and set `Effort:` higher for complex ones.
@@ -29,8 +29,8 @@ Then produce, from `projects/base/task/`:
 Size each task as one worktree / one reviewable unit. Split anything needing two repos and add a
 dependency edge. Then update status + log via the helper (don't hand-edit):
 ```bash
-{{PW_HOME}}/workflow/pw-lib.sh status <slug> breakdown
-{{PW_HOME}}/workflow/pw-lib.sh log <slug> breakdown "wrote PLAN.md + N task files (ΣSP=<n>)"
+{{PW_HOME}}/tooling/pw-lib.sh status <slug> breakdown
+{{PW_HOME}}/tooling/pw-lib.sh log <slug> breakdown "wrote PLAN.md + N task files (ΣSP=<n>)"
 ```
 
 Stop and summarize the plan + task list (chosen provider:model per task, SP, and the total manual

@@ -5,7 +5,7 @@ args: <project-slug>
 Arguments: {{ARGS}} (project slug). Project dir:
 `{{PW_PROJECTS}}/<slug>`.
 
-1. Show the current phase (`…/base/workflow/pw-lib.sh phase <slug>`) and the task-status table
+1. Show the current phase (`…/{{PW_HOME}}/tooling/pw-lib.sh phase <slug>`) and the task-status table
    from `README.md`, plus `task/PLAN.md`'s table (with SP/Time/Result) if present.
 2. List artifacts with unresolved review items:
    ```bash

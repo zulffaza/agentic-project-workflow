@@ -7,7 +7,7 @@ the project slug).
 
 Run:
 ```bash
-{{PW_HOME}}/scaffold.sh {{ARGS}}
+{{PW_HOME}}/tooling/scaffold.sh {{ARGS}}
 ```
 
 Then confirm the structure was created and give me a **full onboarding orientation** so I can use
@@ -24,7 +24,7 @@ the project without reading the whole base guide. Cover, concisely:
    replies `↳ agent:` and flips 🔴→🟢; if the agent has an open question it seeds a `Qn` row I
    answer with `↳ you:`; only I write the Sign-off (date-time to the minute) that clears a gate.
 5. **Execution routing** — tasks carry `Execute with: <provider>:<model>`; models map to a
-   provider CLI in `base/workflow/providers.md` (Claude models → Claude Code, open-weight → KiloCode,
+   provider CLI in `{{PW_HOME}}/tooling/providers.md` (Claude models → Claude Code, open-weight → KiloCode,
    extendable); execution pushes + opens MRs (with my OK).
 6. **The immediate next 2 actions**, spelled out:
    - add inputs to `projects/<slug>/context/` and fill `context/INDEX.md` (a row per input +

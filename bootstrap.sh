@@ -2,23 +2,22 @@
 # ============================================================================
 # bootstrap.sh — onboard this machine to the project-workflow pipeline.
 #
-# Run once after cloning the bundle (or after a machine reset). It is idempotent
-# and NON-DESTRUCTIVE: it never overwrites an existing skill install unless you
-# pass --force, and it never edits your shell profile.
+# Run once after cloning the bundle (or after a machine reset). Idempotent and
+# NON-DESTRUCTIVE: never overwrites an existing skill install unless you pass
+# --force, and never edits your shell profile.
 #
-#   ./bootstrap.sh            install for every detected provider CLI
+#   ./bootstrap.sh            install for every ENABLED provider (see pw.config.sh)
 #   ./bootstrap.sh --force    re-link the skill even if already present
 #   ./bootstrap.sh --check    detect + report only; change nothing
 #
 # It:
 #   1. resolves the three path roots from its own location,
-#   2. detects which agent CLIs you have (claude, kilo, … — extensible below),
-#   3. installs the project-workflow skill into each detected provider,
-#   4. generates the /pw-* slash-commands for each detected provider,
-#   5. writes pw-env.sh (source it to get $PW_HOME/$PW_PROJECTS/$PW_REPOS).
+#   2. reads pw.config.sh for which agent CLIs you use (PW_PROVIDERS),
+#   3. installs the project-workflow skill into each enabled+detected provider,
+#   4. generates the /pw-* slash-commands for them,
+#   5. writes pw-env.sh (source it for $PW_HOME/$PW_PROJECTS/$PW_REPOS).
 #
-# Different teammates have different CLIs — that's the designed-for case. You get
-# commands + skill only for the providers you actually have installed.
+# You never edit THIS script to change providers — edit pw.config.sh.
 # ============================================================================
 set -euo pipefail
 
@@ -36,42 +35,53 @@ done
 PW_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_PROJECTS="${PW_PROJECTS:-$(cd "$PW_HOME/.." && pwd)}"
 PW_REPOS="${PW_REPOS:-$(cd "$PW_PROJECTS/.." && pwd)}"
-SKILL_SRC="$PW_HOME/skill/project-workflow"   # <name>/SKILL.md — the shippable skill
+SKILL_SRC="$PW_HOME/tooling/skill/project-workflow"   # <name>/SKILL.md — the shippable skill
+
+# --- 2. load config (create it from the example on first run) ----------------
+# --check must change nothing, so it reads the example in place without creating the file.
+CONFIG="$PW_HOME/pw.config.sh"
+if [ ! -f "$CONFIG" ] && [ "$MODE" != "check" ]; then
+  cp "$PW_HOME/pw.config.example.sh" "$CONFIG"
+  echo "created $CONFIG from the example — edit it to set your providers."
+fi
+# shellcheck source=/dev/null
+if [ -f "$CONFIG" ]; then . "$CONFIG"; else . "$PW_HOME/pw.config.example.sh"; fi
+declare -p PW_PROVIDERS >/dev/null 2>&1 || PW_PROVIDERS=(claude kilo)
+
+# built-in provider hooks (config-defined functions win — set only if undefined)
+declare -f claude_bin      >/dev/null 2>&1 || claude_bin()      { echo claude; }
+declare -f claude_skilldir >/dev/null 2>&1 || claude_skilldir() { echo "$HOME/.claude/skills"; }
+declare -f kilo_bin        >/dev/null 2>&1 || kilo_bin()        { echo kilo; }
+declare -f kilo_skilldir   >/dev/null 2>&1 || kilo_skilldir()   { echo "$HOME/.kilocode/skills"; }
 
 echo "project-workflow bootstrap"
 echo "  PW_HOME     = $PW_HOME"
 echo "  PW_PROJECTS = $PW_PROJECTS"
 echo "  PW_REPOS    = $PW_REPOS   (git repos live here; override with PW_REPOS=… ./bootstrap.sh)"
+echo "  providers   = ${PW_PROVIDERS[*]}   (from pw.config.sh)"
 echo
 
-# --- 2. provider profiles ----------------------------------------------------
-# To onboard a NEW provider: add its name to PROVIDERS and define <name>_bin /
-# <name>_skilldir. Command output dirs are defined in workflow/gen-commands.sh.
-PROVIDERS=(claude kilo)
-
-claude_bin() { echo claude; }                       # CLI name to look for on PATH
-claude_skilldir() { echo "$HOME/.claude/skills"; }  # <dir>/<skill-name>/SKILL.md
-
-kilo_bin() { echo kilo; }
-kilo_skilldir() { echo "$HOME/.kilocode/skills"; }  # adjust if your kilo reads skills elsewhere
-
-# --- detect ------------------------------------------------------------------
+# --- detect (enabled AND present on PATH) ------------------------------------
 DETECTED=()
-for p in "${PROVIDERS[@]}"; do
+for p in "${PW_PROVIDERS[@]}"; do
+  if ! declare -f "${p}_bin" >/dev/null 2>&1; then
+    echo "  ! provider '$p' has no ${p}_bin()/hooks — define them in pw.config.sh; skipping"
+    continue
+  fi
   bin="$("${p}_bin")"
   if command -v "$bin" >/dev/null 2>&1; then
-    echo "  ✓ detected $p  ($(command -v "$bin"))"
+    echo "  ✓ $p enabled + detected  ($(command -v "$bin"))"
     DETECTED+=("$p")
   else
-    echo "  – $p not found (no '$bin' on PATH) — skipping"
+    echo "  – $p enabled but not found (no '$bin' on PATH) — skipping"
   fi
 done
 echo
 
 if [ "${#DETECTED[@]}" -eq 0 ]; then
-  echo "No supported agent CLI found (looked for: ${PROVIDERS[*]})."
-  echo "Install one, or add your provider (see ONBOARDING.md → 'Register a new provider')."
-  echo "Scaffolding still works: \$PW_HOME/scaffold.sh <slug>."
+  echo "No enabled provider CLI is installed. Set PW_PROVIDERS in $CONFIG,"
+  echo "install a supported CLI, or add your provider (see ONBOARDING.md)."
+  echo "Scaffolding still works: \$PW_HOME/tooling/scaffold.sh <slug>."
 fi
 
 if [ "$MODE" = "check" ]; then
@@ -107,7 +117,7 @@ echo
 if [ "${#DETECTED[@]}" -gt 0 ]; then
   echo "  generating /pw-* commands:"
   PW_PROJECTS="$PW_PROJECTS" PW_REPOS="$PW_REPOS" \
-    "$PW_HOME/workflow/gen-commands.sh" "${DETECTED[@]}" | sed 's/^/    /'
+    "$PW_HOME/tooling/gen-commands.sh" "${DETECTED[@]}" | sed 's/^/    /'
   echo
 fi
 
@@ -124,10 +134,10 @@ echo "  wrote $ENV_FILE"
 echo
 
 # --- verify + next steps -----------------------------------------------------
-echo "  self-test: $("$PW_HOME/workflow/pw-lib.sh" selftest 2>&1 | tail -1)"
+echo "  self-test: $("$PW_HOME/tooling/pw-lib.sh" selftest 2>&1 | tail -1)"
 echo
 echo "Done. To make the path vars available in your shell now:"
 echo "    source \"$ENV_FILE\""
 echo "(optional) add that line to your ~/.zshrc so it persists."
 echo
-echo "Verify end-to-end:  \$PW_HOME/scaffold.sh demo   then   /pw-status demo"
+echo "Verify end-to-end:  \$PW_HOME/tooling/scaffold.sh demo   then   /pw-status demo"

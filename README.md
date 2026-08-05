@@ -5,14 +5,14 @@ pipeline: gather context → analyze → break into tasks → execute in isolate
 learn.
 
 Every project lives in its own directory under `IdeaProjects/projects/<project-slug>/` and is a
-copy of this `base/` structure. Spin one up with [`scaffold.sh`](./scaffold.sh):
+copy of this `base/` structure. Spin one up with [`scaffold.sh`](./tooling/scaffold.sh):
 
 ```bash
-$PW_HOME/scaffold.sh spring-boot-3-upgrade
+$PW_HOME/tooling/scaffold.sh spring-boot-3-upgrade
 ```
 
 > **Path variables used throughout these docs** (so nothing is tied to one machine/username):
-> `$PW_HOME` = this bundle's dir (where `scaffold.sh` lives) · `$PW_PROJECTS` = its parent (where
+> `$PW_HOME` = this bundle's dir (where `bootstrap.sh` lives) · `$PW_PROJECTS` = its parent (where
 > `<slug>` projects go) · `$PW_REPOS` = the repos root (where your sibling git repos live). Run
 > [`./bootstrap.sh`](./bootstrap.sh) once and it exports these (and stamps the real paths into the
 > generated slash-commands). New here or on a fresh machine? See [ONBOARDING.md](./ONBOARDING.md).
@@ -24,7 +24,26 @@ $PW_HOME/scaffold.sh spring-boot-3-upgrade
 
 ---
 
-## Directory anatomy
+## Bundle layout (this repo)
+
+Grouped so it's obvious what's machinery vs. what becomes a project:
+
+```
+agentic-project-workflow/        ← this bundle ($PW_HOME)
+├── README.md · ONBOARDING.md    ← guides
+├── bootstrap.sh                 ← one-shot onboarding — run this first
+├── pw.config.example.sh         ← copy → pw.config.sh; the one file YOU edit (providers)
+├── template/                    ← what a scaffolded project is MADE OF (copied per project)
+│   ├── PROJECT.template.md · _REVIEW.template.md
+│   └── context/ · analysis/ · task/ · worktree/ · sub-agent/
+└── tooling/                     ← the MACHINERY (never copied into a project)
+    ├── scaffold.sh · gen-commands.sh · pw-lib.sh
+    ├── commands/                ← canonical /pw-* sources (generated per provider)
+    ├── providers.md             ← provider registry
+    └── skill/project-workflow/SKILL.md
+```
+
+## Project anatomy (a scaffolded `<slug>/`)
 
 ```
 <project-slug>/
@@ -69,7 +88,7 @@ unambiguous who owns it:
 | 8 | Learn + close | You + CC | EverOS memory, worktrees torn down, Status→done | — | `/pw-close` |
 
 **Who owns the dashboard `Status:` field?** The `/pw-*` commands do — each runs
-`workflow/pw-lib.sh status <slug> <phase>` as its last step (analyze→`analysis`,
+`tooling/pw-lib.sh status <slug> <phase>` as its last step (analyze→`analysis`,
 breakdown→`breakdown`, execute→`executing`/`review`, close→`done`). It is not something you
 maintain by hand (that's the "why is it still `planned`?" trap), and the helper validates the
 phase + auto-logs the change to [`LOG.md`](#audit-log--logmd).
@@ -126,7 +145,7 @@ transition, sub-agent spawn, commit, push, MR, review pass, close-out), newest a
 ```
 YYYY-MM-DD HH:MM | <phase/actor> | <what happened>
 ```
-The `/pw-*` commands append to it via `workflow/pw-lib.sh log …` (deterministic format); you can
+The `/pw-*` commands append to it via `tooling/pw-lib.sh log …` (deterministic format); you can
 add manual notes too. It answers "what did the agents actually do, and when?" without
 reconstructing it from chat.
 
@@ -273,7 +292,7 @@ buried in an agent's head:
 | a `sub-agent/` def | (its provider) | only for a genuinely new role no existing agent covers ([`sub-agent/`](./sub-agent/README.md)) |
 
 **Providers & cross-agent execution** — which CLI runs which model lives in the
-[provider registry](./workflow/providers.md). Claude models → Claude Code, open-weight → KiloCode,
+[provider registry](./tooling/providers.md). Claude models → Claude Code, open-weight → KiloCode,
 and it's a one-row-per-provider extension point. When a task's provider differs from the
 orchestrator's, the orchestrator **shells out to that provider's CLI headlessly** with the task
 file as the work order — so a `/pw-execute` run in Claude Code can delegate specific tasks to
@@ -306,24 +325,25 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | `/pw-close <slug>` | learn + close-out |
 
 These exist for multiple agent tools (Claude Code, kilo, …) but are **not** maintained per tool.
-The single source is [`workflow/commands/*.md`](./workflow/) (provider-neutral, `{{ARGS}}`
-placeholder). [`workflow/gen-commands.sh`](./workflow/gen-commands.sh) stamps them into each
+The single source is [`tooling/commands/*.md`](./tooling/) (provider-neutral, `{{ARGS}}`
+placeholder). [`tooling/gen-commands.sh`](./tooling/gen-commands.sh) stamps them into each
 provider's format and location:
 
 ```bash
-$PW_HOME/workflow/gen-commands.sh
+$PW_HOME/tooling/gen-commands.sh
 ```
 
 Claude → `~/.claude/commands/`, kilo → `~/.config/kilo/command/`. The per-provider files are
 **build artifacts — never hand-edit them.** Change a prompt → edit the canonical file → re-run the
-generator. Add a new agent provider → add one profile in the generator, re-run. See
-[`workflow/README.md`](./workflow/README.md).
+generator (or `./bootstrap.sh`). Enable/disable or add a provider → edit
+[`pw.config.sh`](./pw.config.example.sh) (never the scripts). See
+[`tooling/README.md`](./tooling/README.md) and [ONBOARDING.md](./ONBOARDING.md).
 
 ## Quick start
 
 ```bash
 # 1. scaffold
-$PW_HOME/scaffold.sh my-project
+$PW_HOME/tooling/scaffold.sh my-project
 
 # 2. add context, then in Claude Code:
 #    "analyze the context in projects/my-project/context and write analysis/"

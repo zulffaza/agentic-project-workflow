@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Scaffold a new agentic-workflow project from base/.
-# Usage: base/scaffold.sh <project-slug>
+# Scaffold a new agentic-workflow project from template/.
+# Usage: tooling/scaffold.sh <project-slug>
 set -euo pipefail
 
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECTS_DIR="$(dirname "$BASE_DIR")"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # tooling/
+PW_HOME="$(cd "$HERE/.." && pwd)"                       # repo root (the bundle)
+TEMPLATE_DIR="$PW_HOME/template"                        # what a project is made of
 
 # Three roots for stamping {{PW_*}} tokens into copied templates (see gen-commands.sh).
-PW_HOME="$BASE_DIR"
-PW_PROJECTS="${PW_PROJECTS:-$PROJECTS_DIR}"
-PW_REPOS="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
+PW_PROJECTS="${PW_PROJECTS:-$(cd "$PW_HOME/.." && pwd)}"
+PW_REPOS="${PW_REPOS:-$(cd "$PW_PROJECTS/.." && pwd)}"
 
 slug="${1:-}"
 if [[ -z "$slug" ]]; then
@@ -21,25 +21,22 @@ if [[ ! "$slug" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
   exit 1
 fi
 
-dest="$PROJECTS_DIR/$slug"
+dest="$PW_PROJECTS/$slug"
 if [[ -e "$dest" ]]; then
   echo "Error: $dest already exists." >&2
   exit 1
 fi
 
-# Copy the base tree, minus base-only files (master guide, this script, dashboard template, cruft).
+# Copy the template tree (dashboard template is rendered separately, below).
 mkdir -p "$dest"
 rsync -a \
-  --exclude '/scaffold.sh' \
-  --exclude '/README.md' \
   --exclude '/PROJECT.template.md' \
-  --exclude '/workflow' \
   --exclude '.DS_Store' \
-  "$BASE_DIR"/ "$dest"/
+  "$TEMPLATE_DIR"/ "$dest"/
 
 # Render the project dashboard as the project's README.md.
 sed "s/<PROJECT_NAME>/$slug/g; s|<CREATED>|$(date '+%F %H:%M')|" \
-  "$BASE_DIR/PROJECT.template.md" > "$dest/README.md"
+  "$TEMPLATE_DIR/PROJECT.template.md" > "$dest/README.md"
 
 # Stamp {{PW_*}} tokens (absolute paths) into every copied markdown file.
 find "$dest" -type f -name '*.md' -print0 | while IFS= read -r -d '' md; do
@@ -93,5 +90,5 @@ Next steps (each phase is gated by your review):
   6. /pw-close $slug          → tears down worktrees, seeds learnings, Status=done.
   Check progress any time with /pw-status $slug.
 
-Full guide: $BASE_DIR/README.md
+Full guide: $PW_HOME/README.md
 EOF

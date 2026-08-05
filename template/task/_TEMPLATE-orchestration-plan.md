@@ -73,7 +73,7 @@ measure them reliably; pull them from session telemetry afterward if you need th
 ## Model & sub-agent selection
 Each task declares `Execute with:` (a **model or agent**, `<provider>:<model>` form) plus a `Why:`.
 The **provider** decides which CLI runs it — see the
-[provider registry](../../base/workflow/providers.md) (models are tied to a provider there, and
+[provider registry]({{PW_HOME}}/tooling/providers.md) (models are tied to a provider there, and
 cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
 
 | Choose | Provider | For |

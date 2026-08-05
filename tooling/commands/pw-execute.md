@@ -11,12 +11,12 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 
 1. Read `<project>/task/PLAN.md` fully. Confirm an `approved ✅` sign-off in
    `task/review/PLAN.review.md`; if not, STOP and ask. Then:
-   `…/base/workflow/pw-lib.sh status <slug> executing`.
+   `…/{{PW_HOME}}/tooling/pw-lib.sh status <slug> executing`.
 2. Walk the dependency DAG. Spawn one executor per task, only once its `depends_on` are done.
    Parallelize independent tasks up to the plan's max. Honor the plan's **execution routing** and
    any override in the arguments; record what you used in each task's `Actually used:`.
 3. Execute each task with its `Execute with: <provider>:<model-or-agent>`. Resolve the provider
-   via `base/workflow/providers.md`:
+   via `{{PW_HOME}}/tooling/providers.md`:
    - **If it names an agent** (built-in or a `sub-agent/<name>.md`), resolve the agent's provider
      first: explicit `<provider>:` prefix → else the agent def's `Provider:` → else the
      orchestrator's own provider; apply the agent's `Default model`/`Default effort` unless the
@@ -48,8 +48,8 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
    already said "push + MR as you go." Record the MR in the task's `## Result` and the dashboard's
    **Merge requests** table. Zero-change tasks: note "zero-change — no branch/MR", don't leave blank.
 6. Keep the dashboard task-status table current, and log each meaningful action via the helper —
-   `…/base/workflow/pw-lib.sh log <slug> execute "spawned T0n (provider:model); committed <sha>; MR <url>"`.
-   When all requested tasks are done: `…/base/workflow/pw-lib.sh status <slug> review`. If
+   `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> execute "spawned T0n (provider:model); committed <sha>; MR <url>"`.
+   When all requested tasks are done: `…/{{PW_HOME}}/tooling/pw-lib.sh status <slug> review`. If
    arguments list task IDs, run only those.
 
 Stop for my review before marking anything `accepted`. Two ways I send feedback:

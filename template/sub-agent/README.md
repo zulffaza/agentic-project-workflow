@@ -20,7 +20,7 @@ If a def here should also exist as a provider-native agent (e.g. a kilo agent un
 
 ## Agents are provider-bound too
 Just like a model, **an agent runs under a provider** — see [`_TEMPLATE.md`](./_TEMPLATE.md)'s
-`Provider:` / `Default model:` fields and the [provider registry](../workflow/providers.md). When
+`Provider:` / `Default model:` fields and the [provider registry]({{PW_HOME}}/tooling/providers.md). When
 a task's `Execute with:` names an agent, the orchestrator resolves its provider as:
 1. an explicit prefix on `Execute with:` wins — `kilo:db-migration-runner`, `claude:code-implementation`;
 2. else the `Provider:` declared in this agent's `sub-agent/<name>.md`;

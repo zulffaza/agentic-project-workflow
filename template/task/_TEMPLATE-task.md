@@ -12,7 +12,7 @@
 - **Status:** todo | in-progress | verify-failed | done | accepted
 - **Execute with:** <provider:model-or-agent> — e.g. `claude:claude-opus-4-8` (pinned) or
   `claude:opus` (latest), `claude:sonnet`, `kilo:command_code/MiniMaxAI/MiniMax-M3`, or an existing
-  agent (e.g. `code-implementation`). `provider:` maps to the CLI — see `base/workflow/providers.md`.
+  agent (e.g. `code-implementation`). `provider:` maps to the CLI — see `{{PW_HOME}}/tooling/providers.md`.
   Aliases (`opus`/`sonnet`/…) track the *latest* version; **use the full name to pin** (e.g.
   `claude-opus-4-8` vs `claude-opus-5`) when reproducibility matters. Only name a `sub-agent/` def
   if no existing agent fits.

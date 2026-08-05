@@ -1,7 +1,7 @@
 # Sub-agent: <name>
 
 - **Role:** orchestrator | executor | reviewer | <other>
-- **Provider:** claude | kilo | <other from `../workflow/providers.md`> — the CLI that runs this
+- **Provider:** claude | kilo | <other from `{{PW_HOME}}/tooling/providers.md`> — the CLI that runs this
   agent. Determines HOW the orchestrator spawns it (in-process if it matches the orchestrator's own
   provider, else shelled out to this provider's CLI).
 - **Default model:** <provider-qualified model this agent runs with> — e.g. `claude:claude-opus-4-8`

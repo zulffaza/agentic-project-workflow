@@ -7,7 +7,7 @@ description: Run a multi-repo change through the phased AI-agent pipeline under 
 
 Canonical guide + templates live in `~/IdeaProjects/projects/base/`. **Read
 `base/README.md` first** — it is the source of truth; this skill is the on-demand cheat sheet.
-New project: `~/IdeaProjects/projects/base/scaffold.sh <project-slug>`.
+New project: `~/IdeaProjects/projects/base/tooling/scaffold.sh <project-slug>`.
 Onboarding a fresh machine or a teammate: `base/bootstrap.sh` (detects installed CLIs, installs
 this skill + the `/pw-*` commands per provider) — see `base/ONBOARDING.md`.
 
@@ -79,7 +79,7 @@ states. Agent-owned: analysis/plan/task docs, the dashboard `Status:`/tables, `#
 and get regenerated once the upstream phase is re-approved.
 
 ## Status field + audit log (commands own these — via `pw-lib.sh`)
-Don't hand-edit the Status line or LOG.md — use the helper `base/workflow/pw-lib.sh` (deterministic,
+Don't hand-edit the Status line or LOG.md — use the helper `base/tooling/pw-lib.sh` (deterministic,
 phase-validated, portable across Claude Code + shelled-out kilo executors):
 - `pw-lib.sh status <slug> <phase>` — set the dashboard `Status:` (`context→analysis→breakdown→
   executing→review→done`) and auto-log the change. Each `/pw-*` command runs this as its last step;
@@ -99,9 +99,10 @@ optional `Effort:` (`low`/`medium`/`high`/`xhigh`/`max` → claude `--effort`, k
 **Claude aliases (`opus`/`sonnet`/…) follow the latest version — pin the full name
 (`claude-opus-4-8` vs `claude-opus-5`) for reproducibility.** Defaults: `claude:opus`=complex/risky,
 `claude:sonnet`=standard (most), `claude:haiku`=trivial mechanical; open-weight models route to
-`kilo` via its `command_code` provider, e.g. `kilo:command_code/MiniMaxAI/MiniMax-M3`,
-`kilo:command_code/deepseek/deepseek-v4-pro` (`kilo models command_code` for the list).
-- **Provider registry** = `base/workflow/providers.md`: maps each model/agent → the CLI that runs
+`kilo` via whichever KiloCode model provider you configured (`PW_KILO_PROVIDER` in `pw.config.sh`;
+the maintainer's is `command_code`), e.g. `kilo:command_code/MiniMaxAI/MiniMax-M3`
+(`kilo models <provider>` for the list).
+- **Provider registry** = `base/tooling/providers.md`: maps each model/agent → the CLI that runs
   it, and gives that CLI's **headless invocation**. It's the extension point — add a row to
   onboard a new model/provider; nothing hard-codes the list.
 - **Cross-provider execution:** if a task's provider ≠ the orchestrator's own, the orchestrator
@@ -125,7 +126,7 @@ Users drive phases with `/pw-*`: `/pw-new <slug>`, `/pw-analyze <slug> [focus]`,
 `/pw-breakdown <slug>`, `/pw-review <slug> [phase|path]` (scoped to the current phase),
 `/pw-execute <slug> [task-ids | "with <model/agent>"]`, `/pw-status <slug>`, `/pw-close <slug>`.
 The command files are **generated build artifacts** — the single source is
-`base/workflow/commands/*.md`, emitted per provider by `base/workflow/gen-commands.sh` (Claude →
+`base/tooling/commands/*.md`, emitted per provider by `base/tooling/gen-commands.sh` (Claude →
 `~/.claude/commands/`, kilo → `~/.config/kilo/command/`). To change a command's prompt, edit the
 canonical file and re-run the generator — never hand-edit the per-provider copies.
 

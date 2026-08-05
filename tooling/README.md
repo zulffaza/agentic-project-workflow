@@ -1,18 +1,20 @@
-# workflow/ — command source of truth + generator
+# tooling/ — command source of truth + generator
 
 The `/pw-*` slash commands are duplicated across agent tools (Claude Code, kilo, …), but you
 **maintain them in one place** here. The per-provider files are generated build artifacts.
 
 ```
-workflow/
-├── commands/           ← THE source of truth (provider-neutral)
-│   ├── pw-new.md        frontmatter: description, args, [agent]; body uses {{ARGS}}
+tooling/
+├── scaffold.sh         ← creates a new project from ../template/
+├── gen-commands.sh     ← stamps commands/ into each provider's format + location
+├── pw-lib.sh           ← mechanical helpers the commands call: status / log / phase
+├── commands/           ← THE source of truth for /pw-* (provider-neutral)
+│   ├── pw-new.md        frontmatter: description, args, [agent]; body uses {{ARGS}} + {{PW_*}}
 │   ├── pw-analyze.md
 │   ├── … (pw-breakdown, pw-review, pw-execute, pw-status)
-│   └── pw-close.md      (one per phase)
+│   └── pw-close.md
 ├── providers.md        ← agent provider registry (model → CLI, headless invocation) [🧑 you]
-├── pw-lib.sh           ← mechanical helpers the commands call: status / log / phase
-├── gen-commands.sh     ← stamps commands/ into each provider's format + location
+├── skill/project-workflow/SKILL.md   ← the shippable skill (bootstrap installs it per provider)
 └── README.md
 ```
 
@@ -27,7 +29,7 @@ model/provider.
 ## Regenerate after any change
 Edit a file in `commands/`, then (`$PW_HOME` = the bundle dir; `bootstrap.sh` exports it):
 ```bash
-$PW_HOME/workflow/gen-commands.sh
+$PW_HOME/tooling/gen-commands.sh
 ```
 Outputs (overwritten each run):
 - **Claude Code** → `~/.claude/commands/*.md` (frontmatter `description` + `argument-hint`)
@@ -35,13 +37,14 @@ Outputs (overwritten each run):
 
 `{{ARGS}}` is replaced with each provider's argument placeholder (both use `$ARGUMENTS` today).
 
-## Add a new agent provider
-In `gen-commands.sh`:
-1. Add its name to `PROVIDERS=(…)`.
-2. Add a `<provider>_outdir()` returning its commands directory.
-3. Add a `render_<provider>()` that prints the file in that provider's frontmatter format and
-   maps the `{{ARGS}}` placeholder to its argument syntax.
-4. Re-run the generator.
+## Add / enable a provider
+**You never edit these scripts** — everything is in `../pw.config.sh`:
+1. Add its name to `PW_PROVIDERS=(…)`.
+2. Define `<name>_bin` / `<name>_skilldir` / `<name>_outdir` / `render_<name>` (the scripts only
+   supply defaults for the built-ins, so yours win). Copy `render_claude`/`render_kilo` from
+   `gen-commands.sh` as a starting point.
+3. Add a row to `providers.md` (its headless invocation).
+4. Re-run `./bootstrap.sh` (or `gen-commands.sh`).
 
 That's the whole cost of onboarding a provider — the phase prompts themselves never get copied.
 
@@ -57,4 +60,4 @@ agent: <optional — a provider agent to run the command under, e.g. pw-orchestr
 
 > Agents (kilo `~/.config/kilo/agent/`, Claude Code's Task tool) are **not** generated from here —
 > they're few and provider-shaped. Only the `pw-orchestrator` coordinator is custom; executors
-> reuse existing agents (see `../sub-agent/README.md`).
+> reuse existing agents (see `../template/sub-agent/README.md`).

@@ -28,8 +28,8 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
    Tell me in chat which questions are blocking vs. nice-to-have.
 4. Update status + audit log by running the helper (don't hand-edit these):
    ```bash
-   {{PW_HOME}}/workflow/pw-lib.sh status <slug> analysis
-   {{PW_HOME}}/workflow/pw-lib.sh log <slug> analyze "wrote analysis/<topic>.md (N open questions)"
+   {{PW_HOME}}/tooling/pw-lib.sh status <slug> analysis
+   {{PW_HOME}}/tooling/pw-lib.sh log <slug> analyze "wrote analysis/<topic>.md (N open questions)"
    ```
 
 Stop after writing and summarize it for review. Explain the QnA flow: I answer each `Qn` in the

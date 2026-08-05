@@ -3,3 +3,6 @@ pw-env.sh
 
 # OS cruft
 .DS_Store
+
+# your local config (created from pw.config.example.sh)
+pw.config.sh

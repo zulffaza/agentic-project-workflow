@@ -23,8 +23,8 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 4. **Improve the template** if this run surfaced a workflow gap — note it, or edit `base/`.
 5. Close out via the helper, then summarize:
    ```bash
-   {{PW_HOME}}/workflow/pw-lib.sh log <slug> close "closed — N MRs open, worktrees removed, memories seeded"
-   {{PW_HOME}}/workflow/pw-lib.sh status <slug> done
+   {{PW_HOME}}/tooling/pw-lib.sh log <slug> close "closed — N MRs open, worktrees removed, memories seeded"
+   {{PW_HOME}}/tooling/pw-lib.sh status <slug> done
    ```
    Summarize: MRs opened / merged, worktrees removed, memories seeded, and any leftover follow-ups.
 
