@@ -9,10 +9,13 @@ agents each get their own worktree so their edits never collide.
 Layout: `worktree/<repo>/<task-id>-<slug>/`
 
 ## Create (per task)
+Fork from the task's **Base branch** (`origin/<base>`) — so tasks in one repo can target different
+bases (e.g. `master` vs `spring3`):
 ```bash
+git -C $PW_REPOS/<repo> fetch -q origin <base-branch>
 git -C $PW_REPOS/<repo> worktree add \
   "$PW_PROJECTS/<project-slug>/worktree/<repo>/<task-id>-<slug>" \
-  -b agent/<project-slug>/<task-id>-<slug>
+  -b agent/<project-slug>/<task-id>-<slug> origin/<base-branch>
 ```
 
 ## Remove (after merge/abandon)

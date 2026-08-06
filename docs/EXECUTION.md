@@ -98,14 +98,23 @@ Worktrees are `git worktree add` off the **real sibling repos** in `IdeaProjects
 The project's `worktree/` dir just holds the checked-out working trees, laid out per-repo/per-task
 (`worktree/<repo>/<task-id>-<slug>/`) so parallel agents never collide even within one repo.
 
-Create one for a task (run from anywhere; paths shown absolute for clarity):
+Create one for a task, **forking from the task's `Base branch:`** (`origin/<base>`) so the new
+branch starts from the right place — not from whatever the repo's HEAD happens to be (paths shown
+absolute for clarity):
 ```bash
-REPO=hera
+REPO=hera; BASE=master
 PROJ=$PW_PROJECTS/spring-boot-3-upgrade
+git -C $PW_REPOS/$REPO fetch -q origin "$BASE"
 git -C $PW_REPOS/$REPO worktree add \
   "$PROJ/worktree/$REPO/T03-bump-parent-pom" \
-  -b agent/spring-boot-3-upgrade/T03-bump-parent-pom
+  -b agent/spring-boot-3-upgrade/T03-bump-parent-pom "origin/$BASE"
 ```
+
+**Multiple base branches in one repo is a normal case.** Two tasks can touch the *same* repo off
+*different* bases — e.g. a fix on `master` (`T03`) and its port on `spring3` (`T04`). Because each
+task forks from its own `Base branch:` into its own per-task branch and worktree, they never
+collide and each ships as its own MR (targeting its base). The `PLAN.md` repo manifest lists one row
+per `(repo, base)` pair, so the same repo can appear more than once.
 
 **Adopted / continuation project** (via [`/pw-adopt`](./WORKFLOW.md#adopting-existing-in-progress-work))
 — attach the **existing** branch instead of creating one (no `-b`), one shared worktree **per

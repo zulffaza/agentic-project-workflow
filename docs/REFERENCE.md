@@ -64,6 +64,9 @@ Every table/form in a project carries a `Filled by:` marker so it's unambiguous 
 ## Conventions (the contract every agent follows)
 
 - **Task IDs** — `T01`, `T02`, … Stable, zero-padded, referenced by `depends_on` in `PLAN.md`.
+- **Base branch** — each task declares a `Base branch:`; its worktree forks from `origin/<base>` and
+  its MR targets that base. A repo can appear under **multiple bases** (one `(repo, base)` row each
+  in the PLAN manifest) — e.g. a change on `master` and its port on `spring3`.
 - **Branch naming** — `agent/<project-slug>/<task-id>-<short-slug>`
   (e.g. `agent/spring-boot-3-upgrade/T03-bump-parent-pom`).
 - **Worktree path** — `worktree/<repo>/<task-id>-<short-slug>/` (per-repo, per-task, so parallel

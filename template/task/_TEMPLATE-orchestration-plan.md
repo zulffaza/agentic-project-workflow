@@ -10,11 +10,16 @@
 > Legend: 🤖 = AI-produced/maintained · 🧑 = you fill · 🤖🧑 = both.
 
 ## Repo manifest  [🤖 agent]
-Every repo this project touches. Worktrees are created off these (real dirs in `IdeaProjects/`).
+Every **(repo, base branch)** this project touches. Worktrees fork off these (real dirs in
+`IdeaProjects/`). **A repo may appear on more than one row** if different tasks target different base
+branches — that's a normal case (e.g. a fix on `master` *and* its port on `spring3` in the same
+repo). Each `(repo, base)` pair is an independent branch + MR; tasks under the same pair can run in
+parallel (separate per-task branches), tasks under different pairs are independent too.
 
 | Repo | Base branch | Tasks touching it |
 |------|-------------|-------------------|
 | hera | master | T01, T03 |
+| hera | spring3 | T04 |
 | valas-service | main | T02 |
 
 ## Global rules (apply to EVERY task)

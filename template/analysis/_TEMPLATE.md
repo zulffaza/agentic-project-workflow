@@ -18,10 +18,12 @@ How things work today in the affected area. Cite `repo/path:line` where helpful.
 This is the **confirmed** scope — verify each repo's *real* state (actual base branch, module
 shape, real versions on that branch, not a parked feature branch) and reconcile against the
 "Repos in scope" guess in `context/INDEX.md`. Call out any repo you added, dropped, or corrected.
+**A repo may need changes on more than one base branch** (e.g. a fix on `master` and its port on
+`spring3`) — give it **one row per base branch** and name the base in each row.
 
-| Repo | Area / files | Nature of change |
-|------|--------------|------------------|
-| | | |
+| Repo | Base branch | Area / files | Nature of change |
+|------|-------------|--------------|------------------|
+| | | | |
 
 ## 4. Proposed approach
 The recommended path. If there are alternatives, summarize them and say why this one wins

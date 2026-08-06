@@ -9,7 +9,7 @@ tooling/
 ├── gen-commands.sh     ← stamps commands/ into each provider's format + location
 ├── gen-agents.sh       ← seeds agents/ into each provider's agent dir (same idea as gen-commands)
 ├── pw-common.sh        ← shared plumbing (roots + config + provider hooks) for the scripts below
-├── pw-lib.sh           ← mechanical helpers the commands call: status / oneliner / adopted / log / phase
+├── pw-lib.sh           ← mechanical helpers the commands call: status / oneliner / adopted / adopt / log / phase
 ├── pw-doctor.sh        ← checks installed skill + commands + agents match this bundle (--fix repairs)
 ├── pw-teardown.sh      ← safe worktree removal at close-out (won't nuke your CWD / dirty trees)
 ├── commands/           ← THE source of truth for /pw-* (provider-neutral)
@@ -25,7 +25,7 @@ tooling/
 ```
 
 `pw-lib.sh` makes the load-bearing, format-sensitive steps deterministic instead of hand-edited
-prose — the `/pw-*` commands call `pw-lib.sh status|oneliner|adopted|log|phase` rather than asking the agent
+prose — the `/pw-*` commands call `pw-lib.sh status|oneliner|adopted|adopt|log|phase` rather than asking the agent
 to edit the dashboard by hand. `status` refuses accidental backward phase moves (`--rewind` to
 intend one). Run `pw-lib.sh selftest` after changing it.
 

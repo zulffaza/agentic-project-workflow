@@ -10,15 +10,18 @@ First check the analysis gate: look for an `approved ✅` sign-off row in any
 `<project>/analysis/review/*.review.md`. If none, STOP and ask me to approve the analysis first.
 
 Then produce, from `{{PW_HOME}}/template/task/`:
-1. `<project>/task/PLAN.md` (from `_TEMPLATE-orchestration-plan.md`) — repo manifest, global
+1. `<project>/task/PLAN.md` (from `_TEMPLATE-orchestration-plan.md`) — repo manifest as
+   **`(repo, base branch)` pairs** (a repo may appear on **multiple rows** if tasks target different
+   base branches, e.g. `master` and `spring3` — that's a normal case, not adoption-only), global
    rules, **breakdown rules / execution routing**, dependency DAG, and the task table
    **including the Execute with column and clickable `[T0n](./T0n.md)` links**. Fill **Produced
    by:** with the provider you (this breakdown agent) are running under — that becomes the
    **default execution provider** for every task (see routing).
 2. One `<project>/task/T01.md … Tnn.md` per task (from `_TEMPLATE-task.md`), each self-contained,
-   with a runnable `## Verify` block, an `Execute with: <provider>:<model-or-agent>` + `Why:`, a
-   **`Story points:`** estimate, optional **`Effort:`**/**`Thinking:`**, and an empty `## Result`
-   block.
+   with its **`Repo:` + `Base branch:`** set (the base the task forks from — two tasks in the same
+   repo may declare different bases, e.g. `master` vs `spring3`), a runnable `## Verify` block, an
+   `Execute with: <provider>:<model-or-agent>` + `Why:`, a **`Story points:`** estimate, optional
+   **`Effort:`**/**`Thinking:`**, and an empty `## Result` block.
    - **Default the provider to "Produced by"** (this agent) so I don't have to switch agents;
      only route a task elsewhere when it genuinely needs a stronger/cheaper/open-weight model, and
      justify it in `Why:`. Fold in any custom routing I gave ("run the mechanical bumps in

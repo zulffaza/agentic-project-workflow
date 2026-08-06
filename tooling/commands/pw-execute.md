@@ -16,6 +16,11 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 2. Walk the dependency DAG. Spawn one executor per task, only once its `depends_on` are done.
    Parallelize independent tasks up to the plan's max. Honor the plan's **execution routing** and
    any override in the arguments; record what you used in each task's `Actually used:`.
+   - **Each worktree forks from its task's `Base branch:`** (`git worktree add … -b agent/<slug>/<T0n>
+     origin/<base>`), NOT from the repo's current HEAD. Two tasks in the same repo may declare
+     different bases (e.g. `master` and `spring3`) — that's fine, they get separate branches +
+     worktrees + MRs and can run in parallel. The task file's Step 1 already spells out the exact
+     command; make sure it uses the task's base.
    - **Adopted (continuation) project** (PLAN says "continuation", or dashboard has an `Adopted:`
      note; units in `context/ADOPTED.md`): do NOT create `agent/…` branches. Per **adopted branch**,
      make/keep **one shared worktree that attaches the existing branch** — `git -C

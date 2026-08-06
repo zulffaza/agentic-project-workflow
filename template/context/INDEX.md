@@ -29,7 +29,8 @@ Your **best guess** at which repos this work will touch, filled *now* so the ana
 where to start looking. It is only a starting point — **analysis verifies each repo's real state**
 (actual base branch, module shape, real dependency versions on `master`, not a parked feature
 branch) and may add, drop, or correct rows. Do not treat this table as final; the analysis doc's
-"Affected repos" section is the confirmed version.
+"Affected repos" section is the confirmed version. If a repo needs work on **more than one base
+branch** (e.g. `master` and `spring3`), give it **one row per base**.
 
 | Repo (in `IdeaProjects/`) | Base branch (guess) | Why it's in scope |
 |---------------------------|---------------------|-------------------|

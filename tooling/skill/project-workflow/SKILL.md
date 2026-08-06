@@ -107,6 +107,11 @@ phase-validated, portable across Claude Code + shelled-out kilo executors):
   `/pw-analyze`, distilled from context/).
 - `pw-lib.sh adopted <slug> "<pointer>"` — set/insert the dashboard **Adopted:** pointer (the agent
   does this during `/pw-adopt`; inserts the line only for continuation projects).
+- `pw-lib.sh adopt <slug> <repo> <branch> <base> [mr]` — **deterministically append/upsert one
+  adoption unit** into `context/ADOPTED.md` (keyed by `repo@branch`; new units append at EOF,
+  re-adopting the same one updates it in place). Use this in `/pw-adopt` — do NOT hand-write
+  `ADOPTED.md` (free-form editing is what clobbered a 2nd adopted branch). It also bumps the
+  `Adopted:` count. Resolve `<base>` from the **MR's target branch** when there's an MR.
 - `pw-lib.sh log <slug> <actor> <msg>` — append one audit line to **`LOG.md`**
   (`YYYY-MM-DD HH:MM | actor | what`). Log phase transitions, executor spawns, commits, pushes,
   MRs, review passes, close-out.
@@ -188,11 +193,16 @@ per-provider copies.
 - **Commits:** Conventional Commits.
 
 ## Create a worktree
+**Fork the new branch from the task's `Base branch:`** (`origin/<base>`), not from whatever HEAD is —
+this is what lets two tasks in the SAME repo target different bases (e.g. `master` and `spring3`),
+each its own branch + worktree + MR:
 ```bash
+git -C ~/IdeaProjects/<repo> fetch -q origin <base-branch>
 git -C ~/IdeaProjects/<repo> worktree add \
   ~/IdeaProjects/projects/<project-slug>/worktree/<repo>/<task-id>-<slug> \
-  -b agent/<project-slug>/<task-id>-<slug>
+  -b agent/<project-slug>/<task-id>-<slug> origin/<base-branch>
 ```
+(The repo manifest in `PLAN.md` lists each `(repo, base)` pair; a repo may appear on multiple rows.)
 
 ## Gotchas
 - **KiloCode headless needs `--auto`** — `kilo run` without it auto-*rejects* every permission

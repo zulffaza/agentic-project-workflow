@@ -48,11 +48,12 @@ like "update the config". If a decision is still open, it belongs in analysis/re
 as a judgement call left to the executor.
 
 <!-- ↓↓ LEVEL-OF-DETAIL EXAMPLE (aim for this granularity) ↓↓
-1. Create the worktree:
+1. Create the worktree, forking the new branch from THIS task's **Base branch** (`master` here):
    ```bash
+   git -C {{PW_REPOS}}/hera fetch -q origin master
    git -C {{PW_REPOS}}/hera worktree add \
      "{{PW_PROJECTS}}/<project-slug>/worktree/hera/T01-kafka-toggle" \
-     -b agent/<project-slug>/T01-kafka-toggle
+     -b agent/<project-slug>/T01-kafka-toggle origin/master
    cd "{{PW_PROJECTS}}/<project-slug>/worktree/hera/T01-kafka-toggle"
    ```
 2. In `src/main/resources/application.yml`, under `kafka:`, add:
@@ -66,11 +67,14 @@ as a judgement call left to the executor.
 4. Commit: `git add -A && git commit -m "feat(kafka): gate Kafka wiring behind kafka.enabled toggle"`.
 ↑↑ END EXAMPLE ↑↑ -->
 
-1. Create the worktree:
+1. Create the worktree, forking the new branch from THIS task's **Base branch** (the `Base branch:`
+   field above) — `origin/<base-branch>`, so two tasks in the same repo can target different bases
+   (e.g. `master` vs `spring3`) without colliding:
    ```bash
+   git -C {{PW_REPOS}}/<repo> fetch -q origin <base-branch>
    git -C {{PW_REPOS}}/<repo> worktree add \
      "{{PW_PROJECTS}}/<project-slug>/worktree/<repo>/<T0n>-<slug>" \
-     -b agent/<project-slug>/<T0n>-<slug>
+     -b agent/<project-slug>/<T0n>-<slug> origin/<base-branch>
    cd "{{PW_PROJECTS}}/<project-slug>/worktree/<repo>/<T0n>-<slug>"
    ```
 2. <exact change #1 — file + what to change, with a snippet>

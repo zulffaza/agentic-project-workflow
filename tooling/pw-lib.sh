@@ -7,6 +7,7 @@
 #                                                  backward move) + auto-log the change
 #   pw-lib.sh oneliner <slug> <text...>            set the dashboard One-liner (agent, at analysis)
 #   pw-lib.sh adopted  <slug> <text...>            set/insert the dashboard Adopted: pointer (/pw-adopt)
+#   pw-lib.sh adopt    <slug> <repo> <branch> <base> [mr]   append/upsert one adoption unit (no clobber)
 #   pw-lib.sh log      <slug> <actor> <msg...>     append a timestamped LOG.md line
 #   pw-lib.sh phase    <slug>                       print the current Status value (for scoping/status)
 #   pw-lib.sh selftest                              run an isolated round-trip test
@@ -94,6 +95,61 @@ cmd_adopted() {
   echo "$slug: Adopted -> $text"
 }
 
+# Deterministically append/upsert ONE adoption unit into context/ADOPTED.md, keyed by repo@branch.
+# Append-only per unit (new units go at EOF; re-adopting the same repo@branch updates that unit's
+# Base/MR in place) — so adopting a 2nd branch can NEVER clobber the 1st (the bug free-form editing
+# caused). The agent fills each unit's prose after; the structure/IDs/count are owned here.
+#   adopt <slug> <repo> <branch> <base> [mr]
+cmd_adopt() {
+  [ $# -ge 4 ] || die "usage: adopt <slug> <repo> <branch> <base> [mr-url]"
+  local slug="$1" repo="$2" branch="$3" base="$4" mr="${5:-none yet}"
+  local d; d="$(proj_dir "$slug")"; local cdir="$d/context"; local f="$cdir/ADOPTED.md"
+  mkdir -p "$cdir"
+  local key="$repo @ $branch"
+  if [ ! -f "$f" ]; then
+    {
+      printf '# Adopted work — %s   (CONTINUATION workflow)\n\n' "$slug"
+      printf 'Builds on existing in-progress branches. Serialization is PER-BRANCH: tasks on the same\n'
+      printf 'branch run serially in its shared worktree; tasks on different branches run in parallel.\n'
+      printf 'Unit headings/IDs + the Base/MR lines are managed by `pw-lib.sh adopt` — do NOT hand-edit\n'
+      printf 'them or the dashboard; fill the prose under each unit. [🧑🤖 both]\n'
+    } > "$f"
+  fi
+  # Existing unit for this exact repo@branch? (heading form: "## A<k> · <repo> @ <branch>").
+  # Suffix-match on the ASCII "<repo> @ <branch>" key — avoids byte-offset math around the
+  # multibyte "·" separator (that was the clobber-adjacent bug).
+  local uid; uid="$(awk -v key="$key" '
+    /^## A[0-9]+ · / {
+      h=$0; sub(/^## /,"",h);          # "A1 · <repo> @ <branch>"
+      u=h; sub(/ .*/,"",u);            # first token = unit id
+      if (length(h) >= length(key) && substr(h, length(h)-length(key)+1) == key) { print u; exit }
+    }' "$f")"
+  if [ -n "$uid" ]; then
+    # update this unit's Base/MR lines in place, leave prose untouched
+    awk -v u="$uid" -v base="$base" -v mr="$mr" '
+      $0 ~ ("^## " u " · ") { inU=1; print; next }
+      inU && /^## A[0-9]+ · / { inU=0 }
+      inU && /^- Base: / { print "- Base: " base; next }
+      inU && /^- MR: /   { print "- MR: " mr;   next }
+      { print }' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  else
+    # new unit → next id, append a fresh section at EOF (collision-free)
+    local n; n="$(grep -cE '^## A[0-9]+ · ' "$f" 2>/dev/null || true)"; : "${n:=0}"
+    uid="A$((n+1))"
+    {
+      printf '\n## %s · %s @ %s\n' "$uid" "$repo" "$branch"
+      printf -- '- Base: %s\n' "$base"
+      printf -- '- MR: %s\n' "$mr"
+      printf '### Already done\n<!-- pw-adopt %s already-done: replace with the commit list + diffstat summary -->\n' "$uid"
+      printf '### Remaining work\n🧑 <!-- pw-adopt %s remaining: fill with what to change on top of this branch -->\n' "$uid"
+    } >> "$f"
+  fi
+  local count; count="$(grep -cE '^## A[0-9]+ · ' "$f" 2>/dev/null || true)"; : "${count:=0}"
+  cmd_adopted "$slug" "$count unit(s) — continuation; see context/ADOPTED.md" >/dev/null
+  cmd_log "$slug" adopt "unit $uid: $repo@$branch (base $base, MR $mr)"
+  echo "$slug: adopted $uid ($key) — base $base, MR $mr  [$count unit(s)]"
+}
+
 cmd_phase() {
   [ $# -eq 1 ] || die "usage: phase <slug>"
   local f; f="$(proj_dir "$1")/README.md"
@@ -136,6 +192,20 @@ cmd_selftest() {
   PW_PROJECTS_DIR="$tmp" "$0" adopted demo "2 units — see context/ADOPTED.md" >/dev/null
   [ "$(grep -c '^- \*\*Adopted:\*\*' "$tmp/demo/README.md")" = "1" ] || die "selftest FAIL: Adopted duplicated instead of replaced"
   grep -q '^- \*\*Adopted:\*\* 2 units' "$tmp/demo/README.md" || die "selftest FAIL: Adopted not updated"
+  # adopt: multi-unit append MUST NOT clobber (the reported bug). Two branches, same repo.
+  mkdir -p "$tmp/demo/context"
+  PW_PROJECTS_DIR="$tmp" "$0" adopt demo repoX feat-a master "http://mr/1" >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$0" adopt demo repoX feat-b spring3 "http://mr/2" >/dev/null
+  local A; A="$tmp/demo/context/ADOPTED.md"
+  grep -q '^## A1 · repoX @ feat-a' "$A" || die "selftest FAIL: unit A1 clobbered by 2nd adopt"
+  grep -q '^## A2 · repoX @ feat-b' "$A" || die "selftest FAIL: unit A2 not appended"
+  [ "$(grep -c '^## A[0-9]* · ' "$A")" = "2" ] || die "selftest FAIL: expected 2 adoption units"
+  grep -q '^- \*\*Adopted:\*\* 2 unit(s)' "$tmp/demo/README.md" || die "selftest FAIL: unit count not 2"
+  # re-adopt A1 with a corrected base/MR → updates in place, still 2 units, prose untouched
+  PW_PROJECTS_DIR="$tmp" "$0" adopt demo repoX feat-a develop "http://mr/1b" >/dev/null
+  [ "$(grep -c '^## A[0-9]* · ' "$A")" = "2" ] || die "selftest FAIL: re-adopt duplicated a unit"
+  awk '/^## A1 · /{u=1} u&&/^- Base: /{print;exit}' "$A" | grep -q 'develop' || die "selftest FAIL: A1 base not updated in place"
+  awk '/^## A2 · /{u=1} u&&/^- Base: /{print;exit}' "$A" | grep -q 'spring3' || die "selftest FAIL: A2 base wrongly changed"
   echo "selftest OK"
 }
 
@@ -143,6 +213,7 @@ case "${1:-}" in
   status)   shift; cmd_status "$@" ;;
   oneliner) shift; cmd_oneliner "$@" ;;
   adopted)  shift; cmd_adopted "$@" ;;
+  adopt)    shift; cmd_adopt "$@" ;;
   log)      shift; cmd_log "$@" ;;
   phase)    shift; cmd_phase "$@" ;;
   selftest) cmd_selftest ;;
