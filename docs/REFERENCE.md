@@ -85,7 +85,7 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | Command | Phase |
 |---------|-------|
 | `/pw-new <slug>` | scaffold |
-| `/pw-adopt <slug> <repo> <branch> [mr-url]` | onboard an existing in-progress branch (continue-on) |
+| `/pw-adopt <slug> <repo> <branch> [mr-url] [review]` | onboard an existing in-progress branch — continue-dev (→ context) or `review`-only (→ review, MR required) |
 | `/pw-analyze <slug> [focus]` | analysis |
 | `/pw-review <slug> [phase\|Tid\|path]` | apply review comments (defaults to current phase's review) |
 | `/pw-breakdown <slug>` | task breakdown |

@@ -16,18 +16,20 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 2. Walk the dependency DAG. Spawn one executor per task, only once its `depends_on` are done.
    Parallelize independent tasks up to the plan's max. Honor the plan's **execution routing** and
    any override in the arguments; record what you used in each task's `Actually used:`.
-   - **Each worktree forks from its task's `Base branch:`** (`git worktree add … -b agent/<slug>/<T0n>
-     origin/<base>`), NOT from the repo's current HEAD. Two tasks in the same repo may declare
-     different bases (e.g. `master` and `spring3`) — that's fine, they get separate branches +
-     worktrees + MRs and can run in parallel. The task file's Step 1 already spells out the exact
-     command; make sure it uses the task's base.
-   - **Adopted (continuation) project** (PLAN says "continuation", or dashboard has an `Adopted:`
-     note; units in `context/ADOPTED.md`): do NOT create `agent/…` branches. Per **adopted branch**,
-     make/keep **one shared worktree that attaches the existing branch** — `git -C
-     {{PW_REPOS}}/<repo> worktree add {{PW_PROJECTS}}/<slug>/worktree/<repo>/<branch-slug>
-     <existing-branch>` (no `-b`). **Serialize tasks that share a branch** (one worktree), but
-     **parallelize across different adopted branches**. If git refuses because a branch is checked
-     out in the main repo, tell me to switch that main checkout to another branch first.
+   - **Route each task by its `Branch:`** — this is per-task, so a **mixed** project (fresh tasks +
+     adopted branches, see the WORKFLOW "mixed projects" note) is just tasks of both kinds side by side:
+     - **Fresh task** (`Branch:` is a new `agent/<slug>/<T0n>`) → **fork a worktree from its
+       `Base branch:`**: `git worktree add … -b agent/<slug>/<T0n> origin/<base>`, NOT from the repo's
+       current HEAD. Two tasks in the same repo may declare different bases (e.g. `master` and
+       `spring3`) — fine, separate branches + worktrees + MRs, parallel. The task's Step 1 spells out
+       the exact command; make sure it uses the task's base.
+     - **Adopted task** (`Branch:` is an existing in-progress branch from `context/ADOPTED.md`) → do
+       NOT create an `agent/…` branch. Per **adopted branch**, make/keep **one shared worktree that
+       attaches the existing branch** — `git -C {{PW_REPOS}}/<repo> worktree add
+       {{PW_PROJECTS}}/<slug>/worktree/<repo>/<branch-slug> <existing-branch>` (no `-b`).
+       **Serialize tasks that share a branch** (one worktree), but **parallelize across different
+       adopted branches and all fresh tasks**. If git refuses because a branch is checked out in the
+       main repo, tell me to switch that main checkout to another branch first.
 3. **How to run each task** — resolve `Execute with: <provider>:<model-or-agent>` via
    `{{PW_HOME}}/tooling/providers.md`. Tasks default to the plan's **Produced by** provider, so most
    run under the agent you're already in:

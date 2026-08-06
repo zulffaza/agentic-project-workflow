@@ -109,9 +109,13 @@ phase-validated, portable across Claude Code + shelled-out kilo executors):
   does this during `/pw-adopt`; inserts the line only for continuation projects).
 - `pw-lib.sh adopt <slug> <repo> <branch> <base> [mr]` — **deterministically append/upsert one
   adoption unit** into `context/ADOPTED.md` (keyed by `repo@branch`; new units append at EOF,
-  re-adopting the same one updates it in place). Use this in `/pw-adopt` — do NOT hand-write
-  `ADOPTED.md` (free-form editing is what clobbered a 2nd adopted branch). It also bumps the
-  `Adopted:` count. Resolve `<base>` from the **MR's target branch** when there's an MR.
+  re-adopting the same one updates it in place). In `context/INDEX.md` it also **ensures a one-time
+  generic `ADOPTED.md` provenance row** (never re-enumerated per unit) **and upserts one matching
+  `(repo, origin/<base>)` row into the "Repos in scope" table** (keyed by a hidden
+  `<!-- pw-adopt-scope:… -->` marker). Use this in `/pw-adopt` — do NOT hand-write `ADOPTED.md` or
+  hand-edit `context/INDEX.md`'s adoption rows (free-form editing is what clobbered a 2nd/3rd
+  adopted branch and re-churned the provenance line each attempt). It also bumps the `Adopted:`
+  count. Resolve `<base>` from the **MR's target branch** when there's an MR.
 - `pw-lib.sh log <slug> <actor> <msg>` — append one audit line to **`LOG.md`**
   (`YYYY-MM-DD HH:MM | actor | what`). Log phase transitions, executor spawns, commits, pushes,
   MRs, review passes, close-out.
@@ -166,9 +170,20 @@ each provider's list).
 
 ## Slash commands (generated — one source of truth)
 Users drive phases with `/pw-*`. **Two entry workflows:** `/pw-new <slug>` (fresh start) OR
-`/pw-adopt <slug> <repo> <branch> [mr-url]` (continuation — onboard existing in-progress branch(es),
-run once per branch; continue-on-same-branch; serial within a branch, parallel across branches).
-Then `/pw-analyze <slug> [focus]`,
+`/pw-adopt <slug> <repo> <branch> [mr-url] [review]` (continuation — onboard existing in-progress
+branch(es), run once per branch; continue-on-same-branch; serial within a branch, parallel across
+branches). **Adoption is a context/baseline action with two intents** (never a way to sit in a
+mid-pipeline phase): **continue-dev** (default) lands at `context` so analyze→breakdown→execute→ship
+run on the *remaining* work; **review-only** (trailing `review` keyword, MR required) lands straight
+at `review` to service MR comments (`/pw-ship comments`, `/pw-sync`), skipping analyze/breakdown.
+Guard: refuse on a `done` project (reopen deliberately); a continue-dev adopt onto a project already
+past `context` records the unit and **warns to re-run `/pw-analyze` + `/pw-breakdown`** rather than
+rewinding `Status`. `/pw-adopt` also accepts an **existing** slug (from `/pw-new` or already
+adopted): it folds the branch in without re-scaffolding, yielding a **mixed project** where adoption
+is decided **per task, not per project** — a task that extends an adopted unit continues on that
+branch (serial per branch), every other task gets a fresh `agent/…` branch forked from its base
+(parallel); breakdown and execute both route per task by the task's `Branch:`. Then
+`/pw-analyze <slug> [focus]`,
 `/pw-breakdown <slug>`, `/pw-review <slug> [phase|Tid|path]` (scoped to the current phase),
 `/pw-execute <slug> [task-ids | "with <model/agent>"]` (stops at committed + verified),
 `/pw-ship <slug> [task-ids] [comments]` (push + open MRs; the outward-facing publish step),

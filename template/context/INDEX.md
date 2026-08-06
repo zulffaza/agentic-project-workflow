@@ -5,7 +5,10 @@ logs, chat threads. **Purpose of this index:** record *what each input is* and *
 from*, so later phases (and future-you) know what to trust and can trace a claim back to its
 source. Fill one row per input. Prefer links + short excerpts over dumping huge files.
 
-**Filled by:** [🧑 you] — both tables below. Agents only READ this; they never populate it.
+**Filled by:** [🧑 you] — both tables below. Agents only READ what you write here. **Exception:**
+on continuation projects, `/pw-adopt` deterministically maintains its own rows — a one-time generic
+`ADOPTED.md` provenance row above, and the adopted `(repo, base)` rows in the "Repos in scope" table
+(the `<!-- pw-adopt-scope:… -->` marker rows). Don't hand-edit those.
 (Legend: 🧑 you fill · 🤖 agents fill/maintain, don't hand-edit · 🤖🧑 both.)
 
 | File / link | What it is | Source (ticket / URL / person) | Date added | Trust notes |
@@ -31,6 +34,11 @@ where to start looking. It is only a starting point — **analysis verifies each
 branch) and may add, drop, or correct rows. Do not treat this table as final; the analysis doc's
 "Affected repos" section is the confirmed version. If a repo needs work on **more than one base
 branch** (e.g. `master` and `spring3`), give it **one row per base**.
+
+> **Adopted (continuation) projects:** `/pw-adopt` maintains this table for you — it upserts one
+> row per adopted `(repo, base)` deterministically (via `pw-lib.sh adopt`, keyed by a hidden
+> `<!-- pw-adopt-scope:… -->` marker). **Don't hand-edit those marker rows** — that's what let a
+> later adoption clobber earlier ones. You may still add your own un-marked guess rows above/below.
 
 | Repo (in `IdeaProjects/`) | Base branch (guess) | Why it's in scope |
 |---------------------------|---------------------|-------------------|

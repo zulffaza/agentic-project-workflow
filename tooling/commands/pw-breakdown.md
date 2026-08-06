@@ -40,14 +40,21 @@ Then produce, from `{{PW_HOME}}/template/task/`:
 Size each task as one worktree / one reviewable unit. Split anything needing two repos and add a
 dependency edge.
 
-**Adopted (continuation) project?** If the dashboard has an `Adopted:` note (from `/pw-adopt`; the
-units are in `context/ADOPTED.md`): read every adopted unit `(repo, branch)`. For each task, set its
-`Branch:` to the **adopted branch of the unit/repo it touches** (not a new `agent/…` branch). State
-in PLAN's global rules "**continuation — per-branch serial; cross-branch parallel**". Then shape the
-DAG accordingly: tasks that touch the **same** adopted branch get a **linear dependency chain**
-(they share one worktree, so they must run in sequence); tasks on **different** adopted branches stay
-independent and can run in parallel. Split into tasks for reviewability as usual; the changes extend
-each existing branch (and its MR, if any).
+**Adopted units present?** If the dashboard has an `Adopted:` note (from `/pw-adopt`; the units are
+in `context/ADOPTED.md`), read every adopted unit `(repo, branch, base)` and route **per task** —
+this works whether the project is pure-continuation OR a **mixed** project (`/pw-new` fresh tasks
+plus adopted branches folded in with `/pw-adopt`; see the WORKFLOW "mixed projects" note):
+- A task that **extends an adopted unit** (touches that unit's repo *and* belongs to that
+  in-progress branch's work) → set its `Branch:` to that **adopted branch** (not a new `agent/…`
+  branch); it will continue-on-that-branch.
+- Every **other** task → a normal fresh `Branch: agent/<slug>/<Tid>-…` forked from its `Base branch:`.
+
+State the routing in PLAN's global rules. If any task is adopted, add "**adopted branches:
+per-branch serial; cross-branch parallel; fresh tasks independent**". Then shape the DAG: tasks
+sharing the **same** adopted branch get a **linear dependency chain** (one shared worktree → must
+run in sequence); tasks on **different** adopted branches, and all fresh tasks, stay independent and
+run in parallel. Split into tasks for reviewability as usual; adopted tasks' changes extend the
+existing branch (and its MR, if any), fresh tasks open new branches.
 
 Then **MANDATORY final step — do NOT skip** — update status + log via the helper
 (never hand-edit the Status line), and confirm the dashboard now shows `Status: breakdown`:

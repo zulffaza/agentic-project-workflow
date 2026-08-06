@@ -95,6 +95,65 @@ cmd_adopted() {
   echo "$slug: Adopted -> $text"
 }
 
+# Ensure the context/INDEX.md provenance table has EXACTLY ONE, generic `ADOPTED.md` row —
+# inserted once on first adopt, then left alone. This replaces the old free-form agent edit that
+# re-enumerated every unit into that row's description and thus rewrote it on every /pw-adopt
+# (the "one-liner replaced each attempt" bug). The row stays generic ("see the file"); per-unit
+# detail lives in ADOPTED.md, so it never needs churning. No-ops if INDEX.md is missing.
+_index_provenance_ensure() {
+  local f="$1"
+  [ -f "$f" ] || return 0
+  grep -qE '^\|[^|]*ADOPTED\.md' "$f" && return 0     # a row already references ADOPTED.md → leave it
+  local today; today="$(date +%F)"
+  local row="| \`ADOPTED.md\` | Adoption record — all continuation units (one section per unit; see the file) | git state snapshot, gathered by /pw-adopt | $today | authoritative — live repo state |"
+  # Insert right after the FIRST table's separator (the provenance table, above "## Repos in
+  # scope"); drop that table's single empty placeholder row if present.
+  awk -v row="$row" '
+    /^## Repos in scope/ { stop=1 }
+    {
+      if (!stop && !ins && $0 ~ /^\|[-: |]+\|[[:space:]]*$/) { print; print row; ins=1; next }
+      if (!stop && ins && !dropped && $0 ~ /^\|[[:space:]]*(\|[[:space:]]*)+$/) { dropped=1; next }
+      print
+    }' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+}
+
+# Deterministically append/upsert ONE row per adoption unit into the context/INDEX.md
+# "Repos in scope" table, keyed by a hidden `<!-- pw-adopt-scope:<repo>@<branch> -->` marker.
+# Append-only per unit (new rows go at the end of that table; re-adopting the same repo@branch
+# rewrites its OWN row in place) — so adopting the Nth branch can NEVER clobber the earlier rows
+# (the bug free-form editing caused in INDEX.md, same class as the ADOPTED.md clobber). No-ops
+# safely if INDEX.md or the section is missing — adoption never hard-fails on a weird index.
+_scope_upsert() {
+  local f="$1" repo="$2" branch="$3" base="$4" mr="$5"
+  [ -f "$f" ] || return 0
+  local key="$repo@$branch" mrtxt
+  case "$mr" in
+    http*://*)               mrtxt="[MR]($mr)" ;;
+    ""|none|"none yet")      mrtxt="no MR yet — ⚠️ base unconfirmed" ;;
+    *)                       mrtxt="MR $mr" ;;
+  esac
+  local marker="<!-- pw-adopt-scope:$key -->"
+  local row="| \`$repo\` | \`origin/$base\` | continuation — adopted branch \`$branch\`, $mrtxt $marker |"
+  if grep -Fq "$marker" "$f"; then                     # unit already has a row → rewrite it in place
+    awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
+      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  else                                                 # new unit → append at the end of the table
+    awk -v row="$row" '
+      {
+        if ($0 ~ /^## Repos in scope/) insec=1
+        else if ($0 ~ /^## /) { if (insec && sep && !ins) { print row; ins=1 } insec=0 }
+        if (insec && !sep && $0 ~ /^\|[-: |]+\|[[:space:]]*$/) { print; sep=1; next }
+        if (insec && sep && !ins) {
+          if ($0 ~ /^\|/) { t=$0; gsub(/[ |]/,"",t); if (t=="") next; print; next }  # drop empty placeholder
+          print row; ins=1; print; next                                             # insert before first non-row line
+        }
+        print
+      }
+      END { if (insec && sep && !ins) print row }' \
+      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  fi
+}
+
 # Deterministically append/upsert ONE adoption unit into context/ADOPTED.md, keyed by repo@branch.
 # Append-only per unit (new units go at EOF; re-adopting the same repo@branch updates that unit's
 # Base/MR in place) — so adopting a 2nd branch can NEVER clobber the 1st (the bug free-form editing
@@ -144,6 +203,10 @@ cmd_adopt() {
       printf '### Remaining work\n🧑 <!-- pw-adopt %s remaining: fill with what to change on top of this branch -->\n' "$uid"
     } >> "$f"
   fi
+  # Keep context/INDEX.md in lockstep (deterministic, no clobber): a one-time generic ADOPTED.md
+  # provenance row + one "Repos in scope" row per unit.
+  _index_provenance_ensure "$cdir/INDEX.md"
+  _scope_upsert "$cdir/INDEX.md" "$repo" "$branch" "$base" "$mr"
   local count; count="$(grep -cE '^## A[0-9]+ · ' "$f" 2>/dev/null || true)"; : "${count:=0}"
   cmd_adopted "$slug" "$count unit(s) — continuation; see context/ADOPTED.md" >/dev/null
   cmd_log "$slug" adopt "unit $uid: $repo@$branch (base $base, MR $mr)"
@@ -194,6 +257,11 @@ cmd_selftest() {
   grep -q '^- \*\*Adopted:\*\* 2 units' "$tmp/demo/README.md" || die "selftest FAIL: Adopted not updated"
   # adopt: multi-unit append MUST NOT clobber (the reported bug). Two branches, same repo.
   mkdir -p "$tmp/demo/context"
+  # An INDEX.md with a provenance table (empty placeholder) AND a "Repos in scope" table (empty
+  # placeholder) so we can assert both the one-time provenance row and the no-clobber scope rows.
+  printf '# Context index\n\n| File / link | What it is | Source | Date added | Trust notes |\n|---|---|---|---|---|\n| | | | | |\n\n## Repos in scope\n| Repo | Base branch | Why |\n|------|-------------|-----|\n| | | |\n' \
+    > "$tmp/demo/context/INDEX.md"
+  local IX="$tmp/demo/context/INDEX.md"
   PW_PROJECTS_DIR="$tmp" "$0" adopt demo repoX feat-a master "http://mr/1" >/dev/null
   PW_PROJECTS_DIR="$tmp" "$0" adopt demo repoX feat-b spring3 "http://mr/2" >/dev/null
   local A; A="$tmp/demo/context/ADOPTED.md"
@@ -206,6 +274,20 @@ cmd_selftest() {
   [ "$(grep -c '^## A[0-9]* · ' "$A")" = "2" ] || die "selftest FAIL: re-adopt duplicated a unit"
   awk '/^## A1 · /{u=1} u&&/^- Base: /{print;exit}' "$A" | grep -q 'develop' || die "selftest FAIL: A1 base not updated in place"
   awk '/^## A2 · /{u=1} u&&/^- Base: /{print;exit}' "$A" | grep -q 'spring3' || die "selftest FAIL: A2 base wrongly changed"
+  # scope table (INDEX.md): both units got a row, empty placeholder dropped, no clobber…
+  grep -q 'pw-adopt-scope:repoX@feat-a' "$IX" || die "selftest FAIL: scope row for feat-a missing"
+  grep -q 'pw-adopt-scope:repoX@feat-b' "$IX" || die "selftest FAIL: scope row for feat-b clobbered/missing"
+  [ "$(grep -c 'pw-adopt-scope:' "$IX")" = "2" ] || die "selftest FAIL: expected 2 scope rows"
+  grep -qE '^\| +\| +\|' "$IX" && die "selftest FAIL: empty placeholder scope row not dropped"
+  # …and the re-adopt of A1 (base develop, above) rewrote ONLY feat-a's scope row in place.
+  grep 'pw-adopt-scope:repoX@feat-a' "$IX" | grep -q 'origin/develop' || die "selftest FAIL: feat-a scope row base not updated"
+  grep 'pw-adopt-scope:repoX@feat-b' "$IX" | grep -q 'origin/spring3'  || die "selftest FAIL: feat-b scope row wrongly changed"
+  [ "$(grep -c 'pw-adopt-scope:' "$IX")" = "2" ] || die "selftest FAIL: re-adopt duplicated a scope row"
+  # provenance row: inserted exactly once, generic (not per-unit enumerated), never rewritten/duped
+  # across the multiple adopts above.
+  [ "$(grep -cE '^\|[^|]*ADOPTED\.md' "$IX")" = "1" ] || die "selftest FAIL: expected exactly one ADOPTED.md provenance row"
+  grep -qE '^\|[^|]*ADOPTED\.md.*all continuation units' "$IX" || die "selftest FAIL: provenance row not generic"
+  grep -qE '^\|[^|]*ADOPTED\.md.*feat-a' "$IX" && die "selftest FAIL: provenance row enumerated a unit (should stay generic)"
   echo "selftest OK"
 }
 

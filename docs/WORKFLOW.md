@@ -40,6 +40,19 @@ There are **two entry workflows**, and they differ only at the front:
 - **Continuation** (`/pw-adopt`) — work is **already underway on real branches** (with or without an
   MR) and you want to finish it *through* the pipeline instead of by hand.
 
+**Adoption is a baseline/input action, with two intents** (it's never a way to park in a
+mid-pipeline phase — `ADOPTED.md` lives in `context/` for a reason):
+
+| Intent | Command | Lands at | For |
+|---|---|---|---|
+| Continue development (default) | `/pw-adopt <slug> <repo> <branch> [mr]` | `context` | the branch needs *more work* → analyze→breakdown→execute→ship the **remaining** work |
+| Review-only | `/pw-adopt <slug> <repo> <branch> <mr> review` | `review` | branch is **done + has an MR** → just service MR comments (`/pw-ship comments`, `/pw-sync`); skips analyze/breakdown |
+
+Guard: adopting into a **`done`** (closed) project is refused — reopen deliberately. A continue-dev
+adopt onto a project **already past `context`** records the unit but **won't rewind `Status`** (that
+would falsely imply the in-flight units regressed) — it warns you to re-run `/pw-analyze` +
+`/pw-breakdown` to fold the newcomer in.
+
 Everything from analysis onward — the gates, review flow, `/pw-sync`, `/pw-close` — is identical.
 Only the branch/worktree/ship mechanics differ (below).
 
@@ -71,6 +84,31 @@ deterministically via `pw-lib.sh adopted`). Then fill each unit's `## Remaining 
 
 Full mechanics: the [command](../tooling/commands/pw-adopt.md) ·
 [worktree attach](./EXECUTION.md#multi-repo-worktrees--how).
+
+#### Adopt into an existing project — "fresh + continuation" (mixed projects)
+`/pw-adopt` is **not** only a way to *start* a project. You can run it against a slug that already
+exists — one you began with `/pw-new`, or one that already has adopted units — to **fold an
+in-progress branch into it**. Nothing special is required: if the project dir exists `/pw-adopt`
+skips scaffolding and just appends the unit (creates `context/ADOPTED.md` and the dashboard
+`Adopted:` pointer on first adopt, upserts the `context/INDEX.md` scope row), so adopting the Nth
+branch never disturbs the fresh tasks or the earlier units.
+
+The result is a **mixed project**, and adoption is decided **per task/branch, not per project**:
+
+- A task that **extends an adopted unit's branch** → continues on that branch (no new `agent/…`
+  branch), shares that branch's one worktree, and runs **serially** with its branch-mates.
+- Every **other** task → a fresh `agent/<slug>/T0n` branch forked from its `Base branch:`, its own
+  worktree, parallel as usual.
+
+So one project can carry both at once: breakdown reads `context/ADOPTED.md`, routes each task by
+whether it touches an adopted unit, and the DAG serializes only within each adopted branch.
+`/pw-ship` then opens new MRs for the fresh tasks and updates the existing MR(s) for the adopted
+branches — in the same shipment.
+
+**When to keep it separate instead:** if the in-progress branch is logically unrelated to what the
+project is already doing, give it its own slug — a tighter review gate and a cleaner dashboard beat
+cramming unrelated work into one project. Mixing is for when the adopted branch is *part of the same
+change* as the fresh work.
 
 ## Step 2–3 — Analysis
 Ask any agent to analyze against `context/`. Output goes to `analysis/` using
