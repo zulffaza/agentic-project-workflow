@@ -116,9 +116,8 @@ task forks from its own `Base branch:` into its own per-task branch and worktree
 collide and each ships as its own MR (targeting its base). The `PLAN.md` repo manifest lists one row
 per `(repo, base)` pair, so the same repo can appear more than once.
 
-**Adopted / continuation project** (via [`/pw-adopt`](./WORKFLOW.md#adopting-existing-in-progress-work))
-— attach the **existing** branch instead of creating one (no `-b`), one shared worktree **per
-adopted branch**. Tasks sharing a branch commit onto it in sequence; different adopted branches run
+**Adopted / continuation project** (via [`/pw-adopt`](./ADOPTION.md)) — attach the **existing**
+branch instead of creating one (no `-b`), one shared worktree **per adopted branch**. Tasks sharing a branch commit onto it in sequence; different adopted branches run
 in parallel (each its own worktree):
 ```bash
 git -C $PW_REPOS/$REPO worktree add \

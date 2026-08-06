@@ -1,7 +1,7 @@
 # Reference — layout, conventions, commands
 
 ← [back to README](../README.md) · related: [Workflow](./WORKFLOW.md) ·
-[Execution & routing](./EXECUTION.md)
+[Adoption](./ADOPTION.md) · [Execution & routing](./EXECUTION.md)
 
 ## Bundle layout (this repo)
 
@@ -11,7 +11,7 @@ Grouped so it's obvious what's machinery vs. what becomes a project:
 agentic-project-workflow/        ← this bundle ($PW_HOME)
 ├── AGENTS.md · CLAUDE.md        ← AI-agent entrypoint (CLAUDE.md just imports AGENTS.md)
 ├── README.md · ONBOARDING.md    ← guides (human + agent)
-├── docs/                        ← the detailed guides (WORKFLOW · REVIEW · EXECUTION · REFERENCE)
+├── docs/                        ← the detailed guides (WORKFLOW · ADOPTION · REVIEW · EXECUTION · REFERENCE)
 ├── bootstrap.sh                 ← one-shot onboarding — run this first
 ├── pw.config.example.sh         ← copy → pw.config.sh; the one file YOU edit (providers + memory)
 ├── template/                    ← what a scaffolded project is MADE OF (copied per project)

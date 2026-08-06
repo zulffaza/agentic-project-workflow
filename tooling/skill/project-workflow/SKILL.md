@@ -169,21 +169,18 @@ each provider's list).
   override ("run T03 with kilo:command_code/MiniMaxAI/MiniMax-M3") and write it to `Actually used:`.
 
 ## Slash commands (generated — one source of truth)
-Users drive phases with `/pw-*`. **Two entry workflows:** `/pw-new <slug>` (fresh start) OR
-`/pw-adopt <slug> <repo> <branch> [mr-url] [review]` (continuation — onboard existing in-progress
-branch(es), run once per branch; continue-on-same-branch; serial within a branch, parallel across
-branches). **Adoption is a context/baseline action with two intents** (never a way to sit in a
-mid-pipeline phase): **continue-dev** (default) lands at `context` so analyze→breakdown→execute→ship
-run on the *remaining* work; **review-only** (trailing `review` keyword, MR required) lands straight
-at `review` to service MR comments (`/pw-ship comments`, `/pw-sync`), skipping analyze/breakdown.
-Guard: refuse on a `done` project (reopen deliberately); a continue-dev adopt onto a project already
-past `context` records the unit and **warns to re-run `/pw-analyze` + `/pw-breakdown`** rather than
-rewinding `Status`. `/pw-adopt` also accepts an **existing** slug (from `/pw-new` or already
-adopted): it folds the branch in without re-scaffolding, yielding a **mixed project** where adoption
-is decided **per task, not per project** — a task that extends an adopted unit continues on that
-branch (serial per branch), every other task gets a fresh `agent/…` branch forked from its base
-(parallel); breakdown and execute both route per task by the task's `Branch:`. Then
-`/pw-analyze <slug> [focus]`,
+Users drive phases with `/pw-*`. **Two entry workflows:** `/pw-new <slug>` (fresh) OR
+`/pw-adopt <slug> <repo> <branch> [mr-url] [review]` (continuation — full guide
+`agentic-project-workflow/docs/ADOPTION.md`). Adoption is a **context/baseline** action, run once per
+in-progress branch (continue-on-same-branch; serial within a branch, parallel across), with two
+intents: **continue-dev** (default) → lands at `context`, then analyze→breakdown→execute→ship the
+*remaining* work; **review-only** (trailing `review` keyword, MR required) → lands at `review` to
+service MR comments (`/pw-ship comments`, `/pw-sync`), skipping analyze/breakdown. Guards: refuse on
+a `done` project; a continue-dev adopt onto a project **past `context`** records the unit and
+**warns to re-run `/pw-analyze` + `/pw-breakdown`** (never rewinds `Status`). Adopting into an
+existing slug yields a **mixed project** — routing is **per task by its `Branch:`**: a task extending
+an adopted unit continues on that branch (serial per branch), every other task gets a fresh
+`agent/…` branch off its base (parallel). Then `/pw-analyze <slug> [focus]`,
 `/pw-breakdown <slug>`, `/pw-review <slug> [phase|Tid|path]` (scoped to the current phase),
 `/pw-execute <slug> [task-ids | "with <model/agent>"]` (stops at committed + verified),
 `/pw-ship <slug> [task-ids] [comments]` (push + open MRs; the outward-facing publish step),

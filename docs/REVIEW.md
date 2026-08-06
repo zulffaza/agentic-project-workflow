@@ -1,7 +1,7 @@
 # Review & feedback
 
 ← [back to README](../README.md) · related: [Workflow](./WORKFLOW.md) ·
-[Execution & routing](./EXECUTION.md)
+[Adoption](./ADOPTION.md) · [Execution & routing](./EXECUTION.md)
 
 There are **two places** review happens, and they run at different times:
 

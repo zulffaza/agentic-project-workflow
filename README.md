@@ -37,8 +37,8 @@ $PW_HOME/tooling/scaffold.sh spring-boot-3-upgrade
 **Two ways to start.** Fresh (`/pw-new`, above) — or **continuation** if you're already
 mid-development: `/pw-adopt <slug> <repo> <branch> [mr-url]` snapshots the in-progress work and
 continues it *on the same branch* (with or without an existing MR). Run it **once per in-progress
-branch** to adopt multi-repo work already in flight. Everything from analysis on is identical. See
-[docs/WORKFLOW.md → fresh vs. continuation](./docs/WORKFLOW.md#adopting-existing-in-progress-work).
+branch** to adopt multi-repo work already in flight. Everything from analysis on is identical. Full
+guide → **[docs/ADOPTION.md](./docs/ADOPTION.md)**.
 
 New here or on a fresh machine? **[ONBOARDING.md](./ONBOARDING.md)** has the full setup, including
 adding your own agent CLI as a provider.
@@ -68,6 +68,7 @@ Keeping open MRs fresh as their base moves is a side-loop: **`/pw-sync`**. Full 
 | Guide | What's in it |
 |-------|--------------|
 | 📋 **[docs/WORKFLOW.md](./docs/WORKFLOW.md)** | Every step in detail · who owns `Status:` · the `LOG.md` audit trail · rewinding a phase |
+| 🔀 **[docs/ADOPTION.md](./docs/ADOPTION.md)** | The continuation workflow — adopt in-progress branches, the two intents, mixed projects |
 | 💬 **[docs/REVIEW.md](./docs/REVIEW.md)** | The two review entry points — local `.review.md` files **and** MR comments — and how they reconcile |
 | ⚙️ **[docs/EXECUTION.md](./docs/EXECUTION.md)** | Orchestrator vs executor · picking a model/agent per task · cross-provider execution · worktrees |
 | 📖 **[docs/REFERENCE.md](./docs/REFERENCE.md)** | Bundle layout · project anatomy · naming conventions · the full `/pw-*` command table + generator |

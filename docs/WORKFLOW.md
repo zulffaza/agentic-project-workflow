@@ -1,7 +1,7 @@
 # The workflow, step by step
 
-← [back to README](../README.md) · related: [Review & feedback](./REVIEW.md) ·
-[Execution & routing](./EXECUTION.md) · [Reference](./REFERENCE.md)
+← [back to README](../README.md) · related: [Adoption](./ADOPTION.md) ·
+[Review & feedback](./REVIEW.md) · [Execution & routing](./EXECUTION.md) · [Reference](./REFERENCE.md)
 
 The pipeline is nine steps. Each phase writes to its own directory and stops at a **human sign-off
 gate** before the next begins — so you review one artifact type at a time, and a stalled run is
@@ -33,82 +33,17 @@ over dumping huge files. Optionally start a one-page brief — see
 `REQUIREMENTS.md`); it's optional and sharpens the analysis phase.
 
 <a id="adopting-existing-in-progress-work"></a>
-### Two ways to start: fresh vs. continuation (`/pw-adopt`)
+### Two ways to start: fresh vs. continuation
 There are **two entry workflows**, and they differ only at the front:
 
 - **Fresh start** (`/pw-new`) — empty `context/`, build from scratch in isolated `agent/…` branches.
+  The nine steps above.
 - **Continuation** (`/pw-adopt`) — work is **already underway on real branches** (with or without an
-  MR) and you want to finish it *through* the pipeline instead of by hand.
+  MR); you finish it *through* the pipeline on the same branch(es). Everything from analysis onward
+  is identical — only the branch/worktree/ship mechanics differ.
 
-**Adoption is a baseline/input action, with two intents** (it's never a way to park in a
-mid-pipeline phase — `ADOPTED.md` lives in `context/` for a reason):
-
-| Intent | Command | Lands at | For |
-|---|---|---|---|
-| Continue development (default) | `/pw-adopt <slug> <repo> <branch> [mr]` | `context` | the branch needs *more work* → analyze→breakdown→execute→ship the **remaining** work |
-| Review-only | `/pw-adopt <slug> <repo> <branch> <mr> review` | `review` | branch is **done + has an MR** → just service MR comments (`/pw-ship comments`, `/pw-sync`); skips analyze/breakdown |
-
-Guard: adopting into a **`done`** (closed) project is refused — reopen deliberately. A continue-dev
-adopt onto a project **already past `context`** records the unit but **won't rewind `Status`** (that
-would falsely imply the in-flight units regressed) — it warns you to re-run `/pw-analyze` +
-`/pw-breakdown` to fold the newcomer in.
-
-Everything from analysis onward — the gates, review flow, `/pw-sync`, `/pw-close` — is identical.
-Only the branch/worktree/ship mechanics differ (below).
-
-**Adopt one branch, or many.** An **adoption unit** is a tuple `(repo, in-progress-branch, [mr])`.
-Run `/pw-adopt` **once per in-progress branch** — multi-repo work already in flight = several units.
-Each run appends/updates a unit; it never clobbers earlier ones.
-```bash
-/pw-adopt my-project repo-a feat-a https://…/mr/42     # unit A1 (has an MR)
-/pw-adopt my-project repo-b feat-b                      # unit A2 (no MR yet)
-```
-Each run scaffolds the project (first time), snapshots what that branch already did (commits + diff
-vs its base) into `context/ADOPTED.md`, and bumps the dashboard `Adopted:` pointer (set
-deterministically via `pw-lib.sh adopted`). Then fill each unit's `## Remaining work` in
-`ADOPTED.md` and continue at `/pw-analyze`.
-
-**The two rules that follow from adopting real branches:**
-- **Continue-on-the-same-branch** — task commits extend your existing branch (and its MR); no fresh
-  `agent/…` branches.
-- **Serialization is per-branch** — tasks on the *same* adopted branch run **serially** in that
-  branch's one shared worktree; tasks on *different* adopted branches are independent and run **in
-  parallel**. So multiple units keep cross-unit parallelism while staying continue-on within a unit.
-
-| | Fresh (`/pw-new`) | Continuation (`/pw-adopt`) |
-|---|---|---|
-| Branches | new `agent/<slug>/T0n` per task | your existing branch(es) |
-| Worktrees | one per task, all parallel | one per adopted branch; serial within, parallel across |
-| Ship | opens new MRs | updates an existing MR if present, else opens one |
-| Analysis baseline | just `context/` | `context/` + each unit's existing diff (proposes only *remaining* work) |
-
-Full mechanics: the [command](../tooling/commands/pw-adopt.md) ·
-[worktree attach](./EXECUTION.md#multi-repo-worktrees--how).
-
-#### Adopt into an existing project — "fresh + continuation" (mixed projects)
-`/pw-adopt` is **not** only a way to *start* a project. You can run it against a slug that already
-exists — one you began with `/pw-new`, or one that already has adopted units — to **fold an
-in-progress branch into it**. Nothing special is required: if the project dir exists `/pw-adopt`
-skips scaffolding and just appends the unit (creates `context/ADOPTED.md` and the dashboard
-`Adopted:` pointer on first adopt, upserts the `context/INDEX.md` scope row), so adopting the Nth
-branch never disturbs the fresh tasks or the earlier units.
-
-The result is a **mixed project**, and adoption is decided **per task/branch, not per project**:
-
-- A task that **extends an adopted unit's branch** → continues on that branch (no new `agent/…`
-  branch), shares that branch's one worktree, and runs **serially** with its branch-mates.
-- Every **other** task → a fresh `agent/<slug>/T0n` branch forked from its `Base branch:`, its own
-  worktree, parallel as usual.
-
-So one project can carry both at once: breakdown reads `context/ADOPTED.md`, routes each task by
-whether it touches an adopted unit, and the DAG serializes only within each adopted branch.
-`/pw-ship` then opens new MRs for the fresh tasks and updates the existing MR(s) for the adopted
-branches — in the same shipment.
-
-**When to keep it separate instead:** if the in-progress branch is logically unrelated to what the
-project is already doing, give it its own slug — a tighter review gate and a cleaner dashboard beat
-cramming unrelated work into one project. Mixing is for when the adopted branch is *part of the same
-change* as the fresh work.
+Continuation is a whole workflow of its own (two intents, adopting one branch or many, and folding a
+branch into an existing project) — it has its own guide: **[Adoption →](./ADOPTION.md)**.
 
 ## Step 2–3 — Analysis
 Ask any agent to analyze against `context/`. Output goes to `analysis/` using
