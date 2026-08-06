@@ -15,25 +15,29 @@ Check that everything is in sync any time: `tooling/pw-doctor.sh` ( `--fix` to r
 
 ## Driving a project
 Invoke the **`project-workflow` skill** for the working rules, then use the commands:
-`/pw-new` · `/pw-analyze` · `/pw-breakdown` · `/pw-review` · `/pw-execute` · `/pw-ship` ·
-`/pw-status` · `/pw-close` · `/pw-doctor`. Full guide: **[README.md](./README.md)**. Every phase is
+`/pw-new` · `/pw-adopt` · `/pw-analyze` · `/pw-breakdown` · `/pw-review` · `/pw-execute` ·
+`/pw-ship` · `/pw-sync` · `/pw-status` · `/pw-close` · `/pw-doctor`. Full guide: **[README.md](./README.md)**
+(detail in **[docs/](./docs/)**). Every phase is
 **gated by a human sign-off** — don't skip a gate. Only the **PLAN** sign-off gates execution
 (per-task reviews are optional); `/pw-execute` stops at committed + verified and `/pw-ship` is the
 separate, explicit publish (push + MR) step.
 
 ## Layout (this bundle = `$PW_HOME`)
 - **`template/`** — what a scaffolded project is made of (copied into each new project).
-- **`tooling/`** — the machinery: `scaffold.sh`, `gen-commands.sh`, `pw-lib.sh`, `pw-doctor.sh`,
-  `pw-common.sh`, `pw-teardown.sh` (safe worktree removal), `commands/` (canonical `/pw-*` sources),
-  `providers.md`, `memory.md` (optional-memory policy), `skill/`.
+- **`docs/`** — the detailed guides (WORKFLOW · REVIEW · EXECUTION · REFERENCE); README links out to them.
+- **`tooling/`** — the machinery: `scaffold.sh`, `gen-commands.sh`, `gen-agents.sh`, `pw-lib.sh`,
+  `pw-doctor.sh`, `pw-common.sh`, `pw-teardown.sh` (safe worktree removal), `commands/` (canonical
+  `/pw-*` sources), `agents/` (seedable `pw-orchestrator` + `pw-executor`), `providers.md`,
+  `memory.md` (optional-memory policy), `skill/`.
 - **`pw.config.sh`** — YOUR config (which CLIs, which models, optional `PW_MEMORY`). The one file
   you edit; created from `pw.config.example.sh` on first bootstrap, gitignored.
 
 ## Rules that keep it working
 - **Edit `pw.config.sh`, never the scripts**, to enable, override, or add a provider.
-- **Never hand-edit** generated command files (`~/.claude/commands`, `~/.config/kilo/command`) or a
-  project's dashboard `Status:` / `LOG.md`. Regenerate commands with `gen-commands.sh` (or
-  `bootstrap.sh`); mutate status/log via `tooling/pw-lib.sh status|log|phase`.
+- **Never hand-edit** generated command files (`~/.claude/commands`, `~/.config/kilo/command`),
+  seeded agents (`~/.claude/agents`, `~/.config/kilo/agent`), or a project's dashboard `Status:` /
+  `LOG.md`. Regenerate with `gen-commands.sh` / `gen-agents.sh` (or `bootstrap.sh`); mutate
+  status/log via `tooling/pw-lib.sh status|log|phase`.
 - Paths stay machine-independent via `{{PW_HOME}}` / `{{PW_PROJECTS}}` / `{{PW_REPOS}}` tokens
   stamped at build time. Keep sources tokenized — never hardcode an absolute path.
 - Scaffolded projects live in `$PW_PROJECTS` (this bundle's parent), are plain (non-git) by design,

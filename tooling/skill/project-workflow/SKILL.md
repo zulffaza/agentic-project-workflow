@@ -1,6 +1,6 @@
 ---
 name: project-workflow
-description: Run a multi-repo change through the phased AI-agent pipeline under IdeaProjects/projects/ — context → analysis → task breakdown → parallel worktree execution → review → learn. Use whenever working inside IdeaProjects/projects/<project>/ (context/, analysis/, task/, worktree/, sub-agent/), when asked to analyze context, break analysis into tasks, write or read an orchestration PLAN.md, spawn executor sub-agents against git worktrees, or scaffold a new project from the bundle. Also use when the user mentions the "project workflow", "task breakdown", "orchestration plan", or multi-repo agentic execution.
+description: Run a multi-repo change through the phased AI-agent pipeline under IdeaProjects/projects/ — context → analysis → task breakdown → parallel worktree execution → review → learn. Use whenever working inside IdeaProjects/projects/<project>/ (context/, analysis/, task/, worktree/), when asked to analyze context, break analysis into tasks, write or read an orchestration PLAN.md, spawn executor sub-agents against git worktrees, or scaffold a new project from the bundle. Also use when the user mentions the "project workflow", "task breakdown", "orchestration plan", or multi-repo agentic execution.
 ---
 
 # Project Workflow (multi-repo agentic pipeline)
@@ -13,7 +13,7 @@ this skill + the `/pw-*` commands per provider) — see `agentic-project-workflo
 
 ## Structure of a project
 ```
-<project>/  README.md(dashboard) · context/ · analysis/ · task/(PLAN.md + T0n.md) · worktree/ · sub-agent/
+<project>/  README.md(dashboard) · context/ · analysis/ · task/(PLAN.md + T0n.md) · worktree/
 ```
 Phases are gated: a human approves after **analysis** (step 3) and after **task breakdown**
 (step 5) before the next phase runs. Don't skip a gate.
@@ -75,10 +75,11 @@ Human feedback on any doc lives in a review file under a **`review/` subdir** be
   it in the doc (`❓ Qn`) AND seed a `Qn` row in the review file's "## Open questions" section. The
   human answers with `↳ you:`; the next `/pw-review` folds the answer into the doc and flips the
   row to ✅ answered. Report unanswered `Qn` as blocking.
-- **MR feedback:** review comments left on the *MR itself* are handled by `/pw-ship <slug> T0n
-  comments` (fetch via `glab`/`gh`, fix in the worktree, reply on the thread) — but **always mirror
-  the change into the internal record** (task `## Result` + `task/review/` + `LOG.md`). The project
-  dir stays the source of truth even for MR-driven fixes.
+- **MR feedback:** review comments left on the *MR itself* are handled by `/pw-ship <slug> [task-ids]
+  comments` (fetch via `glab`/`gh`, fix in the worktree, reply on the thread). **Task IDs are
+  optional — with none it sweeps EVERY open MR** in the project in one run (serially). Always
+  **mirror the change into the internal record** (task `## Result` + `task/review/` + `LOG.md`); the
+  project dir stays the source of truth even for MR-driven fixes.
 - After a pass, report how many `🔴 open` items remain: `rtk grep -rln "🔴 open" <project>/`.
 
 **Who fills what** (put a `Filled by:` note on every table/form so it's unambiguous): 🤖 =
@@ -104,6 +105,8 @@ phase-validated, portable across Claude Code + shelled-out kilo executors):
   backward (re-running a task is normal).
 - `pw-lib.sh oneliner <slug> "<text>"` — set the dashboard **One-liner** (the agent does this during
   `/pw-analyze`, distilled from context/).
+- `pw-lib.sh adopted <slug> "<pointer>"` — set/insert the dashboard **Adopted:** pointer (the agent
+  does this during `/pw-adopt`; inserts the line only for continuation projects).
 - `pw-lib.sh log <slug> <actor> <msg>` — append one audit line to **`LOG.md`**
   (`YYYY-MM-DD HH:MM | actor | what`). Log phase transitions, executor spawns, commits, pushes,
   MRs, review passes, close-out.
@@ -121,9 +124,10 @@ doesn't force an agent switch; route a task to a different provider only with a 
 **Claude aliases (`opus`/`sonnet`/…) follow the latest version — pin the full name
 (`claude-opus-4-8` vs `claude-opus-5`) for reproducibility.** Defaults: `claude:opus`=complex/risky,
 `claude:sonnet`=standard (most), `claude:haiku`=trivial mechanical; open-weight models route to
-`kilo` via whichever KiloCode model provider you configured (`PW_KILO_PROVIDER` in `pw.config.sh`;
-the maintainer's is `command_code`), e.g. `kilo:command_code/MiniMaxAI/MiniMax-M3`
-(`kilo models <provider>` for the list).
+`kilo` via **whichever KiloCode model providers you configured** (`PW_KILO_PROVIDERS` array in
+`pw.config.sh` — KiloCode can serve several at once; the maintainer's is `command_code`), e.g.
+`kilo:command_code/MiniMaxAI/MiniMax-M3` or `kilo:openrouter/<model>` (`kilo models <provider>` for
+each provider's list).
 - **Provider registry** = `agentic-project-workflow/tooling/providers.md`: maps each model/agent → the CLI that runs
   it, and gives that CLI's **headless invocation**. It's the extension point — add a row to
   onboard a new model/provider; nothing hard-codes the list.
@@ -131,29 +135,47 @@ the maintainer's is `command_code`), e.g. `kilo:command_code/MiniMaxAI/MiniMax-M
   **shells out to that provider's CLI headlessly**, passing the task file as the work order (Claude
   Code ⇄ KiloCode, and any future provider). The discipline travels with the task (skill + task
   file), not the provider. Unverified headless flags → check `--help` or ask; don't guess.
-- There is **no bespoke executor agent.** The orchestrator spawns (or shells out to) whatever
-  `Execute with:` names — an existing agent (e.g. `code-implementation`) or a `provider:model`.
-  Add a def to `sub-agent/` only for a genuinely new role no existing agent covers.
-- **Agents are provider-bound too.** A `sub-agent/<name>.md` declares `Provider:` + `Default model`
-  + optional default effort/thinking. When `Execute with:` names an agent, resolve its provider:
-  explicit `<provider>:` prefix → else the agent def's `Provider:` → else (built-in, no def) the
-  orchestrator's own provider. Same-provider → spawn in-process; different → shell out to that CLI
-  (`kilo run --agent <name> …`, or `claude`), passing the agent brief + task file.
+- The orchestrator spawns (or shells out to) whatever `Execute with:` names — an existing agent
+  (e.g. `code-implementation`), the shipped `pw-executor`, or a `provider:model`. Two agents ship
+  and are seeded per provider from `tooling/agents/` (`pw-orchestrator`, `pw-executor`); add a def
+  there only for a genuinely new role no existing agent covers.
+- **Agent vs sub-agent — the distinction is load-bearing across providers.** A **sub-agent** is
+  spawned *in-process* by an orchestrator of the **same provider** (Claude Task `subagent_type`;
+  kilo `mode: subagent`) — a provider can spawn only its OWN sub-agents. `pw-executor` is a
+  sub-agent. An **agent** (primary/invocable) is invoked through a provider's CLI — the only unit
+  that crosses a provider boundary. `pw-orchestrator` is primary.
+- **Cross-provider rule (get this right):** an orchestrator on provider A routing a task to provider
+  B **cannot spawn B's sub-agent**. A Claude orchestrator delegating to kilo does NOT name
+  `pw-executor` (a kilo sub-agent it can't reach) — it invokes kilo's CLI headlessly with the **task
+  file + `project-workflow` skill** as the work order and lets kilo's default agent run it (the
+  discipline travels with skill+task, no named agent needed). So `pw-executor` is usable only when
+  its own provider is the orchestrator. Routing resolves to exactly one of: **same provider → spawn
+  the sub-agent in-process**; **different provider → shell out to that CLI passing the task file
+  inline to its default/primary agent** (never `--agent <a-sub-agent>` across the boundary; only a
+  provider's own *primary* agents are invocable from outside). When `Execute with:` names an agent,
+  resolve its provider: explicit `<provider>:` prefix → else the agent def's own provider → else
+  (built-in, no def) the orchestrator's own provider.
 - During **breakdown**, set each task's `Execute with:` + `Why:` + `Story points:` (2 SP = 1
   person-day; PLAN carries the manual-effort/timeline estimate). During **execution**, honor any
   override ("run T03 with kilo:command_code/MiniMaxAI/MiniMax-M3") and write it to `Actually used:`.
 
 ## Slash commands (generated — one source of truth)
-Users drive phases with `/pw-*`: `/pw-new <slug>`, `/pw-analyze <slug> [focus]`,
+Users drive phases with `/pw-*`. **Two entry workflows:** `/pw-new <slug>` (fresh start) OR
+`/pw-adopt <slug> <repo> <branch> [mr-url]` (continuation — onboard existing in-progress branch(es),
+run once per branch; continue-on-same-branch; serial within a branch, parallel across branches).
+Then `/pw-analyze <slug> [focus]`,
 `/pw-breakdown <slug>`, `/pw-review <slug> [phase|Tid|path]` (scoped to the current phase),
 `/pw-execute <slug> [task-ids | "with <model/agent>"]` (stops at committed + verified),
 `/pw-ship <slug> [task-ids] [comments]` (push + open MRs; the outward-facing publish step),
+`/pw-sync <slug> [task-ids]` (merge the moved base into each open MR branch, re-verify, push),
 `/pw-status <slug>`, `/pw-close <slug>`,
-`/pw-doctor [--fix]` (verify/repair that installed commands + skill match the bundle).
+`/pw-doctor [--fix]` (verify/repair that installed commands + agents + skill match the bundle).
 The command files are **generated build artifacts** — the single source is
 `agentic-project-workflow/tooling/commands/*.md`, emitted per provider by `agentic-project-workflow/tooling/gen-commands.sh` (Claude →
-`~/.claude/commands/`, kilo → `~/.config/kilo/command/`). To change a command's prompt, edit the
-canonical file and re-run the generator — never hand-edit the per-provider copies.
+`~/.claude/commands/`, kilo → `~/.config/kilo/command/`); the sub-agents (`pw-orchestrator`,
+`pw-executor`) are seeded the same way from `tooling/agents/` by `gen-agents.sh`. To change a
+command's prompt or an agent, edit the canonical file and re-run the generator — never hand-edit the
+per-provider copies.
 
 ## Conventions (the contract)
 - **Task IDs:** `T01`, `T02`… referenced by `depends_on`.

@@ -88,7 +88,7 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
 | `haiku` | claude | trivial, mechanical bulk edits (renames, config bumps) |
 | `command_code/deepseek/deepseek-v4-pro`, `command_code/MiniMaxAI/MiniMax-M3`, `command_code/xiaomi/mimo-v2.5-pro`, … | kilo | open-weight (cost/availability); routed via KiloCode's `command_code` provider — `kilo models command_code` for the full list |
 | an existing agent | (its provider) | reuse one you already have (e.g. `code-implementation`) |
-| a `sub-agent/` def | (its provider) | only for a genuinely new role no existing agent covers |
+| `pw-executor` or a `tooling/agents/` def | (its provider) | the shipped executor, or a custom role no existing agent covers |
 
 Provider→model mapping, headless invocation, and the **effort/variant/thinking** flag mapping live
 in the registry; **add a row there to onboard a new model/provider** — nothing here hard-codes the

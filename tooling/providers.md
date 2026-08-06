@@ -75,15 +75,20 @@ Blessed `command_code` models for this workflow. Add/remove rows freely; the ful
 
 
 0. If `Execute with:` names an **agent** (not a bare model), resolve its provider first: explicit
-   `<provider>:` prefix → else the agent's `Provider:` in `sub-agent/<name>.md` → else (built-in
-   agent, no def) the orchestrator's own provider. Its `Default model`/`Default effort` apply
-   unless the task overrides. (See `sub-agent/README.md`.)
+   `<provider>:` prefix → else the agent's own provider in `tooling/agents/<name>.md` → else
+   (built-in agent, no def) the orchestrator's own provider. Its `model`/effort defaults apply
+   unless the task overrides. (See `tooling/agents/README.md`.)
 1. Otherwise resolve each task's provider from its `Execute with:` (explicit `<provider>:` prefix, else the
    unique provider serving that model in the table above).
-2. **Same provider** as the orchestrator → spawn a normal in-process sub-agent (the usual path).
+2. **Same provider** as the orchestrator → spawn a normal in-process **sub-agent** (the usual path):
+   `pw-executor`, another same-provider agent, or a bare model. Sub-agents are same-provider only.
 3. **Different provider** → invoke that provider's **CLI headlessly**, passing the *task file* as
-   the work order. The discipline travels with the task, not the provider — the other CLI still
-   follows the `project-workflow` skill + the task file. Concretely:
+   the work order to its **default/primary** agent. You **cannot** name the other provider's
+   *sub-agent* here (e.g. a Claude orchestrator can't use kilo's `pw-executor` sub-agent) — sub-agents
+   don't cross a provider boundary; only a provider's own primary agents are invocable from outside,
+   and a lone task just needs the default agent + task file. The discipline travels with the task,
+   not the provider — the other CLI still follows the `project-workflow` skill + the task file.
+   Concretely (note: `-m <model>`, **no** `--agent`):
    ```bash
    # Claude-Code orchestrator → hand a kilo:* task to KiloCode (command_code provider):
    PROMPT="Follow the project-workflow skill (executor role). Execute the task in \

@@ -46,8 +46,8 @@ find "$dest" -type f -name '*.md' -print0 | while IFS= read -r -d '' md; do
 done
 
 # Keep empty phase dirs present even if rsync left them out; add the review/ subdirs.
-mkdir -p "$dest/context" "$dest/analysis/review" "$dest/task/review" \
-         "$dest/worktree" "$dest/sub-agent"
+# (No per-project sub-agent/ dir — reusable agents are seeded from tooling/agents/ via bootstrap.)
+mkdir -p "$dest/context" "$dest/analysis/review" "$dest/task/review" "$dest/worktree"
 
 # Seed the append-only activity log.
 cat > "$dest/LOG.md" <<EOF
@@ -75,10 +75,10 @@ Structure:
   task/             PLAN.md + T0n.md tasks (from task/_TEMPLATE-*.md)
     review/           your plan/task review files (PLAN.review.md, T0n.review.md)
   worktree/         isolated worktrees appear here during execution
-  sub-agent/        optional custom agent defs
 
 Next steps (each phase is gated by your review):
-  1. Add inputs to $dest/context/ (tickets, RFC excerpts, code refs).
+  1. Add inputs to $dest/context/ (tickets, RFC excerpts, code refs). Optionally start a one-page
+     brief: cp $dest/context/_REQUIREMENTS.template.md $dest/context/REQUIREMENTS.md and fill it.
   2. Fill context/INDEX.md — a row per input (what it is + where it came from), and your
      first-guess "repos in scope" table.
   3. /pw-analyze $slug        → writes analysis/, sets Status=analysis. Then review it:

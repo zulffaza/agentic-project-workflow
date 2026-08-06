@@ -107,6 +107,27 @@ for p in "${PW_PROVIDERS[@]}"; do
       "$HERE/gen-commands.sh" "$p" >/dev/null && echo "      fixed: regenerated commands"
     fi
   fi
+
+  # agents: generate to a SEPARATE temp subdir (the commands check already populated $tmp/$p),
+  # diff against what's installed (only if provider has agent hooks)
+  if pw_provider_has_agent_hooks "$p"; then
+    adir="$("${p}_agentdir")"
+    "$HERE/gen-agents.sh" --outdir "$tmp/agents" "$p" >/dev/null 2>&1
+    adrift=0; amissing=0
+    for exp in "$tmp/agents/$p"/*.md; do
+      n="$(basename "$exp")"
+      if [ ! -f "$adir/$n" ]; then amissing=$((amissing+1))
+      elif ! cmp -s "$exp" "$adir/$n"; then adrift=$((adrift+1)); fi
+    done
+    if [ $((adrift+amissing)) -eq 0 ]; then
+      echo "    ✓ agents in sync ($adir)"
+    else
+      echo "    ✗ agents OUT OF SYNC ($adir): $adrift changed, $amissing missing"; issues=$((issues+1))
+      if [ "$FIX" -eq 1 ]; then
+        "$HERE/gen-agents.sh" "$p" >/dev/null && echo "      fixed: regenerated agents"
+      fi
+    fi
+  fi
   echo
 done
 

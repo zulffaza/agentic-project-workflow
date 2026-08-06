@@ -7,15 +7,17 @@ The `/pw-*` slash commands are duplicated across agent tools (Claude Code, kilo,
 tooling/
 ├── scaffold.sh         ← creates a new project from ../template/
 ├── gen-commands.sh     ← stamps commands/ into each provider's format + location
+├── gen-agents.sh       ← seeds agents/ into each provider's agent dir (same idea as gen-commands)
 ├── pw-common.sh        ← shared plumbing (roots + config + provider hooks) for the scripts below
-├── pw-lib.sh           ← mechanical helpers the commands call: status / oneliner / log / phase
-├── pw-doctor.sh        ← checks installed skill + commands match this bundle (--fix repairs)
+├── pw-lib.sh           ← mechanical helpers the commands call: status / oneliner / adopted / log / phase
+├── pw-doctor.sh        ← checks installed skill + commands + agents match this bundle (--fix repairs)
 ├── pw-teardown.sh      ← safe worktree removal at close-out (won't nuke your CWD / dirty trees)
 ├── commands/           ← THE source of truth for /pw-* (provider-neutral)
 │   ├── pw-new.md        frontmatter: description, args, [agent]; body uses {{ARGS}} + {{PW_*}}
 │   ├── pw-analyze.md
-│   ├── … (pw-breakdown, pw-review, pw-execute, pw-ship, pw-status, pw-doctor)
+│   ├── … (pw-adopt, pw-breakdown, pw-review, pw-execute, pw-ship, pw-sync, pw-status, pw-doctor)
 │   └── pw-close.md
+├── agents/             ← THE source of truth for seedable sub-agents (pw-orchestrator, pw-executor)
 ├── providers.md        ← agent provider registry (model → CLI, headless invocation) [🧑 you]
 ├── memory.md           ← optional/pluggable memory policy (the pipeline works with none)
 ├── skill/project-workflow/SKILL.md   ← the shippable skill (bootstrap installs it per provider)
@@ -23,7 +25,7 @@ tooling/
 ```
 
 `pw-lib.sh` makes the load-bearing, format-sensitive steps deterministic instead of hand-edited
-prose — the `/pw-*` commands call `pw-lib.sh status|oneliner|log|phase` rather than asking the agent
+prose — the `/pw-*` commands call `pw-lib.sh status|oneliner|adopted|log|phase` rather than asking the agent
 to edit the dashboard by hand. `status` refuses accidental backward phase moves (`--rewind` to
 intend one). Run `pw-lib.sh selftest` after changing it.
 
@@ -47,9 +49,10 @@ Outputs (overwritten each run):
 1. Add its name to `PW_PROVIDERS=(…)`.
 2. Define `<name>_bin` / `<name>_skilldir` / `<name>_outdir` / `render_<name>` (the scripts only
    supply defaults for the built-ins, so yours win). Copy `render_claude`/`render_kilo` from
-   `gen-commands.sh` as a starting point.
+   `pw-common.sh` as a starting point. *(Optional)* to also seed the sub-agents for it, define
+   `<name>_agentdir` + `render_<name>_agent`; providers without those just skip agent-seeding.
 3. Add a row to `providers.md` (its headless invocation).
-4. Re-run `./bootstrap.sh` (or `gen-commands.sh`).
+4. Re-run `./bootstrap.sh` (or `gen-commands.sh` + `gen-agents.sh`).
 
 That's the whole cost of onboarding a provider — the phase prompts themselves never get copied.
 
@@ -63,6 +66,7 @@ agent: <optional — a provider agent to run the command under, e.g. pw-orchestr
 <prompt body, using {{ARGS}} where the invocation's arguments go>
 ```
 
-> Agents (kilo `~/.config/kilo/agent/`, Claude Code's Task tool) are **not** generated from here —
-> they're few and provider-shaped. Only the `pw-orchestrator` coordinator is custom; executors
-> reuse existing agents (see `../template/sub-agent/README.md`).
+> Sub-agents **are** generated — from [`agents/`](./agents/README.md), seeded into each provider's
+> agent dir by `gen-agents.sh` (kilo `~/.config/kilo/agent/`, Claude Code `~/.claude/agents/`). The
+> two shipped roles are `pw-orchestrator` and `pw-executor`; execution can still reuse an existing
+> agent you have (e.g. `code-implementation`) by naming it in a task's `Execute with:`.

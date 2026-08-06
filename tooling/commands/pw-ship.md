@@ -2,8 +2,10 @@
 description: Push verified task branches and open MRs with rich descriptions
 args: <project-slug> [task-ids] [comments]
 ---
-Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional
-task IDs to ship a subset; the word `comments` = go into MR-comment mode, below).
+Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task
+IDs to scope to a subset; the word `comments` = go into MR-comment mode, below). Task IDs are
+**optional in both modes** — with none, the command applies to **every** eligible task (all
+shippable tasks in ship mode; all tasks with an open MR in comment mode).
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
@@ -15,6 +17,11 @@ task; here we push branches and open MRs.
 1. Determine which tasks are shippable: `Status: done`/`accepted`, verify passed, a real commit on
    their branch. **Skip zero-change tasks** (note "zero-change — no branch/MR" in their Result) and
    any already-shipped task (Result → MR already set).
+   - **Adopted (continuation) project** (dashboard `Adopted:` note / `context/ADOPTED.md`): ship
+     **per adopted branch**, not per task — each adopted branch is one shipment. For each, push the
+     branch and, if an MR already exists (from `ADOPTED.md → MR:` or a `glab/gh` lookup on the
+     branch), **update it — do NOT open a duplicate**; open a fresh MR only if there's genuinely none
+     yet. With several units, that's one MR per adopted branch.
 2. **Confirm before anything goes out.** List, for each shippable task: repo, branch
    (`agent/<slug>/<T0n>-<slug>`), target base branch, and the MR title. Ask me to confirm the list.
    Only after I say go:
@@ -52,14 +59,25 @@ Part of project `<slug>` (task T0n).
 ```
 Fill every section from the task file + its `## Result`; don't ship a bare "updates X" description.
 
-## MR-comment mode  (`/pw-ship <slug> T0n comments`)
-Handle review comments left on the **MR itself**:
+## MR-comment mode  (`/pw-ship <slug> [task-ids] comments`)
+Handle review comments left on the **MR itself**. **Scope:** with task IDs, only those; **with no
+task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, state open) — so
+`/pw-ship <slug> comments` clears review comments across all of the project's MRs in one run.
+
+0. **Resolve the set** of tasks to process (the given IDs, or all tasks with an open MR). Announce
+   the list. Then, **for each task in the set**, do steps 1–3 in its own worktree:
 1. Fetch the open review threads — GitLab:
    `glab api projects/:id/merge_requests/<iid>/discussions` (or `glab mr diff`), run from inside the
-   repo with `GITLAB_HOST=source.golabs.io`; GitHub: `gh pr view --comments`.
+   repo with `GITLAB_HOST=source.golabs.io`; GitHub: `gh pr view --comments`. A task whose MR has no
+   open threads is skipped (note it in the recap).
 2. Apply the fixes in that task's **worktree**, re-run its `## Verify`, and push.
 3. **Reply to each MR thread** summarizing the fix, AND **mirror it into the internal record** —
    task `## Result`, `task/review/T0n.review.md` (create it if needed), and a `LOG.md` line via the
    helper. The project dir stays the source of truth even for MR-driven changes.
+4. **Recap** a table — one row per task in the set: Task · Repo · MR · threads addressed ·
+   verify (green/failed) · pushed?. Flag any task whose verify failed after the fix (leave it for
+   review) and any thread you couldn't resolve without a decision.
 
-Never merge an MR as part of this command — merging is a human decision downstream.
+Process the set **serially by default** (each is a real edit-verify-push in a worktree); parallelize
+only independent repos if you're confident. Never merge an MR as part of this command — merging is a
+human decision downstream.

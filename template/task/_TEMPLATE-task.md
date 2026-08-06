@@ -18,8 +18,8 @@
   so execution doesn't force you to switch agents — only route elsewhere when a task genuinely needs
   a stronger/cheaper/open-weight model, and say why in `Why:`.
   Aliases (`opus`/`sonnet`/…) track the *latest* version; **use the full name to pin** (e.g.
-  `claude-opus-4-8` vs `claude-opus-5`) when reproducibility matters. Only name a `sub-agent/` def
-  if no existing agent fits.
+  `claude-opus-4-8` vs `claude-opus-5`) when reproducibility matters. Name the shipped `pw-executor`
+  or a custom `tooling/agents/` def only if no existing agent fits.
 - **Effort:** <low|medium|high|xhigh|max — optional> — reasoning effort. Maps to `--effort`
   (claude) / `--variant` (kilo). Omit for the CLI default.
 - **Thinking:** <on|off — optional, kilo only> — emit thinking blocks (`--thinking`).

@@ -6,6 +6,7 @@
 #   pw-lib.sh status   <slug> <phase> [--rewind]   set dashboard Status: (validated, no accidental
 #                                                  backward move) + auto-log the change
 #   pw-lib.sh oneliner <slug> <text...>            set the dashboard One-liner (agent, at analysis)
+#   pw-lib.sh adopted  <slug> <text...>            set/insert the dashboard Adopted: pointer (/pw-adopt)
 #   pw-lib.sh log      <slug> <actor> <msg...>     append a timestamped LOG.md line
 #   pw-lib.sh phase    <slug>                       print the current Status value (for scoping/status)
 #   pw-lib.sh selftest                              run an isolated round-trip test
@@ -73,6 +74,26 @@ cmd_oneliner() {
   echo "$slug: One-liner set"
 }
 
+# Set/insert the dashboard "Adopted:" pointer. Adoption is optional, so a fresh project has no
+# Adopted line — insert one right after the One-liner if absent, else replace its text. Idempotent,
+# so /pw-adopt can call it after adding each unit (the caller passes the current count/pointer text).
+cmd_adopted() {
+  [ $# -ge 2 ] || die "usage: adopted <slug> <text...>"
+  local slug="$1"; shift; local text="$*"
+  local f; f="$(proj_dir "$slug")/README.md"
+  [ -f "$f" ] || die "no README.md in project $slug"
+  if grep -q '^- \*\*Adopted:\*\*' "$f"; then
+    awk -v t="$text" '!d && /^- \*\*Adopted:\*\*/ {print "- **Adopted:** " t; d=1; next} {print}' \
+      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  else
+    grep -q '^- \*\*One-liner:\*\*' "$f" || die "no '- **One-liner:**' line to anchor Adopted: after in $f"
+    awk -v t="$text" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **Adopted:** " t; d=1}' \
+      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  fi
+  cmd_log "$slug" adopt "Adopted pointer set: $text"
+  echo "$slug: Adopted -> $text"
+}
+
 cmd_phase() {
   [ $# -eq 1 ] || die "usage: phase <slug>"
   local f; f="$(proj_dir "$1")/README.md"
@@ -107,12 +128,21 @@ cmd_selftest() {
   [ "$(PW_PROJECTS_DIR="$tmp" "$0" phase demo)" = "analysis" ] || die "selftest FAIL: --rewind did not apply"
   PW_PROJECTS_DIR="$tmp" "$0" log demo analyze "wrote analysis/x.md" >/dev/null
   grep -q '| analyze | wrote analysis/x.md$' "$tmp/demo/LOG.md" || die "selftest FAIL: custom log missing"
+  # Adopted pointer: inserted after One-liner when absent, then replaced in place (idempotent).
+  grep -q '^- \*\*Adopted:\*\*' "$tmp/demo/README.md" && die "selftest FAIL: Adopted line present before adopt"
+  PW_PROJECTS_DIR="$tmp" "$0" adopted demo "1 unit — see context/ADOPTED.md" >/dev/null
+  grep -q '^- \*\*Adopted:\*\* 1 unit — see context/ADOPTED.md$' "$tmp/demo/README.md" || die "selftest FAIL: Adopted not inserted"
+  grep -A1 '^- \*\*One-liner:\*\*' "$tmp/demo/README.md" | grep -q '^- \*\*Adopted:\*\*' || die "selftest FAIL: Adopted not anchored after One-liner"
+  PW_PROJECTS_DIR="$tmp" "$0" adopted demo "2 units — see context/ADOPTED.md" >/dev/null
+  [ "$(grep -c '^- \*\*Adopted:\*\*' "$tmp/demo/README.md")" = "1" ] || die "selftest FAIL: Adopted duplicated instead of replaced"
+  grep -q '^- \*\*Adopted:\*\* 2 units' "$tmp/demo/README.md" || die "selftest FAIL: Adopted not updated"
   echo "selftest OK"
 }
 
 case "${1:-}" in
   status)   shift; cmd_status "$@" ;;
   oneliner) shift; cmd_oneliner "$@" ;;
+  adopted)  shift; cmd_adopted "$@" ;;
   log)      shift; cmd_log "$@" ;;
   phase)    shift; cmd_phase "$@" ;;
   selftest) cmd_selftest ;;

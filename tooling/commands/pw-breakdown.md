@@ -35,7 +35,18 @@ Then produce, from `{{PW_HOME}}/template/task/`:
    dependency chain ÷2). This is the *manual* estimate for planning; agent execution is faster.
 
 Size each task as one worktree / one reviewable unit. Split anything needing two repos and add a
-dependency edge. Then **MANDATORY final step — do NOT skip** — update status + log via the helper
+dependency edge.
+
+**Adopted (continuation) project?** If the dashboard has an `Adopted:` note (from `/pw-adopt`; the
+units are in `context/ADOPTED.md`): read every adopted unit `(repo, branch)`. For each task, set its
+`Branch:` to the **adopted branch of the unit/repo it touches** (not a new `agent/…` branch). State
+in PLAN's global rules "**continuation — per-branch serial; cross-branch parallel**". Then shape the
+DAG accordingly: tasks that touch the **same** adopted branch get a **linear dependency chain**
+(they share one worktree, so they must run in sequence); tasks on **different** adopted branches stay
+independent and can run in parallel. Split into tasks for reviewability as usual; the changes extend
+each existing branch (and its MR, if any).
+
+Then **MANDATORY final step — do NOT skip** — update status + log via the helper
 (never hand-edit the Status line), and confirm the dashboard now shows `Status: breakdown`:
 ```bash
 {{PW_HOME}}/tooling/pw-lib.sh status <slug> breakdown

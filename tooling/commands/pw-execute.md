@@ -16,19 +16,30 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 2. Walk the dependency DAG. Spawn one executor per task, only once its `depends_on` are done.
    Parallelize independent tasks up to the plan's max. Honor the plan's **execution routing** and
    any override in the arguments; record what you used in each task's `Actually used:`.
+   - **Adopted (continuation) project** (PLAN says "continuation", or dashboard has an `Adopted:`
+     note; units in `context/ADOPTED.md`): do NOT create `agent/…` branches. Per **adopted branch**,
+     make/keep **one shared worktree that attaches the existing branch** — `git -C
+     {{PW_REPOS}}/<repo> worktree add {{PW_PROJECTS}}/<slug>/worktree/<repo>/<branch-slug>
+     <existing-branch>` (no `-b`). **Serialize tasks that share a branch** (one worktree), but
+     **parallelize across different adopted branches**. If git refuses because a branch is checked
+     out in the main repo, tell me to switch that main checkout to another branch first.
 3. **How to run each task** — resolve `Execute with: <provider>:<model-or-agent>` via
    `{{PW_HOME}}/tooling/providers.md`. Tasks default to the plan's **Produced by** provider, so most
    run under the agent you're already in:
-   - **Same provider you're running under → spawn a native, in-process sub-agent** (NOT a shell
+   - **Same provider you're running under → spawn a native, in-process SUB-AGENT** (NOT a shell
      invocation). Native sub-agents are easier to monitor and cheaper to supervise. If `Execute
-     with:` names an agent (built-in or a `sub-agent/<name>.md`), spawn that; otherwise spawn a
-     generic executor with the named model + the task file as its work order.
+     with:` names an agent (an existing one like `code-implementation`, the shipped `pw-executor`,
+     or a custom `{{PW_HOME}}/tooling/agents/<name>.md`), spawn that; otherwise spawn a generic
+     executor with the named model + the task file as its work order.
    - **Different provider → shell out to that CLI headlessly** (per the registry's invocation
      column), passing the task file as the work order — e.g. a Claude-Code orchestrator hands a
      `kilo:command_code/MiniMaxAI/MiniMax-M3` task to `kilo run --auto -m … --format json`
-     (`--auto` is REQUIRED or kilo auto-rejects every permission). Route to a capable model (tiny
-     models stop mid-task). Capture the final text for the report, but **confirm the real git
-     artifacts** (branch/commit/Verify), not the CLI's self-report.
+     (`--auto` is REQUIRED or kilo auto-rejects every permission). **Sub-agents do NOT cross
+     providers:** don't pass `--agent pw-executor` (that's the *other* provider's sub-agent you
+     can't reach) — invoke its default/primary agent with the task file + skill inline; the executor
+     discipline travels with them. Route to a capable model (tiny models stop mid-task). Capture the
+     final text for the report, but **confirm the real git artifacts** (branch/commit/Verify), not
+     the CLI's self-report.
    - **Either way, tee the run to a log** so I can watch it: append the executor's combined output
      to `{{PW_PROJECTS}}/<slug>/worktree/<T0n>.log`. Tell me the path so I can `tail -f` it in my
      own window. Record it in the task's `## Result → Log:` field.

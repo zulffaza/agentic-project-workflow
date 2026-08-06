@@ -61,6 +61,8 @@ If `/pw-status` is recognized and prints a status, you're onboarded.
 - Generated the **`/pw-*` commands** for each enabled+detected CLI, with the real absolute paths
   stamped in (sources use `{{PW_*}}` tokens; the generator/scaffolder stamp them — the portability
   trick).
+- Seeded the **sub-agents** (`pw-orchestrator`, `pw-executor`) into each CLI's agent dir the same
+  way (from `tooling/agents/`). Execution can still reuse an existing agent you have.
 - Wrote `pw-env.sh`.
 
 Re-run `./bootstrap.sh` any time (e.g. after `git pull`). Use `--force` to re-link the skill,
@@ -74,7 +76,8 @@ Read [README.md](./README.md) — the full guide. The loop, once onboarded:
 /pw-new <slug>        scaffold a project         /pw-review <slug>     apply your review comments
 /pw-analyze <slug>    context → analysis         /pw-execute <slug>    orchestrate worktree runs (commit + verify)
 /pw-breakdown <slug>  analysis → PLAN + tasks     /pw-ship <slug>       push branches + open MRs (publish)
-/pw-status <slug>     where am I / what's next    /pw-close <slug>      verify, tear down, learn
+/pw-status <slug>     where am I / what's next    /pw-sync <slug>       refresh open MRs against a moved base
+                                                  /pw-close <slug>      verify, tear down, learn
                                                   /pw-doctor [--fix]    check/repair install sync
 ```
 
@@ -103,14 +106,18 @@ Your CLI isn't `claude` or `kilo`? **You don't edit any script** — everything 
    - `<name>_outdir()` — where its slash-commands go
    - `render_<name>()` — prints one command file in its frontmatter format, mapping the `{{ARGS}}`
      placeholder to its argument syntax (copy `render_claude`/`render_kilo` from
-     `tooling/gen-commands.sh` as a starting point)
+     `tooling/pw-common.sh` as a starting point)
+   - *(optional)* `<name>_agentdir()` + `render_<name>_agent()` to also seed the sub-agents for it;
+     providers without these two just skip agent-seeding — the `/pw-*` commands still work.
 3. Add a row to [`tooling/providers.md`](./tooling/providers.md): which models it runs and its
    **headless invocation** (how to run one task non-interactively) — what cross-provider execution
    shells out to.
 4. Re-run `./bootstrap.sh`.
 
-Likewise, which KiloCode **model provider** you use (`command_code` or anything else) is just a
-value you set (`PW_KILO_PROVIDER`) in `pw.config.sh` — it never constrains a teammate.
+Likewise, which KiloCode **model providers** you use (`command_code`, `openrouter`, … — KiloCode can
+connect to several at once) is just a list you set (`PW_KILO_PROVIDERS=(…)`) in `pw.config.sh` — it
+never constrains a teammate. Reference any of them in a task's `Execute with:` as
+`kilo:<provider>/<model>`.
 
 ## Notes for the maintainer (whoever shares this)
 

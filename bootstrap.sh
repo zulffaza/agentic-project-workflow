@@ -113,6 +113,11 @@ if [ "${#DETECTED[@]}" -gt 0 ]; then
   PW_PROJECTS="$PW_PROJECTS" PW_REPOS="$PW_REPOS" \
     "$PW_HOME/tooling/gen-commands.sh" "${DETECTED[@]}" | sed 's/^/    /'
   echo
+
+  echo "  seeding sub-agents (pw-orchestrator, pw-executor):"
+  PW_PROJECTS="$PW_PROJECTS" PW_REPOS="$PW_REPOS" \
+    "$PW_HOME/tooling/gen-agents.sh" "${DETECTED[@]}" | sed 's/^/    /'
+  echo
 fi
 
 # --- 5. write the env file ---------------------------------------------------
