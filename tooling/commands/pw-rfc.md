@@ -91,18 +91,39 @@ target question it doesn't need yet.
 
 ## `comments` (read-only pull — never writes to the external platform)
 1. Under `markdown`: **no-op** — report clearly that there's nothing external to read.
-2. Otherwise: call the backend's `list_comments` (per `rfc-backends.md`), skipping threads already
-   imported (`rfc/META.md`'s `Comment cursor`). For each new thread, create
-   `analysis/review/RFC.review.md` if it doesn't exist yet
-   (`{{PW_HOME}}/tooling/pw-lib.sh review-init <slug> analysis/review/RFC.review.md
-   analysis/<topic>.md`), then append one item per thread — quote the comment, name the author,
-   link the thread, and note the canonical section it's anchored to.
-3. **Never reply to, resolve, or otherwise write into the external thread — that's mine to do.**
-   Update the cursor so a re-run doesn't re-import the same threads:
-   `pw-lib.sh rfc state <slug> CommentCursor <latest-thread-id>`.
-4. **Recap:** how many new items were pulled, and remind me to run `/pw-review` to apply them to
-   the analysis locally (its `↳ agent:` reply is the durable record of what changed), then re-run
-   `/pw-rfc <slug>` (or `milestone`) to push the revision.
+2. Otherwise: call the backend's `list_comments` (per `rfc-backends.md`) for **every** thread on
+   the doc, including each thread's **resolved state** (e.g. Lark's `is_solved`) and **current
+   reply count** — both matter, not just the comment text. Per-thread tracked state (never a
+   single "latest" pointer — that can't tell "an earlier thread changed" from "already handled")
+   lives in `rfc/META.md`'s "Comment tracking" table; read it to know what you've already recorded
+   for each thread (reply count + solved, keyed by thread ID).
+3. For each thread, compare its live state to what's tracked (or "not tracked" if this is the
+   first time you've ever seen this thread ID):
+   - **Resolved on the platform, not tracked yet** — skip entirely; it was resolved before you
+     ever looked, nothing to surface.
+   - **Resolved on the platform, tracked as previously unresolved** — append a short note to its
+     **existing** item in `analysis/review/RFC.review.md` ("🔄 resolved externally on `<backend>`
+     — no action needed unless you want it reflected in the analysis too"). Do **not** flip the
+     item's own 🔴/🟢 dot — that stays owned exclusively by `/pw-review`; this is informational.
+   - **Resolved on the platform, already tracked as resolved** — nothing to do, already noted.
+   - **Unresolved, not tracked yet** — a genuinely new thread: create
+     `analysis/review/RFC.review.md` if it doesn't exist yet
+     (`{{PW_HOME}}/tooling/pw-lib.sh review-init <slug> analysis/review/RFC.review.md
+     analysis/<topic>.md`), then append a **new** item — quote the comment, name the author, link
+     the thread, note the canonical section it's anchored to.
+   - **Unresolved, tracked, and its current reply count is HIGHER than what's recorded** — new
+     discussion since your last pull. **Do not create a duplicate item and do not touch the
+     human's own existing text.** Append only the *new* replies (the ones beyond the tracked
+     count) underneath that **same** existing item, as a running transcript — same convention as
+     local `.review.md` files never being rewritten, only appended to.
+   - **Unresolved, tracked, reply count unchanged** — nothing to do, already surfaced.
+4. **Never reply to, resolve, or otherwise write into the external thread — that's mine to do.**
+   After handling each thread, record its current state:
+   `pw-lib.sh rfc comment-seen <slug> <thread-id> <reply-count> <solved:yes|no>`.
+5. **Recap:** how many genuinely new items were pulled, how many existing items got new replies
+   appended, how many were noted as resolved externally, and remind me to run `/pw-review` to
+   apply any of this to the analysis locally (its `↳ agent:` reply is the durable record of what
+   changed), then re-run `/pw-rfc <slug>` (or `milestone`) to push the revision.
 
 ## What this command never does
 - Never sets the dashboard `Status:` or advances/rewinds a phase.

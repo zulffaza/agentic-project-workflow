@@ -19,6 +19,9 @@
 #   pw-lib.sh rfc target    <slug> <ref>                set/insert rfc/META.md's Target: (external doc ref)
 #   pw-lib.sh rfc state     <slug> <field> <value>      set/insert another rfc/META.md field (see --help)
 #   pw-lib.sh rfc dashboard <slug> <text...>            set/insert the dashboard RFC: line (/pw-rfc)
+#   pw-lib.sh rfc comment-seen <slug> <thread-id> <reply-count> <solved:yes|no>
+#                                                     upsert one comment-thread's tracked state
+#                                                     (per-thread, not a single scalar cursor)
 #   pw-lib.sh selftest                                 run an isolated round-trip test
 #
 # Portable across Claude Code and KiloCode executors (plain bash; call by absolute path).
@@ -300,8 +303,20 @@ _rfc_meta_ensure() {
     printf -- '- **Last revision pushed:** \n'
     printf -- '- **Wave 1 published:** no\n'
     printf -- '- **Wave 2 published:** no\n'
-    printf -- '- **Comment cursor:** \n'
   } > "$f"
+}
+
+# Ensure rfc/META.md has a "## Comment tracking" table (create the header if missing) — lazily
+# added only once a thread is actually seen, so a project with no comments yet never grows this
+# section. Private helper for cmd_rfc_comment_seen.
+_rfc_comment_section_ensure() {
+  local f="$1"
+  grep -q '^## Comment tracking' "$f" 2>/dev/null && return 0
+  {
+    printf '\n## Comment tracking   [🤖-owned — never hand-edit; see `pw-lib.sh rfc comment-seen`]\n\n'
+    printf '| Thread | Replies seen | Solved |\n'
+    printf '|--------|--------------|--------|\n'
+  } >> "$f"
 }
 
 # Set/insert a `- **<label>:** <value>` line in a metadata file — insert-if-absent, else
@@ -329,9 +344,9 @@ cmd_rfc_target() {
 }
 
 # Set/insert any other rfc/META.md field.
-#   rfc state <slug> <field> <value>   (field: Backend|LastRevision|Wave1Published|Wave2Published|CommentCursor)
+#   rfc state <slug> <field> <value>   (field: Backend|LastRevision|Wave1Published|Wave2Published)
 cmd_rfc_state() {
-  [ $# -eq 3 ] || die "usage: rfc state <slug> <field> <value>   (field: Backend|LastRevision|Wave1Published|Wave2Published|CommentCursor)"
+  [ $# -eq 3 ] || die "usage: rfc state <slug> <field> <value>   (field: Backend|LastRevision|Wave1Published|Wave2Published)"
   local slug="$1" field="$2" value="$3" d; d="$(proj_dir "$slug")"; local f="$d/rfc/META.md"
   local label
   case "$field" in
@@ -339,13 +354,39 @@ cmd_rfc_state() {
     LastRevision)   label="Last revision pushed" ;;
     Wave1Published) label="Wave 1 published" ;;
     Wave2Published) label="Wave 2 published" ;;
-    CommentCursor)  label="Comment cursor" ;;
-    *) die "unknown rfc state field '$field' (allowed: Backend LastRevision Wave1Published Wave2Published CommentCursor)" ;;
+    *) die "unknown rfc state field '$field' (allowed: Backend LastRevision Wave1Published Wave2Published)" ;;
   esac
   _rfc_meta_ensure "$f" "$slug"
   _rfc_meta_upsert "$f" "$label" "$value"
   cmd_log "$slug" rfc "state $field=$value"
   echo "$slug: rfc state $field -> $value"
+}
+
+# Deterministically upsert ONE row per comment thread, keyed by a hidden
+# `<!-- pw-rfc-comment:<thread-id> -->` marker — same append-or-rewrite-in-place shape as
+# _scope_upsert (context/INDEX.md's adoption rows). This is what lets `/pw-rfc comments` tell
+# "never seen this thread" from "seen before, N replies then, M replies now" from "already
+# recorded as solved" — a single scalar watermark can't represent per-thread state (the bug: an
+# earlier thread getting new replies after a later thread became "latest" was invisible forever).
+#   rfc comment-seen <slug> <thread-id> <reply-count> <solved:yes|no>
+cmd_rfc_comment_seen() {
+  [ $# -eq 4 ] || die "usage: rfc comment-seen <slug> <thread-id> <reply-count> <solved:yes|no>"
+  local slug="$1" thread="$2" replies="$3" solved="$4"
+  case "$solved" in yes|no) ;; *) die "solved must be 'yes' or 'no' (got '$solved')" ;; esac
+  case "$replies" in ''|*[!0-9]*) die "reply-count must be a non-negative integer (got '$replies')" ;; esac
+  local d; d="$(proj_dir "$slug")"; local f="$d/rfc/META.md"
+  _rfc_meta_ensure "$f" "$slug"
+  _rfc_comment_section_ensure "$f"
+  local marker="<!-- pw-rfc-comment:$thread -->"
+  local row="| \`$thread\` | $replies | $solved $marker |"
+  if grep -Fq "$marker" "$f"; then
+    awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
+      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  else
+    printf '%s\n' "$row" >> "$f"
+  fi
+  cmd_log "$slug" rfc "comment-seen $thread: $replies replies, solved=$solved"
+  echo "$slug: rfc comment-seen $thread -> $replies replies, solved=$solved"
 }
 
 # Set/insert the project dashboard's `- **RFC:**` line — mirrors cmd_adopted almost verbatim,
@@ -374,11 +415,12 @@ cmd_rfc_dashboard() {
 
 cmd_rfc() {
   case "${1:-}" in
-    init)      shift; cmd_rfc_init "$@" ;;
-    target)    shift; cmd_rfc_target "$@" ;;
-    state)     shift; cmd_rfc_state "$@" ;;
-    dashboard) shift; cmd_rfc_dashboard "$@" ;;
-    *) die "usage: rfc <init|target|state|dashboard> ..." ;;
+    init)         shift; cmd_rfc_init "$@" ;;
+    target)       shift; cmd_rfc_target "$@" ;;
+    state)        shift; cmd_rfc_state "$@" ;;
+    dashboard)    shift; cmd_rfc_dashboard "$@" ;;
+    comment-seen) shift; cmd_rfc_comment_seen "$@" ;;
+    *) die "usage: rfc <init|target|state|dashboard|comment-seen> ..." ;;
   esac
 }
 
@@ -507,12 +549,43 @@ cmd_selftest() {
   grep -q '^- \*\*Wave 2 published:\*\* yes$' "$META" || die "selftest FAIL: rfc state Wave2Published not set"
   PW_PROJECTS_DIR="$tmp" "$0" rfc state demo LastRevision 42 >/dev/null
   grep -q '^- \*\*Last revision pushed:\*\* 42$' "$META" || die "selftest FAIL: rfc state LastRevision not set"
-  PW_PROJECTS_DIR="$tmp" "$0" rfc state demo CommentCursor thread-9 >/dev/null
-  grep -q '^- \*\*Comment cursor:\*\* thread-9$' "$META" || die "selftest FAIL: rfc state CommentCursor not set"
   if PW_PROJECTS_DIR="$tmp" "$0" rfc state demo Bogus x >/dev/null 2>&1; then
     die "selftest FAIL: rfc state accepted an unknown field"
   fi
-  grep -q '^- \*\*Comment cursor:\*\* thread-9$' "$META" || die "selftest FAIL: rejected rfc state call mutated the file"
+  if PW_PROJECTS_DIR="$tmp" "$0" rfc state demo CommentCursor thread-9 >/dev/null 2>&1; then
+    die "selftest FAIL: rfc state still accepts the retired CommentCursor field"
+  fi
+  grep -q '^- \*\*Last revision pushed:\*\* 42$' "$META" || die "selftest FAIL: rejected rfc state call mutated the file"
+
+  # rfc comment-seen: per-thread tracking (replaces the old single-scalar Comment cursor, which
+  # couldn't tell "an earlier thread got new replies" from "already handled" once a later thread
+  # became the recorded 'latest'). New thread → new row; re-seeing the SAME thread with a higher
+  # reply count updates that row in place (no duplicate); flipping solved does the same.
+  PW_PROJECTS_DIR="$tmp" "$0" rfc comment-seen demo thread-A 1 no >/dev/null
+  grep -q '^## Comment tracking' "$META" || die "selftest FAIL: comment-seen did not create the tracking section"
+  grep -qF '<!-- pw-rfc-comment:thread-A -->' "$META" || die "selftest FAIL: thread-A row not created"
+  grep 'pw-rfc-comment:thread-A' "$META" | grep -q '| `thread-A` | 1 | no ' || die "selftest FAIL: thread-A row has wrong reply-count/solved"
+  PW_PROJECTS_DIR="$tmp" "$0" rfc comment-seen demo thread-B 1 no >/dev/null
+  [ "$(grep -c 'pw-rfc-comment:' "$META")" = "2" ] || die "selftest FAIL: expected 2 tracked threads after thread-B"
+  # thread-A gets a 2nd reply later (the exact scenario the scalar cursor got wrong) → same row,
+  # updated in place, still only 2 tracked threads total (no duplicate for thread-A).
+  PW_PROJECTS_DIR="$tmp" "$0" rfc comment-seen demo thread-A 2 no >/dev/null
+  [ "$(grep -c 'pw-rfc-comment:' "$META")" = "2" ] || die "selftest FAIL: re-seeing thread-A duplicated a row instead of updating in place"
+  grep 'pw-rfc-comment:thread-A' "$META" | grep -q '| `thread-A` | 2 | no ' || die "selftest FAIL: thread-A reply-count not updated"
+  grep 'pw-rfc-comment:thread-B' "$META" | grep -q '| `thread-B` | 1 | no ' || die "selftest FAIL: thread-B wrongly changed by thread-A's update"
+  # thread-B gets resolved externally → solved flips in place, still no duplicate.
+  PW_PROJECTS_DIR="$tmp" "$0" rfc comment-seen demo thread-B 1 yes >/dev/null
+  [ "$(grep -c 'pw-rfc-comment:' "$META")" = "2" ] || die "selftest FAIL: flipping solved duplicated thread-B's row"
+  grep 'pw-rfc-comment:thread-B' "$META" | grep -q '| `thread-B` | 1 | yes ' || die "selftest FAIL: thread-B solved flag not updated"
+  # validation: reply-count must be a non-negative integer, solved must be yes/no; a bad call is
+  # rejected and doesn't touch existing rows.
+  if PW_PROJECTS_DIR="$tmp" "$0" rfc comment-seen demo thread-C -1 no >/dev/null 2>&1; then
+    die "selftest FAIL: comment-seen accepted a negative reply-count"
+  fi
+  if PW_PROJECTS_DIR="$tmp" "$0" rfc comment-seen demo thread-C 1 maybe >/dev/null 2>&1; then
+    die "selftest FAIL: comment-seen accepted a non yes/no solved value"
+  fi
+  [ "$(grep -c 'pw-rfc-comment:' "$META")" = "2" ] || die "selftest FAIL: rejected comment-seen calls still mutated the tracking table"
 
   # rfc dashboard: inserted after Adopted: when one exists (demo already has one from the adopt
   # tests above); inserted after One-liner when no Adopted: line exists (a fresh project); a 2nd
