@@ -14,6 +14,11 @@
 #   pw-lib.sh log         <slug> <actor> <msg...>     append a timestamped LOG.md line (a Markdown
 #                                                     bullet — readable in a plain preview view)
 #   pw-lib.sh phase       <slug>                       print the current Status value (for scoping/status)
+#   pw-lib.sh rfc init      <slug> [backend]            create rfc/RFC.md from the template if missing
+#                                                     (+ rfc/META.md stamped with [backend], default markdown)
+#   pw-lib.sh rfc target    <slug> <ref>                set/insert rfc/META.md's Target: (external doc ref)
+#   pw-lib.sh rfc state     <slug> <field> <value>      set/insert another rfc/META.md field (see --help)
+#   pw-lib.sh rfc dashboard <slug> <text...>            set/insert the dashboard RFC: line (/pw-rfc)
 #   pw-lib.sh selftest                                 run an isolated round-trip test
 #
 # Portable across Claude Code and KiloCode executors (plain bash; call by absolute path).
@@ -254,6 +259,129 @@ cmd_phase() {
   grep -m1 '^- \*\*Status:\*\*' "$f" | sed 's/^- \*\*Status:\*\*[[:space:]]*//'
 }
 
+# --- RFC side-loop (see tooling/rfc.md + tooling/rfc-backends.md) ------------
+# Deterministic helpers for the optional /pw-rfc publish loop — never touches the dashboard
+# Status: (RFC is a side-loop, not a phase), same discipline as /pw-ship's own helpers.
+
+# Create rfc/RFC.md from the canonical template if (and only if) it doesn't exist yet —
+# idempotent, same shape as cmd_review_init. Never clobbers a doc already in progress. Also
+# ensures rfc/META.md exists, stamped with the REAL configured backend (not a hardcoded guess) —
+# call this with the resolved backend so META.md never drifts from what's actually configured.
+#   rfc init <slug> [backend]   (backend defaults to "markdown" if omitted)
+cmd_rfc_init() {
+  [ $# -ge 1 ] && [ $# -le 2 ] || die "usage: rfc init <slug> [backend]"
+  local slug="$1" backend="${2:-markdown}" d; d="$(proj_dir "$slug")"
+  local f="$d/rfc/RFC.md"
+  _rfc_meta_ensure "$d/rfc/META.md" "$slug" "$backend"
+  if [ -f "$f" ]; then
+    echo "$slug: rfc already exists: rfc/RFC.md (left untouched)"
+    return 0
+  fi
+  local tmpl="$HERE/../template/rfc/_TEMPLATE-RFC.md"
+  [ -f "$tmpl" ] || die "template not found: $tmpl"
+  mkdir -p "$d/rfc"
+  sed "s/<PROJECT_NAME>/$slug/g" "$tmpl" > "$f"
+  cmd_log "$slug" rfc "created rfc/RFC.md from template (backend: $backend)"
+  echo "$slug: rfc-init created rfc/RFC.md"
+}
+
+# Create rfc/META.md with its fixed skeleton if missing — 🤖-owned, never hand-edited (same
+# convention as ADOPTED.md). Private helper shared by rfc init/target/state. Backend defaults to
+# "markdown" only when the caller doesn't know better; rfc init always passes the real one so the
+# skeleton is correct from the moment it's first created, never left silently wrong.
+_rfc_meta_ensure() {
+  local f="$1" slug="$2" backend="${3:-markdown}"
+  [ -f "$f" ] && return 0
+  mkdir -p "$(dirname "$f")"
+  {
+    printf '# RFC metadata — %s   [🤖-owned — never hand-edit; see `pw-lib.sh rfc target|state`]\n\n' "$slug"
+    printf -- '- **Backend:** %s\n' "$backend"
+    printf -- '- **Target:** \n'
+    printf -- '- **Last revision pushed:** \n'
+    printf -- '- **Wave 1 published:** no\n'
+    printf -- '- **Wave 2 published:** no\n'
+    printf -- '- **Comment cursor:** \n'
+  } > "$f"
+}
+
+# Set/insert a `- **<label>:** <value>` line in a metadata file — insert-if-absent, else
+# replace-in-place. Same shape as cmd_adopted, generalized to a parameterized file + label.
+_rfc_meta_upsert() {
+  local f="$1" label="$2" value="$3"
+  if grep -qF -- "- **$label:**" "$f"; then
+    awk -v l="$label" -v v="$value" '!d && index($0, "- **" l ":**")==1 { print "- **" l ":** " v; d=1; next } { print }' \
+      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  else
+    printf -- '- **%s:** %s\n' "$label" "$value" >> "$f"
+  fi
+}
+
+# Set/insert rfc/META.md's Target: (the external doc ref a publish goes to). Persists per-project
+# so a later /pw-rfc run doesn't need --target repeated.
+#   rfc target <slug> <ref>
+cmd_rfc_target() {
+  [ $# -eq 2 ] || die "usage: rfc target <slug> <ref>"
+  local slug="$1" ref="$2" d; d="$(proj_dir "$slug")"; local f="$d/rfc/META.md"
+  _rfc_meta_ensure "$f" "$slug"
+  _rfc_meta_upsert "$f" "Target" "$ref"
+  cmd_log "$slug" rfc "target set: $ref"
+  echo "$slug: rfc target -> $ref"
+}
+
+# Set/insert any other rfc/META.md field.
+#   rfc state <slug> <field> <value>   (field: Backend|LastRevision|Wave1Published|Wave2Published|CommentCursor)
+cmd_rfc_state() {
+  [ $# -eq 3 ] || die "usage: rfc state <slug> <field> <value>   (field: Backend|LastRevision|Wave1Published|Wave2Published|CommentCursor)"
+  local slug="$1" field="$2" value="$3" d; d="$(proj_dir "$slug")"; local f="$d/rfc/META.md"
+  local label
+  case "$field" in
+    Backend)        label="Backend" ;;
+    LastRevision)   label="Last revision pushed" ;;
+    Wave1Published) label="Wave 1 published" ;;
+    Wave2Published) label="Wave 2 published" ;;
+    CommentCursor)  label="Comment cursor" ;;
+    *) die "unknown rfc state field '$field' (allowed: Backend LastRevision Wave1Published Wave2Published CommentCursor)" ;;
+  esac
+  _rfc_meta_ensure "$f" "$slug"
+  _rfc_meta_upsert "$f" "$label" "$value"
+  cmd_log "$slug" rfc "state $field=$value"
+  echo "$slug: rfc state $field -> $value"
+}
+
+# Set/insert the project dashboard's `- **RFC:**` line — mirrors cmd_adopted almost verbatim,
+# anchoring after Adopted: if present (dashboard field order: Status → One-liner → [Adopted] →
+# [RFC]), else after One-liner.
+#   rfc dashboard <slug> <text...>
+cmd_rfc_dashboard() {
+  [ $# -ge 2 ] || die "usage: rfc dashboard <slug> <text...>"
+  local slug="$1"; shift; local text="$*"
+  local f; f="$(proj_dir "$slug")/README.md"
+  [ -f "$f" ] || die "no README.md in project $slug"
+  if grep -q '^- \*\*RFC:\*\*' "$f"; then
+    awk -v t="$text" '!d && /^- \*\*RFC:\*\*/ {print "- **RFC:** " t; d=1; next} {print}' \
+      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  elif grep -q '^- \*\*Adopted:\*\*' "$f"; then
+    awk -v t="$text" '{print} !d && /^- \*\*Adopted:\*\*/ {print "- **RFC:** " t; d=1}' \
+      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  else
+    grep -q '^- \*\*One-liner:\*\*' "$f" || die "no anchor line (Adopted:/One-liner:) in $f"
+    awk -v t="$text" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **RFC:** " t; d=1}' \
+      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  fi
+  cmd_log "$slug" rfc "dashboard: $text"
+  echo "$slug: RFC -> $text"
+}
+
+cmd_rfc() {
+  case "${1:-}" in
+    init)      shift; cmd_rfc_init "$@" ;;
+    target)    shift; cmd_rfc_target "$@" ;;
+    state)     shift; cmd_rfc_state "$@" ;;
+    dashboard) shift; cmd_rfc_dashboard "$@" ;;
+    *) die "usage: rfc <init|target|state|dashboard> ..." ;;
+  esac
+}
+
 cmd_selftest() {
   local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
   mkdir -p "$tmp/demo"
@@ -336,6 +464,72 @@ cmd_selftest() {
   printf '\n### R1 · your item\n' >> "$RV"                    # simulate the human adding an item
   PW_PROJECTS_DIR="$tmp" "$0" review-init demo analysis/review/topic.review.md analysis/topic.md >/dev/null
   grep -q '^### R1 · your item$' "$RV" || die "selftest FAIL: review-init clobbered an existing review file"
+
+  # --- rfc side-loop -----------------------------------------------------
+  # rfc init: creates rfc/RFC.md verbatim from the template (placeholder stamped), idempotent —
+  # a 2nd call never clobbers a manual edit. Also ensures rfc/META.md, stamped with the REAL
+  # backend passed in (not a hardcoded guess) — the bug a live fresh-context test caught.
+  local RFC="$tmp/demo/rfc/RFC.md" META="$tmp/demo/rfc/META.md"
+  PW_PROJECTS_DIR="$tmp" "$0" rfc init demo >/dev/null
+  [ -f "$RFC" ] || die "selftest FAIL: rfc init did not create rfc/RFC.md"
+  grep -q '^# RFC: demo$' "$RFC" || die "selftest FAIL: rfc init did not stamp the project slug"
+  [ -f "$META" ] || die "selftest FAIL: rfc init did not also create rfc/META.md"
+  grep -q '^- \*\*Backend:\*\* markdown$' "$META" || die "selftest FAIL: rfc init (no backend arg) did not default META.md's Backend to markdown"
+  printf '\nmanual edit\n' >> "$RFC"                          # simulate a human/agent edit
+  PW_PROJECTS_DIR="$tmp" "$0" rfc init demo >/dev/null
+  grep -q '^manual edit$' "$RFC" || die "selftest FAIL: rfc init clobbered an existing RFC.md"
+
+  # rfc init <slug> <backend>: on a FRESH project (no rfc/ yet), stamps the REAL backend into
+  # META.md from the start — this is the actual regression test for the bug above.
+  mkdir -p "$tmp/backend-check"
+  printf -- '- **Status:** context\n- **One-liner:** <x>\n' > "$tmp/backend-check/README.md"
+  : > "$tmp/backend-check/LOG.md"
+  PW_PROJECTS_DIR="$tmp" "$0" rfc init backend-check lark >/dev/null
+  grep -q '^- \*\*Backend:\*\* lark$' "$tmp/backend-check/rfc/META.md" || die "selftest FAIL: rfc init <slug> lark did not stamp the real backend"
+
+  # rfc target: upserts Target on the ALREADY-EXISTING META.md (from rfc init above), sets Target;
+  # a 2nd call with a different ref replaces in place (still exactly one Target: line) without
+  # touching Backend.
+  PW_PROJECTS_DIR="$tmp" "$0" rfc target demo "https://example.com/doc/1" >/dev/null
+  grep -q '^- \*\*Target:\*\* https://example.com/doc/1$' "$META" || die "selftest FAIL: rfc target not set"
+  PW_PROJECTS_DIR="$tmp" "$0" rfc target demo "https://example.com/doc/2" >/dev/null
+  [ "$(grep -c '^- \*\*Target:\*\*' "$META")" = "1" ] || die "selftest FAIL: rfc target duplicated instead of replaced"
+  grep -q '^- \*\*Target:\*\* https://example.com/doc/2$' "$META" || die "selftest FAIL: rfc target not updated"
+  grep -q '^- \*\*Backend:\*\* markdown$' "$META" || die "selftest FAIL: rfc target touched an unrelated field"
+
+  # rfc state: round-trips for each allowed field; an unknown field is rejected and leaves the
+  # file untouched (same idiom as the backward-status-move guard above).
+  PW_PROJECTS_DIR="$tmp" "$0" rfc state demo Backend lark >/dev/null
+  grep -q '^- \*\*Backend:\*\* lark$' "$META" || die "selftest FAIL: rfc state Backend not set"
+  PW_PROJECTS_DIR="$tmp" "$0" rfc state demo Wave1Published yes >/dev/null
+  grep -q '^- \*\*Wave 1 published:\*\* yes$' "$META" || die "selftest FAIL: rfc state Wave1Published not set"
+  PW_PROJECTS_DIR="$tmp" "$0" rfc state demo Wave2Published yes >/dev/null
+  grep -q '^- \*\*Wave 2 published:\*\* yes$' "$META" || die "selftest FAIL: rfc state Wave2Published not set"
+  PW_PROJECTS_DIR="$tmp" "$0" rfc state demo LastRevision 42 >/dev/null
+  grep -q '^- \*\*Last revision pushed:\*\* 42$' "$META" || die "selftest FAIL: rfc state LastRevision not set"
+  PW_PROJECTS_DIR="$tmp" "$0" rfc state demo CommentCursor thread-9 >/dev/null
+  grep -q '^- \*\*Comment cursor:\*\* thread-9$' "$META" || die "selftest FAIL: rfc state CommentCursor not set"
+  if PW_PROJECTS_DIR="$tmp" "$0" rfc state demo Bogus x >/dev/null 2>&1; then
+    die "selftest FAIL: rfc state accepted an unknown field"
+  fi
+  grep -q '^- \*\*Comment cursor:\*\* thread-9$' "$META" || die "selftest FAIL: rejected rfc state call mutated the file"
+
+  # rfc dashboard: inserted after Adopted: when one exists (demo already has one from the adopt
+  # tests above); inserted after One-liner when no Adopted: line exists (a fresh project); a 2nd
+  # call replaces in place (still exactly one RFC: line either way).
+  PW_PROJECTS_DIR="$tmp" "$0" rfc dashboard demo "wave 1 published — https://example.com/doc/2" >/dev/null
+  grep -q '^- \*\*RFC:\*\* wave 1 published' "$tmp/demo/README.md" || die "selftest FAIL: RFC line not inserted"
+  grep -A1 '^- \*\*Adopted:\*\*' "$tmp/demo/README.md" | grep -q '^- \*\*RFC:\*\*' || die "selftest FAIL: RFC not anchored after Adopted:"
+  PW_PROJECTS_DIR="$tmp" "$0" rfc dashboard demo "wave 2 published" >/dev/null
+  [ "$(grep -c '^- \*\*RFC:\*\*' "$tmp/demo/README.md")" = "1" ] || die "selftest FAIL: RFC line duplicated instead of replaced"
+  grep -q '^- \*\*RFC:\*\* wave 2 published$' "$tmp/demo/README.md" || die "selftest FAIL: RFC line not updated"
+
+  mkdir -p "$tmp/demo2"
+  printf -- '- **Status:** context\n- **One-liner:** <what this project is>\n' > "$tmp/demo2/README.md"
+  : > "$tmp/demo2/LOG.md"
+  PW_PROJECTS_DIR="$tmp" "$0" rfc dashboard demo2 "wave 1 published" >/dev/null
+  grep -A1 '^- \*\*One-liner:\*\*' "$tmp/demo2/README.md" | grep -q '^- \*\*RFC:\*\*' || die "selftest FAIL: RFC not anchored after One-liner when no Adopted: exists"
+
   echo "selftest OK"
 }
 
@@ -347,6 +541,7 @@ case "${1:-}" in
   review-init) shift; cmd_review_init "$@" ;;
   log)         shift; cmd_log "$@" ;;
   phase)       shift; cmd_phase "$@" ;;
+  rfc)         shift; cmd_rfc "$@" ;;
   selftest)    cmd_selftest ;;
   -h|--help|"") sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown subcommand: $1 (try --help)" ;;

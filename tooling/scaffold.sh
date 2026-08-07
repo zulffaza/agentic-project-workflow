@@ -76,6 +76,7 @@ Structure:
   task/             PLAN.md + T0n.md tasks (from task/_TEMPLATE-*.md)
     review/           your plan/task review files (PLAN.review.md, T0n.review.md)
   worktree/         isolated worktrees appear here during execution
+  rfc/              optional — /pw-rfc's side-loop lives here (RFC.md/META.md appear on first run)
 
 Next steps (each phase is gated by your review):
   1. Add inputs to $dest/context/ (tickets, RFC excerpts, code refs). Optionally start a one-page
@@ -91,6 +92,10 @@ Next steps (each phase is gated by your review):
   6. /pw-ship $slug           → pushes branches + opens MRs (the explicit publish step).
   7. /pw-close $slug          → tears down worktrees (safely), seeds learnings, Status=done.
   Check progress any time with /pw-status $slug.
+
+  Optional side-loops, run whenever — never gate the numbered steps above:
+    /pw-sync $slug   keep an open MR's branch fresh against a moved base.
+    /pw-rfc $slug    publish approved analysis/plan content to an RFC doc (any platform, or none).
 
 Full guide: $PW_HOME/README.md
 EOF

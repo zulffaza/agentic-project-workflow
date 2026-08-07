@@ -28,9 +28,10 @@ task; here we push branches and open MRs.
 3. For each confirmed task, from its worktree
    (`{{PW_PROJECTS}}/<slug>/worktree/<repo>/<T0n>-<slug>`):
    - Push the branch to origin.
-   - Open an MR **targeting the task's Base branch** with a rich description (template below). For
-     GitLab: `glab` run from inside the worktree with `GITLAB_HOST=source.golabs.io` (adjust host
-     per repo). For GitHub: `gh pr create`.
+   - Open an MR **targeting the task's Base branch** with a rich description (template below).
+     **Resolve the forge + CLI per `tooling/forges.md`** (host from this repo's own `origin`
+     remote → `PW_FORGE_HOSTS` override, else auto-detect) — GitLab: `glab` run from inside the
+     worktree with `GITLAB_HOST=<resolved-host>`; GitHub: `gh pr create`. Never hardcode a host.
    - Record the MR in the task's `## Result → MR:` field **and** the dashboard **Merge requests**
      table (Task · Repo · MR url · Target branch · State=open), then log it:
      `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> ship "T0n pushed <branch>; MR <url>"`.
@@ -66,10 +67,10 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
 
 0. **Resolve the set** of tasks to process (the given IDs, or all tasks with an open MR). Announce
    the list. Then, **for each task in the set**, do steps 1–3 in its own worktree:
-1. Fetch the open review threads — GitLab:
-   `glab api projects/:id/merge_requests/<iid>/discussions` (or `glab mr diff`), run from inside the
-   repo with `GITLAB_HOST=source.golabs.io`; GitHub: `gh pr view --comments`. A task whose MR has no
-   open threads is skipped (note it in the recap).
+1. Fetch the open review threads. **Resolve the forge + CLI per `tooling/forges.md`** (same
+   per-repo resolution as ship mode) — GitLab: `glab api projects/:id/merge_requests/<iid>/discussions`
+   (or `glab mr diff`), run from inside the repo with `GITLAB_HOST=<resolved-host>`; GitHub:
+   `gh pr view --comments`. A task whose MR has no open threads is skipped (note it in the recap).
 2. Apply the fixes in that task's **worktree**, re-run its `## Verify`, and push.
 3. **Reply to each MR thread** summarizing the fix, AND **mirror it into the internal record** —
    task `## Result`, `task/review/T0n.review.md` (create it if needed), and a `LOG.md` line via the

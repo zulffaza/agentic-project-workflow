@@ -13,6 +13,11 @@ There are **two places** review happens, and they run at different times:
 Both feed the **same source of truth** — the project dir. MR comments never live only on the MR;
 they get mirrored back in. The two sections below cover each in turn.
 
+A **third, more read-only variant** services comments on a published RFC doc (see
+[docs/RFC.md](./RFC.md)) — it only *pulls* threads into a local review file; unlike the MR flow
+below, the agent never fixes-in-worktree or replies on the thread, since RFC comments are prose
+feedback you resolve yourself.
+
 ---
 
 ## 1. Local review files (pre-ship)

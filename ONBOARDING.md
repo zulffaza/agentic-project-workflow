@@ -79,6 +79,7 @@ Read [README.md](./README.md) — the full guide. The loop, once onboarded:
 /pw-status <slug>     where am I / what's next    /pw-sync <slug>       refresh open MRs against a moved base
                                                   /pw-close <slug>      verify, tear down, learn
                                                   /pw-doctor [--fix]    check/repair install sync
+                                                  /pw-rfc <slug>        optional — publish to an RFC doc
 ```
 
 Each phase is **gated by your review** — an agent stops and you sign off before the next phase.

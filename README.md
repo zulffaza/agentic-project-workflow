@@ -60,7 +60,9 @@ adding your own agent CLI as a provider.
 | 8 | Review results | accepted tasks | ✅ you accept each task | `/pw-review` |
 | 9 | Learn + close | learnings, teardown, Status→done | — | `/pw-close` |
 
-Keeping open MRs fresh as their base moves is a side-loop: **`/pw-sync`**. Full detail →
+Keeping open MRs fresh as their base moves is a side-loop: **`/pw-sync`**. Another optional
+side-loop, **`/pw-rfc`**, publishes approved analysis/plan content to an RFC doc (any configured
+platform, or a local-only doc by default) — see **[docs/RFC.md](./docs/RFC.md)**. Full detail →
 **[docs/WORKFLOW.md](./docs/WORKFLOW.md)**.
 
 ## Dig deeper
@@ -70,6 +72,7 @@ Keeping open MRs fresh as their base moves is a side-loop: **`/pw-sync`**. Full 
 | 📋 **[docs/WORKFLOW.md](./docs/WORKFLOW.md)** | Every step in detail · who owns `Status:` · the `LOG.md` audit trail · rewinding a phase |
 | 🔀 **[docs/ADOPTION.md](./docs/ADOPTION.md)** | The continuation workflow — adopt in-progress branches, the two intents, mixed projects |
 | 💬 **[docs/REVIEW.md](./docs/REVIEW.md)** | The two review entry points — local `.review.md` files **and** MR comments — and how they reconcile |
+| 📝 **[docs/RFC.md](./docs/RFC.md)** | Optional side-loop — publish approved analysis/plan content to an RFC doc, any platform or none |
 | ⚙️ **[docs/EXECUTION.md](./docs/EXECUTION.md)** | Orchestrator vs executor · picking a model/agent per task · cross-provider execution · worktrees |
 | 📖 **[docs/REFERENCE.md](./docs/REFERENCE.md)** | Bundle layout · project anatomy · naming conventions · the full `/pw-*` command table + generator |
 | 🚀 **[ONBOARDING.md](./ONBOARDING.md)** | Fresh-machine / teammate setup · registering a new provider · optional memory |

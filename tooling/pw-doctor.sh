@@ -30,6 +30,8 @@ echo "pw-doctor — project-workflow sync check"
 echo "  PW_HOME   = $PW_HOME"
 echo "  providers = ${PW_PROVIDERS[*]}   (from pw.config.sh)"
 echo "  memory    = ${PW_MEMORY:-none}   (optional; see tooling/memory.md)"
+echo "  forge     = auto-detect (${#PW_FORGE_HOSTS[@]} host override(s))   (optional; see tooling/forges.md)"
+echo "  rfc       = ${PW_RFC_BACKEND:-markdown}   (optional; see tooling/rfc.md)"
 echo
 
 # --- config + env ------------------------------------------------------------

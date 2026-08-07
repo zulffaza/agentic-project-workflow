@@ -53,6 +53,8 @@ echo "  PW_PROJECTS = $PW_PROJECTS"
 echo "  PW_REPOS    = $PW_REPOS   (git repos live here; override with PW_REPOS=… ./bootstrap.sh)"
 echo "  providers   = ${PW_PROVIDERS[*]}   (from pw.config.sh)"
 echo "  memory      = ${PW_MEMORY:-none}   (optional; ${PW_MEMORY:+configured — }see tooling/memory.md)"
+echo "  forge       = auto-detect (${#PW_FORGE_HOSTS[@]} host override(s))   (optional; see tooling/forges.md)"
+echo "  rfc         = ${PW_RFC_BACKEND:-markdown}   (optional; see tooling/rfc.md)"
 echo
 
 # --- detect (enabled AND present on PATH) ------------------------------------

@@ -16,7 +16,7 @@ agentic-project-workflow/        ← this bundle ($PW_HOME)
 ├── pw.config.example.sh         ← copy → pw.config.sh; the one file YOU edit (providers + memory)
 ├── template/                    ← what a scaffolded project is MADE OF (copied per project)
 │   ├── PROJECT.template.md · _REVIEW.template.md
-│   └── context/ (+_REQUIREMENTS.template.md) · analysis/ · task/ · worktree/
+│   └── context/ (+_REQUIREMENTS.template.md) · analysis/ · task/ · worktree/ · rfc/
 └── tooling/                     ← the MACHINERY (never copied into a project)
     ├── scaffold.sh · gen-commands.sh · gen-agents.sh · pw-lib.sh · pw-doctor.sh
     ├── pw-common.sh · pw-teardown.sh
@@ -24,6 +24,8 @@ agentic-project-workflow/        ← this bundle ($PW_HOME)
     ├── agents/                  ← canonical sub-agents (seeded per provider): pw-orchestrator, pw-executor
     ├── providers.md             ← provider registry
     ├── memory.md                ← optional/pluggable memory policy (works with none)
+    ├── forges.md                ← git-forge registry (repo host → gh/glab)
+    ├── rfc.md · rfc-backends.md ← optional/pluggable RFC-publishing policy + backend registry
     └── skill/project-workflow/SKILL.md
 ```
 
@@ -41,8 +43,9 @@ agentic-project-workflow/        ← this bundle ($PW_HOME)
 │   ├── PLAN.md      ← orchestration plan: repos, global rules, dependency DAG  ← executor reads THIS
 │   ├── T01…Tnn.md   ← one self-contained task file each (each is a spawnable prompt)
 │   └── review/      ← your plan/task review files (PLAN.review.md, T0n.review.md)
-└── worktree/        ← isolated git worktrees, laid out per-repo/per-task
-    └── <repo>/<task-id>-<slug>/
+├── worktree/        ← isolated git worktrees, laid out per-repo/per-task
+│   └── <repo>/<task-id>-<slug>/
+└── rfc/             ← OPTIONAL side-loop — RFC.md/META.md appear on first `/pw-rfc` run (see docs/RFC.md)
 ```
 
 Reusable sub-agents are **not** per-project — they're seeded globally from
@@ -95,6 +98,9 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | `/pw-status <slug>` | status |
 | `/pw-close <slug>` | learn + close-out |
 | `/pw-doctor [--fix]` | check (or repair) that installed commands + agents + skill match this bundle |
+| `/pw-rfc <slug> [--target <ref>]` | optional side-loop: publish approved analysis to an RFC doc (see [docs/RFC.md](./RFC.md)) |
+| `/pw-rfc <slug> milestone` | same side-loop, Wave 2 — fills Milestone + Conclusion from an approved PLAN |
+| `/pw-rfc <slug> comments` | read-only pull of RFC-doc comments into a local review file |
 
 These exist for multiple agent tools (Claude Code, kilo, …) but are **not** maintained per tool. The
 single source is [`tooling/commands/*.md`](../tooling/) (provider-neutral, `{{ARGS}}` placeholder).

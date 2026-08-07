@@ -20,6 +20,9 @@ tooling/
 ├── agents/             ← THE source of truth for seedable sub-agents (pw-orchestrator, pw-executor)
 ├── providers.md        ← agent provider registry (model → CLI, headless invocation) [🧑 you]
 ├── memory.md           ← optional/pluggable memory policy (the pipeline works with none)
+├── forges.md           ← git-forge registry (repo host → gh/glab CLI + invocation) [🧑 you]
+├── rfc.md              ← optional/pluggable RFC-publishing policy (the pipeline works with none)
+├── rfc-backends.md     ← RFC backend registry (doc platform → create/fetch/update/comments) [🧑 you]
 ├── skill/project-workflow/SKILL.md   ← the shippable skill (bootstrap installs it per provider)
 └── README.md
 ```
@@ -33,7 +36,13 @@ Run `pw-lib.sh selftest` after changing it.
 
 `providers.md` is **not** generated — it's a config file you maintain (which CLI runs which
 model, and how to invoke it headlessly for cross-provider execution). See it to add a new
-model/provider.
+model/provider. `forges.md` and `rfc-backends.md` are the same shape (a registry you maintain,
+read at ship/rfc time, no code change to add a row) — `forges.md` maps a repo's git host to the
+`gh`/`glab` CLI so nothing hardcodes an org's hostname; `rfc-backends.md` maps an RFC doc platform
+(Lark today; Confluence/Google Docs/Notion documented as contract stubs) to its create/fetch/
+update/list-comments operations. `rfc.md` is the pluggable-policy shape instead — like
+`memory.md`, the pipeline works with **no** backend configured (`/pw-rfc` still generates a local
+`rfc/RFC.md`; publishing to a real platform is the opt-in part).
 
 ## Regenerate after any change
 Edit a file in `commands/`, then (`$PW_HOME` = the bundle dir; `bootstrap.sh` exports it):

@@ -44,6 +44,25 @@ PW_KILO_PROVIDERS=(command_code)
 PW_MEMORY="none"
 PW_MEMORY_NOTES=""
 
+# --- Git forge host overrides (OPTIONAL — auto-detect covers github.com/gitlab.com) ---------
+# /pw-ship and /pw-adopt resolve which CLI (gh/glab) talks to a repo from its OWN origin remote
+# host — see tooling/forges.md. Public github.com/gitlab.com need ZERO config. Only a self-hosted
+# GitLab (or any forge needing a host env var) needs an override here:
+#   PW_FORGE_HOSTS=("git.internal.example.com=gitlab")
+PW_FORGE_HOSTS=()
+
+# --- RFC publishing (OPTIONAL — default "markdown" needs no external tool at all) -----------
+# /pw-rfc always generates <project>/rfc/RFC.md locally, regardless of backend. Publishing that
+# to an external doc platform is additional and opt-in — see tooling/rfc.md + tooling/rfc-backends.md.
+#   PW_RFC_BACKEND="markdown"   # "markdown" (default, zero-dependency) | "lark" | (stub only) confluence/google-docs/notion
+#   PW_RFC_LARK_TEMPLATE=""     # Lark doc/wiki template token or URL — only used when backend=lark
+#   PW_RFC_LARK_SPACE=""        # default target wiki space/parent-node token (or set per-project via /pw-rfc --target)
+#   PW_RFC_NOTES=""             # freeform notes, same spirit as PW_MEMORY_NOTES
+PW_RFC_BACKEND="markdown"
+PW_RFC_LARK_TEMPLATE=""
+PW_RFC_LARK_SPACE=""
+PW_RFC_NOTES=""
+
 # --- Onboard a brand-new provider without touching the scripts --------------
 # Add its name to PW_PROVIDERS above, then define its four command hooks here:
 #   myprov_bin()      { echo myprov-cli; }               # command to detect on PATH

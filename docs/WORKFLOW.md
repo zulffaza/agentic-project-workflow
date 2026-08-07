@@ -20,7 +20,10 @@ resumable because all state lives on disk, not in an agent's head.
 | 9 | Learn + close | You + agent | memory (if configured), worktrees torn down, Status→done | — | `/pw-close` |
 
 Keeping an MR up to date after it's open is a side-loop, not a numbered step: **`/pw-sync`** (see
-step 7). And you can reopen an earlier phase any time — see [rewind](#going-back-a-phase-rewind).
+step 7). Another side-loop, **`/pw-rfc`** (optional, any platform or none — see
+[docs/RFC.md](./RFC.md)), publishes approved analysis/plan content to an RFC doc; like `/pw-sync`
+it never touches the numbered steps or the dashboard `Status:`. And you can reopen an earlier phase
+any time — see [rewind](#going-back-a-phase-rewind).
 
 ---
 

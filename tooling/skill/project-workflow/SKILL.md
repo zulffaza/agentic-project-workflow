@@ -13,7 +13,8 @@ this skill + the `/pw-*` commands per provider) — see `agentic-project-workflo
 
 ## Structure of a project
 ```
-<project>/  README.md(dashboard) · context/ · analysis/ · task/(PLAN.md + T0n.md) · worktree/
+<project>/  README.md(dashboard) · context/ · analysis/ · task/(PLAN.md + T0n.md) · worktree/ ·
+            rfc/ (optional — /pw-rfc side-loop)
 ```
 Phases are gated: a human approves after **analysis** (step 3) and after **task breakdown**
 (step 5) before the next phase runs. Don't skip a gate.
@@ -201,7 +202,9 @@ an adopted unit continues on that branch (serial per branch), every other task g
 `/pw-ship <slug> [task-ids] [comments]` (push + open MRs; the outward-facing publish step),
 `/pw-sync <slug> [task-ids]` (merge the moved base into each open MR branch, re-verify, push),
 `/pw-status <slug>`, `/pw-close <slug>`,
-`/pw-doctor [--fix]` (verify/repair that installed commands + agents + skill match the bundle).
+`/pw-doctor [--fix]` (verify/repair that installed commands + agents + skill match the bundle),
+`/pw-rfc <slug> [--target <ref>] [milestone|comments]` (optional side-loop — publish approved
+analysis/plan content to an RFC doc, any configured backend or none; see `tooling/rfc.md`).
 The command files are **generated build artifacts** — the single source is
 `agentic-project-workflow/tooling/commands/*.md`, emitted per provider by `agentic-project-workflow/tooling/gen-commands.sh` (Claude →
 `~/.claude/commands/`, kilo → `~/.config/kilo/command/`); the sub-agents (`pw-orchestrator`,

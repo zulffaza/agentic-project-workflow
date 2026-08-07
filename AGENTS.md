@@ -66,7 +66,8 @@ real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./do
 - **`tooling/`** — the machinery: `scaffold.sh`, `gen-commands.sh`, `gen-agents.sh`, `pw-lib.sh`
   (deterministic helpers), `pw-doctor.sh`, `pw-common.sh`, `pw-teardown.sh` (safe worktree removal),
   `commands/` (canonical `/pw-*` sources), `agents/` (seedable `pw-orchestrator` + `pw-executor`),
-  `providers.md`, `memory.md` (optional-memory policy), `skill/`.
+  `providers.md`, `memory.md` (optional-memory policy), `forges.md` (git-forge registry),
+  `rfc.md`/`rfc-backends.md` (optional RFC-publishing policy + backend registry), `skill/`.
 - **`pw.config.sh`** — YOUR config (CLIs, models, optional `PW_MEMORY`); the one file you edit.
 
 Human-facing overview: **[README.md](./README.md)**. Restated working rules on demand: the

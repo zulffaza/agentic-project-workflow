@@ -20,6 +20,7 @@
 - Analysis → [`analysis/`](./analysis/)  · reviews → [`analysis/review/`](./analysis/review/)
 - Plan + tasks → [`task/PLAN.md`](./task/PLAN.md)  · reviews → [`task/review/`](./task/review/)
 - Worktrees → [`worktree/`](./worktree/)
+- RFC doc (optional, appears after the first `/pw-rfc` run) → [`rfc/RFC.md`](./rfc/RFC.md)
 - Activity log (audit trail) → [`LOG.md`](./LOG.md)
 
 Full workflow guide: `../agentic-project-workflow/README.md`.
