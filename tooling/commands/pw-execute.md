@@ -56,12 +56,17 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
    - **Different provider → shell out to that CLI headlessly** (per the registry's invocation
      column), passing the task file as the work order — e.g. a Claude-Code orchestrator hands a
      `kilo:command_code/MiniMaxAI/MiniMax-M3` task to `kilo run --auto -m … --format json`
-     (`--auto` is REQUIRED or kilo auto-rejects every permission). **Sub-agents do NOT cross
-     providers:** don't pass `--agent pw-executor` (that's the *other* provider's sub-agent you
-     can't reach) — invoke its default/primary agent with the task file + skill inline; the executor
-     discipline travels with them. Route to a capable model (tiny models stop mid-task). Capture the
-     final text for the report, but **confirm the real git artifacts** (branch/commit/Verify), not
-     the CLI's self-report.
+     (`--auto` is REQUIRED or kilo auto-rejects every permission). **Pipe the prompt via stdin,
+     never as a trailing CLI argument** — a long inline argument can vanish entirely across the
+     shell-out boundary (confirmed 2026-08-08, kilo→claude: `claude --print` reported no prompt was
+     received even though it was right there in the command; the CLI's own syntax was fine in
+     isolation). Stdin is immune to this — see `providers.md`'s Cross-provider execution section
+     for the verified pattern. **Sub-agents do NOT cross providers:** don't pass `--agent
+     pw-executor` (that's the *other* provider's sub-agent you can't reach) — invoke its
+     default/primary agent with the task file + skill inline; the executor discipline travels with
+     them. Route to a capable model (tiny models stop mid-task). Capture the final text for the
+     report, but **confirm the real git artifacts** (branch/commit/Verify), not the CLI's
+     self-report.
    - **Either way, tee the run to a log** so I can watch it: append the executor's combined output
      to `{{PW_PROJECTS}}/<slug>/worktree/<T0n>.log`. Tell me the path so I can `tail -f` it in my
      own window. Record it in the task's `## Result → Log:` field.

@@ -238,6 +238,13 @@ git -C ~/IdeaProjects/<repo> worktree add \
 - **KiloCode headless needs `--auto`** — `kilo run` without it auto-*rejects* every permission
   (can't even read the task file). Worktrees are fine via the CLI (`kilo run --auto` verified
   end-to-end); the "auto-approve breaks in worktrees" issue is the **JetBrains plugin**, not the CLI.
+- **Cross-provider shell-out: pipe the prompt via stdin, never a trailing CLI argument** — a long
+  inline argument can vanish entirely across the shell-out boundary (confirmed kilo→claude: `claude
+  --print` reported no prompt received even though it was right there in the command; the CLI's own
+  syntax was fine in isolation — the loss happens inside the calling tool's own command
+  construction). Stdin is immune. Also: headless `claude --print` needs
+  `--dangerously-skip-permissions` or it hangs producing no output (no TTY to answer a tool-approval
+  prompt) — same spirit as kilo's `--auto`. See `providers.md`'s Cross-provider execution section.
 - **Scaffolded project dirs** (`$PW_PROJECTS/<slug>/`) are **plain (not git repos)** by design —
   version history lives in the real repos, and workflow learnings go in the project's "Decisions &
   learnings" section (and your memory tool at close-out, if `PW_MEMORY` names one). The reusable

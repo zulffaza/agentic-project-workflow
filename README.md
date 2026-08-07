@@ -41,7 +41,8 @@ branch** to adopt multi-repo work already in flight. Everything from analysis on
 guide → **[docs/ADOPTION.md](./docs/ADOPTION.md)**.
 
 New here or on a fresh machine? **[ONBOARDING.md](./ONBOARDING.md)** has the full setup, including
-adding your own agent CLI as a provider.
+adding your own agent CLI as a provider. Leaving/uninstalling? `./offboard.sh` is the exact inverse
+of `./bootstrap.sh` — see ONBOARDING.md's [Offboarding](./ONBOARDING.md#offboarding--uninstalling) section.
 
 > **Path variables used throughout the docs** (so nothing is tied to one machine/username):
 > `$PW_HOME` = this bundle's dir · `$PW_PROJECTS` = its parent (where `<slug>` projects go) ·
@@ -75,7 +76,7 @@ platform, or a local-only doc by default) — see **[docs/RFC.md](./docs/RFC.md)
 | 📝 **[docs/RFC.md](./docs/RFC.md)** | Optional side-loop — publish approved analysis/plan content to an RFC doc, any platform or none |
 | ⚙️ **[docs/EXECUTION.md](./docs/EXECUTION.md)** | Orchestrator vs executor · picking a model/agent per task · cross-provider execution · worktrees |
 | 📖 **[docs/REFERENCE.md](./docs/REFERENCE.md)** | Bundle layout · project anatomy · naming conventions · the full `/pw-*` command table + generator |
-| 🚀 **[ONBOARDING.md](./ONBOARDING.md)** | Fresh-machine / teammate setup · registering a new provider · optional memory |
+| 🚀 **[ONBOARDING.md](./ONBOARDING.md)** | Fresh-machine / teammate setup · registering a new provider · optional memory · offboarding/uninstalling |
 
 ## Why it's shaped this way
 

@@ -14,7 +14,8 @@ review → close**, driven by `/pw-*` slash commands. Work happens in scaffolded
    source ./pw-env.sh    # exports $PW_HOME / $PW_PROJECTS / $PW_REPOS
    ```
    Verify or repair drift any time: `tooling/pw-doctor.sh` (`--fix` to repair). Full setup /
-   fresh-machine recovery: **[ONBOARDING.md](./ONBOARDING.md)**.
+   fresh-machine recovery: **[ONBOARDING.md](./ONBOARDING.md)**. Leaving/uninstalling? `./offboard.sh`
+   is the exact inverse — see ONBOARDING.md's [Offboarding](./ONBOARDING.md#offboarding--uninstalling) section.
 2. **Invoke the `project-workflow` skill.** It's your working cheat-sheet — the detailed rules for
    each phase, routing, and the deterministic helpers. Load it before driving any project.
 3. **Orient by what you're being asked to do** — map it to a phase + command below, then follow the

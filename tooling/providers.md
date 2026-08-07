@@ -19,7 +19,7 @@ _Verified 2026-08-04 against the installed CLIs._
 
 | Provider | CLI binary | Models / agents it serves | Headless (non-interactive) invocation | Notes |
 |----------|-----------|---------------------------|----------------------------------------|-------|
-| `claude` | `claude` | alias = **latest** of that family: `opus`, `sonnet`, `haiku`, `fable`; **pinned** full names: `claude-opus-5`, `claude-opus-4-8`, `claude-sonnet-5`, `claude-haiku-4-5-20251001`, `claude-fable-5`; existing agents (`code-implementation`, …) | `claude -p "<prompt>" --model <model> [--effort <low\|medium\|high\|xhigh\|max>]` | Anthropic models. `-p`/`--print` = headless. **Alias ≠ version-stable** (`opus` follows the latest) — use a full name to pin. |
+| `claude` | `claude` | alias = **latest** of that family: `opus`, `sonnet`, `haiku`, `fable`; **pinned** full names: `claude-opus-5`, `claude-opus-4-8`, `claude-sonnet-5`, `claude-haiku-4-5-20251001`, `claude-fable-5`; existing agents (`code-implementation`, …) | `<prompt> \| claude --print --dangerously-skip-permissions --model <model> [--effort <low\|medium\|high\|xhigh\|max>]` | Anthropic models. `-p`/`--print` = headless; `--dangerously-skip-permissions` is **required** headless — without it a tool-approval prompt has no TTY to answer it and the process hangs producing no output. **Pipe the prompt via stdin, never a trailing CLI argument** — a long inline argument can vanish entirely across a shell-out boundary (confirmed 2026-08-08, kilo→claude: `claude` reported "Input must be provided either through stdin or as a prompt argument" with the prompt right there in the command). Stdin is immune to this. **Alias ≠ version-stable** (`opus` follows the latest) — use a full name to pin. |
 | `kilo` | `kilo` (`@kilocode/cli`) | via the **`command_code`** AI provider (NOT Kilo Gateway): `command_code/deepseek/deepseek-v4-pro`, `command_code/MiniMaxAI/MiniMax-M3`, `command_code/xiaomi/mimo-v2.5-pro`, `command_code/Qwen/Qwen3.7-Max`, `command_code/zai-org/GLM-5.2`, … (also proxies Claude/GPT/Gemini). Full list: `kilo models command_code`. | `kilo run --auto -m command_code/<model> "<prompt>" --dir <path> [--variant <high\|max\|minimal\|…>] [--thinking] [--format json]` — `--auto` is **required** headless (see below); add `--agent <name>` when using a native agent | Open-weight + proxied models. Model id (everything after `-m`) is passed verbatim. `--variant` = provider-specific reasoning effort. |
 | _`<future>`_ | _`<cli>`_ | _`<models/agents>`_ | _`<invocation>`_ | Add a row — no code change needed. |
 
@@ -72,6 +72,19 @@ Blessed `command_code` models for this workflow. Add/remove rows freely; the ful
 >   the real git artifacts (branch/commit/Verify), not just the self-report.
 > - **Model capability matters:** a tiny model (`gemini-3.5-flash-lite`) stopped after one step;
 >   `MiniMaxAI/MiniMax-M3` completed the whole task. Route executor tasks to a capable model.
+>
+> **Confirmed 2026-08-08 (KiloCode orchestrator → `claude --print` executor, real project):** a
+> long inline prompt argument can vanish entirely across the shell-out boundary — `claude` reported
+> `Error: Input must be provided either through stdin or as a prompt argument when using --print`
+> even though the prompt was right there in the command. Reproduced the CLI's own flags/quoting in
+> isolation (they're fine); the loss happens somewhere inside the calling tool's own command
+> construction for a long inline argument, not in `claude` itself. **Fix: pipe the prompt via
+> stdin instead of a trailing argument** — verified working both standalone and through kilo's own
+> Bash tool. Apply this defensively to *any* cross-provider handoff, not just this pairing — a long
+> inline argument is a generic risk regardless of which two CLIs are involved. Separately: running
+> `claude --print` **without** `--dangerously-skip-permissions` headless hangs producing zero
+> output (a tool-approval prompt has no TTY to answer it) — always include it for a headless
+> executor invocation, same spirit as kilo's `--auto`.
 
 
 0. If `Execute with:` names an **agent** (not a bare model), resolve its provider first: explicit
@@ -97,8 +110,11 @@ Blessed `command_code` models for this workflow. Add/remove rows freely; the ful
    kilo run --auto -m command_code/MiniMaxAI/MiniMax-M3 --dir $PW_REPOS \
      --format json "$PROMPT"      # --auto required; scrape final text part for the result
 
-   # KiloCode orchestrator → hand a claude:* task to Claude Code:
-   claude -p "$PROMPT" --model opus
+   # KiloCode orchestrator → hand a claude:* task to Claude Code — pipe the prompt via stdin, NOT
+   # a trailing argument (a long inline argument can vanish entirely across the shell-out boundary
+   # — confirmed 2026-08-08; stdin is immune). --dangerously-skip-permissions is required headless,
+   # same spirit as kilo's --auto:
+   printf '%s' "$PROMPT" | claude --print --dangerously-skip-permissions --model opus
    ```
    Capture that CLI's output into the task's `## Result` and append a `LOG.md` line naming the
    provider used. Record it in the task's `Actually used:` (e.g. `kilo:command_code/MiniMaxAI/MiniMax-M3`).

@@ -120,6 +120,27 @@ connect to several at once) is just a list you set (`PW_KILO_PROVIDERS=(…)`) i
 never constrains a teammate. Reference any of them in a task's `Execute with:` as
 `kilo:<provider>/<model>`.
 
+## Offboarding / uninstalling
+
+Leaving the team, decommissioning a machine, or just done with this pipeline? **`./offboard.sh`**
+is the exact inverse of `./bootstrap.sh` — it removes the installed skill, generated `/pw-*`
+commands, and seeded sub-agents per provider.
+
+```bash
+./offboard.sh                    # dry-run (default, always) — reports what WOULD be removed
+./offboard.sh --yes              # actually remove it
+./offboard.sh --provider kilo    # scope to one/more providers (comma-separated)
+./offboard.sh --all-known        # also sweep claude/kilo even if no longer in PW_PROVIDERS —
+                                  # catches files orphaned by disabling a provider in pw.config.sh
+```
+
+It only ever removes a file whose content **exactly matches** what this bundle would generate
+right now (same check `pw-doctor.sh` uses) — anything you hand-edited, or a foreign file that
+happens to share a name, is reported and skipped, never guessed at. It **never** touches
+`pw.config.sh`, your scaffolded projects under `$PW_PROJECTS`, or this bundle's own folder — those
+are yours; delete them yourself if you want a truly clean slate. See the script's own header
+comment for the full safety contract.
+
 ## Notes for the maintainer (whoever shares this)
 
 - **Keep the shipped skill in sync.** The bundle ships its own copy at
