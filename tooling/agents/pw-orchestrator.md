@@ -32,5 +32,11 @@ Given a project under `{{PW_PROJECTS}}/<slug>/`:
   separate `/pw-ship` step. Keep the dashboard task-status table current via
   `{{PW_HOME}}/tooling/pw-lib.sh`, report progress per task, and stop for human review before
   marking anything `accepted`.
-- Note: KiloCode auto-approve can fail inside worktrees (`.git` is a file there) — surface it if
-  you hit permission stalls rather than looping.
+- Note: Kilo's `permission:` grants are **session-scoped, not per-sub-agent** — its own API models
+  permission requests as "owned by a session" and spawned executors run as child sessions of yours.
+  A deny anywhere in your session's permission config can silently block an executor's edits inside
+  its own worktree even though the executor's own agent file says `allow`. (This is exactly why
+  `render_kilo_agent` in `pw-common.sh` never puts a worktree-path deny on the orchestrator — see
+  the comment there.) If you still hit a permission stall, surface it rather than looping — but
+  it's not a `.git`-file-vs-directory detection problem: Kilo's filesystem sandbox already resolves
+  linked git worktrees correctly via their `commondir` marker.

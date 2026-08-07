@@ -56,12 +56,11 @@ declare -f render_kilo_agent >/dev/null 2>&1 || render_kilo_agent() {
   printf -- '---\nmode: %s\ndescription: %s\n' "$mode" "$desc"
   printf -- 'options:\n  displayName: %s\n  id: %s\n' "${displayName:-$agentname}" "$agentname"
   printf -- 'permission:\n  read: allow\n'
-  if [ "$role" = "orchestrator" ]; then
-    # orchestrator coordinates + edits PLAN/dashboard, but must NOT edit repo code in worktrees
-    printf -- '  edit:\n    "*": allow\n    "**/worktree/**": deny\n'
-  else
-    printf -- '  edit:\n    "*": allow\n'
-  fi
+  # Do not put a worktree edit denial on the orchestrator session. Kilo propagates
+  # session permissions to child agents, which would prevent implementation agents
+  # from editing their assigned worktrees. The orchestrator's no-source-edit rule
+  # is enforced by its prompt and workflow instructions instead.
+  printf -- '  edit:\n    "*": allow\n'
   printf -- '  bash: allow\n  grep: allow\n  glob: allow\n  task: allow\n  skill: allow\n'
   printf -- '---\n%s' "$bodytext"
 }
