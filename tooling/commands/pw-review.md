@@ -23,10 +23,12 @@ to rewind a phase, that's `pw-lib.sh status <slug> <phase> --rewind`, not this c
 **Verify-failed tasks may not have a review file yet — that's the #1 reason "nothing happens".**
 For each task I've flipped to `Status: verify-failed`:
 - If `task/review/T0n.review.md` **exists**, process it (below).
-- If it **does NOT exist**, don't stop silently. Take whatever feedback I gave you in chat, **create
-  the file from `{{PW_HOME}}/template/_REVIEW.template.md`**, write my feedback as the `🔴 open`
-  item(s), then process it. If I flipped the task to verify-failed but gave you **no** feedback
-  anywhere, tell me exactly that and ask what's wrong — don't guess.
+- If it **does NOT exist**, don't stop silently. Create it deterministically —
+  `{{PW_HOME}}/tooling/pw-lib.sh review-init <slug> task/review/T0n.review.md task/T0n.md`
+  (never hand-write it; this guarantees the permanent format hints survive) — then write whatever
+  feedback I gave you in chat as the `🔴 open` item(s), and process it. If I flipped the task to
+  verify-failed but gave you **no** feedback anywhere, tell me exactly that and ask what's wrong —
+  don't guess.
 
 For each `🔴 open` item in the resolved files:
 - apply the fix to the doc it reviews,

@@ -78,9 +78,18 @@ output, and fills the task file's `## Result`. **Execution stops at committed + 
 Full detail on roles, model/agent choice, and cross-provider execution:
 [Execution & routing](./EXECUTION.md).
 
+**Resuming a partial or failed run.** `/pw-execute <slug>` **with no task IDs is a resume of the
+whole plan**, not a one-task-at-a-time step: it processes every task not yet `accepted` (`todo`,
+`in-progress`, `verify-failed`) and walks the DAG through to the end of what's ready **in one
+invocation** — it should not stop just because it had to fix a previously-failed task first. A
+Verify failure confirmed pre-existing/environmental (fails the same way on the untouched base) still
+counts as `done` and doesn't block the DAG; only a genuine regression blocks *that task's own*
+dependents, and every other independent task still proceeds. `/pw-execute <slug> T0n` (a task ID
+given) is the different, deliberate "just re-verify this one" path.
+
 **Rejecting a result** goes through the review loop: flip the task to `Status: verify-failed` and
 either add items to `task/review/T0n.review.md` or just tell the agent what's wrong (`/pw-review`
-creates the review file from your feedback if it's missing), then re-run that one task. See
+creates the review file if it's missing), then `/pw-execute <slug> T0n` re-runs just that task. See
 [Review & feedback](./REVIEW.md).
 
 <a id="ship-and-sync"></a>
@@ -118,13 +127,15 @@ auto-logs the change to [`LOG.md`](#audit-log--logmd). `/pw-review` never touche
 <a id="audit-log--logmd"></a>
 ## Audit log — `LOG.md`
 Every project has a `LOG.md` — an append-only audit trail, one line per meaningful action (phase
-transition, sub-agent spawn, commit, push, MR, review pass, close-out), newest at the bottom:
+transition, sub-agent spawn, commit, push, MR, review pass, close-out), newest at the bottom. Each
+entry is a Markdown bullet, so it stays readable in a plain preview view (a bare pipe row with no
+table header doesn't render as a table — it's just one long unwrapped line):
 ```
-YYYY-MM-DD HH:MM | <phase/actor> | <what happened>
+- **YYYY-MM-DD HH:MM** · `<phase/actor>` — <what happened>
 ```
 The `/pw-*` commands append to it via `tooling/pw-lib.sh log …` (deterministic format); you can add
-manual notes too. It answers "what did the agents actually do, and when?" without reconstructing it
-from chat.
+manual notes the same way. It answers "what did the agents actually do, and when?" without
+reconstructing it from chat.
 
 ## Going back a phase (rewind)
 Phases aren't one-way. To reopen an earlier phase after you've moved on (e.g. breakdown revealed the

@@ -28,10 +28,14 @@ in a **`review/` subdir** beside it, which is the durable record of what you ask
 | `task/T03.md` | `task/review/T03.review.md` |
 
 (The `review/` subdir keeps reviews from cluttering the result docs — `task/` can hold a dozen
-`T0n.md` files, so their reviews live under `task/review/`.) Start one by copying
-[`_REVIEW.template.md`](../template/_REVIEW.template.md) into the phase's `review/` dir — it ships
-with **worked examples** and a **decision-status legend** so it's clear what to fill. Each item has
-an **ID + section anchor** (`R1 · §2`) and a status dot: 🔴 open / 🟢 resolved.
+`T0n.md` files, so their reviews live under `task/review/`.) **You don't create these yourself** —
+`/pw-analyze` and `/pw-breakdown` auto-create `analysis/review/<topic>.review.md` and
+`task/review/PLAN.review.md` (idempotently, via `pw-lib.sh review-init`, from
+[`_REVIEW.template.md`](../template/_REVIEW.template.md)) as their last step, already in-review and
+empty. It ships with **worked examples**, a **decision-status legend**, and — permanently, even
+once items exist — a one-line **"how to add an item / answer a question" hint** right under each
+section heading, so the syntax is always there to copy from. Each item has an **ID + section
+anchor** (`R1 · §2`) and a status dot: 🔴 open / 🟢 resolved.
 
 **Two dials, don't confuse them:** the per-item dot (🔴→🟢) is flipped by the **agent** after it
 addresses your item — you never set it. The only status *you* decide is the **gate** in the Sign-off
@@ -47,11 +51,11 @@ to set any status; you just leave it 🔴 open and run `/pw-review`.
   dashboard Status.
 - Only **you** write the Sign-off row. An agent cannot self-approve a gate — an `approved ✅` row is
   what clears a phase.
-- **Task review is optional.** Only the PLAN sign-off gates execution. To reject an **execution**
-  result, flip that task's `Status: verify-failed` and either add items to
+- **Task review is optional, and created on demand.** Only the PLAN sign-off gates execution. To
+  reject an **execution** result, flip that task's `Status: verify-failed` and either add items to
   `task/review/T0n.review.md` **or** just tell the agent what's wrong — `/pw-review <slug> T0n`
-  creates the review file from your feedback if it doesn't exist, applies the fix, then
-  `/pw-execute <slug> T0n` re-runs just that task and re-verifies.
+  creates the review file (via `pw-lib.sh review-init`, same as above) if it doesn't exist, applies
+  the fix, then `/pw-execute <slug> T0n` re-runs just that task and re-verifies.
 
 List everything still needing work across a project:
 ```bash

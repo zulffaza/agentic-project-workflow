@@ -21,6 +21,11 @@ HOW THIS FILE WORKS — read before editing.
   when fixes are applied — this file is the durable record, the doc is not.
 - Only YOU fill the Sign-off table. An agent cannot self-approve a gate.
 - List everything still open in a project:  rtk grep -rln "🔴 open" .
+- **Agents:** the `> **Add an item:**` / `> **Answer a question:**` blockquotes right under
+  "## Items" / "## Open questions" are a PERMANENT syntax reference, not the deletable worked
+  example below — never remove them, even when clearing a section down to "No blocking …". Create
+  this file via `pw-lib.sh review-init <slug> <review-rel-path> <doc-rel-path>` (copies this
+  template verbatim) rather than hand-writing one, so nothing here gets silently dropped.
 -->
 
 ## Decision status — what moves, and who moves it
@@ -43,6 +48,12 @@ decision. Neither edits the other's text.
 
 ## Items
 
+> **Add an item:** start a new heading `### Rn · <§section or anchor> — 🔴 open (you, <YYYY-MM-DD
+> HH:MM>)`, then write your ask on the line below it. An agent replies with a `  ↳ agent: …` line
+> and flips your heading to 🟢 resolved — it never edits or deletes your text. (This hint stays
+> even once items exist or the section is emptied back to "No blocking …" — it's the syntax
+> reference, not the worked example below.)
+
 <!-- ↓↓ WORKED EXAMPLE (delete this block once you get the idea) ↓↓
 ### R1 · §3 Affected repos — 🔴 open (you, 2026-08-06 10:20)
 You listed `hera` as touched, but the Kafka toggle also lives in `common-config`. Add it to the
@@ -60,6 +71,10 @@ repo table and say whether it needs its own task.
 The agent seeds a `Qn` row here when it hits something it can't resolve (mirrors the analysis
 doc's §5). **You answer** with a `↳ you:` line; the agent then folds the answer into the doc and
 flips the row to ✅ answered. This is the QnA channel — don't answer inside the rewritten doc.
+
+> **Answer a question:** under the `Qn` heading, add a line `  ↳ you (<YYYY-MM-DD HH:MM>): <your
+> decision/answer>`. The agent folds it into the doc on the next pass and flips the row to ✅
+> answered. (Permanent hint — stays even with no open questions.)
 
 <!-- ↓↓ WORKED EXAMPLE ↓↓
 ### Q1 · §4 Approach — ⏳ awaiting answer (agent, 2026-08-06 09:50)

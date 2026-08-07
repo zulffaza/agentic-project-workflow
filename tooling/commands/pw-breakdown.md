@@ -56,6 +56,13 @@ run in sequence); tasks on **different** adopted branches, and all fresh tasks, 
 run in parallel. Split into tasks for reviewability as usual; adopted tasks' changes extend the
 existing branch (and its MR, if any), fresh tasks open new branches.
 
+Then, **create the PLAN review file (idempotent)** — never hand-write it:
+```bash
+{{PW_HOME}}/tooling/pw-lib.sh review-init <slug> task/review/PLAN.review.md task/PLAN.md
+```
+No-ops if it already exists; otherwise creates it verbatim from the template so I don't have to
+copy it myself.
+
 Then **MANDATORY final step — do NOT skip** — update status + log via the helper
 (never hand-edit the Status line), and confirm the dashboard now shows `Status: breakdown`:
 ```bash
@@ -65,5 +72,6 @@ Then **MANDATORY final step — do NOT skip** — update status + log via the he
 
 Stop and summarize the plan + task list (chosen provider:model per task, SP, and the total manual
 estimate: person-days + critical-path days). Remind me that **only the PLAN review gates execution**
-— I review + sign off `task/review/PLAN.review.md` before `/pw-execute`. **Per-task reviews are
-optional** (`task/review/T0n.review.md`) — I only add one if I want to send a specific task back.
+— `task/review/PLAN.review.md` is already there for me; I just add items and sign off before
+`/pw-execute`. **Per-task reviews are optional** (`task/review/T0n.review.md`) — created on demand
+only if I send a specific task back.

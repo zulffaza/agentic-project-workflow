@@ -23,7 +23,14 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
    Tell me in chat which questions are blocking vs. nice-to-have.
 4. Record the analysis author's provider in the doc (`**Provider:** <this agent's CLI>`) so
    breakdown can default execution to the same agent (no mid-workflow switching).
-5. **MANDATORY final step — do NOT skip.** Set the dashboard one-liner + Status + audit log via the
+5. **Create the review file (idempotent — do this even if you think one may already exist).**
+   ```bash
+   {{PW_HOME}}/tooling/pw-lib.sh review-init <slug> analysis/review/<topic>.review.md analysis/<topic>.md
+   ```
+   No-ops if it's already there (never clobbers my items/history); otherwise creates it verbatim
+   from the template (in-review, empty, with its permanent format hints intact) so I don't have to
+   copy it myself.
+6. **MANDATORY final step — do NOT skip.** Set the dashboard one-liner + Status + audit log via the
    helper (never hand-edit these lines). Run all three, then confirm the dashboard now shows
    `Status: analysis`:
    ```bash
@@ -34,6 +41,6 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 
 Stop after writing and summarize it for review. Explain the QnA flow: I answer each `Qn` in the
 review file with `↳ you: <answer>`, then `/pw-review <slug>` folds my answers back into the
-analysis. I review by copying `{{PW_HOME}}/template/_REVIEW.template.md` to
-`analysis/review/<topic>.review.md`, and I approve the gate via its Sign-off row before
-`/pw-breakdown`.
+analysis. The review file (`analysis/review/<topic>.review.md`) is already there for me — I just
+add items (see the `> **Add an item:**` hint in it) and approve the gate via its Sign-off row
+before `/pw-breakdown`.

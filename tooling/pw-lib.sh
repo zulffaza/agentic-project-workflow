@@ -3,14 +3,18 @@
 # steps (dashboard Status, One-liner, LOG.md, phase read) are deterministic instead of hand-edited
 # prose. Deterministic + phase-validated so a flaky/cheap executor can't corrupt the dashboard.
 #
-#   pw-lib.sh status   <slug> <phase> [--rewind]   set dashboard Status: (validated, no accidental
-#                                                  backward move) + auto-log the change
-#   pw-lib.sh oneliner <slug> <text...>            set the dashboard One-liner (agent, at analysis)
-#   pw-lib.sh adopted  <slug> <text...>            set/insert the dashboard Adopted: pointer (/pw-adopt)
-#   pw-lib.sh adopt    <slug> <repo> <branch> <base> [mr]   append/upsert one adoption unit (no clobber)
-#   pw-lib.sh log      <slug> <actor> <msg...>     append a timestamped LOG.md line
-#   pw-lib.sh phase    <slug>                       print the current Status value (for scoping/status)
-#   pw-lib.sh selftest                              run an isolated round-trip test
+#   pw-lib.sh status      <slug> <phase> [--rewind]   set dashboard Status: (validated, no accidental
+#                                                     backward move) + auto-log the change
+#   pw-lib.sh oneliner    <slug> <text...>            set the dashboard One-liner (agent, at analysis)
+#   pw-lib.sh adopted     <slug> <text...>            set/insert the dashboard Adopted: pointer (/pw-adopt)
+#   pw-lib.sh adopt       <slug> <repo> <branch> <base> [mr]   append/upsert one adoption unit (no clobber)
+#   pw-lib.sh review-init <slug> <review-rel-path> <doc-rel-path>   create a review file from the
+#                                                     template if missing (idempotent — never
+#                                                     overwrites an existing one with your items)
+#   pw-lib.sh log         <slug> <actor> <msg...>     append a timestamped LOG.md line (a Markdown
+#                                                     bullet — readable in a plain preview view)
+#   pw-lib.sh phase       <slug>                       print the current Status value (for scoping/status)
+#   pw-lib.sh selftest                                 run an isolated round-trip test
 #
 # Portable across Claude Code and KiloCode executors (plain bash; call by absolute path).
 set -euo pipefail
@@ -32,11 +36,15 @@ phase_rank() {
   esac
 }
 
+# Append one LOG.md entry as a Markdown bullet — `- **<date>** · \`<actor>\` — <message>` — instead
+# of a bare pipe-delimited line. A pipe row with no table header just renders as one long,
+# hard-to-scan paragraph in a plain markdown preview; a bullet list wraps sanely per entry, bolds
+# the timestamp, and tags the actor as inline code, so a growing LOG.md stays skimmable.
 cmd_log() {
   [ $# -ge 3 ] || die "usage: log <slug> <actor> <msg...>"
   local slug="$1" actor="$2"; shift 2
   local d; d="$(proj_dir "$slug")"
-  printf '%s | %s | %s\n' "$(date '+%F %H:%M')" "$actor" "$*" >> "$d/LOG.md"
+  printf -- '- **%s** · `%s` — %s\n' "$(date '+%F %H:%M')" "$actor" "$*" >> "$d/LOG.md"
 }
 
 cmd_status() {
@@ -213,6 +221,32 @@ cmd_adopt() {
   echo "$slug: adopted $uid ($key) — base $base, MR $mr  [$count unit(s)]"
 }
 
+# Create a review file from the canonical template if (and only if) it doesn't exist yet —
+# idempotent, so calling this on every /pw-analyze or /pw-breakdown run never clobbers a review
+# already in progress (your items, replies, Sign-off history). This is the deterministic fix for
+# "I had to manually copy the review template myself" and for review files silently missing the
+# permanent format hints under ## Items / ## Open questions (this always copies the template
+# byte-for-byte, so those hints and the worked examples are never dropped).
+#   review-init <slug> <review-rel-path> <doc-rel-path>
+#   e.g. review-init myproj analysis/review/topic.review.md analysis/topic.md
+cmd_review_init() {
+  [ $# -eq 3 ] || die "usage: review-init <slug> <review-rel-path> <doc-rel-path>"
+  local slug="$1" rel="$2" docrel="$3"
+  local d; d="$(proj_dir "$slug")"
+  local f="$d/$rel"
+  if [ -f "$f" ]; then
+    echo "$slug: review already exists: $rel (left untouched)"
+    return 0
+  fi
+  local tmpl="$HERE/../template/_REVIEW.template.md"
+  [ -f "$tmpl" ] || die "template not found: $tmpl"
+  local docname; docname="$(basename "$docrel")"
+  mkdir -p "$(dirname "$f")"
+  sed "s|<doc\\.md>|$docname|g" "$tmpl" > "$f"
+  cmd_log "$slug" review "created $rel (in-review, awaiting your items)"
+  echo "$slug: review-init created $rel (reviewing ../$docname)"
+}
+
 cmd_phase() {
   [ $# -eq 1 ] || die "usage: phase <slug>"
   local f; f="$(proj_dir "$1")/README.md"
@@ -229,7 +263,7 @@ cmd_selftest() {
   local got; got="$(PW_PROJECTS_DIR="$tmp" "$0" phase demo)"
   [ "$got" = "analysis" ] || die "selftest FAIL: phase='$got' (expected analysis)"
   grep -q '<!-- comment stays -->' "$tmp/demo/README.md" || die "selftest FAIL: clobbered trailing comment"
-  grep -q '| status | Status -> analysis$' "$tmp/demo/LOG.md" || die "selftest FAIL: log line missing"
+  grep -qE '^- \*\*[0-9-]+ [0-9:]+\*\* · `status` — Status -> analysis$' "$tmp/demo/LOG.md" || die "selftest FAIL: log line missing/wrong format"
   # One-liner setter
   PW_PROJECTS_DIR="$tmp" "$0" oneliner demo "toggle kafka usage safely" >/dev/null
   grep -q '^- \*\*One-liner:\*\* toggle kafka usage safely$' "$tmp/demo/README.md" || die "selftest FAIL: one-liner not set"
@@ -246,7 +280,7 @@ cmd_selftest() {
   PW_PROJECTS_DIR="$tmp" "$0" status demo analysis --rewind >/dev/null
   [ "$(PW_PROJECTS_DIR="$tmp" "$0" phase demo)" = "analysis" ] || die "selftest FAIL: --rewind did not apply"
   PW_PROJECTS_DIR="$tmp" "$0" log demo analyze "wrote analysis/x.md" >/dev/null
-  grep -q '| analyze | wrote analysis/x.md$' "$tmp/demo/LOG.md" || die "selftest FAIL: custom log missing"
+  grep -qE '^- \*\*[0-9-]+ [0-9:]+\*\* · `analyze` — wrote analysis/x\.md$' "$tmp/demo/LOG.md" || die "selftest FAIL: custom log missing/wrong format"
   # Adopted pointer: inserted after One-liner when absent, then replaced in place (idempotent).
   grep -q '^- \*\*Adopted:\*\*' "$tmp/demo/README.md" && die "selftest FAIL: Adopted line present before adopt"
   PW_PROJECTS_DIR="$tmp" "$0" adopted demo "1 unit — see context/ADOPTED.md" >/dev/null
@@ -288,17 +322,32 @@ cmd_selftest() {
   [ "$(grep -cE '^\|[^|]*ADOPTED\.md' "$IX")" = "1" ] || die "selftest FAIL: expected exactly one ADOPTED.md provenance row"
   grep -qE '^\|[^|]*ADOPTED\.md.*all continuation units' "$IX" || die "selftest FAIL: provenance row not generic"
   grep -qE '^\|[^|]*ADOPTED\.md.*feat-a' "$IX" && die "selftest FAIL: provenance row enumerated a unit (should stay generic)"
+  # review-init: creates a review file verbatim from the template (header + Reviewing: link
+  # stamped, format hints intact), and is idempotent — a 2nd call never clobbers your items.
+  mkdir -p "$tmp/demo/analysis"
+  printf '# Analysis: demo\n' > "$tmp/demo/analysis/topic.md"
+  PW_PROJECTS_DIR="$tmp" "$0" review-init demo analysis/review/topic.review.md analysis/topic.md >/dev/null
+  local RV="$tmp/demo/analysis/review/topic.review.md"
+  [ -f "$RV" ] || die "selftest FAIL: review-init did not create the file"
+  grep -q '^# Review: topic.md$' "$RV" || die "selftest FAIL: review header not stamped"
+  grep -qF 'Reviewing: [topic.md](../topic.md)' "$RV" || die "selftest FAIL: Reviewing link not stamped"
+  grep -q '^> \*\*Add an item:\*\*' "$RV" || die "selftest FAIL: permanent Items format hint missing"
+  grep -q '^> \*\*Answer a question:\*\*' "$RV" || die "selftest FAIL: permanent Open-questions format hint missing"
+  printf '\n### R1 · your item\n' >> "$RV"                    # simulate the human adding an item
+  PW_PROJECTS_DIR="$tmp" "$0" review-init demo analysis/review/topic.review.md analysis/topic.md >/dev/null
+  grep -q '^### R1 · your item$' "$RV" || die "selftest FAIL: review-init clobbered an existing review file"
   echo "selftest OK"
 }
 
 case "${1:-}" in
-  status)   shift; cmd_status "$@" ;;
-  oneliner) shift; cmd_oneliner "$@" ;;
-  adopted)  shift; cmd_adopted "$@" ;;
-  adopt)    shift; cmd_adopt "$@" ;;
-  log)      shift; cmd_log "$@" ;;
-  phase)    shift; cmd_phase "$@" ;;
-  selftest) cmd_selftest ;;
-  -h|--help|"") sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' ;;
+  status)      shift; cmd_status "$@" ;;
+  oneliner)    shift; cmd_oneliner "$@" ;;
+  adopted)     shift; cmd_adopted "$@" ;;
+  adopt)       shift; cmd_adopt "$@" ;;
+  review-init) shift; cmd_review_init "$@" ;;
+  log)         shift; cmd_log "$@" ;;
+  phase)       shift; cmd_phase "$@" ;;
+  selftest)    cmd_selftest ;;
+  -h|--help|"") sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown subcommand: $1 (try --help)" ;;
 esac

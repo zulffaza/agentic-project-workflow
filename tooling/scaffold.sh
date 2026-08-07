@@ -50,17 +50,18 @@ done
 mkdir -p "$dest/context" "$dest/analysis/review" "$dest/task/review" "$dest/worktree"
 
 # Seed the append-only activity log.
-cat > "$dest/LOG.md" <<EOF
+cat > "$dest/LOG.md" <<LOGEOF
 # Activity log — $slug
 
 Append-only audit trail. One line per meaningful action: phase transitions, sub-agent spawns,
-commits, pushes, MRs, review passes, close-out. Newest at the bottom. The \`/pw-*\` commands
-append here automatically; add manual notes too.
+commits, pushes, MRs, review passes, close-out. Newest at the bottom. The /pw-* commands append
+here automatically (via pw-lib.sh log — never hand-edit); add manual notes the same way, or as
+another Markdown bullet, so it reads consistently in preview.
 
-Format: \`YYYY-MM-DD HH:MM | <phase/actor> | <what happened>\`
+Format: a bullet per entry — "- **YYYY-MM-DD HH:MM** · \`<phase/actor>\` — <what happened>"
 
-$(date "+%Y-%m-%d %H:%M") | scaffold | project created
-EOF
+- **$(date "+%Y-%m-%d %H:%M")** · \`scaffold\` — project created
+LOGEOF
 
 cat <<EOF
 Created $dest
@@ -81,12 +82,11 @@ Next steps (each phase is gated by your review):
      brief: cp $dest/context/_REQUIREMENTS.template.md $dest/context/REQUIREMENTS.md and fill it.
   2. Fill context/INDEX.md — a row per input (what it is + where it came from), and your
      first-guess "repos in scope" table.
-  3. /pw-analyze $slug        → writes analysis/, sets Status=analysis. Then review it:
-     copy _REVIEW.template.md → analysis/review/<topic>.review.md, add items, /pw-review $slug,
-     and sign off when satisfied.
-  4. /pw-breakdown $slug      → writes task/PLAN.md + T0n.md (needs analysis approved). Review +
-     sign off task/review/PLAN.review.md — that PLAN sign-off is the ONLY hard gate. Per-task
-     reviews (task/review/T0n.review.md) are optional; add one only to send a task back.
+  3. /pw-analyze $slug        → writes analysis/ + auto-creates analysis/review/<topic>.review.md,
+     sets Status=analysis. Add items to that review file, /pw-review $slug, sign off when satisfied.
+  4. /pw-breakdown $slug      → writes task/PLAN.md + T0n.md + auto-creates task/review/PLAN.review.md
+     (needs analysis approved). Sign off PLAN.review.md — that's the ONLY hard gate. Per-task
+     reviews (task/review/T0n.review.md) are optional and created on demand, only to send a task back.
   5. /pw-execute $slug        → orchestrates worktree executors; stops at committed + verified.
   6. /pw-ship $slug           → pushes branches + opens MRs (the explicit publish step).
   7. /pw-close $slug          → tears down worktrees (safely), seeds learnings, Status=done.

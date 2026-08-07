@@ -46,8 +46,16 @@ Phases are gated: a human approves after **analysis** (step 3) and after **task 
   headlessly. **Tee each run to `worktree/<T0n>.log`** so the human can tail it. Each executor
   works in its own worktree, runs Verify, reports real output, fills `## Result`. **Execution stops
   at committed + verified** — pushing branches and opening MRs is the separate `/pw-ship` step
-  (nothing goes outward until asked). Reject → `Status: verify-failed` (+ optional
-  `task/review/T0n.review.md`) + re-run.
+  (nothing goes outward until asked).
+  **Scope + resume (get this right — it's what stalls a run):** task IDs given → run exactly those,
+  then stop. **No task IDs → resume the WHOLE plan**: every task not yet `accepted` (`todo`,
+  `in-progress`, `verify-failed`) is in scope; walk the DAG to the end of that scope **in one
+  invocation** — don't stop after fixing/re-running just one task if more are ready. A Verify
+  failure confirmed **pre-existing/environmental** (reproduces on the untouched base) still reaches
+  `Status: done` with the caveat noted, and does NOT block the DAG; only a **real regression**
+  blocks that task's own dependents — every other independent task still proceeds. An explicit
+  single-task re-run (`/pw-execute <slug> T0n`, after the human rejects one task) is the one case
+  that *does* stop after just that task.
 
 ## Review feedback (per-artifact `.review.md`, in a `review/` subdir)
 Human feedback on any doc lives in a review file under a **`review/` subdir** beside it, NOT inline
@@ -116,9 +124,16 @@ phase-validated, portable across Claude Code + shelled-out kilo executors):
   hand-edit `context/INDEX.md`'s adoption rows (free-form editing is what clobbered a 2nd/3rd
   adopted branch and re-churned the provenance line each attempt). It also bumps the `Adopted:`
   count. Resolve `<base>` from the **MR's target branch** when there's an MR.
-- `pw-lib.sh log <slug> <actor> <msg>` — append one audit line to **`LOG.md`**
-  (`YYYY-MM-DD HH:MM | actor | what`). Log phase transitions, executor spawns, commits, pushes,
-  MRs, review passes, close-out.
+- `pw-lib.sh review-init <slug> <review-rel-path> <doc-rel-path>` — **idempotently create a review
+  file from the template** if (and only if) it doesn't exist yet. `/pw-analyze` and `/pw-breakdown`
+  call this so `analysis/review/<topic>.review.md` / `task/review/PLAN.review.md` are already there
+  — the human never has to copy the template themselves. Never hand-write a review file; this also
+  guarantees the permanent `> **Add an item:**` / `> **Answer a question:**` format hints never get
+  silently dropped.
+- `pw-lib.sh log <slug> <actor> <msg>` — append one audit line to **`LOG.md`** as a Markdown bullet
+  (`- **YYYY-MM-DD HH:MM** · \`actor\` — what`, not a bare pipe row — reads properly in a plain
+  preview view). Log phase transitions, executor spawns, commits, pushes, MRs, review passes,
+  close-out.
 - `pw-lib.sh phase <slug>` — read the current phase (used by `/pw-review` scoping + `/pw-status`).
 - Per-task **timing + commit/MR outcome** go in the task file's `## Result` block and the PLAN
   task table's Time/Result columns. **Token/cost are NOT captured** — a running agent can't measure
