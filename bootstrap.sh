@@ -13,7 +13,7 @@
 # It:
 #   1. resolves the three path roots from its own location,
 #   2. reads pw.config.sh for which agent CLIs you use (PW_PROVIDERS),
-#   3. installs the project-workflow skill into each enabled+detected provider,
+#   3. installs every shipped skill (tooling/skill/*/) into each enabled+detected provider,
 #   4. generates the /pw-* slash-commands for them,
 #   5. writes pw-env.sh (source it for $PW_HOME/$PW_PROJECTS/$PW_REPOS).
 #
@@ -35,7 +35,7 @@ done
 PW_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_PROJECTS="${PW_PROJECTS:-$(cd "$PW_HOME/.." && pwd)}"
 PW_REPOS="${PW_REPOS:-$(cd "$PW_PROJECTS/.." && pwd)}"
-SKILL_SRC="$PW_HOME/tooling/skill/project-workflow"   # <name>/SKILL.md — the shippable skill
+SKILL_DIR="$PW_HOME/tooling/skill"   # every subdir with a SKILL.md here is a shippable skill
 
 # --- 2. load config (create it from the example on first run) ----------------
 # --check must change nothing, so it reads the example in place without creating the file.
@@ -85,14 +85,14 @@ if [ "$MODE" = "check" ]; then
   exit 0
 fi
 
-# --- 3. install the skill per detected provider (symlink; copy fallback) -----
+# --- 3. install every shipped skill, per detected provider (symlink; copy fallback) ------------
 install_skill() {
-  local dir="$1" name; name="$(basename "$SKILL_SRC")"
+  local dir="$1" src="$2" name; name="$(basename "$src")"
   local target="$dir/$name"
   mkdir -p "$dir"
   if [ -e "$target" ] || [ -L "$target" ]; then
     if [ "$MODE" != "force" ]; then
-      echo "    skill: already present at $target (leaving as-is; --force to re-link)"
+      echo "    skill: '$name' already present at $target (leaving as-is; --force to re-link)"
       return
     fi
     # --force + target already exists: rm -rf it FIRST. If $target is a real (non-symlink)
@@ -101,16 +101,20 @@ install_skill() {
     # stale copy in place underneath. Removing first avoids that ambiguity entirely.
     rm -rf "$target"
   fi
-  if ln -sfn "$SKILL_SRC" "$target" 2>/dev/null; then
-    echo "    skill: linked $target → $SKILL_SRC"
+  if ln -sfn "$src" "$target" 2>/dev/null; then
+    echo "    skill: linked $target → $src"
   else
-    rm -rf "$target"; cp -R "$SKILL_SRC" "$target"
-    echo "    skill: copied $SKILL_SRC → $target"
+    rm -rf "$target"; cp -R "$src" "$target"
+    echo "    skill: copied $src → $target"
   fi
 }
 for p in "${DETECTED[@]}"; do
   echo "  $p:"
-  install_skill "$("${p}_skilldir")"
+  skdir="$("${p}_skilldir")"
+  for src in "$SKILL_DIR"/*/; do
+    [ -f "${src}SKILL.md" ] || continue   # skip any non-skill subdir
+    install_skill "$skdir" "${src%/}"
+  done
 done
 echo
 
@@ -121,7 +125,7 @@ if [ "${#DETECTED[@]}" -gt 0 ]; then
     "$PW_HOME/tooling/gen-commands.sh" "${DETECTED[@]}" | sed 's/^/    /'
   echo
 
-  echo "  seeding sub-agents (pw-orchestrator, pw-executor):"
+  echo "  seeding sub-agents (pw-orchestrator, pw-executor, pw-reviewer):"
   PW_PROJECTS="$PW_PROJECTS" PW_REPOS="$PW_REPOS" \
     "$PW_HOME/tooling/gen-agents.sh" "${DETECTED[@]}" | sed 's/^/    /'
   echo

@@ -9,15 +9,17 @@ tooling/
 ├── gen-commands.sh     ← stamps commands/ into each provider's format + location
 ├── gen-agents.sh       ← seeds agents/ into each provider's agent dir (same idea as gen-commands)
 ├── pw-common.sh        ← shared plumbing (roots + config + provider hooks) for the scripts below
-├── pw-lib.sh           ← mechanical helpers the commands call: status / oneliner / adopted / adopt / review-init / log / phase
-├── pw-doctor.sh        ← checks installed skill + commands + agents match this bundle (--fix repairs)
+├── pw-lib.sh           ← mechanical helpers the commands call: status / oneliner / adopted / adopt /
+│                         review-init / log / phase / ai-review / review note-init|auto-signoff
+├── pw-doctor.sh        ← checks installed skills + commands + agents match this bundle (--fix repairs)
 ├── pw-teardown.sh      ← safe worktree removal at close-out (won't nuke your CWD / dirty trees)
 ├── commands/           ← THE source of truth for /pw-* (provider-neutral)
 │   ├── pw-new.md        frontmatter: description, args, [agent]; body uses {{ARGS}} + {{PW_*}}
 │   ├── pw-analyze.md
 │   ├── … (pw-adopt, pw-breakdown, pw-review, pw-execute, pw-ship, pw-sync, pw-status, pw-doctor)
 │   └── pw-close.md
-├── agents/             ← THE source of truth for seedable sub-agents (pw-orchestrator, pw-executor)
+├── agents/             ← THE source of truth for seedable sub-agents (pw-orchestrator, pw-executor,
+│                         pw-reviewer — the last optional, only spawned by /pw-review … ai)
 ├── docs/               ← registries/policy the AGENTS read (each has a human-facing peer doc):
 │   ├── providers.md      agent provider registry (model → CLI, headless invocation) [🧑 you]
 │   │                     — human peer: ../../docs/EXECUTION.md
@@ -28,7 +30,10 @@ tooling/
 │   ├── rfc.md            optional/pluggable RFC-publishing policy (works with none)
 │   └── rfc-backends.md   RFC backend registry (doc platform → create/fetch/update/comments) [🧑 you]
 │                         — human peer for both: ../../docs/RFC.md
-├── skill/project-workflow/SKILL.md   ← the shippable skill (bootstrap installs it per provider)
+├── skill/              ← every subdir with a SKILL.md here is a shippable skill (bootstrap installs
+│   ├── project-workflow/SKILL.md      each one, per provider):
+│   └── pw-review/SKILL.md           ← standalone, portable review method — usable by ANY agent,
+│                                       not only the generated pw-reviewer sub-agent
 └── README.md
 ```
 
@@ -90,5 +95,6 @@ agent: <optional — a provider agent to run the command under, e.g. pw-orchestr
 
 > Sub-agents **are** generated — from [`agents/`](./agents/README.md), seeded into each provider's
 > agent dir by `gen-agents.sh` (kilo `~/.config/kilo/agent/`, Claude Code `~/.claude/agents/`). The
-> two shipped roles are `pw-orchestrator` and `pw-executor`; execution can still reuse an existing
-> agent you have (e.g. `code-implementation`) by naming it in a task's `Execute with:`.
+> three shipped roles are `pw-orchestrator`, `pw-executor`, and `pw-reviewer` (optional — off by
+> default per project/phase); execution can still reuse an existing agent you have (e.g.
+> `code-implementation`) by naming it in a task's `Execute with:`.

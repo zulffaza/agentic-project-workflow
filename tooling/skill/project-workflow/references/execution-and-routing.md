@@ -2,6 +2,10 @@
 
 ## Execution phase
 
+**Before routing, skim `REVIEWER-NOTES.md` if it exists** (project root) — anything a past
+`pw-reviewer` pass flagged as worth knowing (see `references/review.md`'s AI-assisted review
+section). Optional and best-effort: a missing file means no AI review has run yet, not a problem.
+
 Handed `task/PLAN.md`: act as **orchestrator** — read the DAG, spawn one **executor** per task
 respecting `depends_on`, keep the dashboard status column + `LOG.md` current. Never edit repo code
 as the orchestrator. **Same-provider tasks → spawn a native in-process sub-agent** (natively
@@ -47,9 +51,10 @@ each provider's list).
   Code ⇄ KiloCode, and any future provider). The discipline travels with the task (skill + task
   file), not the provider. Unverified headless flags → check `--help` or ask; don't guess.
 - The orchestrator spawns (or shells out to) whatever `Execute with:` names — an existing agent
-  (e.g. `code-implementation`), the shipped `pw-executor`, or a `provider:model`. Two agents ship
-  and are seeded per provider from `tooling/agents/` (`pw-orchestrator`, `pw-executor`); add a def
-  there only for a genuinely new role no existing agent covers.
+  (e.g. `code-implementation`), the shipped `pw-executor`, or a `provider:model`. Three agents ship
+  and are seeded per provider from `tooling/agents/` (`pw-orchestrator`, `pw-executor`,
+  `pw-reviewer` — the last is optional, only spawned by `/pw-review <slug> ai …`); add a def there
+  only for a genuinely new role no existing agent covers.
 - **Agent vs sub-agent — the distinction is load-bearing across providers.** A **sub-agent** is
   spawned *in-process* by an orchestrator of the **same provider** (Claude Task `subagent_type`;
   kilo `mode: subagent`) — a provider can spawn only its OWN sub-agents. `pw-executor` is a

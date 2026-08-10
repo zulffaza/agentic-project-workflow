@@ -60,13 +60,15 @@ If `/pw-status` is recognized and prints a status, you're onboarded.
 - Resolved three path roots from the bundle's own location:
   `$PW_HOME` (this bundle) · `$PW_PROJECTS` (`$PW_HOME/..`, where projects go) ·
   `$PW_REPOS` (`$PW_PROJECTS/..`, where your git repos live).
-- Installed the **`project-workflow` skill** into each enabled+detected CLI's skills dir (symlinked
-  to `tooling/skill/project-workflow`, so bundle updates propagate).
+- Installed every shipped **skill** (`project-workflow`, and `pw-review` — the standalone
+  fresh-review method behind the optional AI-assisted review feature) into each enabled+detected
+  CLI's skills dir (symlinked to `tooling/skill/<name>`, so bundle updates propagate).
 - Generated the **`/pw-*` commands** for each enabled+detected CLI, with the real absolute paths
   stamped in (sources use `{{PW_*}}` tokens; the generator/scaffolder stamp them — the portability
   trick).
-- Seeded the **sub-agents** (`pw-orchestrator`, `pw-executor`) into each CLI's agent dir the same
-  way (from `tooling/agents/`). Execution can still reuse an existing agent you have.
+- Seeded the **sub-agents** (`pw-orchestrator`, `pw-executor`, and `pw-reviewer` — optional, off by
+  default per project/phase) into each CLI's agent dir the same way (from `tooling/agents/`).
+  Execution can still reuse an existing agent you have.
 - Wrote `pw-env.sh`.
 
 Re-run `./bootstrap.sh` any time (e.g. after `git pull`). Use `--force` to re-link the skill,
@@ -82,9 +84,10 @@ $PW_HOME/tooling/pw-doctor.sh          # report-only — never changes anything
 $PW_HOME/tooling/pw-doctor.sh --fix    # repair whatever it found
 ```
 
-**What it checks, per enabled provider:** the CLI is actually on `PATH`; the `project-workflow`
-skill is installed and matches the bundle; every generated `/pw-*` command file matches its
-canonical source in `tooling/commands/`; the seeded sub-agents match `tooling/agents/`. Reading the
+**What it checks, per enabled provider:** the CLI is actually on `PATH`; every shipped skill
+(`project-workflow`, `pw-review`) is installed and matches the bundle; every generated `/pw-*`
+command file matches its canonical source in `tooling/commands/`; the seeded sub-agents match
+`tooling/agents/`. Reading the
 output: `✓` = in sync, `✗` = drift (it says exactly what — missing, stale, or out of sync) — with
 `--fix`, each `✗` gets repaired the same way `bootstrap.sh` would install it fresh.
 
@@ -202,10 +205,10 @@ comment for the full safety contract.
 
 ## Notes for the maintainer (whoever shares this)
 
-- **Keep the shipped skill in sync.** The bundle ships its own copy at
-  `tooling/skill/project-workflow/SKILL.md`. If you also maintain the skill elsewhere (e.g. a
-  personal `ai-agent-dir`), refresh the bundle copy before committing/sharing:
-  `cp <your-canonical>/SKILL.md tooling/skill/project-workflow/SKILL.md`.
+- **Keep the shipped skills in sync.** The bundle ships its own copies at
+  `tooling/skill/project-workflow/SKILL.md` and `tooling/skill/pw-review/SKILL.md`. If you also
+  maintain either elsewhere (e.g. a personal `ai-agent-dir`), refresh the bundle copy before
+  committing/sharing: `cp <your-canonical>/SKILL.md tooling/skill/<name>/SKILL.md`.
 - **`providers.md` is machine/account-specific config**, not code — model IDs and available
   providers differ per person. Treat the committed version as a sensible starting roster; each
   person tunes their own.

@@ -27,19 +27,24 @@ agentic-project-workflow/        ← this bundle ($PW_HOME)
     ├── scaffold.sh · gen-commands.sh · gen-agents.sh · pw-lib.sh · pw-doctor.sh
     ├── pw-common.sh · pw-teardown.sh
     ├── commands/                ← canonical /pw-* sources (generated per provider)
-    ├── agents/                  ← canonical sub-agents (seeded per provider): pw-orchestrator, pw-executor
+    ├── agents/                  ← canonical sub-agents (seeded per provider): pw-orchestrator,
+    │                              pw-executor, pw-reviewer (optional — see REVIEW.md)
     ├── docs/                    ← registries/policy docs the AGENTS read (their docs/ human peer
     │                              in parens): providers.md (→ EXECUTION.md) · memory.md
     │                              (→ MEMORY.md) · forges.md (→ REVIEW.md) · rfc.md · rfc-backends.md
     │                              (→ RFC.md)
-    └── skill/project-workflow/SKILL.md (+ references/*.md, loaded per-phase)
+    └── skill/                   ← every shippable skill (seeded per provider): project-workflow/
+                                   SKILL.md (+ references/*.md, loaded per-phase) · pw-review/SKILL.md
+                                   (standalone review method, usable by any agent)
 ```
 
 ## Project anatomy (a scaffolded `<slug>/`)
 
 ```
 <project-slug>/
-├── README.md        ← the project DASHBOARD (status, links). Start here.
+├── README.md        ← the project DASHBOARD (status, links, per-phase AI Review modes). Start here.
+├── REVIEWER-NOTES.md   ← optional — appears once an AI-assisted review pass runs; the *why* behind
+│                        its verdicts (see docs/REVIEW.md), separate from each .review.md's items
 ├── context/         ← raw inputs you feed in: tickets, docs, code refs, transcripts
 │   ├── INDEX.md     ← provenance table (what each input is, where it came from)
 │   └── _REQUIREMENTS.template.md  ← optional one-page brief (copy to REQUIREMENTS.md to use)
@@ -97,6 +102,7 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | `/pw-adopt <slug> <repo> <branch> [mr-url] [review]` | onboard an existing in-progress branch — continue-dev (→ context) or `review`-only (→ review, MR required) |
 | `/pw-analyze <slug> [focus]` | analysis |
 | `/pw-review <slug> [phase\|Tid\|path]` | apply review comments (defaults to current phase's review) |
+| `/pw-review <slug> ai [phase\|Tid\|path]` | optional — delegate a fresh review pass to `pw-reviewer` (see [docs/REVIEW.md](./REVIEW.md#3-ai-assisted-review-optional-per-phase)) |
 | `/pw-breakdown <slug>` | task breakdown |
 | `/pw-execute <slug> [task-ids \| "with <model/agent>"]` | execution (stops at committed + verified) |
 | `/pw-ship <slug> [task-ids] [comments]` | push branches + open MRs (publish); `comments` = handle MR review threads |

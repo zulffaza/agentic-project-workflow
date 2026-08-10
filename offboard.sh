@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # ============================================================================
 # offboard.sh — the exact inverse of bootstrap.sh: cleanly remove this
-# bundle's INSTALLED artifacts from a machine, per provider — the
-# project-workflow skill, generated /pw-* commands, and seeded sub-agents
-# (pw-orchestrator, pw-executor).
+# bundle's INSTALLED artifacts from a machine, per provider — every shipped
+# skill (project-workflow, pw-review), generated /pw-* commands, and seeded
+# sub-agents (pw-orchestrator, pw-executor, pw-reviewer).
 #
 #   ./offboard.sh                        dry-run: report what WOULD be removed
 #   ./offboard.sh --yes                  actually remove it
@@ -18,8 +18,8 @@
 #    would generate right now (the same `cmp -s` check pw-doctor.sh uses). Anything that
 #    differs — hand-edited, or just a foreign file that happens to share a name — is reported
 #    and skipped, never guessed at.
-#  - The skill "install" is only removed if it's literally a symlink pointing at THIS bundle's
-#    tooling/skill/project-workflow, or a directory copy whose SKILL.md content matches it.
+#  - Each skill's "install" is only removed if it's literally a symlink pointing at THIS bundle's
+#    tooling/skill/<name>, or a directory copy whose SKILL.md content matches it.
 #
 # NEVER touched, by design: pw.config.sh (your config), $PW_PROJECTS/* (your project data —
 # a different kind of thing from installed tooling), this bundle's own repo, pw-env.sh, and
@@ -49,7 +49,7 @@ done
 PW_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_PROJECTS="${PW_PROJECTS:-$(cd "$PW_HOME/.." && pwd)}"
 PW_REPOS="${PW_REPOS:-$(cd "$PW_PROJECTS/.." && pwd)}"
-SKILL_SRC="$PW_HOME/tooling/skill/project-workflow"
+SKILL_DIR="$PW_HOME/tooling/skill"   # every subdir with a SKILL.md here is a shippable skill
 export PW_PROJECTS PW_REPOS
 
 # shared plumbing: sources pw.config.sh (if present; falls back to the example) + provider hooks.
@@ -95,32 +95,34 @@ plan_provider() {
   local p="$1"
   echo "  $p:"
 
-  # --- skill ---
-  local skilldir starget sfile
-  skilldir="$("${p}_skilldir")"
-  starget="$skilldir/project-workflow"
-  sfile="$starget/SKILL.md"
-  if [ -L "$starget" ]; then
-    local real; real="$(readlink "$starget")"
-    if [ "$real" = "$SKILL_SRC" ]; then
-      echo "    skill: → remove symlink $starget (-> $SKILL_SRC)"
-      REMOVE_PATHS+=("$starget")
+  # --- skills (every tooling/skill/*/ with a SKILL.md) ---
+  local skilldir; skilldir="$("${p}_skilldir")"
+  for skill_src in "$SKILL_DIR"/*/; do
+    [ -f "${skill_src}SKILL.md" ] || continue
+    skill_src="${skill_src%/}"; local skill_name; skill_name="$(basename "$skill_src")"
+    local starget sfile; starget="$skilldir/$skill_name"; sfile="$starget/SKILL.md"
+    if [ -L "$starget" ]; then
+      local real; real="$(readlink "$starget")"
+      if [ "$real" = "$skill_src" ]; then
+        echo "    skill '$skill_name': → remove symlink $starget (-> $skill_src)"
+        REMOVE_PATHS+=("$starget")
+      else
+        echo "    skill '$skill_name': SKIPPED — $starget is a symlink to a different target ($real), not ours"
+        skipped_count=$((skipped_count+1))
+      fi
+    elif [ -d "$starget" ]; then
+      if [ -f "$sfile" ] && cmp -s "$sfile" "$skill_src/SKILL.md"; then
+        echo "    skill '$skill_name': → remove directory copy $starget (content matches bundle)"
+        REMOVE_PATHS+=("$starget")
+      else
+        echo "    skill '$skill_name': SKIPPED — $starget exists but isn't a symlink to us and its"
+        echo "           content doesn't match (foreign, or hand-edited) — not touching it"
+        skipped_count=$((skipped_count+1))
+      fi
     else
-      echo "    skill: SKIPPED — $starget is a symlink to a different target ($real), not ours"
-      skipped_count=$((skipped_count+1))
+      echo "    skill '$skill_name': not installed, nothing to do"
     fi
-  elif [ -d "$starget" ]; then
-    if [ -f "$sfile" ] && cmp -s "$sfile" "$SKILL_SRC/SKILL.md"; then
-      echo "    skill: → remove directory copy $starget (content matches bundle)"
-      REMOVE_PATHS+=("$starget")
-    else
-      echo "    skill: SKIPPED — $starget exists but isn't a symlink to us and its content"
-      echo "           doesn't match (foreign, or hand-edited) — not touching it"
-      skipped_count=$((skipped_count+1))
-    fi
-  else
-    echo "    skill: not installed, nothing to do"
-  fi
+  done
 
   # --- commands: regenerate to a temp dir, only remove exact matches ---
   local odir rm_c=0 skip_c=0 absent_c=0

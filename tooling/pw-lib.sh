@@ -31,6 +31,16 @@
 #                                                     unresolvable thread (a plain one-off comment,
 #                                                     diff-anchored or general — see tooling/docs/forges.md)
 #                                                     can never report resolved=true on the forge
+#   pw-lib.sh ai-review    <slug> [<phase> <mode>]   get (no extra args) or set one phase's AI-review
+#                                                     mode on the dashboard (phase: analysis|plan|
+#                                                     task-plan|task-exec|ship; mode: off|advisory|auto)
+#   pw-lib.sh review note-init    <slug>              create REVIEWER-NOTES.md if missing (idempotent)
+#   pw-lib.sh review auto-signoff <slug> <review-rel-path> <phase>
+#                                                     write a Sign-off row WITHOUT a human — refuses
+#                                                     unless this project's AI Review mode for <phase>
+#                                                     is genuinely "auto" AND zero 🔴/⏳ remain open;
+#                                                     the ONE tool-enforced exception to "only a human
+#                                                     clears a gate" — see docs/REVIEW.md
 #   pw-lib.sh selftest                                 run an isolated round-trip test
 #
 # Portable across Claude Code and KiloCode executors (plain bash; call by absolute path).
@@ -520,6 +530,158 @@ cmd_ship() {
   esac
 }
 
+# --- AI-assisted review (optional delegated review pass — see docs/REVIEW.md + the pw-review
+# skill) -----------------------------------------------------------------------------------------
+# One config axis per (project, phase): off (default, no change to today's behavior) | advisory
+# (pw-reviewer files items, a human still signs off) | auto (pw-reviewer may ALSO sign off itself,
+# but ONLY through cmd_review_auto_signoff below, and ONLY when this mode is genuinely "auto").
+AI_REVIEW_PHASES="analysis plan task-plan task-exec ship"
+
+# Idempotent: insert the dashboard line, all-off, if it doesn't exist yet (covers projects
+# scaffolded before this feature existed — same "never assume, always ensure" idiom as
+# _rfc_meta_ensure). Anchored after One-liner, same convention as cmd_adopted.
+_ai_review_line_ensure() {
+  local f="$1"
+  grep -q '^- \*\*AI Review:\*\*' "$f" && return 0
+  local default="" p
+  for p in $AI_REVIEW_PHASES; do default="$default $p=off"; done
+  default="${default# }"
+  grep -q '^- \*\*One-liner:\*\*' "$f" || die "no '- **One-liner:**' line to anchor AI Review: after in $f"
+  awk -v t="$default" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **AI Review:** " t; d=1}' \
+    "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+}
+
+# Get (no extra args) or set (phase + mode) this project's per-phase AI-review mode.
+#   ai-review <slug>                 -> prints "analysis=off plan=off task-plan=off task-exec=off ship=off"
+#   ai-review <slug> <phase> <mode>  -> sets just that phase's mode, leaves the other four untouched
+cmd_ai_review() {
+  [ $# -ge 1 ] || die "usage: ai-review <slug> [<phase> <mode>]   (phase: $AI_REVIEW_PHASES; mode: off|advisory|auto)"
+  local slug="$1"; shift
+  local f; f="$(proj_dir "$slug")/README.md"
+  [ -f "$f" ] || die "no README.md in project $slug"
+  _ai_review_line_ensure "$f"
+  if [ $# -eq 0 ]; then
+    grep '^- \*\*AI Review:\*\*' "$f" | sed 's/^- \*\*AI Review:\*\*[[:space:]]*//'
+    return 0
+  fi
+  [ $# -eq 2 ] || die "usage: ai-review <slug> <phase> <mode>   (phase: $AI_REVIEW_PHASES; mode: off|advisory|auto)"
+  local phase="$1" mode="$2"
+  case " $AI_REVIEW_PHASES " in *" $phase "*) ;; *) die "invalid phase '$phase' (allowed: $AI_REVIEW_PHASES)" ;; esac
+  case "$mode" in off|advisory|auto) ;; *) die "invalid mode '$mode' (allowed: off advisory auto)" ;; esac
+  local cur; cur="$(grep '^- \*\*AI Review:\*\*' "$f" | sed 's/^- \*\*AI Review:\*\*[[:space:]]*//')"
+  local new="" found=0 kv k
+  for kv in $cur; do
+    k="${kv%%=*}"
+    if [ "$k" = "$phase" ]; then new="$new $phase=$mode"; found=1
+    else new="$new $kv"; fi
+  done
+  [ "$found" -eq 1 ] || new="$new $phase=$mode"
+  new="${new# }"
+  awk -v t="$new" '!d && /^- \*\*AI Review:\*\*/ {print "- **AI Review:** " t; d=1; next} {print}' \
+    "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  cmd_log "$slug" ai-review "$phase -> $mode"
+  echo "$slug: AI Review $phase -> $mode"
+}
+
+# Private: this project's mode for one phase (always "off"/"advisory"/"auto" — never empty, since
+# cmd_ai_review ensures the line first). Used by cmd_review_auto_signoff's gate check.
+_ai_review_mode_of() {
+  local slug="$1" phase="$2" modes kv
+  modes="$(cmd_ai_review "$slug")"
+  for kv in $modes; do
+    [ "${kv%%=*}" = "$phase" ] && { echo "${kv#*=}"; return 0; }
+  done
+  echo "off"
+}
+
+# Create REVIEWER-NOTES.md with its header if (and only if) it doesn't exist yet — idempotent,
+# same shape as cmd_review_init/cmd_rfc_init. pw-reviewer appends its own dated section directly
+# after this (free-form reasoning prose doesn't fit a CLI-args shape — same precedent as a task's
+# ## Result section, which executors already fill by hand rather than through a wrapper).
+#   review note-init <slug>
+cmd_review_note_init() {
+  [ $# -eq 1 ] || die "usage: review note-init <slug>"
+  local slug="$1" d; d="$(proj_dir "$slug")"
+  local f="$d/REVIEWER-NOTES.md"
+  if [ -f "$f" ]; then
+    echo "$slug: REVIEWER-NOTES.md already exists (left untouched)"
+    return 0
+  fi
+  {
+    printf '# Reviewer notes — %s\n\n' "$slug"
+    printf 'Append-only journal from `pw-reviewer` AI-review passes (see `docs/REVIEW.md` and the\n'
+    printf "\`pw-review\` skill) — NOT the gate itself (that stays in each \`.review.md\`'s Items/\n"
+    printf 'Sign-off). This is the *why*: what the reviewer checked, what it decided, and any\n'
+    printf 'generalizable takeaway under a `**Lessons:**` line (optional — only when something is\n'
+    printf 'genuinely worth carrying forward, not on every pass). A human, a later reviewer pass, the\n'
+    printf "orchestrator, and (if configured) /pw-close's memory-seeding step all read this — never\n"
+    printf 'hand-edit a past entry; append a new dated section per pass.\n'
+  } > "$f"
+  cmd_log "$slug" review "created REVIEWER-NOTES.md"
+  echo "$slug: review note-init created REVIEWER-NOTES.md"
+}
+
+# Private: true if <file> has a REAL unresolved item/question — a genuine "### ..." heading
+# containing 🔴 open or ⏳ awaiting answer OUTSIDE any HTML comment. This is NOT a plain whole-file
+# grep for those tokens: template/_REVIEW.template.md's permanent format-hint blockquotes (kept
+# forever, by design, "even once items exist or the section is emptied") and its deletable WORKED
+# EXAMPLE block both contain these exact tokens verbatim as syntax demonstrations — a naive grep
+# would treat every review file ever created as permanently, unfixably "open". HTML comments are
+# stripped first (the worked example lives inside one); the "^### " heading anchor excludes the
+# permanent hints (blockquote lines, prefixed "> ", never "### "). A live, never-filled-in stub
+# heading (review-init always copies one) still correctly counts as open — auto-signoff should
+# refuse until it's actually been cleared, not just because nobody's looked at it yet.
+_review_has_open_marker() {
+  local f="$1"
+  sed '/<!--/,/-->/d' "$f" | grep -qE '^### .*(🔴 open|⏳ awaiting answer)'
+}
+
+# Write the Sign-off row on a review file WITHOUT a human — the ONE tool-enforced exception to
+# "only a human clears a gate" (template/_REVIEW.template.md's own rule). Refuses unless BOTH:
+# (1) this project's AI Review mode for <phase> is genuinely "auto" (checked here, never taken on
+# the caller's word), and (2) the file has no real remaining open item/question per
+# _review_has_open_marker above. The row is tagged "pw-reviewer (auto)", never blended with a
+# human "you" row, so it's never mistaken for a human decision on a skim of the file or its git
+# history.
+#   review auto-signoff <slug> <review-rel-path> <phase>
+cmd_review_auto_signoff() {
+  [ $# -eq 3 ] || die "usage: review auto-signoff <slug> <review-rel-path> <phase>   (phase: $AI_REVIEW_PHASES)"
+  local slug="$1" rel="$2" phase="$3"
+  case " $AI_REVIEW_PHASES " in *" $phase "*) ;; *) die "invalid phase '$phase' (allowed: $AI_REVIEW_PHASES)" ;; esac
+  local d; d="$(proj_dir "$slug")"
+  local f="$d/$rel"
+  [ -f "$f" ] || die "no such review file: $rel"
+  local mode; mode="$(_ai_review_mode_of "$slug" "$phase")"
+  [ "$mode" = "auto" ] || die "refusing auto-signoff: this project's AI Review mode for '$phase' is '$mode', not 'auto' (pw-lib.sh ai-review $slug $phase auto to enable)"
+  _review_has_open_marker "$f" && die "refusing auto-signoff: $rel still has an unresolved 🔴 open item or ⏳ awaiting-answer question"
+  local signline; signline="$(grep -n '^## Sign-off' "$f" | head -1 | cut -d: -f1)"
+  [ -n "$signline" ] || die "no '## Sign-off' section in $rel — not a valid review file"
+  local ts row; ts="$(date '+%F %H:%M')"; row="| $ts | pw-reviewer (auto) | approved ✅ |"
+  if grep -q '^| | | in-review |$' "$f"; then
+    # first sign-off on this file → replace the template's lone placeholder row
+    awk -v row="$row" '{ if ($0 == "| | | in-review |") { print row; next } print }' \
+      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  else
+    # a re-review cycle already replaced/added rows → append ours as the table's new last row
+    # (head/tail splice, not awk -v — same portability reasoning as _ship_comment_section_ensure:
+    # no shell-quote gymnastics, no awk variable involved).
+    local lastrow; lastrow="$(awk -v s="$signline" 'NR>=s && /^\|/{n=NR} END{print n+0}' "$f")"
+    [ "$lastrow" -gt 0 ] || die "no Sign-off table rows found in $rel"
+    { head -n "$lastrow" "$f"; printf '%s\n' "$row"; tail -n "+$((lastrow+1))" "$f"; } \
+      > "$f.tmp" && mv "$f.tmp" "$f"
+  fi
+  cmd_log "$slug" pw-reviewer "AUTO-APPROVED $rel (phase=$phase, AI Review mode=auto, zero open items) — no human sign-off"
+  echo "$slug: $rel auto-signed-off by pw-reviewer (phase=$phase)"
+}
+
+cmd_review() {
+  case "${1:-}" in
+    note-init)    shift; cmd_review_note_init "$@" ;;
+    auto-signoff) shift; cmd_review_auto_signoff "$@" ;;
+    *) die "usage: review <note-init|auto-signoff> ..." ;;
+  esac
+}
+
 cmd_selftest() {
   local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
   mkdir -p "$tmp/demo"
@@ -738,6 +900,65 @@ cmd_selftest() {
   PW_PROJECTS_DIR="$tmp" "$0" rfc dashboard demo2 "wave 1 published" >/dev/null
   grep -A1 '^- \*\*One-liner:\*\*' "$tmp/demo2/README.md" | grep -q '^- \*\*RFC:\*\*' || die "selftest FAIL: RFC not anchored after One-liner when no Adopted: exists"
 
+  # --- AI-assisted review -------------------------------------------------
+  # ai-review: get on a project with no AI Review line yet auto-creates it, all-off; set updates
+  # exactly one phase, leaving the other four untouched; invalid phase/mode rejected.
+  local got_ai; got_ai="$(PW_PROJECTS_DIR="$tmp" "$0" ai-review demo2)"
+  [ "$got_ai" = "analysis=off plan=off task-plan=off task-exec=off ship=off" ] || die "selftest FAIL: ai-review default line wrong: '$got_ai'"
+  PW_PROJECTS_DIR="$tmp" "$0" ai-review demo2 plan auto >/dev/null
+  got_ai="$(PW_PROJECTS_DIR="$tmp" "$0" ai-review demo2)"
+  [ "$got_ai" = "analysis=off plan=auto task-plan=off task-exec=off ship=off" ] || die "selftest FAIL: ai-review set did not update only 'plan': '$got_ai'"
+  PW_PROJECTS_DIR="$tmp" "$0" ai-review demo2 analysis advisory >/dev/null
+  got_ai="$(PW_PROJECTS_DIR="$tmp" "$0" ai-review demo2)"
+  [ "$got_ai" = "analysis=advisory plan=auto task-plan=off task-exec=off ship=off" ] || die "selftest FAIL: ai-review 2nd set clobbered the 1st: '$got_ai'"
+  [ "$(grep -c '^- \*\*AI Review:\*\*' "$tmp/demo2/README.md")" = "1" ] || die "selftest FAIL: AI Review line duplicated"
+  if PW_PROJECTS_DIR="$tmp" "$0" ai-review demo2 bogus-phase auto >/dev/null 2>&1; then
+    die "selftest FAIL: ai-review accepted an invalid phase"
+  fi
+  if PW_PROJECTS_DIR="$tmp" "$0" ai-review demo2 plan bogus-mode >/dev/null 2>&1; then
+    die "selftest FAIL: ai-review accepted an invalid mode"
+  fi
+  [ "$(PW_PROJECTS_DIR="$tmp" "$0" ai-review demo2)" = "analysis=advisory plan=auto task-plan=off task-exec=off ship=off" ] || die "selftest FAIL: rejected ai-review calls still mutated the line"
+
+  # review note-init: idempotent, same shape as review-init/rfc init.
+  PW_PROJECTS_DIR="$tmp" "$0" review note-init demo2 >/dev/null
+  local NOTES="$tmp/demo2/REVIEWER-NOTES.md"
+  [ -f "$NOTES" ] || die "selftest FAIL: review note-init did not create REVIEWER-NOTES.md"
+  printf '\n## manual entry\n' >> "$NOTES"
+  PW_PROJECTS_DIR="$tmp" "$0" review note-init demo2 >/dev/null
+  grep -q '^## manual entry$' "$NOTES" || die "selftest FAIL: review note-init clobbered an existing file"
+
+  # review auto-signoff: refuses when mode isn't auto (demo2/analysis is "advisory" above), refuses
+  # while the template's own live R1/Q1 stubs are still unresolved (review-init always copies them
+  # verbatim, so a just-created review file genuinely has one 🔴 open + one ⏳ awaiting-answer by
+  # default — this is realistic, not a contrived case), and succeeds — with a distinctly-tagged row
+  # placed INSIDE the Sign-off table — only once mode is auto AND both stubs are cleared.
+  PW_PROJECTS_DIR="$tmp" "$0" review-init demo2 analysis/review/topic2.review.md analysis/topic2.md >/dev/null
+  local RV2="$tmp/demo2/analysis/review/topic2.review.md"
+  grep -q '🔴 open' "$RV2" || die "selftest FAIL: fresh review-init unexpectedly has no 🔴 open stub (test assumption invalid)"
+  if PW_PROJECTS_DIR="$tmp" "$0" review auto-signoff demo2 analysis/review/topic2.review.md analysis >/dev/null 2>&1; then
+    die "selftest FAIL: auto-signoff succeeded although mode is 'advisory', not 'auto'"
+  fi
+  PW_PROJECTS_DIR="$tmp" "$0" ai-review demo2 analysis auto >/dev/null
+  if PW_PROJECTS_DIR="$tmp" "$0" review auto-signoff demo2 analysis/review/topic2.review.md analysis >/dev/null 2>&1; then
+    die "selftest FAIL: auto-signoff succeeded although the R1/Q1 stubs are still open"
+  fi
+  # simulate pw-reviewer clearing both never-filled-in stubs on a genuinely clean pass (the
+  # template's own documented convention — "emptied back to 'No blocking …'" — not a flip, since
+  # there was never a real ask/question here to resolve, just a template placeholder).
+  sed -i '' -e '/^### R1 · <§section or anchor> — 🔴 open/,+1d' \
+            -e '/^### Q1 · <§section> — ⏳ awaiting answer/,+1d' "$RV2"
+  _review_has_open_marker "$RV2" && die "selftest FAIL: clearing the stubs did not resolve _review_has_open_marker (still tripping on the permanent hint / worked example)"
+  PW_PROJECTS_DIR="$tmp" "$0" review auto-signoff demo2 analysis/review/topic2.review.md analysis >/dev/null
+  grep -q '| pw-reviewer (auto) | approved ✅ |$' "$RV2" || die "selftest FAIL: auto-signoff row not written/tagged correctly"
+  grep -q '^| | | in-review |$' "$RV2" && die "selftest FAIL: auto-signoff left the placeholder row instead of replacing it"
+  # anchor to an actual table ROW (starts with "| ", not prose mentioning the tag elsewhere in the
+  # file's explanatory text, e.g. the template's own HOW-THIS-WORKS comment).
+  local as_line as_sign; as_line="$(grep -nE '^\|.*pw-reviewer \(auto\).*approved ✅ \|$' "$RV2" | head -1 | cut -d: -f1)"
+  as_sign="$(grep -n '^## Sign-off' "$RV2" | head -1 | cut -d: -f1)"
+  [ -n "$as_line" ] || die "selftest FAIL: no auto-signoff table row found"
+  [ "$as_line" -gt "$as_sign" ] || die "selftest FAIL: auto-signoff row landed before ## Sign-off"
+
   echo "selftest OK"
 }
 
@@ -751,7 +972,9 @@ case "${1:-}" in
   phase)       shift; cmd_phase "$@" ;;
   rfc)         shift; cmd_rfc "$@" ;;
   ship)        shift; cmd_ship "$@" ;;
+  ai-review)   shift; cmd_ai_review "$@" ;;
+  review)      shift; cmd_review "$@" ;;
   selftest)    cmd_selftest ;;
-  -h|--help|"") sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h|--help|"") sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown subcommand: $1 (try --help)" ;;
 esac

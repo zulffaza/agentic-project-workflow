@@ -84,7 +84,9 @@ of `./bootstrap.sh` — see ONBOARDING.md's [Offboarding](./ONBOARDING.md#offboa
 as a whole, and optionally any individual task's steps), after execution (per task, if you reject a
 result), and after ship (comments on the MR/PR itself). See
 **[docs/WALKTHROUGH.md](./docs/WALKTHROUGH.md)** for all of them walked through on one example, or
-**[docs/REVIEW.md](./docs/REVIEW.md)** for the mechanics of each.
+**[docs/REVIEW.md](./docs/REVIEW.md)** for the mechanics of each. Every one of them is human-only by
+default, but can optionally be delegated to a fresh AI review pass instead (per project, per phase)
+— see that same doc's "AI-assisted review" section.
 
 Keeping open MRs fresh as their base moves is a side-loop: **`/pw-sync`**. Another optional
 side-loop, **`/pw-rfc`**, publishes approved analysis/plan content to an RFC doc (any configured
@@ -98,7 +100,7 @@ platform, or a local-only doc by default) — see **[docs/RFC.md](./docs/RFC.md)
 | 🧭 **[docs/WALKTHROUGH.md](./docs/WALKTHROUGH.md)** | One made-up project through every stage *and* every review point, with example output — read this first if you're new |
 | 📋 **[docs/WORKFLOW.md](./docs/WORKFLOW.md)** | Every step in detail · who owns `Status:` · the `LOG.md` audit trail · rewinding a phase |
 | 🔀 **[docs/ADOPTION.md](./docs/ADOPTION.md)** | The continuation workflow — adopt in-progress branches, the two intents, mixed projects |
-| 💬 **[docs/REVIEW.md](./docs/REVIEW.md)** | The two review entry points — local `.review.md` files **and** MR comments — and how they reconcile |
+| 💬 **[docs/REVIEW.md](./docs/REVIEW.md)** | The two review entry points — local `.review.md` files **and** MR comments — how they reconcile, and the optional AI-assisted delegated review pass |
 | 📝 **[docs/RFC.md](./docs/RFC.md)** | Optional side-loop — publish approved analysis/plan content to an RFC doc, any platform or none |
 | 🧠 **[docs/MEMORY.md](./docs/MEMORY.md)** | Optional cross-project recall — what it's for, why bother, how to turn it on |
 | ⚙️ **[docs/EXECUTION.md](./docs/EXECUTION.md)** | Orchestrator vs executor · picking a model/agent per task · cross-provider execution · worktrees |
