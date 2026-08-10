@@ -13,7 +13,7 @@ review → close**, driven by `/pw-*` slash commands. Work happens in scaffolded
    ./bootstrap.sh        # reads pw.config.sh, installs the skill + /pw-* commands + agents for your CLIs
    source ./pw-env.sh    # exports $PW_HOME / $PW_PROJECTS / $PW_REPOS
    ```
-   Verify or repair drift any time: `tooling/pw-doctor.sh` (`--fix` to repair). Full setup /
+   Verify or repair drift any time: `/pw-doctor` (`/pw-doctor --fix` to repair). Full setup /
    fresh-machine recovery: **[ONBOARDING.md](./ONBOARDING.md)**. Leaving/uninstalling? `./offboard.sh`
    is the exact inverse — see ONBOARDING.md's [Offboarding](./ONBOARDING.md#offboarding--uninstalling) section.
 2. **Invoke the `project-workflow` skill.** It's your working cheat-sheet — the detailed rules for
@@ -52,8 +52,8 @@ real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./do
   bits is what causes drift and clobbers — always go through the helper.
 - **Never hand-edit generated artifacts.** The per-provider command files (`~/.claude/commands`,
   `~/.config/kilo/command`) and seeded agents (`~/.claude/agents`, `~/.config/kilo/agent`) are build
-  output. Change the **canonical source** in `tooling/commands/` or `tooling/agents/` and re-run
-  `gen-commands.sh` / `gen-agents.sh` (or `bootstrap.sh`).
+  output. Change the **canonical source** in `tooling/commands/` or `tooling/agents/`, then run
+  `/pw-doctor --fix` to resync (it regenerates + relinks everything the generators would).
 - **Configure via `pw.config.sh`, never the scripts** — enabling/adding a provider or model lives
   there (gitignored, yours). Keep command/agent/skill sources tokenized with `{{PW_HOME}}` /
   `{{PW_PROJECTS}}` / `{{PW_REPOS}}`; never hardcode an absolute path.

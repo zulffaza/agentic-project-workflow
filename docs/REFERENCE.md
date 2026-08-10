@@ -109,6 +109,7 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | `/pw-ship <slug> [task-ids] [comments]` | push branches + open MRs (publish); `comments` = handle MR review threads |
 | `/pw-sync <slug> [task-ids]` | update open MR branches — merge base in, re-verify, push |
 | `/pw-status <slug>` | status |
+| `/pw-status <slug> rewind <phase>` | move the dashboard `Status:` back to an earlier phase — the human-facing surface for this, never `pw-lib.sh status … --rewind` directly (see [Going back a phase](./WORKFLOW.md#going-back-a-phase-rewind)) |
 | `/pw-close <slug>` | learn + close-out |
 | `/pw-doctor [--fix]` | check (or repair) that installed commands + agents + skill match this bundle |
 | `/pw-rfc <slug> [--target <ref>]` | optional side-loop: publish approved analysis to an RFC doc (see [docs/RFC.md](./RFC.md)) |
@@ -117,15 +118,14 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 
 These exist for multiple agent tools (Claude Code, kilo, …) but are **not** maintained per tool. The
 single source is [`tooling/commands/*.md`](../tooling/) (provider-neutral, `{{ARGS}}` placeholder).
-[`tooling/gen-commands.sh`](../tooling/gen-commands.sh) stamps them into each provider's format and
-location; [`tooling/gen-agents.sh`](../tooling/gen-agents.sh) does the same for the sub-agents:
-
-```bash
-$PW_HOME/tooling/gen-commands.sh    # commands → ~/.claude/commands/, ~/.config/kilo/command/
-$PW_HOME/tooling/gen-agents.sh      # agents   → ~/.claude/agents/,   ~/.config/kilo/agent/
-```
+Under the hood, [`tooling/gen-commands.sh`](../tooling/gen-commands.sh) stamps them into each
+provider's format and location (`~/.claude/commands/`, `~/.config/kilo/command/`), and
+[`tooling/gen-agents.sh`](../tooling/gen-agents.sh) does the same for the sub-agents
+(`~/.claude/agents/`, `~/.config/kilo/agent/`) — you don't run either script yourself; `/pw-doctor
+--fix` (see the table above) drives both.
 
 The per-provider files are **build artifacts — never hand-edit them.** Change a prompt → edit the
-canonical file → re-run the generator (or `./bootstrap.sh`). Enable/disable or add a provider → edit
+canonical file → run **`/pw-doctor --fix`** to resync (it does exactly what the two generators above
+do, for both providers, plus reports what drifted). Enable/disable or add a provider → edit
 [`pw.config.sh`](../pw.config.example.sh) (never the scripts). See
 [`tooling/README.md`](../tooling/README.md) and [ONBOARDING.md](../ONBOARDING.md).

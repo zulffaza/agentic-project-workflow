@@ -79,9 +79,9 @@ Re-run `./bootstrap.sh` any time (e.g. after `git pull`). Use `--force` to re-li
 If a `/pw-*` command isn't found, behaves like an older version, or you just want to confirm this
 machine is actually in sync with the bundle, run:
 
-```bash
-$PW_HOME/tooling/pw-doctor.sh          # report-only — never changes anything
-$PW_HOME/tooling/pw-doctor.sh --fix    # repair whatever it found
+```
+/pw-doctor          # report-only — never changes anything
+/pw-doctor --fix    # repair whatever it found
 ```
 
 **What it checks, per enabled provider:** the CLI is actually on `PATH`; every shipped skill
@@ -98,8 +98,10 @@ output: `✓` = in sync, `✗` = drift (it says exactly what — missing, stale,
 - a `/pw-*` command errors, behaves oddly, or isn't recognized at all,
 - you changed `pw.config.sh` (enabled/disabled a provider) and want to confirm the change landed.
 
-This is one of the few `tooling/` scripts meant to be run directly, alongside `bootstrap.sh` and
-`offboard.sh` — it's the maintenance trio, not the day-to-day interface.
+`/pw-doctor` is the human-facing surface for this — it's the same underlying script
+(`tooling/pw-doctor.sh`), but drive it through the command rather than calling the script directly.
+`bootstrap.sh` and `offboard.sh` remain genuine exceptions — they run *before* any `/pw-*` command
+is installed or *after* it's removed, so there's nothing else to invoke them through.
 
 ## Day-to-day
 

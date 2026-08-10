@@ -8,7 +8,7 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 
 **This command NEVER changes the dashboard `Status:` line or any other dashboard field.** Reviewing
 is not a phase transition — the phase only moves when the next `/pw-*` command runs. (If you meant
-to rewind a phase, that's `pw-lib.sh status <slug> <phase> --rewind`, not this command.)
+to rewind a phase, that's `/pw-status <slug> rewind <phase>`, not this command.)
 
 **If the 2nd argument is literally `ai`, this is the AI-assisted review flow, not apply-comments —
 skip everything below and follow this instead** (the 3rd argument, if given, narrows scope exactly

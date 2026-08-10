@@ -158,12 +158,13 @@ reconstructing it from chat.
 
 ## Going back a phase (rewind)
 Phases aren't one-way. To reopen an earlier phase after you've moved on (e.g. breakdown revealed the
-analysis was wrong):
+analysis was wrong), run **`/pw-status <slug> rewind <phase>`**. It walks you through the same three
+steps either way, but drives them through the command rather than you touching `tooling/` yourself:
 1. Add a fresh `🔴 open` item to that phase's review file (`analysis/review/…` or `task/review/…`)
    describing what needs to change, and add a new `in-review` Sign-off row (leave the old
    `approved ✅` row — it's history).
-2. Set the dashboard `Status:` back to that phase **with the rewind flag**:
-   `tooling/pw-lib.sh status <slug> <phase> --rewind` (a plain `status` refuses to move backward).
+2. Set the dashboard `Status:` back to that phase **with the rewind flag** (under the hood,
+   `tooling/pw-lib.sh status <slug> <phase> --rewind` — a plain `status` refuses to move backward).
 3. Re-run the phase command (`/pw-analyze` / `/pw-breakdown`), then `/pw-review`, then re-approve.
 Downstream artifacts already produced stay on disk; regenerate them once the upstream phase is
 re-approved.
