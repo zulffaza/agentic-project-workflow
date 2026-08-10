@@ -158,10 +158,11 @@ no shared context with whoever produced the artifact, so it's a genuine second o
 an echo of the producer's own reasoning — the same idea as having someone who's never seen your
 draft read it cold, rather than asking yourself "does this look right to me?"
 
-**Turning it on** — one dashboard line per project, five independent phases:
-```sh
-tooling/pw-lib.sh ai-review myproj                       # print all 5 phases' current modes
-tooling/pw-lib.sh ai-review myproj plan auto              # e.g. let the plan-review gate run itself
+**Turning it on** — one dashboard line per project, five independent phases, viewed/changed through
+an agent command, never a shell script:
+```
+/pw-review myproj config              # view all 5 phases' current modes, in plain language
+/pw-review myproj config plan auto    # e.g. let the plan-review gate run itself
 ```
 Each phase (`analysis` / `plan` / `task-plan` / `task-exec` / `ship`) is independently `off`
 (default — nothing changes), `advisory`, or `auto`:

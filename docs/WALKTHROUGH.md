@@ -92,9 +92,11 @@ The agent updates §3, folds your answer into §5, and flips both items to 🟢/
 
 That row is the actual gate. Nothing below this point can start until it's there.
 
-> **AI-assisted option:** if `analysis` mode is `advisory`/`auto` (dashboard `AI Review:` line —
-> off by default), `/pw-review spring-boot-3-upgrade ai` runs a fresh `pw-reviewer` pass first,
-> filing items like `R1` above but tagged `(pw-reviewer, …)`. See [docs/REVIEW.md](./REVIEW.md#3-ai-assisted-review-optional-per-phase).
+> **AI-assisted option:** turn this on with `/pw-review spring-boot-3-upgrade config analysis
+> advisory` (dashboard `AI Review:` line — off by default; `/pw-review spring-boot-3-upgrade
+> config` on its own shows all five phases). Once it's `advisory`/`auto`, `/pw-review
+> spring-boot-3-upgrade ai` runs a fresh `pw-reviewer` pass first, filing items like `R1` above but
+> tagged `(pw-reviewer, …)`. See [docs/REVIEW.md](./REVIEW.md#3-ai-assisted-review-optional-per-phase).
 
 ## Break down
 

@@ -63,8 +63,10 @@ Rules you MUST follow:
 
 ## AI-assisted review (optional, per-phase opt-in)
 Every review point above defaults to human-only. A project's dashboard `AI Review:` line
-(`off`/`advisory`/`auto`, per phase — check/set with `pw-lib.sh ai-review <slug> [<phase> <mode>]`)
-can delegate a phase's review to the `pw-reviewer` sub-agent instead, triggered via `/pw-review
+(`off`/`advisory`/`auto`, per phase) controls this — **the human-facing surface for viewing/setting
+it is `/pw-review <slug> config [<phase> <mode>]`, never `pw-lib.sh ai-review` directly** (that's
+the internal mechanism this sub-verb wraps; if I ever ask you how to change this, point me at the
+command, not the script). Delegate a phase's review to the `pw-reviewer` sub-agent via `/pw-review
 <slug> ai [phase|Tid|path]`:
 - `advisory` — `pw-reviewer` files items exactly like a human would, tagged `(pw-reviewer,
   <timestamp>)` instead of `(you, …)`. A human still writes the Sign-off row; process its items via

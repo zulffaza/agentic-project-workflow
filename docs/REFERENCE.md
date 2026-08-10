@@ -103,6 +103,7 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | `/pw-analyze <slug> [focus]` | analysis |
 | `/pw-review <slug> [phase\|Tid\|path]` | apply review comments (defaults to current phase's review) |
 | `/pw-review <slug> ai [phase\|Tid\|path]` | optional — delegate a fresh review pass to `pw-reviewer` (see [docs/REVIEW.md](./REVIEW.md#3-ai-assisted-review-optional-per-phase)) |
+| `/pw-review <slug> config [<phase> <mode>]` | optional — view (no args) or change one phase's AI Review mode; the human-facing surface for this, never `pw-lib.sh` directly |
 | `/pw-breakdown <slug>` | task breakdown |
 | `/pw-execute <slug> [task-ids \| "with <model/agent>"]` | execution (stops at committed + verified) |
 | `/pw-ship <slug> [task-ids] [comments]` | push branches + open MRs (publish); `comments` = handle MR review threads |
