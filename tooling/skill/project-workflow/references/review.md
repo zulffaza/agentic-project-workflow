@@ -60,3 +60,19 @@ Rules you MUST follow:
     plain new top-level note (no `discussion_id` needed) and flag it in the recap for a human to
     verify once the real discussion syncs. Full flow: `tooling/docs/forges.md`.
 - After a pass, report how many `🔴 open` items remain: `grep -rln "🔴 open" <project>/`.
+
+## AI-assisted review (optional, per-phase opt-in)
+Every review point above defaults to human-only. A project's dashboard `AI Review:` line
+(`off`/`advisory`/`auto`, per phase — check/set with `pw-lib.sh ai-review <slug> [<phase> <mode>]`)
+can delegate a phase's review to the `pw-reviewer` sub-agent instead, triggered via `/pw-review
+<slug> ai [phase|Tid|path]`:
+- `advisory` — `pw-reviewer` files items exactly like a human would, tagged `(pw-reviewer,
+  <timestamp>)` instead of `(you, …)`. A human still writes the Sign-off row; process its items via
+  the normal apply-comments flow above, no different from a human's.
+- `auto` — same filing, but if the pass leaves nothing 🔴/⏳ open, `pw-reviewer` may call
+  `pw-lib.sh review auto-signoff <slug> <review-rel-path> <phase>` itself — the ONE tool-enforced
+  exception to "only a human clears a gate", re-checked by the tool, not taken on trust.
+`pw-reviewer` is spawned **fresh** (no shared context with whoever produced the artifact) and gets
+handed only the artifact + review file + phase + `REVIEWER-NOTES.md` — never this session's own
+reasoning about the artifact. Full method: the `pw-review` skill. Full human-facing explanation:
+`docs/REVIEW.md`'s "AI-assisted review" section.

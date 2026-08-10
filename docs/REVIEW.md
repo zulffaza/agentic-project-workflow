@@ -146,3 +146,49 @@ the project dir, without opening the MR.
 … all approved & merged by a human …
 /pw-close myproj                 # tear down + learn
 ```
+
+---
+
+## 3. AI-assisted review (optional, per-phase)
+
+Everything above assumes a human. You can instead (or additionally, as a pre-filter) delegate any
+of the five review points — analysis, the plan, a task's plan, a task's execution result, MR/PR
+comments — to a **fresh** AI review pass. "Fresh" is the whole point: the reviewer is spawned with
+no shared context with whoever produced the artifact, so it's a genuine second opinion rather than
+an echo of the producer's own reasoning — the same idea as having someone who's never seen your
+draft read it cold, rather than asking yourself "does this look right to me?"
+
+**Turning it on** — one dashboard line per project, five independent phases:
+```sh
+tooling/pw-lib.sh ai-review myproj                       # print all 5 phases' current modes
+tooling/pw-lib.sh ai-review myproj plan auto              # e.g. let the plan-review gate run itself
+```
+Each phase (`analysis` / `plan` / `task-plan` / `task-exec` / `ship`) is independently `off`
+(default — nothing changes), `advisory`, or `auto`:
+
+| Mode | What happens |
+|---|---|
+| `off` | No AI reviewer involved. Identical to everything in sections 1–2 above. |
+| `advisory` | `pw-reviewer` files items into the normal `.review.md`, tagged `(pw-reviewer, <timestamp>)` so they're never confused with a human's. **A human still writes the Sign-off row** — this is a pre-filter, not a replacement. |
+| `auto` | Same filing, but if the pass leaves **nothing** 🔴 open or ⏳ awaiting answer, `pw-reviewer` may sign off itself, via a guarded tool call that independently re-checks both conditions. |
+
+**Run it** with `/pw-review <slug> ai [phase|Tid|path]` — same scope resolution as the normal
+`/pw-review`. Under the hood this spawns the `pw-reviewer` agent fresh, in-process, same provider
+(or hand the artifact + the standalone `pw-review` skill to a completely different agent/session
+yourself, if you want it run somewhere with zero shared context at all).
+
+**On `auto`'s self-approval** — this is the one place this feature changes an existing invariant
+("only a human clears a gate"), so it's deliberately the most auditable part: the Sign-off row
+always reads `pw-reviewer (auto)` in the "By" column, never blended with a human "you" row, and the
+underlying tool (`pw-lib.sh review auto-signoff`) refuses outright unless the project's mode for
+that phase is genuinely `auto` **and** the file has no real open item/question left — it doesn't
+take the reviewer's word for either.
+
+**Reviewer notes — the *why*.** Every AI-review pass appends a dated entry to `REVIEWER-NOTES.md`
+(project root, sibling of `LOG.md`): what it checked, why it decided what it decided, and —
+sometimes, not every pass — a generalizable **Lesson**. This is separate from the `.review.md`'s
+items on purpose: items are the actionable record, `REVIEWER-NOTES.md` is the reasoning behind
+them, especially worth reading whenever `auto` mode approved something without you. A later
+reviewer pass reads prior entries too; `/pw-close`'s memory-seeding step folds its Lessons in if
+you've configured a memory tool (see [docs/MEMORY.md](./MEMORY.md)) — the file itself is always
+there regardless.

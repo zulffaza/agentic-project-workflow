@@ -92,6 +92,10 @@ The agent updates §3, folds your answer into §5, and flips both items to 🟢/
 
 That row is the actual gate. Nothing below this point can start until it's there.
 
+> **AI-assisted option:** if `analysis` mode is `advisory`/`auto` (dashboard `AI Review:` line —
+> off by default), `/pw-review spring-boot-3-upgrade ai` runs a fresh `pw-reviewer` pass first,
+> filing items like `R1` above but tagged `(pw-reviewer, …)`. See [docs/REVIEW.md](./REVIEW.md#3-ai-assisted-review-optional-per-phase).
+
 ## Break down
 
 ```
@@ -121,6 +125,10 @@ hard gate** for execution:
 | 2026-08-10 14:10 | you | approved ✅ |
 ```
 
+> **AI-assisted option:** with `plan` mode set to `auto`, a clean `pw-reviewer` pass can write this
+> row itself — tagged `pw-reviewer (auto)`, never blended with your own row. Given this is the only
+> hard gate, think carefully before setting this phase to `auto` rather than `advisory`.
+
 ## Review an individual task's plan (optional)
 
 Per-task review files are optional and created on demand — and you don't have to wait for a bad
@@ -135,6 +143,10 @@ creates `task/review/T03.review.md` on the spot (if it doesn't exist yet) from y
 an item — *"Step 2 pins `kafka-clients:3.4.0`, we need `3.6.1` for the Boot 3.2 baseline"* — and the
 agent revises `T03.md`'s steps before `/pw-execute` ever touches that repo. Nothing about T01/T02
 is affected; this is scoped to one task, and the PLAN's overall approval above still stands.
+
+> **AI-assisted option:** `task-plan` mode, same idea — `/pw-review spring-boot-3-upgrade ai T03`
+> gives T03's plan a fresh look before anything runs, catching exactly this kind of thing without
+> you having to read every task file yourself.
 
 ## Execute
 
@@ -176,6 +188,9 @@ doesn't exist, applies the fix in the same worktree, and:
 re-runs and re-verifies **just T01**, in its existing worktree — T02 and T03 are untouched, and
 you don't re-run the whole plan.
 
+> **AI-assisted option:** `task-exec` mode — a fresh `pw-reviewer` pass looks at what actually got
+> committed (not just the plan) and can flag T01's config-default change itself, before you do.
+
 ## Ship
 
 ```
@@ -210,6 +225,9 @@ answer (never a bare "done") → **MIRROR** the exchange into `task/T01.md`'s `#
 MR-driven change. Run `/pw-ship spring-boot-3-upgrade comments` (no task ID) to sweep **every**
 open MR in the project in one pass instead of one at a time. Full mechanics, including why a
 general/no-diff comment still counts: [docs/REVIEW.md](./REVIEW.md#2-the-mr-review-flow-post-ship).
+
+> **AI-assisted option:** `ship` mode extends the same delegation to this surface too — see
+> [docs/REVIEW.md](./REVIEW.md#3-ai-assisted-review-optional-per-phase) for how it applies here.
 
 ## Accept results
 

@@ -12,6 +12,10 @@ So the "Reviewing:" link above points one level up (../) to the reviewed doc.
 
 HOW THIS FILE WORKS — read before editing.
 - YOU (human) write review items below. Agents must NEVER edit or delete your item text.
+- If this project's AI Review mode (dashboard `AI Review:` line, see docs/REVIEW.md) is
+  `advisory`/`auto` for this phase, the `pw-reviewer` agent may ALSO write items here — tagged
+  `(pw-reviewer, <timestamp>)`, never `(you, …)`, so it's always visually distinct from a human
+  item in this file's history. Treat a `pw-reviewer` item exactly like a human one when applying it.
 - To address an item, the agent appends a "↳ agent:" reply and flips 🔴 open → 🟢 resolved.
   That reply is the agent's summary of what it did — it must be concrete (name the section and
   what changed), never a bare "fixed"/"done". No diff needed; the summary is the record.
@@ -19,7 +23,11 @@ HOW THIS FILE WORKS — read before editing.
   without opening the file.
 - Anchor each item to a section of the doc (§heading), because the doc itself gets rewritten
   when fixes are applied — this file is the durable record, the doc is not.
-- Only YOU fill the Sign-off table. An agent cannot self-approve a gate.
+- Only YOU fill the Sign-off table by hand. The ONE exception: with this phase's AI Review mode
+  set to `auto`, `pw-reviewer` may write a row itself — via the guarded `pw-lib.sh review
+  auto-signoff` (which refuses unless mode is genuinely `auto` AND nothing here is still
+  🔴 open/⏳ awaiting answer), never by hand-editing this table. That row's "By" column always
+  reads `pw-reviewer (auto)`, never blended with a human "you" row — see docs/REVIEW.md.
 - List everything still open in a project:  grep -rln "🔴 open" .
 - **Agents:** the `> **Add an item:**` / `> **Answer a question:**` blockquotes right under
   "## Items" / "## Open questions" are a PERMANENT syntax reference, not the deletable worked
@@ -42,9 +50,12 @@ and run `/pw-review`; the agent resolves them. The only status *you* decide is t
 Sign-off table: add an `approved ✅` row when you're satisfied (that unlocks the next phase), or a
 `changes-requested` row to send it back for another pass.
 
-**Filled by:** [🧑 you] write Items + Open-question answers + the Sign-off. [🤖 agent] appends
-`↳ agent:` replies, flips item/question status dots, and seeds Open-question rows when it needs a
-decision. Neither edits the other's text.
+**Filled by:** [🧑 you] write Items + Open-question answers + the Sign-off (by hand). [🤖 agent]
+appends `↳ agent:` replies, flips item/question status dots, and seeds Open-question rows when it
+needs a decision. [🤖 pw-reviewer] — only if this phase's AI Review mode is `advisory`/`auto` —
+writes Items the same way you would, tagged `(pw-reviewer, <timestamp>)`; in `auto` mode only, and
+only via the guarded tool (never by hand), it may also write the Sign-off row. None of the three
+edits another's text.
 
 ## Items
 
@@ -52,7 +63,8 @@ decision. Neither edits the other's text.
 > HH:MM>)`, then write your ask on the line below it. An agent replies with a `  ↳ agent: …` line
 > and flips your heading to 🟢 resolved — it never edits or deletes your text. (This hint stays
 > even once items exist or the section is emptied back to "No blocking …" — it's the syntax
-> reference, not the worked example below.)
+> reference, not the worked example below.) If AI Review is `advisory`/`auto` for this phase,
+> `pw-reviewer` writes items the same way, with `(pw-reviewer, <timestamp>)` in place of `(you, …)`.
 
 <!-- ↓↓ WORKED EXAMPLE (delete this block once you get the idea) ↓↓
 ### R1 · §3 Affected repos — 🔴 open (you, 2026-08-06 10:20)
@@ -102,6 +114,11 @@ review rounds often happen the same day, so a bare date can't order them.
 
 <!-- EXAMPLE of a cleared gate — your final row looks like:
 | 2026-08-06 11:30 | you | approved ✅ |
+
+Or, ONLY when this phase's AI Review mode is `auto` and pw-reviewer's own pass leaves nothing
+open, `pw-lib.sh review auto-signoff` writes a row itself, tagged distinctly so it's never mistaken
+for your approval:
+| 2026-08-06 11:30 | pw-reviewer (auto) | approved ✅ |
 
 - Not ready yet? Leave the `in-review` row, or add a `changes-requested` row and run /pw-review again.
 - Reopening a phase later? Add a new "in-review" row (don't delete the old approval), bump the

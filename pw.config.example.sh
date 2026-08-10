@@ -44,6 +44,15 @@ PW_KILO_PROVIDERS=(command_code)
 PW_MEMORY="none"
 PW_MEMORY_NOTES=""
 
+# --- AI-assisted review (OPTIONAL — off leaves today's human-only review unchanged) ----------
+# Every scaffolded project gets a per-phase "AI Review" dashboard line (off|advisory|off for each
+# of analysis/plan/task-plan/task-exec/ship), seeded from this ONE bundle-wide default and then
+# freely overridable per project/phase any time via `pw-lib.sh ai-review <slug> <phase> <mode>` —
+# see docs/REVIEW.md. This only changes what NEW projects are scaffolded with; it never touches an
+# already-scaffolded project's dashboard.
+#   PW_AI_REVIEW_DEFAULT="off"   # "off" (default) | "advisory" | "auto"
+PW_AI_REVIEW_DEFAULT="off"
+
 # --- Git forge host overrides (OPTIONAL — auto-detect covers github.com/gitlab.com) ---------
 # /pw-ship and /pw-adopt resolve which CLI (gh/glab) talks to a repo from its OWN origin remote
 # host — see tooling/docs/forges.md. Public github.com/gitlab.com need ZERO config. Only a self-hosted

@@ -1,6 +1,6 @@
 ---
-description: Apply my review comments for the current phase (or a given review file)
-args: <project-slug> [phase | Tid | path-to-.review.md]
+description: Apply my review comments for the current phase (or a given review file) — or, with the "ai" sub-verb, delegate a fresh review pass to pw-reviewer
+args: <project-slug> [ai] [phase | Tid | path-to-.review.md]
 ---
 Invoke the `project-workflow` skill (review rules). Arguments: {{ARGS}}.
 
@@ -10,7 +10,30 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 is not a phase transition — the phase only moves when the next `/pw-*` command runs. (If you meant
 to rewind a phase, that's `pw-lib.sh status <slug> <phase> --rewind`, not this command.)
 
-**Resolve WHICH review files to process — do NOT scan the whole project:**
+**If the 2nd argument is literally `ai`, this is the AI-assisted review flow, not apply-comments —
+skip everything below and follow this instead** (the 3rd argument, if given, narrows scope exactly
+like the apply-comments flow does):
+
+1. Resolve scope the same way apply-comments does (below) — explicit path > task id > phase word >
+   infer from the current phase — but map it to one of the five AI-Review phase keys: `analysis`,
+   `plan`, `task-plan`, `task-exec`, `ship`.
+2. Check this project's mode for that phase: `…/{{PW_HOME}}/tooling/pw-lib.sh ai-review <slug>`. If
+   `off`, tell me AI review isn't enabled for this phase and stop — point me at
+   `pw-lib.sh ai-review <slug> <phase> <mode>` rather than guessing I want it turned on.
+3. If `advisory` or `auto`, ensure the review file exists (`review-init` if not), then spawn the
+   `pw-reviewer` agent **fresh** — same provider, in-process sub-agent (Claude Task tool / kilo
+   `mode: subagent`). Hand it **only**: the artifact path, the review-file path, the phase name,
+   and `REVIEWER-NOTES.md` if it exists. Do **not** pass this session's own reasoning about the
+   artifact, or any chat history about how it was produced — that defeats the entire point of a
+   second opinion. Invoke the `pw-review` skill yourself first if you need the full method before
+   spawning it.
+4. `pw-reviewer` files items (tagged `(pw-reviewer, <timestamp>)`) and a `REVIEWER-NOTES.md` entry
+   on its own — you don't do this part. In `auto` mode with a genuinely clean pass, it may also
+   call `pw-lib.sh review auto-signoff` itself; you never write that row.
+5. Recap what it did (items filed, whether it signed off) exactly like the apply-comments recap
+   below. `advisory` mode: remind me a human still needs to review its items and sign off.
+
+**Resolve WHICH review files to process (apply-comments flow — do NOT scan the whole project):**
 - If the 2nd arg is a **path** to a `.review.md`, use exactly that file.
 - If it's a **task id** (`T0n`), process `task/review/T0n.review.md`.
 - If it's a **phase word** (`analysis` or `task`/`plan`), process that phase's `review/` dir only.

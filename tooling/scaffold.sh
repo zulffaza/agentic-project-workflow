@@ -11,6 +11,15 @@ TEMPLATE_DIR="$PW_HOME/template"                        # what a project is made
 PW_PROJECTS="${PW_PROJECTS:-$(cd "$PW_HOME/.." && pwd)}"
 PW_REPOS="${PW_REPOS:-$(cd "$PW_PROJECTS/.." && pwd)}"
 
+# Shared plumbing — this is the single place that loads pw.config.sh (fallback: the example), so
+# PW_AI_REVIEW_DEFAULT below always reflects the same config bootstrap.sh/gen-commands.sh/
+# pw-doctor.sh see, never a second, drifting copy of that fallback logic.
+. "$HERE/pw-common.sh"
+AI_REVIEW_PHASES="analysis plan task-plan task-exec ship"
+ai_review_default_line=""
+for p in $AI_REVIEW_PHASES; do ai_review_default_line="$ai_review_default_line $p=${PW_AI_REVIEW_DEFAULT:-off}"; done
+ai_review_default_line="${ai_review_default_line# }"
+
 slug="${1:-}"
 if [[ -z "$slug" ]]; then
   echo "Usage: $(basename "$0") <project-slug>   (e.g. spring-boot-3-upgrade)" >&2
@@ -35,7 +44,7 @@ rsync -a \
   "$TEMPLATE_DIR"/ "$dest"/
 
 # Render the project dashboard as the project's README.md.
-sed "s/<PROJECT_NAME>/$slug/g; s|<CREATED>|$(date '+%F %H:%M')|" \
+sed "s/<PROJECT_NAME>/$slug/g; s|<CREATED>|$(date '+%F %H:%M')|; s|<AI_REVIEW_DEFAULT>|$ai_review_default_line|" \
   "$TEMPLATE_DIR/PROJECT.template.md" > "$dest/README.md"
 
 # Stamp {{PW_*}} tokens (absolute paths) into every copied markdown file.

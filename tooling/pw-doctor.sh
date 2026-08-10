@@ -15,7 +15,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # tooling/
 PW_HOME="$(cd "$HERE/.." && pwd)"
 . "$HERE/pw-common.sh"
-SKILL_SRC="$PW_HOME/tooling/skill/project-workflow"
+SKILL_DIR="$PW_HOME/tooling/skill"   # every subdir with a SKILL.md here is a shippable skill
 
 FIX=0
 case "${1:-}" in
@@ -73,31 +73,37 @@ for p in "${PW_PROVIDERS[@]}"; do
     echo "    – CLI '$bin' enabled but not on PATH"
   fi
 
-  # skill — compare the WHOLE directory tree (SKILL.md + any references/*.md), not just the
-  # single SKILL.md file, so drift in a reference file is actually caught on a copy-fallback
-  # filesystem (a symlink install is trivially "in sync" since diff -rq dereferences it).
-  skilldir="$("${p}_skilldir")"; starget="$skilldir/project-workflow"
-  if [ ! -e "$starget" ]; then
-    echo "    ✗ skill NOT installed ($starget)"; issues=$((issues+1))
-    if [ "$FIX" -eq 1 ]; then
-      mkdir -p "$skilldir"
-      ln -sfn "$SKILL_SRC" "$starget" 2>/dev/null || cp -R "$SKILL_SRC" "$starget"
-      echo "      fixed: installed skill"
+  # skills — compare the WHOLE directory tree of EACH shipped skill (SKILL.md + any
+  # references/*.md), not just the single SKILL.md file, so drift in a reference file is actually
+  # caught on a copy-fallback filesystem (a symlink install is trivially "in sync" since diff -rq
+  # dereferences it). Loops every tooling/skill/*/ dir — adding a new skill needs no change here.
+  skilldir="$("${p}_skilldir")"
+  for skill_src in "$SKILL_DIR"/*/; do
+    [ -f "${skill_src}SKILL.md" ] || continue
+    skill_src="${skill_src%/}"; skill_name="$(basename "$skill_src")"
+    starget="$skilldir/$skill_name"
+    if [ ! -e "$starget" ]; then
+      echo "    ✗ skill '$skill_name' NOT installed ($starget)"; issues=$((issues+1))
+      if [ "$FIX" -eq 1 ]; then
+        mkdir -p "$skilldir"
+        ln -sfn "$skill_src" "$starget" 2>/dev/null || cp -R "$skill_src" "$starget"
+        echo "      fixed: installed skill '$skill_name'"
+      fi
+    elif diff -rq "$starget" "$skill_src" >/dev/null 2>&1; then
+      echo "    ✓ skill '$skill_name' up to date"
+    else
+      echo "    ✗ skill '$skill_name' STALE (differs from bundle)"; issues=$((issues+1))
+      if [ "$FIX" -eq 1 ]; then
+        # rm -rf FIRST, unconditionally: if $starget is a real (non-symlink) directory, `ln -sfn`
+        # against an *existing directory* target doesn't fail or replace it — it silently nests a
+        # new symlink INSIDE it (standard multi-arg `ln` semantics), leaving the stale copy in
+        # place. Removing first avoids that ambiguity entirely, for both the symlink and copy path.
+        rm -rf "$starget"
+        ln -sfn "$skill_src" "$starget" 2>/dev/null || cp -R "$skill_src" "$starget"
+        echo "      fixed: refreshed skill '$skill_name' from bundle"
+      fi
     fi
-  elif diff -rq "$starget" "$SKILL_SRC" >/dev/null 2>&1; then
-    echo "    ✓ skill up to date"
-  else
-    echo "    ✗ skill STALE (differs from bundle)"; issues=$((issues+1))
-    if [ "$FIX" -eq 1 ]; then
-      # rm -rf FIRST, unconditionally: if $starget is a real (non-symlink) directory, `ln -sfn`
-      # against an *existing directory* target doesn't fail or replace it — it silently nests a
-      # new symlink INSIDE it (standard multi-arg `ln` semantics), leaving the stale copy in
-      # place. Removing first avoids that ambiguity entirely, for both the symlink and copy path.
-      rm -rf "$starget"
-      ln -sfn "$SKILL_SRC" "$starget" 2>/dev/null || cp -R "$SKILL_SRC" "$starget"
-      echo "      fixed: refreshed skill from bundle"
-    fi
-  fi
+  done
 
   # commands: generate to temp, diff against what's installed
   odir="$("${p}_outdir")"

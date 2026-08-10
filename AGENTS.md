@@ -34,7 +34,9 @@ review → close**, driven by `/pw-*` slash commands. Work happens in scaffolded
 | Close | `/pw-close` | learnings + teardown, `Status → done` | — |
 
 Side-loops: **`/pw-sync`** refreshes open MRs against a moved base · **`/pw-ship … comments`**
-services MR review threads · **`/pw-status`** shows where a project is.
+services MR review threads · **`/pw-status`** shows where a project is. Every ✅ review point above
+also has an optional AI-assisted mode (off by default, per project/phase) — `/pw-review … ai` delegates
+a fresh review pass instead of a human doing it; see [docs/REVIEW.md](./docs/REVIEW.md).
 
 **Two ways to start:** *fresh* (`/pw-new`) or *continuation* (`/pw-adopt`, when work is already on a
 real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./docs/ADOPTION.md)**.
@@ -68,9 +70,11 @@ real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./do
   [MEMORY](./docs/MEMORY.md).
 - **`tooling/`** — the machinery: `scaffold.sh`, `gen-commands.sh`, `gen-agents.sh`, `pw-lib.sh`
   (deterministic helpers), `pw-doctor.sh`, `pw-common.sh`, `pw-teardown.sh` (safe worktree removal),
-  `commands/` (canonical `/pw-*` sources), `agents/` (seedable `pw-orchestrator` + `pw-executor`),
-  `docs/` (the registries/policy AGENTS read: `providers.md`, `memory.md`, `forges.md`,
-  `rfc.md`/`rfc-backends.md` — each has a human-facing peer under the bundle's own `docs/`), `skill/`.
+  `commands/` (canonical `/pw-*` sources), `agents/` (seedable `pw-orchestrator` + `pw-executor` +
+  `pw-reviewer` — the last optional, only spawned by `/pw-review … ai`), `docs/` (the
+  registries/policy AGENTS read: `providers.md`, `memory.md`, `forges.md`,
+  `rfc.md`/`rfc-backends.md` — each has a human-facing peer under the bundle's own `docs/`),
+  `skill/` (`project-workflow` + the standalone, portable `pw-review`).
   A human shouldn't normally need to open this dir — `docs/` + the `/pw-*` commands are the
   intended interface.
 - **`pw.config.sh`** — YOUR config (CLIs, models, optional `PW_MEMORY`); the one file you edit.

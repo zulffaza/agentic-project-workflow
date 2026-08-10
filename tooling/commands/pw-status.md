@@ -11,6 +11,9 @@ Arguments: {{ARGS}} (project slug). Project dir:
    ```bash
    grep -rln "🔴 open" {{PW_PROJECTS}}/<slug>/
    ```
-3. Show the last few `LOG.md` lines (recent activity).
-4. Tell me what's blocking the next gate (unapproved analysis/plan, open reviews, or
+3. Show this project's AI Review modes (`…/{{PW_HOME}}/tooling/pw-lib.sh ai-review <slug>`) — only
+   call this out if at least one phase isn't `off`. If `REVIEWER-NOTES.md` exists, show its most
+   recent dated entry's header line (phase/artifact/mode/verdict), not the full file.
+4. Show the last few `LOG.md` lines (recent activity).
+5. Tell me what's blocking the next gate (unapproved analysis/plan, open reviews, or
    verify-failed tasks) and the single next action/command.

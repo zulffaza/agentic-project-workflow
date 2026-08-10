@@ -13,6 +13,11 @@
 - **One-liner:** <what this project is>
   <!-- [🤖 set by /pw-analyze via `pw-lib.sh oneliner <slug> "…"`] — a one-sentence description
        distilled from context/. Leave the placeholder until analysis fills it. -->
+- **AI Review:** <AI_REVIEW_DEFAULT>
+  <!-- [🧑🤖 both] Optional, per-phase — off (default) | advisory | auto. Delegates a review pass to
+       the pw-reviewer agent instead of (advisory) or in addition to (auto, if clean) a human.
+       Change any phase any time: `pw-lib.sh ai-review <slug> <phase> <mode>` (phase: analysis |
+       plan | task-plan | task-exec | ship). See docs/REVIEW.md. -->
 
 
 ## Where things are

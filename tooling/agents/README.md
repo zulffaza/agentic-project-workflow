@@ -9,7 +9,9 @@ copies; edit the canonical file here and re-run [`gen-agents.sh`](../gen-agents.
 ```
 tooling/agents/
 ├── pw-orchestrator.md   ← reads task/PLAN.md, owns the DAG, spawns executors; never edits repo code
-└── pw-executor.md       ← runs ONE task in ONE worktree, runs ## Verify, reports; nothing else
+├── pw-executor.md       ← runs ONE task in ONE worktree, runs ## Verify, reports; nothing else
+└── pw-reviewer.md       ← optional, fresh-session review pass on ONE artifact; never edits it —
+                            see docs/REVIEW.md + the `pw-review` skill
 ```
 
 **Where they land** (per provider, via each provider's `<name>_agentdir` hook):
@@ -21,11 +23,13 @@ provider's `render_<name>_agent` hook wraps the body in that provider's frontmat
 `../pw-common.sh`).
 
 ## Reuse before you create
-The two shipped agents cover the two roles the workflow needs. **Execution can still reuse an
+The three shipped agents cover the three roles the workflow needs. **Execution can still reuse an
 existing agent you already have** (e.g. `code-implementation`) — a task's `Execute with:` names
 whatever should run it, and the discipline (worktree isolation, running `## Verify`, faithful
 reporting) comes from the `project-workflow` skill + the task file, not from a bespoke agent. Ship
-`pw-executor` is there for teammates who *don't* have a code agent.
+`pw-executor` is there for teammates who *don't* have a code agent. `pw-reviewer` is optional —
+every review point defaults to human-only (AI Review mode `off`); it only ever runs when a
+project's dashboard turns it on for a specific phase.
 
 ## Adding a custom agent
 Only for a **genuinely new role** no existing agent covers, that recurs across tasks (e.g. a
@@ -48,8 +52,10 @@ model: <optional default model>
 
 ## Agents are provider-bound — and sub-agents don't cross providers
 Two kinds of thing live here, and the difference is load-bearing:
-- **`pw-executor` is a sub-agent** — spawned *in-process* (Claude Task `subagent_type`; kilo
-  `mode: subagent`). A provider can spawn only its **own** sub-agents.
+- **`pw-executor` and `pw-reviewer` are sub-agents** — spawned *in-process* (Claude Task
+  `subagent_type`; kilo `mode: subagent`). A provider can spawn only its **own** sub-agents.
+  `pw-reviewer` is spawned by whichever agent is running `/pw-review <slug> ai …`, not only by
+  `pw-orchestrator` — any primary agent on that provider can spawn it.
 - **`pw-orchestrator` is a primary/invocable agent** — run through a provider's CLI, the only unit
   that crosses a provider boundary.
 
