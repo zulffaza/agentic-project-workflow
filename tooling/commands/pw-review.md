@@ -28,10 +28,13 @@ like the apply-comments flow does):
    second opinion. Invoke the `pw-review` skill yourself first if you need the full method before
    spawning it.
 4. `pw-reviewer` files items (tagged `(pw-reviewer, <timestamp>)`) and a `REVIEWER-NOTES.md` entry
-   on its own — you don't do this part. In `auto` mode with a genuinely clean pass, it may also
-   call `pw-lib.sh review auto-signoff` itself; you never write that row.
-5. Recap what it did (items filed, whether it signed off) exactly like the apply-comments recap
-   below. `advisory` mode: remind me a human still needs to review its items and sign off.
+   on its own — you don't do this part. It checks for an existing item on the same section anchor
+   before filing anything (loop prevention — a 3rd item on the same anchor becomes a 🔴 open
+   escalation instead of a normal finding, never resolved by it). In `auto` mode with a genuinely
+   clean pass, it may also call `pw-lib.sh review auto-signoff` itself; you never write that row.
+5. Recap what it did (items filed, whether it signed off, any escalation) exactly like the
+   apply-comments recap below. `advisory` mode: remind me a human still needs to review its items
+   and sign off. An escalation means this needs my attention now, not another `ai` re-run.
 
 **Resolve WHICH review files to process (apply-comments flow — do NOT scan the whole project):**
 - If the 2nd arg is a **path** to a `.review.md`, use exactly that file.

@@ -184,6 +184,14 @@ underlying tool (`pw-lib.sh review auto-signoff`) refuses outright unless the pr
 that phase is genuinely `auto` **and** the file has no real open item/question left — it doesn't
 take the reviewer's word for either.
 
+**What stops an endless loop** — before filing anything, `pw-reviewer` checks the review file for
+an existing item on the same section it's about to flag. A 2nd item on that same section (after
+the 1st was marked resolved) is filed as a linked **recurrence** — "the fix didn't hold" — rather
+than looking like a brand-new, unrelated complaint. A **3rd** item on that same section gets filed
+as a 🔴 open **escalation** instead: pw-reviewer never resolves it itself, which is what keeps
+`auto-signoff` genuinely blocked (the tool checks the file, not the reviewer's promise) — a section
+that keeps failing the same way forces a human decision instead of spinning forever.
+
 **Reviewer notes — the *why*.** Every AI-review pass appends a dated entry to `REVIEWER-NOTES.md`
 (project root, sibling of `LOG.md`): what it checked, why it decided what it decided, and —
 sometimes, not every pass — a generalizable **Lesson**. This is separate from the `.review.md`'s

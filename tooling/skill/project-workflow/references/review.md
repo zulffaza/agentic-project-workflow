@@ -74,5 +74,9 @@ can delegate a phase's review to the `pw-reviewer` sub-agent instead, triggered 
   exception to "only a human clears a gate", re-checked by the tool, not taken on trust.
 `pw-reviewer` is spawned **fresh** (no shared context with whoever produced the artifact) and gets
 handed only the artifact + review file + phase + `REVIEWER-NOTES.md` — never this session's own
-reasoning about the artifact. Full method: the `pw-review` skill. Full human-facing explanation:
-`docs/REVIEW.md`'s "AI-assisted review" section.
+reasoning about the artifact. **Loop prevention:** before filing, it checks the review file for an
+existing item on the same section anchor — a 3rd item on the same anchor (i.e. a "fix" that already
+recurred once) gets filed as a 🔴 open escalation instead of an ordinary finding, so `auto-signoff`
+stays blocked by the tool's own check rather than by the reviewer remembering not to call it. Full
+method: the `pw-review` skill. Full human-facing explanation: `docs/REVIEW.md`'s "AI-assisted
+review" section.

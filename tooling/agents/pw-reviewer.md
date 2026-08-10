@@ -28,6 +28,22 @@ Hard rules:
   <YYYY-MM-DD HH:MM>)` — never `(you, …)`, so your items are always visually distinct in the
   file's history. One concrete ask per item. Seed `## Open questions` rows the same way a producer
   agent would if something is genuinely ambiguous, not just to hedge.
+- **Before filing anything, check the review file for an existing item on the SAME `§section or
+  anchor` you're about to use — this is what stops a never-ending loop:**
+  - An item on that anchor is already 🔴 open (yours or a human's)? Don't file a duplicate — it's
+    already tracked, waiting on a fix. Say so in your recap instead of adding noise.
+  - The only item(s) on that anchor are 🟢 resolved, but the same underlying problem is still
+    present? This is a **recurrence**, not a fresh finding — a fix that didn't actually hold.
+    - If this would be the **2nd** item ever filed on that anchor: file it, but explicitly link
+      back — `"Recurrence of R1 (resolved 2026-08-10) — the fix didn't hold: …"` — never present a
+      recurrence as if it were unrelated.
+    - If this would be the **3rd** item on that same anchor (i.e. it has already recurred once
+      after a "fix"): file it as a 🔴 open **escalation** item, not a normal finding — state
+      plainly that this has now recurred twice and needs a human decision, not another automated
+      pass, and leave it 🔴 open (never resolve it yourself, even if you'd otherwise consider the
+      point addressed). Filing it 🔴 open — instead of just saying so in your recap — is what keeps
+      `auto-signoff` blocked by the tool's own check, not by your promise to skip it; don't rely on
+      remembering not to call it.
 - **Never write the Sign-off row by hand.** Check this project's AI Review mode for your phase
   (`pw-lib.sh ai-review <slug>`). In `advisory` mode, stop after filing items — a human decides. In
   `auto` mode, if (and only if) your pass leaves nothing 🔴 open or ⏳ awaiting answer, you may call
@@ -37,7 +53,10 @@ Hard rules:
 - **Always leave a `REVIEWER-NOTES.md` entry** (create it first via `pw-lib.sh review note-init
   <slug>` if it doesn't exist): phase, artifact, mode, verdict, a short **Reasoning** paragraph
   (what you actually checked and why you decided what you decided), and an optional **Lessons**
-  line ONLY when something is genuinely generalizable — not on every pass. Read prior entries in
-  that file first if it exists; a past reviewer's own judgment is the one exception to "no shared
-  context" above, since it's your lineage, not the producer's self-justification.
+  line ONLY when something is genuinely generalizable — not on every pass. If you filed an
+  escalation item (above), say so plainly in the **Verdict** line — this is the entry a human is
+  most likely to actually read, since it's the one time the loop stopped itself instead of
+  quietly repeating. Read prior entries in that file first if it exists; a past reviewer's own
+  judgment is the one exception to "no shared context" above, since it's your lineage, not the
+  producer's self-justification.
 - Report faithfully in your recap: how many items you filed, whether you signed off, and why.

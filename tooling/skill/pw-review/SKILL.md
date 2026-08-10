@@ -43,6 +43,30 @@ fresh is that it doesn't.
   *add* new items/questions, or (if you're the one applying fixes elsewhere in the pipeline —
   that's a different role, `/pw-review`'s apply flow, not this skill) reply and flip status.
 
+## Preventing an endless loop — check before you file
+
+Before filing ANY item, grep the review file for an existing heading on the **same `§section or
+anchor`** you're about to use (any status, any author — the file's own history is all the state
+you need, nothing new to track):
+
+- **An item on that anchor is already 🔴 open?** Don't file a duplicate — it's already tracked.
+  Say so in your recap instead of adding noise.
+- **The only item(s) on that anchor are 🟢 resolved, but the same problem is still there?** That's a
+  **recurrence** — a fix that didn't hold, not a fresh finding.
+  - **2nd item ever on that anchor** — file it, but link back explicitly: `"Recurrence of R1
+    (resolved 2026-08-10) — the fix didn't hold: …"`. Never present a recurrence as unrelated.
+  - **3rd item on that same anchor** (i.e. it already recurred once after a "fix") — file it as a
+    🔴 open **escalation** item instead of an ordinary finding: state plainly that this has
+    recurred twice and needs a human decision, not another automated pass, and **leave it 🔴
+    open** — never resolve it yourself even if you'd otherwise consider it addressed. Filing it
+    open (not just saying so in your recap) is what keeps `auto-signoff` blocked by the tool's own
+    check — don't rely on remembering not to call it; make the file itself unable to pass.
+
+This is the actual mechanism that stops a never-ending loop: without it, nothing prevents you (or
+a future automated re-run) from re-raising the same concern indefinitely, each time looking like an
+unrelated fresh complaint. With it, the third attempt visibly stops itself instead of quietly
+repeating.
+
 ## The gate — advisory vs. auto
 
 This project's AI Review mode for your phase controls what you're allowed to do:
@@ -85,11 +109,16 @@ Then append your own dated section directly (free-form prose doesn't fit a CLI-a
 
 ```markdown
 ## <YYYY-MM-DD HH:MM> · <phase> · <artifact-rel-path> · mode=<advisory|auto>
-**Verdict:** <n items filed | clean pass — auto-approved | clean pass — awaiting human>
+**Verdict:** <n items filed | clean pass — auto-approved | clean pass — awaiting human | ESCALATED
+— §<anchor> recurred twice, needs a human>
 **Reasoning:** <2-4 sentences: what you actually checked, what stood out, why that verdict>
 **Lessons:** <optional — 1-3 bullets, ONLY when something is genuinely generalizable; omit this
 line entirely most passes>
 ```
+
+If you filed an escalation item, say so in the **Verdict** line — this is the one entry a human is
+most likely to actually read, since it's the pass where the loop stopped itself instead of
+quietly repeating.
 
 If `REVIEWER-NOTES.md` already has entries, skim them first — a past reviewer's own accumulated
 judgment is the one deliberate exception to "never see the producer's reasoning" above, since it's
