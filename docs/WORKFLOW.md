@@ -3,9 +3,12 @@
 ← [back to README](../README.md) · related: [Adoption](./ADOPTION.md) ·
 [Review & feedback](./REVIEW.md) · [Execution & routing](./EXECUTION.md) · [Reference](./REFERENCE.md)
 
-The pipeline is nine steps. Each phase writes to its own directory and stops at a **human sign-off
-gate** before the next begins — so you review one artifact type at a time, and a stalled run is
-resumable because all state lives on disk, not in an agent's head.
+The pipeline has **6 core stages** (context → analyze → break down → execute → ship → close — see
+README's diagram); the table below numbers 9 rows because review gets its own row wherever it's a
+distinct action from the phase around it (e.g. "Analyze" and "Review analysis" are two rows, not
+one). Each phase writes to its own directory and stops at a **human sign-off gate** before the next
+begins — so you review one artifact type at a time, and a stalled run is resumable because all
+state lives on disk, not in an agent's head.
 
 | # | Step | Who | Produces | Gate | Command |
 |---|------|-----|----------|------|---------|
@@ -40,7 +43,7 @@ over dumping huge files. Optionally start a one-page brief — see
 There are **two entry workflows**, and they differ only at the front:
 
 - **Fresh start** (`/pw-new`) — empty `context/`, build from scratch in isolated `agent/…` branches.
-  The nine steps above.
+  The stages/steps above.
 - **Continuation** (`/pw-adopt`) — work is **already underway on real branches** (with or without an
   MR); you finish it *through* the pipeline on the same branch(es). Everything from analysis onward
   is identical — only the branch/worktree/ship mechanics differ.
@@ -108,6 +111,19 @@ Once MRs are open they drift out of date as their base branches move. **`/pw-syn
 MR's branch, re-runs each task's `Verify`, and pushes — reporting per-task which merged cleanly,
 which hit a conflict, and which fail verify after the merge. Review comments left on an MR are a
 different loop — see the [MR review flow](./REVIEW.md#the-mr-review-flow-post-ship).
+
+## Step 8 — Review results
+`done` (committed + verified) isn't the same as `accepted` — that's a separate decision you make
+after actually looking at what an executor produced. Two outcomes:
+- **You're satisfied** → flip the task's `Status: accepted`. This is the only status only you ever
+  set; nothing else in the pipeline can self-approve it.
+- **You're not** → flip `Status: verify-failed` and either add items to `task/review/T0n.review.md`
+  or just tell the agent what's wrong (`/pw-review <slug> T0n` creates that file from your feedback
+  if it's missing). `/pw-execute <slug> T0n` then re-runs and re-verifies **just that task**, in its
+  existing worktree — every other task is untouched.
+
+Review comments can also arrive on the MR/PR itself, a genuinely different entry point from the
+local `.review.md` files above — see the [MR review flow](./REVIEW.md#2-the-mr-review-flow-post-ship).
 
 ## Step 9 — Learn + close (`/pw-close`)
 After the run, `/pw-close` verifies every task is `accepted`, **tears down the worktrees with the

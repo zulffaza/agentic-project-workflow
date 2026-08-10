@@ -18,14 +18,25 @@ tooling/
 │   ├── … (pw-adopt, pw-breakdown, pw-review, pw-execute, pw-ship, pw-sync, pw-status, pw-doctor)
 │   └── pw-close.md
 ├── agents/             ← THE source of truth for seedable sub-agents (pw-orchestrator, pw-executor)
-├── providers.md        ← agent provider registry (model → CLI, headless invocation) [🧑 you]
-├── memory.md           ← optional/pluggable memory policy (the pipeline works with none)
-├── forges.md           ← git-forge registry (repo host → gh/glab CLI + invocation) [🧑 you]
-├── rfc.md              ← optional/pluggable RFC-publishing policy (the pipeline works with none)
-├── rfc-backends.md     ← RFC backend registry (doc platform → create/fetch/update/comments) [🧑 you]
+├── docs/               ← registries/policy the AGENTS read (each has a human-facing peer doc):
+│   ├── providers.md      agent provider registry (model → CLI, headless invocation) [🧑 you]
+│   │                     — human peer: ../../docs/EXECUTION.md
+│   ├── memory.md         optional/pluggable memory policy (the pipeline works with none)
+│   │                     — human peer: ../../docs/MEMORY.md
+│   ├── forges.md         git-forge registry (repo host → gh/glab CLI + invocation) [🧑 you]
+│   │                     — human peer: ../../docs/REVIEW.md
+│   ├── rfc.md            optional/pluggable RFC-publishing policy (works with none)
+│   └── rfc-backends.md   RFC backend registry (doc platform → create/fetch/update/comments) [🧑 you]
+│                         — human peer for both: ../../docs/RFC.md
 ├── skill/project-workflow/SKILL.md   ← the shippable skill (bootstrap installs it per provider)
 └── README.md
 ```
+
+**This dir is the machinery, not the intended reading path.** A human using the pipeline should
+be able to do everything from the bundle's own `docs/` + the `/pw-*` commands; the files above are
+what an agent reads to actually run a phase, or what someone extending the bundle (a new provider,
+forge, or RFC backend) edits. If you're just using the pipeline, you shouldn't need to open this
+directory at all.
 
 `pw-lib.sh` makes the load-bearing, format-sensitive steps deterministic instead of hand-edited
 prose — the `/pw-*` commands call `pw-lib.sh status|oneliner|adopted|adopt|review-init|log|phase`

@@ -16,11 +16,11 @@ elif [ -f "$PW_HOME/pw.config.example.sh" ]; then . "$PW_HOME/pw.config.example.
 fi
 declare -p PW_PROVIDERS >/dev/null 2>&1 || PW_PROVIDERS=(claude kilo)
 
-# Forge host overrides (see tooling/forges.md) — default to empty (pure auto-detect) so a
+# Forge host overrides (see tooling/docs/forges.md) — default to empty (pure auto-detect) so a
 # pw.config.sh that predates this var (or the example file) never trips `set -u` on `${#…[@]}`.
 declare -p PW_FORGE_HOSTS >/dev/null 2>&1 || PW_FORGE_HOSTS=()
 
-# RFC backend (see tooling/rfc.md) — default "markdown" (zero-dependency) so an unconfigured
+# RFC backend (see tooling/docs/rfc.md) — default "markdown" (zero-dependency) so an unconfigured
 # pw.config.sh still runs /pw-rfc; a scalar var, so ${PW_RFC_BACKEND:-markdown} alone would be
 # enough under set -u, but set it here too so every script sees the same resolved value.
 : "${PW_RFC_BACKEND:=markdown}"

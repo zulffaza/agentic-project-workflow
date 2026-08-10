@@ -108,40 +108,16 @@ reviewer leaves a comment on MR !123 (thread on file X, line N — OR a general/
                  • LOG.md line via pw-lib.sh log
 ```
 
-### ⚠️ Don't filter by diff-position — verified case of a real thread getting missed
-An earlier version of this doc said GitLab's `individual_note` field tells a diff-anchored comment
-from a general one, and that only diff-anchored threads are resolvable. **That's wrong**, and
-following it (or the more common shortcut of only looking at notes with a diff `position`) causes a
-real failure mode: a general/no-diff MR comment can still be `resolvable: true` — GitLab lets you
-"Start a thread" from the Overview tab, not just from a diff line — and in a real production MR this
-showed up as `individual_note: false`, `resolvable: true`, `resolved: false`, containing a
-reviewer's unaddressed follow-up ("I still want it to be executed parallel, please fix"), which was
-completely missed because the fetch step only ever surfaced diff-positioned (`DiffNote`) comments.
-
-**The fields that actually matter** (verified against real MR API responses — see
-[`tooling/forges.md`](../tooling/forges.md#standalone-vs-diff-anchored-comments-both-forges--read-before-writing-a-fetch-comments-step)
-for the full breakdown and a `jq` recipe):
-- `notes[].system == true` → GitLab's own activity log (approvals, commit-push notices, the
-  security-scan bot) — not reviewer feedback, skip it. This is the real noise filter.
-- `notes[].resolvable` → can the forge *ever* report this resolved? True for diff-anchored **and**
-  general "thread" comments alike; false only for a genuine one-off "Comment" (diff or general) —
-  those can never be marked resolved via the API, no matter how many replies they get.
-- `notes[].resolved` → only meaningful when `resolvable: true`. GitLab **auto-resolves a
-  diff-anchored thread when its line changes on a later push** — but does **not** auto-resolve a
-  resolvable *general* thread just because you pushed a fix; that one needs an explicit resolve call
-  or it looks open forever even after being fixed.
-- Diff-position (`position`/`type: DiffNote`) is informational only — **never** the filter for
-  whether something needs action.
-
-Two failure modes follow from getting this wrong: (1) filtering on diff-position **silently drops
-real general-comment threads entirely** — they never surface as something to act on (the case
-above); (2) for a genuinely `resolvable: false` comment, a naive "is it still open?" check based on
-the forge's resolved bit will say yes **every single run**, causing endless re-processing (or, if an
-agent gives up and treats "always open" as "must already be handled," the opposite mistake of
-ignoring it). `/pw-ship … comments` fixes (2) by checking the **local** `## MR comment tracking`
-table in `task/review/T0n.review.md` (written by `pw-lib.sh ship comment-seen`) instead of the
-forge's resolved state for anything `resolvable: false` — the same pattern `/pw-rfc comments`
-already uses for RFC-platform comments via `pw-lib.sh rfc comment-seen`.
+### ⚠️ A general MR comment (no diff line) can still need action
+A reviewer can "Start a thread" from an MR's Overview tab, not just from a diff line — that
+general comment can be just as actionable as one anchored to a line, so the fetch step never
+filters by diff-position. And some comment types can never be marked "resolved" by the forge no
+matter what — for those, `/pw-ship … comments` checks the **local** `## MR comment tracking` table
+in `task/review/T0n.review.md` (written by `pw-lib.sh ship comment-seen`) instead of waiting on a
+forge-side flag that will never flip (the same pattern `/pw-rfc comments` uses for RFC-platform
+comments). The exact API fields this relies on, and why, are in
+[`tooling/docs/forges.md`](../tooling/docs/forges.md#standalone-vs-diff-anchored-comments-both-forges--read-before-writing-a-fetch-comments-step)
+— only worth opening if you're implementing a new forge or debugging a missed comment.
 
 ### Why the mirror matters (the reconciliation rule)
 An MR comment lives in your Git host, which the project dir doesn't automatically know about. If a

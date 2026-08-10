@@ -13,7 +13,7 @@ Want to see this in action first, with no setup at all? → [docs/WALKTHROUGH.md
 
 - `git`, `bash`, `perl` (all standard on macOS/Linux).
 - A Git-forge CLI for the repos you'll ship to — `gh` (GitHub) or `glab` (GitLab). `/pw-ship`/
-  `/pw-adopt` need one per repo; see [`tooling/forges.md`](./tooling/forges.md).
+  `/pw-adopt` need one per repo; see [`tooling/docs/forges.md`](./tooling/docs/forges.md).
 - At least one supported agent CLI on your `PATH`:
   - **Claude Code** — `claude`
   - **KiloCode** — `kilo`  (KiloCode connects to many model providers; you pick which one in
@@ -46,9 +46,9 @@ PW_REPOS=/path/to/your/repos ./bootstrap.sh
 ### Verify
 
 ```bash
-$PW_HOME/tooling/scaffold.sh demo      # scaffold a throwaway project
-/pw-status demo                # your CLI should know the command and report phase=context
-rm -rf $PW_PROJECTS/demo       # clean up
+/pw-new demo                    # in your agent CLI — scaffold a throwaway project
+/pw-status demo                 # your CLI should know the command and report phase=context
+rm -rf $PW_PROJECTS/demo        # clean up (no /pw-* command for this — just a filesystem delete)
 ```
 
 If `/pw-status` is recognized and prints a status, you're onboarded.
@@ -71,6 +71,32 @@ If `/pw-status` is recognized and prints a status, you're onboarded.
 
 Re-run `./bootstrap.sh` any time (e.g. after `git pull`). Use `--force` to re-link the skill,
 `--check` to detect-and-report without changing anything.
+
+## Troubleshooting — `pw-doctor`
+
+If a `/pw-*` command isn't found, behaves like an older version, or you just want to confirm this
+machine is actually in sync with the bundle, run:
+
+```bash
+$PW_HOME/tooling/pw-doctor.sh          # report-only — never changes anything
+$PW_HOME/tooling/pw-doctor.sh --fix    # repair whatever it found
+```
+
+**What it checks, per enabled provider:** the CLI is actually on `PATH`; the `project-workflow`
+skill is installed and matches the bundle; every generated `/pw-*` command file matches its
+canonical source in `tooling/commands/`; the seeded sub-agents match `tooling/agents/`. Reading the
+output: `✓` = in sync, `✗` = drift (it says exactly what — missing, stale, or out of sync) — with
+`--fix`, each `✗` gets repaired the same way `bootstrap.sh` would install it fresh.
+
+**Reach for this whenever:**
+- you just `git pull`ed the bundle and want to confirm the update actually took effect,
+- you (or someone) edited a file under `tooling/commands/` directly and it doesn't seem to be
+  reflected in your agent CLI,
+- a `/pw-*` command errors, behaves oddly, or isn't recognized at all,
+- you changed `pw.config.sh` (enabled/disabled a provider) and want to confirm the change landed.
+
+This is one of the few `tooling/` scripts meant to be run directly, alongside `bootstrap.sh` and
+`offboard.sh` — it's the maintenance trio, not the day-to-day interface.
 
 ## Day-to-day
 
@@ -95,8 +121,8 @@ stops at *committed + verified* — nothing is pushed until you explicitly run `
 The pipeline records decisions in each project's README + LOG regardless, so **it works with no
 memory tool at all**. If you use one (EverOS, mem0, a notes repo, …), name it in `pw.config.sh`
 (`PW_MEMORY` / `PW_MEMORY_NOTES`) and agents will search it at analysis and seed it at close-out; if
-`PW_MEMORY=none` (the default), those steps are skipped silently and nothing blocks. See
-[`tooling/memory.md`](./tooling/memory.md).
+`PW_MEMORY=none` (the default), those steps are skipped silently and nothing blocks. Full guide,
+including *why* you'd want one: **[docs/MEMORY.md](./docs/MEMORY.md)**.
 
 ## Register a new provider
 
@@ -114,10 +140,39 @@ Your CLI isn't `claude` or `kilo`? **You don't edit any script** — everything 
      `tooling/pw-common.sh` as a starting point)
    - *(optional)* `<name>_agentdir()` + `render_<name>_agent()` to also seed the sub-agents for it;
      providers without these two just skip agent-seeding — the `/pw-*` commands still work.
-3. Add a row to [`tooling/providers.md`](./tooling/providers.md): which models it runs and its
+3. Add a row to [`tooling/docs/providers.md`](./tooling/docs/providers.md): which models it runs and its
    **headless invocation** (how to run one task non-interactively) — what cross-provider execution
    shells out to.
 4. Re-run `./bootstrap.sh`.
+
+### Worked example: registering Cline
+
+Say you want to add [Cline](https://cline.bot/cli)'s CLI (`npm i -g cline`; binary is just `cline`).
+This is the shape of what goes in `pw.config.sh` — verify the exact frontmatter Cline's workflow
+loader expects before relying on this, it's a starting point, not tested code:
+
+```sh
+PW_PROVIDERS+=(cline)
+
+cline_bin()      { echo cline; }
+cline_skilldir() { echo "$HOME/.cline/skills"; }             # Cline's global skills dir
+cline_outdir()   { echo "$HOME/Documents/Cline/Workflows"; } # global custom slash-commands ("workflows")
+
+render_cline() {
+  # Cline turns a workflow's FILENAME into its slash command (pw-new.md -> /pw-new) and only
+  # reads a `description` frontmatter field — there's no {{ARGS}}-placeholder convention like
+  # Claude's $ARGUMENTS, so the body just states "arguments follow the command" in prose instead
+  # of substituting a token.
+  printf -- '---\ndescription: %s\n---\n%s' "$desc" "${bodytext//\{\{ARGS\}\}/the arguments given}"
+}
+```
+
+Then in [`tooling/docs/providers.md`](./tooling/docs/providers.md), a row like: CLI binary `cline`;
+headless invocation `cline "<prompt>" --yolo --json` (or piped: `<prompt> | cline --yolo --json`)
+— `--yolo`/`--no-interactive` auto-approves every action (required headless, same spirit as kilo's
+`--auto`), `--json` gives structured output to scrape. No `<name>_agentdir`/`render_<name>_agent`
+shown here — skip those and Cline just won't get the seeded sub-agents; the `/pw-*` commands still
+work.
 
 Likewise, which KiloCode **model providers** you use (`command_code`, `openrouter`, … — KiloCode can
 connect to several at once) is just a list you set (`PW_KILO_PROVIDERS=(…)`) in `pw.config.sh` — it

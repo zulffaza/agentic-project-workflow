@@ -29,7 +29,7 @@
 #                                                     before ## Sign-off, never after) — the LOCAL
 #                                                     authority for "already replied", since an
 #                                                     unresolvable thread (a plain one-off comment,
-#                                                     diff-anchored or general — see tooling/forges.md)
+#                                                     diff-anchored or general — see tooling/docs/forges.md)
 #                                                     can never report resolved=true on the forge
 #   pw-lib.sh selftest                                 run an isolated round-trip test
 #
@@ -271,7 +271,7 @@ cmd_phase() {
   grep -m1 '^- \*\*Status:\*\*' "$f" | sed 's/^- \*\*Status:\*\*[[:space:]]*//'
 }
 
-# --- RFC side-loop (see tooling/rfc.md + tooling/rfc-backends.md) ------------
+# --- RFC side-loop (see tooling/docs/rfc.md + tooling/docs/rfc-backends.md) ------------
 # Deterministic helpers for the optional /pw-rfc publish loop — never touches the dashboard
 # Status: (RFC is a side-loop, not a phase), same discipline as /pw-ship's own helpers.
 
@@ -456,7 +456,7 @@ _ship_comment_section_ensure() {
   {
     printf '\n## MR comment tracking   [🤖-owned — never hand-edit; see `pw-lib.sh ship comment-seen`]\n\n'
     printf "A discussion's \`resolvable\` flag (NOT whether it's diff-anchored vs general — see\n"
-    printf "tooling/forges.md) decides whether the forge can ever report it resolved. A \`resolvable: false\`\n"
+    printf "tooling/docs/forges.md) decides whether the forge can ever report it resolved. A \`resolvable: false\`\n"
     printf 'thread (a plain one-off comment) can never report resolved=true via the forge API, no matter how\n'
     printf "many replies it gets — so the forge can never tell a later \`/pw-ship … comments\` run \"this one's\n"
     printf '%s\n' 'already handled". This table is the LOCAL authority for that instead, keyed by thread/comment ID'
@@ -685,7 +685,7 @@ cmd_selftest() {
 
   # ship comment-seen: same per-thread upsert shape as rfc comment-seen, but for /pw-ship …
   # comments — this is what makes an unresolvable MR comment (a plain one-off comment the forge
-  # itself can never mark "resolved", diff-anchored or general — see tooling/forges.md) idempotent
+  # itself can never mark "resolved", diff-anchored or general — see tooling/docs/forges.md) idempotent
   # across reruns. Thread IDs below deliberately differ in their first 8 chars (the truncated
   # display prefix) so the two rows are visually distinguishable in the assertions.
   PW_PROJECTS_DIR="$tmp" "$0" review-init demo task/review/T01.review.md task/T01.md >/dev/null

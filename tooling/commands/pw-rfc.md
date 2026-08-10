@@ -2,8 +2,8 @@
 description: Optional side-loop — publish approved analysis/plan content to an RFC doc (any configured backend, or a local-only doc by default)
 args: <project-slug> [--target <ref>] [milestone|comments]
 ---
-Follow the `project-workflow` skill, and read `{{PW_HOME}}/tooling/rfc.md` (policy) +
-`{{PW_HOME}}/tooling/rfc-backends.md` (backend registry) before doing anything — they own the
+Follow the `project-workflow` skill, and read `{{PW_HOME}}/tooling/docs/rfc.md` (policy) +
+`{{PW_HOME}}/tooling/docs/rfc-backends.md` (backend registry) before doing anything — they own the
 canonical section schema, the gating rule, and the concrete per-backend invocation. **This command
 never hardcodes a platform**; every external call is resolved through those two files.
 

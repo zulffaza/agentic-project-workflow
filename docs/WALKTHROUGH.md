@@ -1,11 +1,13 @@
 # Walkthrough — one made-up project, start to finish
 
-← [back to README](../README.md) · related: [Workflow](./WORKFLOW.md) · [Reference](./REFERENCE.md)
+← [back to README](../README.md) · related: [Workflow](./WORKFLOW.md) · [Review](./REVIEW.md) ·
+[Reference](./REFERENCE.md)
 
 This doc doesn't teach anything new — every rule here is documented properly elsewhere. Its only
-job is to make the pipeline **concrete** before you try it: one fictional project, walked through
-all nine steps, showing roughly what each artifact actually looks like. No setup required to read
-this; nothing here is real output.
+job is to make the pipeline **concrete** before you try it: one fictional project, with every point
+where you can act on it, showing roughly what each artifact actually looks like. No setup required
+to read this; nothing here is real output. Review isn't one step here — it recurs at several
+points, each shown as its own section below rather than folded into the phase around it.
 
 > Excerpts below are illustrative and paraphrased, not literal template dumps — the real templates
 > (`template/analysis/_TEMPLATE.md`, `template/task/_TEMPLATE-*.md`, `template/_REVIEW.template.md`)
@@ -17,14 +19,14 @@ You need to bump Spring Boot 2 → 3 across three services: `payments-api`, `ord
 `notifications-worker`. It's the same slug used in the README's own Quick Start
 (`spring-boot-3-upgrade`) — that's intentional, so the two docs read as one continuous example.
 
-## 1. Drop context
+## Drop context
 
-```bash
-$PW_HOME/tooling/scaffold.sh spring-boot-3-upgrade
+```
+/pw-new spring-boot-3-upgrade
 ```
 
-You copy the migration ticket and a link to Spring's own 2→3 migration guide into
-`context/`, then add one row per input to `context/INDEX.md`:
+You copy the migration ticket and a link to Spring's own 2→3 migration guide into `context/`,
+then add one row per input to `context/INDEX.md`:
 
 | File / link | What it is | Source | Trust notes |
 |---|---|---|---|
@@ -34,7 +36,7 @@ You copy the migration ticket and a link to Spring's own 2→3 migration guide i
 ...and your best guess at which repos are in scope (the "Repos in scope" table further down in the
 same file) — analysis will confirm or correct this, so a rough guess is fine.
 
-## 2–3. Analyze, then review
+## Analyze
 
 ```
 /pw-analyze spring-boot-3-upgrade
@@ -56,6 +58,8 @@ with sections like:
 - ❓ Q1: notifications-worker's Kafka client bump is coupled to the Boot bump — same task,
   or split? — status: awaiting answer
 ```
+
+## Review the analysis
 
 It also auto-creates `analysis/review/spring-boot-3-upgrade.review.md`, empty and `in-review`. You
 open it and leave a comment:
@@ -88,7 +92,7 @@ The agent updates §3, folds your answer into §5, and flips both items to 🟢/
 
 That row is the actual gate. Nothing below this point can start until it's there.
 
-## 4–5. Break down, then review
+## Break down
 
 ```
 /pw-breakdown spring-boot-3-upgrade
@@ -98,20 +102,41 @@ Refuses if the row above is missing. Once it's there, the agent writes `task/PLA
 manifest, a dependency DAG, and a task table:
 
 ```
-| ID  | Title                          | Repo                | depends_on | Execute with |
-|-----|---------------------------------|----------------------|-----------|--------------|
-| T01 | Bump payments-api to Boot 3     | payments-api         | —         | opus         |
-| T02 | Bump orders-api to Boot 3       | orders-api           | —         | sonnet       |
-| T03 | Bump notifications-worker+Kafka | notifications-worker | —         | sonnet       |
+| ID  | Title                           | Repo                  | depends_on | Execute with |
+|-----|----------------------------------|-----------------------|-----------|--------------|
+| T01 | Bump payments-api to Boot 3      | payments-api          | —         | opus         |
+| T02 | Bump orders-api to Boot 3        | orders-api            | —         | sonnet       |
+| T03 | Bump notifications-worker+Kafka  | notifications-worker  | —         | sonnet       |
 ```
 
 ...plus one self-contained `T01.md`/`T02.md`/`T03.md` per row, each with exact steps and a runnable
-`## Verify` block (e.g. `mvn -q verify` with an expected "BUILD SUCCESS"). Same review loop as
-above, but this time against `task/review/PLAN.review.md` — and **this is the one hard gate** for
-execution; per-task review files are optional, created only if you want to send a specific task
-back later.
+`## Verify` block (e.g. `mvn -q verify` with an expected "BUILD SUCCESS").
 
-## 6. Execute
+## Review the plan (the hard gate)
+
+Same review loop as analysis, but against `task/review/PLAN.review.md` — and **this is the one
+hard gate** for execution:
+
+```
+| 2026-08-10 14:10 | you | approved ✅ |
+```
+
+## Review an individual task's plan (optional)
+
+Per-task review files are optional and created on demand — and you don't have to wait for a bad
+execution result to use one. Say you actually read `T03.md`'s steps before running anything and
+notice it pins the wrong Kafka client version:
+
+```
+/pw-review spring-boot-3-upgrade T03
+```
+
+creates `task/review/T03.review.md` on the spot (if it doesn't exist yet) from your feedback. Add
+an item — *"Step 2 pins `kafka-clients:3.4.0`, we need `3.6.1` for the Boot 3.2 baseline"* — and the
+agent revises `T03.md`'s steps before `/pw-execute` ever touches that repo. Nothing about T01/T02
+is affected; this is scoped to one task, and the PLAN's overall approval above still stands.
+
+## Execute
 
 ```
 /pw-execute spring-boot-3-upgrade
@@ -131,14 +156,34 @@ T03 notifications-worker   done   commit 4c5d6e7   verify: BUILD SUCCESS
 
 `/pw-execute` stops here — **committed + verified, nothing pushed.**
 
-## 7. Ship
+## Review an execution result (optional)
+
+`done` isn't the same as `accepted` — you still look at what actually got committed. Say T02's
+diff looks fine, but T01's changed a config default it shouldn't have. You reject it:
+
+```
+Status: verify-failed        # you flip this on T01
+```
+
+...then either add an item to `task/review/T01.review.md` or just tell the agent what's wrong.
+Running `/pw-review spring-boot-3-upgrade T01` creates that review file from your feedback if it
+doesn't exist, applies the fix in the same worktree, and:
+
+```
+/pw-execute spring-boot-3-upgrade T01
+```
+
+re-runs and re-verifies **just T01**, in its existing worktree — T02 and T03 are untouched, and
+you don't re-run the whole plan.
+
+## Ship
 
 ```
 /pw-ship spring-boot-3-upgrade
 ```
 
 Pushes each task's branch and opens one MR/PR per (repo, base) pair, using your configured Git
-forge CLI (`gh`/`glab` — see [`tooling/forges.md`](../tooling/forges.md)):
+forge CLI (`gh`/`glab` — see [`tooling/docs/forges.md`](../tooling/docs/forges.md)):
 
 ```
 T01  payments-api          MR !142  agent/spring-boot-3-upgrade/T01-boot3-payments → master
@@ -146,24 +191,43 @@ T02  orders-api            PR #58   agent/spring-boot-3-upgrade/T02-boot3-orders
 T03  notifications-worker  MR !89   agent/spring-boot-3-upgrade/T03-boot3-kafka    → master
 ```
 
-A reviewer can now comment directly on those MRs/PRs — that's a **separate** loop
-(`/pw-ship <slug> [task] comments`), covered in [docs/REVIEW.md](./REVIEW.md); this walkthrough
-won't duplicate it.
+## Review via MR/PR comments
 
-## 8–9. Accept results, then close
+A reviewer can now comment directly on the pushed diff, in your Git host's own UI — a genuinely
+different review entry point from everything above (those were all local `.review.md` files; this
+one lives on the MR itself). Say someone comments on MR !142:
 
-Once each MR is reviewed and you're satisfied, you flip its task to `accepted` (or `verify-failed`
-to send one back). When everything's in, close out:
+*"This bumps `common-validation` too — was that intentional, or should it be a separate MR?"*
+
+```
+/pw-ship spring-boot-3-upgrade T01 comments
+```
+
+runs the full loop: **FETCH** the open thread → **FIX** in T01's worktree if a change is warranted
+(here, maybe just clarifying, no code change needed) → **REPLY** on the thread with a concrete
+answer (never a bare "done") → **MIRROR** the exchange into `task/T01.md`'s `## Result` and
+`task/review/T01.review.md` as a 🟢 resolved item, so the project dir stays the record even for an
+MR-driven change. Run `/pw-ship spring-boot-3-upgrade comments` (no task ID) to sweep **every**
+open MR in the project in one pass instead of one at a time. Full mechanics, including why a
+general/no-diff comment still counts: [docs/REVIEW.md](./REVIEW.md#2-the-mr-review-flow-post-ship).
+
+## Accept results
+
+Once each MR is reviewed and you're satisfied, you flip its task to `accepted` (the one status
+only you ever set).
+
+## Close
 
 ```
 /pw-close spring-boot-3-upgrade
 ```
 
-This captures learnings into the project dashboard's "Decisions & learnings" section (and your
-memory tool, if you've configured one — see `tooling/memory.md`), safely tears down the worktrees,
-and sets `Status: done`.
+Captures learnings into the project dashboard's "Decisions & learnings" section (and your memory
+tool, if you've configured one — see [docs/MEMORY.md](./MEMORY.md)), safely tears down the
+worktrees, and sets `Status: done`. **`accepted` ≠ merged** — open/on-hold MRs don't block close-out.
 
 ---
 
-That's the whole loop, on one made-up example. Ready on a real project? → the Quick Start in
-[README.md](../README.md), or [ONBOARDING.md](../ONBOARDING.md) if this machine isn't set up yet.
+That's the whole loop, on one made-up example, with every review entry point shown separately.
+Ready on a real project? → the Quick Start in [README.md](../README.md), or
+[ONBOARDING.md](../ONBOARDING.md) if this machine isn't set up yet.

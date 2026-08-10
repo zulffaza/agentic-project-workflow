@@ -52,9 +52,9 @@ echo "  PW_HOME     = $PW_HOME"
 echo "  PW_PROJECTS = $PW_PROJECTS"
 echo "  PW_REPOS    = $PW_REPOS   (git repos live here; override with PW_REPOS=… ./bootstrap.sh)"
 echo "  providers   = ${PW_PROVIDERS[*]}   (from pw.config.sh)"
-echo "  memory      = ${PW_MEMORY:-none}   (optional; ${PW_MEMORY:+configured — }see tooling/memory.md)"
-echo "  forge       = auto-detect (${#PW_FORGE_HOSTS[@]} host override(s))   (optional; see tooling/forges.md)"
-echo "  rfc         = ${PW_RFC_BACKEND:-markdown}   (optional; see tooling/rfc.md)"
+echo "  memory      = ${PW_MEMORY:-none}   (optional; ${PW_MEMORY:+configured — }see tooling/docs/memory.md)"
+echo "  forge       = auto-detect (${#PW_FORGE_HOSTS[@]} host override(s))   (optional; see tooling/docs/forges.md)"
+echo "  rfc         = ${PW_RFC_BACKEND:-markdown}   (optional; see tooling/docs/rfc.md)"
 echo
 
 # --- detect (enabled AND present on PATH) ------------------------------------
@@ -95,6 +95,11 @@ install_skill() {
       echo "    skill: already present at $target (leaving as-is; --force to re-link)"
       return
     fi
+    # --force + target already exists: rm -rf it FIRST. If $target is a real (non-symlink)
+    # directory, `ln -sfn` against an *existing directory* target doesn't fail or replace it —
+    # it silently nests a new symlink INSIDE it (standard multi-arg `ln` semantics), leaving the
+    # stale copy in place underneath. Removing first avoids that ambiguity entirely.
+    rm -rf "$target"
   fi
   if ln -sfn "$SKILL_SRC" "$target" 2>/dev/null; then
     echo "    skill: linked $target → $SKILL_SRC"
@@ -141,4 +146,4 @@ echo "Done. To make the path vars available in your shell now:"
 echo "    source \"$ENV_FILE\""
 echo "(optional) add that line to your ~/.zshrc so it persists."
 echo
-echo "Verify end-to-end:  \$PW_HOME/tooling/scaffold.sh demo   then   /pw-status demo"
+echo "Verify end-to-end (in your agent CLI):  /pw-new demo   then   /pw-status demo"

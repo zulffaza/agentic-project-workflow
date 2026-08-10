@@ -14,4 +14,4 @@ don't write RFCs for this project.
 RFC publishing never touches the dashboard `Status:` phase machine — it's a side-loop, gated by the
 **existing** approval gates (analysis `approved ✅` for Wave 1, PLAN `approved ✅` for Wave 2). Full
 guide: [`docs/RFC.md`](../../docs/RFC.md). Backend config: `PW_RFC_BACKEND` in `pw.config.sh` (see
-[`tooling/rfc.md`](../../tooling/rfc.md) + [`tooling/rfc-backends.md`](../../tooling/rfc-backends.md)).
+[`tooling/docs/rfc.md`](../../tooling/docs/rfc.md) + [`tooling/docs/rfc-backends.md`](../../tooling/docs/rfc-backends.md)).

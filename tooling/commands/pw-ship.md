@@ -29,7 +29,7 @@ task; here we push branches and open MRs.
    (`{{PW_PROJECTS}}/<slug>/worktree/<repo>/<T0n>-<slug>`):
    - Push the branch to origin.
    - Open an MR **targeting the task's Base branch** with a rich description (template below).
-     **Resolve the forge + CLI per `tooling/forges.md`** (host from this repo's own `origin`
+     **Resolve the forge + CLI per `tooling/docs/forges.md`** (host from this repo's own `origin`
      remote → `PW_FORGE_HOSTS` override, else auto-detect) — GitLab: `glab` run from inside the
      worktree with `GITLAB_HOST=<resolved-host>`; GitHub: `gh pr create`. Never hardcode a host.
    - Record the MR in the task's `## Result → MR:` field **and** the dashboard **Merge requests**
@@ -67,7 +67,7 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
 
 0. **Resolve the set** of tasks to process (the given IDs, or all tasks with an open MR). Announce
    the list. Then, **for each task in the set**, do steps 1–3 in its own worktree:
-1. Fetch **every** open comment thread. **Read `tooling/forges.md`'s "Standalone vs diff-anchored
+1. Fetch **every** open comment thread. **Read `tooling/docs/forges.md`'s "Standalone vs diff-anchored
    comments" section in full before writing this step** — it documents the exact fields, verified
    against real production MR data (an earlier version of this instruction relied on the wrong
    field and a real reviewer follow-up was silently missed as a result):
@@ -85,7 +85,7 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
    - **GitHub:** two separate endpoints, both needed — `gh pr view --comments` (standalone/general
      PR conversation comments) **and** `gh api repos/:owner/:repo/pulls/<n>/comments` (diff-anchored
      review comments). `gh pr view --comments` alone misses every inline review comment.
-   - **Resolve the forge + CLI per `tooling/forges.md`** (same per-repo resolution as ship mode).
+   - **Resolve the forge + CLI per `tooling/docs/forges.md`** (same per-repo resolution as ship mode).
    - **Before treating anything as "already handled," check the local tracking table** —
      `task/review/T0n.review.md`'s `## MR comment tracking` section (see step 3) — for that
      thread/comment ID. Only the forge's `resolved` flag is trustworthy for a `resolvable: true`

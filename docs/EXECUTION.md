@@ -77,7 +77,7 @@ So routing a task resolves to exactly one of:
 
 ## Providers & the registry
 
-Which CLI runs which model lives in the [provider registry](../tooling/providers.md). Claude models
+Which CLI runs which model lives in the [provider registry](../tooling/docs/providers.md). Claude models
 → Claude Code; open-weight models → KiloCode, which can connect to **several model providers at
 once** (list them in `PW_KILO_PROVIDERS` — e.g. `command_code`, `openrouter`, … — and reference any
 as `kilo:<provider>/<model>`). It's a one-row-per-provider extension point, so new providers slot in

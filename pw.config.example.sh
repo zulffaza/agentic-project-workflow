@@ -29,7 +29,7 @@ PW_PROVIDERS=(claude kilo)
 # one you use. Reference any of them in a task's `Execute with:` as
 # `kilo:<provider>/<model>` (e.g. `kilo:command_code/MiniMaxAI/MiniMax-M3`,
 # `kilo:openrouter/anthropic/claude-3.5-sonnet`). The shipped examples in
-# tooling/providers.md use `command_code`, but that's just the maintainer's
+# tooling/docs/providers.md use `command_code`, but that's just the maintainer's
 # setup — it does NOT constrain teammates who use different kilo providers.
 PW_KILO_PROVIDERS=(command_code)
 # Back-compat: the old singular PW_KILO_PROVIDER still works and is folded into
@@ -38,7 +38,7 @@ PW_KILO_PROVIDERS=(command_code)
 # --- Memory (OPTIONAL — the workflow never depends on it) -------------------
 # The pipeline records decisions/learnings in each project's README + LOG regardless.
 # If you use a memory tool, name it here and (optionally) describe how to use it; if not,
-# leave "none" and agents skip all memory steps without blocking. See tooling/memory.md.
+# leave "none" and agents skip all memory steps without blocking. See tooling/docs/memory.md.
 #   PW_MEMORY="none"          # "none" (default) | "everos" | "mem0" | your tool's short name
 #   PW_MEMORY_NOTES=""        # free text: buckets/scopes/how the agent should search+seed it
 PW_MEMORY="none"
@@ -46,14 +46,14 @@ PW_MEMORY_NOTES=""
 
 # --- Git forge host overrides (OPTIONAL — auto-detect covers github.com/gitlab.com) ---------
 # /pw-ship and /pw-adopt resolve which CLI (gh/glab) talks to a repo from its OWN origin remote
-# host — see tooling/forges.md. Public github.com/gitlab.com need ZERO config. Only a self-hosted
+# host — see tooling/docs/forges.md. Public github.com/gitlab.com need ZERO config. Only a self-hosted
 # GitLab (or any forge needing a host env var) needs an override here:
 #   PW_FORGE_HOSTS=("git.internal.example.com=gitlab")
 PW_FORGE_HOSTS=()
 
 # --- RFC publishing (OPTIONAL — default "markdown" needs no external tool at all) -----------
 # /pw-rfc always generates <project>/rfc/RFC.md locally, regardless of backend. Publishing that
-# to an external doc platform is additional and opt-in — see tooling/rfc.md + tooling/rfc-backends.md.
+# to an external doc platform is additional and opt-in — see tooling/docs/rfc.md + tooling/docs/rfc-backends.md.
 #   PW_RFC_BACKEND="markdown"   # "markdown" (default, zero-dependency) | "lark" | (stub only) confluence/google-docs/notion
 #   PW_RFC_LARK_TEMPLATE=""     # Lark doc/wiki template token or URL — only used when backend=lark
 #   PW_RFC_LARK_SPACE=""        # default target wiki space/parent-node token (or set per-project via /pw-rfc --target)

@@ -25,7 +25,7 @@ the project without reading the whole base guide. Cover, concisely:
    replies `↳ agent:` and flips 🔴→🟢; if the agent has an open question it seeds a `Qn` row I
    answer with `↳ you:`; only I write the Sign-off (date-time to the minute) that clears a gate.
 5. **Execution routing** — tasks carry `Execute with: <provider>:<model>`; models map to a
-   provider CLI in `{{PW_HOME}}/tooling/providers.md` (Claude models → Claude Code, open-weight → KiloCode,
+   provider CLI in `{{PW_HOME}}/tooling/docs/providers.md` (Claude models → Claude Code, open-weight → KiloCode,
    extendable); `/pw-execute` stops at committed + verified, and `/pw-ship` is the separate step
    that pushes + opens MRs (with my OK).
 6. **The immediate next 2 actions**, spelled out:

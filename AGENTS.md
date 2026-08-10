@@ -64,12 +64,15 @@ real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./do
 - **`template/`** — what a scaffolded project is made of (copied into each new project).
 - **`docs/`** — the detailed human guides: [WALKTHROUGH](./docs/WALKTHROUGH.md) (a worked example) ·
   [WORKFLOW](./docs/WORKFLOW.md) · [ADOPTION](./docs/ADOPTION.md) · [REVIEW](./docs/REVIEW.md) ·
-  [EXECUTION](./docs/EXECUTION.md) · [REFERENCE](./docs/REFERENCE.md) · [RFC](./docs/RFC.md).
+  [EXECUTION](./docs/EXECUTION.md) · [REFERENCE](./docs/REFERENCE.md) · [RFC](./docs/RFC.md) ·
+  [MEMORY](./docs/MEMORY.md).
 - **`tooling/`** — the machinery: `scaffold.sh`, `gen-commands.sh`, `gen-agents.sh`, `pw-lib.sh`
   (deterministic helpers), `pw-doctor.sh`, `pw-common.sh`, `pw-teardown.sh` (safe worktree removal),
   `commands/` (canonical `/pw-*` sources), `agents/` (seedable `pw-orchestrator` + `pw-executor`),
-  `providers.md`, `memory.md` (optional-memory policy), `forges.md` (git-forge registry),
-  `rfc.md`/`rfc-backends.md` (optional RFC-publishing policy + backend registry), `skill/`.
+  `docs/` (the registries/policy AGENTS read: `providers.md`, `memory.md`, `forges.md`,
+  `rfc.md`/`rfc-backends.md` — each has a human-facing peer under the bundle's own `docs/`), `skill/`.
+  A human shouldn't normally need to open this dir — `docs/` + the `/pw-*` commands are the
+  intended interface.
 - **`pw.config.sh`** — YOUR config (CLIs, models, optional `PW_MEMORY`); the one file you edit.
 
 Human-facing overview: **[README.md](./README.md)**. Restated working rules on demand: the

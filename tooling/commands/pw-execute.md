@@ -46,7 +46,7 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
        adopted branches and all fresh tasks**. If git refuses because a branch is checked out in the
        main repo, tell me to switch that main checkout to another branch first.
 4. **How to run each task** — resolve `Execute with: <provider>:<model-or-agent>` via
-   `{{PW_HOME}}/tooling/providers.md`. Tasks default to the plan's **Produced by** provider, so most
+   `{{PW_HOME}}/tooling/docs/providers.md`. Tasks default to the plan's **Produced by** provider, so most
    run under the agent you're already in:
    - **Same provider you're running under → spawn a native, in-process SUB-AGENT** (NOT a shell
      invocation). Native sub-agents are easier to monitor and cheaper to supervise. If `Execute

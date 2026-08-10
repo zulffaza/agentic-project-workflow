@@ -8,7 +8,7 @@ second token scopes the analysis to a topic).
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
 0. **Search memory first — IF a memory tool is configured** (optional; see
-   `{{PW_HOME}}/tooling/memory.md` and `PW_MEMORY` in `pw.config.sh`). If one is set, search it for
+   `{{PW_HOME}}/tooling/docs/memory.md` and `PW_MEMORY` in `pw.config.sh`). If one is set, search it for
    prior context on the domain and each impacted repo before reasoning from scratch, fold in what's
    relevant, and cite it. **If `PW_MEMORY=none`, skip this step silently — do not block.**
 1. Read everything in `<project>/context/` plus `context/INDEX.md` (provenance + in-scope repos).

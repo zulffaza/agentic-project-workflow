@@ -25,7 +25,7 @@ Then produce, from `{{PW_HOME}}/template/task/`:
    - **Default the provider to "Produced by"** (this agent) so I don't have to switch agents;
      only route a task elsewhere when it genuinely needs a stronger/cheaper/open-weight model, and
      justify it in `Why:`. Fold in any custom routing I gave ("run the mechanical bumps in
-     KiloCode", "T03 → opus"). Resolve providers via `{{PW_HOME}}/tooling/providers.md`. **Pin the
+     KiloCode", "T03 → opus"). Resolve providers via `{{PW_HOME}}/tooling/docs/providers.md`. **Pin the
      Claude version** (full name like `claude-opus-4-8`) on risky tasks; raise `Effort:` for complex ones.
    - **Write DETAILED `## Steps`** — name the exact file, the exact change (before/after snippet or
      literal edit), and the exact command per step, so the executor needs minimal independent

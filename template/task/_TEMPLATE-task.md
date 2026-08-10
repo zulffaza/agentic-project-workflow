@@ -13,7 +13,7 @@
 - **Status:** todo | in-progress | verify-failed | done | accepted
 - **Execute with:** <provider:model-or-agent> — e.g. `claude:claude-opus-4-8` (pinned) or
   `claude:opus` (latest), `claude:sonnet`, `kilo:command_code/MiniMaxAI/MiniMax-M3`, or an existing
-  agent (e.g. `code-implementation`). `provider:` maps to the CLI — see `{{PW_HOME}}/tooling/providers.md`.
+  agent (e.g. `code-implementation`). `provider:` maps to the CLI — see `{{PW_HOME}}/tooling/docs/providers.md`.
   **Default to the SAME provider that ran the breakdown** (recorded in `PLAN.md` → "Produced by")
   so execution doesn't force you to switch agents — only route elsewhere when a task genuinely needs
   a stronger/cheaper/open-weight model, and say why in `Why:`.

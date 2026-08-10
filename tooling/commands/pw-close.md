@@ -22,7 +22,7 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
    (dirty); re-run after `cd`-ing out, or pass `--yes` only when you've confirmed a dirty worktree
    is safe to discard. It never deletes branches or the project dir.
 3. **Learn — seed memory (only IF a memory tool is configured;** see
-   `{{PW_HOME}}/tooling/memory.md` / `PW_MEMORY`): distil durable, *workflow-level* learnings into
+   `{{PW_HOME}}/tooling/docs/memory.md` / `PW_MEMORY`): distil durable, *workflow-level* learnings into
    your memory tool, mark superseded facts `[SUPERSEDED]`, and don't save what the repos/commits
    already record. **If `PW_MEMORY=none`, skip this — the project's "Decisions & learnings" section
    is the record.** Either way, make sure that section is filled before closing.
