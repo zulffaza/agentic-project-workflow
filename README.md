@@ -4,6 +4,21 @@ Take a piece of work across many repos from a pile of context to reviewed, shipp
 AI agents, **gated by you at every phase**. It's a set of `/pw-*` slash commands plus a handful of
 templates, portable across agent CLIs (Claude Code, KiloCode, …).
 
+**The idea, plainly:** say you need to change something across several repos — an upgrade, a new
+field threaded through three services, whatever. Instead of doing the thinking yourself, you hand
+an agent the raw material and let it work in stages: first it explains *what* needs to change and
+*why* (you read that and correct it before anything else happens), then it turns your approved
+understanding into a concrete task list (you approve that too — the one hard gate), then it
+actually makes the changes, each in its own disposable copy of the repo so nothing collides — and
+nothing is pushed anywhere until you say so. You're never surprised by a change you didn't see
+coming, and you never wrote the boilerplate.
+
+**Terms used below:** a **worktree** is an isolated, disposable checkout of a repo (so parallel
+tasks never collide with each other or your own checkout) · **DAG** = the task dependency graph
+(which tasks must finish before others can start) · **MR** ("merge request", GitLab) = the same
+thing as a GitHub **PR** · an **agent** is the AI process you're driving; a **sub-agent** is one it
+spawns to do a single task in isolation (full definitions: [docs/EXECUTION.md](./docs/EXECUTION.md)).
+
 ```
  context  →  analyze  →  break down  →  execute  →  ship  →  close
    📥          🔍            🧩           ⚙️        🚀       ✅
@@ -14,6 +29,11 @@ templates, portable across agent CLIs (Claude Code, KiloCode, …).
 Every project lives in its own directory under `IdeaProjects/projects/<slug>/` — a copy of this
 bundle's [`template/`](./template). One phase writes, you review, the next phase starts. Nothing goes
 outward (no push, no MR) until you explicitly run `/pw-ship`.
+
+**New here?** Read in this order: this Quick Start (2 min) → optionally
+[docs/WALKTHROUGH.md](./docs/WALKTHROUGH.md) to see one made-up project go through every phase with
+example output (5 min) → [ONBOARDING.md](./ONBOARDING.md) when you're ready to actually install it
+(10 min).
 
 ---
 
@@ -70,6 +90,7 @@ platform, or a local-only doc by default) — see **[docs/RFC.md](./docs/RFC.md)
 
 | Guide | What's in it |
 |-------|--------------|
+| 🧭 **[docs/WALKTHROUGH.md](./docs/WALKTHROUGH.md)** | One made-up project through all 9 steps, with example output — read this first if you're new |
 | 📋 **[docs/WORKFLOW.md](./docs/WORKFLOW.md)** | Every step in detail · who owns `Status:` · the `LOG.md` audit trail · rewinding a phase |
 | 🔀 **[docs/ADOPTION.md](./docs/ADOPTION.md)** | The continuation workflow — adopt in-progress branches, the two intents, mixed projects |
 | 💬 **[docs/REVIEW.md](./docs/REVIEW.md)** | The two review entry points — local `.review.md` files **and** MR comments — and how they reconcile |

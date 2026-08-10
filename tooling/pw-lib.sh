@@ -22,6 +22,15 @@
 #   pw-lib.sh rfc comment-seen <slug> <thread-id> <reply-count> <solved:yes|no>
 #                                                     upsert one comment-thread's tracked state
 #                                                     (per-thread, not a single scalar cursor)
+#   pw-lib.sh ship comment-seen <slug> <task-id> <thread-id> <kind:resolvable|unresolvable>
+#                                <replied:yes|no> [note...]
+#                                                     upsert one MR-comment thread's tracked state
+#                                                     into task/review/T0n.review.md (inserted
+#                                                     before ## Sign-off, never after) — the LOCAL
+#                                                     authority for "already replied", since an
+#                                                     unresolvable thread (a plain one-off comment,
+#                                                     diff-anchored or general — see tooling/forges.md)
+#                                                     can never report resolved=true on the forge
 #   pw-lib.sh selftest                                 run an isolated round-trip test
 #
 # Portable across Claude Code and KiloCode executors (plain bash; call by absolute path).
@@ -424,6 +433,93 @@ cmd_rfc() {
   esac
 }
 
+# Ensure task/review/T0n.review.md has a "## MR comment tracking" table (create the header +
+# explainer if missing) — lazily added only once a thread is actually seen. Private helper for
+# cmd_ship_comment_seen.
+#
+# Unlike rfc/META.md (pure machine metadata, nothing ever follows the Comment-tracking section),
+# a review file's LAST section is "## Sign-off" — human-owned, and meant to read as the closing
+# gate. A blind end-of-file append lands this section AFTER Sign-off, visually orphaned below the
+# gate a human just signed. So: insert it right BEFORE "## Sign-off" if that heading exists yet
+# (review-init always creates one, so in practice it always does); fall back to a plain append only
+# if some non-standard file genuinely lacks one.
+_ship_comment_section_ensure() {
+  local f="$1"
+  grep -q '^## MR comment tracking' "$f" 2>/dev/null && return 0
+  # Written to a temp file with plain printf, then spliced in with head/tail/cat — NOT awk -v and
+  # NOT a heredoc. Two real, confirmed-here portability traps ruled those out: (1) a heredoc body
+  # with an odd count of literal apostrophes confuses bash's own parser once nested inside a
+  # $(...) substitution; (2) macOS's /usr/bin/awk (the BWK "one true awk", not gawk) rejects a
+  # `-v var=…` assignment whose value contains embedded newlines ("awk: newline in string").
+  # head/tail/cat sidestep both — no shell-quote gymnastics, no awk variable involved at all.
+  local sectionfile; sectionfile="$(mktemp)"
+  {
+    printf '\n## MR comment tracking   [🤖-owned — never hand-edit; see `pw-lib.sh ship comment-seen`]\n\n'
+    printf "A discussion's \`resolvable\` flag (NOT whether it's diff-anchored vs general — see\n"
+    printf "tooling/forges.md) decides whether the forge can ever report it resolved. A \`resolvable: false\`\n"
+    printf 'thread (a plain one-off comment) can never report resolved=true via the forge API, no matter how\n'
+    printf "many replies it gets — so the forge can never tell a later \`/pw-ship … comments\` run \"this one's\n"
+    printf '%s\n' 'already handled". This table is the LOCAL authority for that instead, keyed by thread/comment ID'
+    printf "(shown truncated below; the full ID lives in each row's hidden marker, which is what matching\n"
+    printf "actually keys on — don't reformat/shorten a row by hand, add a \`note\` argument instead).\n"
+    printf '\n| Thread | Kind | Replied | Notes |\n|--------|------|---------|-------|\n'
+  } > "$sectionfile"
+  if grep -q '^## Sign-off' "$f"; then
+    local signline; signline="$(grep -n '^## Sign-off' "$f" | head -1 | cut -d: -f1)"
+    { head -n "$((signline - 1))" "$f"; cat "$sectionfile"; printf '\n'; tail -n "+${signline}" "$f"; } \
+      > "$f.tmp" && mv "$f.tmp" "$f"
+  else
+    cat "$sectionfile" >> "$f"
+  fi
+  rm -f "$sectionfile"
+}
+
+# Deterministically upsert ONE row per MR-comment thread — same keyed-marker upsert shape as
+# cmd_rfc_comment_seen (append-or-rewrite-in-place), applied to /pw-ship … comments instead of
+# /pw-rfc comments. This is what makes a rerun able to tell "already replied to this unresolvable
+# comment" from "new one, never seen" — without it, an unresolvable thread either gets silently
+# skipped forever (looks perpetually "not resolved" on the forge, so a naive resolved-filter treats
+# it as not-actionable) or gets re-processed/re-replied-to every single run (no forge-side flag
+# ever flips to stop it recurring).
+#   ship comment-seen <slug> <task-id> <thread-id> <kind:resolvable|unresolvable> <replied:yes|no> [note...]
+cmd_ship_comment_seen() {
+  [ $# -ge 5 ] || die "usage: ship comment-seen <slug> <task-id> <thread-id> <kind:resolvable|unresolvable> <replied:yes|no> [note...]"
+  local slug="$1" task="$2" thread="$3" kind="$4" replied="$5"; shift 5; local note="$*"
+  case "$kind" in resolvable|unresolvable) ;; *) die "kind must be 'resolvable' or 'unresolvable' (got '$kind')" ;; esac
+  case "$replied" in yes|no) ;; *) die "replied must be 'yes' or 'no' (got '$replied')" ;; esac
+  local d; d="$(proj_dir "$slug")"
+  local f="$d/task/review/$task.review.md"
+  [ -f "$f" ] || die "no review file: task/review/$task.review.md (run 'pw-lib.sh review-init $slug task/review/$task.review.md task/$task.md' first)"
+  _ship_comment_section_ensure "$f"
+  local marker="<!-- pw-mr-comment:$thread -->"
+  local shortid="${thread:0:8}"
+  local row="| \`$shortid\` | $kind | $replied | $note $marker |"
+  if grep -Fq "$marker" "$f"; then
+    awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
+      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  else
+    # Insert right after this section's table separator, so a brand-new row lands INSIDE the
+    # table (immediately below the header) instead of at the true end of the file — where it
+    # would land after ## Sign-off and read as an orphaned, disconnected block. Falls back to a
+    # plain append only if the separator can't be found (defensive; should not normally happen).
+    awk -v row="$row" '
+      /^## MR comment tracking/ { insec=1 }
+      { print }
+      insec && !done && /^\|[-| ]+\|[ ]*$/ { print row; done=1 }
+    ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    grep -Fq "$marker" "$f" || printf '%s\n' "$row" >> "$f"
+  fi
+  cmd_log "$slug" ship "comment-seen $task/$thread ($kind): replied=$replied"
+  echo "$slug: ship comment-seen $task/$thread ($kind) -> replied=$replied"
+}
+
+cmd_ship() {
+  case "${1:-}" in
+    comment-seen) shift; cmd_ship_comment_seen "$@" ;;
+    *) die "usage: ship comment-seen <slug> <task-id> <thread-id> <kind:resolvable|unresolvable> <replied:yes|no> [note...]" ;;
+  esac
+}
+
 cmd_selftest() {
   local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
   mkdir -p "$tmp/demo"
@@ -587,6 +683,45 @@ cmd_selftest() {
   fi
   [ "$(grep -c 'pw-rfc-comment:' "$META")" = "2" ] || die "selftest FAIL: rejected comment-seen calls still mutated the tracking table"
 
+  # ship comment-seen: same per-thread upsert shape as rfc comment-seen, but for /pw-ship …
+  # comments — this is what makes an unresolvable MR comment (a plain one-off comment the forge
+  # itself can never mark "resolved", diff-anchored or general — see tooling/forges.md) idempotent
+  # across reruns. Thread IDs below deliberately differ in their first 8 chars (the truncated
+  # display prefix) so the two rows are visually distinguishable in the assertions.
+  PW_PROJECTS_DIR="$tmp" "$0" review-init demo task/review/T01.review.md task/T01.md >/dev/null
+  local TREV="$tmp/demo/task/review/T01.review.md"
+  PW_PROJECTS_DIR="$tmp" "$0" ship comment-seen demo T01 aaaaaaaa1111 resolvable yes >/dev/null
+  grep -q '^## MR comment tracking' "$TREV" || die "selftest FAIL: ship comment-seen did not create the tracking section"
+  # placement: the tracking section must land BEFORE ## Sign-off, never after (a blind end-of-file
+  # append was the actual bug this fixes — a real project's review files ended up with duplicate,
+  # orphaned rows sitting below the human-owned Sign-off gate).
+  local sec_line sign_line
+  sec_line="$(grep -n '^## MR comment tracking' "$TREV" | head -1 | cut -d: -f1)"
+  sign_line="$(grep -n '^## Sign-off' "$TREV" | head -1 | cut -d: -f1)"
+  [ "$sec_line" -lt "$sign_line" ] || die "selftest FAIL: MR comment tracking landed at/after ## Sign-off (line $sec_line vs $sign_line)"
+  grep -qF '<!-- pw-mr-comment:aaaaaaaa1111 -->' "$TREV" || die "selftest FAIL: aaaaaaaa1111 row not created"
+  grep 'pw-mr-comment:aaaaaaaa1111' "$TREV" | grep -q '| `aaaaaaaa` | resolvable | yes ' || die "selftest FAIL: aaaaaaaa1111 row has wrong kind/replied"
+  PW_PROJECTS_DIR="$tmp" "$0" ship comment-seen demo T01 bbbbbbbb2222 unresolvable yes "reviewer asked for X" >/dev/null
+  [ "$(grep -c 'pw-mr-comment:' "$TREV")" = "2" ] || die "selftest FAIL: expected 2 tracked MR-comment threads after bbbbbbbb2222"
+  grep 'pw-mr-comment:bbbbbbbb2222' "$TREV" | grep -q '| `bbbbbbbb` | unresolvable | yes | reviewer asked for X ' || die "selftest FAIL: optional note text not recorded"
+  # both new-row inserts must land INSIDE the table (right after its header/separator), not at the
+  # true end of the file — assert both marker lines still sit before ## Sign-off.
+  local last_marker_line; last_marker_line="$(grep -n 'pw-mr-comment:' "$TREV" | tail -1 | cut -d: -f1)"
+  sign_line="$(grep -n '^## Sign-off' "$TREV" | head -1 | cut -d: -f1)"
+  [ "$last_marker_line" -lt "$sign_line" ] || die "selftest FAIL: a tracked row landed at/after ## Sign-off"
+  # re-seeing aaaaaaaa1111 updates in place, never duplicates — and leaves bbbbbbbb2222 untouched
+  PW_PROJECTS_DIR="$tmp" "$0" ship comment-seen demo T01 aaaaaaaa1111 resolvable no >/dev/null
+  [ "$(grep -c 'pw-mr-comment:' "$TREV")" = "2" ] || die "selftest FAIL: re-seeing aaaaaaaa1111 duplicated a row instead of updating in place"
+  grep 'pw-mr-comment:aaaaaaaa1111' "$TREV" | grep -q '| `aaaaaaaa` | resolvable | no ' || die "selftest FAIL: aaaaaaaa1111 replied flag not updated"
+  grep 'pw-mr-comment:bbbbbbbb2222' "$TREV" | grep -q '| `bbbbbbbb` | unresolvable | yes | reviewer asked for X ' || die "selftest FAIL: bbbbbbbb2222 wrongly changed by aaaaaaaa1111's update"
+  if PW_PROJECTS_DIR="$tmp" "$0" ship comment-seen demo T01 cccccccc3333 bogus-kind yes >/dev/null 2>&1; then
+    die "selftest FAIL: comment-seen accepted an invalid kind"
+  fi
+  if PW_PROJECTS_DIR="$tmp" "$0" ship comment-seen demo T01 cccccccc3333 unresolvable maybe >/dev/null 2>&1; then
+    die "selftest FAIL: comment-seen accepted a non yes/no replied value"
+  fi
+  [ "$(grep -c 'pw-mr-comment:' "$TREV")" = "2" ] || die "selftest FAIL: rejected ship comment-seen calls still mutated the tracking table"
+
   # rfc dashboard: inserted after Adopted: when one exists (demo already has one from the adopt
   # tests above); inserted after One-liner when no Adopted: line exists (a fresh project); a 2nd
   # call replaces in place (still exactly one RFC: line either way).
@@ -615,7 +750,8 @@ case "${1:-}" in
   log)         shift; cmd_log "$@" ;;
   phase)       shift; cmd_phase "$@" ;;
   rfc)         shift; cmd_rfc "$@" ;;
+  ship)        shift; cmd_ship "$@" ;;
   selftest)    cmd_selftest ;;
-  -h|--help|"") sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h|--help|"") sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown subcommand: $1 (try --help)" ;;
 esac

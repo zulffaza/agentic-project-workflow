@@ -4,7 +4,7 @@ Holds git worktrees checked out from the **real sibling repos** in `$PW_REPOS/`.
 agents each get their own worktree so their edits never collide.
 
 > Path vars: `$PW_REPOS` = repos root · `$PW_PROJECTS` = projects root. `bootstrap.sh` exports
-> them; see the bundle [README](../README.md) legend.
+> them; see the bundle's [REFERENCE.md]({{PW_HOME}}/docs/REFERENCE.md#who-fills-what-legend) legend.
 
 Layout: `worktree/<repo>/<task-id>-<slug>/`
 

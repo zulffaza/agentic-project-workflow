@@ -7,9 +7,13 @@ have (Claude Code, KiloCode, …), and you only get wired up for the ones you ac
 
 Same steps whether you're a **new teammate** or **recovering a wiped machine**.
 
+Want to see this in action first, with no setup at all? → [docs/WALKTHROUGH.md](./docs/WALKTHROUGH.md).
+
 ## Prerequisites
 
 - `git`, `bash`, `perl` (all standard on macOS/Linux).
+- A Git-forge CLI for the repos you'll ship to — `gh` (GitHub) or `glab` (GitLab). `/pw-ship`/
+  `/pw-adopt` need one per repo; see [`tooling/forges.md`](./tooling/forges.md).
 - At least one supported agent CLI on your `PATH`:
   - **Claude Code** — `claude`
   - **KiloCode** — `kilo`  (KiloCode connects to many model providers; you pick which one in

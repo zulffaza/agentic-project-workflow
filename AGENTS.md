@@ -62,8 +62,9 @@ real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./do
 ## Layout (this bundle = `$PW_HOME`)
 
 - **`template/`** — what a scaffolded project is made of (copied into each new project).
-- **`docs/`** — the detailed human guides: [WORKFLOW](./docs/WORKFLOW.md) · [ADOPTION](./docs/ADOPTION.md) ·
-  [REVIEW](./docs/REVIEW.md) · [EXECUTION](./docs/EXECUTION.md) · [REFERENCE](./docs/REFERENCE.md).
+- **`docs/`** — the detailed human guides: [WALKTHROUGH](./docs/WALKTHROUGH.md) (a worked example) ·
+  [WORKFLOW](./docs/WORKFLOW.md) · [ADOPTION](./docs/ADOPTION.md) · [REVIEW](./docs/REVIEW.md) ·
+  [EXECUTION](./docs/EXECUTION.md) · [REFERENCE](./docs/REFERENCE.md) · [RFC](./docs/RFC.md).
 - **`tooling/`** — the machinery: `scaffold.sh`, `gen-commands.sh`, `gen-agents.sh`, `pw-lib.sh`
   (deterministic helpers), `pw-doctor.sh`, `pw-common.sh`, `pw-teardown.sh` (safe worktree removal),
   `commands/` (canonical `/pw-*` sources), `agents/` (seedable `pw-orchestrator` + `pw-executor`),

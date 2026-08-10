@@ -20,7 +20,7 @@ HOW THIS FILE WORKS — read before editing.
 - Anchor each item to a section of the doc (§heading), because the doc itself gets rewritten
   when fixes are applied — this file is the durable record, the doc is not.
 - Only YOU fill the Sign-off table. An agent cannot self-approve a gate.
-- List everything still open in a project:  rtk grep -rln "🔴 open" .
+- List everything still open in a project:  grep -rln "🔴 open" .
 - **Agents:** the `> **Add an item:**` / `> **Answer a question:**` blockquotes right under
   "## Items" / "## Open questions" are a PERMANENT syntax reference, not the deletable worked
   example below — never remove them, even when clearing a section down to "No blocking …". Create

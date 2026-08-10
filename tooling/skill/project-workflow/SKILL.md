@@ -89,7 +89,32 @@ Human feedback on any doc lives in a review file under a **`review/` subdir** be
   optional — with none it sweeps EVERY open MR** in the project in one run (serially). Always
   **mirror the change into the internal record** (task `## Result` + `task/review/` + `LOG.md`); the
   project dir stays the source of truth even for MR-driven fixes.
-- After a pass, report how many `🔴 open` items remain: `rtk grep -rln "🔴 open" <project>/`.
+  - **⚠️ Never filter by diff-position to decide what's actionable.** GitHub needs two endpoints
+    (`gh pr view --comments` + `gh api .../pulls/<n>/comments`) or inline review comments are
+    missed; GitLab's `discussions` API returns everything in one call, but classify by
+    `notes[].system`/`resolvable`/`resolved` — **not** `individual_note`, and **not** whether the
+    note has a diff `position`. A general "Start thread" comment (no diff line) can be
+    `resolvable: true` just like a diff comment — filtering on diff-position is a verified real bug
+    that silently dropped an open reviewer thread entirely. Full field breakdown + a `jq` recipe:
+    `tooling/forges.md`.
+  - **GitLab auto-resolves a diff thread when its line changes on a later push — it does NOT
+    auto-resolve a resolvable *general* thread the same way.** Reply to a resolvable general thread
+    AND explicitly resolve it (`glab api -X PUT …/discussions/<id> -f resolved=true`), or it'll look
+    open forever even after being fixed.
+  - **Idempotency for `resolvable: false` comments is local, not the forge's** — those can never
+    report `resolved: true` no matter what. After replying to *any* thread, call
+    `pw-lib.sh ship comment-seen <slug> <T0n> <thread-id> <resolvable|unresolvable> yes` — this
+    upserts a row in `task/review/T0n.review.md`'s `## MR comment tracking` table, which the next
+    `/pw-ship … comments` run checks before treating a thread as new. Same pattern as
+    `pw-lib.sh rfc comment-seen` for RFC-platform comments.
+  - **⚠️ `/discussions` can lag the raw notes table** (verified: 20+ min on a self-hosted GitLab, a
+    real comment visible in the web UI, absent from the API the whole time). Cross-check freshness
+    against `.../notes?sort=desc&order_by=updated_at` (a flat list, no `discussion_id` — useful only
+    for detecting staleness, not for replying). If its newest non-system note isn't in the
+    `/discussions` pull, don't report "nothing open" — retry, and if still missing, reply with a
+    plain new top-level note (no `discussion_id` needed) and flag it in the recap for a human to
+    verify once the real discussion syncs. Full flow: `tooling/forges.md`.
+- After a pass, report how many `🔴 open` items remain: `grep -rln "🔴 open" <project>/`.
 
 **Who fills what** (put a `Filled by:` note on every table/form so it's unambiguous): 🤖 =
 AI-maintained (don't hand-edit) · 🧑 = human fills · 🤖🧑 = both. Human-owned: `context/`, review

@@ -47,5 +47,5 @@ Never edit or delete my comment text (items OR my `↳ you:` answers). Never wri
 
 When done, recap each resolved item (one line) here, and tell me how many `🔴 open` items remain
 **in the resolved scope** (and, as a footnote, across the whole project:
-`rtk grep -rln "🔴 open"` in the project dir). For a task review: after fixes are applied, remind me
+`grep -rln "🔴 open"` in the project dir). For a task review: after fixes are applied, remind me
 to re-run `/pw-execute <slug> T0n` to re-verify in its worktree.
