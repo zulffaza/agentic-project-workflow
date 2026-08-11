@@ -124,7 +124,10 @@ Read [README.md](./README.md) — the full guide. The loop, once onboarded:
 
 Each phase is **gated by your review** — an agent stops and you sign off before the next phase.
 Only the **PLAN** sign-off is a hard gate for execution; per-task reviews are optional. `/pw-execute`
-stops at *committed + verified* — nothing is pushed until you explicitly run `/pw-ship`.
+stops at *committed + verified* — nothing is pushed until you explicitly run `/pw-ship`. A bare
+`/pw-execute <slug>` resumes everything outstanding in one invocation; `/pw-execute <slug> --wave`
+runs only the immediately-ready tasks and checkpoints there instead — useful for chunking a long
+plan (see [docs/EXECUTION.md](./docs/EXECUTION.md)).
 
 ## Memory (optional — not required)
 

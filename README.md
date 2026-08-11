@@ -55,6 +55,11 @@ example output (5 min) → [ONBOARDING.md](./ONBOARDING.md) when you're ready to
 /pw-close     spring-boot-3-upgrade     # → tears down worktrees, captures learnings, Status → done
 ```
 
+Long plan? A bare `/pw-execute <slug>` (above) resumes **everything** currently outstanding in one
+invocation. `/pw-execute <slug> --wave` instead runs just the tasks that are immediately ready right
+now, then stops and reports — a checkpoint-sized chunk instead of the whole remaining DAG, so a
+misbehaving run or a lost session only costs you one wave. Details: [docs/EXECUTION.md](./docs/EXECUTION.md).
+
 ### Already mid-development? Adopt it instead of starting fresh
 
 The Quick Start above is the greenfield path. If work is **already underway on a real branch**
@@ -110,6 +115,7 @@ platform, or a local-only doc by default) — see **[docs/RFC.md](./docs/RFC.md)
 | ⚙️ **[docs/EXECUTION.md](./docs/EXECUTION.md)** | Orchestrator vs executor · picking a model/agent per task · cross-provider execution · worktrees |
 | 📖 **[docs/REFERENCE.md](./docs/REFERENCE.md)** | Bundle layout · project anatomy · naming conventions · the full `/pw-*` command table + generator |
 | 🐛 **[docs/KNOWN-ISSUES.md](./docs/KNOWN-ISSUES.md)** | Verified gotchas this bundle already works around (cross-provider shell-out quirks, GitLab API traps) — dated, with root cause + mitigation |
+| 🚑 **[docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md)** | Symptom → what to do: stuck worktrees, crashed runs, allowlist refusals, missing MR comments, `/pw-doctor` drift |
 | 🚀 **[ONBOARDING.md](./ONBOARDING.md)** | Fresh-machine / teammate setup · registering a new provider · optional memory · offboarding/uninstalling |
 
 ## Why it's shaped this way

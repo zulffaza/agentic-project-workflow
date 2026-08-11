@@ -170,6 +170,12 @@ T03 notifications-worker   done   commit 4c5d6e7   verify: BUILD SUCCESS
 
 `/pw-execute` stops here — **committed + verified, nothing pushed.**
 
+> **Long plan?** The bare `/pw-execute spring-boot-3-upgrade` above resumes **everything**
+> outstanding in one invocation — fine for three tasks like this one. For a much longer plan,
+> `/pw-execute spring-boot-3-upgrade --wave` instead runs only the tasks that are immediately ready
+> right now, then stops and reports which tasks are newly ready for the *next* `--wave` call — a
+> checkpoint-sized chunk so a lost session only costs one wave, not the whole remaining DAG.
+
 ## Review an execution result (optional)
 
 `done` isn't the same as `accepted` — you still look at what actually got committed. Say T02's

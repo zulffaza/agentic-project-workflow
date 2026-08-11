@@ -20,6 +20,17 @@ it, and the discipline (worktree isolation, running Verify, faithful reporting) 
 `project-workflow` skill + the task file — not from a bespoke agent. `pw-executor` exists mainly for
 teammates who don't already have a code agent.
 
+## Full resume vs one wave at a time
+
+`/pw-execute <slug>` with no task IDs is a **resume of the whole run** — it walks every task not
+yet `accepted` to the end of what's currently ready, in one invocation. For a long plan, `/pw-execute
+<slug> --wave` instead runs **only the tasks immediately runnable right now** (every `depends_on`
+already `done`/`accepted`), then stops and reports rather than cascading into whatever it just
+unblocked — a checkpoint-sized chunk, so a misbehaving orchestrator or a lost session only costs one
+wave's blast radius, not the whole remaining DAG. Naming specific task IDs (`/pw-execute <slug>
+T03`) is a third, narrower mode: run exactly those tasks and stop, regardless of what else is
+pending. Full semantics: [`tooling/commands/pw-execute.md`](../tooling/commands/pw-execute.md).
+
 ## Choosing a model / sub-agent per task
 
 Every task records **how it should be run**, so the choice is documented and reviewable — not buried
@@ -120,9 +131,11 @@ Which CLI runs which model lives in the [Agent Provider registry](../tooling/doc
 Claude models → Claude Code; open-weight models → KiloCode, which can connect to **several API
 Providers at once** (list them in `PW_KILO_API_PROVIDERS` — e.g. `command_code`, `openrouter`, …
 — and reference any as `kilo:<provider>/<model>`). It's a one-row-per-Agent-Provider extension
-point, so new providers slot in without code changes. When `Execute with:` names an agent, resolve its provider the same way as a
-model: an explicit `<provider>:` prefix wins → else the agent def's own provider → else (a built-in
-with no def) the orchestrator's own provider — then apply the same-vs-different routing above.
+point, so new providers slot in without code changes.
+
+When `Execute with:` names an agent, resolve its provider the same way as a model: an explicit
+`<provider>:` prefix wins → else the agent def's own provider → else (a built-in with no def) the
+orchestrator's own provider — then apply the same-vs-different routing above.
 
 **Requesting a specific model/agent — three ways, all honored:**
 1. **Statically** — set the task's `Execute with:` field (edit it, or ask the breakdown agent to set
