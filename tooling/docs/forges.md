@@ -26,7 +26,7 @@ resolved **per repo, from that repo's own `origin` remote**, never assumed globa
 |-------|-----------|--------------|----------------------|----------------------------|-------|
 | `github` | `gh` | `github.com` (default; no override needed) | `gh pr create` (run from inside the repo/worktree) | `gh pr view --comments` (standalone/general PR conversation comments) **+** `gh api repos/:owner/:repo/pulls/<n>/comments` (diff-anchored review comments) — **both**, or inline review comments are missed entirely | No host env var needed — `gh` resolves `github.com` on its own. |
 | `gitlab` | `glab` | anything not `github.com` (default), or an exact `PW_FORGE_HOSTS` match | `GITLAB_HOST=<resolved-host> glab mr create` (run from inside the worktree) | `GITLAB_HOST=<resolved-host> glab api projects/:id/merge_requests/<iid>/discussions` — do **not** use `glab mr diff` for this, it only shows the code diff, no comments at all | `<resolved-host>` = `gitlab.com` when auto-detected with no override, or the matched `PW_FORGE_HOSTS` host for a self-hosted instance. **Never hardcode a literal host in a command file** — that's the exact bug this registry fixes. |
-| _`<future>`_ | _`<cli>`_ | _`<host signal>`_ | _`<invocation>`_ | _`<invocation>`_ | Add a row — no code change needed. |
+| _`<future>`_ | _`<cli>`_ | _`<host signal>`_ | _`<invocation>`_ | _`<invocation>`_ | Maintainer adds a row — no code change needed, but see "Adding a forge" below. |
 
 ## Standalone vs diff-anchored comments (both forges — read before writing a fetch-comments step)
 
@@ -62,7 +62,7 @@ resolved/open state to decide whether it still needs handling — it will look "
 `/pw-ship … comments` handles this by tracking every thread it has already replied to — resolvable
 or not — in a **local** table (`task/review/T0n.review.md`'s `## MR comment tracking`, via
 `pw-lib.sh ship comment-seen`) instead of relying solely on the forge's resolved bit — see
-[`docs/REVIEW.md`](../docs/REVIEW.md#2-the-mr-review-flow-post-ship).
+[`docs/REVIEW.md`](../../docs/REVIEW.md#2-the-mr-review-flow-post-ship).
 
 **Optional sanity check (if `jq` is available)** — run this after fetching, to mechanically list
 what's still actionable instead of eyeballing a large JSON array (eyeballing is exactly how a real
@@ -100,7 +100,7 @@ and original text, note the lag explicitly in the reply, and record it in the lo
 as `unresolvable` with a note flagging it for a human to double check once the real discussion
 eventually appears (the note ID and the eventual discussion ID aren't reconcilable from the API in
 any straightforward way — don't try to auto-merge them later, just flag it). See
-[`tooling/commands/pw-ship.md`](./commands/pw-ship.md)'s MR-comment mode step 1 for the full flow.
+[`tooling/commands/pw-ship.md`](../commands/pw-ship.md)'s MR-comment mode step 1 for the full flow.
 
 ## Example config (`pw.config.sh`)
 ```sh

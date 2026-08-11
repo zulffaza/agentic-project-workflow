@@ -33,8 +33,8 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
    task's `Actually used:`.
    - **Route each task by its `Branch:`** — this is per-task, so a **mixed** project (fresh tasks +
      adopted branches, see the WORKFLOW "mixed projects" note) is just tasks of both kinds side by side:
-     - **Fresh task** (`Branch:` is a new `agent/<slug>/<T0n>`) → **fork a worktree from its
-       `Base branch:`**: `git worktree add … -b agent/<slug>/<T0n> origin/<base>`, NOT from the repo's
+     - **Fresh task** (`Branch:` is a new `agent/<slug>/<T0n>-<slug>`) → **fork a worktree from its
+       `Base branch:`**: `git worktree add … -b agent/<slug>/<T0n>-<slug> origin/<base>`, NOT from the repo's
        current HEAD. Two tasks in the same repo may declare different bases (e.g. `master` and
        `spring3`) — fine, separate branches + worktrees + MRs, parallel. The task's Step 1 spells out
        the exact command; make sure it uses the task's base.

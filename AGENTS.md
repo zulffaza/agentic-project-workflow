@@ -34,9 +34,11 @@ review → close**, driven by `/pw-*` slash commands. Work happens in scaffolded
 | Close | `/pw-close` | learnings + teardown, `Status → done` | — |
 
 Side-loops: **`/pw-sync`** refreshes open MRs against a moved base · **`/pw-ship … comments`**
-services MR review threads · **`/pw-status`** shows where a project is. Every ✅ review point above
-also has an optional AI-assisted mode (off by default, per project/phase) — `/pw-review … ai` delegates
-a fresh review pass instead of a human doing it; see [docs/REVIEW.md](./docs/REVIEW.md).
+services MR review threads · **`/pw-status`** shows where a project is. All **five** review points
+in this pipeline — analysis, plan (breakdown), a task's plan, a task's execution result, and MR/PR
+comments (not all shown as their own row above — per-task and MR reviews are optional/side-loop)
+— each have an optional AI-assisted mode (off by default, per project/phase) — `/pw-review … ai`
+delegates a fresh review pass instead of a human doing it; see [docs/REVIEW.md](./docs/REVIEW.md).
 
 **Two ways to start:** *fresh* (`/pw-new`) or *continuation* (`/pw-adopt`, when work is already on a
 real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./docs/ADOPTION.md)**.

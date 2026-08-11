@@ -106,7 +106,7 @@ comment quote — never a direct edit.
 
 ## The comment loop — read-only outward, always
 
-Unlike the MR-comment flow (see [Review & feedback → the MR review flow](./REVIEW.md#the-mr-review-flow-post-ship)),
+Unlike the MR-comment flow (see [Review & feedback → the MR review flow](./REVIEW.md#2-the-mr-review-flow-post-ship)),
 `/pw-rfc <slug> comments` **never writes back** to the external platform. It only pulls:
 
 ```

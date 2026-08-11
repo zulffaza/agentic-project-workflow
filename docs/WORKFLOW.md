@@ -110,7 +110,7 @@ Once MRs are open they drift out of date as their base branches move. **`/pw-syn
 [task-ids]`** brings them all back up to date in one sweep: it merges the latest base into each open
 MR's branch, re-runs each task's `Verify`, and pushes — reporting per-task which merged cleanly,
 which hit a conflict, and which fail verify after the merge. Review comments left on an MR are a
-different loop — see the [MR review flow](./REVIEW.md#the-mr-review-flow-post-ship).
+different loop — see the [MR review flow](./REVIEW.md#2-the-mr-review-flow-post-ship).
 
 ## Step 8 — Review results
 `done` (committed + verified) isn't the same as `accepted` — that's a separate decision you make

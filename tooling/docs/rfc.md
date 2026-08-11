@@ -21,7 +21,7 @@ breakdown; skip it entirely for smaller projects — nothing else in the pipelin
 
 ## Canonical section schema
 Every RFC (any backend) uses this schema — see
-[`template/rfc/_TEMPLATE-RFC.md`](../template/rfc/_TEMPLATE-RFC.md) for the literal skeleton. A
+[`template/rfc/_TEMPLATE-RFC.md`](../../template/rfc/_TEMPLATE-RFC.md) for the literal skeleton. A
 backend's `fetch_anchors` (in [`rfc-backends.md`](./rfc-backends.md)) maps these canonical names
 onto that platform's *real* template headings, so a differently-worded template still works — the
 mapping is data, not a hardcoded assumption that every platform's template reads identically.

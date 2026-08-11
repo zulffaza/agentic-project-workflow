@@ -89,8 +89,9 @@ scripts** — everything else also goes in `../pw.config.sh`:
    variable contract in [ONBOARDING.md](../ONBOARDING.md#register-a-new-provider). *(Optional)*
    to also seed the sub-agents for it, define `<name>_agentdir` + `render_<name>_agent`;
    providers without those just skip agent-seeding.
-3. Add a row to `docs/providers.md` (its headless invocation) — a separate, optional registry
-   only needed for cross-provider task routing, not for the CLI to work at all.
+3. *(Optional)* define `<name>_headless()` — its exact non-interactive invocation template, so an
+   orchestrator on a *different* provider can shell out to this one (cross-provider execution).
+   Not needed for the CLI to work at all, same-provider-only. See `docs/providers.md`.
 4. Re-run `./bootstrap.sh` (or `gen-commands.sh` + `gen-agents.sh`).
 
 That's the whole cost of onboarding a provider — the phase prompts themselves never get copied.

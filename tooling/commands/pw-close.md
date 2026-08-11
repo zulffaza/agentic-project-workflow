@@ -2,7 +2,7 @@
 description: Close out a finished project — verify, tear down, learn
 args: <project-slug>
 ---
-Invoke the `project-workflow` skill (Step 8 — Learn + close). Arguments: {{ARGS}} (project slug).
+Invoke the `project-workflow` skill (close phase — learn + teardown). Arguments: {{ARGS}} (project slug).
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 

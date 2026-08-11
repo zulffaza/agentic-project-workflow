@@ -43,6 +43,7 @@ agentic-project-workflow/        ← this bundle ($PW_HOME)
 ```
 <project-slug>/
 ├── README.md        ← the project DASHBOARD (status, links, per-phase AI Review modes). Start here.
+├── LOG.md           ← append-only audit trail — one line per phase transition/commit/push/MR/etc.
 ├── REVIEWER-NOTES.md   ← optional — appears once an AI-assisted review pass runs; the *why* behind
 │                        its verdicts (see docs/REVIEW.md), separate from each .review.md's items
 ├── context/         ← raw inputs you feed in: tickets, docs, code refs, transcripts
