@@ -59,11 +59,30 @@ else
 fi
 echo
 
+# Live model catalog for one Agent Provider, one line per model id (provider-prefix included),
+# or nothing on any failure — every call site treats "nothing" as "can't check", never an error.
+# Only kilo/opencode have a queryable catalog at all (claude has a fixed alias set — see
+# docs/EXECUTION.md); callers check that before ever reaching here.
+_pw_doctor_model_catalog() {
+  local prov="$1" ap
+  case "$prov" in
+    kilo)
+      if [ "${#PW_KILO_API_PROVIDERS[@]}" -gt 0 ]; then
+        for ap in "${PW_KILO_API_PROVIDERS[@]}"; do kilo models "$ap" 2>/dev/null || true; done
+      else
+        kilo models 2>/dev/null || true
+      fi
+      ;;
+    opencode) opencode models 2>/dev/null || true ;;
+  esac
+  return 0
+}
+
 # --- per provider ------------------------------------------------------------
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 for p in "${PW_PROVIDERS[@]}"; do
   if ! pw_provider_has_hooks "$p"; then
-    echo "  $p: missing hooks (bin/skilldir/outdir/render) in pw.config.sh — skipping"; echo; continue
+    echo "  $p: missing hooks (bin/skilldir/commanddir/render_*_command) in pw.config.sh — skipping"; echo; continue
   fi
   echo "  $p:"
   bin="$("${p}_bin")"
@@ -106,7 +125,7 @@ for p in "${PW_PROVIDERS[@]}"; do
   done
 
   # commands: generate to temp, diff against what's installed
-  odir="$("${p}_outdir")"
+  odir="$("${p}_commanddir")"
   "$HERE/gen-commands.sh" --outdir "$tmp" "$p" >/dev/null
   drift=0; missing=0
   for exp in "$tmp/$p"/*.md; do
@@ -141,6 +160,39 @@ for p in "${PW_PROVIDERS[@]}"; do
       if [ "$FIX" -eq 1 ]; then
         "$HERE/gen-agents.sh" "$p" >/dev/null && echo "      fixed: regenerated agents"
       fi
+    fi
+  fi
+
+  # --- model availability (INFORMATIONAL ONLY — never touches $issues or the exit code; a ⚠
+  # here never blocks or fails pw-doctor, per design) --------------------------------------
+  upper="$(printf '%s' "$p" | tr '[:lower:]' '[:upper:]')"
+  allow_var="PW_MODEL_ALLOWLIST_${upper}"
+  allow="${!allow_var:-}"
+  if [ -z "$allow" ]; then
+    echo "    · model allowlist: none set (unrestricted — every model is allowed, the default)"
+  elif [ "$p" = "claude" ]; then
+    echo "    · model allowlist: \"$allow\" — can't verify live (Claude Code has a fixed alias"
+    echo "        set, not a queryable catalog; see docs/EXECUTION.md's model table)"
+  elif ! command -v "$bin" >/dev/null 2>&1; then
+    echo "    · model allowlist: \"$allow\" — can't check ($bin not on PATH)"
+  else
+    catalog="$(_pw_doctor_model_catalog "$p")"
+    if [ -z "$catalog" ]; then
+      echo "    · model allowlist: \"$allow\" — can't check (no models returned by '$bin models')"
+    else
+      IFS=',' read -ra allow_pats <<< "$allow"
+      for allow_pat in "${allow_pats[@]}"; do
+        allow_pat="$(printf '%s' "$allow_pat" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        n=0
+        while IFS= read -r line; do
+          case "$line" in $allow_pat) n=$((n+1)) ;; esac
+        done <<< "$catalog"
+        if [ "$n" -gt 0 ]; then
+          echo "    ✓ model allowlist \"$allow_pat\": $n match(es) in the live catalog"
+        else
+          echo "    ⚠ model allowlist \"$allow_pat\": 0 matches — possible typo, deprecated id, or not covered by your authenticated API Providers"
+        fi
+      done
     fi
   fi
   echo

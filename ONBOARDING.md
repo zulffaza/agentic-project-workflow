@@ -14,10 +14,11 @@ Want to see this in action first, with no setup at all? → [docs/WALKTHROUGH.md
 - `git`, `bash`, `perl` (all standard on macOS/Linux).
 - A Git-forge CLI for the repos you'll ship to — `gh` (GitHub) or `glab` (GitLab). `/pw-ship`/
   `/pw-adopt` need one per repo; see [`tooling/docs/forges.md`](./tooling/docs/forges.md).
-- At least one supported agent CLI on your `PATH`:
+- At least one supported Agent Provider (AI-agent CLI) on your `PATH` — built in, no extra config:
   - **Claude Code** — `claude`
-  - **KiloCode** — `kilo`  (KiloCode connects to many model providers; you pick which one in
-    `pw.config.sh` — the shipped examples use `command_code`, but that's just one choice)
+  - **KiloCode** — `kilo`  (KiloCode connects to many model API Providers; you pick which one(s)
+    in `pw.config.sh` — the shipped examples use `command_code`, but that's just one choice)
+  - **OpenCode** — `opencode`
   - Something else? You can add it — see [Register a new provider](#register-a-new-provider).
 
 ## Onboard in 3 steps
@@ -131,24 +132,56 @@ including *why* you'd want one: **[docs/MEMORY.md](./docs/MEMORY.md)**.
 
 ## Register a new provider
 
-Your CLI isn't `claude` or `kilo`? **You don't edit any script** — everything goes in
-**`pw.config.sh`** (created for you on first bootstrap; gitignored, so it stays yours):
+**Two different meanings of "provider," worth separating up front:**
+- An **Agent Provider** is the AI-agent CLI you actually run — `claude`, `kilo`, `opencode`, or a
+  new one you're wiring up here. This section is about registering one of those.
+- An **API Provider** is a narrower, different thing — which model *backend* a given Agent
+  Provider talks to underneath (e.g. KiloCode alone can route to several: `command_code`,
+  `openrouter`, …). That's `PW_KILO_API_PROVIDERS` in `pw.config.sh`, unrelated to what follows.
+
+**Is your CLI already `claude`, `kilo`, or `opencode`?** Those three are **built into**
+`tooling/pw-common.sh` — you don't need anything below. Just add the name to `PW_PROVIDERS=(…)`
+in `pw.config.sh` and re-run `./bootstrap.sh`. **Built-in is not the same as enabled** — a
+built-in provider still does nothing until you list it in `PW_PROVIDERS` yourself; skip this
+step and it's simply not wired up, whether or not the CLI is installed on your machine.
+
+Registering a CLI that **isn't** one of those three is what the rest of this section covers. **You
+don't edit any script** — everything goes in **`pw.config.sh`** (created for you on first
+bootstrap; gitignored, so it stays yours):
 
 1. Add its name to `PW_PROVIDERS=(…)`.
-2. Define its four hooks in the same file (the scripts only supply defaults for the built-ins, so
-   yours win):
+2. Define its **required** hooks in the same file (the scripts only supply defaults for the
+   built-ins, so yours win — this is also why you should never redefine `claude_*`/`kilo_*`/
+   `opencode_*` here: your version would silently replace the working built-in one):
    - `<name>_bin()` — the command to detect on `PATH`
-   - `<name>_skilldir()` — where it reads skills
-   - `<name>_outdir()` — where its slash-commands go
-   - `render_<name>()` — prints one command file in its frontmatter format, mapping the `{{ARGS}}`
-     placeholder to its argument syntax (copy `render_claude`/`render_kilo` from
-     `tooling/pw-common.sh` as a starting point)
-   - *(optional)* `<name>_agentdir()` + `render_<name>_agent()` to also seed the sub-agents for it;
-     providers without these two just skip agent-seeding — the `/pw-*` commands still work.
-3. Add a row to [`tooling/docs/providers.md`](./tooling/docs/providers.md): which models it runs and its
+   - `<name>_skilldir()` — where it reads skills (these are plain files/dirs, copied or
+     symlinked as-is — no rendering involved)
+   - `<name>_commanddir()` — where its generated slash-commands go
+   - `render_<name>_command()` — **prints one finished command file to stdout.** Before calling
+     it, `gen-commands.sh` sets four plain shell variables it inherits (no arguments are
+     passed): `$desc` (one-line description), `$args` (argument hint, may be empty), `$agent`
+     (optional provider-agent name, may be empty), `$bodytext` (the prompt body, with
+     `{{PW_*}}` tokens already stamped to real paths, and `{{ARGS}}` still literal — map that to
+     your CLI's own argument-placeholder syntax). Your function's only job is to `printf` the
+     complete frontmatter + body to stdout — `gen-commands.sh` redirects that into the real
+     file; the function itself never opens a file, and it never runs or invokes anything.
+     Minimal shape (mirrors `render_claude_command` in `tooling/pw-common.sh`):
+     ```sh
+     render_myprov_command() {
+       printf -- '---\ndescription: %s\n---\n%s' "$desc" "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
+     }
+     ```
+3. *(Optional)* `<name>_agentdir()` + `render_<name>_agent()` to also seed the sub-agents
+   (`pw-orchestrator`, `pw-executor`, `pw-reviewer`) for it. Same idea as `render_<name>_command`,
+   but `gen-agents.sh` sets a different variable set beforehand: `$agentname` (the file's
+   basename), `$desc`, `$displayName`, `$role`, `$claude_tools`, `$model`, `$bodytext` — see
+   `render_claude_agent`/`render_kilo_agent` in `tooling/pw-common.sh` for full examples.
+   Providers without these two hooks just skip agent-seeding — the `/pw-*` commands still work.
+4. Add a row to [`tooling/docs/providers.md`](./tooling/docs/providers.md): which models it runs and its
    **headless invocation** (how to run one task non-interactively) — what cross-provider execution
-   shells out to.
-4. Re-run `./bootstrap.sh`.
+   shells out to. This is a **separate, optional** registry from steps 1–3 above — it's only
+   needed for cross-provider task routing during `/pw-execute`, not for the CLI to be usable.
+5. Re-run `./bootstrap.sh`.
 
 ### Worked example: registering Cline
 
@@ -159,11 +192,11 @@ loader expects before relying on this, it's a starting point, not tested code:
 ```sh
 PW_PROVIDERS+=(cline)
 
-cline_bin()      { echo cline; }
-cline_skilldir() { echo "$HOME/.cline/skills"; }             # Cline's global skills dir
-cline_outdir()   { echo "$HOME/Documents/Cline/Workflows"; } # global custom slash-commands ("workflows")
+cline_bin()        { echo cline; }
+cline_skilldir()   { echo "$HOME/.cline/skills"; }             # Cline's global skills dir
+cline_commanddir() { echo "$HOME/Documents/Cline/Workflows"; } # global custom slash-commands ("workflows")
 
-render_cline() {
+render_cline_command() {
   # Cline turns a workflow's FILENAME into its slash command (pw-new.md -> /pw-new) and only
   # reads a `description` frontmatter field — there's no {{ARGS}}-placeholder convention like
   # Claude's $ARGUMENTS, so the body just states "arguments follow the command" in prose instead
@@ -179,10 +212,10 @@ headless invocation `cline "<prompt>" --yolo --json` (or piped: `<prompt> | clin
 shown here — skip those and Cline just won't get the seeded sub-agents; the `/pw-*` commands still
 work.
 
-Likewise, which KiloCode **model providers** you use (`command_code`, `openrouter`, … — KiloCode can
-connect to several at once) is just a list you set (`PW_KILO_PROVIDERS=(…)`) in `pw.config.sh` — it
-never constrains a teammate. Reference any of them in a task's `Execute with:` as
-`kilo:<provider>/<model>`.
+Likewise, which KiloCode **API Providers** you use (`command_code`, `openrouter`, … — the model
+backend(s) KiloCode itself connects to, a different axis from the Agent Provider list above) is
+just a list you set (`PW_KILO_API_PROVIDERS=(…)`) in `pw.config.sh` — it never constrains a
+teammate. Reference any of them in a task's `Execute with:` as `kilo:<provider>/<model>`.
 
 ## Offboarding / uninstalling
 
@@ -212,7 +245,7 @@ comment for the full safety contract.
   maintain either elsewhere (e.g. a personal `ai-agent-dir`), refresh the bundle copy before
   committing/sharing: `cp <your-canonical>/SKILL.md tooling/skill/<name>/SKILL.md`.
 - **`providers.md` is machine/account-specific config**, not code — model IDs and available
-  providers differ per person. Treat the committed version as a sensible starting roster; each
+  providers differ per person. Treat the committed version as a sensible starting point; each
   person tunes their own.
 - **Project dirs are not committed here.** This repo is the reusable bundle only; the
   `<slug>` projects you scaffold live in `$PW_PROJECTS` (the bundle's parent) and are yours.

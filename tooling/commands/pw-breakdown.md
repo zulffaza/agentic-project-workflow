@@ -27,6 +27,23 @@ Then produce, from `{{PW_HOME}}/template/task/`:
      justify it in `Why:`. Fold in any custom routing I gave ("run the mechanical bumps in
      KiloCode", "T03 → opus"). Resolve providers via `{{PW_HOME}}/tooling/docs/providers.md`. **Pin the
      Claude version** (full name like `claude-opus-4-8`) on risky tasks; raise `Effort:` for complex ones.
+   - **Picking a kilo or opencode model: query the live catalog, never recall/guess an id from
+     memory.** A plausible-looking id can simply not exist, or its display name can differ from
+     the real id.
+     ```bash
+     kilo models <api-provider>      # once per entry in PW_KILO_API_PROVIDERS (pw.config.sh)
+     opencode models                 # opencode manages its own provider config internally
+     ```
+     Pick the id from that actual output. Claude has no live catalog — its fixed alias set is
+     already fully documented in `{{PW_HOME}}/tooling/docs/providers.md`.
+   - **Before finalizing each task's `Execute with:`**, check the chosen model against the
+     project's model allowlist (empty/unset = every model is allowed, the default — see
+     `pw.config.sh`):
+     ```bash
+     {{PW_HOME}}/tooling/pw-lib.sh model-check <provider> <model-id>
+     ```
+     If it refuses, pick a different allowed model for that task rather than writing one the
+     allowlist excludes — don't silently override it.
    - **Write DETAILED `## Steps`** — name the exact file, the exact change (before/after snippet or
      literal edit), and the exact command per step, so the executor needs minimal independent
      reasoning (cheaper, more reliable — a small model shouldn't re-derive the work). Any unresolved

@@ -42,9 +42,47 @@ forced to switch agents mid-workflow — a task is routed elsewhere only with a 
 | `opus` | claude | complex reasoning, cross-cutting / ambiguous / high-risk work |
 | `sonnet` | claude | well-specified standard implementation (most tasks) |
 | `haiku` | claude | trivial mechanical bulk edits |
-| `command_code/MiniMaxAI/MiniMax-M3`, `openrouter/<model>`, … | kilo | open-weight — routed via any KiloCode model provider you listed in `PW_KILO_PROVIDERS` (`kilo models <provider>`) |
+| `command_code/MiniMaxAI/MiniMax-M3`, `openrouter/<model>`, … | kilo | open-weight — routed via any KiloCode API Provider you listed in `PW_KILO_API_PROVIDERS` (`kilo models <provider>`) |
 | an existing agent | (its provider) | reuse one you already have (e.g. `code-implementation`) |
 | a `tooling/agents/` def | (its provider) | a shipped or custom role — `pw-executor`, or a new one you added |
+
+**How the agent knows what's actually available:** claude's models are the fixed set in the table
+above — nothing to look up. kilo and opencode both have a real, changeable catalog, so
+`/pw-breakdown` is instructed to **query it live** (`kilo models <api-provider>` /
+`opencode models`) rather than recall an id from memory before writing a task's `Execute with:` —
+a plausible-looking id can simply not exist, or a display name can differ from the actual id
+(verified case: KiloCode's own credential list shows "Kilo Gateway," but the usable id is `kilo`,
+not `kilo_gateway`). This is a separate concern from the allowlist below — discovery is about
+*what exists*, the allowlist is about *what you'll permit*.
+
+## Model allowlist (optional — a cost guard, not a routing mechanism)
+
+There's no fixed, pre-approved model list in this bundle — an agent (during `/pw-breakdown`) or
+you can pick any model any configured API Provider serves, for claude, kilo, or opencode alike.
+
+**If you want to rule some OUT** — typically to stop an agent reaching for an unexpectedly
+expensive model — set an allowlist per Agent Provider in `pw.config.sh`
+(`PW_MODEL_ALLOWLIST_CLAUDE` / `_KILO` / `_OPENCODE`), a comma-separated list of glob patterns
+matched against the model id (everything after the `<provider>:` prefix, e.g. `sonnet` or
+`command_code/deepseek/*`).
+
+**The rule, stated plainly: empty or unset = ALL models allowed.** That's the default for every
+provider — nothing is restricted until you explicitly set a pattern. This is deliberately
+opt-in, matching how every other optional knob in `pw.config.sh` works (off/unrestricted by
+default, e.g. `PW_AI_REVIEW_DEFAULT`).
+
+**Where it's enforced:** `/pw-breakdown` checks a task's chosen model against the allowlist while
+filling `Execute with:`; `/pw-execute` checks again right before invoking it (catches a
+hand-edited task file too). Both refuse rather than silently substituting a different model.
+
+**Checking your allowlist is actually valid — run `/pw-doctor`, not a CLI command by hand.** Its
+"model allowlist" line reports, per configured pattern, how many real models in the provider's
+live catalog it matches — a pattern with zero matches usually means a typo, a deprecated id, or a
+model your authenticated API Providers don't cover. This is purely informational: a ⚠ never
+blocks `/pw-doctor` or fails its exit code, since availability can legitimately change over time.
+One exception — **Claude Code has a fixed alias set (`opus`/`sonnet`/`haiku`/`fable` + pinned full
+names), not a queryable catalog**, so `/pw-doctor` can't verify a claude allowlist pattern
+live; cross-check it against the table above yourself.
 
 ## Agents vs sub-agents (and why the difference matters across providers)
 
@@ -77,11 +115,11 @@ So routing a task resolves to exactly one of:
 
 ## Providers & the registry
 
-Which CLI runs which model lives in the [provider registry](../tooling/docs/providers.md). Claude models
-→ Claude Code; open-weight models → KiloCode, which can connect to **several model providers at
-once** (list them in `PW_KILO_PROVIDERS` — e.g. `command_code`, `openrouter`, … — and reference any
-as `kilo:<provider>/<model>`). It's a one-row-per-provider extension point, so new providers slot in
-without code changes. When `Execute with:` names an agent, resolve its provider the same way as a
+Which CLI runs which model lives in the [Agent Provider registry](../tooling/docs/providers.md).
+Claude models → Claude Code; open-weight models → KiloCode, which can connect to **several API
+Providers at once** (list them in `PW_KILO_API_PROVIDERS` — e.g. `command_code`, `openrouter`, …
+— and reference any as `kilo:<provider>/<model>`). It's a one-row-per-Agent-Provider extension
+point, so new providers slot in without code changes. When `Execute with:` names an agent, resolve its provider the same way as a
 model: an explicit `<provider>:` prefix wins → else the agent def's own provider → else (a built-in
 with no def) the orchestrator's own provider — then apply the same-vs-different routing above.
 

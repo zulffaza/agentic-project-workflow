@@ -41,6 +41,11 @@
 #                                                     is genuinely "auto" AND zero 🔴/⏳ remain open;
 #                                                     the ONE tool-enforced exception to "only a human
 #                                                     clears a gate" — see docs/REVIEW.md
+#   pw-lib.sh model-check   <provider> <model-id>    pass/refuse a model against
+#                                                     PW_MODEL_ALLOWLIST_<PROVIDER> in pw.config.sh
+#                                                     — empty/unset = ALL models allowed (the
+#                                                     default). Called by /pw-breakdown and
+#                                                     /pw-execute; not meant to be run by hand.
 #   pw-lib.sh selftest                                 run an isolated round-trip test
 #
 # Portable across Claude Code and KiloCode executors (plain bash; call by absolute path).
@@ -682,6 +687,40 @@ cmd_review() {
   esac
 }
 
+# Guard against an agent picking an unexpectedly expensive model. Reads PW_MODEL_ALLOWLIST_<PROVIDER>
+# (uppercased) from pw.config.sh — a comma-separated list of glob patterns matched against the
+# model id (the part after the provider prefix, e.g. "opus" or "command_code/deepseek/*").
+# THE RULE: empty or unset = ALL models allowed for that provider — this is the default, and it's
+# deliberate: nothing is restricted unless you explicitly configure a pattern. Never taken on the
+# caller's word — this re-reads the config itself, same spirit as auto-signoff re-checking its own
+# gate rather than trusting the reviewer. Called by /pw-breakdown (while filling a task's `Execute
+# with:`) and /pw-execute (again, right before invoking — catches a hand-edited PLAN.md too); not
+# meant to be run directly by a human — see docs/EXECUTION.md's "Model allowlist" section.
+#   model-check <provider> <model-id>
+cmd_model_check() {
+  [ $# -eq 2 ] || die "usage: model-check <provider> <model-id>   (empty PW_MODEL_ALLOWLIST_<PROVIDER> = all models allowed)"
+  local prov="$1" model="$2" upper var allow pats pat matched=0
+  upper="$(printf '%s' "$prov" | tr '[:lower:]' '[:upper:]')"
+  var="PW_MODEL_ALLOWLIST_${upper}"
+  allow="${!var:-}"
+  if [ -z "$allow" ]; then
+    echo "model-check: $prov:$model — allowed (PW_MODEL_ALLOWLIST_${upper} is empty = all models allowed, the default)"
+    return 0
+  fi
+  IFS=',' read -ra pats <<< "$allow"
+  for pat in "${pats[@]}"; do
+    pat="$(printf '%s' "$pat" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    case "$model" in
+      $pat) matched=1; break ;;
+    esac
+  done
+  if [ "$matched" -eq 1 ]; then
+    echo "model-check: $prov:$model — allowed (matched allowlist pattern \"$pat\")"
+    return 0
+  fi
+  die "model-check: $prov:$model — refused. Not in PW_MODEL_ALLOWLIST_${upper} (\"$allow\"). Add a matching pattern to pw.config.sh, or choose an allowed model."
+}
+
 cmd_selftest() {
   local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
   mkdir -p "$tmp/demo"
@@ -959,6 +998,22 @@ cmd_selftest() {
   [ -n "$as_line" ] || die "selftest FAIL: no auto-signoff table row found"
   [ "$as_line" -gt "$as_sign" ] || die "selftest FAIL: auto-signoff row landed before ## Sign-off"
 
+  # --- model-check: empty/unset allowlist = all models allowed (the default rule) ---
+  local mc
+  mc="$(PW_MODEL_ALLOWLIST_CLAUDE="" "$0" model-check claude some-random-model-nobody-configured)" \
+    || die "selftest FAIL: model-check refused with an empty allowlist (should always pass)"
+  echo "$mc" | grep -q "all models allowed" || die "selftest FAIL: model-check's empty-allowlist message didn't state the 'all models allowed' rule"
+  # a configured allowlist passes a matching model...
+  PW_MODEL_ALLOWLIST_CLAUDE="sonnet,haiku" "$0" model-check claude sonnet >/dev/null \
+    || die "selftest FAIL: model-check refused a model matching its configured allowlist"
+  # ...glob patterns match...
+  PW_MODEL_ALLOWLIST_KILO="command_code/deepseek/*" "$0" model-check kilo command_code/deepseek/deepseek-v4-flash >/dev/null \
+    || die "selftest FAIL: model-check refused a model matching a glob pattern in its allowlist"
+  # ...and refuses one that doesn't, without silently passing.
+  if PW_MODEL_ALLOWLIST_CLAUDE="sonnet,haiku" "$0" model-check claude opus >/dev/null 2>&1; then
+    die "selftest FAIL: model-check allowed a model NOT in its configured allowlist"
+  fi
+
   echo "selftest OK"
 }
 
@@ -974,7 +1029,8 @@ case "${1:-}" in
   ship)        shift; cmd_ship "$@" ;;
   ai-review)   shift; cmd_ai_review "$@" ;;
   review)      shift; cmd_review "$@" ;;
+  model-check) shift; cmd_model_check "$@" ;;
   selftest)    cmd_selftest ;;
-  -h|--help|"") sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h|--help|"") sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown subcommand: $1 (try --help)" ;;
 esac

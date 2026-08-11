@@ -71,14 +71,20 @@ Outputs (overwritten each run):
 
 `{{ARGS}}` is replaced with each provider's argument placeholder (both use `$ARGUMENTS` today).
 
-## Add / enable a provider
-**You never edit these scripts** — everything is in `../pw.config.sh`:
+## Add / enable an Agent Provider
+Already `claude`, `kilo`, or `opencode`? Those are **built in** — just add the name to
+`PW_PROVIDERS=(…)` in `../pw.config.sh`, nothing else. For any other CLI, **you never edit these
+scripts** — everything else also goes in `../pw.config.sh`:
 1. Add its name to `PW_PROVIDERS=(…)`.
-2. Define `<name>_bin` / `<name>_skilldir` / `<name>_outdir` / `render_<name>` (the scripts only
-   supply defaults for the built-ins, so yours win). Copy `render_claude`/`render_kilo` from
-   `pw-common.sh` as a starting point. *(Optional)* to also seed the sub-agents for it, define
-   `<name>_agentdir` + `render_<name>_agent`; providers without those just skip agent-seeding.
-3. Add a row to `providers.md` (its headless invocation).
+2. Define `<name>_bin` / `<name>_skilldir` / `<name>_commanddir` / `render_<name>_command` (the
+   scripts only supply defaults for the built-ins, so yours win — never redefine a built-in
+   provider's hooks here, it'll silently replace the working default). Copy
+   `render_claude_command`/`render_kilo_command` from `pw-common.sh` as a starting point; full
+   variable contract in [ONBOARDING.md](../ONBOARDING.md#register-a-new-provider). *(Optional)*
+   to also seed the sub-agents for it, define `<name>_agentdir` + `render_<name>_agent`;
+   providers without those just skip agent-seeding.
+3. Add a row to `docs/providers.md` (its headless invocation) — a separate, optional registry
+   only needed for cross-provider task routing, not for the CLI to work at all.
 4. Re-run `./bootstrap.sh` (or `gen-commands.sh` + `gen-agents.sh`).
 
 That's the whole cost of onboarding a provider — the phase prompts themselves never get copied.

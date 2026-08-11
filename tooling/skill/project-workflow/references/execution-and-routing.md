@@ -38,14 +38,36 @@ doesn't force an agent switch; route a task to a different provider only with a 
 **Claude aliases (`opus`/`sonnet`/…) follow the latest version — pin the full name
 (`claude-opus-4-8` vs `claude-opus-5`) for reproducibility.** Defaults: `claude:opus`=complex/risky,
 `claude:sonnet`=standard (most), `claude:haiku`=trivial mechanical; open-weight models route to
-`kilo` via **whichever KiloCode model providers you configured** (`PW_KILO_PROVIDERS` array in
+`kilo` via **whichever KiloCode API Providers you configured** (`PW_KILO_API_PROVIDERS` array in
 `pw.config.sh` — KiloCode can serve several at once; the maintainer's is `command_code`), e.g.
 `kilo:command_code/MiniMaxAI/MiniMax-M3` or `kilo:openrouter/<model>` (`kilo models <provider>` for
 each provider's list).
 
+- **Discover real kilo/opencode model ids by querying the live catalog — never recall/guess one
+  from memory.** There's no fixed roster to read off anymore; a plausible-looking id can simply
+  not exist, or a display name can differ from the real id (verified case: KiloCode's own `auth
+  list` shows "Kilo Gateway," but the id it actually resolves under is `kilo`, not `kilo_gateway`
+  — `kilo models kilo_gateway` errors). Before writing a task's `Execute with:`:
+  ```bash
+  kilo models <api-provider>      # once per entry in PW_KILO_API_PROVIDERS (pw.config.sh)
+  opencode models                 # opencode manages its own provider config internally
+  ```
+  Pick an id from that actual output. Claude has no live catalog to query — its fixed alias set
+  (`opus`/`sonnet`/`haiku`/`fable` + pinned full names) is already fully documented in the
+  registry and `docs/EXECUTION.md`'s table, so there's nothing to discover there.
 - **Provider registry** = `agentic-project-workflow/tooling/docs/providers.md`: maps each model/agent
   → the CLI that runs it, and gives that CLI's **headless invocation**. It's the extension point —
   add a row to onboard a new model/provider; nothing hard-codes the list.
+- **Model allowlist — check before you write, and again before you run.** No model is off-limits
+  by default; `PW_MODEL_ALLOWLIST_<PROVIDER>` in `pw.config.sh` is empty/unset for every provider
+  unless the human configured one. Before finalizing a task's `Execute with:` during breakdown,
+  AND again right before invoking it during execution, run:
+  ```bash
+  pw-lib.sh model-check <provider> <model-id>
+  ```
+  Empty/unset allowlist → always passes (the default — every model allowed). A configured
+  allowlist that refuses your choice means pick a different allowed model — never override it or
+  run the task anyway.
 - **Cross-provider execution:** if a task's provider ≠ the orchestrator's own, the orchestrator
   **shells out to that provider's CLI headlessly**, passing the task file as the work order (Claude
   Code ⇄ KiloCode, and any future provider). The discipline travels with the task (skill + task

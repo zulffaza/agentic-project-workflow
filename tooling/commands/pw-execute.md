@@ -47,7 +47,14 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
        main repo, tell me to switch that main checkout to another branch first.
 4. **How to run each task** — resolve `Execute with: <provider>:<model-or-agent>` via
    `{{PW_HOME}}/tooling/docs/providers.md`. Tasks default to the plan's **Produced by** provider, so most
-   run under the agent you're already in:
+   run under the agent you're already in. **Before invoking**, re-check the resolved model against
+   the allowlist (empty/unset = every model is allowed, the default) — catches a task file that
+   was hand-edited after breakdown already checked it:
+   ```bash
+   {{PW_HOME}}/tooling/pw-lib.sh model-check <provider> <model-id>
+   ```
+   If it refuses, STOP that task and tell me — don't substitute a different model yourself or run
+   it anyway.
    - **Same provider you're running under → spawn a native, in-process SUB-AGENT** (NOT a shell
      invocation). Native sub-agents are easier to monitor and cheaper to supervise. If `Execute
      with:` names an agent (an existing one like `code-implementation`, the shipped `pw-executor`,

@@ -61,7 +61,7 @@ echo
 DETECTED=()
 for p in "${PW_PROVIDERS[@]}"; do
   if ! pw_provider_has_hooks "$p"; then
-    echo "  ! provider '$p' is missing hooks (bin/skilldir/outdir/render) — define them in pw.config.sh; skipping"
+    echo "  ! provider '$p' is missing hooks (bin/skilldir/commanddir/render_*_command) — define them in pw.config.sh; skipping"
     continue
   fi
   bin="$("${p}_bin")"

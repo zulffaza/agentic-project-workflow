@@ -126,7 +126,7 @@ plan_provider() {
 
   # --- commands: regenerate to a temp dir, only remove exact matches ---
   local odir rm_c=0 skip_c=0 absent_c=0
-  odir="$("${p}_outdir")"
+  odir="$("${p}_commanddir")"
   "$PW_HOME/tooling/gen-commands.sh" --outdir "$tmp/cmd" "$p" >/dev/null 2>&1 || true
   if [ -d "$tmp/cmd/$p" ]; then
     for exp in "$tmp/cmd/$p"/*.md; do
@@ -171,7 +171,7 @@ plan_provider() {
 for p in "${SCOPE[@]:-}"; do
   [ -z "$p" ] && continue
   if ! pw_provider_has_hooks "$p"; then
-    echo "  $p: no hooks defined (bin/skilldir/outdir/render) — cannot compute install paths,"
+    echo "  $p: no hooks defined (bin/skilldir/commanddir/render_*_command) — cannot compute install paths,"
     echo "      skipping (known limitation — see the header comment)"
     echo
     continue

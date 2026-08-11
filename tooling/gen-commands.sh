@@ -43,7 +43,7 @@ body() {  # body <file> -> everything after the closing --- of frontmatter
 # --- drive -------------------------------------------------------------------
 count=0
 for prov in "${PROVIDERS[@]}"; do
-  if [ -n "$OUTDIR_OVERRIDE" ]; then outdir="$OUTDIR_OVERRIDE/$prov"; else outdir="$("${prov}_outdir")"; fi
+  if [ -n "$OUTDIR_OVERRIDE" ]; then outdir="$OUTDIR_OVERRIDE/$prov"; else outdir="$("${prov}_commanddir")"; fi
   mkdir -p "$outdir"
   for f in "$CANON_DIR"/*.md; do
     name="$(basename "$f" .md)"
@@ -55,7 +55,7 @@ for prov in "${PROVIDERS[@]}"; do
     bodytext="${bodytext//\{\{PW_HOME\}\}/$PW_HOME}"
     bodytext="${bodytext//\{\{PW_PROJECTS\}\}/$PW_PROJECTS}"
     bodytext="${bodytext//\{\{PW_REPOS\}\}/$PW_REPOS}"
-    "render_${prov}" > "$outdir/$name.md"
+    "render_${prov}_command" > "$outdir/$name.md"
     count=$((count+1))
   done
   echo "✓ $prov  → $outdir  ($(ls "$CANON_DIR"/*.md | wc -l | tr -d ' ') commands)"
