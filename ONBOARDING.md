@@ -17,7 +17,9 @@ Want to see this in action first, with no setup at all? → [docs/WALKTHROUGH.md
 - At least one supported Agent Provider (AI-agent CLI) on your `PATH` — built in, no extra config:
   - **Claude Code** — `claude`
   - **KiloCode** — `kilo`  (KiloCode connects to many model API Providers; you pick which one(s)
-    in `pw.config.sh` — the shipped examples use `command_code`, but that's just one choice)
+    in `pw.config.sh` — the shipped default is `kilo` itself, KiloCode's own built-in gateway,
+    which needs no separate credential; `command_code`/`openrouter`/etc. shown elsewhere as
+    examples are just the maintainer's own additional setup, not a requirement)
   - **OpenCode** — `opencode`
   - Something else? You can add it — see [Register a new provider](#register-a-new-provider).
 
@@ -138,8 +140,9 @@ including *why* you'd want one: **[docs/MEMORY.md](./docs/MEMORY.md)**.
 - An **Agent Provider** is the AI-agent CLI you actually run — `claude`, `kilo`, `opencode`, or a
   new one you're wiring up here. This section is about registering one of those.
 - An **API Provider** is a narrower, different thing — which model *backend* a given Agent
-  Provider talks to underneath (e.g. KiloCode alone can route to several: `command_code`,
-  `openrouter`, …). That's `PW_KILO_API_PROVIDERS` in `pw.config.sh`, unrelated to what follows.
+  Provider talks to underneath (e.g. KiloCode alone can route to several: its own built-in `kilo`
+  gateway, or `command_code`/`openrouter`/…). That's `PW_KILO_API_PROVIDERS` in `pw.config.sh`,
+  unrelated to what follows.
 
 **Is your CLI already `claude`, `kilo`, or `opencode`?** Those three are **built into**
 `tooling/pw-common.sh` — you don't need anything below. Just add the name to `PW_PROVIDERS=(…)`
@@ -214,10 +217,11 @@ headless invocation `cline "<prompt>" --yolo --json` (or piped: `<prompt> | clin
 shown here — skip those and Cline just won't get the seeded sub-agents; the `/pw-*` commands still
 work.
 
-Likewise, which KiloCode **API Providers** you use (`command_code`, `openrouter`, … — the model
-backend(s) KiloCode itself connects to, a different axis from the Agent Provider list above) is
-just a list you set (`PW_KILO_API_PROVIDERS=(…)`) in `pw.config.sh` — it never constrains a
-teammate. Reference any of them in a task's `Execute with:` as `kilo:<provider>/<model>`.
+Likewise, which KiloCode **API Providers** you use (default `kilo` itself; also `command_code`,
+`openrouter`, … if you've added credentials for them — the model backend(s) KiloCode itself
+connects to, a different axis from the Agent Provider list above) is just a list you set
+(`PW_KILO_API_PROVIDERS=(…)`) in `pw.config.sh` — it never constrains a teammate. Reference any
+of them in a task's `Execute with:` as `kilo:<provider>/<model>`.
 
 ## Offboarding / uninstalling
 
