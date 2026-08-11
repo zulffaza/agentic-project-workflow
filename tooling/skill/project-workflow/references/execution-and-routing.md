@@ -104,9 +104,9 @@ this is what lets two tasks in the SAME repo target different bases (e.g. `maste
 each its own branch + worktree + MR:
 
 ```bash
-git -C ~/IdeaProjects/<repo> fetch -q origin <base-branch>
-git -C ~/IdeaProjects/<repo> worktree add \
-  ~/IdeaProjects/projects/<project-slug>/worktree/<repo>/<task-id>-<slug> \
+git -C $PW_REPOS/<repo> fetch -q origin <base-branch>
+git -C $PW_REPOS/<repo> worktree add \
+  $PW_PROJECTS/<project-slug>/worktree/<repo>/<task-id>-<slug> \
   -b agent/<project-slug>/<task-id>-<slug> origin/<base-branch>
 ```
 

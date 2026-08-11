@@ -1,11 +1,12 @@
 ---
 name: project-workflow
-description: Run a multi-repo change through the phased AI-agent pipeline under IdeaProjects/projects/ — context → analysis → task breakdown → parallel worktree execution → review → learn. Use whenever working inside IdeaProjects/projects/<project>/ (context/, analysis/, task/, worktree/), when asked to analyze context, break analysis into tasks, write or read an orchestration PLAN.md, spawn executor sub-agents against git worktrees, or scaffold a new project from the bundle. Also use when the user mentions the "project workflow", "task breakdown", "orchestration plan", or multi-repo agentic execution.
+description: Run a multi-repo change through the phased AI-agent pipeline for a scaffolded project directory (context/, analysis/, task/, worktree/) — context → analysis → task breakdown → parallel worktree execution → review → learn. Use whenever working inside a project's own scaffolded directory (context/, analysis/, task/, worktree/), when asked to analyze context, break analysis into tasks, write or read an orchestration PLAN.md, spawn executor sub-agents against git worktrees, or scaffold a new project from the bundle. Also use when the user mentions the "project workflow", "task breakdown", "orchestration plan", or multi-repo agentic execution.
 ---
 
 # Project Workflow (multi-repo agentic pipeline)
 
-Canonical guide + templates live in `~/IdeaProjects/projects/agentic-project-workflow/`. **Read
+Canonical guide + templates live in the `agentic-project-workflow/` bundle root (wherever you
+cloned it — `$PW_HOME` if sourced). **Read
 `agentic-project-workflow/README.md` first** — it is the source of truth; this skill is the
 on-demand cheat sheet, split into `references/*.md` loaded per-phase so a single invocation doesn't
 pull in detail from every other phase. New project: `/pw-new <project-slug>` (in your agent CLI).

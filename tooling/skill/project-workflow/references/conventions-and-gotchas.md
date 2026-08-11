@@ -82,7 +82,7 @@ per-provider copies.
 - **Task IDs:** `T01`, `T02`… referenced by `depends_on`.
 - **Branch:** `agent/<project-slug>/<task-id>-<slug>`
 - **Worktree:** `worktree/<repo>/<task-id>-<slug>/`, created by `git worktree add` off the real
-  sibling repo in `IdeaProjects/` — never a copy. Remove with `git worktree remove` when done.
+  sibling repo in `$PW_REPOS/` — never a copy. Remove with `git worktree remove` when done.
 - **Isolation:** an executor edits ONLY its worktree. No cross-task edits.
 - **Done:** only after running the task's `## Verify` and pasting real output. Report failures
   and skips faithfully — never claim done on unverified work.

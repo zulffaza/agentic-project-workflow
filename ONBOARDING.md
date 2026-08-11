@@ -25,9 +25,11 @@ Want to see this in action first, with no setup at all? → [docs/WALKTHROUGH.md
 
 ```bash
 # 1. Clone the bundle so it sits ALONGSIDE the git repos you'll be changing —
-#    i.e. inside your repos root (the default $PW_REPOS is two levels up).
-git clone <remote-url>/agentic-project-workflow ~/IdeaProjects/projects/agentic-project-workflow
-cd ~/IdeaProjects/projects/agentic-project-workflow
+#    i.e. inside your repos root (the default $PW_REPOS is two levels up). Any folder
+#    layout works; this is just one example (a JetBrains-style "IdeaProjects/projects/"
+#    layout isn't required — put it wherever your own repos root actually is):
+git clone <remote-url>/agentic-project-workflow <your-repos-root>/projects/agentic-project-workflow
+cd <your-repos-root>/projects/agentic-project-workflow
 
 # 2. Bootstrap: reads pw.config.sh (created from the example on first run), installs the
 #    skill + /pw-* commands for each enabled CLI, writes pw-env.sh. Idempotent and

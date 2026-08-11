@@ -132,7 +132,7 @@ with no def) the orchestrator's own provider — then apply the same-vs-differen
 
 ## Multi-repo worktrees — how
 
-Worktrees are `git worktree add` off the **real sibling repos** in `IdeaProjects/` — never copies.
+Worktrees are `git worktree add` off the **real sibling repos** in `$PW_REPOS/` — never copies.
 The project's `worktree/` dir just holds the checked-out working trees, laid out per-repo/per-task
 (`worktree/<repo>/<task-id>-<slug>/`) so parallel agents never collide even within one repo.
 

@@ -26,8 +26,9 @@ spawns to do a single task in isolation (full definitions: [docs/EXECUTION.md](.
   inputs    (you sign off) (you sign off) commit+verify    tear down
 ```
 
-Every project lives in its own directory under `IdeaProjects/projects/<slug>/` — a copy of this
-bundle's [`template/`](./template). One phase writes, you review, the next phase starts. Nothing goes
+Every project lives in its own directory under `$PW_PROJECTS/<slug>/` (wherever you cloned this
+bundle — see [ONBOARDING.md](./ONBOARDING.md), not a fixed folder name) — a copy of this bundle's
+[`template/`](./template). One phase writes, you review, the next phase starts. Nothing goes
 outward (no push, no MR) until you explicitly run `/pw-ship`.
 
 **New here?** Read in this order: this Quick Start (2 min) → optionally

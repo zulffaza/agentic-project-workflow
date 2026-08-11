@@ -11,7 +11,7 @@
 
 ## Repo manifest  [🤖 agent]
 Every **(repo, base branch)** this project touches. Worktrees fork off these (real dirs in
-`IdeaProjects/`). **A repo may appear on more than one row** if different tasks target different base
+`{{PW_REPOS}}/`). **A repo may appear on more than one row** if different tasks target different base
 branches — that's a normal case (e.g. a fix on `master` *and* its port on `spring3` in the same
 repo). Each `(repo, base)` pair is an independent branch + MR; tasks under the same pair can run in
 parallel (separate per-task branches), tasks under different pairs are independent too.
