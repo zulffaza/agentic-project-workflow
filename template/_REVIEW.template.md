@@ -29,6 +29,12 @@ HOW THIS FILE WORKS — read before editing.
   🔴 open/⏳ awaiting answer), never by hand-editing this table. That row's "By" column always
   reads `pw-reviewer (auto)`, never blended with a human "you" row — see docs/REVIEW.md.
 - List everything still open in a project:  grep -rln "🔴 open" .
+- **Every item/question heading carries a trailing `<!-- pw-item-status: open|resolved -->`
+  machine marker, alongside the human-facing 🔴/🟢/⏳/✅ text — don't remove it when you flip a
+  status, update BOTH together.** This is what tooling (the auto-signoff gate check) actually
+  keys off; the emoji stays purely for human skimming. Keeps the gate check robust even if this
+  template's wording/emoji ever changes later — see docs/KNOWN-ISSUES.md's template-gotcha entry
+  for why this exists.
 - **Agents:** the `> **Add an item:**` / `> **Answer a question:**` blockquotes right under
   "## Items" / "## Open questions" are a PERMANENT syntax reference, not the deletable worked
   example below — never remove them, even when clearing a section down to "No blocking …". Create
@@ -60,23 +66,32 @@ edits another's text.
 ## Items
 
 > **Add an item:** start a new heading `### Rn · <§section or anchor> — 🔴 open (you, <YYYY-MM-DD
-> HH:MM>)`, then write your ask on the line below it. An agent replies with a `  ↳ agent: …` line
-> and flips your heading to 🟢 resolved — it never edits or deletes your text. (This hint stays
-> even once items exist or the section is emptied back to "No blocking …" — it's the syntax
+> HH:MM>) <!-- pw-item-status: open -->`, then write your ask on the line below it. **Keep the
+> trailing `<!-- pw-item-status: … -->` marker** — that's what the auto-signoff gate check
+> actually reads, the emoji is for humans. An agent replies with a `  ↳ agent: …` line and flips
+> your heading to `🟢 resolved (you, <timestamp>) <!-- pw-item-status: resolved -->` (both the
+> emoji AND the marker, together) — it never edits or deletes your text otherwise. (This hint
+> stays even once items exist or the section is emptied back to "No blocking …" — it's the syntax
 > reference, not the worked example below.) If AI Review is `advisory`/`auto` for this phase,
 > `pw-reviewer` writes items the same way, with `(pw-reviewer, <timestamp>)` in place of `(you, …)`.
 
 <!-- ↓↓ WORKED EXAMPLE (delete this block once you get the idea) ↓↓
-### R1 · §3 Affected repos — 🔴 open (you, 2026-08-06 10:20)
+### R1 · §3 Affected repos — 🔴 open (you, 2026-08-06 10:20) [marker: pw-item-status open]
 You listed `hera` as touched, but the Kafka toggle also lives in `common-config`. Add it to the
 repo table and say whether it needs its own task.
 
   ↳ agent (2026-08-06 11:05): §3 — added a `common-config` row (config-only change); §7 — split
      the "rough shape" bullet into two chunks so breakdown can give it its own task. Item resolved.
-### R1 · §3 Affected repos — 🟢 resolved (you, 2026-08-06 10:20)   ← agent flipped 🔴→🟢
+### R1 · §3 Affected repos — 🟢 resolved (you, 2026-08-06 10:20) [marker: pw-item-status resolved]   ← agent flipped 🔴→🟢 AND the marker
 ↑↑ END EXAMPLE ↑↑ -->
+<!-- NOTE for whoever edits this template: the two "[marker: ...]" tags just above are shown in
+bracket notation, NOT the real `<!-- pw-item-status: ... -->` HTML-comment syntax, on PURPOSE —
+this whole worked-example block is already wrapped in one outer HTML comment, and HTML comments
+cannot nest. A real `<!-- pw-item-status: … -->` on those lines would prematurely close THIS
+comment at its first `-->`, leaving the rest of the worked example unprotected and visible to the
+gate check. The live headings below (outside any wrapping comment) DO use the real syntax. -->
 
-### R1 · <§section or anchor> — 🔴 open (you, <YYYY-MM-DD HH:MM>)
+### R1 · <§section or anchor> — 🔴 open (you, <YYYY-MM-DD HH:MM>) <!-- pw-item-status: open -->
 <what needs to change, and why. One concrete ask per item — split unrelated asks into R2, R3…>
 
 ## Open questions (agent asks → you answer)
@@ -89,15 +104,17 @@ flips the row to ✅ answered. This is the QnA channel — don't answer inside t
 > answered. (Permanent hint — stays even with no open questions.)
 
 <!-- ↓↓ WORKED EXAMPLE ↓↓
-### Q1 · §4 Approach — ⏳ awaiting answer (agent, 2026-08-06 09:50)
+### Q1 · §4 Approach — ⏳ awaiting answer (agent, 2026-08-06 09:50) [marker: pw-item-status open]
 Toggle default: should the flag ship **off** (opt-in, safest) or **on** (parity with today)?
   ↳ you (2026-08-06 10:20): ship it OFF by default; we'll enable per-service after canary.
-### Q1 · §4 Approach — ✅ answered (agent, 2026-08-06 11:05)   ← agent flips after folding in
+### Q1 · §4 Approach — ✅ answered (agent, 2026-08-06 11:05) [marker: pw-item-status resolved]   ← agent flips after folding in
   ↳ you (2026-08-06 10:20): ship it OFF by default; we'll enable per-service after canary.
   ↳ agent (2026-08-06 11:05): folded into §4 — default flag value = off; added a canary note to §5.
 ↑↑ END EXAMPLE ↑↑ -->
+<!-- (Bracket notation used above, not the real HTML-comment marker syntax — same nesting reason
+as the R-item worked example earlier in this file; see its note.) -->
 
-### Q1 · <§section> — ⏳ awaiting answer (agent, <YYYY-MM-DD HH:MM>)
+### Q1 · <§section> — ⏳ awaiting answer (agent, <YYYY-MM-DD HH:MM>) <!-- pw-item-status: open -->
 <the agent's question>
 <!-- You answer by adding, under the question:
   ↳ you (<YYYY-MM-DD HH:MM>): <your decision/answer>   -->

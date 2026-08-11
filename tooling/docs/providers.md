@@ -154,7 +154,8 @@ you ever add a `_headless()` hook).
 ## Verification notes (historical)
 
 Provenance for the operational rules stated above — kept for reference and future debugging, not
-required reading to just use this mechanism.
+required reading to just use this mechanism. Summarized (symptom/root cause/mitigation, no need to
+read this whole section) in [`docs/KNOWN-ISSUES.md`](../../docs/KNOWN-ISSUES.md).
 
 **Built-in headless hooks** — verified 2026-08-04 against the installed CLIs.
 

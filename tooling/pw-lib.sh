@@ -211,7 +211,7 @@ cmd_adopt() {
       printf 'Builds on existing in-progress branches. Serialization is PER-BRANCH: tasks on the same\n'
       printf 'branch run serially in its shared worktree; tasks on different branches run in parallel.\n'
       printf 'Unit headings/IDs + the Base/MR lines are managed by `pw-lib.sh adopt` — do NOT hand-edit\n'
-      printf 'them or the dashboard; fill the prose under each unit. [🧑🤖 both]\n'
+      printf 'them or the dashboard; fill the prose under each unit. [🤖🧑 both]\n'
     } > "$f"
   fi
   # Existing unit for this exact repo@branch? (heading form: "## A<k> · <repo> @ <branch>").
@@ -627,18 +627,46 @@ cmd_review_note_init() {
 }
 
 # Private: true if <file> has a REAL unresolved item/question — a genuine "### ..." heading
-# containing 🔴 open or ⏳ awaiting answer OUTSIDE any HTML comment. This is NOT a plain whole-file
-# grep for those tokens: template/_REVIEW.template.md's permanent format-hint blockquotes (kept
-# forever, by design, "even once items exist or the section is emptied") and its deletable WORKED
-# EXAMPLE block both contain these exact tokens verbatim as syntax demonstrations — a naive grep
-# would treat every review file ever created as permanently, unfixably "open". HTML comments are
-# stripped first (the worked example lives inside one); the "^### " heading anchor excludes the
-# permanent hints (blockquote lines, prefixed "> ", never "### "). A live, never-filled-in stub
-# heading (review-init always copies one) still correctly counts as open — auto-signoff should
-# refuse until it's actually been cleared, not just because nobody's looked at it yet.
+# that's still open — OUTSIDE any HTML comment. This is NOT a plain whole-file grep:
+# template/_REVIEW.template.md's permanent format-hint blockquotes (kept forever, by design,
+# "even once items exist or the section is emptied") and its deletable WORKED EXAMPLE block both
+# contain open-item syntax verbatim as demonstrations — a naive grep would treat every review file
+# ever created as permanently, unfixably "open".
+#
+# Comment-stripping is an explicit line-by-line state machine (awk), NOT `sed '/<!--/,/-->/d'`:
+# that one-liner checks the CLOSING pattern starting from the line AFTER the one that matched the
+# opening pattern — never the same line (verified empirically — a real, reproducible sed gotcha,
+# not a hypothetical). A same-line self-contained comment (`<!-- foo -->`, which every real
+# item/question heading now carries, see below) would falsely open a multi-line range that then
+# swallows everything up to the NEXT `-->` anywhere later in the file. The state machine instead:
+# a line with BOTH `<!--` and `-->` is a self-contained one-liner — kept, unstripped, exactly as
+# written; a line with only `<!--` opens a genuine multi-line comment (skipped along with every
+# line up to and including the next line containing `-->`). template/_REVIEW.template.md's own
+# WORKED EXAMPLE blocks deliberately use bracket notation (`[marker: pw-item-status open]`), not
+# real `<!-- -->` syntax, for exactly this reason — HTML comments cannot nest, so a real same-line
+# comment inside an already-open multi-line one would prematurely close the outer one and leak the
+# rest of the worked example into "real" content. Never put real `<!-- -->` syntax inside a
+# multi-line comment block in this template.
+#
+# Primary signal: a real heading carrying `<!-- pw-item-status: open -->` — a dedicated machine
+# marker (template/_REVIEW.template.md), immune to a future reword of the human-facing 🔴/⏳ prose
+# breaking this check. Fallback: the legacy emoji-text match, for a review file created before
+# this marker existed — never drop real open items in an older file just because it predates the
+# marker; when in doubt, this errs toward "still open," matching auto-signoff's own refuse-by-default stance.
 _review_has_open_marker() {
-  local f="$1"
-  sed '/<!--/,/-->/d' "$f" | grep -qE '^### .*(🔴 open|⏳ awaiting answer)'
+  local f="$1" stripped
+  stripped="$(awk '
+    BEGIN { in_comment = 0 }
+    {
+      line = $0
+      if (in_comment) { if (line ~ /-->/) { in_comment = 0 }; next }
+      if (line ~ /<!--/ && line ~ /-->/) { print line; next }
+      if (line ~ /<!--/) { in_comment = 1; next }
+      print line
+    }
+  ' "$f")"
+  printf '%s\n' "$stripped" | grep -qE '^### .*<!-- pw-item-status: open -->' && return 0
+  printf '%s\n' "$stripped" | grep -qE '^### .*(🔴 open|⏳ awaiting answer)'
 }
 
 # Write the Sign-off row on a review file WITHOUT a human — the ONE tool-enforced exception to
@@ -988,6 +1016,32 @@ cmd_selftest() {
   sed -i '' -e '/^### R1 · <§section or anchor> — 🔴 open/,+1d' \
             -e '/^### Q1 · <§section> — ⏳ awaiting answer/,+1d' "$RV2"
   _review_has_open_marker "$RV2" && die "selftest FAIL: clearing the stubs did not resolve _review_has_open_marker (still tripping on the permanent hint / worked example)"
+
+  # --- _review_has_open_marker: dedicated unit-level checks for the machine marker itself,
+  # isolated from the full auto-signoff integration flow above ---
+  local MKT="$tmp/marker-test.md"
+  # 1. A real heading whose ONLY open signal is the new marker (no legacy emoji at all) must
+  #    still be detected — proves the marker path works independently of the emoji fallback.
+  printf '### R1 · §1 something — status pending <!-- pw-item-status: open -->\nbody\n' > "$MKT"
+  _review_has_open_marker "$MKT" || die "selftest FAIL: marker-only open heading (no emoji) not detected as open"
+  # 2. A resolved marker must NOT be treated as open even when unrelated prose elsewhere on the
+  #    SAME line mentions the legacy "open" words — proves the marker, not stray text, decides.
+  printf '### R1 · §1 something resolved, previously open <!-- pw-item-status: resolved -->\nbody\n' > "$MKT"
+  _review_has_open_marker "$MKT" && die "selftest FAIL: a resolved-marker heading was treated as open because of unrelated 'open' text on the same line"
+  # 3. A same-line marker on a real heading must never be swallowed by, or itself swallow, a
+  #    separate genuinely-multi-line comment elsewhere in the file (the sed-range gotcha this
+  #    mechanism was rewritten to avoid) — content after the multi-line block must survive.
+  printf '### R1 real — open <!-- pw-item-status: open -->\n<!-- multiline wrapper\nswallowed middle line\nend of wrapper -->\n### R2 real — resolved <!-- pw-item-status: resolved -->\n' > "$MKT"
+  _review_has_open_marker "$MKT" || die "selftest FAIL: real open marker lost across an unrelated multi-line comment block"
+  grep -q "swallowed middle line" <(awk '
+    BEGIN { in_comment = 0 }
+    { line = $0
+      if (in_comment) { if (line ~ /-->/) { in_comment = 0 }; next }
+      if (line ~ /<!--/ && line ~ /-->/) { print line; next }
+      if (line ~ /<!--/) { in_comment = 1; next }
+      print line }
+  ' "$MKT") && die "selftest FAIL: multi-line comment content was not actually stripped"
+
   PW_PROJECTS_DIR="$tmp" "$0" review auto-signoff demo2 analysis/review/topic2.review.md analysis >/dev/null
   grep -q '| pw-reviewer (auto) | approved ✅ |$' "$RV2" || die "selftest FAIL: auto-signoff row not written/tagged correctly"
   grep -q '^| | | in-review |$' "$RV2" && die "selftest FAIL: auto-signoff left the placeholder row instead of replacing it"

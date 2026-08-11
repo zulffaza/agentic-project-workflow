@@ -142,6 +142,18 @@ for p in "${PW_PROVIDERS[@]}"; do
     fi
   fi
 
+  # {{ARGS}} conformance: a render_<prov>_command hook that forgets to substitute the {{ARGS}}
+  # token leaves it literally in the rendered file — that CLI's argument placeholder never gets
+  # filled in at all. Check the freshly-generated output (not the installed copy), so this catches
+  # a broken render hook even before the drift check above would ever surface it via --fix.
+  unsub=0
+  for exp in "$tmp/$p"/*.md; do
+    grep -q '{{ARGS}}' "$exp" 2>/dev/null && unsub=$((unsub+1))
+  done
+  if [ "$unsub" -gt 0 ]; then
+    echo "    ✗ {{ARGS}} left unsubstituted in $unsub rendered command file(s) — render_${p}_command never maps it to this CLI's argument placeholder"; issues=$((issues+1))
+  fi
+
   # agents: generate to a SEPARATE temp subdir (the commands check already populated $tmp/$p),
   # diff against what's installed (only if provider has agent hooks)
   if pw_provider_has_agent_hooks "$p"; then

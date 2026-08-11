@@ -55,11 +55,14 @@ example output (5 min) → [ONBOARDING.md](./ONBOARDING.md) when you're ready to
 /pw-close     spring-boot-3-upgrade     # → tears down worktrees, captures learnings, Status → done
 ```
 
-**Two ways to start.** Fresh (`/pw-new`, above) — or **continuation** if you're already
-mid-development: `/pw-adopt <slug> <repo> <branch> [mr-url]` snapshots the in-progress work and
-continues it *on the same branch* (with or without an existing MR). Run it **once per in-progress
-branch** to adopt multi-repo work already in flight. Everything from analysis on is identical. Full
-guide → **[docs/ADOPTION.md](./docs/ADOPTION.md)**.
+### Already mid-development? Adopt it instead of starting fresh
+
+The Quick Start above is the greenfield path. If work is **already underway on a real branch**
+(with or without an MR), `/pw-adopt <slug> <repo> <branch> [mr-url]` snapshots it and continues
+*on that same branch* — nothing about analysis/breakdown/execute/ship changes once adopted. This
+is what makes continuation a first-class path here, not fresh-start-only: `/pw-adopt` (once per
+in-progress branch, for a multi-repo continuation) instead of `/pw-new`, then everything else is
+identical. Full guide → **[docs/ADOPTION.md](./docs/ADOPTION.md)**.
 
 New here or on a fresh machine? **[ONBOARDING.md](./ONBOARDING.md)** has the full setup, including
 adding your own agent CLI as a provider. Leaving/uninstalling? `./offboard.sh` is the exact inverse
@@ -106,6 +109,7 @@ platform, or a local-only doc by default) — see **[docs/RFC.md](./docs/RFC.md)
 | 🧠 **[docs/MEMORY.md](./docs/MEMORY.md)** | Optional cross-project recall — what it's for, why bother, how to turn it on |
 | ⚙️ **[docs/EXECUTION.md](./docs/EXECUTION.md)** | Orchestrator vs executor · picking a model/agent per task · cross-provider execution · worktrees |
 | 📖 **[docs/REFERENCE.md](./docs/REFERENCE.md)** | Bundle layout · project anatomy · naming conventions · the full `/pw-*` command table + generator |
+| 🐛 **[docs/KNOWN-ISSUES.md](./docs/KNOWN-ISSUES.md)** | Verified gotchas this bundle already works around (cross-provider shell-out quirks, GitLab API traps) — dated, with root cause + mitigation |
 | 🚀 **[ONBOARDING.md](./ONBOARDING.md)** | Fresh-machine / teammate setup · registering a new provider · optional memory · offboarding/uninstalling |
 
 ## Why it's shaped this way

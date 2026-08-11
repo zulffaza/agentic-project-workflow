@@ -64,10 +64,10 @@
 ### Milestone #2
 
 ## Rollout Plan (Optional)
-🧑🤖 <filled only if you ask — from analysis risks + PLAN's rollback-plan-if-a-group-fails>
+🤖🧑 <filled only if you ask — from analysis risks + PLAN's rollback-plan-if-a-group-fails>
 
 ## Rollback Plan (Optional)
-🧑🤖 <filled only if you ask>
+🤖🧑 <filled only if you ask>
 
 ## Conclusion
 🤖 <filled at Wave 2 — the recommendation, restated for a reader who skipped straight here>

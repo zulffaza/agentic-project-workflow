@@ -1,11 +1,11 @@
 ---
 description: Execute a project's PLAN.md via orchestrated worktree sub-agents
-args: <project-slug> [task-ids | "with <model/agent>"]
+args: <project-slug> [task-ids | "with <model/agent>" | --wave]
 agent: pw-orchestrator
 ---
 Follow the `project-workflow` skill. Act as the ORCHESTRATOR — never edit repo code yourself.
-Arguments: {{ARGS}} (first token = project slug; optional remainder = task IDs or an override
-like "T03 with opus").
+Arguments: {{ARGS}} (first token = project slug; optional remainder = task IDs, an override like
+"T03 with opus", or the literal `--wave`).
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
@@ -17,16 +17,23 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
    - **Arguments name specific task IDs** → scope = exactly those tasks (plus an optional `"with
      <model/agent>"` override). This is the deliberate "re-verify just this one" path — run only
      what's named, then stop, whether or not other tasks in the plan are still pending.
-   - **No task IDs** → this is a **resume of the whole run**, not "run one task and stop." Scope =
-     **every task in the PLAN table whose `Status` is NOT YET `accepted`** — i.e. `todo`,
-     `in-progress` (a stale/crashed run), or `verify-failed`. Tasks already `accepted` are left
-     completely alone; tasks already `done` (committed + verified, just awaiting my review) are
-     also left alone — don't re-run something that already succeeded.
-   - **Keep walking the DAG to the end of that scope in this SAME invocation — do not stop after
+   - **`--wave`** → scope = **only the tasks immediately runnable right now** — not yet `accepted`,
+     and every entry in `depends_on` is already `done`/`accepted` at the moment you resolve scope.
+     Run that wave to completion, then **stop and report** rather than cascading into whatever it
+     just unblocked — the deliberate "one deployable-sized chunk, then checkpoint" path for a long
+     plan, so a misbehaving orchestrator or a lost session only affects one wave's blast radius.
+     Tell me which tasks are now newly ready for the *next* `--wave` call.
+   - **No task IDs, no `--wave`** → this is a **resume of the whole run**, not "run one task and
+     stop." Scope = **every task in the PLAN table whose `Status` is NOT YET `accepted`** — i.e.
+     `todo`, `in-progress` (a stale/crashed run), or `verify-failed`. Tasks already `accepted` are
+     left completely alone; tasks already `done` (committed + verified, just awaiting my review)
+     are also left alone — don't re-run something that already succeeded.
+   - **Keep walking the DAG to the end of *that* scope in this SAME invocation — do not stop after
      handling only one task.** The moment a task you (re)ran reaches `done`, immediately continue:
-     spawn whatever depends on it, and any other independent ready task, without waiting for me to
-     invoke `/pw-execute` again. A bare `/pw-execute <slug>` should drive the run to the end of
-     what's currently ready, once, not one task per invocation.
+     spawn whatever depends on it *within scope*, and any other independent ready task *within
+     scope*, without waiting for me to invoke `/pw-execute` again. A bare `/pw-execute <slug>`
+     drives the run to the end of everything currently outstanding, once; `--wave` drives it only
+     to the end of the immediately-runnable wave, then checkpoints.
 3. Walk the dependency DAG within that scope. Spawn one executor per task, only once its
    `depends_on` are `done`/`accepted`. Parallelize independent tasks up to the plan's max. Honor
    the plan's **execution routing** and any override in the arguments; record what you used in each
@@ -101,10 +108,15 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
    (not shipped yet). Keep the dashboard task-status table current and log each action via the
    helper:
    `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> execute "spawned T0n (provider:model); committed <sha>"`.
-   When every task in scope is `done` (or blocked only by a `verify-failed` dependency):
-   `…/{{PW_HOME}}/tooling/pw-lib.sh status <slug> review`. Report a clean per-task summary — which
-   reached `done`, which are still `verify-failed` and why, which never got a turn because their
-   dependency is blocked.
+   **The dashboard `Status: review` transition is keyed to the WHOLE PLAN, not the resolved
+   scope** — set it via `…/{{PW_HOME}}/tooling/pw-lib.sh status <slug> review` only when *every*
+   task in the *entire* `PLAN.md` table is `done`/`accepted` (or blocked only by a `verify-failed`
+   dependency), regardless of whether this particular invocation was a `--wave`, a task-id-scoped
+   re-run, or a full resume. A `--wave` call that finishes its wave but leaves later tasks still
+   `todo` must NOT flip Status — report the wave's outcome and stop, plan still `executing`.
+   Report a clean per-task summary — which reached `done`, which are still `verify-failed` and why,
+   which never got a turn because their dependency is blocked, and (for `--wave`) which tasks are
+   newly ready for the next `--wave` call.
 
 Stop for my review before marking anything `accepted`. Two different re-run paths — don't confuse
 them:

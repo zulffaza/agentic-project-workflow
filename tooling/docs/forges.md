@@ -3,7 +3,8 @@
 **Filled by:** [🤖 maintainer] — the day-to-day override you actually set is `PW_FORGE_HOSTS` in
 `pw.config.sh` (a self-hosted GitLab host, or any forge whose CLI needs a host env var). This file
 itself is maintainer-owned reference: the resolution algorithm + the Registry's exact CLI
-invocations. `/pw-ship`/`/pw-adopt` READ this registry; you don't edit it day-to-day.
+invocations. `/pw-ship`/`/pw-adopt` READ this registry; you don't edit it day-to-day. The
+gotchas below are summarized in [`docs/KNOWN-ISSUES.md`](../../docs/KNOWN-ISSUES.md).
 
 `/pw-ship` (open MRs, fetch MR comments) and `/pw-adopt` (resolve an MR's target branch) both need
 to know **which CLI talks to a given repo's Git host**. That's a per-repo fact, not a global one —

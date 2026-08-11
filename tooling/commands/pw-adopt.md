@@ -1,10 +1,23 @@
 ---
-description: Onboard existing in-progress branch(es) into the workflow — the continuation workflow (with or without an MR)
-args: <project-slug> <repo> <existing-branch> [mr-url] [review]
+description: Onboard existing in-progress branch(es) into the workflow — the continuation workflow (with or without an MR); one repo per call, or several in one call for a multi-repo continuation
+args: <project-slug> <repo> <existing-branch> [mr-url] [review]  |  <project-slug> <repo1>:<branch1>[:mr-url1] <repo2>:<branch2>[:mr-url2] ... [review]
 ---
-Follow the `project-workflow` skill. Arguments: {{ARGS}} — `<project-slug> <repo> <existing-branch>
-[mr-url] [review]`. This is the **continuation workflow**: instead of a fresh start (`/pw-new`), you
-build on work that's **already underway on real branches** (with or without an MR).
+Follow the `project-workflow` skill. Arguments: {{ARGS}} — either the single-unit form
+`<project-slug> <repo> <existing-branch> [mr-url] [review]`, or the **batch form** for a multi-repo
+continuation in one call: `<project-slug> <repo1>:<branch1>[:mr-url1] <repo2>:<branch2>[:mr-url2]
+... [review]` (each `repo:branch[:mr-url]` group is ONE token, colon-separated — detect batch mode
+by whether argument 2 contains a `:`). This is the **continuation workflow**: instead of a fresh
+start (`/pw-new`), you build on work that's **already underway on real branches** (with or without
+an MR).
+
+**Batch form mechanics** — same rules as single-unit, just looped: run steps 1–4 below **once per
+`repo:branch[:mr-url]` group, in order** (each is its own independent `pw-lib.sh adopt` call —
+already safe to call repeatedly, per "Appending a unit is deterministic" below, so one group
+failing validation doesn't corrupt units already recorded before it; STOP and report which groups
+succeeded vs. the one that failed rather than rolling anything back). A trailing `review` keyword
+applies to the **whole batch** — all groups land at the same intent/phase; if some branches need a
+different intent, adopt those separately. Run step 5 (set phase) and step 6 (recap) **once**, for
+the whole batch — one phase transition, one combined recap listing every adopted unit.
 
 Project dir: `{{PW_PROJECTS}}/<slug>`. Repo: `{{PW_REPOS}}/<repo>`.
 
@@ -47,14 +60,17 @@ earlier units are untouched. The result is a **mixed project** where adoption is
 "mixed projects" note. Keep unrelated in-progress work in its own slug instead.
 
 ## Steps
-1. **Parse mode + guard the phase.** If the last argument is the literal `review`, this is a
-   **review-only** adopt (strip it from the args; the `mr-url` before it is then required) —
-   otherwise it's a default **continue-dev** adopt. Read the current phase
+1. **Parse mode + guard the phase.** First, detect **batch vs. single-unit** from argument 2: if
+   it contains a `:`, this is the batch form — split it and every following non-`review` argument
+   on `:` into `(repo, branch, mr-url?)` groups. If the last argument is the literal `review`, this
+   is a **review-only** adopt for the whole batch (strip it from the args; each group's `mr-url` is
+   then required) — otherwise it's a default **continue-dev** adopt. Read the current phase
    (`{{PW_HOME}}/tooling/pw-lib.sh phase <slug>`, if the project already exists) and apply the phase
-   guard above: refuse on `done` (unless I say reopen); for a continue-dev adopt past `context`, plan
-   to warn (not rewind). **Validate:** confirm `{{PW_REPOS}}/<repo>` is a git repo and
-   `<existing-branch>` exists (`git -C {{PW_REPOS}}/<repo> rev-parse --verify <existing-branch>`, else
-   `origin/<existing-branch>`). If the slug's project dir doesn't exist yet, scaffold it first:
+   guard above ONCE, for the whole call: refuse on `done` (unless I say reopen); for a continue-dev
+   adopt past `context`, plan to warn (not rewind) once at the end, not per group. **Validate each
+   group**: confirm `{{PW_REPOS}}/<repo>` is a git repo and `<existing-branch>` exists (`git -C
+   {{PW_REPOS}}/<repo> rev-parse --verify <existing-branch>`, else `origin/<existing-branch>`) —
+   if the slug's project dir doesn't exist yet, scaffold it first (once, before the first group):
    `{{PW_HOME}}/tooling/scaffold.sh <slug>`.
 2. **Resolve the base branch — from the MR target first.** The authoritative base for an adopted
    branch is **its MR's target branch**, not a guess:
@@ -86,14 +102,18 @@ earlier units are untouched. The result is a **mixed project** where adoption is
      `ADOPTED.md` provenance row (inserted once, kept generic — never re-enumerate units into it)
      and the "Repos in scope" marker rows, so adopting the Nth branch can't clobber earlier rows or
      re-churn that provenance line (the reported bugs).
-5. **Set the phase for this intent** (per the phase guard above):
-   - **Review-only adopt** → `{{PW_HOME}}/tooling/pw-lib.sh status <slug> review`. Mark that unit's
-     `### Remaining work` as `none — review-only (servicing MR comments)`.
+5. **Set the phase for this intent, ONCE for the whole call** (per the phase guard above) — repeat
+   steps 2–4 per group first, then do this exactly once:
+   - **Review-only adopt** → `{{PW_HOME}}/tooling/pw-lib.sh status <slug> review`. Mark each
+     adopted unit's `### Remaining work` as `none — review-only (servicing MR comments)`.
    - **Continue-dev adopt on a fresh/context project** → leave `Status` at `context` (don't touch it).
    - **Continue-dev adopt on a project already past `context`** → do NOT change `Status`; you'll warn
      in the recap instead.
-6. **Recap + next actions:** report the unit id, repo@branch, resolved base **and whether it came
-   from the MR target or is unconfirmed**, the MR state, and the **intent/landing phase**. Then:
+6. **Recap + next actions:** for a single-unit call, report the unit id, repo@branch, resolved
+   base **and whether it came from the MR target or is unconfirmed**, the MR state, and the
+   **intent/landing phase**. For a **batch call, report one line per adopted unit** (same fields)
+   plus which groups (if any) failed validation and were skipped, then the shared intent/phase
+   once at the end. Then:
    - **Continue-dev:** fill each unit's `### Remaining work` in `ADOPTED.md`; adopt more branches with
      another `/pw-adopt` run if the work spans more repos; then run **`/pw-analyze <slug>`** — analysis
      reads `ADOPTED.md` + each unit's existing diff as the baseline and proposes only the *remaining*
