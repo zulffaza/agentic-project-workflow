@@ -55,9 +55,10 @@ each provider's list).
   Pick an id from that actual output. Claude has no live catalog to query — its fixed alias set
   (`opus`/`sonnet`/`haiku`/`fable` + pinned full names) is already fully documented in the
   registry and `docs/EXECUTION.md`'s table, so there's nothing to discover there.
-- **Provider registry** = `agentic-project-workflow/tooling/docs/providers.md`: maps each model/agent
-  → the CLI that runs it, and gives that CLI's **headless invocation**. It's the extension point —
-  add a row to onboard a new model/provider; nothing hard-codes the list.
+- **Cross-provider execution mechanism** = `agentic-project-workflow/tooling/docs/providers.md`:
+  explains how the orchestrator reads a provider's `<name>_headless()` hook (built-in for claude/
+  kilo/opencode; added or overridden in `pw.config.sh` — never edited in `tooling/` directly) to
+  invoke it non-interactively.
 - **Model allowlist — check before you write, and again before you run.** No model is off-limits
   by default; `PW_MODEL_ALLOWLIST_<PROVIDER>` in `pw.config.sh` is empty/unset for every provider
   unless the human configured one. Before finalizing a task's `Execute with:` during breakdown,

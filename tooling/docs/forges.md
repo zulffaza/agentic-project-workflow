@@ -1,8 +1,9 @@
 # Git forge registry (shipment routing)
 
-**Filled by:** [🧑 you] — this is config you maintain as you add forges/hosts, same shape as
-[`providers.md`](./providers.md). `/pw-ship`/`/pw-adopt` READ this registry, they don't hardcode a
-forge or host.
+**Filled by:** [🤖 maintainer] — the day-to-day override you actually set is `PW_FORGE_HOSTS` in
+`pw.config.sh` (a self-hosted GitLab host, or any forge whose CLI needs a host env var). This file
+itself is maintainer-owned reference: the resolution algorithm + the Registry's exact CLI
+invocations. `/pw-ship`/`/pw-adopt` READ this registry; you don't edit it day-to-day.
 
 `/pw-ship` (open MRs, fetch MR comments) and `/pw-adopt` (resolve an MR's target branch) both need
 to know **which CLI talks to a given repo's Git host**. That's a per-repo fact, not a global one —
@@ -109,7 +110,7 @@ PW_FORGE_HOSTS=("git.internal.example.com=gitlab")
 (That's a placeholder host for the example — put your **own** organization's real internal hostname
 in your own gitignored `pw.config.sh`, never in a tracked file.)
 
-## Adding a forge (extensibility)
+## Adding a forge (extensibility — a maintainer task, not a quick edit)
 Add one row to the Registry with its CLI binary, host-detection signal, and both invocations. If it
 needs a host/instance env var the way `glab` needs `GITLAB_HOST`, say so in the invocation column —
 the resolution algorithm above already threads `<resolved-host>` through for you. No generator or

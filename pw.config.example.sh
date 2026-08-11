@@ -145,3 +145,15 @@ PW_RFC_NOTES=""
 #                                # $displayName $role $claude_tools $model $bodytext instead —
 #                                # see render_claude_agent/render_kilo_agent for full examples.
 # Providers without these two hooks just skip agent-seeding — commands still work.
+#
+# OPTIONAL — to let an orchestrator running under a DIFFERENT provider hand tasks to this one
+# headlessly (cross-provider execution — see tooling/docs/providers.md), add:
+#   myprov_headless() { cat <<'HEADLESS'
+#     myprov-cli run --auto -m <model> "<prompt>"   # the exact non-interactive invocation
+#     --auto (or whatever flag skips permission prompts) is usually REQUIRED headless — without
+#     it, a permission prompt has no TTY to answer and the process hangs producing no output.
+#   HEADLESS
+#   }
+# Without this hook, the provider is still fully usable same-provider (spawning an in-process
+# sub-agent) — it just can't be a cross-provider execution TARGET. See
+# claude_headless/kilo_headless/opencode_headless in tooling/pw-common.sh for real examples.

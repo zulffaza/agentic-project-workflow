@@ -1,44 +1,64 @@
-# Agent Provider registry (execution routing)
+# Cross-provider execution (how a task routes to another Agent Provider's CLI)
 
-**Filled by:** [🧑 you] — this is config you maintain as you add agents/models. Agents READ it.
+**Filled by:** [🤖 maintainer] — this documents the mechanism; you never edit this file to
+register a provider or a model. Adding cross-provider execution support for a new Agent Provider
+means defining `<name>_headless()` in `pw.config.sh` — see
+[ONBOARDING.md](../../ONBOARDING.md#register-a-new-provider) — never editing this file.
 
 > **Not the same registry as [ONBOARDING.md](../../ONBOARDING.md)'s "Register a new provider."**
 > That one is about wiring a new AI-agent CLI into this bundle at all (skills/commands/agents,
-> via hooks in `pw.config.sh`). This file is a separate, optional registry consulted only by
-> `/pw-execute`'s cross-provider task routing — a CLI can be fully wired up with no row here, and
-> a row here means nothing without that CLI also being a registered Agent Provider.
+> via hooks in `pw.config.sh`). This file explains a separate, optional mechanism consulted only
+> by `/pw-execute`'s cross-provider task routing — a CLI can be fully wired up with no headless
+> hook at all, and a headless hook means nothing without that CLI also being a registered Agent
+> Provider.
 >
-> **Terminology:** an **Agent Provider** is the CLI itself (`claude`, `kilo`, `opencode`, …) — the
-> rows below. An **API Provider** is a narrower, different thing: which model *backend* a given
-> Agent Provider talks to underneath (e.g. `command_code`/`openrouter` inside KiloCode). One
-> Agent Provider can have several API Providers; don't conflate the two when reading this file.
+> **Terminology:** an **Agent Provider** is the CLI itself (`claude`, `kilo`, `opencode`, …). An
+> **API Provider** is a narrower, different thing: which model *backend* a given Agent Provider
+> talks to underneath (e.g. `command_code`/`openrouter` inside KiloCode). One Agent Provider can
+> have several API Providers; don't conflate the two when reading this file.
 
 > Path vars below (`$PW_HOME`/`$PW_PROJECTS`/`$PW_REPOS`) are exported by `bootstrap.sh`; see the
 > bundle [README](../README.md) legend.
 
 `Execute with:` on a task names a **model** or an **agent**. Each belongs to an **Agent Provider**
-— the CLI that can actually run it. The orchestrator uses this registry to decide, per task: run
-it in-process (same Agent Provider the orchestrator is running under) or **shell out to another
-Agent Provider's CLI**. This is what lets a `/pw-execute` started in Claude Code hand specific
-tasks to KiloCode (or vice-versa), and stays open for new providers.
+— the CLI that can actually run it. The orchestrator decides, per task: run it in-process (same
+Agent Provider the orchestrator is running under) or **shell out to another Agent Provider's
+CLI**. This is what lets a `/pw-execute` started in Claude Code hand specific tasks to KiloCode
+(or vice-versa), and stays open for new providers.
 
-`Execute with:` format → **`<provider>:<model-or-agent>`** (the `<provider>:` prefix is optional
-when the model maps to exactly one provider below).
+`Execute with:` format → **`<provider>:<model-or-agent>`** — **the `<provider>:` prefix is always
+required.** There's no static model→provider catalog to fall back on for an implicit mapping (and
+there won't be one again — see "Choosing a model" below for why); write it explicitly every time.
 
-## Registry
+## How headless invocation actually works
 
-| Provider | CLI binary | Models / agents it serves | Headless (non-interactive) invocation | Notes |
-|----------|-----------|---------------------------|----------------------------------------|-------|
-| `claude` | `claude` | alias = **latest** of that family: `opus`, `sonnet`, `haiku`, `fable`; **pinned** full names: `claude-opus-5`, `claude-opus-4-8`, `claude-sonnet-5`, `claude-haiku-4-5-20251001`, `claude-fable-5`; existing agents (`code-implementation`, …) | `<prompt> \| claude --print --dangerously-skip-permissions --model <model> [--effort <low\|medium\|high\|xhigh\|max>]` | Anthropic models. `-p`/`--print` = headless; `--dangerously-skip-permissions` is **required** headless — without it a tool-approval prompt has no TTY to answer it and the process hangs producing no output. **Pipe the prompt via stdin, never a trailing CLI argument** — a long inline argument can vanish entirely across a shell-out boundary; stdin is immune (see [Verification notes](#verification-notes-historical) for why). **Alias ≠ version-stable** (`opus` follows the latest) — use a full name to pin. |
-| `kilo` | `kilo` (`@kilocode/cli`) | via the **`command_code`** API Provider (NOT Kilo Gateway): `command_code/deepseek/deepseek-v4-pro`, `command_code/MiniMaxAI/MiniMax-M3`, `command_code/xiaomi/mimo-v2.5-pro`, `command_code/Qwen/Qwen3.7-Max`, `command_code/zai-org/GLM-5.2`, … (also proxies Claude/GPT/Gemini). Full list: `kilo models command_code`. | `kilo run --auto -m command_code/<model> "<prompt>" --dir <path> [--variant <high\|max\|minimal\|…>] [--thinking] [--format json]` — `--auto` is **required** headless (see below); add `--agent <name>` when using a native agent | Open-weight + proxied models. Model id (everything after `-m`) is passed verbatim. `--variant` = provider-specific reasoning effort. |
-| `opencode` | `opencode` | via any API Provider configured in OpenCode's own config: `<provider>/<model>` ids, e.g. `anthropic/claude-sonnet-4-20250514`, `openai/gpt-5`, … Full list: `opencode models`. | `opencode run --auto -m <provider>/<model> "<prompt>" [--format json] [--attach <url>]` — `--auto` is **required** headless (auto-approves permissions not explicitly denied) | Model id (everything after `-m`) is `<provider>/<model>` per OpenCode's own config, passed verbatim. **Not yet run end-to-end in this bundle** (unlike the claude/kilo rows — see Verification notes) — confirmed against OpenCode's own CLI docs only; verify before relying on it for a real task. |
-| _`<future>`_ | _`<cli>`_ | _`<models/agents>`_ | _`<invocation>`_ | Add a row — no code change needed. |
+Each Agent Provider has an **optional** `<name>_headless()` hook — built-in for claude/kilo/
+opencode in `tooling/pw-common.sh`, overridable (or added fresh, for a provider that isn't
+built-in) in `pw.config.sh` — that prints the exact non-interactive invocation template plus
+operational gotchas for that CLI. The orchestrator reads **that hook's output**, not a markdown
+table, when routing a task to a *different* provider than its own. A provider without this hook
+is still fully usable same-provider; it just can't be a cross-provider **target** (same optional
+treatment as `agentdir`/`render_*_agent` for sub-agent seeding).
 
-> **`Execute with:` form per provider:** `claude:<model-or-agent>` (e.g. `claude:opus` = latest, or
-> pinned `claude:claude-opus-4-8`), or `kilo:<full-model-id>` where the id after `kilo:` is exactly
-> what `kilo run -m` expects — e.g. `kilo:command_code/MiniMaxAI/MiniMax-M3`. The `command_code/`
-> prefix is required because that's the API Provider in use inside KiloCode (confirmed:
-> `command_code` credential, not Kilo Gateway).
+**What the built-in hooks currently return** (source of truth is `tooling/pw-common.sh`'s
+`claude_headless`/`kilo_headless`/`opencode_headless` — the lines below are illustrative, kept in
+sync by whoever maintains the bundle, not something you edit here to change behavior):
+
+- **claude** — `claude --print --dangerously-skip-permissions --model <model> [--effort <low|
+  medium|high|xhigh|max>]`. `--dangerously-skip-permissions` is **required** headless (no TTY to
+  answer a permission prompt otherwise). **Pipe the prompt via stdin, never a trailing
+  argument** — a long inline argument can vanish entirely across a shell-out boundary; stdin is
+  immune (see [Verification notes](#verification-notes-historical)). Model aliases (`opus`/
+  `sonnet`/`haiku`/`fable`) follow the *latest* of that family — pin a full name
+  (`claude-opus-4-8` vs `claude-opus-5`) for reproducibility on risky tasks.
+- **kilo** — `kilo run --auto -m <api-provider>/<model> "<prompt>" --dir <path> [--variant <low|
+  medium|high|max|minimal>] [--thinking] [--format json]`. `--auto` is **required** headless
+  (without it, `kilo run` auto-*rejects* every permission — it can't even read the task file).
+  Add `--agent <name>` when targeting a native agent instead of a bare model. `<api-provider>` is
+  one of `PW_KILO_API_PROVIDERS` (`pw.config.sh`) — e.g. `kilo`, `command_code`, `openrouter`.
+- **opencode** — `opencode run --auto -m <api-provider>/<model> "<prompt>" [--format json]
+  [--attach <url>]`. `--auto` is required headless. **Not yet run end-to-end in this bundle**
+  (unlike claude/kilo — see Verification notes); confirmed against OpenCode's own CLI docs only.
 
 ## Effort / variant / thinking (per-task tuning)
 A task may carry two optional fields alongside `Execute with:` — the orchestrator maps them to the
@@ -57,9 +77,12 @@ right CLI flag by provider:
 
 ## Choosing a model — no fixed roster, model-agnostic by default
 
-There's deliberately no fixed "blessed models" list here — any model any configured API
-Provider serves is fair game, for kilo, opencode, or claude. An agent (during `/pw-breakdown`) or
-you can pick whatever fits the task.
+There's deliberately no fixed "blessed models" list, and no static model→provider catalog either
+— any model any configured API Provider serves is fair game, for kilo, opencode, or claude alike.
+An agent (during `/pw-breakdown`) or you can pick whatever fits the task, but **always write the
+explicit `<provider>:` prefix** — this is exactly why: a static catalog goes stale (a display name
+can differ from the real id — verified case: KiloCode's own "Kilo Gateway" credential resolves
+under the id `kilo`, not `kilo_gateway`), so there's nothing here to infer a provider from.
 
 **If you don't want that fully open** — e.g. to keep an agent from reaching for an unexpectedly
 expensive model — set an optional **model allowlist** per Agent Provider in `pw.config.sh`
@@ -89,19 +112,20 @@ than inline here.
    `<provider>:` prefix → else the agent's own provider in `tooling/agents/<name>.md` → else
    (built-in agent, no def) the orchestrator's own provider. Its `model`/effort defaults apply
    unless the task overrides. (See `tooling/agents/README.md`.)
-1. Otherwise resolve each task's provider from its `Execute with:` (explicit `<provider>:` prefix, else the
-   unique provider serving that model in the table above).
+1. Otherwise resolve each task's provider from its `Execute with:` **explicit `<provider>:`
+   prefix** — always present, never inferred.
 2. **Same provider** as the orchestrator → spawn a normal in-process **sub-agent** (the usual path):
    `pw-executor`, another same-provider agent, or a bare model. Sub-agents are same-provider only.
-3. **Different provider** → invoke that provider's **CLI headlessly**, passing the *task file* as
-   the work order to its **default/primary** agent. You **cannot** name the other provider's
-   *sub-agent* here (e.g. a Claude orchestrator can't use kilo's `pw-executor` sub-agent) — sub-agents
-   don't cross a provider boundary; only a provider's own primary agents are invocable from outside,
-   and a lone task just needs the default agent + task file. The discipline travels with the task,
-   not the provider — the other CLI still follows the `project-workflow` skill + the task file.
+3. **Different provider** → read that provider's `<name>_headless()` hook output, and invoke its
+   **CLI headlessly** per that template, passing the *task file* as the work order to its
+   **default/primary** agent. You **cannot** name the other provider's *sub-agent* here (e.g. a
+   Claude orchestrator can't use kilo's `pw-executor` sub-agent) — sub-agents don't cross a
+   provider boundary; only a provider's own primary agents are invocable from outside, and a lone
+   task just needs the default agent + task file. The discipline travels with the task, not the
+   provider — the other CLI still follows the `project-workflow` skill + the task file.
    Concretely (note: `-m <model>`, **no** `--agent`):
    ```bash
-   # Claude-Code orchestrator → hand a kilo:* task to KiloCode (command_code provider):
+   # Claude-Code orchestrator → hand a kilo:* task to KiloCode (command_code API Provider):
    PROMPT="Follow the project-workflow skill (executor role). Execute the task in \
    $PW_PROJECTS/<slug>/task/<T0n>.md in its own git worktree, run its \
    ## Verify block, paste real output, fill its ## Result block. Do not touch other worktrees."
@@ -117,27 +141,27 @@ than inline here.
    Capture that CLI's output into the task's `## Result` and append a `LOG.md` line naming the
    provider used. Record it in the task's `Actually used:` (e.g. `kilo:command_code/MiniMaxAI/MiniMax-M3`).
 
-## Adding a row here (extensibility)
+## Adding cross-provider execution for a new Agent Provider (extensibility)
 
-Add one row to the Registry with its CLI binary, the models/agents it serves, and its headless
-invocation. Keep each **model listed under exactly one Agent Provider** so a bare
-`Execute with: <model>` resolves unambiguously; if a model is served by two, always write
-`<provider>:<model>`. No generator or code change is required — the orchestrator reads this file
-at execution time. **This does not register the CLI itself** — that's the separate step in
-[ONBOARDING.md](../../ONBOARDING.md#register-a-new-provider) (only needed once, regardless of how
-many rows it ends up with here).
+Define `<name>_headless()` in `pw.config.sh` — the exact non-interactive invocation template plus
+any operational gotchas (an auto-approve flag, a stdin-vs-argument quirk, etc.), same shape as
+the built-ins above. No edit to this file is required, and none of this even needs to exist if
+you only ever want same-provider execution for that CLI — cross-provider routing is the only
+thing it enables. **This is a separate, optional step from registering the CLI itself** — that's
+[ONBOARDING.md](../../ONBOARDING.md#register-a-new-provider) (needed once, regardless of whether
+you ever add a `_headless()` hook).
 
 ## Verification notes (historical)
 
 Provenance for the operational rules stated above — kept for reference and future debugging, not
-required reading to just use this registry.
+required reading to just use this mechanism.
 
-**Registry** — verified 2026-08-04 against the installed CLIs.
+**Built-in headless hooks** — verified 2026-08-04 against the installed CLIs.
 
 **Claude stdin-vs-argument bug** — confirmed 2026-08-08, kilo→claude: `claude` reported "Input must
 be provided either through stdin or as a prompt argument" with the prompt right there in the
 command. A long inline CLI argument can vanish entirely across a shell-out boundary; piping the
-prompt via stdin is immune. This is why the Registry's `claude` row and the routing steps above
+prompt via stdin is immune. This is why `claude_headless`'s output and the routing steps above
 both say to always pipe.
 
 **Cross-provider execution, verified end-to-end 2026-08-04** (Claude Code orchestrator → `kilo run`

@@ -1,7 +1,10 @@
 # RFC backend registry (publish routing)
 
-**Filled by:** [🧑 you] — same shape as [`providers.md`](./providers.md): a registry `/pw-rfc`
-reads at publish time, extensible by adding a row, no code change required.
+**Filled by:** [🤖 maintainer] — the day-to-day settings you actually set are `PW_RFC_BACKEND` /
+`PW_RFC_LARK_*` / `PW_RFC_NOTES` in `pw.config.sh`. This file itself is a maintainer-owned
+implementation spec — a registry `/pw-rfc` reads at publish time — not something you edit
+day-to-day; adding a genuinely new backend (Confluence/Notion/etc.) is a real integration project
+(OAuth flow, API contract, platform-specific limitations), not a quick config edit.
 
 `/pw-rfc` always **generates** `<project>/rfc/RFC.md` locally first, regardless of backend (see
 [`rfc.md`](./rfc.md)'s Generate/Publish split). **Publishing** that to an external doc is optional
@@ -29,7 +32,7 @@ project `rfc/META.md` → config default (see `rfc.md`).
 | `notion` | **Contract stub — not implemented** | Notion's API has **no page-duplicate endpoint** — **known limitation**: `create_from_template` must recreate the block tree by reading the template's `GET /v1/blocks/{id}/children` and re-`POST`ing each block under the new page, not a single copy call | Notion blocks have stable ids (unlike Confluence/Docs) — read them via `GET /v1/blocks/{id}/children`, map each top-level block matching a canonical heading to its id | `PATCH /v1/blocks/{id}` on the specific block(s) under that heading's id | `GET /v1/comments?block_id={id}` — **known limitation**: Notion comment threads have no distinct "resolved" flag the way Lark/Confluence/Docs do; a future implementer needs a documented convention (e.g. treat a thread with no new comments since last pull as settled, or require the human to delete/react to close it) before per-thread tracking here can work the same way. | Internal integration token (Bearer) scoped to the workspace; the target page must be explicitly shared with the integration first — call this out to a future implementer, it's a common setup trap. |
 | _`<future>`_ | _stub or implemented_ | _…_ | _…_ | _…_ | _…_ | Add a row — no code change needed. |
 
-## Adding a backend (extensibility)
+## Adding a backend (extensibility — a real integration project, not a quick edit)
 
 1. Add a row above with the 4 operations spelled out concretely (exact CLI/API calls), its auth
    mechanism, and any platform-specific limitation (anchor stability, template mechanics).
@@ -42,4 +45,4 @@ project `rfc/META.md` → config default (see `rfc.md`).
    is the one thing worth empirically verifying before trusting a backend with a real RFC.
 
 No `/pw-rfc` command-logic change is required to add a row — the command reads this file at
-publish time, the same way execution reads `providers.md`.
+publish time.

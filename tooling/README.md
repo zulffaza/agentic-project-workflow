@@ -20,15 +20,16 @@ tooling/
 │   └── pw-close.md
 ├── agents/             ← THE source of truth for seedable sub-agents (pw-orchestrator, pw-executor,
 │                         pw-reviewer — the last optional, only spawned by /pw-review … ai)
-├── docs/               ← registries/policy the AGENTS read (each has a human-facing peer doc):
-│   ├── providers.md      agent provider registry (model → CLI, headless invocation) [🧑 you]
+├── docs/               ← registries/policy the AGENTS read (each has a human-facing peer doc);
+│                         maintainer-owned reference — you never edit these, see below:
+│   ├── providers.md      cross-provider execution mechanism (headless invocation hooks)
 │   │                     — human peer: ../../docs/EXECUTION.md
 │   ├── memory.md         optional/pluggable memory policy (the pipeline works with none)
 │   │                     — human peer: ../../docs/MEMORY.md
-│   ├── forges.md         git-forge registry (repo host → gh/glab CLI + invocation) [🧑 you]
+│   ├── forges.md         git-forge registry (repo host → gh/glab CLI + invocation)
 │   │                     — human peer: ../../docs/REVIEW.md
 │   ├── rfc.md            optional/pluggable RFC-publishing policy (works with none)
-│   └── rfc-backends.md   RFC backend registry (doc platform → create/fetch/update/comments) [🧑 you]
+│   └── rfc-backends.md   RFC backend registry (doc platform → create/fetch/update/comments)
 │                         — human peer for both: ../../docs/RFC.md
 ├── skill/              ← every subdir with a SKILL.md here is a shippable skill (bootstrap installs
 │   ├── project-workflow/SKILL.md      each one, per provider):
@@ -37,11 +38,14 @@ tooling/
 └── README.md
 ```
 
-**This dir is the machinery, not the intended reading path.** A human using the pipeline should
-be able to do everything from the bundle's own `docs/` + the `/pw-*` commands; the files above are
-what an agent reads to actually run a phase, or what someone extending the bundle (a new provider,
-forge, or RFC backend) edits. If you're just using the pipeline, you shouldn't need to open this
-directory at all.
+**This dir is the machinery, not the intended reading path — and it's never edited by a user,
+only by whoever maintains this bundle.** A human using the pipeline should be able to do
+everything from the bundle's own `docs/` + the `/pw-*` commands; the files above are what an
+agent reads to actually run a phase. Any per-user customization goes in `pw.config.sh` instead —
+registering a new Agent Provider, its optional cross-provider `_headless()` hook, a forge-host
+override (`PW_FORGE_HOSTS`), or an RFC backend setting (`PW_RFC_*`) are all hooks/variables there,
+never a hand-edit to a file in this directory. If you're just using the pipeline, you shouldn't
+need to open this directory at all.
 
 `pw-lib.sh` makes the load-bearing, format-sensitive steps deterministic instead of hand-edited
 prose — the `/pw-*` commands call `pw-lib.sh status|oneliner|adopted|adopt|review-init|log|phase`
@@ -50,15 +54,17 @@ refuses accidental backward phase moves (`--rewind` to intend one); `review-init
 calling it on every `/pw-analyze`/`/pw-breakdown` run never clobbers a review already in progress.
 Run `pw-lib.sh selftest` after changing it.
 
-`providers.md` is **not** generated — it's a config file you maintain (which CLI runs which
-model, and how to invoke it headlessly for cross-provider execution). See it to add a new
-model/provider. `forges.md` and `rfc-backends.md` are the same shape (a registry you maintain,
-read at ship/rfc time, no code change to add a row) — `forges.md` maps a repo's git host to the
-`gh`/`glab` CLI so nothing hardcodes an org's hostname; `rfc-backends.md` maps an RFC doc platform
-(Lark today; Confluence/Google Docs/Notion documented as contract stubs) to its create/fetch/
-update/list-comments operations. `rfc.md` is the pluggable-policy shape instead — like
-`memory.md`, the pipeline works with **no** backend configured (`/pw-rfc` still generates a local
-`rfc/RFC.md`; publishing to a real platform is the opt-in part).
+`providers.md` documents the cross-provider execution mechanism — how the orchestrator invokes a
+*different* Agent Provider's CLI headlessly, reading that provider's `<name>_headless()` hook
+(built-in for claude/kilo/opencode in `pw-common.sh`, added or overridden in `pw.config.sh` —
+never edited here). `forges.md` and `rfc-backends.md` are maintainer-owned the same way — the
+day-to-day settings you actually set (`PW_FORGE_HOSTS`, `PW_RFC_BACKEND`/`PW_RFC_LARK_*`) already
+live in `pw.config.sh`; `forges.md` documents how a repo's git host resolves to the `gh`/`glab`
+CLI so nothing hardcodes an org's hostname, `rfc-backends.md` documents each RFC doc platform's
+(Lark implemented; Confluence/Google Docs/Notion as contract stubs) create/fetch/update/
+list-comments operations. `rfc.md` is the pluggable-policy shape instead — like `memory.md`, the
+pipeline works with **no** backend configured (`/pw-rfc` still generates a local `rfc/RFC.md`;
+publishing to a real platform is the opt-in part).
 
 ## Regenerate after any change
 Edit a file in `commands/`, then (`$PW_HOME` = the bundle dir; `bootstrap.sh` exports it):

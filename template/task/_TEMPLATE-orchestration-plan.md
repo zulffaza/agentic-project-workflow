@@ -95,9 +95,10 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
 | an existing agent | (its provider) | reuse one you already have (e.g. `code-implementation`) |
 | `pw-executor` or a `tooling/agents/` def | (its provider) | the shipped executor, or a custom role no existing agent covers |
 
-Provider→model mapping, headless invocation, and the **effort/variant/thinking** flag mapping live
-in the registry; **add a row there to onboard a new model/provider** — nothing here hard-codes the
-list. Claude aliases (`opus`/`sonnet`/…) track the *latest* version — **pin the full name**
+Headless invocation and the **effort/variant/thinking** flag mapping are documented in
+`{{PW_HOME}}/tooling/docs/providers.md`; onboarding a new Agent Provider for cross-provider
+execution means defining `<name>_headless()` in `pw.config.sh` (a maintainer action), never
+editing that file. Claude aliases (`opus`/`sonnet`/…) track the *latest* version — **pin the full name**
 (`claude-opus-4-8` vs `claude-opus-5`) on risky tasks; set each task's `Effort:` per its complexity. The orchestrator does **not**
 use a bespoke executor agent; it spawns (or shells out to) whatever `Execute with:` names, and the
 discipline comes from the skill + the task file. Override per task at execution time ("run T03

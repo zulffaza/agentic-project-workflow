@@ -182,10 +182,14 @@ bootstrap; gitignored, so it stays yours):
    basename), `$desc`, `$displayName`, `$role`, `$claude_tools`, `$model`, `$bodytext` — see
    `render_claude_agent`/`render_kilo_agent` in `tooling/pw-common.sh` for full examples.
    Providers without these two hooks just skip agent-seeding — the `/pw-*` commands still work.
-4. Add a row to [`tooling/docs/providers.md`](./tooling/docs/providers.md): which models it runs and its
-   **headless invocation** (how to run one task non-interactively) — what cross-provider execution
-   shells out to. This is a **separate, optional** registry from steps 1–3 above — it's only
-   needed for cross-provider task routing during `/pw-execute`, not for the CLI to be usable.
+4. *(Optional)* `<name>_headless()` — prints the exact non-interactive invocation template for
+   this CLI (e.g. an auto-approve flag, how the model/prompt gets passed), so an orchestrator
+   running under a *different* provider can shell out to this one for cross-provider execution.
+   See `claude_headless`/`kilo_headless`/`opencode_headless` in `tooling/pw-common.sh` for real
+   examples. Without it, this provider is still fully usable same-provider — it just can't be a
+   cross-provider execution **target**. Full mechanics: `tooling/docs/providers.md` (a
+   maintainer-owned reference doc — you never edit it directly; this hook is the only thing you
+   set).
 5. Re-run `./bootstrap.sh`.
 
 ### Worked example: registering Cline
@@ -208,14 +212,20 @@ render_cline_command() {
   # of substituting a token.
   printf -- '---\ndescription: %s\n---\n%s' "$desc" "${bodytext//\{\{ARGS\}\}/the arguments given}"
 }
+
+# OPTIONAL — only needed for cross-provider execution (an orchestrator on another provider
+# handing a task to Cline headlessly). Skip this and Cline still works fully for same-provider use.
+cline_headless() {
+  cat <<'EOF'
+cline "<prompt>" --yolo --json   (or piped: <prompt> | cline --yolo --json)
+--yolo/--no-interactive auto-approves every action (required headless, same spirit as kilo's
+--auto); --json gives structured output to scrape.
+EOF
+}
 ```
 
-Then in [`tooling/docs/providers.md`](./tooling/docs/providers.md), a row like: CLI binary `cline`;
-headless invocation `cline "<prompt>" --yolo --json` (or piped: `<prompt> | cline --yolo --json`)
-— `--yolo`/`--no-interactive` auto-approves every action (required headless, same spirit as kilo's
-`--auto`), `--json` gives structured output to scrape. No `<name>_agentdir`/`render_<name>_agent`
-shown here — skip those and Cline just won't get the seeded sub-agents; the `/pw-*` commands still
-work.
+No `<name>_agentdir`/`render_<name>_agent` shown here either — skip those and Cline just won't
+get the seeded sub-agents; the `/pw-*` commands still work.
 
 Likewise, which KiloCode **API Providers** you use (default `kilo` itself; also `command_code`,
 `openrouter`, … if you've added credentials for them — the model backend(s) KiloCode itself

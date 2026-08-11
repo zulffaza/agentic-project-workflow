@@ -81,6 +81,19 @@ declare -f render_claude_agent >/dev/null 2>&1 || render_claude_agent() {
   [ -n "$model" ] && printf -- 'model: %s\n' "$model"
   printf -- '---\n%s' "$bodytext"
 }
+# <prov>_headless: OPTIONAL. Prints the exact headless (non-interactive) invocation template for
+# this Agent Provider's CLI, for the orchestrator to read and adapt when routing a task to a
+# DIFFERENT provider than its own (cross-provider execution — see tooling/docs/providers.md).
+# Same-provider execution (spawning a normal in-process sub-agent) never calls this at all.
+declare -f claude_headless >/dev/null 2>&1 || claude_headless() {
+  cat <<'EOF'
+claude --print --dangerously-skip-permissions --model <model> [--effort <low|medium|high|xhigh|max>]
+Pipe the prompt via STDIN, never a trailing argument — printf '%s' "$PROMPT" | claude ...
+(a long inline argument can vanish entirely across a shell-out boundary; stdin is immune).
+--dangerously-skip-permissions is REQUIRED headless — without it a permission prompt has no TTY
+to answer and the process hangs producing no output.
+EOF
+}
 
 declare -f kilo_bin        >/dev/null 2>&1 || kilo_bin()        { echo kilo; }
 declare -f kilo_skilldir   >/dev/null 2>&1 || kilo_skilldir()   { echo "$HOME/.kilocode/skills"; }
@@ -104,6 +117,14 @@ declare -f render_kilo_agent >/dev/null 2>&1 || render_kilo_agent() {
   printf -- '  bash: allow\n  grep: allow\n  glob: allow\n  task: allow\n  skill: allow\n'
   printf -- '---\n%s' "$bodytext"
 }
+declare -f kilo_headless >/dev/null 2>&1 || kilo_headless() {
+  cat <<'EOF'
+kilo run --auto -m <api-provider>/<model> "<prompt>" --dir <path> [--variant <low|medium|high|max|minimal>] [--thinking] [--format json]
+--auto is REQUIRED headless — without it kilo run auto-REJECTS every permission (it can't even
+read the task file). Add --agent <name> when targeting a native agent instead of a bare model.
+<api-provider> is one of PW_KILO_API_PROVIDERS (pw.config.sh) — e.g. kilo, command_code, openrouter.
+EOF
+}
 
 declare -f opencode_bin        >/dev/null 2>&1 || opencode_bin()        { echo opencode; }
 declare -f opencode_skilldir   >/dev/null 2>&1 || opencode_skilldir()   { echo "$HOME/.config/opencode/skills"; }
@@ -124,6 +145,13 @@ declare -f render_opencode_agent >/dev/null 2>&1 || render_opencode_agent() {
   printf -- 'permission:\n  edit: allow\n  bash: allow\n  read: allow\n'
   printf -- '---\n%s' "$bodytext"
 }
+declare -f opencode_headless >/dev/null 2>&1 || opencode_headless() {
+  cat <<'EOF'
+opencode run --auto -m <api-provider>/<model> "<prompt>" [--format json] [--attach <url>]
+--auto is REQUIRED headless — auto-approves permissions not explicitly denied.
+--attach <url> connects to an already-running server, avoiding a cold-boot delay.
+EOF
+}
 
 # has_hooks <provider> -> 0 if the four REQUIRED hooks exist (bin/skilldir/commanddir/render_*_command)
 pw_provider_has_hooks() {
@@ -141,4 +169,10 @@ pw_provider_has_agent_hooks() {
     declare -f "$fn" >/dev/null 2>&1 || return 1
   done
   return 0
+}
+
+# has_headless_hook <provider> -> 0 if the OPTIONAL cross-provider-execution hook exists. Without
+# it, a provider is still fully usable same-provider; it just can't be a cross-provider target.
+pw_provider_has_headless_hook() {
+  declare -f "${1}_headless" >/dev/null 2>&1
 }
