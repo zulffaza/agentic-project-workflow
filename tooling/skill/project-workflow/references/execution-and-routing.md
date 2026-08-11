@@ -37,8 +37,10 @@ optional `Effort:` (`low`/`medium`/`high`/`xhigh`/`max` → claude `--effort`, k
 doesn't force an agent switch; route a task to a different provider only with a stated `Why:`.
 **Claude aliases (`opus`/`sonnet`/…) follow the latest version — pin the full name
 (`claude-opus-4-8` vs `claude-opus-5`) for reproducibility.** Defaults: `claude:opus`=complex/risky,
-`claude:sonnet`=standard (most), `claude:haiku`=trivial mechanical; open-weight models route to
-`kilo` via **whichever KiloCode API Providers you configured** (`PW_KILO_API_PROVIDERS` array in
+`claude:sonnet`=standard (most), `claude:haiku`=trivial mechanical; `kilo:kilo/<model>` uses
+KiloCode's own built-in gateway (the **default** API Provider, no separate credential — also
+proxies Claude/GPT/Gemini). Open-weight/third-party models instead route through **whichever
+*additional* KiloCode API Providers you configured** (`PW_KILO_API_PROVIDERS` array in
 `pw.config.sh` — KiloCode can serve several at once; the maintainer's is `command_code`), e.g.
 `kilo:command_code/MiniMaxAI/MiniMax-M3` or `kilo:openrouter/<model>` (`kilo models <provider>` for
 each provider's list).

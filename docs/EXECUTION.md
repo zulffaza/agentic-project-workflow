@@ -42,7 +42,8 @@ forced to switch agents mid-workflow — a task is routed elsewhere only with a 
 | `opus` | claude | complex reasoning, cross-cutting / ambiguous / high-risk work |
 | `sonnet` | claude | well-specified standard implementation (most tasks) |
 | `haiku` | claude | trivial mechanical bulk edits |
-| `command_code/MiniMaxAI/MiniMax-M3`, `openrouter/<model>`, … | kilo | open-weight — routed via any KiloCode API Provider you listed in `PW_KILO_API_PROVIDERS` (`kilo models <provider>`) |
+| `kilo/<model>` | kilo | KiloCode's own built-in gateway — the **default** API Provider, no separate credential (proxies Claude/GPT/Gemini/etc. through KiloCode itself) |
+| `command_code/MiniMaxAI/MiniMax-M3`, `openrouter/<model>`, … | kilo | open-weight/third-party models — needs its own credential; routed via any *additional* KiloCode API Provider you've listed in `PW_KILO_API_PROVIDERS` (`kilo models <provider>`) |
 | an existing agent | (its provider) | reuse one you already have (e.g. `code-implementation`) |
 | a `tooling/agents/` def | (its provider) | a shipped or custom role — `pw-executor`, or a new one you added |
 

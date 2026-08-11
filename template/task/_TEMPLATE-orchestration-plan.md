@@ -91,7 +91,8 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
 | `opus` | claude | complex reasoning, cross-cutting / ambiguous / high-risk changes |
 | `sonnet` | claude | well-specified standard implementation (most tasks) |
 | `haiku` | claude | trivial, mechanical bulk edits (renames, config bumps) |
-| `command_code/deepseek/deepseek-v4-pro`, `command_code/MiniMaxAI/MiniMax-M3`, `command_code/xiaomi/mimo-v2.5-pro`, … | kilo | open-weight (cost/availability); routed via KiloCode's `command_code` provider — `kilo models command_code` for the full list |
+| `kilo/<model>` | kilo | KiloCode's own built-in gateway — the **default** API Provider, no separate credential |
+| `command_code/deepseek/deepseek-v4-pro`, `command_code/MiniMaxAI/MiniMax-M3`, `command_code/xiaomi/mimo-v2.5-pro`, … | kilo | open-weight/third-party models (cost/availability); needs its own credential — routed via an *additional* KiloCode API Provider — `kilo models command_code` for the full list |
 | an existing agent | (its provider) | reuse one you already have (e.g. `code-implementation`) |
 | `pw-executor` or a `tooling/agents/` def | (its provider) | the shipped executor, or a custom role no existing agent covers |
 
