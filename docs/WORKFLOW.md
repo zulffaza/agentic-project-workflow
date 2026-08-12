@@ -57,6 +57,10 @@ Ask any agent to analyze against `context/`. Output goes to `analysis/` using
 and why*, surfaces unknowns/risks, and lists **confirmed** affected repos — it does **not** yet
 decide task boundaries. Iterate here until you approve; this is the cheapest place to fix
 misunderstandings. You review it via a `.review.md` file — see [Review & feedback](./REVIEW.md).
+If this analysis also goes through the optional [RFC side-loop](./RFC.md) (external stakeholders,
+often a days/weeks negotiation), a comment-driven fix applied after approval **automatically
+reopens this exact gate** — analysis-approved and RFC-approved are the same fact, by design, so
+`/pw-breakdown` keeps correctly refusing until the whole negotiation settles and you re-approve.
 
 ## Step 4–5 — Task breakdown
 Ask any agent to turn approved analysis into a breakdown:
@@ -168,3 +172,10 @@ steps either way, but drives them through the command rather than you touching `
 3. Re-run the phase command (`/pw-analyze` / `/pw-breakdown`), then `/pw-review`, then re-approve.
 Downstream artifacts already produced stay on disk; regenerate them once the upstream phase is
 re-approved.
+
+**This is different from `/pw-review`'s automatic Sign-off reopen** (docs/RFC.md) — that one fires
+on analysis's or the PLAN's own review file the moment a fix lands there post-approval, tagged
+`pw-review (auto-reopen)`, and never touches the dashboard `Status:` line at all (it doesn't need
+to — if `Status:` hasn't advanced past that phase yet, which is the normal case, there's nothing to
+rewind). Reach for the manual `rewind` flow above only once `Status:` has genuinely moved on and
+you need to walk it backward on purpose.

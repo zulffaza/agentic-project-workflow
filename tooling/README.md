@@ -10,7 +10,8 @@ tooling/
 ├── gen-agents.sh       ← seeds agents/ into each provider's agent dir (same idea as gen-commands)
 ├── pw-common.sh        ← shared plumbing (roots + config + provider hooks) for the scripts below
 ├── pw-lib.sh           ← mechanical helpers the commands call: status / oneliner / adopted / adopt /
-│                         review-init / log / phase / ai-review / review note-init|auto-signoff
+│                         review-init / log / phase / ai-review / review note-init|auto-signoff|
+│                         gate|reopen
 ├── pw-doctor.sh        ← checks installed skills + commands + agents match this bundle (--fix repairs)
 ├── pw-teardown.sh      ← safe worktree removal at close-out (won't nuke your CWD / dirty trees)
 ├── commands/           ← THE source of truth for /pw-* (provider-neutral)

@@ -9,10 +9,14 @@ Arguments: {{ARGS}} (first token = project slug; optional remainder = task IDs, 
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
-1. Read `<project>/task/PLAN.md` fully. **Gate:** confirm an `approved ✅` sign-off in
-   `task/review/PLAN.review.md`; if not, STOP and ask. (Per-task review files are **optional** —
-   their absence never blocks execution; they only matter when a task is being sent back.) Then:
-   `…/{{PW_HOME}}/tooling/pw-lib.sh status <slug> executing`.
+1. Read `<project>/task/PLAN.md` fully. **Gate:** `…/{{PW_HOME}}/tooling/pw-lib.sh review gate
+   <slug> task/review/PLAN.review.md` — this is the file's CURRENT Sign-off decision only, never
+   "was it ever approved"; if it exits non-zero (missing file, `in-review`, or `changes-requested`),
+   STOP and ask, quoting what it printed. Checked on **every** invocation, including a resume — a
+   PLAN reopened after approval (e.g. by `/pw-review`'s auto-reopen, when a fix lands post-approval)
+   must re-block execution here even mid-run, not just on the very first call. (Per-task review
+   files are **optional** — their absence never blocks execution; they only matter when a task is
+   being sent back.) Then: `…/{{PW_HOME}}/tooling/pw-lib.sh status <slug> executing`.
 2. **Resolve scope — this decides resume behavior, get it right:**
    - **Arguments name specific task IDs** → scope = exactly those tasks (plus an optional `"with
      <model/agent>"` override). This is the deliberate "re-verify just this one" path — run only

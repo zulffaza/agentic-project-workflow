@@ -23,11 +23,15 @@ HOW THIS FILE WORKS — read before editing.
   without opening the file.
 - Anchor each item to a section of the doc (§heading), because the doc itself gets rewritten
   when fixes are applied — this file is the durable record, the doc is not.
-- Only YOU fill the Sign-off table by hand. The ONE exception: with this phase's AI Review mode
-  set to `auto`, `pw-reviewer` may write a row itself — via the guarded `pw-lib.sh review
-  auto-signoff` (which refuses unless mode is genuinely `auto` AND nothing here is still
-  🔴 open/⏳ awaiting answer), never by hand-editing this table. That row's "By" column always
-  reads `pw-reviewer (auto)`, never blended with a human "you" row — see docs/REVIEW.md.
+- Only YOU fill the Sign-off table by hand. Two tool-enforced exceptions, both tagged distinctly so
+  neither is ever mistaken for your own decision: (1) with this phase's AI Review mode set to
+  `auto`, `pw-reviewer` may write an `approved ✅` row itself — via the guarded `pw-lib.sh review
+  auto-signoff` (refuses unless mode is genuinely `auto` AND nothing here is still 🔴 open/⏳
+  awaiting answer), "By" reads `pw-reviewer (auto)`; (2) if this is analysis's or the PLAN's own
+  review file (the two with a real gate downstream) and a fix lands here after it already read
+  `approved ✅`, `/pw-review` appends a fresh `in-review` row itself via `pw-lib.sh review reopen`,
+  "By" reads `pw-review (auto-reopen)` — see the Sign-off section below and docs/REVIEW.md /
+  docs/RFC.md.
 - List everything still open in a project:  grep -rln "🔴 open" .
 - **Every item/question heading carries a trailing `<!-- pw-item-status: open|resolved -->`
   machine marker, alongside the human-facing 🔴/🟢/⏳/✅ text — don't remove it when you flip a
@@ -137,7 +141,18 @@ open, `pw-lib.sh review auto-signoff` writes a row itself, tagged distinctly so 
 for your approval:
 | 2026-08-06 11:30 | pw-reviewer (auto) | approved ✅ |
 
+A THIRD way a row can appear here, on THIS file specifically if it's analysis's or the PLAN's own
+review file (the two with a real hard gate downstream): `/pw-review` auto-reopens this table —
+`pw-lib.sh review reopen` — whenever it applies a fix here AFTER this row already read
+`approved ✅`, e.g. an RFC comment folded back into the analysis post-approval (see docs/RFC.md).
+Tagged distinctly again, so you can tell it apart from your own decision at a glance:
+| 2026-08-06 14:10 | pw-review (auto-reopen) | in-review |
+Only fires automatically while this doc's own phase is still the project's CURRENT phase (e.g.
+`Status:` is still `analysis` throughout a multi-round RFC negotiation) — if the project has
+already moved past this phase, /pw-review stops and asks before reopening instead, since a later
+phase may already depend on the approval it would invalidate.
+
 - Not ready yet? Leave the `in-review` row, or add a `changes-requested` row and run /pw-review again.
-- Reopening a phase later? Add a new "in-review" row (don't delete the old approval), bump the
-  dashboard Status back with `pw-lib.sh status <slug> <phase> --rewind`, and re-run the phase.
-  See README "Going back a phase". -->
+- Reopening a phase later BY HAND (your own decision, not the auto-reopen above)? Add a new
+  "in-review" row (don't delete the old approval), bump the dashboard Status back with
+  `pw-lib.sh status <slug> <phase> --rewind`, and re-run the phase. See README "Going back a phase". -->

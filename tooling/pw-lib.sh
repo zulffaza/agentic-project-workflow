@@ -41,6 +41,18 @@
 #                                                     is genuinely "auto" AND zero 🔴/⏳ remain open;
 #                                                     the ONE tool-enforced exception to "only a human
 #                                                     clears a gate" — see docs/REVIEW.md
+#   pw-lib.sh review gate   <slug> <review-rel-path>  print + exit-0/1 on the Sign-off table's
+#                                                     CURRENT (latest) row only — never "was this
+#                                                     ever approved" (a stale historical row must
+#                                                     not keep satisfying a hard gate after a later
+#                                                     `in-review` row supersedes it)
+#   pw-lib.sh review reopen <slug> <review-rel-path>  append a fresh `in-review` Sign-off row —
+#                                                     ONLY if the current row is `approved ✅`
+#                                                     (idempotent no-op otherwise); never deletes the
+#                                                     old approval, same append-only history rule as
+#                                                     a human's own reopen. Used when a fix lands on
+#                                                     an already-approved doc (e.g. an RFC comment
+#                                                     folded back into the analysis) — see docs/RFC.md
 #   pw-lib.sh model-check   <provider> <model-id>    pass/refuse a model against
 #                                                     PW_MODEL_ALLOWLIST_<PROVIDER> in pw.config.sh
 #                                                     — empty/unset = ALL models allowed (the
@@ -669,6 +681,89 @@ _review_has_open_marker() {
   printf '%s\n' "$stripped" | grep -qE '^### .*(🔴 open|⏳ awaiting answer)'
 }
 
+# Line number (in the ORIGINAL file) of the ## Sign-off table's real last data row — never a
+# WORKED-EXAMPLE row sitting inside the template's own trailing <!-- --> comment block. That block
+# contains two lines that look exactly like real table rows ("| 2026-08-06 11:30 | you | approved
+# ✅ |" and the pw-reviewer-auto variant) — a naive "last line starting with |, from ## Sign-off to
+# EOF" scan (what a first cut of this helper did) picks THOSE, since they're the last such lines in
+# the whole file, silently corrupting where a real row gets inserted on any RE-review cycle (a
+# fresh file's very first sign-off is unaffected — it replaces the literal placeholder line by
+# exact text match instead, a different code path). Fix: blank out (never delete — callers need
+# original line numbers for a head/tail splice) every comment line first, reusing the same
+# same-line-vs-multi-line state machine as _review_has_open_marker, THEN scan for the last `|` line
+# from ## Sign-off onward. Returns 0 if the table has no real rows yet (malformed file).
+_signoff_last_real_row_line() {
+  local f="$1"
+  awk '
+    BEGIN { in_comment = 0 }
+    {
+      line = $0
+      if (in_comment) { if (line ~ /-->/) { in_comment = 0 }; print ""; next }
+      if (line ~ /<!--/ && line ~ /-->/) { print line; next }
+      if (line ~ /<!--/) { in_comment = 1; print ""; next }
+      print line
+    }
+  ' "$f" | awk '/^## Sign-off/{s=1} s && /^\|/{n=NR} END{print n+0}'
+}
+
+# The Sign-off table's CURRENT (latest) Decision cell only — "approved ✅" / "in-review" /
+# "changes-requested" — never "was this ever approved anywhere in the file's history". Empty
+# output (+ non-zero exit) if the file has no real Sign-off rows at all.
+_signoff_latest_decision() {
+  local f="$1" lastrow
+  lastrow="$(_signoff_last_real_row_line "$f")"
+  [ "$lastrow" -gt 0 ] || return 1
+  sed -n "${lastrow}p" "$f" | awk -F'|' '{ gsub(/^[ \t]+|[ \t]+$/, "", $4); print $4 }'
+}
+
+# Deterministic, unambiguous replacement for prose like "look for an approved ✅ row anywhere in
+# this file" — the ambiguity that let a stale historical approval keep satisfying a hard gate after
+# a later `in-review`/`changes-requested` row superseded it (exactly what /pw-breakdown's analysis
+# gate and /pw-execute's PLAN gate must NOT do once a doc is reopened post-approval — see
+# docs/RFC.md). Prints the current decision text; exits 0 iff it's exactly "approved ✅".
+#   review gate <slug> <review-rel-path>
+cmd_review_gate() {
+  [ $# -eq 2 ] || die "usage: review gate <slug> <review-rel-path>"
+  local slug="$1" rel="$2"
+  local d; d="$(proj_dir "$slug")"
+  local f="$d/$rel"
+  [ -f "$f" ] || die "no such review file: $rel"
+  local decision; decision="$(_signoff_latest_decision "$f")" \
+    || die "no Sign-off table rows found in $rel — not a valid review file"
+  echo "$decision"
+  [ "$decision" = "approved ✅" ]
+}
+
+# The other half of the analysis/RFC parity fix (docs/RFC.md): a fix applied to a doc AFTER its
+# review file was already approved (e.g. an RFC comment folded back into the analysis post-
+# approval) must invalidate that stale approval, or `review gate` above would still wrongly pass.
+# Appends a fresh `in-review` row — NEVER deletes the old approval, same append-only-history rule
+# as a human's own manual reopen (template's Sign-off section: "Add a new 'in-review' row, don't
+# delete the old approval"). Idempotent no-op if the file isn't currently `approved ✅` (nothing
+# stale to invalidate) — safe for a caller to call unconditionally before applying a fix, no extra
+# branching needed. Tagged "pw-review (auto-reopen)" so it's never mistaken for a human's own
+# `changes-requested` decision on a skim of the file or its git history.
+#   review reopen <slug> <review-rel-path>
+cmd_review_reopen() {
+  [ $# -eq 2 ] || die "usage: review reopen <slug> <review-rel-path>"
+  local slug="$1" rel="$2"
+  local d; d="$(proj_dir "$slug")"
+  local f="$d/$rel"
+  [ -f "$f" ] || die "no such review file: $rel"
+  local decision; decision="$(_signoff_latest_decision "$f")" \
+    || die "no Sign-off table rows found in $rel — not a valid review file"
+  if [ "$decision" != "approved ✅" ]; then
+    echo "$slug: $rel already open (current: $decision) — nothing to reopen"
+    return 0
+  fi
+  local lastrow; lastrow="$(_signoff_last_real_row_line "$f")"
+  local ts row; ts="$(date '+%F %H:%M')"; row="| $ts | pw-review (auto-reopen) | in-review |"
+  { head -n "$lastrow" "$f"; printf '%s\n' "$row"; tail -n "+$((lastrow+1))" "$f"; } \
+    > "$f.tmp" && mv "$f.tmp" "$f"
+  cmd_log "$slug" pw-review "AUTO-REOPENED $rel — a fix was applied after it was already approved ✅ (new row: in-review); re-approve once settled"
+  echo "$slug: $rel reopened (was approved ✅, now in-review)"
+}
+
 # Write the Sign-off row on a review file WITHOUT a human — the ONE tool-enforced exception to
 # "only a human clears a gate" (template/_REVIEW.template.md's own rule). Refuses unless BOTH:
 # (1) this project's AI Review mode for <phase> is genuinely "auto" (checked here, never taken on
@@ -697,8 +792,11 @@ cmd_review_auto_signoff() {
   else
     # a re-review cycle already replaced/added rows → append ours as the table's new last row
     # (head/tail splice, not awk -v — same portability reasoning as _ship_comment_section_ensure:
-    # no shell-quote gymnastics, no awk variable involved).
-    local lastrow; lastrow="$(awk -v s="$signline" 'NR>=s && /^\|/{n=NR} END{print n+0}' "$f")"
+    # no shell-quote gymnastics, no awk variable involved). Uses the comment-stripped scanner, not
+    # a raw "last | line from ## Sign-off to EOF" — the raw version picks the template's own
+    # WORKED-EXAMPLE Sign-off rows (inside a trailing <!-- --> block) since they're the last such
+    # lines in the whole file, corrupting a SECOND-or-later signoff. See _signoff_last_real_row_line.
+    local lastrow; lastrow="$(_signoff_last_real_row_line "$f")"
     [ "$lastrow" -gt 0 ] || die "no Sign-off table rows found in $rel"
     { head -n "$lastrow" "$f"; printf '%s\n' "$row"; tail -n "+$((lastrow+1))" "$f"; } \
       > "$f.tmp" && mv "$f.tmp" "$f"
@@ -711,7 +809,9 @@ cmd_review() {
   case "${1:-}" in
     note-init)    shift; cmd_review_note_init "$@" ;;
     auto-signoff) shift; cmd_review_auto_signoff "$@" ;;
-    *) die "usage: review <note-init|auto-signoff> ..." ;;
+    gate)         shift; cmd_review_gate "$@" ;;
+    reopen)       shift; cmd_review_reopen "$@" ;;
+    *) die "usage: review <note-init|auto-signoff|gate|reopen> ..." ;;
   esac
 }
 
@@ -1051,6 +1151,85 @@ cmd_selftest() {
   as_sign="$(grep -n '^## Sign-off' "$RV2" | head -1 | cut -d: -f1)"
   [ -n "$as_line" ] || die "selftest FAIL: no auto-signoff table row found"
   [ "$as_line" -gt "$as_sign" ] || die "selftest FAIL: auto-signoff row landed before ## Sign-off"
+
+  # --- review gate / review reopen: the analysis/RFC-parity mechanism (docs/RFC.md) ---
+  # RV2 is currently approved ✅ (the auto-signoff row just above) — and, being a verbatim
+  # review-init copy, STILL carries the template's own trailing Sign-off WORKED-EXAMPLE comment
+  # block, containing two lines that look exactly like real approved-row table rows. This is
+  # exactly the fixture that would trip the naive "last | line from ## Sign-off to EOF" bug.
+  local gd
+  gd="$(PW_PROJECTS_DIR="$tmp" "$0" review gate demo2 analysis/review/topic2.review.md)" \
+    || die "selftest FAIL: review gate exited non-zero on a genuinely approved ✅ file"
+  [ "$gd" = "approved ✅" ] || die "selftest FAIL: review gate printed '$gd', expected 'approved ✅'"
+
+  # reopen: must succeed, append (never delete) an in-review row, and gate must now report open.
+  PW_PROJECTS_DIR="$tmp" "$0" review reopen demo2 analysis/review/topic2.review.md >/dev/null
+  grep -q '| pw-reviewer (auto) | approved ✅ |$' "$RV2" \
+    || die "selftest FAIL: review reopen deleted the prior approval instead of appending after it"
+  grep -q '| pw-review (auto-reopen) | in-review |$' "$RV2" \
+    || die "selftest FAIL: review reopen did not append the expected in-review row"
+  if gd="$(PW_PROJECTS_DIR="$tmp" "$0" review gate demo2 analysis/review/topic2.review.md)"; then
+    die "selftest FAIL: review gate exited 0 right after reopen (should read in-review now)"
+  fi
+  [ "$gd" = "in-review" ] || die "selftest FAIL: review gate printed '$gd' after reopen, expected 'in-review'"
+
+  # From here on, count/locate rows against a COMMENT-STRIPPED view of RV2 — the template's own
+  # trailing WORKED-EXAMPLE block (still present, since review-init copies it verbatim and nothing
+  # in this flow ever deletes it) contains a decorative "pw-reviewer (auto) | approved ✅ |" line
+  # of its own, which would otherwise inflate a naive grep -c on the raw file. Blank (never delete)
+  # commented lines so real line numbers still line up — same technique as
+  # _signoff_last_real_row_line, duplicated here since it's a private helper.
+  strip_rv2() {
+    awk '
+      BEGIN { in_comment = 0 }
+      { line = $0
+        if (in_comment) { if (line ~ /-->/) { in_comment = 0 }; print ""; next }
+        if (line ~ /<!--/ && line ~ /-->/) { print line; next }
+        if (line ~ /<!--/) { in_comment = 1; print ""; next }
+        print line }
+    ' "$RV2"
+  }
+
+  # reopen again while already open: idempotent no-op, must NOT append a second in-review row.
+  PW_PROJECTS_DIR="$tmp" "$0" review reopen demo2 analysis/review/topic2.review.md >/dev/null
+  [ "$(strip_rv2 | grep -c '| pw-review (auto-reopen) | in-review |$')" -eq 1 ] \
+    || die "selftest FAIL: review reopen was not idempotent — appended a second in-review row"
+
+  # re-approve (a SECOND auto-signoff on this file) must land as the table's new LAST row, not
+  # inside/after the template's trailing WORKED-EXAMPLE comment block — the exact regression this
+  # round's _signoff_last_real_row_line fix targets (a raw scan previously picked the example's
+  # own "approved ✅" lines, since they're the last such lines in the whole file).
+  PW_PROJECTS_DIR="$tmp" "$0" ai-review demo2 analysis auto >/dev/null   # already auto from above; explicit for clarity
+  PW_PROJECTS_DIR="$tmp" "$0" review auto-signoff demo2 analysis/review/topic2.review.md analysis >/dev/null
+  [ "$(strip_rv2 | grep -c '| pw-reviewer (auto) | approved ✅ |$')" -eq 2 ] \
+    || die "selftest FAIL: second auto-signoff didn't produce a second distinct real approved row"
+  gd="$(PW_PROJECTS_DIR="$tmp" "$0" review gate demo2 analysis/review/topic2.review.md)" \
+    || die "selftest FAIL: review gate exited non-zero after the second (re-)approval"
+  [ "$gd" = "approved ✅" ] || die "selftest FAIL: review gate printed '$gd' after re-approval, expected 'approved ✅'"
+  # and the row order must still be [1st approved, in-review, 2nd approved] top-to-bottom in the
+  # file — proof the second approval landed AFTER the reopen row, not before/inside the example
+  # block (line numbers, not just gate's reported decision, so this doesn't just re-check the same
+  # function under test — it checks the row actually got spliced into the right physical spot).
+  local ln_row1 ln_reopen ln_row2
+  ln_row1="$(strip_rv2 | grep -n '| pw-reviewer (auto) | approved ✅ |$' | sed -n '1p' | cut -d: -f1)"
+  ln_reopen="$(strip_rv2 | grep -n '| pw-review (auto-reopen) | in-review |$' | cut -d: -f1)"
+  ln_row2="$(strip_rv2 | grep -n '| pw-reviewer (auto) | approved ✅ |$' | sed -n '2p' | cut -d: -f1)"
+  [ -n "$ln_row1" ] && [ -n "$ln_reopen" ] && [ -n "$ln_row2" ] \
+    || die "selftest FAIL: couldn't locate all 3 expected real Sign-off rows in $RV2"
+  [ "$ln_row1" -lt "$ln_reopen" ] && [ "$ln_reopen" -lt "$ln_row2" ] \
+    || die "selftest FAIL: Sign-off rows out of order (1st-approved=$ln_row1 reopen=$ln_reopen 2nd-approved=$ln_row2) — the second approval didn't land after the reopen row"
+
+  # reopen must refuse silently (no-op, exit 0) when the file is NOT currently approved.
+  PW_PROJECTS_DIR="$tmp" "$0" review reopen demo2 analysis/review/topic2.review.md >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$0" review reopen demo2 analysis/review/topic2.review.md >/dev/null || \
+    die "selftest FAIL: reopen on an already-open file exited non-zero (should be a harmless no-op)"
+
+  # review gate on a review file with no Sign-off rows fabricated at all → dies, doesn't crash.
+  local NOSIGN="$tmp/demo2/no-signoff.review.md"
+  printf '# not a real review file\nno Sign-off section here\n' > "$NOSIGN"
+  if PW_PROJECTS_DIR="$tmp" "$0" review gate demo2 no-signoff.review.md >/dev/null 2>&1; then
+    die "selftest FAIL: review gate succeeded on a file with no ## Sign-off section at all"
+  fi
 
   # --- model-check: empty/unset allowlist = all models allowed (the default rule) ---
   local mc

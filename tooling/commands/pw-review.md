@@ -77,6 +77,37 @@ For each task I've flipped to `Status: verify-failed`:
   verify-failed but gave you **no** feedback anywhere, tell me exactly that and ask what's wrong —
   don't guess.
 
+**Before applying a fix — if the doc being edited is `analysis/<topic>.md` or `task/PLAN.md`,
+check whether this fix needs to reopen that doc's own gate first** (analysis and PLAN are the two
+docs with a real hard-gate Sign-off table — `/pw-breakdown` and `/pw-execute` read them via
+`pw-lib.sh review gate`, the current/latest row only, never "was it ever approved"). This matters
+even when the file you're processing ISN'T that doc's own review file — e.g. an RFC comment lives
+in `analysis/review/RFC.review.md`, but the doc it fixes is `analysis/<topic>.md`, whose OWN gate
+lives in the *separate* `analysis/review/<topic>.review.md` (derived from the doc's path per the
+naming convention in `_REVIEW.template.md`'s "WHERE THIS LIVES" note). Skip this whole check for
+any other doc (a task file, an RFC doc, a ship artifact) — nothing gates on those review files'
+Sign-off, so there's nothing to reopen.
+1. Derive the doc's own canonical review file: `analysis/<topic>.md` → `analysis/review/
+   <topic>.review.md`; `task/PLAN.md` → `task/review/PLAN.review.md`. (Usually this IS the file
+   already being processed — the derivation only diverges for RFC.review.md's case above.)
+2. `…/{{PW_HOME}}/tooling/pw-lib.sh review gate <slug> <canonical-review>`. If it's not currently
+   `approved ✅`, there's nothing to reopen — just apply the fix as normal.
+3. If it IS currently `approved ✅`: compare that doc's phase (`analysis`→`analysis`,
+   `task/PLAN.md`→`breakdown`) against the project's actual current phase
+   (`…/{{PW_HOME}}/tooling/pw-lib.sh phase <slug>`), using the fixed order `context < analysis <
+   breakdown < executing < review < done`:
+   - **Same phase** (the common case — nothing has advanced past this doc yet, e.g. mid-RFC
+     negotiation where `Status:` is still `analysis`) → reopen it automatically:
+     `…/{{PW_HOME}}/tooling/pw-lib.sh review reopen <slug> <canonical-review>`, then apply the fix.
+     This is the ordinary case and needs no confirmation — a bare `/pw-review <slug>` used for its
+     everyday purpose will only ever hit this branch, never the one below.
+   - **Doc's phase is EARLIER than the current phase** (only reachable by explicitly naming an
+     earlier phase/file — the project has already moved on, e.g. `Status:` is `executing` and
+     you're fixing analysis post-hoc) → **STOP and ask me to confirm before reopening.** A later
+     phase already relied on this approval (execution may have real commits depending on the PLAN
+     gate you're about to invalidate) — never do this silently. Only call `review reopen` after I
+     explicitly say to proceed.
+
 For each `🔴 open` item in the resolved files:
 - apply the fix to the doc it reviews,
 - append a concrete `↳ agent:` reply naming the section + exactly what changed (never a bare
@@ -95,4 +126,6 @@ Never edit or delete my comment text (items OR my `↳ you:` answers). Never wri
 When done, recap each resolved item (one line) here, and tell me how many `🔴 open` items remain
 **in the resolved scope** (and, as a footnote, across the whole project:
 `grep -rln "🔴 open"` in the project dir). For a task review: after fixes are applied, remind me
-to re-run `/pw-execute <slug> T0n` to re-verify in its worktree.
+to re-run `/pw-execute <slug> T0n` to re-verify in its worktree. **If a gate got auto-reopened**
+(the check above), say so explicitly and name which file/phase — that's the one thing here that
+changes whether a *later* command will run, so it can't just be buried in the item recap.

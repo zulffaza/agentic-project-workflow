@@ -6,8 +6,20 @@ Invoke the `project-workflow` skill. Arguments: {{ARGS}} (project slug).
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
-First check the analysis gate: look for an `approved ✅` sign-off row in any
-`<project>/analysis/review/*.review.md`. If none, STOP and ask me to approve the analysis first.
+First check the analysis gate — **per analysis doc, its CURRENT Sign-off decision, not "was it
+ever approved":** for each real `<project>/analysis/<topic>.md`, run
+`{{PW_HOME}}/tooling/pw-lib.sh review gate <slug> analysis/review/<topic>.review.md` (the file
+doesn't exist yet → treat as not approved). If it exits non-zero for **any** topic, STOP and ask me
+to (re-)approve that analysis first — quote the decision it printed (`in-review` or
+`changes-requested`). **Do not fall back to scanning the file for an `approved ✅` string anywhere
+in its history** — a doc reopened after approval (e.g. an RFC comment folded back in post-approval,
+see [`docs/RFC.md`](../../docs/RFC.md)) still has an old approved row sitting earlier in the same
+file; `review gate` deliberately reads only the table's current/last row so a stale historical
+approval can never satisfy this gate on its own. This is also why an RFC comment on the analysis
+doesn't need its own separate approval concept: once folded in, it reopens *this exact* gate, and
+your fresh `approved ✅` here is what unblocks breakdown — nothing RFC-specific to check.
+`analysis/review/RFC.review.md` (if present) is never itself part of this gate — only the review
+file paired with a real `analysis/<topic>.md` counts.
 
 Then produce, from `{{PW_HOME}}/template/task/`:
 1. `<project>/task/PLAN.md` (from `_TEMPLATE-orchestration-plan.md`) — repo manifest as

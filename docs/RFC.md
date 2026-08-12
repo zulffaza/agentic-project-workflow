@@ -90,19 +90,43 @@ one's big enough that another team's lead wants visibility before you break it i
 5. **You decide it's worth addressing** — either answer it inline in the review file yourself, or
    just tell the agent; run `/pw-review spring-boot-3-upgrade` to fold the answer into the analysis
    (its `↳ agent:` reply is the durable record of what changed). **You** reply to and resolve the
-   actual thread on the platform — the agent never touches it.
+   actual thread on the platform — the agent never touches it. **This step also, automatically,
+   reopens `analysis/review/spring-boot-3-upgrade.review.md`'s own Sign-off** — even though the fix
+   came in through `RFC.review.md`, it's the analysis doc's *own* review file that
+   `/pw-breakdown` actually gates on, so that's the one that has to stop reading `approved ✅`
+   once the doc's changed out from under it. The row is tagged `pw-review (auto-reopen)` so you can
+   tell at a glance it wasn't your own decision to reopen it.
 6. **Push the revision:** re-run `/pw-rfc spring-boot-3-upgrade` — it updates only the affected
    section(s) in the external doc, never a whole-doc overwrite, so nothing else on that page (their
-   comment thread included) gets disturbed.
-7. **Later, once the PLAN is approved:**
+   comment thread included) gets disturbed. The RFC doc **only ever moves when you explicitly ask
+   for this step** — nothing in the comment-pull or the analysis fix triggers a push on its own.
+7. **Repeat 3–6 for as many rounds as the negotiation needs** — a real cross-team RFC can run
+   days or weeks of comment → fix → push cycles before everyone's satisfied. Steps 4–5 keep
+   reopening the analysis gate each time a fresh comment lands after a re-approval, so
+   `/pw-breakdown` keeps correctly refusing throughout — it never quietly becomes runnable mid-negotiation.
+8. **Once the negotiation is genuinely done**, add a fresh `approved ✅` row to
+   `analysis/review/spring-boot-3-upgrade.review.md`'s Sign-off yourself, same as any ordinary
+   analysis approval. **There's no separate "RFC approved" concept to set anywhere** — this one row
+   is both, by construction: it can only be added once every fold-in has already happened, so it
+   being `approved ✅` again *is* what "RFC settled" means. `/pw-breakdown` unblocks.
+9. **Later, once the PLAN is approved:**
    ```
    /pw-rfc spring-boot-3-upgrade milestone
    ```
    fills in Milestone + Conclusion from the approved `task/PLAN.md`.
 
-That's the whole loop: local review stays the mandatory gate throughout; the RFC doc is a
-read-mostly window onto already-approved work, and the only thing that ever flows back in is a
-comment quote — never a direct edit.
+That's the whole loop: local review stays the mandatory gate throughout — reopened automatically
+whenever RFC feedback changes the analysis after an earlier approval, closed again only by you —
+and the RFC doc is otherwise a read-mostly window onto already-approved work; the only thing that
+ever flows back in is a comment quote, never a direct edit.
+
+**Why this needs no separate RFC-approval gate:** it might seem like a long external negotiation
+needs its own tracked state distinct from the analysis's local approval. It doesn't — because
+step 5's auto-reopen means the analysis review file's Sign-off table can only show a *current*
+`approved ✅` once nothing outstanding from the RFC side remains unfolded. Analysis-approved and
+RFC-approved collapse into the same fact, so `/pw-breakdown`'s existing gate (see
+[`docs/WORKFLOW.md`](./WORKFLOW.md)) is already the right one — it just needed to stop trusting a
+*stale* approved row, which is exactly what the reopen mechanism fixes.
 
 ## The comment loop — read-only outward, always
 

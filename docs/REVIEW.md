@@ -54,8 +54,12 @@ to set any status; you just leave it 🔴 open and run `/pw-review`.
   section, what changed). The agent also recaps the resolved items in chat after each pass.
 - Before editing any doc, the agent reads its `.review.md` first. `/pw-review` never changes the
   dashboard Status.
-- Only **you** write the Sign-off row. An agent cannot self-approve a gate — an `approved ✅` row is
-  what clears a phase.
+- Only **you** write an `approved ✅` Sign-off row — an agent cannot self-approve a gate (the one
+  narrow, heavily-guarded exception is AI-assisted `auto` mode below). The tooling has one *other*
+  narrow exception in the opposite direction: on analysis's or the PLAN's own review file, `/pw-review`
+  auto-appends an `in-review` row (tagged `pw-review (auto-reopen)`) if a fix lands there after it
+  was already `approved ✅` — this only ever *closes* a gate, never opens one, so it can't be used to
+  sneak a phase forward; see [docs/RFC.md](./RFC.md) for why this exists.
 - **Task review is optional, and created on demand.** Only the PLAN sign-off gates execution. To
   reject an **execution** result, flip that task's `Status: verify-failed` and either add items to
   `task/review/T0n.review.md` **or** just tell the agent what's wrong — `/pw-review <slug> T0n`
