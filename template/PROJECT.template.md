@@ -6,19 +6,13 @@
 
 - **Created:** <CREATED>
 - **Status:** context
-  <!-- Lifecycle: context → analysis → breakdown → executing → review → done.
-       The `/pw-*` commands OWN this transition — each command sets it as its last step
-       (pw-analyze→analysis, pw-breakdown→breakdown, pw-execute→executing then review,
-       pw-close→done). If you edit it by hand, keep to that vocabulary. -->
+  <!-- 🤖 context → analysis → breakdown → executing → review → done. Each `/pw-*` command sets
+       this as its last step — don't hand-edit except to match that vocabulary. -->
 - **One-liner:** <what this project is>
-  <!-- [🤖 set by /pw-analyze via `pw-lib.sh oneliner <slug> "…"`] — a one-sentence description
-       distilled from context/. Leave the placeholder until analysis fills it. -->
+  <!-- 🤖 set by /pw-analyze. Leave the placeholder until analysis fills it. -->
 - **AI Review:** <AI_REVIEW_DEFAULT>
-  <!-- [🤖 set via `/pw-review <slug> config <phase> <mode>`, on your request] Optional, per-phase
-       — off (default) | advisory | auto. Delegates a review pass to the pw-reviewer agent instead
-       of (advisory) or in addition to (auto, if clean) a human. You decide the policy; the command
-       writes the line — `/pw-review <slug> config` with no args shows the current settings. See
-       docs/REVIEW.md. Don't hand-edit this line directly. -->
+  <!-- 🤖 set via `/pw-review <slug> config <phase> <mode>` — off (default)/advisory/auto per
+       phase. `/pw-review <slug> config` alone shows current settings. See docs/REVIEW.md. -->
 
 
 ## Where things are

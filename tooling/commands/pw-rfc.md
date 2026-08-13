@@ -40,19 +40,24 @@ target question it doesn't need yet.
    be approved to publish at all.
 
 ## Wave 1 (default — no trailing keyword)
-1. **Gate:** read `{{PW_HOME}}/tooling/pw-lib.sh phase <slug>` and the analysis review file's
-   Sign-off row. If analysis isn't `approved ✅`, **refuse and report why** — do nothing else, and
-   do not create `rfc/RFC.md`.
+1. **Gate:** `{{PW_HOME}}/tooling/pw-lib.sh review gate <slug> analysis/review/<topic>.review.md`
+   — the file's CURRENT Sign-off row, never "was it ever approved" (same reasoning as
+   `/pw-breakdown`'s gate — a stale historical approval must not satisfy this after a later fix
+   reopens it, e.g. via `/pw-review`'s auto-reopen). If it exits non-zero, **refuse and report the
+   decision it printed** — do nothing else, and do not create `rfc/RFC.md`. Also require analysis
+   §4's `**Chosen approach:**` to be filled in (not pending) — an RFC published from an
+   as-yet-undecided analysis would need republishing the moment a choice is made anyway.
 2. Gate passed: `{{PW_HOME}}/tooling/pw-lib.sh rfc init <slug> <backend>` — idempotent; creates
    `rfc/RFC.md` from the template and stamps `rfc/META.md`'s `Backend:` with the **real** resolved
    backend from step 1 above (not a default guess), no-ops (and never clobbers) on a later run.
-3. Fill Background, Requirements + Out of Scope, Solution (Approach #1/#2), Dependencies from the
-   approved `analysis/<topic>.md`, per the canonical section schema in `rfc.md`. Fill Rollout
-   Plan / Rollback Plan **only if I explicitly ask** in this invocation — leave them as template
-   placeholders otherwise. **If the external template pre-populates a section you have no
-   generated content for** (e.g. its own "Approach #2" placeholder when analysis found no
-   alternative) — **leave that section's existing content untouched**; do not delete or edit it
-   unless I explicitly ask you to.
+3. Fill Background, Requirements + Out of Scope, Solution (the **chosen** approach as "Approach
+   (Chosen)"; any others as "Approaches considered, not chosen" — brief, since they're record, not
+   proposal), Dependencies from the approved `analysis/<topic>.md`, per the canonical section
+   schema in `rfc.md`. Fill Rollout Plan / Rollback Plan **only if I explicitly ask** in this
+   invocation — leave them as template placeholders otherwise. **If the external template
+   pre-populates a section you have no generated content for** (e.g. its own second-approach
+   placeholder when analysis concluded there was only one option) — **leave that section's
+   existing content untouched**; do not delete or edit it unless I explicitly ask you to.
 4. **Diagrams** (Block/Sequence Diagram subsections): **auto-generate by default** for each
    Approach actually written up — generate mermaid from the relevant analysis section and render
    it via an **isolated sub-agent call** (per `rfc.md`'s diagram rule — never a persistent agent).

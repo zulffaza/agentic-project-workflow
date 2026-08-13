@@ -11,15 +11,12 @@
 - **Worktree:** `worktree/<repo>/<T0n>-<slug>/`
 - **depends_on:** <T-ids or none>          **Parallel group:** <Gn>
 - **Status:** todo | in-progress | verify-failed | done | accepted
-- **Execute with:** <provider:model-or-agent> — e.g. `claude:claude-opus-4-8` (pinned) or
-  `claude:opus` (latest), `claude:sonnet`, `kilo:command_code/MiniMaxAI/MiniMax-M3`, or an existing
-  agent (e.g. `code-implementation`). `provider:` maps to the CLI — see `{{PW_HOME}}/tooling/docs/providers.md`.
-  **Default to the SAME provider that ran the breakdown** (recorded in `PLAN.md` → "Produced by")
-  so execution doesn't force you to switch agents — only route elsewhere when a task genuinely needs
-  a stronger/cheaper/open-weight model, and say why in `Why:`.
-  Aliases (`opus`/`sonnet`/…) track the *latest* version; **use the full name to pin** (e.g.
-  `claude-opus-4-8` vs `claude-opus-5`) when reproducibility matters. Name the shipped `pw-executor`
-  or a custom `tooling/agents/` def only if no existing agent fits.
+- **Execute with:** <provider:model-or-agent> — e.g. `claude:sonnet`, `claude:claude-opus-4-8`
+  (pinned), `kilo:command_code/<model>`, or an existing agent (e.g. `code-implementation`).
+  Defaults to the same provider that ran the breakdown (`PLAN.md` → "Produced by") — route
+  elsewhere only when this task genuinely needs a stronger/cheaper/open-weight model, and say why
+  in `Why:`. Aliases (`opus`/`sonnet`/…) track the *latest* version — pin the full name when
+  reproducibility matters. Full detail: `{{PW_HOME}}/tooling/docs/providers.md`.
 - **Effort:** <low|medium|high|xhigh|max — optional> — reasoning effort. Maps to `--effort`
   (claude) / `--variant` (kilo). Omit for the CLI default.
 - **Thinking:** <on|off — optional, kilo only> — emit thinking blocks (`--thinking`).

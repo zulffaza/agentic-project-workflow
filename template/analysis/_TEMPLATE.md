@@ -25,15 +25,33 @@ shape, real versions on that branch, not a parked feature branch) and reconcile 
 |------|-------------|--------------|------------------|
 | | | | |
 
-## 4. Proposed approach
-The recommended path. If there are alternatives, summarize them and say why this one wins
-(don't bury a survey — give a recommendation).
+## 4. Approach options
+Lay out **genuinely distinct options** — don't collapse to one recommendation; the human picks.
+Each option needs enough detail to actually evaluate (what it is, how it works, the real
+trade-off), not a one-line strawman sitting next to a fully-fleshed "real" answer. If there truly
+is only one reasonable approach, say so explicitly and why the alternatives don't hold up — that's
+fine, but it's the exception, not the default.
+
+### Option A: <name>
+<what it is, how it works>
+- **Trade-offs:** <pros/cons — cost, risk, blast radius, how it ages>
+
+### Option B: <name>
+<…>
+- **Trade-offs:** <…>
+
+**Chosen approach:** _pending your review_
+<!-- [🧑 you] pick via the review file's QnA (Q0, auto-seeded below when 2+ options exist) —
+don't edit this line directly, /pw-review fills it in once you answer. Breakdown reads ONLY the
+chosen option; the others stay here as record, never implemented. -->
 
 ## 5. Risks, unknowns & open questions
 - Risk: … → mitigation …
 
 **Open questions (QnA)** — anything you couldn't resolve from `context/` + memory + the repos, or
-that needs a human call. Give each a stable ID so the answer can be tracked:
+that needs a human call. Give each a stable ID so the answer can be tracked. `Q0` (if §4 has 2+
+options) is reserved for "which approach?" and anchors to §4, not here — numbering below starts
+at `Q1` regardless:
 - ❓ **Q1:** <the question, and why it blocks/affects the analysis> — _status: awaiting answer_
 - ❓ **Q2:** <…> — _status: awaiting answer_
 

@@ -92,18 +92,18 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
 | `sonnet` | claude | well-specified standard implementation (most tasks) |
 | `haiku` | claude | trivial, mechanical bulk edits (renames, config bumps) |
 | `kilo/<model>` | kilo | KiloCode's own built-in gateway — the **default** API Provider, no separate credential |
-| `command_code/deepseek/deepseek-v4-pro`, `command_code/MiniMaxAI/MiniMax-M3`, `command_code/xiaomi/mimo-v2.5-pro`, … | kilo | open-weight/third-party models (cost/availability); needs its own credential — routed via an *additional* KiloCode API Provider — `kilo models command_code` for the full list |
+| `command_code/<model>` | kilo | open-weight/third-party models — needs its own credential; `kilo models command_code` for the full list |
 | an existing agent | (its provider) | reuse one you already have (e.g. `code-implementation`) |
-| `pw-executor` or a `tooling/agents/` def | (its provider) | the shipped executor, or a custom role no existing agent covers |
+| `pw-executor` / a `tooling/agents/` def | (its provider) | the shipped executor, or a custom role no existing agent covers |
 
-Headless invocation and the **effort/variant/thinking** flag mapping are documented in
-`{{PW_HOME}}/tooling/docs/providers.md`; onboarding a new Agent Provider for cross-provider
-execution means defining `<name>_headless()` in `pw.config.sh` (a maintainer action), never
-editing that file. Claude aliases (`opus`/`sonnet`/…) track the *latest* version — **pin the full name**
-(`claude-opus-4-8` vs `claude-opus-5`) on risky tasks; set each task's `Effort:` per its complexity. The orchestrator does **not**
-use a bespoke executor agent; it spawns (or shells out to) whatever `Execute with:` names, and the
-discipline comes from the skill + the task file. Override per task at execution time ("run T03
-with opus" / "with kilo:command_code/MiniMaxAI/MiniMax-M3"); the orchestrator records it in `Actually used:`.
+- **Pin risky tasks:** claude aliases (`opus`/`sonnet`/…) track the *latest* version — use the full
+  name (`claude-opus-4-8` vs `claude-opus-5`) when reproducibility matters.
+- **No bespoke executor agent** — the orchestrator spawns/shells out to whatever `Execute with:`
+  names; the discipline comes from the skill + task file, not a special agent.
+- **Override at run time:** "run T03 with opus" — the orchestrator records what it actually used in
+  `Actually used:`.
+- Headless invocation + the `Effort`/`Thinking` flag mapping: `{{PW_HOME}}/tooling/docs/providers.md`
+  (onboarding a new Agent Provider is a `pw.config.sh` edit, never that file).
 
 ## Execution strategy
 - Max parallelism: <n> concurrent executors.

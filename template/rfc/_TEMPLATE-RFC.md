@@ -27,8 +27,8 @@
 
 ## Solution
 
-### Approach #1 (Preferred)
-🤖 <analysis §4 Proposed approach — the recommended path>
+### Approach (Chosen)
+🤖 <analysis §4's **Chosen approach** — the option the human actually picked, not a recommendation>
 
 #### Overview (Optional)
 #### Block Diagram (Optional)
@@ -42,11 +42,12 @@
 #### Database Modelling (Optional)
 #### APIs (Optional)
 
-### Approach #2
-🤖 <analysis §4 alternatives, if any were considered — omit this subsection entirely if there
-   weren't. If publishing to a backend whose template pre-populates this section (e.g. Lark's real
-   template ships a placeholder here regardless), leave that existing content untouched rather than
-   deleting it — don't guess at a removal operation that wasn't asked for.>
+### Approaches considered, not chosen
+🤖 <analysis §4's other options, briefly — they're record, not proposal, so this can be terser than
+   the chosen approach above. Omit entirely if analysis concluded there was only one option. If
+   publishing to a backend whose template pre-populates this section regardless (e.g. Lark's real
+   template ships a placeholder here), leave that existing content untouched rather than deleting
+   it — don't guess at a removal operation that wasn't asked for.>
 
 #### Overview (Optional)
 #### Block Diagram (Optional)

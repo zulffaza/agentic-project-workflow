@@ -42,7 +42,7 @@ artifact you've already approved through the normal pipeline:
 
 | Wave | Command | Gate | Fills |
 |---|---|---|---|
-| 1 | `/pw-rfc <slug> [--target <ref>]` | analysis `approved ✅` | Background · Requirements + Out of Scope · Solution (+ diagrams) · Dependencies · (Rollout/Rollback Plan, only if you ask) |
+| 1 | `/pw-rfc <slug> [--target <ref>]` | analysis `approved ✅` + a chosen approach (§4) | Background · Requirements + Out of Scope · Solution — chosen approach (+ diagrams) · Dependencies · (Rollout/Rollback Plan, only if you ask) |
 | 2 | `/pw-rfc <slug> milestone` | `task/PLAN.md` `approved ✅` | Milestone (from the PLAN's DAG groups + task table + SP/timeline) · Conclusion |
 
 Glossary and the References subsections (Open questions?, RFC review meeting notes) stay

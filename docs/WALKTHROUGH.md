@@ -54,6 +54,18 @@ with sections like:
 | orders-api             | master      | Boot 2.7→3.2, no javax usage found        |
 | notifications-worker   | master      | Boot 2.7→3.2 + Kafka client bump (coupled)|
 
+## 4. Approach options
+
+### Option A: big-bang — all three repos in one wave
+Bump Boot + javax→jakarta + Kafka client together, one PLAN, parallel tasks.
+- **Trade-offs:** fastest to land; biggest blast radius if the Kafka client bump misbehaves.
+
+### Option B: staged — payments-api first, the other two after it's proven in prod
+Same end state, split into two PLANs a week apart.
+- **Trade-offs:** de-risks the Kafka coupling; two review/ship cycles instead of one.
+
+**Chosen approach:** _pending your review_
+
 ## 5. Risks, unknowns & open questions
 - ❓ Q1: notifications-worker's Kafka client bump is coupled to the Boot bump — same task,
   or split? — status: awaiting answer
@@ -61,18 +73,25 @@ with sections like:
 
 ## Review the analysis
 
-It also auto-creates `analysis/review/spring-boot-3-upgrade.review.md`, empty and `in-review`. You
-open it and leave a comment:
+It also auto-creates `analysis/review/spring-boot-3-upgrade.review.md`, empty and `in-review`, with
+a `Q0` already seeded since §4 has two real options:
 
 ```
+### Q0 · §4 Approach options — ⏳ awaiting answer (agent, 2026-08-10 09:02)
+Which approach — A (big-bang) or B (staged)?
+```
+
+You open it, answer `Q0`, leave a comment on §3, and answer the other open question:
+
+```
+### Q0 · §4 Approach options — ⏳ awaiting answer (agent, 2026-08-10 09:02)
+  ↳ you (2026-08-10 09:18): Option A — the Kafka client bump is small enough, staging adds
+    ceremony we don't need here.
+
 ### R1 · §3 Affected repos — 🔴 open (you, 2026-08-10 09:15)
 You're missing that payments-api also has a custom javax.validation setup in
 `common-validation/` — check whether that needs its own line item.
-```
 
-...and answer its open question inline:
-
-```
 ### Q1 · §5 Risks — ⏳ awaiting answer (agent, 2026-08-10 09:02)
   ↳ you (2026-08-10 09:20): keep it in the same task — they're coupled, splitting adds risk.
 ```
@@ -83,14 +102,17 @@ Then:
 /pw-review spring-boot-3-upgrade
 ```
 
-The agent updates §3, folds your answer into §5, and flips both items to 🟢/✅ with a concrete
-`↳ agent:` reply. When you're satisfied, **you** — never the agent — write the Sign-off row:
+The agent sets §4's `**Chosen approach:** Option A`, updates §3, folds your Q1 answer into §5, and
+flips all three to 🟢/✅ with a concrete `↳ agent:` reply. When you're satisfied, **you** — never
+the agent — write the Sign-off row:
 
 ```
 | 2026-08-10 09:45 | you | approved ✅ |
 ```
 
-That row is the actual gate. Nothing below this point can start until it's there.
+That row is the actual gate — but **`/pw-breakdown` also checks that `Chosen approach:` isn't
+still pending**, even if this row already says `approved ✅`. Answering `Q0` isn't optional
+paperwork; it's what breakdown actually builds from.
 
 > **AI-assisted option:** turn this on with `/pw-review spring-boot-3-upgrade config analysis
 > advisory` (dashboard `AI Review:` line — off by default; `/pw-review spring-boot-3-upgrade

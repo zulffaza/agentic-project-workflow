@@ -105,3 +105,18 @@ buried in `tooling/`.
   comments first, then anchors only to real `### ` headings (not `> ` blockquote lines) — this is
   what the auto-signoff gate actually checks, and it's covered by `pw-lib.sh selftest`.
 - Discovered during the AI-review feature's own testing, 2026-08-10.
+
+### HTML comments cannot nest — a worked example living inside one needs bracket notation instead
+- **Symptom:** a real `<!-- pw-item-status: … -->` marker placed on a line inside
+  `template/_REVIEW.template.md`'s WORKED-EXAMPLE block would prematurely close the *outer*
+  `<!-- ↓↓ WORKED EXAMPLE … -->` comment at its own first `-->`, leaking the rest of the example
+  into real, rendered content and exposing it to the gate check above.
+- **Root cause:** HTML comments cannot nest — there is no way to open a second `<!--` while
+  already inside one and have it behave as a distinct, independently-closable region.
+- **Mitigation (built in):** every worked example in that template uses bracket notation
+  (`[marker: pw-item-status open]`) instead of the real comment syntax, purely as a visual stand-in
+  for what the marker looks like — never processed by tooling. The **live** headings outside any
+  wrapping comment use the real syntax; only content already inside another comment needs the
+  bracket substitute.
+- Applies to both the Items and Open-questions worked examples in that template — same reasoning
+  either place.

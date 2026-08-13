@@ -31,7 +31,7 @@ mapping is data, not a hardcoded assumption that every platform's template reads
 | Glossary | 🧑 you (never the agent) | — |
 | Background | 🤖 agent, from analysis §1–2 | 1 |
 | Requirements + Out of scope | 🤖 agent, from analysis §1 + §6 | 1 |
-| Solution (Approach #1/#2 + diagrams) | 🤖 agent, from analysis §4 | 1 |
+| Solution (chosen approach + diagrams) | 🤖 agent, from analysis §4 | 1 |
 | Dependencies | 🤖 agent, from analysis §3 | 1 |
 | Rollout Plan / Rollback Plan | 🧑🤖 both, **only if you ask** | 1 (on request) |
 | Milestone | 🤖 agent, from `task/PLAN.md`'s DAG + task table + SP/timeline | 2 |
@@ -40,9 +40,11 @@ mapping is data, not a hardcoded assumption that every platform's template reads
 | References → RFC review meeting notes | 🧑 you (never the agent) | — |
 
 ## The two publish waves — each gated by an EXISTING approval gate
-- **Wave 1** (`/pw-rfc <slug> [--target <ref>]`) — refuses unless analysis is `approved ✅`
-  (`pw-lib.sh phase <slug>` / the analysis review file's Sign-off row). Fills Background through
-  Dependencies (+ Rollout/Rollback if asked).
+- **Wave 1** (`/pw-rfc <slug> [--target <ref>]`) — refuses unless `pw-lib.sh review gate <slug>
+  analysis/review/<topic>.review.md` reads `approved ✅` (the file's CURRENT row, never "was it
+  ever approved" — same reasoning as `/pw-breakdown`'s gate) **and** analysis §4's `Chosen
+  approach:` is filled in, not pending. Fills Background through Dependencies (+ Rollout/Rollback
+  if asked) from the chosen option only.
 - **Wave 2** (`/pw-rfc <slug> milestone`) — refuses unless `task/PLAN.md` is `approved ✅`. Fills
   Milestone + Conclusion from the approved PLAN.
 - Neither wave sets the dashboard `Status:` or otherwise advances the pipeline — RFC publishing is
@@ -65,8 +67,9 @@ mapping is data, not a hardcoded assumption that every platform's template reads
   isn't even approved yet. Cheap, local checks (the gate, generation, the local diff) always come
   first; the target question only fires once there's real, approved content ready to publish.
 - **If the external template pre-populates a section with no corresponding generated content**
-  (e.g. its own "Approach #2" placeholder when analysis found no alternative), `/pw-rfc` leaves
-  that section's existing content untouched — it never deletes or edits it without being asked.
+  (e.g. its own second-approach placeholder when analysis concluded there was only one option),
+  `/pw-rfc` leaves that section's existing content untouched — it never deletes or edits it without
+  being asked.
 
 ## The section-scoped-update mandate (non-negotiable)
 A backend's `update_section` (per `rfc-backends.md`) must touch **only the block/anchor range for

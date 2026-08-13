@@ -55,8 +55,11 @@ branch into an existing project) — it has its own guide: **[Adoption →](./AD
 Ask any agent to analyze against `context/`. Output goes to `analysis/` using
 [`analysis/_TEMPLATE.md`](../template/analysis/_TEMPLATE.md). Analysis answers *what needs to change
 and why*, surfaces unknowns/risks, and lists **confirmed** affected repos — it does **not** yet
-decide task boundaries. Iterate here until you approve; this is the cheapest place to fix
-misunderstandings. You review it via a `.review.md` file — see [Review & feedback](./REVIEW.md).
+decide task boundaries. **§4 lays out real approach options, not one recommendation** — you pick
+via a `Q0` in the review file (same QnA mechanism as any other open question), and `/pw-breakdown`
+structurally can't proceed until a choice is recorded, even if the doc is otherwise `approved ✅`.
+Iterate here until you approve; this is the cheapest place to fix misunderstandings. You review it
+via a `.review.md` file — see [Review & feedback](./REVIEW.md).
 If this analysis also goes through the optional [RFC side-loop](./RFC.md) (external stakeholders,
 often a days/weeks negotiation), a comment-driven fix applied after approval **automatically
 reopens this exact gate** — analysis-approved and RFC-approved are the same fact, by design, so

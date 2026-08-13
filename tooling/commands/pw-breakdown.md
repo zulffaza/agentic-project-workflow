@@ -21,6 +21,13 @@ your fresh `approved ✅` here is what unblocks breakdown — nothing RFC-specif
 `analysis/review/RFC.review.md` (if present) is never itself part of this gate — only the review
 file paired with a real `analysis/<topic>.md` counts.
 
+**Second check, per analysis doc — a chosen approach, not just approval:** read that doc's §4.
+If it lists 2+ options, `**Chosen approach:**` must be filled in (not `_pending your review_`). If
+it's still pending, STOP and ask me to answer `Q0` in the review file first — **even if Sign-off
+already reads `approved ✅`**, since approving without choosing leaves nothing concrete to build a
+plan from. Build the PLAN and every task **only from the chosen option** — unchosen ones stay in
+the doc as record; never implement them, even partially "just in case."
+
 Then produce, from `{{PW_HOME}}/template/task/`:
 1. `<project>/task/PLAN.md` (from `_TEMPLATE-orchestration-plan.md`) — repo manifest as
    **`(repo, base branch)` pairs** (a repo may appear on **multiple rows** if tasks target different
