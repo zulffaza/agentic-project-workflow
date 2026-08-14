@@ -28,4 +28,6 @@ Hard rules:
 - Commit with Conventional Commits, scoped to this task's worktree. **Stop at committed + verified**
   — do NOT push or open an MR (that is the orchestrator/`/pw-ship`'s job).
 - Fill the task file's `## Result` (what changed, verify output, timing, `Actually used:`) and hand
-  back to the orchestrator. Report faithfully — state failures and skips.
+  back to the orchestrator. **`Verify outcome:`/`Notes:` are one distinct fact per (sub-)bullet,
+  never a single run-on paragraph** — see `_TEMPLATE-task.md`'s `## Result` for the exact shape.
+  Report faithfully — state failures and skips.

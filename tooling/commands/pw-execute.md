@@ -96,6 +96,9 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
      ask me; don't guess.
 5. Each executor works ONLY in its own worktree, runs the task's `## Verify`, reports real output,
    and fills the task's `## Result` block (time, log path, commit sha(s), verify outcome).
+   **`Verify outcome:` and `Notes:` are one distinct fact per (sub-)bullet, never a single run-on
+   paragraph chaining several unrelated facts** (a real result + an unrelated environment hiccup +
+   a mutation-test finding, say) — see `_TEMPLATE-task.md`'s own `## Result` for the exact shape.
    **Judging the Verify result decides whether the DAG keeps moving — get this right, it's what
    made a past run stall:**
    - **Confirmed pre-existing/environmental failure** (reproduce it on the *untouched* base branch

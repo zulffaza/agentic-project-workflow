@@ -48,10 +48,13 @@ table (`in-review` / `changes-requested` / `approved ✅`). Writing an item does
 to set any status; you just leave it 🔴 open and run `/pw-review`.
 
 **The contract:**
-- You write items. The agent **never edits or deletes your text** — it appends a `↳ agent:` reply
-  and flips 🔴→🟢. Your words stay the source of truth for what was asked.
+- You write items. The agent **never edits or deletes your text** — it edits that item's SAME
+  heading in place (flips 🔴→🟢, never adding a second heading) and appends a quoted
+  `> ↳ agent: …` reply below your ask, followed by a `---` rule before the next item. Your words
+  stay the source of truth for what was asked — the reply never restates them.
 - **How you know what the agent did:** the `↳ agent:` reply is a concrete summary per item (which
-  section, what changed). The agent also recaps the resolved items in chat after each pass.
+  section, what changed) — never a bare "fixed"/"done". The agent also recaps the resolved items in
+  chat after each pass.
 - Before editing any doc, the agent reads its `.review.md` first. `/pw-review` never changes the
   dashboard Status.
 - Only **you** write an `approved ✅` Sign-off row — an agent cannot self-approve a gate (the one
@@ -199,9 +202,10 @@ that keeps failing the same way forces a human decision instead of spinning fore
 
 **Reviewer notes — the *why*.** Every AI-review pass appends a dated entry to `REVIEWER-NOTES.md`
 (project root, sibling of `LOG.md`): what it checked, why it decided what it decided, and —
-sometimes, not every pass — a generalizable **Lesson**. This is separate from the `.review.md`'s
-items on purpose: items are the actionable record, `REVIEWER-NOTES.md` is the reasoning behind
-them, especially worth reading whenever `auto` mode approved something without you. A later
-reviewer pass reads prior entries too; `/pw-close`'s memory-seeding step folds its Lessons in if
-you've configured a memory tool (see [docs/MEMORY.md](./MEMORY.md)) — the file itself is always
-there regardless.
+sometimes, not every pass — a generalizable **Lesson**. Each entry is short labeled bullets, never
+a paragraph, and ends with a `---` rule, so the file stays fast to scan even after many passes.
+This is separate from the `.review.md`'s items on purpose: items are the actionable record,
+`REVIEWER-NOTES.md` is the reasoning behind them, especially worth reading whenever `auto` mode
+approved something without you. A later reviewer pass reads prior entries too; `/pw-close`'s
+memory-seeding step folds its Lessons in if you've configured a memory tool (see
+[docs/MEMORY.md](./MEMORY.md)) — the file itself is always there regardless.

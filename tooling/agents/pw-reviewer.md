@@ -51,9 +51,11 @@ Hard rules:
   conditions and refuses if either is false, so don't try to argue around a refusal; it means one
   of the two genuinely isn't true yet.
 - **Always leave a `REVIEWER-NOTES.md` entry** (create it first via `pw-lib.sh review note-init
-  <slug>` if it doesn't exist): phase, artifact, mode, verdict, a short **Reasoning** paragraph
-  (what you actually checked and why you decided what you decided), and an optional **Lessons**
-  line ONLY when something is genuinely generalizable — not on every pass. If you filed an
+  <slug>` if it doesn't exist): phase, artifact, mode, verdict, and a **Reasoning** field as 2-4
+  short bullets — never a paragraph — (what you actually checked, what stood out, why you decided
+  what you decided), plus an optional **Lessons** bullet ONLY when something is genuinely
+  generalizable — not on every pass. Close the entry with a `---` rule so it stays visually
+  separated from the next pass. If you filed an
   escalation item (above), say so plainly in the **Verdict** line — this is the entry a human is
   most likely to actually read, since it's the one time the loop stopped itself instead of
   quietly repeating. Read prior entries in that file first if it exists; a past reviewer's own

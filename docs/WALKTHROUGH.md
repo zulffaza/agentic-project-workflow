@@ -81,19 +81,28 @@ a `Q0` already seeded since §4 has two real options:
 Which approach — A (big-bang) or B (staged)?
 ```
 
-You open it, answer `Q0`, leave a comment on §3, and answer the other open question:
+You open it, answer `Q0`, leave a comment on §3, and answer the other open question — note each
+`↳ you:` is a quoted line under the SAME heading it answers, not a new one:
 
 ```
 ### Q0 · §4 Approach options — ⏳ awaiting answer (agent, 2026-08-10 09:02)
-  ↳ you (2026-08-10 09:18): Option A — the Kafka client bump is small enough, staging adds
-    ceremony we don't need here.
+Which approach — A (big-bang) or B (staged)?
+
+> ↳ **you** (2026-08-10 09:18): Option A — the Kafka client bump is small enough, staging adds
+> ceremony we don't need here.
+
+---
 
 ### R1 · §3 Affected repos — 🔴 open (you, 2026-08-10 09:15)
 You're missing that payments-api also has a custom javax.validation setup in
 `common-validation/` — check whether that needs its own line item.
 
+---
+
 ### Q1 · §5 Risks — ⏳ awaiting answer (agent, 2026-08-10 09:02)
-  ↳ you (2026-08-10 09:20): keep it in the same task — they're coupled, splitting adds risk.
+Coupled Kafka client bump — same task as the Boot bump, or its own?
+
+> ↳ **you** (2026-08-10 09:20): keep it in the same task — they're coupled, splitting adds risk.
 ```
 
 Then:
@@ -103,8 +112,21 @@ Then:
 ```
 
 The agent sets §4's `**Chosen approach:** Option A`, updates §3, folds your Q1 answer into §5, and
-flips all three to 🟢/✅ with a concrete `↳ agent:` reply. When you're satisfied, **you** — never
-the agent — write the Sign-off row:
+resolves all three — **editing each heading in place** (never adding a second one), with a concrete
+quoted `↳ agent:` reply and a `---` rule after each:
+
+```
+### R1 · §3 Affected repos — 🟢 resolved (you, 2026-08-10 09:15) <!-- pw-item-status: resolved -->
+You're missing that payments-api also has a custom javax.validation setup in
+`common-validation/` — check whether that needs its own line item.
+
+> ↳ **agent** (2026-08-10 09:46): §3 — added a `common-validation` row (config-only change, no
+> own task needed).
+
+---
+```
+
+When you're satisfied, **you** — never the agent — write the Sign-off row:
 
 ```
 | 2026-08-10 09:45 | you | approved ✅ |

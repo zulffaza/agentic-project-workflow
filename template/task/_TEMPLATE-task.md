@@ -108,6 +108,16 @@ cd {{PW_PROJECTS}}/<project-slug>/worktree/<repo>/<T0n>-<slug>
 - **Log:** `worktree/<T0n>.log` <executor tees its output here so you can tail the run>
 - **Commit(s):** <short-sha(s), or `zero-change` if nothing was removable>
 - **MR:** <url / number, or `—` if not shipped yet (see /pw-ship)>
-- **Verify outcome:** <pass / pass-with-preexisting-failures (name them) / fail>
-- **Notes:** <anything the reviewer needs — surprises, kept-pinned rationale, follow-ups>
+- **Verify outcome:** <pass / pass-with-preexisting-failures (name them) / fail. **One distinct fact
+  per line** — if there's more than one (a real result + an unrelated preexisting failure you
+  reproduced on the base branch, say), use a nested sub-bullet per fact instead of chaining them
+  into one sentence:>
+  - `PASS — ./gradlew test, BUILD SUCCESSFUL`
+  - pre-existing failure in `common-api`, reproduces on the untouched base branch too — not a
+    regression from this task's diff
+- **Notes:** <anything the reviewer needs — surprises, kept-pinned rationale, follow-ups. Same rule
+  as above: one fact per (sub-)bullet, never a single run-on paragraph chaining several unrelated
+  facts together — it's the #1 reason this section gets exhausting to read:>
+  - <fact 1 — e.g. what was mirrored/reused from another task>
+  - <fact 2, only if genuinely distinct — e.g. an environment hiccup hit and how it was resolved>
 <!-- Token/cost intentionally omitted — not measurable from inside the run. -->

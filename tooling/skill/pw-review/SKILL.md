@@ -105,15 +105,22 @@ narrative one — what you checked and why you decided what you decided. Always 
 tooling/pw-lib.sh review note-init <slug>   # idempotent — creates the file with its header if missing
 ```
 
-Then append your own dated section directly (free-form prose doesn't fit a CLI-args shape):
+Then append your own dated section directly (free-form prose doesn't fit a CLI-args shape). Keep
+every field a **short bullet, never a paragraph** — this file gets read cold, sometimes months
+later, and a wall of prose defeats the point of a "notes" file. Close every entry with a `---` rule
+so consecutive passes stay visually separated:
 
 ```markdown
 ## <YYYY-MM-DD HH:MM> · <phase> · <artifact-rel-path> · mode=<advisory|auto>
-**Verdict:** <n items filed | clean pass — auto-approved | clean pass — awaiting human | ESCALATED
-— §<anchor> recurred twice, needs a human>
-**Reasoning:** <2-4 sentences: what you actually checked, what stood out, why that verdict>
-**Lessons:** <optional — 1-3 bullets, ONLY when something is genuinely generalizable; omit this
-line entirely most passes>
+- **Verdict:** <n items filed | clean pass — auto-approved | clean pass — awaiting human |
+  ESCALATED — §<anchor> recurred twice, needs a human>
+- **Reasoning:** 2-4 short bullets, not a paragraph — one line per distinct point
+  - <what you actually checked>
+  - <what stood out, and why that verdict>
+- **Lessons:** <optional — 1-3 bullets, ONLY when something is genuinely generalizable; omit this
+  field entirely most passes>
+
+---
 ```
 
 If you filed an escalation item, say so in the **Verdict** line — this is the one entry a human is

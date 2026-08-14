@@ -110,14 +110,21 @@ Sign-off, so there's nothing to reopen.
 
 For each `🔴 open` item in the resolved files:
 - apply the fix to the doc it reviews,
-- append a concrete `↳ agent:` reply naming the section + exactly what changed (never a bare
-  "fixed"/"done"),
-- flip the item to `🟢 resolved`.
+- edit that SAME `### Rn · …` heading in place — flip `🔴 open` → `🟢 resolved` and its trailing
+  `pw-item-status` marker together; **never add a second heading for the same item** (that's what
+  makes consecutive items in the file visually run together — one heading per item, always),
+- append a concrete reply as a quoted line directly below the item's ask, one blank line between
+  them: `> ↳ **agent** (<YYYY-MM-DD HH:MM>): <section(s) + exactly what changed>` — never a bare
+  "fixed"/"done", and **never restate my ask** (R-items never get a `↳ you:` line; my ask is
+  already sitting right there as the item's own body text),
+- add a `---` rule after the reply, before the next item.
 
-**Also process the "## Open questions" section (QnA):** for each `Qn` that now has a `↳ you:`
-answer, fold that answer into the reviewed doc, append a `↳ agent:` line saying what you changed,
-and flip the row `⏳ awaiting answer` → `✅ answered`. Leave unanswered `Qn` rows untouched and
-report them as still blocking.
+**Also process the "## Open questions" section (QnA):** for each `Qn` whose `> ↳ **you**:` line has
+an answer, fold that answer into the reviewed doc, edit that SAME `### Qn · …` heading in place
+(flip `⏳ awaiting answer` → `✅ answered` + marker — never a second heading), append
+`> ↳ **agent** (<timestamp>): …` right after my `↳ you:` line inside the same quoted block (one
+blank quoted line between the two), and add a `---` rule before the next question. Leave unanswered
+`Qn` rows untouched and report them as still blocking.
 
 Never edit or delete my comment text (items OR my `↳ you:` answers). Never write the Sign-off row
 — only I clear the gate. Log the pass (this is the ONLY dashboard-adjacent write you make):

@@ -632,7 +632,19 @@ cmd_review_note_init() {
     printf 'generalizable takeaway under a `**Lessons:**` line (optional — only when something is\n'
     printf 'genuinely worth carrying forward, not on every pass). A human, a later reviewer pass, the\n'
     printf "orchestrator, and (if configured) /pw-close's memory-seeding step all read this — never\n"
-    printf 'hand-edit a past entry; append a new dated section per pass.\n'
+    printf 'hand-edit a past entry; append a new dated section per pass.\n\n'
+    printf 'Per-entry shape — keep %s and %s short bullets, never a paragraph, so a scan of this\n' \
+      '**Reasoning**' 'each field'
+    printf 'file stays fast even after many passes; end every entry with a `---` rule:\n\n'
+    printf '## <YYYY-MM-DD HH:MM> · <phase> · <artifact-rel-path> · mode=<advisory|auto>\n'
+    printf -- '- **Verdict:** <n items filed | clean pass — auto-approved | clean pass — awaiting\n'
+    printf '  human | ESCALATED — §<anchor> recurred twice, needs a human>\n'
+    printf -- '- **Reasoning:** 2-4 short bullets, not a paragraph — one line per distinct point\n'
+    printf '  - <what you checked>\n'
+    printf '  - <what stood out, and why that verdict>\n'
+    printf -- '- **Lessons:** <optional — 1-3 bullets, ONLY when genuinely generalizable; omit this\n'
+    printf '  field entirely most passes>\n\n'
+    printf -- '---\n'
   } > "$f"
   cmd_log "$slug" review "created REVIEWER-NOTES.md"
   echo "$slug: review note-init created REVIEWER-NOTES.md"
