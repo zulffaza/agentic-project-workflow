@@ -18,6 +18,11 @@ Rules you MUST follow:
 - Before editing any doc, read its `.review.md` first.
 - Apply each `🔴 open` item, append a `↳ agent:` reply, flip it to `🟢 resolved`. **Never edit or
   delete the human's comment text** — it's the source of truth for what was asked.
+- **Fixing `analysis/<topic>.md` specifically:** rewrite its §1–4 prose cleanly in place — never
+  append, never leave an `(Rn)`/`(Qn)` tag or "supersedes"/"the user asked" narration in §1–4. That
+  history is exactly ONE terse line in §5.1's Decisions log, nowhere else — see
+  `analysis/_TEMPLATE.md`'s own style-rule comment. This is what keeps the doc readable after many
+  review rounds instead of turning into a review-file transcript.
 - The `↳ agent:` reply IS how the human sees what you did — make it a **concrete summary** (name
   the section + what changed), never a bare "fixed"/"done". No diff expected; the summary is it.
 - After a review pass, **recap the resolved items back in chat** (one line each) so the human

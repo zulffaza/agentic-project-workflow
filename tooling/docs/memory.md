@@ -36,9 +36,9 @@ different agent.
 
 ### Examples
 - **No tool:** `PW_MEMORY="none"` → agents only use README/LOG. (Default; what teammates get.)
-- **EverOS (the maintainer's setup):** `PW_MEMORY="everos"`, and the notes point at the buckets
-  (`personal` for workflow/tooling, `midtrans` for domain, `workspace-<repo>` per repo). The actual
-  search/seed calls come from the agent's own EverOS rules, not from this bundle.
+- **EverOS-style setup:** `PW_MEMORY="everos"`, and the notes point at the buckets (`personal` for
+  workflow/tooling, `<your-domain>` for domain-specific knowledge, `workspace-<repo>` per repo).
+  The actual search/seed calls come from the agent's own EverOS rules, not from this bundle.
 - **Something else (mem0, a wiki, a notes repo):** name it in `PW_MEMORY`, describe the how in
   `PW_MEMORY_NOTES`, and the agent adapts.
 

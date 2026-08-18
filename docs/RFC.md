@@ -37,13 +37,20 @@ fresh clone (including an AI agent onboarding itself) can run `/pw-rfc` immediat
 
 ## The two waves
 
-Each wave is gated by an **existing** approval gate — RFC publishing only ever externalizes an
-artifact you've already approved through the normal pipeline:
+Each wave has its own gate, and they're deliberately **not the same kind of gate**:
 
 | Wave | Command | Gate | Fills |
 |---|---|---|---|
-| 1 | `/pw-rfc <slug> [--target <ref>]` | analysis `approved ✅` + a chosen approach (§4) | Background · Requirements + Out of Scope · Solution — chosen approach (+ diagrams) · Dependencies · (Rollout/Rollback Plan, only if you ask) |
+| 1 | `/pw-rfc <slug> [--target <ref>]` | analysis §4 has a chosen approach — **Sign-off does NOT need to read `approved ✅` yet** | Background · Requirements + Out of Scope · Solution — chosen approach (+ diagrams) · Dependencies · (Rollout/Rollback Plan, only if you ask) |
 | 2 | `/pw-rfc <slug> milestone` | `task/PLAN.md` `approved ✅` | Milestone (from the PLAN's DAG groups + task table + SP/timeline) · Conclusion |
+
+**Wave 1 publishes a draft, not a decision.** RFC-approved and analysis-approved are the same fact
+(see below) — so requiring you to privately approve the analysis locally *before* the people the
+RFC is meant to negotiate with ever see it would be backwards: you'd be deciding before asking.
+Wave 1's bar is just "there's a real, chosen direction to publish" (§4's `Chosen approach:` filled
+in). Wave 2 is different on purpose: `milestone` summarizes an already-cut `task/PLAN.md`, and
+there's no meaningful "draft milestone" to negotiate over, so it genuinely needs the PLAN approved
+first.
 
 Glossary and the References subsections (Open questions?, RFC review meeting notes) stay
 human-owned placeholders — the agent never fills those. Before touching anything external, `/pw-rfc`
@@ -69,8 +76,10 @@ you can set it per-project (via `--target` once) instead of a single global defa
 Continuing [docs/WALKTHROUGH.md](./WALKTHROUGH.md)'s own `spring-boot-3-upgrade` example: say this
 one's big enough that another team's lead wants visibility before you break it into tasks.
 
-1. **Analysis gets approved** (the normal `analysis/review/spring-boot-3-upgrade.review.md`
-   sign-off — RFC publishing never happens before this).
+1. **Analysis reaches a chosen approach** (§4's `**Chosen approach:**` is filled in — via the
+   normal `Q0` answer in `analysis/review/spring-boot-3-upgrade.review.md`). **No Sign-off row
+   needed yet** — Wave 1 is exactly how you get the other lead's input *before* deciding this is
+   final, not after.
 2. **Wave 1 publish:**
    ```
    /pw-rfc spring-boot-3-upgrade --target <lark-doc-or-folder-ref>
@@ -105,10 +114,12 @@ one's big enough that another team's lead wants visibility before you break it i
    reopening the analysis gate each time a fresh comment lands after a re-approval, so
    `/pw-breakdown` keeps correctly refusing throughout — it never quietly becomes runnable mid-negotiation.
 8. **Once the negotiation is genuinely done**, add a fresh `approved ✅` row to
-   `analysis/review/spring-boot-3-upgrade.review.md`'s Sign-off yourself, same as any ordinary
-   analysis approval. **There's no separate "RFC approved" concept to set anywhere** — this one row
-   is both, by construction: it can only be added once every fold-in has already happened, so it
-   being `approved ✅` again *is* what "RFC settled" means. `/pw-breakdown` unblocks.
+   `analysis/review/spring-boot-3-upgrade.review.md`'s Sign-off yourself — often the **first**
+   Sign-off row this doc ever gets, since nothing required one before Wave 1 published. **There's
+   no separate "RFC approved" concept to set anywhere** — this one row is both, by construction: it
+   only makes sense to add once every fold-in from the negotiation has already happened, so it
+   being `approved ✅` *is* what "RFC settled" means, whether it's the first approval or a
+   re-approval after a later round. `/pw-breakdown` unblocks.
 9. **Later, once the PLAN is approved:**
    ```
    /pw-rfc spring-boot-3-upgrade milestone

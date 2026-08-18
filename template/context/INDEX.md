@@ -18,8 +18,9 @@ on continuation projects, `/pw-adopt` deterministically maintains its own rows �
 
 **Column meanings** (the two that get confused):
 - **File / link** — the artifact *sitting in this `context/` dir* (a filename you dropped here,
-  e.g. `spring-rfc.md`), or a bare URL if you didn't copy it locally. This is *the copy you're
-  feeding the agent*.
+  e.g. `spring-rfc.md`), or a bare URL if you didn't copy it locally. A bare URL means `/pw-analyze`
+  fetches it live (via WebFetch or the matching platform skill) rather than treating the link
+  itself as content — so it still ends up as *the copy the agent actually reasons from*.
 - **Source** — where that artifact *originally came from*: the JIRA/ticket ID, the Lark/Confluence
   URL, or the person who gave it to you. This is *the origin/provenance*. (File/link = the copy;
   Source = where it came from.)

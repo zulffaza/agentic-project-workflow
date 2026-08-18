@@ -13,11 +13,18 @@ get a maintained local RFC doc and skip every external call, same spirit as `mem
 → agents only use README/LOG" default.
 
 ## Is RFC even the right side-loop for this project?
-`/pw-rfc` only ever externalizes work **already approved** through the pipeline's own gates — it
-never introduces a new phase and never touches the dashboard `Status:` (context→analysis→
+`/pw-rfc` never introduces a new phase and never touches the dashboard `Status:` (context→analysis→
 breakdown→executing→review→done). It only appends to `LOG.md`, exactly like `/pw-ship`/`/pw-sync`.
 Use it when a project is big/cross-team enough to need a written RFC and discussion before
 breakdown; skip it entirely for smaller projects — nothing else in the pipeline notices either way.
+
+**Wave 1 does NOT require analysis to already be locally `approved ✅`** — only that §4 has a
+chosen approach. RFC-approved and analysis-approved are **the same fact** (see below), so Wave 1's
+whole purpose is to let the *draft* reach outside reviewers before the local Sign-off is written —
+requiring a private pre-approval first would mean deciding before asking, which is backwards for a
+genuine cross-team negotiation. Wave 2 (`milestone`) is different: it summarizes an already-cut
+`task/PLAN.md`, so it genuinely needs that PLAN to be `approved ✅` first — there's no "draft
+milestone" to negotiate over.
 
 ## Canonical section schema
 Every RFC (any backend) uses this schema — see
@@ -39,23 +46,24 @@ mapping is data, not a hardcoded assumption that every platform's template reads
 | References → Open questions? | 🧑 you (RFC-comment pulls land in `analysis/review/RFC.review.md` instead — see below) | — |
 | References → RFC review meeting notes | 🧑 you (never the agent) | — |
 
-## The two publish waves — each gated by an EXISTING approval gate
-- **Wave 1** (`/pw-rfc <slug> [--target <ref>]`) — refuses unless `pw-lib.sh review gate <slug>
-  analysis/review/<topic>.review.md` reads `approved ✅` (the file's CURRENT row, never "was it
-  ever approved" — same reasoning as `/pw-breakdown`'s gate) **and** analysis §4's `Chosen
-  approach:` is filled in, not pending. Fills Background through Dependencies (+ Rollout/Rollback
-  if asked) from the chosen option only.
+## The two publish waves
+- **Wave 1** (`/pw-rfc <slug> [--target <ref>]`) — refuses unless analysis §4's `Chosen approach:`
+  is filled in, not pending. **Does NOT require the review file's Sign-off to read `approved ✅`**
+  — publishing a still-`in-review` draft for outside comment is the normal, expected case; see
+  above for why. Fills Background through Dependencies (+ Rollout/Rollback if asked) from the
+  chosen option only.
 - **Wave 2** (`/pw-rfc <slug> milestone`) — refuses unless `task/PLAN.md` is `approved ✅`. Fills
   Milestone + Conclusion from the approved PLAN.
 - Neither wave sets the dashboard `Status:` or otherwise advances the pipeline — RFC publishing is
-  purely a side-effect of an already-approved artifact, recorded via `pw-lib.sh rfc state/dashboard`
-  + `pw-lib.sh log` (same audit-trail convention as every other mutator).
+  purely a side-effect of a gate-passing artifact (Wave 1: a chosen approach; Wave 2: an approved
+  PLAN), recorded via `pw-lib.sh rfc state/dashboard` + `pw-lib.sh log` (same audit-trail
+  convention as every other mutator).
 - Before touching any external backend, `/pw-rfc` **always shows the local diff of `rfc/RFC.md`
   and confirms with you first** — same discipline as `/pw-ship` confirming the push list.
 - `rfc init` (creating `rfc/RFC.md` + stamping `rfc/META.md`) runs **inside each wave, only after
   its gate passes** — never in a shared preamble ahead of the gate check. A refused run leaves
-  nothing on disk; this is what makes "RFC publishing only ever externalizes already-approved
-  work" actually true, not just a stated intent.
+  nothing on disk; this is what makes each wave's own gate (not a blanket "already approved" rule
+  — see above, Wave 1's gate is deliberately lighter) actually enforced, not just a stated intent.
 - **If a backend other than `markdown` has no resolvable target** (no `--target`, no persisted
   `rfc/META.md` target, no configured default) on a project's first publish, `/pw-rfc` **stops and
   asks you** where to create the doc — it never guesses a location (e.g. a Drive root folder). This
@@ -64,8 +72,9 @@ mapping is data, not a hardcoded assumption that every platform's template reads
   actual publish sub-step, inside the wave, only after that wave's gate has already passed** — not
   in the shared preamble. A second fresh-context test caught the ordering flaw in an earlier draft:
   checking it before the gate meant an agent could ask "where should I publish?" for a project that
-  isn't even approved yet. Cheap, local checks (the gate, generation, the local diff) always come
-  first; the target question only fires once there's real, approved content ready to publish.
+  doesn't even clear that wave's own gate yet. Cheap, local checks (the gate, generation, the local
+  diff) always come first; the target question only fires once there's real, gate-passing content
+  ready to publish.
 - **If the external template pre-populates a section with no corresponding generated content**
   (e.g. its own second-approach placeholder when analysis concluded there was only one option),
   `/pw-rfc` leaves that section's existing content untouched — it never deletes or edits it without

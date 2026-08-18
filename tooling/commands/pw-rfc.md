@@ -12,9 +12,12 @@ external doc ref for this and future runs; trailing `milestone` = Wave 2; traili
 read-only comment pull. With neither trailing keyword, this is Wave 1 (default).
 
 Project dir: `{{PW_PROJECTS}}/<slug>`. **This is a side-loop, not a phase** — it never sets the
-dashboard `Status:` (only `pw-lib.sh log`, for the audit trail), and it only ever externalizes an
-artifact **already approved** through the pipeline's own gates. Never block a phase or refuse to
-run because a backend is unset/unreachable — that's a config choice, not an error.
+dashboard `Status:` (only `pw-lib.sh log`, for the audit trail). Each wave has its own gate, and
+they're NOT the same kind: Wave 1 only needs analysis §4 to have a chosen approach (publishing a
+still-`in-review` draft for outside comment is the normal case — see `rfc.md`); Wave 2 genuinely
+needs `task/PLAN.md` `approved ✅`, since there's no meaningful "draft milestone" to negotiate
+over. Never block a phase or refuse to run because a backend is unset/unreachable — that's a
+config choice, not an error.
 
 ## Resolve the backend + target (every invocation — read-only computation, no gate check yet)
 This step only **computes** values and, if you explicitly gave `--target`, **records** it — it
@@ -31,8 +34,8 @@ target question it doesn't need yet.
    (this only records where a *future* publish would go — it's bookkeeping, not RFC content, so
    it's fine to record even if this invocation's gate ends up refusing below).
 3. `rfc init` (creating the local doc + metadata) happens **inside each wave below, after its gate
-   passes** — never before. RFC publishing only ever externalizes work already approved; creating
-   even a local placeholder ahead of that would contradict it.
+   passes** — never before. Each wave's own gate is what's authoritative (Wave 1: chosen approach;
+   Wave 2: PLAN approved) — creating even a local placeholder ahead of that would contradict it.
 4. **The "no target resolved" stop-and-ask** (below) is checked **inside each wave, immediately
    before its actual publish sub-step** — not here. Asking about a destination is only warranted
    once a wave's gate has passed and there's real generated content ready to show you; asking
@@ -40,13 +43,14 @@ target question it doesn't need yet.
    be approved to publish at all.
 
 ## Wave 1 (default — no trailing keyword)
-1. **Gate:** `{{PW_HOME}}/tooling/pw-lib.sh review gate <slug> analysis/review/<topic>.review.md`
-   — the file's CURRENT Sign-off row, never "was it ever approved" (same reasoning as
-   `/pw-breakdown`'s gate — a stale historical approval must not satisfy this after a later fix
-   reopens it, e.g. via `/pw-review`'s auto-reopen). If it exits non-zero, **refuse and report the
-   decision it printed** — do nothing else, and do not create `rfc/RFC.md`. Also require analysis
-   §4's `**Chosen approach:**` to be filled in (not pending) — an RFC published from an
-   as-yet-undecided analysis would need republishing the moment a choice is made anyway.
+1. **Gate:** analysis §4's `**Chosen approach:**` must be filled in (not `_pending your review_`)
+   — that is the **only** requirement to publish a Wave 1 draft. **Do NOT require the review
+   file's Sign-off to already read `approved ✅`** — RFC-approved and analysis-approved are the
+   same fact (see `rfc.md`), so demanding a separate, private local approval *before* the draft
+   ever reaches the people it's meant to negotiate with would defeat the entire point of using RFC
+   for cross-team input. It is normal and expected for Wave 1 to publish a still-`in-review` doc.
+   If §4 isn't decided yet, **refuse and say so** — do nothing else, and do not create
+   `rfc/RFC.md`.
 2. Gate passed: `{{PW_HOME}}/tooling/pw-lib.sh rfc init <slug> <backend>` — idempotent; creates
    `rfc/RFC.md` from the template and stamps `rfc/META.md`'s `Backend:` with the **real** resolved
    backend from step 1 above (not a default guess), no-ops (and never clobbers) on a later run.

@@ -61,9 +61,12 @@ structurally can't proceed until a choice is recorded, even if the doc is otherw
 Iterate here until you approve; this is the cheapest place to fix misunderstandings. You review it
 via a `.review.md` file — see [Review & feedback](./REVIEW.md).
 If this analysis also goes through the optional [RFC side-loop](./RFC.md) (external stakeholders,
-often a days/weeks negotiation), a comment-driven fix applied after approval **automatically
-reopens this exact gate** — analysis-approved and RFC-approved are the same fact, by design, so
-`/pw-breakdown` keeps correctly refusing until the whole negotiation settles and you re-approve.
+often a days/weeks negotiation): publishing the draft (`/pw-rfc`'s Wave 1) only needs §4's chosen
+approach, **not** this Sign-off — negotiating with outside reviewers is normal *before* you decide
+this is final, not after. Once negotiated, a comment-driven fix applied after this row already
+reads `approved ✅` **automatically reopens this exact gate** — analysis-approved and RFC-approved
+are the same fact, by design, so `/pw-breakdown` keeps correctly refusing until the whole
+negotiation settles and you (re-)approve.
 
 ## Step 4–5 — Task breakdown
 Ask any agent to turn approved analysis into a breakdown:

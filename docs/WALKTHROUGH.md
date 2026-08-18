@@ -66,7 +66,9 @@ Same end state, split into two PLANs a week apart.
 
 **Chosen approach:** _pending your review_
 
-## 5. Risks, unknowns & open questions
+## 5. Decisions, risks & open questions
+
+### 5.3 Open questions (QnA)
 - ❓ Q1: notifications-worker's Kafka client bump is coupled to the Boot bump — same task,
   or split? — status: awaiting answer
 ```
@@ -99,7 +101,7 @@ You're missing that payments-api also has a custom javax.validation setup in
 
 ---
 
-### Q1 · §5 Risks — ⏳ awaiting answer (agent, 2026-08-10 09:02)
+### Q1 · §5.3 Open questions — ⏳ awaiting answer (agent, 2026-08-10 09:02)
 Coupled Kafka client bump — same task as the Boot bump, or its own?
 
 > ↳ **you** (2026-08-10 09:20): keep it in the same task — they're coupled, splitting adds risk.
@@ -111,9 +113,10 @@ Then:
 /pw-review spring-boot-3-upgrade
 ```
 
-The agent sets §4's `**Chosen approach:** Option A`, updates §3, folds your Q1 answer into §5, and
-resolves all three — **editing each heading in place** (never adding a second one), with a concrete
-quoted `↳ agent:` reply and a `---` rule after each:
+The agent sets §4's `**Chosen approach:** Option A`, updates §3, folds your Q1 answer into §7's
+task shape (same task, not split — plus one terse line in §5.1's Decisions log, never a tag left
+in §3/§4 themselves) and resolves all three — **editing each heading in place** (never adding a
+second one), with a concrete quoted `↳ agent:` reply and a `---` rule after each:
 
 ```
 ### R1 · §3 Affected repos — 🟢 resolved (you, 2026-08-10 09:15) <!-- pw-item-status: resolved -->
