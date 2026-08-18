@@ -15,11 +15,22 @@ to (re-)approve that analysis first — quote the decision it printed (`in-revie
 in its history** — a doc reopened after approval (e.g. an RFC comment folded back in post-approval,
 see [`docs/RFC.md`](../../docs/RFC.md)) still has an old approved row sitting earlier in the same
 file; `review gate` deliberately reads only the table's current/last row so a stale historical
-approval can never satisfy this gate on its own. This is also why an RFC comment on the analysis
-doesn't need its own separate approval concept: once folded in, it reopens *this exact* gate, and
-your fresh `approved ✅` here is what unblocks breakdown — nothing RFC-specific to check.
-`analysis/review/RFC.review.md` (if present) is never itself part of this gate — only the review
-file paired with a real `analysis/<topic>.md` counts.
+approval can never satisfy this gate on its own. This is also why a *folded-in* RFC comment doesn't
+need its own separate approval concept: once folded in, it reopens *this exact* gate, and your
+fresh `approved ✅` here is what unblocks breakdown. That reopen only fires retroactively, though —
+it says nothing about a comment that's been pulled but never folded in. That gap is the third check
+below, a genuinely separate mechanism from this Sign-off read.
+
+**Third check — an open RFC negotiation blocks breakdown outright:** run
+`{{PW_HOME}}/tooling/pw-lib.sh review has-open <slug> analysis/review/RFC.review.md`. If it prints
+`yes` (exit 0), STOP — do not produce `PLAN.md` or any task file, even if the analysis Sign-off
+above reads `approved ✅`. Tell me which item(s) are still 🔴 open/⏳ awaiting-answer in that file
+and that I need to either fold each one into the analysis via `/pw-review` (which reopens the
+analysis gate above until re-approved) or resolve it directly in the review file myself, then
+re-run `/pw-breakdown`. This closes the gap where analysis got approved on its own merits while a
+live external RFC comment thread is still sitting unresolved — see
+[`docs/RFC.md`](../../docs/RFC.md). A missing `RFC.review.md` (no RFC side-loop ever used, or no
+comments pulled yet) prints `no`/exits 1 — not an error, nothing to block on.
 
 **Second check, per analysis doc — a chosen approach, not just approval:** read that doc's §4.
 If it lists 2+ options, `**Chosen approach:**` must be filled in (not `_pending your review_`). If

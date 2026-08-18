@@ -66,7 +66,11 @@ approach, **not** this Sign-off — negotiating with outside reviewers is normal
 this is final, not after. Once negotiated, a comment-driven fix applied after this row already
 reads `approved ✅` **automatically reopens this exact gate** — analysis-approved and RFC-approved
 are the same fact, by design, so `/pw-breakdown` keeps correctly refusing until the whole
-negotiation settles and you (re-)approve.
+negotiation settles and you (re-)approve. That auto-reopen only covers comments already *folded in*,
+though — `/pw-breakdown` also hard-refuses outright if `analysis/review/RFC.review.md` has any
+comment still sitting 🔴 open/⏳ awaiting-answer (pulled via `/pw-rfc … comments` but not yet folded
+in or resolved), even when this Sign-off already reads `approved ✅` on its own. Fold it in via
+`/pw-review` or resolve it directly before re-running `/pw-breakdown`.
 
 ## Step 4–5 — Task breakdown
 Ask any agent to turn approved analysis into a breakdown:

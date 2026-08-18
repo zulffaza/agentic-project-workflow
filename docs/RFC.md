@@ -112,7 +112,13 @@ one's big enough that another team's lead wants visibility before you break it i
 7. **Repeat 3–6 for as many rounds as the negotiation needs** — a real cross-team RFC can run
    days or weeks of comment → fix → push cycles before everyone's satisfied. Steps 4–5 keep
    reopening the analysis gate each time a fresh comment lands after a re-approval, so
-   `/pw-breakdown` keeps correctly refusing throughout — it never quietly becomes runnable mid-negotiation.
+   `/pw-breakdown` keeps correctly refusing throughout — it never quietly becomes runnable
+   mid-negotiation. **This holds even in the window before you've folded a fresh comment in at
+   all**: the moment step 4 pulls it, it sits as a 🔴 open item in `RFC.review.md`, and
+   `/pw-breakdown` checks that file directly (`pw-lib.sh review has-open`) — so it refuses outright
+   even if the analysis Sign-off hasn't been touched yet (e.g. it was approved *before* this comment
+   ever arrived). You must fold the comment in (step 5) or resolve it in the review file yourself
+   before breakdown will run.
 8. **Once the negotiation is genuinely done**, add a fresh `approved ✅` row to
    `analysis/review/spring-boot-3-upgrade.review.md`'s Sign-off yourself — often the **first**
    Sign-off row this doc ever gets, since nothing required one before Wave 1 published. **There's
@@ -131,13 +137,25 @@ whenever RFC feedback changes the analysis after an earlier approval, closed aga
 and the RFC doc is otherwise a read-mostly window onto already-approved work; the only thing that
 ever flows back in is a comment quote, never a direct edit.
 
-**Why this needs no separate RFC-approval gate:** it might seem like a long external negotiation
-needs its own tracked state distinct from the analysis's local approval. It doesn't — because
-step 5's auto-reopen means the analysis review file's Sign-off table can only show a *current*
-`approved ✅` once nothing outstanding from the RFC side remains unfolded. Analysis-approved and
-RFC-approved collapse into the same fact, so `/pw-breakdown`'s existing gate (see
-[`docs/WORKFLOW.md`](./WORKFLOW.md)) is already the right one — it just needed to stop trusting a
-*stale* approved row, which is exactly what the reopen mechanism fixes.
+**Why there's still no separate "RFC approved" row to write, even though breakdown now checks two
+things:** it might seem like a long external negotiation needs its own tracked approval state,
+distinct from the analysis's local Sign-off. It still doesn't — there's no second table to fill in,
+no second decision to make. What changed is that `/pw-breakdown` no longer trusts the analysis
+Sign-off *alone* to prove "nothing outstanding remains." Two independent checks now both have to
+clear:
+- **The Sign-off's current row must read `approved ✅`** — step 5's auto-reopen keeps this honest
+  for anything that's already been *folded in*: a fix landing after an earlier approval flips this
+  row back to `in-review` automatically.
+- **`analysis/review/RFC.review.md` must have zero open items** (`pw-lib.sh review has-open`) — this
+  catches the *other* half: a comment that's been pulled (step 4) but not yet folded in at all
+  (still sitting between steps 4 and 5) leaves the Sign-off table completely untouched, so the
+  auto-reopen alone can't see it. Without this second check, an analysis approved *before* a late
+  comment ever arrived would let breakdown run right past an open negotiation.
+
+Analysis-approved and RFC-approved are still the same fact by design — you only ever write one
+`approved ✅` row, never a parallel RFC-specific one — but "the same fact" now needs both checks to
+actually hold, not just the Sign-off read on its own. See [`docs/WORKFLOW.md`](./WORKFLOW.md) for
+where this is enforced.
 
 ## The comment loop — read-only outward, always
 

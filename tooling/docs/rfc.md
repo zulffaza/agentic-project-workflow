@@ -26,6 +26,15 @@ genuine cross-team negotiation. Wave 2 (`milestone`) is different: it summarizes
 `task/PLAN.md`, so it genuinely needs that PLAN to be `approved ✅` first — there's no "draft
 milestone" to negotiate over.
 
+**The other direction of the same coin: `/pw-breakdown` hard-refuses while a pulled RFC comment sits
+unresolved**, even if analysis is `approved ✅` on its own merits — `pw-lib.sh review has-open <slug>
+analysis/review/RFC.review.md` checks this independently of the Sign-off read, because a comment
+that's been pulled (`/pw-rfc <slug> comments`) but never folded into the analysis leaves no trace on
+the analysis's own Sign-off table at all; only an actual fold-in reopens that gate. Without this
+second check, analysis could get approved (or stay approved from before the RFC even published)
+while a live, known, external negotiation is still open — breakdown would otherwise race ahead of
+it. See `docs/RFC.md`'s walkthrough for the full loop.
+
 ## Canonical section schema
 Every RFC (any backend) uses this schema — see
 [`template/rfc/_TEMPLATE-RFC.md`](../../template/rfc/_TEMPLATE-RFC.md) for the literal skeleton. A

@@ -53,6 +53,15 @@
 #                                                     a human's own reopen. Used when a fix lands on
 #                                                     an already-approved doc (e.g. an RFC comment
 #                                                     folded back into the analysis) — see docs/RFC.md
+#   pw-lib.sh review has-open <slug> <review-rel-path>  print yes/no + exit 0/1 on whether the file
+#                                                     has any unresolved 🔴 open item or ⏳ awaiting-
+#                                                     answer question (missing file → "no", exit 1 —
+#                                                     not an error, just "nothing in flight"). A
+#                                                     generic open-item check, unlike `review gate`
+#                                                     which reads a Sign-off decision — used by
+#                                                     /pw-breakdown's RFC-negotiation hard block on
+#                                                     analysis/review/RFC.review.md, which has no
+#                                                     Sign-off table of its own — see docs/RFC.md
 #   pw-lib.sh model-check   <provider> <model-id>    pass/refuse a model against
 #                                                     PW_MODEL_ALLOWLIST_<PROVIDER> in pw.config.sh
 #                                                     — empty/unset = ALL models allowed (the
@@ -817,13 +826,40 @@ cmd_review_auto_signoff() {
   echo "$slug: $rel auto-signed-off by pw-reviewer (phase=$phase)"
 }
 
+# Generic open-item check — reuses _review_has_open_marker (the same detector `auto-signoff` relies
+# on) but exposed standalone, since not every open-item check hangs off a Sign-off gate.
+# `analysis/review/RFC.review.md` has no Sign-off table of its own (pulled comments there are
+# informational staging, never individually approved as a unit) — so `review gate` doesn't apply to
+# it, but /pw-breakdown still needs to know whether any pulled comment is sitting unresolved before
+# letting the analysis's own approval unblock breakdown. Missing file → "no" + exit 1 (no RFC
+# negotiation in flight, not an error) rather than dying — plenty of projects never touch the RFC
+# side-loop at all, and that must never be treated as a failure.
+#   review has-open <slug> <review-rel-path>
+cmd_review_has_open() {
+  [ $# -eq 2 ] || die "usage: review has-open <slug> <review-rel-path>"
+  local slug="$1" rel="$2"
+  local d; d="$(proj_dir "$slug")"
+  local f="$d/$rel"
+  if [ ! -f "$f" ]; then
+    echo "no"
+    return 1
+  fi
+  if _review_has_open_marker "$f"; then
+    echo "yes"
+    return 0
+  fi
+  echo "no"
+  return 1
+}
+
 cmd_review() {
   case "${1:-}" in
     note-init)    shift; cmd_review_note_init "$@" ;;
     auto-signoff) shift; cmd_review_auto_signoff "$@" ;;
     gate)         shift; cmd_review_gate "$@" ;;
     reopen)       shift; cmd_review_reopen "$@" ;;
-    *) die "usage: review <note-init|auto-signoff|gate|reopen> ..." ;;
+    has-open)     shift; cmd_review_has_open "$@" ;;
+    *) die "usage: review <note-init|auto-signoff|gate|reopen|has-open> ..." ;;
   esac
 }
 
@@ -1235,6 +1271,35 @@ cmd_selftest() {
   PW_PROJECTS_DIR="$tmp" "$0" review reopen demo2 analysis/review/topic2.review.md >/dev/null
   PW_PROJECTS_DIR="$tmp" "$0" review reopen demo2 analysis/review/topic2.review.md >/dev/null || \
     die "selftest FAIL: reopen on an already-open file exited non-zero (should be a harmless no-op)"
+
+  # --- review has-open: the generic open-item check /pw-breakdown's RFC hard block relies on ---
+  # a project with no RFC.review.md at all (never touched the side-loop) must report "no"/exit 1,
+  # never an error.
+  local RFCRV="$tmp/demo2/analysis/review/RFC.review.md" hn
+  if hn="$(PW_PROJECTS_DIR="$tmp" "$0" review has-open demo2 analysis/review/RFC.review.md)"; then
+    die "selftest FAIL: review has-open exited 0 for a nonexistent RFC.review.md (should be 'no'/exit 1)"
+  fi
+  [ "$hn" = "no" ] || die "selftest FAIL: review has-open printed '$hn' for a missing file, expected 'no'"
+
+  # a real pulled-comment item, still open — must report "yes"/exit 0.
+  mkdir -p "$(dirname "$RFCRV")"
+  printf '# RFC comments\n\n### R1 — a pulled comment <!-- pw-item-status: open -->\n\n> quoted comment text\n' \
+    > "$RFCRV"
+  if ! PW_PROJECTS_DIR="$tmp" "$0" review has-open demo2 analysis/review/RFC.review.md >/dev/null; then
+    die "selftest FAIL: review has-open exited non-zero on a file with a real open item"
+  fi
+  hn="$(PW_PROJECTS_DIR="$tmp" "$0" review has-open demo2 analysis/review/RFC.review.md)"
+  [ "$hn" = "yes" ] || die "selftest FAIL: review has-open printed '$hn' with an open item present, expected 'yes'"
+
+  # resolve it in place — has-open must now report clean ("no"/exit 1), same file, no other rows.
+  # Capture the printed value INSIDE the if-guard (not a separate call) — the expected exit here is
+  # 1, and an ungated `hn="$(...)"` on a nonzero-exit command would trip `set -e` and abort the
+  # whole selftest silently, same reasoning as the existing `review gate` checks above.
+  sed -i '' -e 's/<!-- pw-item-status: open -->/<!-- pw-item-status: resolved -->/' "$RFCRV"
+  if hn="$(PW_PROJECTS_DIR="$tmp" "$0" review has-open demo2 analysis/review/RFC.review.md)"; then
+    die "selftest FAIL: review has-open exited 0 after the only open item was resolved"
+  fi
+  [ "$hn" = "no" ] || die "selftest FAIL: review has-open printed '$hn' after resolving, expected 'no'"
 
   # review gate on a review file with no Sign-off rows fabricated at all → dies, doesn't crash.
   local NOSIGN="$tmp/demo2/no-signoff.review.md"
