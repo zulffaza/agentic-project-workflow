@@ -58,10 +58,23 @@ target question it doesn't need yet.
    (Chosen)"; any others as "Approaches considered, not chosen" — brief, since they're record, not
    proposal), Dependencies from the approved `analysis/<topic>.md`, per the canonical section
    schema in `rfc.md`. Fill Rollout Plan / Rollback Plan **only if I explicitly ask** in this
-   invocation — leave them as template placeholders otherwise. **If the external template
-   pre-populates a section you have no generated content for** (e.g. its own second-approach
-   placeholder when analysis concluded there was only one option) — **leave that section's
-   existing content untouched**; do not delete or edit it unless I explicitly ask you to.
+   invocation — leave them as template placeholders otherwise. **Map every write to the backend's
+   REAL fetched heading (`fetch_anchors`), never a guessed position** — a live doc has shown a
+   Dependencies write landing under an unrelated approach's own subsection instead of its actual
+   top-level Dependencies heading; always re-check the fetch, don't assume. **Two genuinely
+   different cases for a configured backend template's own second-approach placeholder** (some
+   real-world templates ship one, with their own heading wording):
+   - **Analysis has real rejected alternatives to record** (the normal multi-option case) — write
+     the brief "Approaches considered, not chosen" content into that real second-approach heading.
+     Never leave it empty, and never stuff those alternatives into the chosen approach's own
+     subsections instead — that's a live-confirmed mistake, not a hypothetical.
+   - **Analysis concluded there was genuinely only one approach, nothing else to record** — only
+     then leave that section's existing placeholder content untouched; don't invent content that
+     doesn't exist.
+   Also follow `rfc.md`'s **Doc hygiene** rules while writing: replace a template's own
+   instructional/placeholder text with real content rather than leaving both, fill any
+   backend-knowable metadata (e.g. a Status checkbox, Created Date) from real state, and never split
+   a `**bold**` marker across an inline `` `code` `` span.
 4. **Diagrams** (Block/Sequence Diagram subsections): **auto-generate by default** for each
    Approach actually written up — generate mermaid from the relevant analysis section and render
    it via an **isolated sub-agent call** (per `rfc.md`'s diagram rule — never a persistent agent).

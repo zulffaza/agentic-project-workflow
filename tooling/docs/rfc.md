@@ -35,6 +35,25 @@ second check, analysis could get approved (or stay approved from before the RFC 
 while a live, known, external negotiation is still open — breakdown would otherwise race ahead of
 it. See `docs/RFC.md`'s walkthrough for the full loop.
 
+## Doc hygiene — a filled RFC must never look half-finished
+Found from a live published doc: a blank metadata table, instructional placeholder text left
+sitting beside real content, rejected alternatives stuffed into the wrong subsection, and a
+Dependencies write landing in the wrong anchor entirely. None of these are cosmetic — they make a
+"published" RFC look abandoned mid-draft. Rules, backend-agnostic:
+- **Replace placeholder/instructional content when writing real content into a section** — never
+  leave it sitting beside the real text. A subsection you're genuinely not filling gets a one-line
+  "Not applicable — <why>", not a bare unanswered instruction.
+- **Map to the backend's REAL fetched heading text/id** (`fetch_anchors`), never by assumption or
+  position. See `rfc-backends.md`'s `lark` row for the concrete bug this rule fixes (a Dependencies
+  write landed under an unrelated approach's subsection because the mapping wasn't checked against
+  the actual fetched outline).
+- **If the backend's template gives each approach a fixed heading slot and there's only one real
+  approach**, use the second slot for "Approaches considered, not chosen" — don't leave it empty
+  and don't stuff the rejected alternatives into the chosen approach's own subsections.
+- **Never split a `**bold**` marker across an inline `` `code` `` span** (e.g.
+  `**Single`**CdcEvent**`**proto**`) — the same markdown-hygiene bug already fixed once in an
+  analysis doc this bundle generates; close bold before the code span starts, always.
+
 ## Canonical section schema
 Every RFC (any backend) uses this schema — see
 [`template/rfc/_TEMPLATE-RFC.md`](../../template/rfc/_TEMPLATE-RFC.md) for the literal skeleton. A

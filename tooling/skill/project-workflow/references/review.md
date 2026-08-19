@@ -22,7 +22,10 @@ Rules you MUST follow:
   append, never leave an `(Rn)`/`(Qn)` tag or "supersedes"/"the user asked" narration in §1–4. That
   history is exactly ONE terse line in §5.1's Decisions log, nowhere else — see
   `analysis/_TEMPLATE.md`'s own style-rule comment. This is what keeps the doc readable after many
-  review rounds instead of turning into a review-file transcript.
+  review rounds instead of turning into a review-file transcript. **Keep the density rule in force
+  while rewriting §3/§4** — one fact per (sub-)bullet, short table cells, fold new depth into an
+  existing `### 4.N` subsection before appending a new one; a fold-in is exactly the moment §4
+  tends to sprawl one subsection at a time — see the template's own density-rule comment.
 - The `↳ agent:` reply IS how the human sees what you did — make it a **concrete summary** (name
   the section + what changed), never a bare "fixed"/"done". No diff expected; the summary is it.
 - After a review pass, **recap the resolved items back in chat** (one line each) so the human

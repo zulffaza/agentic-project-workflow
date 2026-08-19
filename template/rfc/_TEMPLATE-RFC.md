@@ -5,7 +5,26 @@
      gated on analysis `approved ✅`) fills Background → Dependencies. Wave 2
      (`/pw-rfc <slug> milestone`, gated on PLAN `approved ✅`) fills Milestone + Conclusion.
      Rollout/Rollback Plan are filled only if you ask. Glossary and the References subsections stay
-     human-owned placeholders — the agent never fills those. Legend: 🤖 agent · 🧑 you. -->
+     human-owned placeholders — the agent never fills those. Legend: 🤖 agent · 🧑 you.
+
+     HYGIENE RULES (a filled RFC must never look half-finished — see docs/RFC.md's "Doc hygiene"
+     for the concrete bug these came from):
+     - Any instructional/placeholder text a template ships per section (a 🚧-style callout, a
+       "Point 1/Point 2/Point 3" table stub) gets REPLACED when you write real content, never left
+       sitting alongside it. An empty subsection you're genuinely not filling (e.g. Database
+       Modelling when there's no schema change) gets a one-line "Not applicable — <why>", not a bare
+       unanswered instruction.
+     - A Pros/Cons table (if the platform's template ships one per approach) is filled from the
+       analysis's own §4 Trade-offs — that reasoning already exists; don't leave placeholder rows.
+     - If a backend's real template gives each approach its own fixed heading slot and there's only
+       ONE real approach, use the second slot for "Approaches considered, not chosen", briefly —
+       never leave that slot empty and never stuff the rejected alternatives into the chosen
+       approach's own subsections instead.
+     - Map content to the backend's REAL fetched heading text/id (fetch_anchors), never by
+       assumption — a generated "Dependencies" write has landed in the wrong anchor before (see
+       docs/RFC.md).
+     - Never let a `**bold**` marker span across or interleave with an inline `` `code` `` span
+       (e.g. `**Single`**CdcEvent**`**proto**`) — close bold before the code span starts. -->
 
 - **Status:** draft
 - **Backend:** <markdown | lark | …, from rfc/META.md>
@@ -44,10 +63,13 @@
 
 ### Approaches considered, not chosen
 🤖 <analysis §4's other options, briefly — they're record, not proposal, so this can be terser than
-   the chosen approach above. Omit entirely if analysis concluded there was only one option. If
-   publishing to a backend whose template pre-populates this section regardless (e.g. Lark's real
-   template ships a placeholder here), leave that existing content untouched rather than deleting
-   it — don't guess at a removal operation that wasn't asked for.>
+   the chosen approach above. Two different cases: (1) real rejected alternatives exist (the normal
+   case) — write them here, into the backend's real fetched heading for this slot if publishing
+   externally (some configured templates ship their own fixed second-approach heading) — never
+   leave that heading empty and never stuff the alternatives into the chosen approach's own
+   subsections instead. (2) analysis concluded there was genuinely only one option, nothing to
+   record — only then leave a backend's
+   pre-populated placeholder here untouched rather than deleting it or inventing content.>
 
 #### Overview (Optional)
 #### Block Diagram (Optional)

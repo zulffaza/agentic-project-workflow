@@ -10,7 +10,19 @@
      turns a doc unreadable after 20+ rounds. Which review item drove a change, why an earlier
      decision got superseded, the "user asked X, we said Y" narration — none of that belongs in
      §1–4. It all goes in §5.1's Decisions log below, and the full verbatim history always lives in
-     `analysis/review/<topic>.review.md` regardless — this doc never needs to be its own archive. -->
+     `analysis/review/<topic>.review.md` regardless — this doc never needs to be its own archive.
+
+     DENSITY RULE — "readable" also means well-organized, not just untagged: a doc that's technically
+     clean but is one giant wall of paragraph-prose is still unreadable. Same discipline as a task's
+     `## Result`: ONE distinct fact per (sub-)bullet, never a paragraph chaining several unrelated
+     facts together. A table cell holds a fact or two, not an essay — if a cell needs more than
+     2–3 sentences, keep the core fact in the cell and move the rest to a bullet in the prose below
+     the table. When a review round adds real design depth to §4, prefer folding it into an EXISTING
+     `### 4.N` subsection over bolting on a new one at the end — check whether a subsection already
+     owns that topic before adding `4.N+1`. If §4 has grown past ~8 subsections, lead the section
+     with a short bullet-point summary of the end-to-end design before the detailed subsections, so
+     a reader gets the shape of the approach before the depth. "Detailed" and "organized" aren't in
+     tension — the goal is a doc dense with facts that's still easy to scan, not a shorter doc. -->
 
 - **Status:** draft | in-review | approved
 - **Author:** <agent/you>   **Provider:** <the agent/CLI this ran under, e.g. `kilo` / `claude`>
@@ -37,6 +49,9 @@ shape, real versions on that branch, not a parked feature branch) and reconcile 
 "Repos in scope" guess in `context/INDEX.md`. Call out any repo you added, dropped, or corrected.
 **A repo may need changes on more than one base branch** (e.g. a fix on `master` and its port on
 `spring3`) — give it **one row per base branch** and name the base in each row.
+<!-- Keep each cell short — the key files/change/gotcha as a fact or two, not a paragraph. A cell
+     that's grown past 2–3 sentences over several review rounds means detail belongs in §4 instead
+     (or a bullet under the table), not stacked into the cell. -->
 
 | Repo | Base branch | Area / files | Nature of change |
 |------|-------------|--------------|------------------|

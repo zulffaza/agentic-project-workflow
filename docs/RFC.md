@@ -183,6 +183,26 @@ and resolve the actual thread on the platform yourself**, using that local recor
 reference. Re-run `/pw-rfc <slug>` (or `milestone`) afterward to push the revised sections. Under
 the `markdown` backend, `comments` is a clear no-op — there's nothing external to read.
 
+## Doc hygiene — a filled RFC must never look half-finished
+Caught from a real published doc: a blank metadata table, instructional placeholder text left
+sitting beside real content, rejected alternatives crammed into the wrong subsection, and a
+Dependencies write that landed under an unrelated approach's subsection instead of its own
+top-level heading. None of these are cosmetic taste — a doc with them looks abandoned mid-draft to
+anyone outside the pipeline who opens it. `/pw-rfc` now follows a fixed set of rules for this (see
+`tooling/docs/rfc.md` for the agent-facing version, `rfc-backends.md`'s `lark` row for the concrete
+backend fix):
+- Placeholder/instructional text a template ships gets **replaced**, not left beside real content.
+- Content maps to the backend's **real fetched heading**, never a guessed position — this is what
+  went wrong with the Dependencies write above.
+- If a backend gives each approach a fixed heading slot and only one real approach exists, the
+  second slot gets the brief "considered, not chosen" write-up — it never sits empty while the
+  rejected alternatives get stuffed into the chosen approach's own subsections instead.
+- A Pros/Cons table, if the backend's template ships one, gets filled from analysis §4's own
+  Trade-offs — never left with placeholder rows.
+- A backend's own knowable metadata (e.g. a Status checkbox, Created Date) gets filled from real
+  state; anything genuinely human-owned (authorship, reviewers/approvers, org-specific
+  classification fields, …) stays blank, same as Glossary.
+
 ## Diagrams
 
 Block/Sequence Diagram subsections generate via an isolated, ad-hoc sub-agent call (not a

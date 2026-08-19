@@ -36,6 +36,11 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
      one terse line per item — full history stays in the `.review.md` file. See the template's own
      style-rule comment for the exact shape; this is what keeps the doc readable after 20+ rounds
      instead of turning into a review-file transcript.
+   - **§3/§4 stay organized as detail accumulates, not just untagged.** One distinct fact per
+     (sub-)bullet — never a paragraph chaining several unrelated facts (same discipline as a task's
+     `## Result`); a table cell holds a fact or two, keep the rest as prose below the table. Fold new
+     §4 depth into an existing `### 4.N` subsection where one already owns that topic, rather than
+     always appending `4.N+1`. See the template's own density-rule comment for the full shape.
 3. **Open questions (QnA):** if anything is hard to analyze or needs my decision, DON'T guess —
    list it in the analysis §5.3 as `❓ Q1/Q2…` (with why it matters), AND seed a matching `Qn` row
    in `analysis/review/<topic>.review.md` under "## Open questions" so I have a channel to answer.

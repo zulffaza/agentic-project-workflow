@@ -112,7 +112,11 @@ For each `🔴 open` item in the resolved files:
 - apply the fix to the doc it reviews — **if that doc is `analysis/<topic>.md`, rewrite its §1–4
   prose cleanly in place** (never append, never add an `(Rn)`/`(Qn)` tag or "supersedes"/"the user
   asked" narration there) and add exactly **one** terse line to its §5.1 Decisions log instead —
-  that's the only place the tag belongs; see the template's own style-rule comment,
+  that's the only place the tag belongs; see the template's own style-rule comment. **When the fix
+  adds real depth to §3/§4, keep the density rule in force while rewriting** — one fact per
+  (sub-)bullet, short table cells, fold into an existing `### 4.N` subsection before adding a new
+  one — a fold-in is exactly the moment §4 tends to sprawl one subsection at a time; don't let this
+  round be the one that does it,
 - edit that SAME `### Rn · …` heading in place — flip `🔴 open` → `🟢 resolved` and its trailing
   `pw-item-status` marker together; **never add a second heading for the same item** (that's what
   makes consecutive items in the file visually run together — one heading per item, always),

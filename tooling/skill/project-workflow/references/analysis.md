@@ -20,6 +20,11 @@ Asked to analyze `context/`:
      `Date:` (timestamp only). That history belongs *only* in §5.1's Decisions log (one terse line
      per item) — the `.review.md` file already holds the full verbatim record. This is what keeps
      the doc readable after many review rounds instead of turning into a review-file transcript.
+   - **§3/§4 stay organized as detail accumulates, not just untagged.** One distinct fact per
+     (sub-)bullet, never a paragraph chaining several unrelated facts; a table cell holds a fact or
+     two, not an essay. Fold new §4 depth into an existing `### 4.N` subsection where one already
+     owns that topic, rather than always appending a new one — see the template's density-rule
+     comment.
 4. **Last step, mandatory:** set the dashboard one-liner + Status via
    `pw-lib.sh oneliner <slug> "…"` then `pw-lib.sh status <slug> analysis` (see
    `references/conventions-and-gotchas.md` for the full helper contract).
