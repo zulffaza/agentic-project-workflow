@@ -16,7 +16,7 @@ Rules you MUST follow:
   human's chat feedback, then apply it — don't silently do nothing (a frequent confusion). If
   there's no feedback anywhere, ask.
 - Before editing any doc, read its `.review.md` first.
-- Apply each `🔴 open` item, append a `↳ agent:` reply, flip it to `🟢 resolved`. **Never edit or
+- Apply each `[OPEN]` item, append a `↳ agent:` reply, flip it to `[RESOLVED]`. **Never edit or
   delete the human's comment text** — it's the source of truth for what was asked.
 - **Fixing `analysis/<topic>.md` specifically:** rewrite its §1–4 prose cleanly in place — never
   append, never leave an `(Rn)`/`(Qn)` tag or "supersedes"/"the user asked" narration in §1–4. That
@@ -30,13 +30,13 @@ Rules you MUST follow:
   the section + what changed), never a bare "fixed"/"done". No diff expected; the summary is it.
 - After a review pass, **recap the resolved items back in chat** (one line each) so the human
   sees the changes without opening the file.
-- **Never** write the Sign-off row — only the human clears a gate (`approved ✅`, date-time to the minute).
+- **Never** write the Sign-off row — only the human clears a gate (`approved`, date-time to the minute).
 - Rejected execution result → the human adds items to `task/review/T0n.review.md` and sets the task
   `Status: verify-failed`; re-run it in its worktree and re-verify.
 - **Open questions (QnA):** when you can't resolve something during analysis, don't guess — list
-  it in the doc (`❓ Qn`) AND seed a `Qn` row in the review file's "## Open questions" section. The
+  it in the doc (`Qn`) AND seed a `Qn` row in the review file's "## Open questions" section. The
   human answers with `↳ you:`; the next `/pw-review` folds the answer into the doc and flips the
-  row to ✅ answered. Report unanswered `Qn` as blocking.
+  row to [ANSWERED]. Report unanswered `Qn` as blocking.
 - **MR feedback:** review comments left on the *MR itself* are handled by `/pw-ship <slug> [task-ids]
   comments` (fetch via `glab`/`gh`, fix in the worktree, reply on the thread). **Task IDs are
   optional — with none it sweeps EVERY open MR** in the project in one run (serially). Always
@@ -67,7 +67,9 @@ Rules you MUST follow:
     `/discussions` pull, don't report "nothing open" — retry, and if still missing, reply with a
     plain new top-level note (no `discussion_id` needed) and flag it in the recap for a human to
     verify once the real discussion syncs. Full flow: `tooling/docs/forges.md`.
-- After a pass, report how many `🔴 open` items remain: `grep -rln "🔴 open" <project>/`.
+- After a pass, report how many `[OPEN]` items remain: `grep -rln "pw-item-status: open" <project>/`
+  (the actual machine marker — `[` / `]` are regex metacharacters, so grepping the literal bracket
+  tag itself needs `-F` or escaping; the marker is simpler and more robust either way).
 
 ## AI-assisted review (optional, per-phase opt-in)
 Every review point above defaults to human-only. A project's dashboard `AI Review:` line
@@ -79,14 +81,14 @@ command, not the script). Delegate a phase's review to the `pw-reviewer` sub-age
 - `advisory` — `pw-reviewer` files items exactly like a human would, tagged `(pw-reviewer,
   <timestamp>)` instead of `(you, …)`. A human still writes the Sign-off row; process its items via
   the normal apply-comments flow above, no different from a human's.
-- `auto` — same filing, but if the pass leaves nothing 🔴/⏳ open, `pw-reviewer` may call
+- `auto` — same filing, but if the pass leaves nothing `[OPEN]`/`[PENDING]`, `pw-reviewer` may call
   `pw-lib.sh review auto-signoff <slug> <review-rel-path> <phase>` itself — the ONE tool-enforced
   exception to "only a human clears a gate", re-checked by the tool, not taken on trust.
 `pw-reviewer` is spawned **fresh** (no shared context with whoever produced the artifact) and gets
 handed only the artifact + review file + phase + `REVIEWER-NOTES.md` — never this session's own
 reasoning about the artifact. **Loop prevention:** before filing, it checks the review file for an
 existing item on the same section anchor — a 3rd item on the same anchor (i.e. a "fix" that already
-recurred once) gets filed as a 🔴 open escalation instead of an ordinary finding, so `auto-signoff`
+recurred once) gets filed as a [OPEN] escalation instead of an ordinary finding, so `auto-signoff`
 stays blocked by the tool's own check rather than by the reviewer remembering not to call it. Full
 method: the `pw-review` skill. Full human-facing explanation: `docs/REVIEW.md`'s "AI-assisted
 review" section.

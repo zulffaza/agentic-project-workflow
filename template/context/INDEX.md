@@ -43,4 +43,5 @@ branch** (e.g. `master` and `spring3`), give it **one row per base**.
 
 | Repo (in `{{PW_REPOS}}/`) | Base branch (guess) | Why it's in scope |
 |----------------------------|---------------------|-------------------|
+| _e.g._ `hera` | `master` | Owns the Kafka producer config the RFC wants toggled |
 | | | |

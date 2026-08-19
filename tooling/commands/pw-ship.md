@@ -138,7 +138,7 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      `task/review/T0n.review.md`'s `## MR comment tracking` table keyed by thread ID, which step 1
      reads back on the next run. Without this call, an unresolvable comment (which the forge can
      never mark resolved) either gets silently skipped forever or re-processed every single run.
-   - Also mirror as usual: task `## Result`, a `🟢 resolved` item in `task/review/T0n.review.md`'s
+   - Also mirror as usual: task `## Result`, a `[RESOLVED]` item in `task/review/T0n.review.md`'s
      `## Items` section (create the file first via `pw-lib.sh review-init` if it doesn't exist yet),
      and a `LOG.md` line via the helper. The project dir stays the source of truth even for
      MR-driven changes.

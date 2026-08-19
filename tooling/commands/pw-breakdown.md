@@ -11,20 +11,20 @@ ever approved":** for each real `<project>/analysis/<topic>.md`, run
 `{{PW_HOME}}/tooling/pw-lib.sh review gate <slug> analysis/review/<topic>.review.md` (the file
 doesn't exist yet → treat as not approved). If it exits non-zero for **any** topic, STOP and ask me
 to (re-)approve that analysis first — quote the decision it printed (`in-review` or
-`changes-requested`). **Do not fall back to scanning the file for an `approved ✅` string anywhere
+`changes-requested`). **Do not fall back to scanning the file for an `approved` string anywhere
 in its history** — a doc reopened after approval (e.g. an RFC comment folded back in post-approval,
 see [`docs/RFC.md`](../../docs/RFC.md)) still has an old approved row sitting earlier in the same
 file; `review gate` deliberately reads only the table's current/last row so a stale historical
 approval can never satisfy this gate on its own. This is also why a *folded-in* RFC comment doesn't
 need its own separate approval concept: once folded in, it reopens *this exact* gate, and your
-fresh `approved ✅` here is what unblocks breakdown. That reopen only fires retroactively, though —
+fresh `approved` here is what unblocks breakdown. That reopen only fires retroactively, though —
 it says nothing about a comment that's been pulled but never folded in. That gap is the third check
 below, a genuinely separate mechanism from this Sign-off read.
 
 **Third check — an open RFC negotiation blocks breakdown outright:** run
 `{{PW_HOME}}/tooling/pw-lib.sh review has-open <slug> analysis/review/RFC.review.md`. If it prints
 `yes` (exit 0), STOP — do not produce `PLAN.md` or any task file, even if the analysis Sign-off
-above reads `approved ✅`. Tell me which item(s) are still 🔴 open/⏳ awaiting-answer in that file
+above reads `approved`. Tell me which item(s) are still [OPEN]/[PENDING] in that file
 and that I need to either fold each one into the analysis via `/pw-review` (which reopens the
 analysis gate above until re-approved) or resolve it directly in the review file myself, then
 re-run `/pw-breakdown`. This closes the gap where analysis got approved on its own merits while a
@@ -35,9 +35,18 @@ comments pulled yet) prints `no`/exits 1 — not an error, nothing to block on.
 **Second check, per analysis doc — a chosen approach, not just approval:** read that doc's §4.
 If it lists 2+ options, `**Chosen approach:**` must be filled in (not `_pending your review_`). If
 it's still pending, STOP and ask me to answer `Q0` in the review file first — **even if Sign-off
-already reads `approved ✅`**, since approving without choosing leaves nothing concrete to build a
+already reads `approved`**, since approving without choosing leaves nothing concrete to build a
 plan from. Build the PLAN and every task **only from the chosen option** — unchosen ones stay in
 the doc as record; never implement them, even partially "just in case."
+
+**If more than one `analysis/<topic>.md` exists** (a project whose work is several large,
+mostly-independent solution areas, each analyzed separately — see the analysis template's
+"MULTIPLE LARGE SOLUTION AREAS" note): the checks above already loop over **every** real analysis
+doc, per-topic. Read **every** approved doc's chosen approach and produce **ONE merged `PLAN.md` +
+one task set spanning all of them** — never a separate PLAN per analysis doc. The repo manifest,
+dependency DAG, and task table naturally end up reflecting work from every solution area in one
+place; a task from one area may depend on a task from another exactly like any other cross-task
+dependency.
 
 Then produce, from `{{PW_HOME}}/template/task/`:
 1. `<project>/task/PLAN.md` (from `_TEMPLATE-orchestration-plan.md`) — repo manifest as
@@ -76,9 +85,12 @@ Then produce, from `{{PW_HOME}}/template/task/`:
      allowlist excludes — don't silently override it.
    - **Write DETAILED `## Steps`** — name the exact file, the exact change (before/after snippet or
      literal edit), and the exact command per step, so the executor needs minimal independent
-     reasoning (cheaper, more reliable — a small model shouldn't re-derive the work). Any unresolved
-     judgement call is a `Q` for analysis/review, not something left to the executor. See the
-     level-of-detail example in `_TEMPLATE-task.md`.
+     reasoning (cheaper, more reliable — a small model shouldn't re-derive the work). **The only
+     thinking a step should leave to the executor is debugging why THIS exact step didn't work —
+     never deciding what a step should do.** Any unresolved judgement call is a `Q` for
+     analysis/review, not something left to the executor. See the level-of-detail example in
+     `_TEMPLATE-task.md` — including its sub-sectioning rule (`### A.`/`### B.`/… phase headings,
+     numbering continuous across them) once a task's Steps would run past ~8-10 flat items.
 3. **Estimate manual effort/timeline** (`2 SP = 1 person-day`): give each task a story-point value
    in the task table's `SP` column, then fill PLAN's "## Manual-execution estimate" — total SP,
    sequential person-days (ΣSP÷2), and critical-path calendar days (ΣSP along the longest

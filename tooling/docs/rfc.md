@@ -18,16 +18,16 @@ breakdown→executing→review→done). It only appends to `LOG.md`, exactly lik
 Use it when a project is big/cross-team enough to need a written RFC and discussion before
 breakdown; skip it entirely for smaller projects — nothing else in the pipeline notices either way.
 
-**Wave 1 does NOT require analysis to already be locally `approved ✅`** — only that §4 has a
+**Wave 1 does NOT require analysis to already be locally `approved`** — only that §4 has a
 chosen approach. RFC-approved and analysis-approved are **the same fact** (see below), so Wave 1's
 whole purpose is to let the *draft* reach outside reviewers before the local Sign-off is written —
 requiring a private pre-approval first would mean deciding before asking, which is backwards for a
 genuine cross-team negotiation. Wave 2 (`milestone`) is different: it summarizes an already-cut
-`task/PLAN.md`, so it genuinely needs that PLAN to be `approved ✅` first — there's no "draft
+`task/PLAN.md`, so it genuinely needs that PLAN to be `approved` first — there's no "draft
 milestone" to negotiate over.
 
 **The other direction of the same coin: `/pw-breakdown` hard-refuses while a pulled RFC comment sits
-unresolved**, even if analysis is `approved ✅` on its own merits — `pw-lib.sh review has-open <slug>
+unresolved**, even if analysis is `approved` on its own merits — `pw-lib.sh review has-open <slug>
 analysis/review/RFC.review.md` checks this independently of the Sign-off read, because a comment
 that's been pulled (`/pw-rfc <slug> comments`) but never folded into the analysis leaves no trace on
 the analysis's own Sign-off table at all; only an actual fold-in reopens that gate. Without this
@@ -76,11 +76,11 @@ mapping is data, not a hardcoded assumption that every platform's template reads
 
 ## The two publish waves
 - **Wave 1** (`/pw-rfc <slug> [--target <ref>]`) — refuses unless analysis §4's `Chosen approach:`
-  is filled in, not pending. **Does NOT require the review file's Sign-off to read `approved ✅`**
+  is filled in, not pending. **Does NOT require the review file's Sign-off to read `approved`**
   — publishing a still-`in-review` draft for outside comment is the normal, expected case; see
   above for why. Fills Background through Dependencies (+ Rollout/Rollback if asked) from the
   chosen option only.
-- **Wave 2** (`/pw-rfc <slug> milestone`) — refuses unless `task/PLAN.md` is `approved ✅`. Fills
+- **Wave 2** (`/pw-rfc <slug> milestone`) — refuses unless `task/PLAN.md` is `approved`. Fills
   Milestone + Conclusion from the approved PLAN.
 - Neither wave sets the dashboard `Status:` or otherwise advances the pipeline — RFC publishing is
   purely a side-effect of a gate-passing artifact (Wave 1: a chosen approach; Wave 2: an approved

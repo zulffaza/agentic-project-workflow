@@ -7,8 +7,8 @@ items + QnA answers + Sign-off, `provider registry`, and the `accepted`/`verify-
 states. Agent-owned: analysis/plan/task docs, the dashboard `Status:`/tables, `## Result`, `LOG.md`.
 
 ## Going back a phase (rewind)
-To reopen an earlier phase, the human adds a fresh `🔴 open` item + a new `in-review` Sign-off row
-(old `approved ✅` stays as history) and bumps the dashboard `Status:` back **with the explicit
+To reopen an earlier phase, the human adds a fresh `[OPEN]` item + a new `in-review` Sign-off row
+(old `approved` stays as history) and bumps the dashboard `Status:` back **with the explicit
 rewind flag** (`pw-lib.sh status <slug> <phase> --rewind` — a plain `status` refuses to move
 backward, which is what stops accidental resets); then re-run that phase's command and re-approve.
 Downstream artifacts stay on disk and get regenerated once the upstream phase is re-approved.

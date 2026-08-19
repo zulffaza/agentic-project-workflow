@@ -26,11 +26,11 @@ review → close**, driven by `/pw-*` slash commands. Work happens in scaffolded
 | Phase | Command | Produces | Gate before moving on |
 |---|---|---|---|
 | Context | `/pw-new` (fresh) · `/pw-adopt` (continuation) | `context/` inputs + `INDEX.md` | — |
-| Analysis | `/pw-analyze` → `/pw-review` | `analysis/<topic>.md` | ✅ you approve the analysis |
-| Breakdown | `/pw-breakdown` → `/pw-review` | `task/PLAN.md` + `T0n.md` | ✅ **PLAN approved — the only hard gate** |
+| Analysis | `/pw-analyze` → `/pw-review` | `analysis/<topic>.md` | you approve the analysis |
+| Breakdown | `/pw-breakdown` → `/pw-review` | `task/PLAN.md` + `T0n.md` | **PLAN approved — the only hard gate** |
 | Execution | `/pw-execute` | commits in `worktree/*` (committed **+ verified**) | per-task Definition of Done |
 | Ship | `/pw-ship` | pushed branches + MRs | you confirm the push |
-| Review results | `/pw-review` | accepted tasks | ✅ you accept each task |
+| Review results | `/pw-review` | accepted tasks | you accept each task |
 | Close | `/pw-close` | learnings + teardown, `Status → done` | — |
 
 Side-loops: **`/pw-sync`** refreshes open MRs against a moved base · **`/pw-ship … comments`**
@@ -76,7 +76,7 @@ real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./do
   `pw-reviewer` — the last optional, only spawned by `/pw-review … ai`), `docs/` (the
   registries/policy AGENTS read: `providers.md`, `memory.md`, `forges.md`,
   `rfc.md`/`rfc-backends.md` — each has a human-facing peer under the bundle's own `docs/`),
-  `skill/` (`project-workflow` + the standalone, portable `pw-review`).
+  `skill/` (`project-workflow` + the standalone, portable `pw-review` and `pw-rfc`).
   A human shouldn't normally need to open this dir — `docs/` + the `/pw-*` commands are the
   intended interface.
 - **`pw.config.sh`** — YOUR config (CLIs, models, optional `PW_MEMORY`); the one file you edit.

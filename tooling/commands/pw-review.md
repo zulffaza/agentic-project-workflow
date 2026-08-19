@@ -30,7 +30,7 @@ like the apply-comments flow does):
    spawning it.
 4. `pw-reviewer` files items (tagged `(pw-reviewer, <timestamp>)`) and a `REVIEWER-NOTES.md` entry
    on its own — you don't do this part. It checks for an existing item on the same section anchor
-   before filing anything (loop prevention — a 3rd item on the same anchor becomes a 🔴 open
+   before filing anything (loop prevention — a 3rd item on the same anchor becomes a [OPEN]
    escalation instead of a normal finding, never resolved by it). In `auto` mode with a genuinely
    clean pass, it may also call `pw-lib.sh review auto-signoff` itself; you never write that row.
 5. Recap what it did (items filed, whether it signed off, any escalation) exactly like the
@@ -73,7 +73,7 @@ For each task I've flipped to `Status: verify-failed`:
 - If it **does NOT exist**, don't stop silently. Create it deterministically —
   `{{PW_HOME}}/tooling/pw-lib.sh review-init <slug> task/review/T0n.review.md task/T0n.md`
   (never hand-write it; this guarantees the permanent format hints survive) — then write whatever
-  feedback I gave you in chat as the `🔴 open` item(s), and process it. If I flipped the task to
+  feedback I gave you in chat as the `[OPEN]` item(s), and process it. If I flipped the task to
   verify-failed but gave you **no** feedback anywhere, tell me exactly that and ask what's wrong —
   don't guess.
 
@@ -91,8 +91,8 @@ Sign-off, so there's nothing to reopen.
    <topic>.review.md`; `task/PLAN.md` → `task/review/PLAN.review.md`. (Usually this IS the file
    already being processed — the derivation only diverges for RFC.review.md's case above.)
 2. `…/{{PW_HOME}}/tooling/pw-lib.sh review gate <slug> <canonical-review>`. If it's not currently
-   `approved ✅`, there's nothing to reopen — just apply the fix as normal.
-3. If it IS currently `approved ✅`: compare that doc's phase (`analysis`→`analysis`,
+   `approved`, there's nothing to reopen — just apply the fix as normal.
+3. If it IS currently `approved`: compare that doc's phase (`analysis`→`analysis`,
    `task/PLAN.md`→`breakdown`) against the project's actual current phase
    (`…/{{PW_HOME}}/tooling/pw-lib.sh phase <slug>`), using the fixed order `context < analysis <
    breakdown < executing < review < done`:
@@ -108,7 +108,7 @@ Sign-off, so there's nothing to reopen.
      gate you're about to invalidate) — never do this silently. Only call `review reopen` after I
      explicitly say to proceed.
 
-For each `🔴 open` item in the resolved files:
+For each `[OPEN]` item in the resolved files:
 - apply the fix to the doc it reviews — **if that doc is `analysis/<topic>.md`, rewrite its §1–4
   prose cleanly in place** (never append, never add an `(Rn)`/`(Qn)` tag or "supersedes"/"the user
   asked" narration there) and add exactly **one** terse line to its §5.1 Decisions log instead —
@@ -117,7 +117,7 @@ For each `🔴 open` item in the resolved files:
   (sub-)bullet, short table cells, fold into an existing `### 4.N` subsection before adding a new
   one — a fold-in is exactly the moment §4 tends to sprawl one subsection at a time; don't let this
   round be the one that does it,
-- edit that SAME `### Rn · …` heading in place — flip `🔴 open` → `🟢 resolved` and its trailing
+- edit that SAME `### Rn · …` heading in place — flip `[OPEN]` → `[RESOLVED]` and its trailing
   `pw-item-status` marker together; **never add a second heading for the same item** (that's what
   makes consecutive items in the file visually run together — one heading per item, always),
 - append a concrete reply as a quoted line directly below the item's ask, one blank line between
@@ -128,7 +128,7 @@ For each `🔴 open` item in the resolved files:
 
 **Also process the "## Open questions" section (QnA):** for each `Qn` whose `> ↳ **you**:` line has
 an answer, fold that answer into the reviewed doc, edit that SAME `### Qn · …` heading in place
-(flip `⏳ awaiting answer` → `✅ answered` + marker — never a second heading), append
+(flip `[PENDING]` → `[ANSWERED]` + marker — never a second heading), append
 `> ↳ **agent** (<timestamp>): …` right after my `↳ you:` line inside the same quoted block (one
 blank quoted line between the two), and add a `---` rule before the next question. Leave unanswered
 `Qn` rows untouched and report them as still blocking.
@@ -137,9 +137,9 @@ Never edit or delete my comment text (items OR my `↳ you:` answers). Never wri
 — only I clear the gate. Log the pass (this is the ONLY dashboard-adjacent write you make):
 `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> review "<n> items resolved in <file>"`.
 
-When done, recap each resolved item (one line) here, and tell me how many `🔴 open` items remain
+When done, recap each resolved item (one line) here, and tell me how many `[OPEN]` items remain
 **in the resolved scope** (and, as a footnote, across the whole project:
-`grep -rln "🔴 open"` in the project dir). For a task review: after fixes are applied, remind me
+`grep -rln "pw-item-status: open"` in the project dir). For a task review: after fixes are applied, remind me
 to re-run `/pw-execute <slug> T0n` to re-verify in its worktree. **If a gate got auto-reopened**
 (the check above), say so explicitly and name which file/phase — that's the one thing here that
 changes whether a *later* command will run, so it can't just be buried in the item recap.

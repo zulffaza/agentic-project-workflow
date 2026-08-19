@@ -21,7 +21,6 @@ spawns to do a single task in isolation (full definitions: [docs/EXECUTION.md](.
 
 ```
  context  →  analyze  →  break down  →  execute  →  ship  →  close
-   📥          🔍            🧩           ⚙️        🚀       ✅
   drop      what & why    PLAN + tasks  worktrees   MRs    learn +
   inputs    (you sign off) (you sign off) commit+verify    tear down
 ```

@@ -42,7 +42,27 @@ breakdown is here, the cheaper and more reliable the execution (a small model sh
 re-derive what to do). Each step names the **exact file**, the **exact change**, and (where it
 runs code) the **exact command**. Prefer before/after snippets or literal find-replace over prose
 like "update the config". If a decision is still open, it belongs in analysis/review as a `Q`, not
-as a judgement call left to the executor.
+as a judgement call left to the executor. **The only thinking a step should ever require of the
+executor is debugging why THIS exact, given step didn't work** (a flaky command, an off-by-one in a
+generated snippet) — never deciding what a step should do. If following steps to the letter can't
+possibly work (the file doesn't exist, the snippet doesn't apply), that's a breakdown mistake, not
+something for the executor to improvise around.
+
+<!-- SUB-SECTIONING — once Steps would run past ~8-10 flat numbered items, split into named phase
+     sub-headings: `### A. <phase name>`, `### B. <phase name>`, … Numbering continues straight
+     through across sub-headings (step 7 stays step 7 whichever sub-heading it's under) — never
+     restart per sub-heading, so a step number stays a stable reference. Fold new steps into an
+     EXISTING phase sub-heading before adding a new one — same "check for an existing home first"
+     discipline as the analysis template's DENSITY RULE. This isn't hypothetical: two real,
+     dense task files independently invented exactly this shape once they got long, with zero
+     governing rule at the time — e.g.:
+     ### A. Worktree
+     1. <…>
+     ### B. Gradle wiring
+     2. <…>
+     3. <…>
+     ### C. Commit
+     7. <…> -->
 
 <!-- ↓↓ LEVEL-OF-DETAIL EXAMPLE (aim for this granularity) ↓↓
 1. Create the worktree, forking the new branch from THIS task's **Base branch** (`master` here):

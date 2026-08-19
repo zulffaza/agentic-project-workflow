@@ -69,7 +69,7 @@ Same end state, split into two PLANs a week apart.
 ## 5. Decisions, risks & open questions
 
 ### 5.3 Open questions (QnA)
-- ❓ Q1: notifications-worker's Kafka client bump is coupled to the Boot bump — same task,
+- Q1: notifications-worker's Kafka client bump is coupled to the Boot bump — same task,
   or split? — status: awaiting answer
 ```
 
@@ -79,7 +79,7 @@ It also auto-creates `analysis/review/spring-boot-3-upgrade.review.md`, empty an
 a `Q0` already seeded since §4 has two real options:
 
 ```
-### Q0 · §4 Approach options — ⏳ awaiting answer (agent, 2026-08-10 09:02)
+### Q0 · §4 Approach options — [PENDING] (agent, 2026-08-10 09:02)
 Which approach — A (big-bang) or B (staged)?
 ```
 
@@ -87,7 +87,7 @@ You open it, answer `Q0`, leave a comment on §3, and answer the other open ques
 `↳ you:` is a quoted line under the SAME heading it answers, not a new one:
 
 ```
-### Q0 · §4 Approach options — ⏳ awaiting answer (agent, 2026-08-10 09:02)
+### Q0 · §4 Approach options — [PENDING] (agent, 2026-08-10 09:02)
 Which approach — A (big-bang) or B (staged)?
 
 > ↳ **you** (2026-08-10 09:18): Option A — the Kafka client bump is small enough, staging adds
@@ -95,13 +95,13 @@ Which approach — A (big-bang) or B (staged)?
 
 ---
 
-### R1 · §3 Affected repos — 🔴 open (you, 2026-08-10 09:15)
+### R1 · §3 Affected repos — [OPEN] (you, 2026-08-10 09:15)
 You're missing that payments-api also has a custom javax.validation setup in
 `common-validation/` — check whether that needs its own line item.
 
 ---
 
-### Q1 · §5.3 Open questions — ⏳ awaiting answer (agent, 2026-08-10 09:02)
+### Q1 · §5.3 Open questions — [PENDING] (agent, 2026-08-10 09:02)
 Coupled Kafka client bump — same task as the Boot bump, or its own?
 
 > ↳ **you** (2026-08-10 09:20): keep it in the same task — they're coupled, splitting adds risk.
@@ -119,7 +119,7 @@ in §3/§4 themselves) and resolves all three — **editing each heading in plac
 second one), with a concrete quoted `↳ agent:` reply and a `---` rule after each:
 
 ```
-### R1 · §3 Affected repos — 🟢 resolved (you, 2026-08-10 09:15) <!-- pw-item-status: resolved -->
+### R1 · §3 Affected repos — [RESOLVED] (you, 2026-08-10 09:15) <!-- pw-item-status: resolved -->
 You're missing that payments-api also has a custom javax.validation setup in
 `common-validation/` — check whether that needs its own line item.
 
@@ -132,11 +132,11 @@ You're missing that payments-api also has a custom javax.validation setup in
 When you're satisfied, **you** — never the agent — write the Sign-off row:
 
 ```
-| 2026-08-10 09:45 | you | approved ✅ |
+| 2026-08-10 09:45 | you | approved |
 ```
 
 That row is the actual gate — but **`/pw-breakdown` also checks that `Chosen approach:` isn't
-still pending**, even if this row already says `approved ✅`. Answering `Q0` isn't optional
+still pending**, even if this row already says `approved`. Answering `Q0` isn't optional
 paperwork; it's what breakdown actually builds from.
 
 > **AI-assisted option:** turn this on with `/pw-review spring-boot-3-upgrade config analysis
@@ -171,7 +171,7 @@ Same review loop as analysis, but against `task/review/PLAN.review.md` — and *
 hard gate** for execution:
 
 ```
-| 2026-08-10 14:10 | you | approved ✅ |
+| 2026-08-10 14:10 | you | approved |
 ```
 
 > **AI-assisted option:** with `plan` mode set to `auto`, a clean `pw-reviewer` pass can write this
@@ -203,7 +203,7 @@ is affected; this is scoped to one task, and the PLAN's overall approval above s
 /pw-execute spring-boot-3-upgrade
 ```
 
-Refuses unless PLAN is `approved ✅`. The orchestrator spawns one executor per task (T01/T02/T03
+Refuses unless PLAN is `approved`. The orchestrator spawns one executor per task (T01/T02/T03
 have no dependencies on each other here, so they run in parallel), each in its own isolated
 `worktree/<repo>/<task-id>-<slug>/` — a real git worktree off the real repo, not a copy. Each
 executor makes its edits, commits, runs its `## Verify` block, and pastes the real output into the
@@ -276,7 +276,7 @@ one lives on the MR itself). Say someone comments on MR !142:
 runs the full loop: **FETCH** the open thread → **FIX** in T01's worktree if a change is warranted
 (here, maybe just clarifying, no code change needed) → **REPLY** on the thread with a concrete
 answer (never a bare "done") → **MIRROR** the exchange into `task/T01.md`'s `## Result` and
-`task/review/T01.review.md` as a 🟢 resolved item, so the project dir stays the record even for an
+`task/review/T01.review.md` as a [RESOLVED] item, so the project dir stays the record even for an
 MR-driven change. Run `/pw-ship spring-boot-3-upgrade comments` (no task ID) to sweep **every**
 open MR in the project in one pass instead of one at a time. Full mechanics, including why a
 general/no-diff comment still counts: [docs/REVIEW.md](./REVIEW.md#2-the-mr-review-flow-post-ship).

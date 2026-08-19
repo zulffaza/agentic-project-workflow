@@ -41,8 +41,8 @@ Each wave has its own gate, and they're deliberately **not the same kind of gate
 
 | Wave | Command | Gate | Fills |
 |---|---|---|---|
-| 1 | `/pw-rfc <slug> [--target <ref>]` | analysis §4 has a chosen approach — **Sign-off does NOT need to read `approved ✅` yet** | Background · Requirements + Out of Scope · Solution — chosen approach (+ diagrams) · Dependencies · (Rollout/Rollback Plan, only if you ask) |
-| 2 | `/pw-rfc <slug> milestone` | `task/PLAN.md` `approved ✅` | Milestone (from the PLAN's DAG groups + task table + SP/timeline) · Conclusion |
+| 1 | `/pw-rfc <slug> [--target <ref>]` | analysis §4 has a chosen approach — **Sign-off does NOT need to read `approved` yet** | Background · Requirements + Out of Scope · Solution — chosen approach (+ diagrams) · Dependencies · (Rollout/Rollback Plan, only if you ask) |
+| 2 | `/pw-rfc <slug> milestone` | `task/PLAN.md` `approved` | Milestone (from the PLAN's DAG groups + task table + SP/timeline) · Conclusion |
 
 **Wave 1 publishes a draft, not a decision.** RFC-approved and analysis-approved are the same fact
 (see below) — so requiring you to privately approve the analysis locally *before* the people the
@@ -93,7 +93,7 @@ one's big enough that another team's lead wants visibility before you break it i
    ```
    /pw-rfc spring-boot-3-upgrade comments
    ```
-   Fetches that thread (read-only) and adds one 🔴 open item to its own dedicated review file,
+   Fetches that thread (read-only) and adds one [OPEN] item to its own dedicated review file,
    `analysis/review/RFC.review.md` (separate from `spring-boot-3-upgrade.review.md` — created on
    demand if it doesn't exist yet), quoting the comment with a link back to the thread.
 5. **You decide it's worth addressing** — either answer it inline in the review file yourself, or
@@ -102,7 +102,7 @@ one's big enough that another team's lead wants visibility before you break it i
    actual thread on the platform — the agent never touches it. **This step also, automatically,
    reopens `analysis/review/spring-boot-3-upgrade.review.md`'s own Sign-off** — even though the fix
    came in through `RFC.review.md`, it's the analysis doc's *own* review file that
-   `/pw-breakdown` actually gates on, so that's the one that has to stop reading `approved ✅`
+   `/pw-breakdown` actually gates on, so that's the one that has to stop reading `approved`
    once the doc's changed out from under it. The row is tagged `pw-review (auto-reopen)` so you can
    tell at a glance it wasn't your own decision to reopen it.
 6. **Push the revision:** re-run `/pw-rfc spring-boot-3-upgrade` — it updates only the affected
@@ -114,17 +114,17 @@ one's big enough that another team's lead wants visibility before you break it i
    reopening the analysis gate each time a fresh comment lands after a re-approval, so
    `/pw-breakdown` keeps correctly refusing throughout — it never quietly becomes runnable
    mid-negotiation. **This holds even in the window before you've folded a fresh comment in at
-   all**: the moment step 4 pulls it, it sits as a 🔴 open item in `RFC.review.md`, and
+   all**: the moment step 4 pulls it, it sits as a [OPEN] item in `RFC.review.md`, and
    `/pw-breakdown` checks that file directly (`pw-lib.sh review has-open`) — so it refuses outright
    even if the analysis Sign-off hasn't been touched yet (e.g. it was approved *before* this comment
    ever arrived). You must fold the comment in (step 5) or resolve it in the review file yourself
    before breakdown will run.
-8. **Once the negotiation is genuinely done**, add a fresh `approved ✅` row to
+8. **Once the negotiation is genuinely done**, add a fresh `approved` row to
    `analysis/review/spring-boot-3-upgrade.review.md`'s Sign-off yourself — often the **first**
    Sign-off row this doc ever gets, since nothing required one before Wave 1 published. **There's
    no separate "RFC approved" concept to set anywhere** — this one row is both, by construction: it
    only makes sense to add once every fold-in from the negotiation has already happened, so it
-   being `approved ✅` *is* what "RFC settled" means, whether it's the first approval or a
+   being `approved` *is* what "RFC settled" means, whether it's the first approval or a
    re-approval after a later round. `/pw-breakdown` unblocks.
 9. **Later, once the PLAN is approved:**
    ```
@@ -143,7 +143,7 @@ distinct from the analysis's local Sign-off. It still doesn't — there's no sec
 no second decision to make. What changed is that `/pw-breakdown` no longer trusts the analysis
 Sign-off *alone* to prove "nothing outstanding remains." Two independent checks now both have to
 clear:
-- **The Sign-off's current row must read `approved ✅`** — step 5's auto-reopen keeps this honest
+- **The Sign-off's current row must read `approved`** — step 5's auto-reopen keeps this honest
   for anything that's already been *folded in*: a fix landing after an earlier approval flips this
   row back to `in-review` automatically.
 - **`analysis/review/RFC.review.md` must have zero open items** (`pw-lib.sh review has-open`) — this
@@ -153,7 +153,7 @@ clear:
   comment ever arrived would let breakdown run right past an open negotiation.
 
 Analysis-approved and RFC-approved are still the same fact by design — you only ever write one
-`approved ✅` row, never a parallel RFC-specific one — but "the same fact" now needs both checks to
+`approved` row, never a parallel RFC-specific one — but "the same fact" now needs both checks to
 actually hold, not just the Sign-off read on its own. See [`docs/WORKFLOW.md`](./WORKFLOW.md) for
 where this is enforced.
 
@@ -170,7 +170,7 @@ you/a teammate comments on the RFC doc (thread on some section)
         │
         ├─ 1. FETCH open threads   (the backend's list_comments — read-only)
         └─ 2. MIRROR into the project dir
-                 • analysis/review/RFC.review.md  (one 🔴 open item per thread: quote, author,
+                 • analysis/review/RFC.review.md  (one [OPEN] item per thread: quote, author,
                    link, which section)
                  • rfc/META.md's "Comment tracking" table  (one row per thread — reply count seen +
                    solved — via `pw-lib.sh rfc comment-seen`, so a re-run tells a brand-new thread

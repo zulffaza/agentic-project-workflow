@@ -2,8 +2,8 @@
 
 <!-- [🤖 agent] generates this file locally via `/pw-rfc` — always, regardless of whether you
      publish anywhere external (Generate vs Publish, see docs/RFC.md). Wave 1 (`/pw-rfc <slug>`,
-     gated on analysis `approved ✅`) fills Background → Dependencies. Wave 2
-     (`/pw-rfc <slug> milestone`, gated on PLAN `approved ✅`) fills Milestone + Conclusion.
+     gated on analysis `approved`) fills Background → Dependencies. Wave 2
+     (`/pw-rfc <slug> milestone`, gated on PLAN `approved`) fills Milestone + Conclusion.
      Rollout/Rollback Plan are filled only if you ask. Glossary and the References subsections stay
      human-owned placeholders — the agent never fills those. Legend: 🤖 agent · 🧑 you.
 
@@ -34,6 +34,11 @@
 
 ## Glossary
 🧑 <terms/acronyms specific to this RFC — fill in if useful; the agent doesn't populate this>
+
+| Term | Meaning |
+|------|---------|
+| _e.g._ RFC | Request for Comments |
+| | |
 
 ## Background
 🤖 <analysis §1 Problem/goal + §2 Current state — what's true today, and why this needs to change now>

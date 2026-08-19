@@ -40,16 +40,17 @@ in a **`review/` subdir** beside it, which is the durable record of what you ask
 empty. It ships with **worked examples**, a **decision-status legend**, and — permanently, even
 once items exist — a one-line **"how to add an item / answer a question" hint** right under each
 section heading, so the syntax is always there to copy from. Each item has an **ID + section
-anchor** (`R1 · §2`) and a status dot: 🔴 open / 🟢 resolved.
+anchor** (`R1 · §2`) and a status tag: `[OPEN]` / `[RESOLVED]` — plain bracket text, nothing to
+hunt down and copy-paste.
 
-**Two dials, don't confuse them:** the per-item dot (🔴→🟢) is flipped by the **agent** after it
-addresses your item — you never set it. The only status *you* decide is the **gate** in the Sign-off
-table (`in-review` / `changes-requested` / `approved ✅`). Writing an item does **not** require you
-to set any status; you just leave it 🔴 open and run `/pw-review`.
+**Two dials, don't confuse them:** the per-item tag (`[OPEN]`→`[RESOLVED]`) is flipped by the
+**agent** after it addresses your item — you never set it. The only status *you* decide is the
+**gate** in the Sign-off table (`in-review` / `changes-requested` / `approved`). Writing an item
+does **not** require you to set any status; you just leave it `[OPEN]` and run `/pw-review`.
 
 **The contract:**
 - You write items. The agent **never edits or deletes your text** — it edits that item's SAME
-  heading in place (flips 🔴→🟢, never adding a second heading) and appends a quoted
+  heading in place (flips `[OPEN]`→`[RESOLVED]`, never adding a second heading) and appends a quoted
   `> ↳ agent: …` reply below your ask, followed by a `---` rule before the next item. Your words
   stay the source of truth for what was asked — the reply never restates them.
 - **How you know what the agent did:** the `↳ agent:` reply is a concrete summary per item (which
@@ -57,11 +58,11 @@ to set any status; you just leave it 🔴 open and run `/pw-review`.
   chat after each pass.
 - Before editing any doc, the agent reads its `.review.md` first. `/pw-review` never changes the
   dashboard Status.
-- Only **you** write an `approved ✅` Sign-off row — an agent cannot self-approve a gate (the one
+- Only **you** write an `approved` Sign-off row — an agent cannot self-approve a gate (the one
   narrow, heavily-guarded exception is AI-assisted `auto` mode below). The tooling has one *other*
   narrow exception in the opposite direction: on analysis's or the PLAN's own review file, `/pw-review`
   auto-appends an `in-review` row (tagged `pw-review (auto-reopen)`) if a fix lands there after it
-  was already `approved ✅` — this only ever *closes* a gate, never opens one, so it can't be used to
+  was already `approved` — this only ever *closes* a gate, never opens one, so it can't be used to
   sneak a phase forward; see [docs/RFC.md](./RFC.md) for why this exists.
 - **Task review is optional, and created on demand.** Only the PLAN sign-off gates execution. To
   reject an **execution** result, flip that task's `Status: verify-failed` and either add items to
@@ -71,7 +72,7 @@ to set any status; you just leave it 🔴 open and run `/pw-review`.
 
 List everything still needing work across a project:
 ```bash
-grep -rln "🔴 open" projects/<project-slug>/
+grep -rln "pw-item-status: open" projects/<project-slug>/
 ```
 
 Keep this separate from the dashboard's **decision log** (that's "why we chose X", durable
@@ -109,7 +110,7 @@ reviewer leaves a comment on MR !123 (thread on file X, line N — OR a general/
         │                          explicitly resolve a resolvable-but-general thread (no auto-resolve)
         └─ 4. MIRROR into the project dir  ← the important bit
                  • task/T03.md  ## Result   (what changed + verify output)
-                 • task/review/T03.review.md  (create it if missing — a 🟢 resolved item per thread,
+                 • task/review/T03.review.md  (create it if missing — a [RESOLVED] item per thread,
                    PLUS a row in its `## MR comment tracking` table via
                    `pw-lib.sh ship comment-seen <slug> T03 <thread-id> <resolvable|unresolvable> yes`)
                  • LOG.md line via pw-lib.sh log
@@ -178,7 +179,7 @@ Each phase (`analysis` / `plan` / `task-plan` / `task-exec` / `ship`) is indepen
 |---|---|
 | `off` | No AI reviewer involved. Identical to everything in sections 1–2 above. |
 | `advisory` | `pw-reviewer` files items into the normal `.review.md`, tagged `(pw-reviewer, <timestamp>)` so they're never confused with a human's. **A human still writes the Sign-off row** — this is a pre-filter, not a replacement. |
-| `auto` | Same filing, but if the pass leaves **nothing** 🔴 open or ⏳ awaiting answer, `pw-reviewer` may sign off itself, via a guarded tool call that independently re-checks both conditions. |
+| `auto` | Same filing, but if the pass leaves **nothing** [OPEN] or [PENDING], `pw-reviewer` may sign off itself, via a guarded tool call that independently re-checks both conditions. |
 
 **Run it** with `/pw-review <slug> ai [phase|Tid|path]` — same scope resolution as the normal
 `/pw-review`. Under the hood this spawns the `pw-reviewer` agent fresh, in-process, same provider
@@ -196,7 +197,7 @@ take the reviewer's word for either.
 an existing item on the same section it's about to flag. A 2nd item on that same section (after
 the 1st was marked resolved) is filed as a linked **recurrence** — "the fix didn't hold" — rather
 than looking like a brand-new, unrelated complaint. A **3rd** item on that same section gets filed
-as a 🔴 open **escalation** instead: pw-reviewer never resolves it itself, which is what keeps
+as a [OPEN] **escalation** instead: pw-reviewer never resolves it itself, which is what keeps
 `auto-signoff` genuinely blocked (the tool checks the file, not the reviewer's promise) — a section
 that keeps failing the same way forces a human decision instead of spinning forever.
 

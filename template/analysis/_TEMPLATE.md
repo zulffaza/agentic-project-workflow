@@ -64,18 +64,51 @@ trade-off), not a one-line strawman sitting next to a fully-fleshed "real" answe
 is only one reasonable approach, say so explicitly and why the alternatives don't hold up — that's
 fine, but it's the exception, not the default.
 
+<!-- FIXED SKELETON RULE — every option ALWAYS uses these exact four slots, in this exact order,
+     every time. This is not a menu of headings to reach for "if needed" — it's why §4 sprawled
+     into ad hoc 4.7–4.16 subsections last time: nothing forced a check for an existing home before
+     a new one got invented. There is no fifth slot. If a later review round's new detail genuinely
+     doesn't fit Design / Per-repo impact / Trade-offs, that's the signal it belongs in §5.1's
+     Decisions log or §5.2's Risks instead of §4 — or that this "option" has actually grown into its
+     own solution area (see the MULTIPLE SOLUTION AREAS note below `**Chosen approach:**`). -->
+
 ### Option A: <name>
-<what it is, how it works>
-- **Trade-offs:** <pros/cons — cost, risk, blast radius, how it ages>
+<one paragraph: what it is, the core idea — no design detail here, that's the next slot>
+
+#### Design
+<how it works, mechanism by mechanism — one bullet per mechanism>
+
+#### Per-repo impact
+<!-- omit this whole slot if only one repo is touched by this option -->
+##### <repo 1>
+- <bullets>
+##### <repo 2>
+- <bullets>
+
+#### Trade-offs
+- **Pros:** <bullets>
+- **Cons:** <bullets>
 
 ### Option B: <name>
-<…>
-- **Trade-offs:** <…>
+<same four slots as Option A>
 
 **Chosen approach:** _pending your review_
 <!-- [🧑 you] pick via the review file's QnA (Q0, auto-seeded below when 2+ options exist) —
 don't edit this line directly, /pw-review fills it in once you answer. Breakdown reads ONLY the
 chosen option; the others stay here as record, never implemented. -->
+
+<!-- MULTIPLE LARGE SOLUTION AREAS — when §4 genuinely isn't enough: if this project's work is
+     several large, mostly-independent problem areas (not just alternative approaches to ONE
+     problem), don't force them into one §4. Two choices, same review/breakdown workflow either
+     way (no phase changes):
+     - Areas belong in ONE review cycle → give §4 named solution-area groupings instead of a flat
+       option list: `### 4.A Solution area: <name>` (each internally using the same Option A/B +
+       fixed-skeleton structure above), `### 4.B Solution area: <name>`, etc.
+     - An area needs its own independent approval timing, or is really a separate initiative that
+       happens to share this project → run `/pw-analyze <slug> <another-area-name>` again instead,
+       producing a SEPARATE `analysis/<another-area-name>.md` with its own §4 and its own review
+       file. /pw-breakdown already gates on, and merges, every analysis doc present — see its own
+       instructions — so this needs no workflow change, just more files. -->
 
 ## 5. Decisions, risks & open questions
 
@@ -94,8 +127,8 @@ in `analysis/review/<topic>.review.md`, so this log only needs the one-line *gis
 Anything you couldn't resolve from `context/` + memory + the repos, or that needs a human call.
 Give each a stable ID so the answer can be tracked. `Q0` (if §4 has 2+ options) is reserved for
 "which approach?" and anchors to §4, not here — numbering below starts at `Q1` regardless:
-- ❓ **Q1:** <the question, and why it blocks/affects the analysis> — _status: awaiting answer_
-- ❓ **Q2:** <…> — _status: awaiting answer_
+- **Q1:** <the question, and why it blocks/affects the analysis> — _status: awaiting answer_
+- **Q2:** <…> — _status: awaiting answer_
 
 > **How this gets answered (QnA flow):** each open `Q` is also mirrored as an item in this doc's
 > review file (`analysis/review/<topic>.review.md`, under "## Open questions"). You answer there

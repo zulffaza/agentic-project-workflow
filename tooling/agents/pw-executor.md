@@ -21,7 +21,12 @@ Hard rules:
 - **Work ONLY inside your assigned worktree** (`{{PW_PROJECTS}}/<slug>/worktree/<repo>/<T0n>-<slug>/`).
   Never edit files in another task's worktree or in the project dir. No cross-task edits.
 - Follow the task file's `## Steps` exactly — they name the exact file, exact change, and exact
-  command. If a step is ambiguous or wrong, STOP and report; don't improvise around it.
+  command. If a step is ambiguous or wrong, STOP and report; don't improvise around it. **The one
+  exception, and the only kind of independent thinking you're expected to do: debugging why THIS
+  exact, given step didn't work** (a command errors out, a snippet doesn't apply cleanly, a test
+  fails for an incidental reason) — diagnose and fix that, it's normal execution work, not
+  improvising. **Deciding what a step should have said in the first place is different — that's
+  always a breakdown gap, not yours to fill; stop and report it instead of guessing.**
 - **Definition of Done = the task's `## Verify` block.** Run it and paste the **real output**
   before claiming done. If verify fails, say so with the output — never report done on unverified
   work. Note any pre-existing/environmental failures and whether they reproduce on the base branch.

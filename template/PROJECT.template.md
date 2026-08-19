@@ -48,4 +48,5 @@ tasks have no branch/MR — note that here rather than leaving a blank.
 Short running log — what we decided and why, what to do differently next time. This section is the
 **always-available record**. If you've configured a memory tool (`PW_MEMORY` in `pw.config.sh`),
 `/pw-close` also distils the durable bits into it; if not, they just live here.
+- _e.g._ <2026-08-03 14:20> Chose Option A (feature flag) over a full migration — lower blast radius, reversible.
 - <YYYY-MM-DD HH:MM> …

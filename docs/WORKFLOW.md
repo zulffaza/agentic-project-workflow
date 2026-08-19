@@ -14,12 +14,12 @@ state lives on disk, not in an agent's head.
 |---|------|-----|----------|------|---------|
 | 1 | Drop context | You | files in `context/` + a row in `context/INDEX.md` | — | `/pw-new` |
 | 2 | Analyze | any agent | `analysis/<topic>.md` + dashboard one-liner | — | `/pw-analyze` |
-| 3 | Review analysis | You + agent | `analysis/review/<t>.review.md` + fixes | ✅ analysis approved | `/pw-review` |
+| 3 | Review analysis | You + agent | `analysis/review/<t>.review.md` + fixes | analysis approved | `/pw-review` |
 | 4 | Break down | any agent | `task/PLAN.md` + `task/T01…Tnn.md` | — | `/pw-breakdown` |
-| 5 | Review tasks | You | `task/review/PLAN.review.md` + fixes | ✅ **plan approved (only hard gate)** | `/pw-review` |
+| 5 | Review tasks | You | `task/review/PLAN.review.md` + fixes | **plan approved (only hard gate)** | `/pw-review` |
 | 6 | Execute | Executor agent | commits/branches in `worktree/*` (committed + verified) | per-task DoD | `/pw-execute` |
 | 7 | Ship | Executor agent | pushed branches + MRs (rich description) | you confirm the push | `/pw-ship` |
-| 8 | Review results | You + agent | accepted tasks (optional `task/review/T0n`) | ✅ you accept each task | `/pw-review` |
+| 8 | Review results | You + agent | accepted tasks (optional `task/review/T0n`) | you accept each task | `/pw-review` |
 | 9 | Learn + close | You + agent | memory (if configured), worktrees torn down, Status→done | — | `/pw-close` |
 
 Keeping an MR up to date after it's open is a side-loop, not a numbered step: **`/pw-sync`** (see
@@ -57,19 +57,19 @@ Ask any agent to analyze against `context/`. Output goes to `analysis/` using
 and why*, surfaces unknowns/risks, and lists **confirmed** affected repos — it does **not** yet
 decide task boundaries. **§4 lays out real approach options, not one recommendation** — you pick
 via a `Q0` in the review file (same QnA mechanism as any other open question), and `/pw-breakdown`
-structurally can't proceed until a choice is recorded, even if the doc is otherwise `approved ✅`.
+structurally can't proceed until a choice is recorded, even if the doc is otherwise `approved`.
 Iterate here until you approve; this is the cheapest place to fix misunderstandings. You review it
 via a `.review.md` file — see [Review & feedback](./REVIEW.md).
 If this analysis also goes through the optional [RFC side-loop](./RFC.md) (external stakeholders,
 often a days/weeks negotiation): publishing the draft (`/pw-rfc`'s Wave 1) only needs §4's chosen
 approach, **not** this Sign-off — negotiating with outside reviewers is normal *before* you decide
 this is final, not after. Once negotiated, a comment-driven fix applied after this row already
-reads `approved ✅` **automatically reopens this exact gate** — analysis-approved and RFC-approved
+reads `approved` **automatically reopens this exact gate** — analysis-approved and RFC-approved
 are the same fact, by design, so `/pw-breakdown` keeps correctly refusing until the whole
 negotiation settles and you (re-)approve. That auto-reopen only covers comments already *folded in*,
 though — `/pw-breakdown` also hard-refuses outright if `analysis/review/RFC.review.md` has any
-comment still sitting 🔴 open/⏳ awaiting-answer (pulled via `/pw-rfc … comments` but not yet folded
-in or resolved), even when this Sign-off already reads `approved ✅` on its own. Fold it in via
+comment still sitting [OPEN]/[PENDING] (pulled via `/pw-rfc … comments` but not yet folded
+in or resolved), even when this Sign-off already reads `approved` on its own. Fold it in via
 `/pw-review` or resolve it directly before re-running `/pw-breakdown`.
 
 ## Step 4–5 — Task breakdown
@@ -174,9 +174,9 @@ reconstructing it from chat.
 Phases aren't one-way. To reopen an earlier phase after you've moved on (e.g. breakdown revealed the
 analysis was wrong), run **`/pw-status <slug> rewind <phase>`**. It walks you through the same three
 steps either way, but drives them through the command rather than you touching `tooling/` yourself:
-1. Add a fresh `🔴 open` item to that phase's review file (`analysis/review/…` or `task/review/…`)
+1. Add a fresh `[OPEN]` item to that phase's review file (`analysis/review/…` or `task/review/…`)
    describing what needs to change, and add a new `in-review` Sign-off row (leave the old
-   `approved ✅` row — it's history).
+   `approved` row — it's history).
 2. Set the dashboard `Status:` back to that phase **with the rewind flag** (under the hood,
    `tooling/pw-lib.sh status <slug> <phase> --rewind` — a plain `status` refuses to move backward).
 3. Re-run the phase command (`/pw-analyze` / `/pw-breakdown`), then `/pw-review`, then re-approve.

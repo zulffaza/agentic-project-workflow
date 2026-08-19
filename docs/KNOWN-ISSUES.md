@@ -96,10 +96,10 @@ buried in `tooling/`.
 ## Template/tooling gotchas (this bundle's own code)
 
 ### A review template's own format-hint text can permanently false-positive a naive "is anything open" check
-- **Symptom:** a plain `grep -q '🔴 open'` on any review file is *always* true, forever — even one
+- **Symptom:** a plain `grep -qF '[OPEN]'` on any review file is *always* true, forever — even one
   with zero real open items.
 - **Root cause:** `template/_REVIEW.template.md`'s permanent format-hint blockquote and its
-  deletable worked-example block both contain the literal string `🔴 open` as a syntax
+  deletable worked-example block both contain the literal string `[OPEN]` as a syntax
   demonstration, by design — a naive whole-file grep can't tell that apart from a real item.
 - **Mitigation (built in):** `_review_has_open_marker()` (`tooling/pw-lib.sh`) strips HTML
   comments first, then anchors only to real `### ` headings (not `> ` blockquote lines) — this is

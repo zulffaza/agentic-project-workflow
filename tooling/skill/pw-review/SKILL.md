@@ -32,11 +32,11 @@ fresh is that it doesn't.
 
 ## The review-file schema (recap — full template: `template/_REVIEW.template.md`)
 
-- `## Items`: add a heading `### Rn · <§section or anchor> — 🔴 open (pw-reviewer, <YYYY-MM-DD
+- `## Items`: add a heading `### Rn · <§section or anchor> — [OPEN] (pw-reviewer, <YYYY-MM-DD
   HH:MM>)` followed by your ask on the next line. **Use `(pw-reviewer, …)`, never `(you, …)`** — a
   human's items and yours must stay visually distinguishable in the file's history. One concrete
   ask per item.
-- `## Open questions`: seed a `### Qn · <§section> — ⏳ awaiting answer (pw-reviewer, <timestamp>)`
+- `## Open questions`: seed a `### Qn · <§section> — [PENDING] (pw-reviewer, <timestamp>)`
   row only for something genuinely ambiguous that blocks judgment — not to hedge on a real finding.
 - `## Sign-off`: **never write this by hand.** See "The gate" below.
 - Never edit or delete existing item/question text (human- or agent-authored) — you only ever
@@ -49,16 +49,15 @@ Before filing ANY item, grep the review file for an existing heading on the **sa
 anchor`** you're about to use (any status, any author — the file's own history is all the state
 you need, nothing new to track):
 
-- **An item on that anchor is already 🔴 open?** Don't file a duplicate — it's already tracked.
+- **An item on that anchor is already [OPEN]?** Don't file a duplicate — it's already tracked.
   Say so in your recap instead of adding noise.
-- **The only item(s) on that anchor are 🟢 resolved, but the same problem is still there?** That's a
+- **The only item(s) on that anchor are [RESOLVED], but the same problem is still there?** That's a
   **recurrence** — a fix that didn't hold, not a fresh finding.
   - **2nd item ever on that anchor** — file it, but link back explicitly: `"Recurrence of R1
     (resolved 2026-08-10) — the fix didn't hold: …"`. Never present a recurrence as unrelated.
   - **3rd item on that same anchor** (i.e. it already recurred once after a "fix") — file it as a
-    🔴 open **escalation** item instead of an ordinary finding: state plainly that this has
-    recurred twice and needs a human decision, not another automated pass, and **leave it 🔴
-    open** — never resolve it yourself even if you'd otherwise consider it addressed. Filing it
+    [OPEN] **escalation** item instead of an ordinary finding: state plainly that this has
+    recurred twice and needs a human decision, not another automated pass, and **leave it [OPEN]** — never resolve it yourself even if you'd otherwise consider it addressed. Filing it
     open (not just saying so in your recap) is what keeps `auto-signoff` blocked by the tool's own
     check — don't rely on remembering not to call it; make the file itself unable to pass.
 
@@ -80,8 +79,8 @@ tooling/pw-lib.sh ai-review <slug> <phase> <mode>      # off | advisory | auto
 - **`advisory`**: file your items/questions, then **stop**. A human reads them and writes the
   Sign-off row themselves, exactly as if a human had raised those items. This is the default
   expectation whenever you're unsure.
-- **`auto`**: same filing step, but if — and only if — your pass leaves **zero** 🔴 open items and
-  **zero** ⏳ awaiting-answer questions, you may call:
+- **`auto`**: same filing step, but if — and only if — your pass leaves **zero** [OPEN] items and
+  **zero** [PENDING] questions, you may call:
   ```sh
   tooling/pw-lib.sh review auto-signoff <slug> <review-rel-path> <phase>
   ```

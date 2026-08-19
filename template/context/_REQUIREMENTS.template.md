@@ -35,8 +35,10 @@
 - <the check that proves it worked — ideally something runnable, e.g. "mvn verify green on all
   in-scope repos", "toggle absent from config + integration test T passes">
 
-## Known context & links
-- <ticket / RFC / PRD / Slack thread — each also gets a provenance row in INDEX.md>
+<!-- No "Known context & links" section here on purpose — every ticket/RFC/PRD/thread this brief
+     relies on gets its provenance row in `context/INDEX.md` instead, which already has the real
+     table shape (File/link, Source, Date added, Trust notes) for it. A second freeform list here
+     would only ever end up saying "see INDEX.md" — pure duplication, so it's not in this template. -->
 
 ## Open questions (optional)
 - <anything you already know is unresolved — analysis will pick these up>

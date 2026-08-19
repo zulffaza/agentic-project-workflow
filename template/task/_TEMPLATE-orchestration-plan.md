@@ -113,7 +113,7 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
 - **How work exits:** `/pw-execute` stops at *committed + verified*. Pushing branches and opening
   MRs is a separate, explicit step — **`/pw-ship <slug> [task-ids]`** — so nothing goes outward
   until you ask. Zero-change tasks never get a branch/MR.
-- **Gate:** only the **PLAN** sign-off (`task/review/PLAN.review.md → approved ✅`) is required to
+- **Gate:** only the **PLAN** sign-off (`task/review/PLAN.review.md → approved`) is required to
   execute. Per-task review is **optional** — add a `task/review/T0n.review.md` only when you want to
   send a task back.
 - Rollback plan if a group fails: <…>

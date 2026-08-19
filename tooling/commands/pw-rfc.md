@@ -2,7 +2,9 @@
 description: Optional side-loop — publish approved analysis/plan content to an RFC doc (any configured backend, or a local-only doc by default)
 args: <project-slug> [--target <ref>] [milestone|comments]
 ---
-Follow the `project-workflow` skill, and read `{{PW_HOME}}/tooling/docs/rfc.md` (policy) +
+Follow the `project-workflow` skill, and invoke the **`pw-rfc` skill** for the section-by-section
+authoring guide (which analysis/task content feeds which section, the multi-solution-area case, the
+"write for a broader reader" rule). Also read `{{PW_HOME}}/tooling/docs/rfc.md` (policy) +
 `{{PW_HOME}}/tooling/docs/rfc-backends.md` (backend registry) before doing anything — they own the
 canonical section schema, the gating rule, and the concrete per-backend invocation. **This command
 never hardcodes a platform**; every external call is resolved through those two files.
@@ -15,7 +17,7 @@ Project dir: `{{PW_PROJECTS}}/<slug>`. **This is a side-loop, not a phase** — 
 dashboard `Status:` (only `pw-lib.sh log`, for the audit trail). Each wave has its own gate, and
 they're NOT the same kind: Wave 1 only needs analysis §4 to have a chosen approach (publishing a
 still-`in-review` draft for outside comment is the normal case — see `rfc.md`); Wave 2 genuinely
-needs `task/PLAN.md` `approved ✅`, since there's no meaningful "draft milestone" to negotiate
+needs `task/PLAN.md` `approved`, since there's no meaningful "draft milestone" to negotiate
 over. Never block a phase or refuse to run because a backend is unset/unreachable — that's a
 config choice, not an error.
 
@@ -43,21 +45,27 @@ target question it doesn't need yet.
    be approved to publish at all.
 
 ## Wave 1 (default — no trailing keyword)
-1. **Gate:** analysis §4's `**Chosen approach:**` must be filled in (not `_pending your review_`)
-   — that is the **only** requirement to publish a Wave 1 draft. **Do NOT require the review
-   file's Sign-off to already read `approved ✅`** — RFC-approved and analysis-approved are the
-   same fact (see `rfc.md`), so demanding a separate, private local approval *before* the draft
-   ever reaches the people it's meant to negotiate with would defeat the entire point of using RFC
-   for cross-team input. It is normal and expected for Wave 1 to publish a still-`in-review` doc.
-   If §4 isn't decided yet, **refuse and say so** — do nothing else, and do not create
-   `rfc/RFC.md`.
+1. **Gate:** every real `analysis/<topic>.md`'s §4 `**Chosen approach:**` must be filled in (not
+   `_pending your review_`) — a project may have more than one analysis doc (large,
+   mostly-independent solution areas; see the analysis template's "MULTIPLE LARGE SOLUTION AREAS"
+   note and the `pw-rfc` skill's multi-solution guidance) — check **every** one, same loop shape as
+   `/pw-breakdown`'s gate. That is the **only** requirement to publish a Wave 1 draft. **Do NOT
+   require the review file's Sign-off to already read `approved`** — RFC-approved and
+   analysis-approved are the same fact (see `rfc.md`), so demanding a separate, private local
+   approval *before* the draft ever reaches the people it's meant to negotiate with would defeat
+   the entire point of using RFC for cross-team input. It is normal and expected for Wave 1 to
+   publish a still-`in-review` doc. If any doc's §4 isn't decided yet, **refuse and say so** — do
+   nothing else, and do not create `rfc/RFC.md`.
 2. Gate passed: `{{PW_HOME}}/tooling/pw-lib.sh rfc init <slug> <backend>` — idempotent; creates
    `rfc/RFC.md` from the template and stamps `rfc/META.md`'s `Backend:` with the **real** resolved
    backend from step 1 above (not a default guess), no-ops (and never clobbers) on a later run.
 3. Fill Background, Requirements + Out of Scope, Solution (the **chosen** approach as "Approach
    (Chosen)"; any others as "Approaches considered, not chosen" — brief, since they're record, not
-   proposal), Dependencies from the approved `analysis/<topic>.md`, per the canonical section
-   schema in `rfc.md`. Fill Rollout Plan / Rollback Plan **only if I explicitly ask** in this
+   proposal), Dependencies — **from every approved `analysis/<topic>.md` present**, per the
+   `pw-rfc` skill's section-by-section mapping and the canonical section schema in `rfc.md`. If
+   there's more than one analysis doc, Solution becomes one `## Solution for <area>` per doc (skill
+   has the exact shape); Dependencies stays a single merged section. Fill Rollout Plan / Rollback
+   Plan **only if I explicitly ask** in this
    invocation — leave them as template placeholders otherwise. **Map every write to the backend's
    REAL fetched heading (`fetch_anchors`), never a guessed position** — a live doc has shown a
    Dependencies write landing under an unrelated approach's own subsection instead of its actual
@@ -100,15 +108,20 @@ target question it doesn't need yet.
    to a placeholder.
 
 ## `milestone` (Wave 2)
-1. **Gate:** if `task/PLAN.md` isn't `approved ✅` (its review file's Sign-off row), **refuse and
+1. **Gate:** if `task/PLAN.md` isn't `approved` (its review file's Sign-off row), **refuse and
    report why** — do nothing else.
 2. Gate passed: `{{PW_HOME}}/tooling/pw-lib.sh rfc init <slug> <backend>` if `rfc/RFC.md` doesn't
    exist yet (idempotent — normally a no-op here since Wave 1 already ran, but covers the case
    where `milestone` is run without ever running Wave 1).
-3. Fill **Milestone** from `task/PLAN.md`'s dependency-DAG groups + task table + the manual-
-   execution SP/timeline estimate (one `### Milestone #n` per DAG group is a reasonable default —
-   use judgment if the PLAN's own structure suggests a different split) and **Conclusion**.
-4. Same diff-confirm-publish-record-recap steps as Wave 1 (steps 5–8 above), setting
+3. **Before filling Milestone, ask me explicitly whether I want Milestone detail in this RFC at
+   all** — some RFCs are meant to stop at "here's the approved design," not expose the internal
+   task breakdown. Only proceed to fill it after I say yes; if I say no, skip straight to
+   **Conclusion** below and leave Milestone as the template's placeholder.
+4. If I said yes: fill **Milestone** from `task/PLAN.md`'s dependency-DAG groups + task table + the
+   manual-execution SP/timeline estimate (one `### Milestone #n` per DAG group is a reasonable
+   default — use judgment if the PLAN's own structure suggests a different split). Either way, fill
+   **Conclusion**.
+5. Same diff-confirm-publish-record-recap steps as Wave 1 (steps 5–8 above), setting
    `Wave2Published` instead of `Wave1Published`.
 
 ## `comments` (read-only pull — never writes to the external platform)
@@ -126,7 +139,7 @@ target question it doesn't need yet.
    - **Resolved on the platform, tracked as previously unresolved** — append a short note to its
      **existing** item in `analysis/review/RFC.review.md` ("🔄 resolved externally on `<backend>`
      — no action needed unless you want it reflected in the analysis too"). Do **not** flip the
-     item's own 🔴/🟢 dot — that stays owned exclusively by `/pw-review`; this is informational.
+     item's own `[OPEN]`/`[RESOLVED]` tag — that stays owned exclusively by `/pw-review`; this is informational.
    - **Resolved on the platform, already tracked as resolved** — nothing to do, already noted.
    - **Unresolved, not tracked yet** — a genuinely new thread: create
      `analysis/review/RFC.review.md` if it doesn't exist yet

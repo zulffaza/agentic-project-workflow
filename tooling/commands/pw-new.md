@@ -22,7 +22,7 @@ the project without reading the whole base guide. Cover, concisely:
 3. **Who fills what** — the legend 🤖 (AI-maintained, don't hand-edit) / 🧑 (you fill) / 🤖🧑
    (both); point out that the dashboard `Status:` is agent-owned and `context/INDEX.md` is yours.
 4. **How review + QnA works** — I comment in the phase's `review/` dir (never inline), the agent
-   replies `↳ agent:` and flips 🔴→🟢; if the agent has an open question it seeds a `Qn` row I
+   replies `↳ agent:` and flips `[OPEN]`→`[RESOLVED]`; if the agent has an open question it seeds a `Qn` row I
    answer with `↳ you:`; only I write the Sign-off (date-time to the minute) that clears a gate.
 5. **Execution routing** — tasks carry `Execute with: <provider>:<model>` — **always write the
    explicit `<provider>:` prefix** (e.g. `claude:opus`, `kilo:command_code/...`) — there's no

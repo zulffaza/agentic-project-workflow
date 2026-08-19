@@ -9,7 +9,7 @@ You are the ORCHESTRATOR for the multi-repo agentic project workflow. Invoke the
 
 Given a project under `{{PW_PROJECTS}}/<slug>/`:
 
-- Read `task/PLAN.md` **fully first**. Confirm it carries an `approved ✅` sign-off row; if not,
+- Read `task/PLAN.md` **fully first**. Confirm it carries an `approved` sign-off row; if not,
   STOP and ask the human to approve the plan. The PLAN sign-off is the ONLY hard gate — per-task
   reviews are optional.
 - Walk the dependency DAG. Spawn ONE executor per task, only once its `depends_on` are all done.
