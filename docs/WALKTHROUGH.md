@@ -253,13 +253,22 @@ you don't re-run the whole plan.
 ```
 
 Pushes each task's branch and opens one MR/PR per (repo, base) pair, using your configured Git
-forge CLI (`gh`/`glab` — see [`tooling/docs/forges.md`](../tooling/docs/forges.md)):
+forge CLI (`gh`/`glab` — see [`tooling/docs/forges.md`](../tooling/docs/forges.md)). Each MR title
+is prefixed with the ticket from `context/INDEX.md`'s `Source` column (`JIRA-4821` here) — that's
+where the `[JIRA-4821]` below comes from, not something typed by hand:
 
 ```
-T01  payments-api          MR !142  agent/spring-boot-3-upgrade/T01-boot3-payments → master
-T02  orders-api            PR #58   agent/spring-boot-3-upgrade/T02-boot3-orders   → master
-T03  notifications-worker  MR !89   agent/spring-boot-3-upgrade/T03-boot3-kafka    → master
+T01  payments-api          MR !142  [JIRA-4821] Upgrade to Spring Boot 3 — payments-api
+                                     agent/spring-boot-3-upgrade/T01-boot3-payments → master
+T02  orders-api            PR #58   [JIRA-4821] Upgrade to Spring Boot 3 — orders-api
+                                     agent/spring-boot-3-upgrade/T02-boot3-orders   → master
+T03  notifications-worker  MR !89   [JIRA-4821] Upgrade to Spring Boot 3 — notifications-worker
+                                     agent/spring-boot-3-upgrade/T03-boot3-kafka    → master
 ```
+
+Add `--build-check` (`/pw-ship spring-boot-3-upgrade --build-check`) to also poll each MR's
+pipeline to a terminal state and have the result show up here too — it's opt-in, so the plain
+command above never touches CI.
 
 ## Review via MR/PR comments
 

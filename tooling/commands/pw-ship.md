@@ -1,11 +1,16 @@
 ---
 description: Push verified task branches and open MRs with rich descriptions
-args: <project-slug> [task-ids] [comments]
+args: <project-slug> [task-ids] [comments] [--build-check]
 ---
 Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task
-IDs to scope to a subset; the word `comments` = go into MR-comment mode, below). Task IDs are
-**optional in both modes** — with none, the command applies to **every** eligible task (all
-shippable tasks in ship mode; all tasks with an open MR in comment mode).
+IDs to scope to a subset; the word `comments` = go into MR-comment mode, below; `--build-check` may
+appear anywhere after the slug, in either mode). Task IDs are **optional in both modes** — with
+none, the command applies to **every** eligible task (all shippable tasks in ship mode; all tasks
+with an open MR in comment mode).
+
+**`--build-check` is opt-in and additive** — a plain `/pw-ship`/`/pw-ship … comments` never blocks
+on CI, exactly as before. Pass it when you want this run to also monitor the MR's pipeline/checks
+to a terminal state and report the result; see "Build check" near the bottom for the mechanics.
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
@@ -23,20 +28,34 @@ task; here we push branches and open MRs.
      branch), **update it — do NOT open a duplicate**; open a fresh MR only if there's genuinely none
      yet. With several units, that's one MR per adopted branch.
 2. **Confirm before anything goes out.** List, for each shippable task: repo, branch
-   (`agent/<slug>/<T0n>-<slug>`), target base branch, and the MR title. Ask me to confirm the list.
-   Only after I say go:
+   (`agent/<slug>/<T0n>-<slug>`), target base branch, and the MR title (ticket prefix resolved per
+   the convention below). Ask me to confirm the list. Only after I say go:
+   - **Ticket-number → MR title convention:** before building the title, check `context/INDEX.md`'s
+     `Source` column (ticket / URL / person) for the repo/task in question — for an adopted project,
+     also check `context/ADOPTED.md` — for a ticket key (a Jira-style `PROJ-123`, or an equivalent
+     issue reference). Found → prefix the title: `[<ticket-number>] <MR title>`. Nothing found →
+     plain title, no brackets — **never invent or guess a placeholder ticket**. Different repos in
+     the same shipment can carry different tickets — resolve **per repo/task**, not once for the
+     whole project. More than one candidate ticket for the same repo/task → list every candidate in
+     this confirm step and ask which one; don't pick for me.
 3. For each confirmed task, from its worktree
    (`{{PW_PROJECTS}}/<slug>/worktree/<repo>/<T0n>-<slug>`):
    - Push the branch to origin.
-   - Open an MR **targeting the task's Base branch** with a rich description (template below).
-     **Resolve the forge + CLI per `tooling/docs/forges.md`** (host from this repo's own `origin`
-     remote → `PW_FORGE_HOSTS` override, else auto-detect) — GitLab: `glab` run from inside the
-     worktree with `GITLAB_HOST=<resolved-host>`; GitHub: `gh pr create`. Never hardcode a host.
+   - Open an MR **targeting the task's Base branch** with a rich description (template below), title
+     per the ticket convention above. **Resolve the forge + CLI per `tooling/docs/forges.md`** (host
+     from this repo's own `origin` remote → `PW_FORGE_HOSTS` override, else auto-detect) — GitLab:
+     `glab` run from inside the worktree with `GITLAB_HOST=<resolved-host>`; GitHub: `gh pr create`.
+     Never hardcode a host.
    - Record the MR in the task's `## Result → MR:` field **and** the dashboard **Merge requests**
-     table (Task · Repo · MR url · Target branch · State=open), then log it:
+     table (Task · Repo · MR url · Target branch · State=open · Build — leave `Build` as `—` unless
+     `--build-check` was passed), then log it:
      `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> ship "T0n pushed <branch>; MR <url>"`.
-4. Recap: one line per task (branch → MR url → state). Remind me that **open/on-hold MRs don't block
-   `/pw-close`** — `accepted` means verified + MR opened + my sign-off; merging is downstream.
+   - **If `--build-check` was passed:** once the MR is open, monitor its pipeline/checks to a
+     terminal state (see "Build check" below) and fill the task's `## Result → Build check:` field
+     and the dashboard row's `Build` column with the outcome before moving to the next task.
+4. Recap: one line per task (branch → MR url → state → build result if `--build-check` was passed).
+   Remind me that **open/on-hold MRs don't block `/pw-close`** — `accepted` means verified + MR
+   opened + my sign-off; merging is downstream.
 
 ### MR description template (make it genuinely useful — this is what a reviewer reads first)
 ```
@@ -122,6 +141,9 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
          thread.
    - A task whose MR has no open/unrecorded threads at all is skipped (note it in the recap).
 2. Apply the fixes in that task's **worktree**, re-run its `## Verify`, and push.
+   - **If `--build-check` was passed:** monitor the pipeline/checks to a terminal state right after
+     this push (see "Build check" below), before moving on to step 3 — so a failed build shows up
+     in the recap and can be mentioned in the thread reply, not discovered later.
 3. **Reply to every thread you acted on — general/no-diff comments included — AND mirror it into
    the internal record:**
    - **Reply on the thread itself.** GitLab: `POST` a new note into that same discussion (works
@@ -138,14 +160,41 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      `task/review/T0n.review.md`'s `## MR comment tracking` table keyed by thread ID, which step 1
      reads back on the next run. Without this call, an unresolvable comment (which the forge can
      never mark resolved) either gets silently skipped forever or re-processed every single run.
+   - **Refresh the MR description too — every round, not just the first.** Re-fetch the current
+     description (`glab mr view <iid>` / `gh pr view <number> --json body`), then update it (`glab
+     mr update <iid> --description '<updated body>'` / `gh pr edit <number> --body '<updated
+     body>'`) so it still matches the MR's real, current state: add a bullet under `## Changes` for
+     what this round fixed, refresh `## Verification`'s output if it changed, and add/adjust `##
+     Notes for the reviewer` if the fix introduced a new pinned-as-is/risk/follow-up. Do this even
+     if the reply-on-thread already explains it — the description is what a reviewer (or you) reads
+     first, and it goes stale fast once several review rounds have landed fixes the original
+     description never mentioned.
    - Also mirror as usual: task `## Result`, a `[RESOLVED]` item in `task/review/T0n.review.md`'s
      `## Items` section (create the file first via `pw-lib.sh review-init` if it doesn't exist yet),
      and a `LOG.md` line via the helper. The project dir stays the source of truth even for
      MR-driven changes.
 4. **Recap** a table — one row per task in the set: Task · Repo · MR · threads addressed (note how
-   many were general/no-diff-position) · verify (green/failed) · pushed?. Flag any task whose verify
-   failed after the fix (leave it for review) and any thread you couldn't resolve without a decision.
+   many were general/no-diff-position) · verify (green/failed) · pushed? · build result (only a
+   column if `--build-check` was passed). Flag any task whose verify failed after the fix (leave it
+   for review) and any thread you couldn't resolve without a decision.
 
 Process the set **serially by default** (each is a real edit-verify-push in a worktree); parallelize
 only independent repos if you're confident. Never merge an MR as part of this command — merging is a
 human decision downstream.
+
+## Build check (optional — `--build-check`, either mode)
+Off by default — nothing about ordinary `/pw-ship` behavior changes if you never pass it. When
+passed, after the MR is opened/updated (ship mode) or after each fix is pushed (comment mode), poll
+that MR's pipeline/checks until they reach a terminal state, using the **Build/CI status
+invocation** column in `tooling/docs/forges.md`'s Registry (same per-repo forge resolution as
+everything else here — never hardcode a host or a CLI).
+- **Terminal states:** GitHub `SUCCESS`/`FAILURE`/`CANCELLED`/`SKIPPED` (via `gh pr checks`);
+  GitLab `success`/`failed`/`canceled`/`skipped` (via the pipeline's `.status`). Anything else
+  (`pending`/`running`/`created`) means keep polling.
+- **Timeout, not an infinite wait:** poll on a short interval (~30s) up to a ~15 minute budget. Still
+  not terminal at the budget → report it as **"still running — not yet resolved"** in the recap and
+  the `## Result → Build check:` field, rather than blocking the rest of the run on it.
+- **Report, never remediate:** this step only monitors and reports. A failing build is surfaced in
+  the recap and the task's `## Result` for a human to look at — it never triggers an automatic
+  retry/re-run of the pipeline, and it never blocks pushing or opening the MR itself (the push/open
+  already happened before the check starts).

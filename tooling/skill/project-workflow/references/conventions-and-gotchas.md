@@ -65,7 +65,8 @@ an adopted unit continues on that branch (serial per branch), every other task g
 `agent/…` branch off its base (parallel). Then `/pw-analyze <slug> [focus]`,
 `/pw-breakdown <slug>`, `/pw-review <slug> [phase|Tid|path]` (scoped to the current phase),
 `/pw-execute <slug> [task-ids | "with <model/agent>"]` (stops at committed + verified),
-`/pw-ship <slug> [task-ids] [comments]` (push + open MRs; the outward-facing publish step),
+`/pw-ship <slug> [task-ids] [comments] [--build-check]` (push + open MRs; the outward-facing publish
+step; `--build-check` optionally monitors the MR's pipeline to a terminal state),
 `/pw-sync <slug> [task-ids]` (merge the moved base branch into each open MR branch, re-verify, push),
 `/pw-status <slug>`, `/pw-close <slug>`,
 `/pw-doctor [--fix]` (verify/repair that installed commands + agents + skill match the bundle),

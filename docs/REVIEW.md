@@ -124,15 +124,29 @@ reviewer leaves a comment on MR !123 (thread on file X, line N — OR a general/
         │                          it has a diff position (see box below); cross-check the local
         │                          tracking table, not just the forge's resolved flag
         ├─ 2. FIX in the worktree  worktree/<repo>/T03-<slug>/ … edit, re-run ## Verify, push
+        │                          (optional: --build-check monitors the pipeline here too)
         ├─ 3. REPLY on each thread  summarising the fix (never a bare "done") — general comments too;
         │                          explicitly resolve a resolvable-but-general thread (no auto-resolve)
-        └─ 4. MIRROR into the project dir  ← the important bit
-                 • task/T03.md  ## Result   (what changed + verify output)
+        ├─ 4. REFRESH the MR description  every round, not just the first — add what this round
+        │                          fixed, update the verification output, adjust reviewer notes
+        └─ 5. MIRROR into the project dir  ← the important bit
+                 • task/T03.md  ## Result   (what changed + verify output + build-check result)
                  • task/review/T03.review.md  (create it if missing — a [RESOLVED] item per thread,
                    PLUS a row in its `## MR comment tracking` table via
                    `pw-lib.sh ship comment-seen <slug> T03 <thread-id> <resolvable|unresolvable> yes`)
                  • LOG.md line via pw-lib.sh log
 ```
+
+**The description goes stale otherwise.** A reviewer (or you, later) reads the MR description
+first — if it still only describes the original diff after three rounds of review fixes, it's
+actively misleading. Refreshing it is as mandatory as replying on the thread, just easy to forget
+since the forge doesn't prompt for it the way an unresolved thread does.
+
+**Optional build check (`--build-check`):** neither ship mode nor comment mode touches CI by
+default. Pass the flag to also poll the MR's pipeline/checks to a terminal state (green/red/still
+running) and have the result show up in the recap and the task's `## Result` — see
+[`tooling/commands/pw-ship.md`](../tooling/commands/pw-ship.md)'s own "Build check" section for the
+exact per-forge mechanics and timeout handling.
 
 ### ⚠️ A general MR comment (no diff line) can still need action
 A reviewer can "Start a thread" from an MR's Overview tab, not just from a diff line — that
@@ -149,10 +163,10 @@ comments). The exact API fields this relies on, and why, are in
 An MR comment lives in your Git host, which the project dir doesn't automatically know about. If a
 fix only happened in reply to an MR thread, the project's record would silently diverge from what
 actually shipped. So the rule is: **the project dir stays the source of truth even for MR-driven
-changes.** Every MR-comment fix lands in three places — the MR thread reply (for the reviewer), the
-task `## Result` + a `task/review/T0n.review.md` item (for the project record), and `LOG.md` (for
-the audit trail). After a pass you can still answer "what was asked and what changed?" entirely from
-the project dir, without opening the MR.
+changes.** Every MR-comment fix lands in four places — the MR thread reply *and* the refreshed MR
+description (both for the reviewer), the task `## Result` + a `task/review/T0n.review.md` item (for
+the project record), and `LOG.md` (for the audit trail). After a pass you can still answer "what was
+asked and what changed?" entirely from the project dir, without opening the MR.
 
 ### What each command does *not* do
 - `/pw-ship … comments` **never merges** the MR — merging is a human decision downstream.

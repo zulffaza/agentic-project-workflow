@@ -116,9 +116,11 @@ creates the review file if it's missing), then `/pw-execute <slug> T0n` re-runs 
 ## Step 7 — Ship (`/pw-ship`), and keeping MRs fresh (`/pw-sync`)
 Publishing is a **separate, explicit** step so nothing goes outward until you ask. `/pw-ship <slug>
 [task-ids]` pushes each verified task's branch and opens an MR with a **rich description** (what &
-why, changes, verification output, pinned-version rationale, risk, follow-ups), then records the MR
-in the task's `## Result` and the dashboard's **Merge requests** table. It **confirms the push list
-with you first**. Zero-change tasks get no branch/MR.
+why, changes, verification output, pinned-version rationale, risk, follow-ups), titled `[<ticket>]
+<title>` when `context/INDEX.md` (or `ADOPTED.md`) names a ticket for that repo/task, then records
+the MR in the task's `## Result` and the dashboard's **Merge requests** table. It **confirms the
+push list with you first**. Zero-change tasks get no branch/MR. Add `--build-check` to also monitor
+the MR's pipeline to a terminal state and report it — off by default, never blocks the push itself.
 
 Once MRs are open they drift out of date as their base branches move. **`/pw-sync <slug>
 [task-ids]`** brings them all back up to date in one sweep: it merges the latest base into each open

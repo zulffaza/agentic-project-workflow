@@ -57,6 +57,12 @@ Rules you MUST follow:
   optional — with none it sweeps EVERY open MR** in the project in one run (serially). Always
   **mirror the change into the internal record** (task `## Result` + `task/review/` + `LOG.md`); the
   project dir stays the source of truth even for MR-driven fixes.
+  - **Refresh the MR description every round**, not just at open — it goes stale fast once several
+    review rounds have landed fixes the original description never mentioned. Add a `## Changes`
+    bullet, refresh `## Verification`'s output, adjust reviewer notes if warranted.
+  - **`--build-check`** (optional, either mode of `/pw-ship`) polls the MR's pipeline/checks to a
+    terminal state and reports it — off by default, never blocks the push/reply itself. Mechanics
+    + per-forge invocation: `tooling/docs/forges.md`.
   - **⚠️ Never filter by diff-position to decide what's actionable.** GitHub needs two endpoints
     (`gh pr view --comments` + `gh api .../pulls/<n>/comments`) or inline review comments are
     missed; GitLab's `discussions` API returns everything in one call, but classify by

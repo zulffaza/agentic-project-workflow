@@ -23,7 +23,9 @@ on continuation projects, `/pw-adopt` deterministically maintains its own rows �
   itself as content — so it still ends up as *the copy the agent actually reasons from*.
 - **Source** — where that artifact *originally came from*: the JIRA/ticket ID, the Lark/Confluence
   URL, or the person who gave it to you. This is *the origin/provenance*. (File/link = the copy;
-  Source = where it came from.)
+  Source = where it came from.) **A ticket key here (e.g. `PROJ-123`) also doubles as `/pw-ship`'s
+  MR-title prefix** — it looks here (and, for a continuation project, `ADOPTED.md`) to build
+  `[<ticket-number>] <MR title>`. No ticket key in either place → a plain title, no brackets.
 - **Trust notes** — how authoritative it is, so analysis can weight it: "approved RFC",
   "draft — may change", "Slack thread, unofficial", "my own notes".
 

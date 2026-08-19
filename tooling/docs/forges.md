@@ -23,11 +23,11 @@ resolved **per repo, from that repo's own `origin` remote**, never assumed globa
 4. Look up the resolved forge in the Registry below for its CLI + invocation shape.
 
 ## Registry
-| Forge | CLI binary | Host signal | Create-MR invocation | Fetch-comments invocation | Notes |
-|-------|-----------|--------------|----------------------|----------------------------|-------|
-| `github` | `gh` | `github.com` (default; no override needed) | `gh pr create` (run from inside the repo/worktree) | `gh pr view --comments` (standalone/general PR conversation comments) **+** `gh api repos/:owner/:repo/pulls/<n>/comments` (diff-anchored review comments) — **both**, or inline review comments are missed entirely | No host env var needed — `gh` resolves `github.com` on its own. |
-| `gitlab` | `glab` | anything not `github.com` (default), or an exact `PW_FORGE_HOSTS` match | `GITLAB_HOST=<resolved-host> glab mr create` (run from inside the worktree) | `GITLAB_HOST=<resolved-host> glab api projects/:id/merge_requests/<iid>/discussions` — do **not** use `glab mr diff` for this, it only shows the code diff, no comments at all | `<resolved-host>` = `gitlab.com` when auto-detected with no override, or the matched `PW_FORGE_HOSTS` host for a self-hosted instance. **Never hardcode a literal host in a command file** — that's the exact bug this registry fixes. |
-| _`<future>`_ | _`<cli>`_ | _`<host signal>`_ | _`<invocation>`_ | _`<invocation>`_ | Maintainer adds a row — no code change needed, but see "Adding a forge" below. |
+| Forge | CLI binary | Host signal | Create-MR invocation | Fetch-comments invocation | Build/CI-status invocation | Notes |
+|-------|-----------|--------------|----------------------|----------------------------|-----------------------------|-------|
+| `github` | `gh` | `github.com` (default; no override needed) | `gh pr create` (run from inside the repo/worktree) | `gh pr view --comments` (standalone/general PR conversation comments) **+** `gh api repos/:owner/:repo/pulls/<n>/comments` (diff-anchored review comments) — **both**, or inline review comments are missed entirely | `gh pr checks <number>` — poll it (see § Build/CI status below) until every check reports a terminal `state`/`conclusion` | No host env var needed — `gh` resolves `github.com` on its own. |
+| `gitlab` | `glab` | anything not `github.com` (default), or an exact `PW_FORGE_HOSTS` match | `GITLAB_HOST=<resolved-host> glab mr create` (run from inside the worktree) | `GITLAB_HOST=<resolved-host> glab api projects/:id/merge_requests/<iid>/discussions` — do **not** use `glab mr diff` for this, it only shows the code diff, no comments at all | `GITLAB_HOST=<resolved-host> glab api projects/:id/merge_requests/<iid>/pipelines` → take the newest entry's `id`, then poll `GITLAB_HOST=<resolved-host> glab api projects/:id/pipelines/<id>` for `.status` (see § Build/CI status below) | `<resolved-host>` = `gitlab.com` when auto-detected with no override, or the matched `PW_FORGE_HOSTS` host for a self-hosted instance. **Never hardcode a literal host in a command file** — that's the exact bug this registry fixes. |
+| _`<future>`_ | _`<cli>`_ | _`<host signal>`_ | _`<invocation>`_ | _`<invocation>`_ | _`<invocation>`_ | Maintainer adds a row — no code change needed, but see "Adding a forge" below. |
 
 ## Standalone vs diff-anchored comments (both forges — read before writing a fetch-comments step)
 
@@ -103,6 +103,34 @@ eventually appears (the note ID and the eventual discussion ID aren't reconcilab
 any straightforward way — don't try to auto-merge them later, just flag it). See
 [`tooling/commands/pw-ship.md`](../commands/pw-ship.md)'s MR-comment mode step 1 for the full flow.
 
+## Build/CI status (optional — only when `/pw-ship … --build-check` is passed)
+
+`--build-check` is opt-in monitoring, not a gate: a plain `/pw-ship` never touches CI at all. When
+it's passed, this is the invocation an agent polls, per repo, after a push (see
+[`tooling/commands/pw-ship.md`](../commands/pw-ship.md)'s own "Build check" section for exactly when
+it fires in each mode).
+
+**Terminal states** (stop polling once you see one of these — anything else means keep polling):
+- **GitHub** (`gh pr checks <number>`, or `gh pr checks <number> --json state,conclusion` for a
+  scriptable read): each check's `state` reaches `COMPLETED`, at which point its `conclusion` is one
+  of `SUCCESS` / `FAILURE` / `CANCELLED` / `SKIPPED` / `NEUTRAL`. Treat the run as terminal once
+  every check has a `COMPLETED` state; the overall result is a failure if **any** check's
+  `conclusion` is `FAILURE` or `CANCELLED`.
+- **GitLab** (`glab api projects/:id/pipelines/<id>`): `.status` reaches one of `success` / `failed`
+  / `canceled` / `skipped`. `pending`, `running`, and `created` are all non-terminal.
+
+**Poll on an interval, with a timeout — never block indefinitely:**
+- Re-check every ~30 seconds, up to a total budget of ~15 minutes.
+- Still non-terminal at the budget → stop polling and report **"still running — not yet resolved"**
+  (in the recap and the task's `## Result → Build check:` field) rather than hanging the rest of the
+  `/pw-ship` run on one slow pipeline. This is a monitoring convenience, not a blocking gate — the
+  push/MR-open/MR-update it's checking already happened before polling started.
+
+**Report, never remediate.** A failed build is surfaced for a human to look at — this never triggers
+an automatic pipeline retry/re-run, and it never rolls back or blocks the push/MR that's already out.
+(Re-enqueuing an obviously-flaky CI failure is a judgment call for whoever's watching the MR
+afterward — including an autonomous maintenance pass — not something `--build-check` itself does.)
+
 ## Example config (`pw.config.sh`)
 ```sh
 # A self-hosted GitLab needs exactly one line; public github.com/gitlab.com need none.
@@ -112,7 +140,8 @@ PW_FORGE_HOSTS=("git.internal.example.com=gitlab")
 in your own gitignored `pw.config.sh`, never in a tracked file.)
 
 ## Adding a forge (extensibility — a maintainer task, not a quick edit)
-Add one row to the Registry with its CLI binary, host-detection signal, and both invocations. If it
-needs a host/instance env var the way `glab` needs `GITLAB_HOST`, say so in the invocation column —
-the resolution algorithm above already threads `<resolved-host>` through for you. No generator or
-script change is required; `/pw-ship`/`/pw-adopt` read this file at ship/adopt time.
+Add one row to the Registry with its CLI binary, host-detection signal, and all three invocations
+(create-MR, fetch-comments, build/CI-status). If it needs a host/instance env var the way `glab`
+needs `GITLAB_HOST`, say so in the invocation column — the resolution algorithm above already
+threads `<resolved-host>` through for you. No generator or script change is required; `/pw-ship`/
+`/pw-adopt` read this file at ship/adopt time.
