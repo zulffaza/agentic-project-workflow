@@ -128,9 +128,9 @@ cd {{PW_PROJECTS}}/<project-slug>/worktree/<repo>/<T0n>-<slug>
 - **Log:** `worktree/<T0n>.log` <executor tees its output here so you can tail the run>
 - **Commit(s):** <short-sha(s), or `zero-change` if nothing was removable>
 - **MR:** <url / number, or `—` if not shipped yet (see /pw-ship)>
-- **Build check:** <`—` unless `/pw-ship … --build-check` was run for this MR; else `green` /
-  `red` (link the failing job) / `still running — not yet resolved`. Opt-in monitoring only — a
-  blank/`—` here does NOT mean the build failed, just that it wasn't checked.>
+- **Build check:** <build-check runs by default at ship time — `green` / `red` (link the failing
+  job) / `still running — not yet resolved`. `—` only if this ship/comment run passed
+  `--skip-build-check`; that means "not checked," not "passed.">
 - **Verify outcome:** <pass / pass-with-preexisting-failures (name them) / fail. **One distinct fact
   per line** — if there's more than one (a real result + an unrelated preexisting failure you
   reproduced on the base branch, say), use a nested sub-bullet per fact instead of chaining them

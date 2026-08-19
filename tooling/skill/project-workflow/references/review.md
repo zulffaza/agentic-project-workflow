@@ -60,9 +60,10 @@ Rules you MUST follow:
   - **Refresh the MR description every round**, not just at open — it goes stale fast once several
     review rounds have landed fixes the original description never mentioned. Add a `## Changes`
     bullet, refresh `## Verification`'s output, adjust reviewer notes if warranted.
-  - **`--build-check`** (optional, either mode of `/pw-ship`) polls the MR's pipeline/checks to a
-    terminal state and reports it — off by default, never blocks the push/reply itself. Mechanics
-    + per-forge invocation: `tooling/docs/forges.md`.
+  - **Build check runs by default**, either mode of `/pw-ship` — polls the MR's pipeline/checks to
+    a terminal state and reports it, which means the run waits on CI before returning. Pass
+    `--skip-build-check` to opt out for a given run. Mechanics + per-forge invocation:
+    `tooling/docs/forges.md`.
   - **⚠️ Never filter by diff-position to decide what's actionable.** GitHub needs two endpoints
     (`gh pr view --comments` + `gh api .../pulls/<n>/comments`) or inline review comments are
     missed; GitLab's `discussions` API returns everything in one call, but classify by

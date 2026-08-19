@@ -124,7 +124,8 @@ reviewer leaves a comment on MR !123 (thread on file X, line N — OR a general/
         │                          it has a diff position (see box below); cross-check the local
         │                          tracking table, not just the forge's resolved flag
         ├─ 2. FIX in the worktree  worktree/<repo>/T03-<slug>/ … edit, re-run ## Verify, push
-        │                          (optional: --build-check monitors the pipeline here too)
+        │                          (build-check monitors the pipeline here too, unless
+        │                          --skip-build-check was passed)
         ├─ 3. REPLY on each thread  summarising the fix (never a bare "done") — general comments too;
         │                          explicitly resolve a resolvable-but-general thread (no auto-resolve)
         ├─ 4. REFRESH the MR description  every round, not just the first — add what this round
@@ -142,9 +143,10 @@ first — if it still only describes the original diff after three rounds of rev
 actively misleading. Refreshing it is as mandatory as replying on the thread, just easy to forget
 since the forge doesn't prompt for it the way an unresolved thread does.
 
-**Optional build check (`--build-check`):** neither ship mode nor comment mode touches CI by
-default. Pass the flag to also poll the MR's pipeline/checks to a terminal state (green/red/still
-running) and have the result show up in the recap and the task's `## Result` — see
+**Build check runs by default, in both modes:** polls the MR's pipeline/checks to a terminal state
+(green/red/still running) and shows the result in the recap and the task's `## Result` — meaning a
+plain run now waits on CI before it finishes. Pass `--skip-build-check` to opt out and get the
+immediate-return behavior back. See
 [`tooling/commands/pw-ship.md`](../tooling/commands/pw-ship.md)'s own "Build check" section for the
 exact per-forge mechanics and timeout handling.
 

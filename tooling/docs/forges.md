@@ -103,12 +103,13 @@ eventually appears (the note ID and the eventual discussion ID aren't reconcilab
 any straightforward way — don't try to auto-merge them later, just flag it). See
 [`tooling/commands/pw-ship.md`](../commands/pw-ship.md)'s MR-comment mode step 1 for the full flow.
 
-## Build/CI status (optional — only when `/pw-ship … --build-check` is passed)
+## Build/CI status (runs by default — `/pw-ship … --skip-build-check` opts out)
 
-`--build-check` is opt-in monitoring, not a gate: a plain `/pw-ship` never touches CI at all. When
-it's passed, this is the invocation an agent polls, per repo, after a push (see
+Build-check monitoring is **on by default** for `/pw-ship`, not a gate: it doesn't block the push
+or the MR open/update, but it does mean a plain run now waits on CI before finishing. This is the
+invocation an agent polls, per repo, after a push (see
 [`tooling/commands/pw-ship.md`](../commands/pw-ship.md)'s own "Build check" section for exactly when
-it fires in each mode).
+it fires in each mode, and how `--skip-build-check` disables it for a given run).
 
 **Terminal states** (stop polling once you see one of these — anything else means keep polling):
 - **GitHub** (`gh pr checks <number>`, or `gh pr checks <number> --json state,conclusion` for a
@@ -129,7 +130,7 @@ it fires in each mode).
 **Report, never remediate.** A failed build is surfaced for a human to look at — this never triggers
 an automatic pipeline retry/re-run, and it never rolls back or blocks the push/MR that's already out.
 (Re-enqueuing an obviously-flaky CI failure is a judgment call for whoever's watching the MR
-afterward — including an autonomous maintenance pass — not something `--build-check` itself does.)
+afterward — including an autonomous maintenance pass — not something the build check itself does.)
 
 ## Example config (`pw.config.sh`)
 ```sh

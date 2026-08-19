@@ -119,8 +119,9 @@ Publishing is a **separate, explicit** step so nothing goes outward until you as
 why, changes, verification output, pinned-version rationale, risk, follow-ups), titled `[<ticket>]
 <title>` when `context/INDEX.md` (or `ADOPTED.md`) names a ticket for that repo/task, then records
 the MR in the task's `## Result` and the dashboard's **Merge requests** table. It **confirms the
-push list with you first**. Zero-change tasks get no branch/MR. Add `--build-check` to also monitor
-the MR's pipeline to a terminal state and report it — off by default, never blocks the push itself.
+push list with you first**. Zero-change tasks get no branch/MR. By default it also monitors each
+MR's pipeline to a terminal state and reports it — meaning the run waits on CI before finishing;
+pass `--skip-build-check` if you'd rather it return immediately, unchecked.
 
 Once MRs are open they drift out of date as their base branches move. **`/pw-sync <slug>
 [task-ids]`** brings them all back up to date in one sweep: it merges the latest base into each open

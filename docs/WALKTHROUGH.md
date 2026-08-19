@@ -266,9 +266,9 @@ T03  notifications-worker  MR !89   [JIRA-4821] Upgrade to Spring Boot 3 — not
                                      agent/spring-boot-3-upgrade/T03-boot3-kafka    → master
 ```
 
-Add `--build-check` (`/pw-ship spring-boot-3-upgrade --build-check`) to also poll each MR's
-pipeline to a terminal state and have the result show up here too — it's opt-in, so the plain
-command above never touches CI.
+The command above already polled each MR's pipeline to a terminal state — that's the default. Pass
+`--skip-build-check` (`/pw-ship spring-boot-3-upgrade --skip-build-check`) if you want the old
+immediate-return behavior instead, e.g. for a fast dry run where you don't want to wait on CI.
 
 ## Review via MR/PR comments
 

@@ -1,16 +1,18 @@
 ---
 description: Push verified task branches and open MRs with rich descriptions
-args: <project-slug> [task-ids] [comments] [--build-check]
+args: <project-slug> [task-ids] [comments] [--skip-build-check]
 ---
 Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task
-IDs to scope to a subset; the word `comments` = go into MR-comment mode, below; `--build-check` may
-appear anywhere after the slug, in either mode). Task IDs are **optional in both modes** — with
+IDs to scope to a subset; the word `comments` = go into MR-comment mode, below; `--skip-build-check`
+may appear anywhere after the slug, in either mode). Task IDs are **optional in both modes** — with
 none, the command applies to **every** eligible task (all shippable tasks in ship mode; all tasks
 with an open MR in comment mode).
 
-**`--build-check` is opt-in and additive** — a plain `/pw-ship`/`/pw-ship … comments` never blocks
-on CI, exactly as before. Pass it when you want this run to also monitor the MR's pipeline/checks
-to a terminal state and report the result; see "Build check" near the bottom for the mechanics.
+**Build-check monitoring runs by default** — after the MR is opened/updated (ship mode) or after
+each fix is pushed (comment mode), this command also polls that MR's pipeline/checks to a terminal
+state and reports the result; see "Build check" near the bottom for the mechanics. **This means a
+plain run now waits on CI** (up to the timeout below) before it finishes, unlike before. Pass
+`--skip-build-check` to opt out for this run and get the old, immediate-return behavior back.
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
@@ -47,15 +49,15 @@ task; here we push branches and open MRs.
      `glab` run from inside the worktree with `GITLAB_HOST=<resolved-host>`; GitHub: `gh pr create`.
      Never hardcode a host.
    - Record the MR in the task's `## Result → MR:` field **and** the dashboard **Merge requests**
-     table (Task · Repo · MR url · Target branch · State=open · Build — leave `Build` as `—` unless
-     `--build-check` was passed), then log it:
+     table (Task · Repo · MR url · Target branch · State=open · Build), then log it:
      `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> ship "T0n pushed <branch>; MR <url>"`.
-   - **If `--build-check` was passed:** once the MR is open, monitor its pipeline/checks to a
-     terminal state (see "Build check" below) and fill the task's `## Result → Build check:` field
-     and the dashboard row's `Build` column with the outcome before moving to the next task.
-4. Recap: one line per task (branch → MR url → state → build result if `--build-check` was passed).
-   Remind me that **open/on-hold MRs don't block `/pw-close`** — `accepted` means verified + MR
-   opened + my sign-off; merging is downstream.
+   - **Unless `--skip-build-check` was passed:** once the MR is open, monitor its pipeline/checks to
+     a terminal state (see "Build check" below) and fill the task's `## Result → Build check:` field
+     and the dashboard row's `Build` column with the outcome before moving to the next task. If
+     `--skip-build-check` was passed, leave both as `—` (not checked this run).
+4. Recap: one line per task (branch → MR url → state → build result, or "skipped" if
+   `--skip-build-check` was passed). Remind me that **open/on-hold MRs don't block `/pw-close`** —
+   `accepted` means verified + MR opened + my sign-off; merging is downstream.
 
 ### MR description template (make it genuinely useful — this is what a reviewer reads first)
 ```
@@ -141,9 +143,9 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
          thread.
    - A task whose MR has no open/unrecorded threads at all is skipped (note it in the recap).
 2. Apply the fixes in that task's **worktree**, re-run its `## Verify`, and push.
-   - **If `--build-check` was passed:** monitor the pipeline/checks to a terminal state right after
-     this push (see "Build check" below), before moving on to step 3 — so a failed build shows up
-     in the recap and can be mentioned in the thread reply, not discovered later.
+   - **Unless `--skip-build-check` was passed:** monitor the pipeline/checks to a terminal state
+     right after this push (see "Build check" below), before moving on to step 3 — so a failed
+     build shows up in the recap and can be mentioned in the thread reply, not discovered later.
 3. **Reply to every thread you acted on — general/no-diff comments included — AND mirror it into
    the internal record:**
    - **Reply on the thread itself.** GitLab: `POST` a new note into that same discussion (works
@@ -174,20 +176,21 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      and a `LOG.md` line via the helper. The project dir stays the source of truth even for
      MR-driven changes.
 4. **Recap** a table — one row per task in the set: Task · Repo · MR · threads addressed (note how
-   many were general/no-diff-position) · verify (green/failed) · pushed? · build result (only a
-   column if `--build-check` was passed). Flag any task whose verify failed after the fix (leave it
-   for review) and any thread you couldn't resolve without a decision.
+   many were general/no-diff-position) · verify (green/failed) · pushed? · build result (or
+   "skipped" if `--skip-build-check` was passed). Flag any task whose verify failed after the fix
+   (leave it for review) and any thread you couldn't resolve without a decision.
 
 Process the set **serially by default** (each is a real edit-verify-push in a worktree); parallelize
 only independent repos if you're confident. Never merge an MR as part of this command — merging is a
 human decision downstream.
 
-## Build check (optional — `--build-check`, either mode)
-Off by default — nothing about ordinary `/pw-ship` behavior changes if you never pass it. When
-passed, after the MR is opened/updated (ship mode) or after each fix is pushed (comment mode), poll
-that MR's pipeline/checks until they reach a terminal state, using the **Build/CI status
-invocation** column in `tooling/docs/forges.md`'s Registry (same per-repo forge resolution as
-everything else here — never hardcode a host or a CLI).
+## Build check (on by default — `--skip-build-check` to opt out, either mode)
+Runs automatically, in both modes: after the MR is opened/updated (ship mode) or after each fix is
+pushed (comment mode), poll that MR's pipeline/checks until they reach a terminal state, using the
+**Build/CI status invocation** column in `tooling/docs/forges.md`'s Registry (same per-repo forge
+resolution as everything else here — never hardcode a host or a CLI). Pass `--skip-build-check` to
+skip this entirely for the run and get the old immediate-return behavior (dashboard/`## Result`
+`Build`/`Build check` fields stay `—`, recap says "skipped").
 - **Terminal states:** GitHub `SUCCESS`/`FAILURE`/`CANCELLED`/`SKIPPED` (via `gh pr checks`);
   GitLab `success`/`failed`/`canceled`/`skipped` (via the pipeline's `.status`). Anything else
   (`pending`/`running`/`created`) means keep polling.

@@ -107,7 +107,7 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | `/pw-review <slug> config [<phase> <mode>]` | optional — view (no args) or change one phase's AI Review mode; the human-facing surface for this, never `pw-lib.sh` directly |
 | `/pw-breakdown <slug>` | task breakdown |
 | `/pw-execute <slug> [task-ids \| "with <model/agent>"]` | execution (stops at committed + verified) |
-| `/pw-ship <slug> [task-ids] [comments] [--build-check]` | push branches + open MRs (publish), titled `[<ticket>] <title>` when a ticket is found; `comments` = handle MR review threads (also refreshes the MR description each round); `--build-check` = also monitor the MR's pipeline/checks to a terminal state |
+| `/pw-ship <slug> [task-ids] [comments] [--skip-build-check]` | push branches + open MRs (publish), titled `[<ticket>] <title>` when a ticket is found; `comments` = handle MR review threads (also refreshes the MR description each round); by default also monitors the MR's pipeline/checks to a terminal state — `--skip-build-check` opts out |
 | `/pw-sync <slug> [task-ids]` | update open MR branches — merge base in, re-verify, push |
 | `/pw-status <slug>` | status |
 | `/pw-status <slug> rewind <phase>` | move the dashboard `Status:` back to an earlier phase — the human-facing surface for this, never `pw-lib.sh status … --rewind` directly (see [Going back a phase](./WORKFLOW.md#going-back-a-phase-rewind)) |

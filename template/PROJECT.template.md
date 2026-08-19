@@ -38,8 +38,9 @@ _todo → in-progress → verify-failed / done → accepted_
 
 ## Merge requests  [🤖 agent-maintained]
 Filled once branches are pushed and MRs opened (see `/pw-ship`). Zero-change tasks have no
-branch/MR — note that here rather than leaving a blank. `Build` stays `—` unless `/pw-ship
---build-check` was actually run for that MR (it's opt-in monitoring, not a required field).
+branch/MR — note that here rather than leaving a blank. `Build` reflects the terminal pipeline
+result from ship/comment time (build-checking runs by default); it's `—` only when a run passed
+`/pw-ship --skip-build-check`.
 
 | Task | Repo | MR | Target branch | State | Build |
 |------|------|----|--------------|-------|-------|
