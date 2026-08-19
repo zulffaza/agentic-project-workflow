@@ -57,6 +57,15 @@ the internal mechanism this sub-verb wraps, not something I should need to know 
    I'm opting into.
 3. This never changes the dashboard `Status:` line either — same rule as everything else here.
 
+**Step 0 — pinpoint before reading, IF a memory tool is configured** (optional; see
+`{{PW_HOME}}/tooling/docs/memory.md` and `PW_MEMORY` in `pw.config.sh`). For the item(s) about to
+be applied, query the configured tool for the concepts already in the item's own ask text + its
+`§section or anchor` — BEFORE reading anything else. Treat any result strictly as a **location
+pointer** (which heading/section) — never as content; the fix must still be grounded in a fresh
+read of that live section regardless of what the query returns. If unconfigured, or it returns
+nothing, fall back to the file's own `## Contents` table (below). **If `PW_MEMORY=none`, skip this
+step silently — do not block.**
+
 **Resolve WHICH review files to process (apply-comments flow — do NOT scan the whole project):**
 - If the 2nd arg is a **path** to a `.review.md`, use exactly that file.
 - If it's a **task id** (`T0n`), process `task/review/T0n.review.md`.
@@ -66,6 +75,13 @@ the internal mechanism this sub-verb wraps, not something I should need to know 
   - `breakdown` → `task/review/*.review.md` (PLAN + any T0n)
   - `executing` / `review` → every task currently `verify-failed` (read the PLAN task table + task
     files to find them).
+
+**Scoped reads — applying one item only needs that item's own block, never the whole file.** Use
+the file's own `## Contents` table (heading-text-anchored, 🤖-owned — refresh it with
+`…/{{PW_HOME}}/tooling/pw-lib.sh review reindex <slug> <review-rel-path>` if it looks stale) or
+Step 0's pinpoint result to jump straight to the item's own heading + the doc section(s) its
+anchor names. Never read `<file>.archive.md` (moved-out `[RESOLVED]`/`[ANSWERED]` history) unless
+the item's own ask specifically asks about past rationale.
 
 **Verify-failed tasks may not have a review file yet — that's the #1 reason "nothing happens".**
 For each task I've flipped to `Status: verify-failed`:
@@ -108,6 +124,13 @@ Sign-off, so there's nothing to reopen.
      gate you're about to invalidate) — never do this silently. Only call `review reopen` after I
      explicitly say to proceed.
 
+**If a single item's ask names 3+ distinct concerns/sections** (e.g. it touches several repos'
+worth of design at once), first list every target heading by name before touching anything, apply
+all of that item's edits across those headings in one coherent pass, then run consistency checks
+**once** at the end for that item — never per-section, per-edit re-checks. When re-checking for
+stale references after a rewrite, use one combined `grep -rnE 'pat1|pat2|pat3'` pass rather than N
+serial single-pattern greps.
+
 For each `[OPEN]` item in the resolved files:
 - apply the fix to the doc it reviews — **if that doc is `analysis/<topic>.md`, rewrite its §1–4
   prose cleanly in place** (never append, never add an `(Rn)`/`(Qn)` tag or "supersedes"/"the user
@@ -135,7 +158,23 @@ blank quoted line between the two), and add a `---` rule before the next questio
 
 Never edit or delete my comment text (items OR my `↳ you:` answers). Never write the Sign-off row
 — only I clear the gate. Log the pass (this is the ONLY dashboard-adjacent write you make):
-`…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> review "<n> items resolved in <file>"`.
+`…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> review "<n> items resolved in <file>"`. Then refresh
+that file's `## Contents` table: `…/{{PW_HOME}}/tooling/pw-lib.sh review reindex <slug>
+<review-rel-path>` — a heading just changed status, so the table would otherwise go stale.
+
+**Archive once several items have piled up resolved** — a concrete trigger, not a vibe: once 3+
+items/questions in this file are `[RESOLVED]`/`[ANSWERED]` since the last archive, or the file
+itself has passed ~150 lines, run `…/{{PW_HOME}}/tooling/pw-lib.sh review archive <slug>
+<review-rel-path>`. This moves them verbatim into a sibling `<topic>.archive.md`, never touches
+`[OPEN]`/`[PENDING]` headings or the Sign-off table (see `docs/REVIEW.md`), and is what keeps a
+long-lived review file from forcing every future round to re-read its whole resolved history.
+
+**Opportunistically seed memory too — IF a memory tool is configured** (skip silently otherwise;
+see `{{PW_HOME}}/tooling/docs/memory.md`). When a resolved item's fix was durable/generalizable
+(not just this project's own bookkeeping), seed it — reuse the item's own `↳ agent:` reply text
+(or, for an analysis-doc fix, the §5.1 Decisions-log one-liner you're already writing) verbatim as
+the payload; never a separate authoring pass. Scope project-specific vs. cross-project per
+whatever `PW_MEMORY_NOTES` already documents for this tool's buckets.
 
 When done, recap each resolved item (one line) here, and tell me how many `[OPEN]` items remain
 **in the resolved scope** (and, as a footnote, across the whole project:

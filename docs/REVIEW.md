@@ -58,6 +58,10 @@ does **not** require you to set any status; you just leave it `[OPEN]` and run `
   chat after each pass.
 - Before editing any doc, the agent reads its `.review.md` first. `/pw-review` never changes the
   dashboard Status.
+- **Applying one item only needs that item's own block** — the file's own `## Contents` table
+  (heading-text-anchored, 🤖-owned) points straight at the section it targets, so the agent never
+  needs to read the whole file — and never the archived resolved history (below) — to apply a
+  single new item.
 - Only **you** write an `approved` Sign-off row — an agent cannot self-approve a gate (the one
   narrow, heavily-guarded exception is AI-assisted `auto` mode below). The tooling has one *other*
   narrow exception in the opposite direction: on analysis's or the PLAN's own review file, `/pw-review`
@@ -77,6 +81,20 @@ grep -rln "pw-item-status: open" projects/<project-slug>/
 
 Keep this separate from the dashboard's **decision log** (that's "why we chose X", durable
 rationale) — review files are the transient back-and-forth that empties out as items resolve.
+
+**A review file doesn't grow forever.** Two tools keep a long-lived one (many rounds, dozens of
+items) cheap to work with instead of turning every future round into "re-read the whole resolved
+history to apply one new item":
+- `pw-lib.sh review reindex <slug> <review-rel-path>` (re)builds the `## Contents` table at the
+  top — ID, section/anchor, status — for every real item/question, so applying one means jumping
+  straight to it instead of scanning start-to-finish. Anchored by heading TEXT, never a line
+  number, so it never goes stale on a rewrite; safe to re-run any time.
+- `pw-lib.sh review archive <slug> <review-rel-path>` moves every fully `[RESOLVED]`/`[ANSWERED]`
+  heading, verbatim, into a sibling `<topic>.archive.md` — leaving a one-line pointer row in a
+  `## Archived items` table. It **never** touches `[OPEN]`/`[PENDING]` headings or the `##
+  Sign-off` table, since the gate logic (`review gate`/`review reopen`/`review auto-signoff`) only
+  ever reads those two things — archiving is provably gate-safe. Run it once several items have
+  piled up resolved (a few, or the file getting long) rather than waiting for it to feel unwieldy.
 
 ---
 

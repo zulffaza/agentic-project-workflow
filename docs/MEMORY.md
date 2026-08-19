@@ -39,11 +39,20 @@ teammate — or a different agent CLI — needs to actually use it correctly.
 
 | Command | What it does with memory |
 |---|---|
-| `/pw-analyze` | **Searches** first for prior context on the domain/repos, folds in what's relevant, cites it. |
+| `/pw-analyze` | **Searches** first for prior context on the domain/repos, folds in what's relevant, cites it. Also **opportunistically seeds** a genuinely durable, generalizable finding as it writes the doc (reusing the fact's own one-line Decisions-log form — never a separate write-up). |
+| `/pw-review` | **Pinpoints** which section a review item targets before reading anything, if the tool supports it — treated strictly as a location pointer, never as content (see below). Also **opportunistically seeds** a durable fix, reusing its own reply text. |
 | `/pw-close` | **Seeds** durable, workflow-level learnings — not what the commits/repos already record. |
 
-Both steps are skipped silently when `PW_MEMORY="none"` — an agent must never block, refuse, or
-stall a phase because a memory tool is missing or a search comes back empty.
+All three are skipped silently when `PW_MEMORY="none"` — an agent must never block, refuse, or
+stall a phase because a memory tool is missing or a search comes back empty. `/pw-close` was
+originally the only seed point; `/pw-analyze` and `/pw-review` now also seed opportunistically,
+mid-pipeline, rather than batching everything to the end.
+
+**The one rule that makes `/pw-review`'s pinpointing safe regardless of how fresh the memory tool
+is:** it may only ever return a location (which heading/section to look at), never content. A
+stale pointer costs, at worst, reading one extra or wrong section before self-correcting — it can
+never cause an agent to act on stale information, since the actual fix always comes from a fresh
+read of the live doc.
 
 ## Examples
 

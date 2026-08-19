@@ -66,6 +66,18 @@
 #                                                     /pw-breakdown's RFC-negotiation hard block on
 #                                                     analysis/review/RFC.review.md, which has no
 #                                                     Sign-off table of its own — see docs/RFC.md
+#   pw-lib.sh review reindex <slug> <review-rel-path>  (re)build the heading-text-anchored
+#                                                     "## Contents" table (ID/anchor/status per
+#                                                     real item/question) — jump straight to a
+#                                                     section instead of reading the whole file
+#   pw-lib.sh review archive <slug> <review-rel-path>  move every fully [RESOLVED]/[ANSWERED]
+#                                                     item/question out of the live review file,
+#                                                     verbatim, into a sibling <topic>.archive.md
+#                                                     — keeps a long-lived review file from forcing
+#                                                     every new round to re-read the whole resolved
+#                                                     history; never touches [OPEN]/[PENDING] or
+#                                                     ## Sign-off (provably gate-safe — see the
+#                                                     function's own comment)
 #   pw-lib.sh model-check   <provider> <model-id>    pass/refuse a model against
 #                                                     PW_MODEL_ALLOWLIST_<PROVIDER> in pw.config.sh
 #                                                     — empty/unset = ALL models allowed (the
@@ -97,11 +109,42 @@ phase_rank() {
 # of a bare pipe-delimited line. A pipe row with no table header just renders as one long,
 # hard-to-scan paragraph in a plain markdown preview; a bullet list wraps sanely per entry, bolds
 # the timestamp, and tags the actor as inline code, so a growing LOG.md stays skimmable.
+#
+# Duplicate-guard: a real project's LOG.md was observed with the identical actor+message logged
+# twice (once even three times) back-to-back within minutes — a caller re-running its own trailing
+# log step, not a deliberate second entry. Dedup key: exact actor+message match against LOG.md's
+# LAST line only (not a scan of history — a repeat several entries back is a different, real
+# event, not this bug), within PW_LOG_DEDUP_WINDOW_MIN minutes (default 5) of that line's own
+# timestamp. On a match: warn to stderr and return 0 WITHOUT appending — never `die`, since
+# cmd_log runs as a trailing step inside many other commands and must not abort the caller's real
+# work over an audit-trail nicety. A parse failure on the last line (unexpected format, clock
+# skew) fails OPEN — always logs — rather than risk silently dropping a genuinely new entry.
 cmd_log() {
   [ $# -ge 3 ] || die "usage: log <slug> <actor> <msg...>"
   local slug="$1" actor="$2"; shift 2
+  local msg="$*"
   local d; d="$(proj_dir "$slug")"
-  printf -- '- **%s** · `%s` — %s\n' "$(date '+%F %H:%M')" "$actor" "$*" >> "$d/LOG.md"
+  local f="$d/LOG.md"
+  local window="${PW_LOG_DEDUP_WINDOW_MIN:-5}"
+  if [ -f "$f" ] && [ -s "$f" ]; then
+    local last; last="$(tail -n 1 "$f")"
+    local ltag; ltag="$(printf '%s' "$last" | sed -n 's/^- \*\*\([^*]*\)\*\* · .*/\1/p')"
+    local ltail; ltail="$(printf '%s' "$last" | sed 's/^- \*\*[^*]*\*\* · //')"
+    local newtail; newtail="$(printf -- '`%s` — %s' "$actor" "$msg")"
+    if [ -n "$ltag" ] && [ "$ltail" = "$newtail" ]; then
+      local now_epoch last_epoch
+      now_epoch="$(date '+%s')"
+      last_epoch="$(date -j -f '%Y-%m-%d %H:%M' "$ltag" '+%s' 2>/dev/null || date -d "$ltag" '+%s' 2>/dev/null || echo '')"
+      if [ -n "$last_epoch" ]; then
+        local diff_min=$(( (now_epoch - last_epoch) / 60 ))
+        if [ "$diff_min" -ge 0 ] && [ "$diff_min" -lt "$window" ]; then
+          echo "pw-lib: skipped duplicate log entry for $slug (same actor+message ${diff_min}m ago, within ${window}m window)" >&2
+          return 0
+        fi
+      fi
+    fi
+  fi
+  printf -- '- **%s** · `%s` — %s\n' "$(date '+%F %H:%M')" "$actor" "$msg" >> "$f"
 }
 
 cmd_status() {
@@ -692,18 +735,29 @@ cmd_review_note_init() {
 # bracket-tag migration — never drop real open items in an older file just because it predates the
 # switch; when in doubt, this errs toward "still open," matching auto-signoff's own refuse-by-default
 # stance. Never remove the emoji branch even though new files never write it again.
-_review_has_open_marker() {
-  local f="$1" stripped
-  stripped="$(awk '
+# Shared comment-blanking state machine (see the long rationale above) — factored out so
+# _review_has_open_marker, _signoff_last_real_row_line, cmd_review_reindex, and cmd_review_archive
+# all read real headings the same way instead of four near-identical copies drifting apart. Blanks
+# (never deletes) every line inside a real multi-line comment, so output line numbers always match
+# the ORIGINAL file — callers that splice content back in at an exact original line (head/tail)
+# depend on this. A same-line, self-contained `<!-- ... -->` comment is left fully unstripped,
+# since every real live heading carries exactly one of those.
+_comment_blanked() {
+  awk '
     BEGIN { in_comment = 0 }
     {
       line = $0
-      if (in_comment) { if (line ~ /-->/) { in_comment = 0 }; next }
+      if (in_comment) { if (line ~ /-->/) { in_comment = 0 }; print ""; next }
       if (line ~ /<!--/ && line ~ /-->/) { print line; next }
-      if (line ~ /<!--/) { in_comment = 1; next }
+      if (line ~ /<!--/) { in_comment = 1; print ""; next }
       print line
     }
-  ' "$f")"
+  ' "$1"
+}
+
+_review_has_open_marker() {
+  local f="$1" stripped
+  stripped="$(_comment_blanked "$f")"
   printf '%s\n' "$stripped" | grep -qE '^### .*<!-- pw-item-status: open -->' && return 0
   printf '%s\n' "$stripped" | grep -qE '^### .*(🔴 open|⏳ awaiting answer|\[OPEN\]|\[PENDING\])'
 }
@@ -733,16 +787,7 @@ _decision_is_approved() {
 # from ## Sign-off onward. Returns 0 if the table has no real rows yet (malformed file).
 _signoff_last_real_row_line() {
   local f="$1"
-  awk '
-    BEGIN { in_comment = 0 }
-    {
-      line = $0
-      if (in_comment) { if (line ~ /-->/) { in_comment = 0 }; print ""; next }
-      if (line ~ /<!--/ && line ~ /-->/) { print line; next }
-      if (line ~ /<!--/) { in_comment = 1; print ""; next }
-      print line
-    }
-  ' "$f" | awk '/^## Sign-off/{s=1} s && /^\|/{n=NR} END{print n+0}'
+  _comment_blanked "$f" | awk '/^## Sign-off/{s=1} s && /^\|/{n=NR} END{print n+0}'
 }
 
 # The Sign-off table's CURRENT (latest) Decision cell only — "approved ✅" / "in-review" /
@@ -873,6 +918,187 @@ cmd_review_has_open() {
   return 1
 }
 
+# Extract "LINE<TAB>ID<TAB>anchor text<TAB>STATUS" for every REAL ### Rn/Qn heading in $1, in file
+# order — comment-blanked first (see _comment_blanked) so template worked-examples/format-hints
+# never appear, same reasoning as _review_has_open_marker. Shared by cmd_review_reindex and
+# cmd_review_archive so both agree on exactly what counts as a "real" item/question.
+_review_items_tsv() {
+  _comment_blanked "$1" | awk '
+    /^### [RQ][0-9]+ · / {
+      id = $0; sub(/^### /, "", id); sub(/ ·.*/, "", id)
+      rest = $0; sub(/^### [RQ][0-9]+ · /, "", rest)
+      anchor = rest; sub(/ — \[[A-Z]+\].*/, "", anchor)
+      tag = rest; sub(/^.*— \[/, "", tag); sub(/\].*/, "", tag)
+      printf "%d\t%s\t%s\t%s\n", NR, id, anchor, tag
+    }
+  '
+}
+
+# Idempotently (re)build the heading-text-anchored "## Contents" table — ID / section-anchor /
+# status for every real item/question, in file order — so applying ONE review item only requires
+# jumping to the section it names instead of reading the whole file to find it. Anchored by
+# HEADING TEXT, never a line number (a rewrite shifts lines; heading text doesn't), so re-running
+# this after any edit is always safe — never goes stale the way a line-number index would.
+#   review reindex <slug> <review-rel-path>
+cmd_review_reindex() {
+  [ $# -eq 2 ] || die "usage: review reindex <slug> <review-rel-path>"
+  local slug="$1" rel="$2"
+  local d; d="$(proj_dir "$slug")"
+  local f="$d/$rel"
+  [ -f "$f" ] || die "no such review file: $rel"
+  local rows; rows="$(_review_items_tsv "$f" | cut -f2-)"
+  local block; block="$(mktemp)"
+  {
+    printf '<!-- pw-contents:begin -->\n'
+    printf '## Contents   [🤖-owned — regenerated by `pw-lib.sh review reindex`; never hand-edit]\n\n'
+    printf '| ID | Section / anchor | Status |\n|----|-------------------|--------|\n'
+    if [ -n "$rows" ]; then
+      printf '%s\n' "$rows" | awk -F'\t' '{printf "| %s | %s | [%s] |\n", $1, $2, $3}'
+    else
+      printf '| _(none yet)_ | | |\n'
+    fi
+    printf '<!-- pw-contents:end -->\n'
+  } > "$block"
+  if grep -q '<!-- pw-contents:begin -->' "$f"; then
+    local b e
+    b="$(grep -n '<!-- pw-contents:begin -->' "$f" | head -1 | cut -d: -f1)"
+    e="$(grep -n '<!-- pw-contents:end -->' "$f" | head -1 | cut -d: -f1)"
+    { head -n "$((b-1))" "$f"; cat "$block"; tail -n "+$((e+1))" "$f"; } > "$f.tmp" && mv "$f.tmp" "$f"
+  else
+    local anchor; anchor="$(grep -n '^Gate:' "$f" | head -1 | cut -d: -f1)"
+    if [ -n "$anchor" ]; then
+      { head -n "$anchor" "$f"; printf '\n'; cat "$block"; tail -n "+$((anchor+1))" "$f"; } > "$f.tmp" && mv "$f.tmp" "$f"
+    else
+      { cat "$block"; printf '\n'; cat "$f"; } > "$f.tmp" && mv "$f.tmp" "$f"
+    fi
+  fi
+  rm -f "$block"
+  local n; n="$(printf '%s\n' "$rows" | grep -c . || true)"; : "${n:=0}"
+  cmd_log "$slug" review "reindexed $rel ($n live item(s)/question(s))"
+  echo "$slug: reindexed $rel ($n item(s)/question(s))"
+}
+
+# Move every fully-resolved ([RESOLVED] item / [ANSWERED] question) heading block out of the live
+# review file, VERBATIM, into a sibling "<topic>.archive.md" — replacing it with one pointer row
+# in a "## Archived items" table. This is what keeps a long-lived, many-round review file from
+# forcing every future round to re-read the whole resolved history just to apply one new item.
+#
+# Gate-safety (why this can never break a hard gate): cmd_review_gate/cmd_review_reopen/
+# cmd_review_auto_signoff only ever read the "## Sign-off" table's latest row
+# (_signoff_latest_decision) and the open-marker check (_review_has_open_marker). This function
+# NEVER touches [OPEN]/[PENDING] headings and never writes to "## Sign-off" — it only ever moves
+# headings whose marker already reads resolved/answered — so both gate mechanisms are provably
+# unaffected by any archive run. Never edits or deletes the human's original ask/answer text —
+# moved byte-for-byte verbatim.
+#   review archive <slug> <review-rel-path>
+cmd_review_archive() {
+  [ $# -eq 2 ] || die "usage: review archive <slug> <review-rel-path>"
+  local slug="$1" rel="$2"
+  local d; d="$(proj_dir "$slug")"
+  local f="$d/$rel"
+  [ -f "$f" ] || die "no such review file: $rel"
+  local archrel="${rel%.review.md}.archive.md"
+  local af="$d/$archrel"
+
+  # Ensure the section exists FIRST (idempotent, positioned right before ## Sign-off — same splice
+  # pattern _ship_comment_section_ensure uses). This always lands strictly AFTER every item/
+  # question heading, so it can never shift the line ranges computed below.
+  if ! grep -q '^## Archived items' "$f"; then
+    local secfile; secfile="$(mktemp)"
+    {
+      printf '\n## Archived items   [🤖-owned — see `pw-lib.sh review archive`; never hand-edit]\n\n'
+      printf 'Full text preserved verbatim in `%s`.\n\n' "$(basename "$archrel")"
+      printf '| ID | Summary | Archived |\n|----|---------|----------|\n'
+    } > "$secfile"
+    if grep -q '^## Sign-off' "$f"; then
+      local signline; signline="$(grep -n '^## Sign-off' "$f" | head -1 | cut -d: -f1)"
+      { head -n "$((signline - 1))" "$f"; cat "$secfile"; printf '\n'; tail -n "+${signline}" "$f"; } \
+        > "$f.tmp" && mv "$f.tmp" "$f"
+    else
+      cat "$secfile" >> "$f"
+    fi
+    rm -f "$secfile"
+  fi
+  if [ ! -f "$af" ]; then
+    {
+      printf '# Archived review items — %s\n\n' "$(basename "${rel%.review.md}")"
+      printf 'Items/questions moved out of `%s` once fully [RESOLVED]/[ANSWERED], by `pw-lib.sh review\n' "$rel"
+      printf 'archive` — text preserved verbatim, never edited. See that file'"'"'s "## Archived items"\n'
+      printf 'table for one pointer row per entry moved here.\n'
+    } > "$af"
+  fi
+
+  # Compute (start,end,id) for every RESOLVED/ANSWERED heading against the file's CURRENT state —
+  # the section-ensure above only ever adds content at/after ## Sign-off (strictly after every
+  # item/question), so it can never shift any of these ranges.
+  local blanked; blanked="$(mktemp)"; _comment_blanked "$f" > "$blanked"
+  local total; total="$(wc -l < "$blanked" | tr -d ' ')"
+  local -a all_heads=()
+  while IFS= read -r h; do all_heads+=("$h"); done < <(grep -nE '^(## |### )' "$blanked" | cut -d: -f1)
+
+  local -a rstarts=() rends=() rids=()
+  while IFS=$'\t' read -r ln id anchor tag; do
+    [ "$tag" = "RESOLVED" ] || [ "$tag" = "ANSWERED" ] || continue
+    local end="$total" hh
+    for hh in "${all_heads[@]}"; do
+      if [ "$hh" -gt "$ln" ]; then end=$((hh-1)); break; fi
+    done
+    rstarts+=("$ln"); rends+=("$end"); rids+=("$id")
+  done < <(_review_items_tsv "$f")
+  rm -f "$blanked"
+
+  if [ "${#rstarts[@]}" -eq 0 ]; then
+    echo "$slug: $rel — nothing to archive (no [RESOLVED]/[ANSWERED] items)"
+    return 0
+  fi
+
+  # Append every moved block's text (verbatim) + a pointer row, in file order. Row-insertion
+  # rescans the CURRENT file each time for "## Archived items", so it self-corrects regardless of
+  # how many rows already landed there — it never relies on a stale line number.
+  local i today; today="$(date +%F)"
+  for i in "${!rstarts[@]}"; do
+    local s="${rstarts[$i]}" e="${rends[$i]}" id="${rids[$i]}"
+    local blocktxt; blocktxt="$(sed -n "${s},${e}p" "$f")"
+    local summary
+    summary="$(printf '%s\n' "$blocktxt" | tail -n +2 | grep -vE '^[[:space:]]*$' | head -1)"
+    if [ ${#summary} -gt 80 ]; then summary="${summary:0:80}…"; fi
+    summary="$(printf '%s' "$summary" | sed 's/|/\\|/g')"
+    [ -n "$summary" ] || summary="(no summary line)"
+    { printf '\n---\n\n'; printf '%s\n' "$blocktxt"; } >> "$af"
+    local marker="<!-- pw-archived:$id -->"
+    local row="| $id | $summary | $today $marker |"
+    if grep -Fq "$marker" "$f"; then
+      awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
+        "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    else
+      awk -v row="$row" '
+        /^## Archived items/ { insec=1 }
+        { print }
+        insec && !done && /^\|[-| ]+\|[ ]*$/ { print row; done=1 }
+      ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+      grep -Fq "$marker" "$f" || printf '%s\n' "$row" >> "$f"
+    fi
+  done
+
+  # NOW remove the moved ranges from the live file, HIGHEST start-line first, so removing an
+  # already-processed (higher-numbered) block never shifts the line numbers of a not-yet-processed
+  # (lower-numbered) one still waiting to be removed.
+  local order; order="$(for i in "${!rstarts[@]}"; do printf '%s\t%s\n' "${rstarts[$i]}" "$i"; done | sort -rn -k1,1)"
+  while IFS=$'\t' read -r _ i; do
+    local s="${rstarts[$i]}" e="${rends[$i]}"
+    local flen; flen="$(wc -l < "$f" | tr -d ' ')"
+    {
+      [ "$s" -gt 1 ] && sed -n "1,$((s-1))p" "$f"
+      [ "$e" -lt "$flen" ] && sed -n "$((e+1)),\$p" "$f"
+      true
+    } > "$f.tmp" && mv "$f.tmp" "$f"
+  done <<< "$order"
+
+  cmd_review_reindex "$slug" "$rel" >/dev/null
+  cmd_log "$slug" review "archived ${#rstarts[@]} resolved item(s)/question(s) from $rel to $archrel"
+  echo "$slug: archived ${#rstarts[@]} item(s)/question(s) from $rel to $archrel"
+}
+
 cmd_review() {
   case "${1:-}" in
     note-init)    shift; cmd_review_note_init "$@" ;;
@@ -880,7 +1106,9 @@ cmd_review() {
     gate)         shift; cmd_review_gate "$@" ;;
     reopen)       shift; cmd_review_reopen "$@" ;;
     has-open)     shift; cmd_review_has_open "$@" ;;
-    *) die "usage: review <note-init|auto-signoff|gate|reopen|has-open> ..." ;;
+    reindex)      shift; cmd_review_reindex "$@" ;;
+    archive)      shift; cmd_review_archive "$@" ;;
+    *) die "usage: review <note-init|auto-signoff|gate|reopen|has-open|reindex|archive> ..." ;;
   esac
 }
 
@@ -1259,16 +1487,7 @@ cmd_selftest() {
   # of its own, which would otherwise inflate a naive grep -c on the raw file. Blank (never delete)
   # commented lines so real line numbers still line up — same technique as
   # _signoff_last_real_row_line, duplicated here since it's a private helper.
-  strip_rv2() {
-    awk '
-      BEGIN { in_comment = 0 }
-      { line = $0
-        if (in_comment) { if (line ~ /-->/) { in_comment = 0 }; print ""; next }
-        if (line ~ /<!--/ && line ~ /-->/) { print line; next }
-        if (line ~ /<!--/) { in_comment = 1; print ""; next }
-        print line }
-    ' "$RV2"
-  }
+  strip_rv2() { _comment_blanked "$RV2"; }
 
   # reopen again while already open: idempotent no-op, must NOT append a second in-review row.
   PW_PROJECTS_DIR="$tmp" "$0" review reopen demo2 analysis/review/topic2.review.md >/dev/null
@@ -1355,6 +1574,97 @@ cmd_selftest() {
   if PW_MODEL_ALLOWLIST_CLAUDE="sonnet,haiku" "$0" model-check claude opus >/dev/null 2>&1; then
     die "selftest FAIL: model-check allowed a model NOT in its configured allowlist"
   fi
+
+  # --- cmd_log duplicate-guard ---------------------------------------------------------
+  # The real, observed bug: a live project's LOG.md had the identical actor+message logged twice
+  # (once even three times) back-to-back within minutes. Calling log twice with the exact same
+  # actor+message must not double-append; a genuinely different message right after must NOT be
+  # deduped; the SAME message again, but outside the dedup window, must append (not be dropped).
+  mkdir -p "$tmp/logtest"
+  printf -- '- **Status:** context\n- **One-liner:** <x>\n' > "$tmp/logtest/README.md"
+  : > "$tmp/logtest/LOG.md"
+  local LT="$tmp/logtest/LOG.md"
+  PW_PROJECTS_DIR="$tmp" "$0" log logtest review "3 items resolved in analysis/review/x.review.md" >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$0" log logtest review "3 items resolved in analysis/review/x.review.md" >/dev/null
+  [ "$(grep -c '^- ' "$LT")" = "1" ] || die "selftest FAIL: duplicate log entry was not deduped"
+  PW_PROJECTS_DIR="$tmp" "$0" log logtest review "1 items resolved in analysis/review/y.review.md" >/dev/null
+  [ "$(grep -c '^- ' "$LT")" = "2" ] || die "selftest FAIL: a distinct message was wrongly deduped"
+  sed -i '' -e 's/^- \*\*[^*]*\*\*/- **2020-01-01 00:00**/' "$LT"
+  PW_PROJECTS_DIR="$tmp" "$0" log logtest review "1 items resolved in analysis/review/y.review.md" >/dev/null
+  [ "$(grep -c '^- ' "$LT")" = "3" ] || die "selftest FAIL: an identical message outside the dedup window was wrongly skipped"
+
+  # --- review reindex / review archive -------------------------------------------------
+  mkdir -p "$tmp/reviewtest/analysis"
+  printf -- '- **Status:** context\n- **One-liner:** <x>\n' > "$tmp/reviewtest/README.md"
+  : > "$tmp/reviewtest/LOG.md"
+  printf '# Analysis: rt\n' > "$tmp/reviewtest/analysis/rt.md"
+  PW_PROJECTS_DIR="$tmp" "$0" review-init reviewtest analysis/review/rt.review.md analysis/rt.md >/dev/null
+  local RTV="$tmp/reviewtest/analysis/review/rt.review.md"
+  # Add a 2nd OPEN item and a RESOLVED item into ## Items, BEFORE ## Open questions — realistic
+  # placement (never a blind end-of-file append, which would land after ## Sign-off and prove
+  # nothing). Written to a temp file with plain printf, then head/tail/cat-spliced in — NOT
+  # `awk -v` with this multi-line block: macOS's stock awk rejects a `-v` value containing embedded
+  # newlines ("awk: newline in string") — the exact portability trap _ship_comment_section_ensure's
+  # own comment already documents; sidestep it here the same way that function does.
+  local newitems; newitems="$(mktemp)"
+  {
+    printf '### R2 · §3 second item — [OPEN] (you, 2026-08-19 10:00) <!-- pw-item-status: open -->\n'
+    printf 'Second ask, still open.\n\n---\n\n'
+    printf '### R3 · §4 third item — [RESOLVED] (you, 2026-08-19 09:00) <!-- pw-item-status: resolved -->\n'
+    printf 'Third ask, already fixed.\n\n'
+    printf '> ↳ **agent** (2026-08-19 09:30): §4 — fixed as asked.\n\n---\n\n'
+  } > "$newitems"
+  local oqline; oqline="$(grep -n '^## Open questions' "$RTV" | head -1 | cut -d: -f1)"
+  { head -n "$((oqline-1))" "$RTV"; cat "$newitems"; tail -n "+${oqline}" "$RTV"; } > "$RTV.tmp" && mv "$RTV.tmp" "$RTV"
+  rm -f "$newitems"
+  # Clear the template's own live R1/Q1 stubs (same convention as the auto-signoff test above —
+  # never a real "fix", just clearing a never-filled-in placeholder) so this test is isolated to
+  # R2/R3.
+  sed -i '' -e '/^### R1 · <§section or anchor> — \[OPEN\]/,+1d' \
+            -e '/^### Q1 · <§section> — \[PENDING\]/,+1d' "$RTV"
+
+  # reindex: builds a Contents table with exactly R2 (open) and R3 (resolved) — ignoring the
+  # template's own commented-out worked-example headings (R1/Q1, still present verbatim above the
+  # live section) — and is idempotent (a 2nd run replaces the block in place, never duplicates it).
+  PW_PROJECTS_DIR="$tmp" "$0" review reindex reviewtest analysis/review/rt.review.md >/dev/null
+  grep -q '<!-- pw-contents:begin -->' "$RTV" || die "selftest FAIL: review reindex did not insert a Contents block"
+  local CT1; CT1="$(sed -n '/pw-contents:begin/,/pw-contents:end/p' "$RTV")"
+  printf '%s\n' "$CT1" | grep -qF '| R2 | §3 second item | [OPEN] |' || die "selftest FAIL: reindex Contents missing/wrong R2 row"
+  printf '%s\n' "$CT1" | grep -qF '| R3 | §4 third item | [RESOLVED] |' || die "selftest FAIL: reindex Contents missing/wrong R3 row"
+  printf '%s\n' "$CT1" | grep -q '| R1 |' && die "selftest FAIL: reindex Contents picked up a commented-out worked-example heading"
+  [ "$(grep -c '<!-- pw-contents:begin -->' "$RTV")" = "1" ] || die "selftest FAIL: reindex duplicated the Contents begin-marker"
+  PW_PROJECTS_DIR="$tmp" "$0" review reindex reviewtest analysis/review/rt.review.md >/dev/null
+  [ "$(grep -c '<!-- pw-contents:begin -->' "$RTV")" = "1" ] || die "selftest FAIL: re-running reindex duplicated the Contents block instead of replacing it in place"
+  [ "$(grep -c '^## Contents' "$RTV")" = "1" ] || die "selftest FAIL: re-running reindex duplicated the Contents heading"
+
+  # archive: gate-safety proof — capture the Sign-off section + has-open verdict BEFORE, run
+  # archive, assert both are UNCHANGED after, R3's heading is gone from the live file, R2's is
+  # untouched, the archive file has R3's text verbatim (including its reply), and a pointer row
+  # with the right marker landed in a new "## Archived items" section.
+  local before_signoff before_hasopen
+  before_signoff="$(sed -n '/^## Sign-off/,$p' "$RTV")"
+  before_hasopen="$(PW_PROJECTS_DIR="$tmp" "$0" review has-open reviewtest analysis/review/rt.review.md)"
+  PW_PROJECTS_DIR="$tmp" "$0" review archive reviewtest analysis/review/rt.review.md >/dev/null
+  local after_signoff after_hasopen
+  after_signoff="$(sed -n '/^## Sign-off/,$p' "$RTV")"
+  after_hasopen="$(PW_PROJECTS_DIR="$tmp" "$0" review has-open reviewtest analysis/review/rt.review.md)"
+  [ "$before_signoff" = "$after_signoff" ] || die "selftest FAIL: review archive changed the Sign-off table/section — gate-safety broken"
+  [ "$before_hasopen" = "$after_hasopen" ] || die "selftest FAIL: review archive changed has-open's verdict ($before_hasopen -> $after_hasopen)"
+  [ "$after_hasopen" = "yes" ] || die "selftest FAIL: R2 should still be open after archiving R3 (test assumption invalid)"
+  grep -q '^### R3 · §4 third item' "$RTV" && die "selftest FAIL: R3's heading is still in the live file after archiving"
+  grep -q '^### R2 · §3 second item' "$RTV" || die "selftest FAIL: R2's heading was removed by archive (should be untouched — still [OPEN])"
+  local RTA="$tmp/reviewtest/analysis/review/rt.archive.md"
+  [ -f "$RTA" ] || die "selftest FAIL: review archive did not create rt.archive.md"
+  grep -q '^### R3 · §4 third item — \[RESOLVED\]' "$RTA" || die "selftest FAIL: R3's heading not moved verbatim into the archive file"
+  grep -qF '> ↳ **agent** (2026-08-19 09:30): §4 — fixed as asked.' "$RTA" || die "selftest FAIL: R3's reply text not preserved verbatim in the archive file"
+  grep -q '^## Archived items' "$RTV" || die "selftest FAIL: review archive did not add an Archived items section"
+  grep -qF '<!-- pw-archived:R3 -->' "$RTV" || die "selftest FAIL: no pointer row/marker for R3 in Archived items"
+
+  # a 2nd archive run with nothing newly resolved must be a harmless no-op (no duplicate rows).
+  local archived_rows_before; archived_rows_before="$(grep -c 'pw-archived:' "$RTV")"
+  PW_PROJECTS_DIR="$tmp" "$0" review archive reviewtest analysis/review/rt.review.md >/dev/null
+  [ "$(grep -c 'pw-archived:' "$RTV")" = "$archived_rows_before" ] \
+    || die "selftest FAIL: re-running archive with nothing newly resolved was not a no-op"
 
   echo "selftest OK"
 }

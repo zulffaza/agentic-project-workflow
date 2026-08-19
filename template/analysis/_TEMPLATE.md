@@ -22,7 +22,10 @@
      owns that topic before adding `4.N+1`. If §4 has grown past ~8 subsections, lead the section
      with a short bullet-point summary of the end-to-end design before the detailed subsections, so
      a reader gets the shape of the approach before the depth. "Detailed" and "organized" aren't in
-     tension — the goal is a doc dense with facts that's still easy to scan, not a shorter doc. -->
+     tension — the goal is a doc dense with facts that's still easy to scan, not a shorter doc.
+     Also soft-wrap individual prose lines to roughly 100–120 characters — a real, observed cost
+     driver: a very long unwrapped line is exactly what makes a patch/edit tool's exact-match fail
+     on rewrite, forcing a wasted re-read-and-retry cycle instead of a clean one-shot edit. -->
 
 - **Status:** draft | in-review | approved
 - **Author:** <agent/you>   **Provider:** <the agent/CLI this ran under, e.g. `kilo` / `claude`>
@@ -99,8 +102,10 @@ chosen option; the others stay here as record, never implemented. -->
 
 <!-- MULTIPLE LARGE SOLUTION AREAS — when §4 genuinely isn't enough: if this project's work is
      several large, mostly-independent problem areas (not just alternative approaches to ONE
-     problem), don't force them into one §4. Two choices, same review/breakdown workflow either
-     way (no phase changes):
+     problem), don't force them into one §4. CONCRETE TRIGGER, not a vibe: once §4 would need a
+     5th option/solution-area slot, OR this doc's total line count crosses roughly 500–600 lines
+     (`wc -l`), that's the signal to split — don't wait for it to "feel" large. Two choices, same
+     review/breakdown workflow either way (no phase changes):
      - Areas belong in ONE review cycle → give §4 named solution-area groupings instead of a flat
        option list: `### 4.A Solution area: <name>` (each internally using the same Option A/B +
        fixed-skeleton structure above), `### 4.B Solution area: <name>`, etc.

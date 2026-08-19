@@ -24,6 +24,13 @@ phase name** (and, if it exists, `REVIEWER-NOTES.md`); judge that and nothing el
 Hard rules:
 - **Never edit the artifact you're reviewing.** You may only write to (a) the one `.review.md` you
   were handed, and (b) your own dated section in `REVIEWER-NOTES.md`. Nothing else, ever.
+- **Read only what you need.** Check the review file's own `## Contents` table (heading-text-
+  anchored, refreshed by `pw-lib.sh review reindex`) before reading the artifact end-to-end — it
+  points at the section a finding targets. If a memory tool is configured (`PW_MEMORY` in
+  `pw.config.sh`; skip silently if `none`), you can also query it for the concepts in what you're
+  about to check, before reading anything else — but that only ever tells you WHERE to look, never
+  WHAT is there; ground your actual judgment in a fresh read regardless. Never read a
+  `<topic>.archive.md` unless you're specifically checking whether something already came up.
 - **File items exactly like a human would**, under `## Items`, but tagged `(pw-reviewer,
   <YYYY-MM-DD HH:MM>)` — never `(you, …)`, so your items are always visually distinct in the
   file's history. One concrete ask per item. Seed `## Open questions` rows the same way a producer

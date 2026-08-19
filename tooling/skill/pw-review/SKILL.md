@@ -43,6 +43,17 @@ fresh is that it doesn't.
   *add* new items/questions, or (if you're the one applying fixes elsewhere in the pipeline —
   that's a different role, `/pw-review`'s apply flow, not this skill) reply and flip status.
 
+## Read only what you need — never the whole file to find one section
+
+Before reading the artifact end-to-end, check the review file's own `## Contents` table
+(heading-text-anchored, 🤖-owned, refreshed by `pw-lib.sh review reindex`) for the section your
+finding targets. **IF a memory tool is configured** (`PW_MEMORY` in `pw.config.sh` — skip this
+silently if `none`), you can also query it for the concepts in what you're about to flag, BEFORE
+reading anything else — but treat any result strictly as a location pointer, never as content;
+ground your actual judgment in a fresh read of that live section regardless. Never read a
+`<topic>.archive.md` (moved-out resolved history) unless you're specifically checking whether
+something already came up before.
+
 ## Preventing an endless loop — check before you file
 
 Before filing ANY item, grep the review file for an existing heading on the **same `§section or

@@ -30,9 +30,24 @@ different agent.
 
 ### Where the `/pw-*` commands touch memory (only when configured)
 - **`/pw-analyze`** — *search* memory first for prior context on the domain/repos, fold in what's
-  relevant, and cite it. Skip silently if `PW_MEMORY=none`.
+  relevant, and cite it. Also *opportunistically seeds* a genuinely durable, generalizable finding
+  (not this project's own bookkeeping) as it's written — reusing that fact's own §5.1
+  Decisions-log one-liner as the payload, never a separate authoring pass. Skip silently if
+  `PW_MEMORY=none`.
+- **`/pw-review`** — *pinpoints*: before reading a review item's target section, queries the
+  configured tool for the concepts already in the item's own ask text + heading, treating any
+  result strictly as a LOCATION POINTER (which heading/section) — never as content; the fix is
+  always grounded in a fresh read of that live section regardless. Falls back to the review file's
+  own `## Contents` table when unconfigured or the query returns nothing. Also *opportunistically
+  seeds* a durable/generalizable fix, reusing the item's own `↳ agent:` reply verbatim. Skip
+  silently if `PW_MEMORY=none`. **The location-only constraint is the one correctness-critical
+  invariant here** — staleness in a pure location pointer degrades to "read one extra/wrong
+  section, self-correct," never to acting on stale content, which is what makes this safe to layer
+  on top of an ordinary, possibly-stale memory tool.
 - **`/pw-close`** — *seed* durable, workflow-level learnings (not what the repos/commits already
   record). Skip silently if `PW_MEMORY=none`; the "Decisions & learnings" section still captures them.
+  (`/pw-analyze` and `/pw-review` above now also seed opportunistically, mid-pipeline — this is no
+  longer the only seed point, just the batch/close-time one.)
 
 ### Examples
 - **No tool:** `PW_MEMORY="none"` → agents only use README/LOG. (Default; what teammates get.)

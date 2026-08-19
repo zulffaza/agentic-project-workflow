@@ -38,6 +38,14 @@ Asked to analyze `context/`:
      flat §4 — see the template's "MULTIPLE LARGE SOLUTION AREAS" comment for named §4 groupings
      vs. a separate `analysis/<topic>.md` per area (a second `/pw-analyze <slug> <area>` run — no
      phase/workflow change, `references/breakdown.md` already merges every analysis doc present).
+     **Concrete trigger, not a vibe:** once §4 would need a 5th option/area slot, or the doc
+     crosses roughly 500–600 lines (`wc -l`), that's the signal to split.
+   - **Keep a lightweight heading index current as you write** — each `§`/`###` heading mapped to
+     a one-line gist, refreshed as a targeted single-line edit per changed section, never a full
+     rebuild. Lets a later review pass jump straight to the section an item names.
+   - **Opportunistically seed memory too — IF configured** (skip silently if `PW_MEMORY=none`): a
+     genuinely durable, generalizable finding (not this project's own bookkeeping) gets seeded
+     using its own §5.1 Decisions-log one-liner as the payload — never a separate authoring pass.
 4. **Last step, mandatory:** set the dashboard one-liner + Status via
    `pw-lib.sh oneliner <slug> "…"` then `pw-lib.sh status <slug> analysis` (see
    `references/conventions-and-gotchas.md` for the full helper contract).

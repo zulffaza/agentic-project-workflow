@@ -53,7 +53,14 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
      force them into one flat §4 — see the template's own "MULTIPLE LARGE SOLUTION AREAS" comment
      right after §4's `**Chosen approach:**` line for the two supported shapes (named groupings
      within one doc, or a separate `analysis/<topic>.md` per area via a second `/pw-analyze <slug>
-     <area>` run) and how to pick between them.
+     <area>` run) and how to pick between them. **Concrete trigger, not a vibe:** once §4 would
+     need a 5th option/area slot, or this doc crosses roughly 500–600 lines (`wc -l`), that's the
+     signal to split — don't wait for it to "feel" large.
+   - **Keep a lightweight heading index current as you write** — a short bullet list near the top
+     (or just below "Context used") mapping each `§`/`###` heading to a one-line gist, refreshed as
+     a targeted single-line edit whenever that section changes, never a full rebuild. This is what
+     lets a later `/pw-review` pass (or a different reviewer) jump straight to the section a review
+     item names instead of reading the whole doc to find it.
    - **§1–4 must always read as the current, clean understanding — never an archive.** No `(Rn)`/
      `(Qn)` tags in headings or prose there, no "supersedes X"/"the user asked Y" narration, no
      changelog stuffed into `Date:` (timestamp only). All of that belongs in §5.1's Decisions log,
@@ -65,6 +72,12 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
      `## Result`); a table cell holds a fact or two, keep the rest as prose below the table. Fold new
      §4 depth into an existing `### 4.N` subsection where one already owns that topic, rather than
      always appending `4.N+1`. See the template's own density-rule comment for the full shape.
+   - **Opportunistically seed memory too — IF a memory tool is configured** (skip silently if
+     `PW_MEMORY=none`; see `{{PW_HOME}}/tooling/docs/memory.md`). If writing this analysis surfaces a
+     genuinely durable, generalizable finding (a systemic bug or gotcha, not just this project's own
+     bookkeeping), seed it — reuse that fact's own §5.1 Decisions-log one-liner as the payload,
+     never a separate authoring pass. Scope project-specific vs. cross-project per whatever
+     `PW_MEMORY_NOTES` already documents for this tool's buckets.
 3. **Open questions (QnA):** if anything is hard to analyze or needs my decision, DON'T guess —
    list it in the analysis §5.3 as `Q1/Q2…` (with why it matters), AND seed a matching `Qn` row
    in `analysis/review/<topic>.review.md` under "## Open questions" so I have a channel to answer.
