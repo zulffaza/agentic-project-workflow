@@ -16,12 +16,31 @@ history rewrite). Pushing is **outward-facing**, so confirm before anything goes
 
 ## Steps
 1. **Resolve the set.** Find each task that is shipped: `Status: accepted`/`done`, a real branch,
-   and an **open** MR recorded in its `## Result → MR:` (and the dashboard **Merge requests**
-   table). Skip zero-change tasks, already-merged MRs, and `verify-failed` tasks. If task IDs were
-   given, restrict to those.
-2. **Confirm the list.** For each task in the set, show: repo, branch (`agent/<slug>/<T0n>-<slug>`),
-   base branch, MR url. Ask me to confirm. Only after I say go:
-3. **For each task, from its worktree** (`{{PW_PROJECTS}}/<slug>/worktree/<repo>/<T0n>-<slug>`):
+   and an MR recorded in its `## Result → MR:` (and the dashboard **Merge requests** table).
+   Skip zero-change tasks and `verify-failed` tasks. If task IDs were given, restrict to those.
+
+2. **Check MR state for each task.** Before syncing, verify each MR is still open:
+   ```bash
+   {{PW_HOME}}/tooling/pw-lib.sh mr-state <slug> <task-id>
+   ```
+   This queries the forge (GitLab/GitHub) and prints `open`, `merged`, `closed`, or `unknown`.
+   - **If `merged`**: The MR was already merged downstream. Handle it:
+     1. Update task status: `{{PW_HOME}}/tooling/pw-lib.sh task-accept <slug> <task-id>`
+     2. Update dashboard task table: `{{PW_HOME}}/tooling/pw-lib.sh dashboard-task-status <slug> <task-id> "accepted (MR merged)"`
+     3. Update dashboard MR table: `{{PW_HOME}}/tooling/pw-lib.sh dashboard-mr-state <slug> <task-id> merged`
+     4. Remove worktree: `{{PW_HOME}}/tooling/pw-lib.sh worktree-remove <slug> <task-id>`
+     5. Mark this task as `already-merged` in your tracking — **do NOT attempt to sync it**.
+   - **If `closed`**: The MR was closed without merging. Note it in the recap but skip sync.
+   - **If `open`**: Proceed with sync (step 3).
+   - **If it prints `unknown`** (no MR URL/worktree/origin, or the forge query failed or returned
+     null — the helper exits 1): Note it as `mr-state-unknown` and skip.
+
+3. **Confirm the list.** For each task with an `open` MR, show: repo, branch
+   (`agent/<slug>/<T0n>-<slug>`), base branch, MR url. Also list any `already-merged` / `closed` /
+   `mr-state-unknown` tasks separately. Ask me to confirm. Only after I say go:
+
+4. **For each task with an open MR, from its worktree**
+   (`{{PW_PROJECTS}}/<slug>/worktree/<repo>/<T0n>-<slug>`):
    - `git fetch origin` then `git merge origin/<base>` (the task's **Base branch**).
    - **Conflict?** `git merge --abort`, mark the task `CONFLICT — needs manual resolution`, and
      **move on to the next task** — never leave a half-merged worktree. Don't try to auto-resolve.
@@ -34,9 +53,12 @@ history rewrite). Pushing is **outward-facing**, so confirm before anything goes
    - On a successful push, log it: `{{PW_HOME}}/tooling/pw-lib.sh log <slug> sync "T0n merged
      origin/<base>; verify green; pushed"`, and add a one-line note to the task's `## Result`
      (`Synced with <base> @ <short-sha> on <date>`). The MR updates itself — no new MR is opened.
-4. **Recap** a table — one row per task: Task · Repo · Base · Result
-   (`synced ✓` / `conflict ✗` / `verify-failed ✗` / `skipped`). List any `conflict` /
-   `verify-failed` tasks as the ones needing you next, with the exact worktree path for each.
+
+5. **Recap** a table — one row per task: Task · Repo · Base · Result
+   (`synced ✓` / `already-merged ✓` / `closed` / `conflict ✗` / `verify-failed ✗` /
+   `mr-state-unknown` / `skipped`). List any `conflict` / `verify-failed` tasks as the ones
+   needing you next, with the exact worktree path for each.
 
 Never merge or close the **MR** itself — that's a human decision downstream. This command only
-brings each MR's branch up to date with its base.
+brings each MR's branch up to date with its base, and cleans up work for MRs that were already
+merged by someone else.

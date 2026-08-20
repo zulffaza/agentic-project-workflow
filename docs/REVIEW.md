@@ -215,8 +215,9 @@ Each phase (`analysis` / `plan` / `task-plan` / `task-exec` / `ship`) is indepen
 | `advisory` | `pw-reviewer` files items into the normal `.review.md`, tagged `(pw-reviewer, <timestamp>)` so they're never confused with a human's. **A human still writes the Sign-off row** — this is a pre-filter, not a replacement. |
 | `auto` | Same filing, but if the pass leaves **nothing** [OPEN] or [PENDING], `pw-reviewer` may sign off itself, via a guarded tool call that independently re-checks both conditions. |
 
-**Run it** with `/pw-review <slug> ai [phase|Tid|path]` — same scope resolution as the normal
-`/pw-review`. Under the hood this spawns the `pw-reviewer` agent fresh, in-process, same provider
+**Run it** with `/pw-review <slug> ai [phase|Tid(s)|path]` — same scope resolution as the normal
+`/pw-review` (a list of task ids = one fresh reviewer pass per task). Under the hood this spawns the
+`pw-reviewer` agent fresh, in-process, same provider
 (or hand the artifact + the standalone `pw-review` skill to a completely different agent/session
 yourself, if you want it run somewhere with zero shared context at all).
 

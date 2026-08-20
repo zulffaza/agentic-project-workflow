@@ -99,7 +99,7 @@ Every review point above defaults to human-only. A project's dashboard `AI Revie
 it is `/pw-review <slug> config [<phase> <mode>]`, never `pw-lib.sh ai-review` directly** (that's
 the internal mechanism this sub-verb wraps; if I ever ask you how to change this, point me at the
 command, not the script). Delegate a phase's review to the `pw-reviewer` sub-agent via `/pw-review
-<slug> ai [phase|Tid|path]`:
+<slug> ai [phase|Tid(s)|path]` (a list of task ids = one reviewer pass per task):
 - `advisory` — `pw-reviewer` files items exactly like a human would, tagged `(pw-reviewer,
   <timestamp>)` instead of `(you, …)`. A human still writes the Sign-off row; process its items via
   the normal apply-comments flow above, no different from a human's.

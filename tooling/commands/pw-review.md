@@ -1,6 +1,6 @@
 ---
 description: Apply my review comments for the current phase (or a given review file) — or, with the "ai" sub-verb, delegate a fresh review pass to pw-reviewer — or, with "config", view/change this project's AI Review settings
-args: <project-slug> [ai | config] [phase | Tid | path-to-.review.md | <phase> <mode>]
+args: <project-slug> [ai | config] [phase | Tid(s) | path-to-.review.md | <phase> <mode>]
 ---
 Invoke the `project-workflow` skill (review rules). Arguments: {{ARGS}}.
 
@@ -14,9 +14,11 @@ to rewind a phase, that's `/pw-status <slug> rewind <phase>`, not this command.)
 skip everything below and follow this instead** (the 3rd argument, if given, narrows scope exactly
 like the apply-comments flow does):
 
-1. Resolve scope the same way apply-comments does (below) — explicit path > task id > phase word >
-   infer from the current phase — but map it to one of the five AI-Review phase keys: `analysis`,
-   `plan`, `task-plan`, `task-exec`, `ship`.
+1. Resolve scope the same way apply-comments does (below) — explicit path > task id(s) > phase
+   word > infer from the current phase — but map it to one of the five AI-Review phase keys:
+   `analysis`, `plan`, `task-plan`, `task-exec`, `ship`. A list of task ids means one reviewer
+   pass PER named task (each task is its own artifact + review file) — never one pass across
+   several tasks.
 2. Check this project's mode for that phase: `…/{{PW_HOME}}/tooling/pw-lib.sh ai-review <slug>` (an
    internal check — I never type this myself). If `off`, tell me AI review isn't enabled for this
    phase and stop — point me at `/pw-review <slug> config <phase> <mode>` rather than guessing I
@@ -68,7 +70,12 @@ step silently — do not block.**
 
 **Resolve WHICH review files to process (apply-comments flow — do NOT scan the whole project):**
 - If the 2nd arg is a **path** to a `.review.md`, use exactly that file.
-- If it's a **task id** (`T0n`), process `task/review/T0n.review.md`.
+- If the 2nd+ args are **task ids** (`T0n`, one or many — `T01 T03 T05 T06` works), process each
+  named task's `task/review/<T0n>.review.md` in **ONE pass**: apply all `[OPEN]` items across the
+  named files (same per-item rules below), then a single grouped recap at the end. Per-task rules
+  still apply per named task — a `verify-failed` named task with no review file gets one created
+  deterministically (rule below); a named task with no review file that ISN'T `verify-failed` is
+  skipped and noted in the recap — never create an empty review file just because a task was named.
 - If it's a **phase word** (`analysis` or `task`/`plan`), process that phase's `review/` dir only.
 - Otherwise, infer from the current phase (`…/{{PW_HOME}}/tooling/pw-lib.sh phase <slug>`):
   - `analysis` → `analysis/review/*.review.md`
@@ -157,10 +164,11 @@ blank quoted line between the two), and add a `---` rule before the next questio
 `Qn` rows untouched and report them as still blocking.
 
 Never edit or delete my comment text (items OR my `↳ you:` answers). Never write the Sign-off row
-— only I clear the gate. Log the pass (this is the ONLY dashboard-adjacent write you make):
-`…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> review "<n> items resolved in <file>"`. Then refresh
-that file's `## Contents` table: `…/{{PW_HOME}}/tooling/pw-lib.sh review reindex <slug>
-<review-rel-path>` — a heading just changed status, so the table would otherwise go stale.
+— only I clear the gate. Log the pass (this is the ONLY dashboard-adjacent write you make) — **one
+line per processed file**: `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> review "<n> items resolved in
+<file>"`. Then refresh **each processed file's** `## Contents` table:
+`…/{{PW_HOME}}/tooling/pw-lib.sh review reindex <slug> <review-rel-path>` — a heading just changed
+status, so the table would otherwise go stale.
 
 **Archive once several items have piled up resolved** — a concrete trigger, not a vibe: once 3+
 items/questions in this file are `[RESOLVED]`/`[ANSWERED]` since the last archive, or the file
@@ -176,8 +184,8 @@ see `{{PW_HOME}}/tooling/docs/memory.md`). When a resolved item's fix was durabl
 the payload; never a separate authoring pass. Scope project-specific vs. cross-project per
 whatever `PW_MEMORY_NOTES` already documents for this tool's buckets.
 
-When done, recap each resolved item (one line) here, and tell me how many `[OPEN]` items remain
-**in the resolved scope** (and, as a footnote, across the whole project:
+When done, recap each resolved item (one line, grouped by its task/file), and tell me how many
+`[OPEN]` items remain **in the resolved scope** (and, as a footnote, across the whole project:
 `grep -rln "pw-item-status: open"` in the project dir). For a task review: after fixes are applied, remind me
 to re-run `/pw-execute <slug> T0n` to re-verify in its worktree. **If a gate got auto-reopened**
 (the check above), say so explicitly and name which file/phase — that's the one thing here that

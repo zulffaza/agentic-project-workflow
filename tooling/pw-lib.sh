@@ -83,6 +83,25 @@
 #                                                     — empty/unset = ALL models allowed (the
 #                                                     default). Called by /pw-breakdown and
 #                                                     /pw-execute; not meant to be run by hand.
+#   pw-lib.sh mr-state      <slug> <task-id>         query the forge (GitLab/GitHub) for an MR's
+#                                                     current state. Prints "open"/"merged"/
+#                                                     "closed"/"unknown" (unknown + exit 1 on any
+#                                                     lookup/query failure). Used by /pw-sync and
+#                                                     /pw-ship comments to detect MRs that were
+#                                                     already merged downstream before attempting
+#                                                     to sync or process comments.
+#   pw-lib.sh task-accept   <slug> <task-id>         update a task's Status: field to "accepted"
+#                                                     (used when an MR is already merged).
+#   pw-lib.sh dashboard-task-status <slug> <task-id> <status>
+#                                                     update a task's status in the dashboard
+#                                                     README.md task status table.
+#   pw-lib.sh dashboard-mr-state <slug> <task-id> <state>
+#                                                     update an MR's state in the dashboard
+#                                                     README.md MR table (e.g., "merged").
+#   pw-lib.sh worktree-remove <slug> <task-id>       safely remove a task's worktree (refuses if
+#                                                     the worktree has uncommitted changes or is
+#                                                     the current directory). Used when an MR is
+#                                                     already merged to clean up the worktree.
 #   pw-lib.sh selftest                                 run an isolated round-trip test
 #
 # Portable across Claude Code and KiloCode executors (plain bash; call by absolute path).
@@ -91,6 +110,11 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"          # …/agentic-project-workflow/tooling
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../.." && pwd)}"  # …/projects  (override for tests)
 VALID_PHASES="context analysis breakdown executing review done"
+
+# Load pw.config.sh if reachable (same resolution pw-common.sh uses) so forge routing
+# (PW_FORGE_HOSTS) and allowlists work when pw-lib.sh is called directly. Never required.
+if [ -f "$HERE/../pw.config.sh" ]; then . "$HERE/../pw.config.sh"; fi
+if ! declare -p PW_FORGE_HOSTS >/dev/null 2>&1; then PW_FORGE_HOSTS=(); fi
 
 die() { echo "pw-lib: $*" >&2; exit 2; }
 proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d)"; printf '%s' "$d"; }
@@ -1146,6 +1170,255 @@ cmd_model_check() {
   die "model-check: $prov:$model — refused. Not in PW_MODEL_ALLOWLIST_${upper} (\"$allow\"). Add a matching pattern to pw.config.sh, or choose an allowed model."
 }
 
+# --- MR state detection (for /pw-sync and /pw-ship comments) -----------------
+# Check an MR's current state via the forge CLI. Prints one of "open", "merged", "closed", or
+# "unknown" to stdout; exit 0 for the three definitive states, exit 1 + "unknown" for anything it
+# can't determine (no MR URL/worktree/origin, or the forge query failed or returned null). Callers
+# treat stdout "unknown" as mr-state-unknown and skip — this helper never die()s on a runtime
+# lookup failure, only on a usage error. Resolves the forge per repo (same as /pw-ship does) —
+# never hardcodes a host.
+#   mr-state <slug> <task-id>
+# MR URL is taken from the task's "## Result → MR:" line if present, else from the dashboard
+# Merge-requests table (Task · MR · Target rows). Requires an existing worktree for the task so
+# the forge CLI can be run from inside the repo (glab needs repo context to resolve :id).
+# Emit an mr-state lookup failure: diagnostic to stderr, "unknown" to stdout, exit 1. set -e-safe:
+# always invoke as `_mr_unknown "…" || return 1` so the failing call sits in an OR-list.
+_mr_unknown() {
+  echo "mr-state: $*" >&2
+  echo "unknown"
+  return 1
+}
+
+cmd_mr_state() {
+  [ $# -eq 2 ] || die "usage: mr-state <slug> <task-id>"
+  local slug="$1" task="$2"
+  local d; d="$(proj_dir "$slug")"
+  local taskfile="$d/task/$task.md"
+
+  # MR URL: task file "## Result" block first (field "MR:" or a bare URL), else dashboard table row.
+  local mr_url=""
+  if [ -f "$taskfile" ]; then
+    mr_url="$(grep -E 'MR:|https://' "$taskfile" 2>/dev/null | grep -oE 'https://[^ )|]+' | head -1 || true)"
+  fi
+  if [ -z "$mr_url" ]; then
+    mr_url="$(grep -E "^\| *$task *\| *https://" "$d/README.md" 2>/dev/null | grep -oE 'https://[^ )|]+' | head -1 || true)"
+  fi
+  [ -n "$mr_url" ] || _mr_unknown "no MR URL found for $task (task file or dashboard table)" || return 1
+
+  # Extract MR IID/number from URL (GitLab /-/merge_requests/<n> or GitHub /pull/<n>)
+  local mr_iid
+  mr_iid="$(printf '%s' "$mr_url" | grep -oE '/-/merge_requests/[0-9]+' | grep -oE '[0-9]+$' || true)"
+  [ -z "$mr_iid" ] && mr_iid="$(printf '%s' "$mr_url" | grep -oE '/pull/[0-9]+' | grep -oE '[0-9]+$' || true)"
+  [ -n "$mr_iid" ] || _mr_unknown "could not extract MR IID from URL: $mr_url" || return 1
+
+  # Locate the task's worktree — the task file's own "Branch:" / "Worktree:" fields are
+  # authoritative (never pattern-match project-specific branch shapes like PAYMXMP-123/… — a task
+  # can live on any branch, and the shape is the project's business, not this tool's). Fall back to
+  # scanning worktree/ ONLY when the branch is known, matching the checked-out branch (a worktree's
+  # .git is a FILE, not a dir, so find by the checkout marker, never by -type d). With no branch
+  # and no Worktree: field, fail loudly with the candidates instead of guessing the first worktree
+  # in a multi-repo project.
+  local repo_dir="" branch
+  if [ -f "$taskfile" ]; then
+    branch="$(grep -m1 -E '^- \*\*Branch:\*\*' "$taskfile" | sed -E 's/^- \*\*Branch:\*\* *`?([^`]*)`?$/\1/; s/[[:space:]]*$//' || true)"
+    local wt_rel
+    wt_rel="$(grep -m1 -E '^- \*\*Worktree:\*\*' "$taskfile" | sed -E 's/^- \*\*Worktree:\*\* *`?([^`]*)`?$/\1/; s/[[:space:]]*$//' || true)"
+    [ -n "$wt_rel" ] && [ -d "$d/$wt_rel" ] && repo_dir="$d/$wt_rel"
+  fi
+  if [ -z "$repo_dir" ] && [ -n "$branch" ]; then
+    local g
+    for g in $(find "$d/worktree" -maxdepth 4 -name .git 2>/dev/null); do
+      local cand; cand="$(dirname "$g")"
+      local cb; cb="$(git -C "$cand" branch --show-current 2>/dev/null || true)"
+      if [ "$cb" = "$branch" ]; then repo_dir="$cand"; break; fi
+    done
+  fi
+  if [ -z "$repo_dir" ] || [ ! -d "$repo_dir" ]; then
+    if [ -z "$branch" ]; then
+      find "$d/worktree" -maxdepth 4 -name .git 2>/dev/null | while read -r g; do
+        echo "  candidate: $(dirname "$g")" >&2
+      done || true
+    fi
+    _mr_unknown "no worktree found for $task (Branch: ${branch:-unset}, Worktree: field missing or not under $d/worktree)" || return 1
+  fi
+
+  local origin_url
+  origin_url="$(git -C "$repo_dir" remote get-url origin 2>/dev/null || true)"
+  [ -n "$origin_url" ] || _mr_unknown "no origin remote in $repo_dir" || return 1
+
+  # Host extraction handles ssh (git@host:...) and https (https://host/...) forms.
+  local host
+  host="$(printf '%s' "$origin_url" | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||')"
+  [ -n "$host" ] || _mr_unknown "could not resolve host from origin: $origin_url" || return 1
+
+  # Resolve forge: PW_FORGE_HOSTS override, else auto-detect (github.com → github, else gitlab).
+  local forge="gitlab"
+  case "$host" in
+    github.com) forge="github" ;;
+  esac
+  if [ -n "${PW_FORGE_HOSTS:-}" ]; then
+    for entry in "${PW_FORGE_HOSTS[@]}"; do
+      local h="${entry%%=*}" f="${entry#*=}"
+      [ "$h" = "$host" ] && { forge="$f"; break; }
+    done
+  fi
+
+  # Query MR state from INSIDE the repo dir (glab resolves the project from cwd; gh from origin).
+  local state=""
+  case "$forge" in
+    github)
+      state="$(cd "$repo_dir" && gh pr view "$mr_iid" --json state -q .state 2>/dev/null || true)"
+      ;;
+    gitlab)
+      state="$(cd "$repo_dir" && GITLAB_HOST="$host" glab mr view "$mr_iid" --output json 2>/dev/null | jq -r .state 2>/dev/null || true)"
+      ;;
+    *) die "unknown forge: $forge" ;;
+  esac
+  [ -n "$state" ] && [ "$state" != "null" ] \
+    || _mr_unknown "failed to query MR $mr_iid state via $forge CLI on $host (is it authenticated?)" || return 1
+
+  # Normalize state
+  case "$state" in
+    MERGED|merged) echo "merged" ;;
+    OPEN|opened) echo "open" ;;
+    CLOSED|closed) echo "closed" ;;
+    *) _mr_unknown "unexpected MR state: $state (from $forge on $host)" || return 1 ;;
+  esac
+}
+
+# Update a task's Status field to "accepted" (used when MR is already merged).
+#   task-accept <slug> <task-id>
+cmd_task_accept() {
+  [ $# -eq 2 ] || die "usage: task-accept <slug> <task-id>"
+  local slug="$1" task="$2"
+  local d; d="$(proj_dir "$slug")"
+  local taskfile="$d/task/$task.md"
+  [ -f "$taskfile" ] || die "no task file: task/$task.md"
+  
+  # Update Status: line in task file
+  if grep -q '^- \*\*Status:\*\*' "$taskfile"; then
+    sed -i '' -E 's/^- \*\*Status:\*\*.*$/- **Status:** accepted/' "$taskfile"
+  else
+    # Insert after first line if no Status line exists
+    sed -i '' '1a\
+- **Status:** accepted
+' "$taskfile"
+  fi
+  
+  cmd_log "$slug" sync "$task: MR already merged, marked as accepted"
+  echo "$slug: $task marked as accepted (MR already merged)"
+}
+
+# Update one cell of a markdown table in a file: find the table whose header's FIRST cell equals
+# <id-col-name> ("ID" for the Task status table, "Task" for the Merge requests table), resolve the
+# <id-col-name> and <target-col-name> columns FROM THE HEADER (never by fixed position — the MR
+# table's State is column 5, not 4), and rewrite the cell of the row whose id column equals
+# <row-id>. Leaves the file untouched and prints an error (exit 1) if the table, a column, or the
+# row isn't found — never a silent no-op. Deliberately regex-free on pipes (BSD awk rejects `\|`
+# in a -v variable used as a regex) — header/separator detection is by cell comparison instead.
+#   _dashboard_update <file> <id-col-name> <target-col-name> <row-id> <new-value>
+_dashboard_update() {
+  [ $# -eq 5 ] || { echo "_dashboard_update: expected 5 args, got $#" >&2; return 2; }
+  local file="$1" idname="$2" tgtname="$3" rowid="$4" newval="$5"
+  local errfile="${file}.dash-err"
+  if ! awk -v idname="$idname" -v tgtname="$tgtname" -v rowid="$rowid" -v newval="$newval" '
+    function trim(s){ sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+    BEGIN{ idcol=0; tgtcol=0; intable=0; found=0; matched=0 }
+    {
+      if (!intable && /^[ \t]*\|/) {
+        n = split($0, c, "|")
+        if (n >= 3 && trim(c[2]) == idname) {
+          intable = 1; found = 1
+          for (i = 2; i < n; i++) { t = trim(c[i]); if (t == idname) idcol = i; if (t == tgtname) tgtcol = i }
+        }
+      }
+      if (intable) {
+        if (/^[ \t]*$/) { intable = 0 }
+        else if ($0 !~ /^[ \t]*\|/) { intable = 0 }
+        else {
+          tmp = $0; gsub(/[ \t|:-]/, "", tmp)
+          if (tmp == "") { print; next }          # separator row (dashes/pipes/colons only)
+        }
+      }
+      if (intable && idcol > 0 && tgtcol > 0) {
+        n = split($0, c, "|")
+        if (n > tgtcol && trim(c[idcol]) == rowid) {
+          c[tgtcol] = " " newval " "
+          line = ""
+          for (i = 1; i <= n; i++) line = line c[i] (i < n ? "|" : "")
+          print line
+          matched = 1
+          next
+        }
+      }
+      print
+    }
+    END {
+      if (!found) print "ERR: no table whose first column is \"" idname "\" in " FILENAME > "/dev/stderr"
+      else if (tgtcol == 0) print "ERR: no \"" tgtname "\" column in the matched table" > "/dev/stderr"
+      else if (idcol == 0) print "ERR: no \"" idname "\" column in the matched table" > "/dev/stderr"
+      else if (!matched) print "ERR: no row with " idname "=\"" rowid "\" in the matched table" > "/dev/stderr"
+    }
+  ' "$file" > "$file.tmp" 2> "$errfile"; then
+    rm -f "$file.tmp"; cat "$errfile" >&2; rm -f "$errfile"; return 1
+  fi
+  if [ -s "$errfile" ]; then
+    rm -f "$file.tmp"; cat "$errfile" >&2; rm -f "$errfile"; return 1
+  fi
+  rm -f "$errfile"
+  mv "$file.tmp" "$file"
+}
+
+# Update a task's status in the dashboard README.md task status table.
+#   dashboard-task-status <slug> <task-id> <status>
+cmd_dashboard_task_status() {
+  [ $# -eq 3 ] || die "usage: dashboard-task-status <slug> <task-id> <status>"
+  local slug="$1" task="$2" status="$3"
+  local d; d="$(proj_dir "$slug")"
+  local readme="$d/README.md"
+  [ -f "$readme" ] || die "no README.md in project $slug"
+
+  _dashboard_update "$readme" 'ID' 'Status' "$task" "$status" \
+    || die "dashboard-task-status: could not update $task in the Task status table (see above)"
+  cmd_log "$slug" sync "dashboard: $task status -> $status"
+}
+
+# Update an MR's state in the dashboard README.md MR table.
+#   dashboard-mr-state <slug> <task-id> <state>
+cmd_dashboard_mr_state() {
+  [ $# -eq 3 ] || die "usage: dashboard-mr-state <slug> <task-id> <state>"
+  local slug="$1" task="$2" state="$3"
+  local d; d="$(proj_dir "$slug")"
+  local readme="$d/README.md"
+  [ -f "$readme" ] || die "no README.md in project $slug"
+
+  _dashboard_update "$readme" 'Task' 'State' "$task" "$state" \
+    || die "dashboard-mr-state: could not update $task in the Merge requests table (see above)"
+  cmd_log "$slug" sync "dashboard: $task MR state -> $state"
+}
+
+# Safely remove a task's worktree (used when MR is already merged).
+#   worktree-remove <slug> <task-id>
+cmd_worktree_remove() {
+  [ $# -eq 2 ] || die "usage: worktree-remove <slug> <task-id>"
+  local slug="$1" task="$2"
+  local d; d="$(proj_dir "$slug")"
+  local wt="$d/worktree"
+
+  # Find the worktree directory for this task
+  local task_wt
+  task_wt="$(find "$wt" -maxdepth 3 -type d -name "$task-*" 2>/dev/null | head -1)"
+  [ -n "$task_wt" ] && [ -d "$task_wt" ] || { echo "no worktree found for $task"; return 1; }
+
+  # Delegate to pw-teardown.sh — the single owner of the safety guards (refuses the worktree
+  # you're standing in, refuses one with uncommitted changes). Never passes --yes: a dirty worktree
+  # must be committed/stashed first, exactly as /pw-close requires. Exit 1 from teardown means it
+  # skipped the worktree (reason already printed) — don't log "removed".
+  "$HERE/pw-teardown.sh" "$d" "" "$task_wt" || return 1
+  cmd_log "$slug" sync "$task: worktree removed (MR already merged)"
+  echo "$slug: $task worktree removed"
+}
+
 cmd_selftest() {
   local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' RETURN
   mkdir -p "$tmp/demo"
@@ -1666,6 +1939,31 @@ cmd_selftest() {
   [ "$(grep -c 'pw-archived:' "$RTV")" = "$archived_rows_before" ] \
     || die "selftest FAIL: re-running archive with nothing newly resolved was not a no-op"
 
+  # --- dashboard table edits (MR-state flow) --------------------------------
+  # Task status table + MR table with realistic rows; the MR table's State is column 5, so a
+  # fixed-position "column 4" write (the original implementation) would clobber the MR URL.
+  printf '\n## Task status\n\n| ID | Title | Repo | Status | Notes |\n|----|-------|------|--------|-------|\n| T01 | fix x | repo-a | done | |\n\n## Merge requests\n\n| Task | Repo | MR | Target branch | State | Build |\n|------|------|----|--------------|-------|-------|\n| T01 | repo-a | http://forge/x/-/merge_requests/12 | main | open | green |\n' >> "$tmp/demo/README.md"
+
+  PW_PROJECTS_DIR="$tmp" "$0" dashboard-task-status demo T01 "accepted (MR merged)" >/dev/null
+  grep -q '^| T01 | fix x | repo-a | accepted (MR merged) | |$' "$tmp/demo/README.md" \
+    || die "selftest FAIL: dashboard-task-status did not update the Status column"
+  grep -q '^| T01 | repo-a | http://forge/x/-/merge_requests/12 | main | open | green |$' "$tmp/demo/README.md" \
+    || die "selftest FAIL: dashboard-task-status leaked into the MR table"
+
+  PW_PROJECTS_DIR="$tmp" "$0" dashboard-mr-state demo T01 merged >/dev/null
+  grep -q '^| T01 | repo-a | http://forge/x/-/merge_requests/12 | main | merged | green |$' "$tmp/demo/README.md" \
+    || die "selftest FAIL: dashboard-mr-state did not update the State column (or clobbered the MR URL)"
+  [ "$(grep -c 'merge_requests/12' "$tmp/demo/README.md")" = "1" ] \
+    || die "selftest FAIL: dashboard-mr-state duplicated/lost the MR URL row"
+
+  # failure path: a task with no row must fail loudly and leave the file untouched.
+  local readme_before; readme_before="$(cat "$tmp/demo/README.md")"
+  if PW_PROJECTS_DIR="$tmp" "$0" dashboard-task-status demo T99 done >/dev/null 2>&1; then
+    die "selftest FAIL: dashboard-task-status accepted a task with no row"
+  fi
+  [ "$(cat "$tmp/demo/README.md")" = "$readme_before" ] \
+    || die "selftest FAIL: failed dashboard-task-status still mutated the file"
+
   echo "selftest OK"
 }
 
@@ -1682,7 +1980,12 @@ case "${1:-}" in
   ai-review)   shift; cmd_ai_review "$@" ;;
   review)      shift; cmd_review "$@" ;;
   model-check) shift; cmd_model_check "$@" ;;
+  mr-state)    shift; cmd_mr_state "$@" ;;
+  task-accept) shift; cmd_task_accept "$@" ;;
+  dashboard-task-status) shift; cmd_dashboard_task_status "$@" ;;
+  dashboard-mr-state)    shift; cmd_dashboard_mr_state "$@" ;;
+  worktree-remove)       shift; cmd_worktree_remove "$@" ;;
   selftest)    cmd_selftest ;;
-  -h|--help|"") sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h|--help|"") sed -n '2,105p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown subcommand: $1 (try --help)" ;;
 esac

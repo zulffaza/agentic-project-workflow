@@ -102,8 +102,8 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | `/pw-new <slug>` | scaffold |
 | `/pw-adopt <slug> <repo> <branch> [mr-url] [review]` | onboard an existing in-progress branch — continue-dev (→ context) or `review`-only (→ review, MR required) |
 | `/pw-analyze <slug> [focus]` | analysis |
-| `/pw-review <slug> [phase\|Tid\|path]` | apply review comments (defaults to current phase's review) |
-| `/pw-review <slug> ai [phase\|Tid\|path]` | optional — delegate a fresh review pass to `pw-reviewer` (see [docs/REVIEW.md](./REVIEW.md#3-ai-assisted-review-optional-per-phase)) |
+| `/pw-review <slug> [phase\|Tid(s)\|path]` | apply review comments (defaults to current phase's review; task ids can be a list — `T01 T03 T05 T06` — processed in one pass) |
+| `/pw-review <slug> ai [phase\|Tid(s)\|path]` | optional — delegate a fresh review pass to `pw-reviewer` (see [docs/REVIEW.md](./REVIEW.md#3-ai-assisted-review-optional-per-phase)) |
 | `/pw-review <slug> config [<phase> <mode>]` | optional — view (no args) or change one phase's AI Review mode; the human-facing surface for this, never `pw-lib.sh` directly |
 | `/pw-breakdown <slug>` | task breakdown |
 | `/pw-execute <slug> [task-ids \| "with <model/agent>"]` | execution (stops at committed + verified) |

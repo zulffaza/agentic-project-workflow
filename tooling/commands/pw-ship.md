@@ -86,8 +86,24 @@ Handle review comments left on the **MR itself**. **Scope:** with task IDs, only
 task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, state open) — so
 `/pw-ship <slug> comments` clears review comments across all of the project's MRs in one run.
 
-0. **Resolve the set** of tasks to process (the given IDs, or all tasks with an open MR). Announce
-   the list. Then, **for each task in the set**, do steps 1–3 in its own worktree:
+0. **Resolve the set** of tasks to process (the given IDs, or all tasks with an MR). **Check MR
+   state for each task** before proceeding:
+   ```bash
+   {{PW_HOME}}/tooling/pw-lib.sh mr-state <slug> <task-id>
+   ```
+   - **If `merged`**: The MR was already merged downstream. Handle it:
+     1. Update task status: `{{PW_HOME}}/tooling/pw-lib.sh task-accept <slug> <task-id>`
+     2. Update dashboard task table: `{{PW_HOME}}/tooling/pw-lib.sh dashboard-task-status <slug> <task-id> "accepted (MR merged)"`
+     3. Update dashboard MR table: `{{PW_HOME}}/tooling/pw-lib.sh dashboard-mr-state <slug> <task-id> merged`
+     4. Remove worktree: `{{PW_HOME}}/tooling/pw-lib.sh worktree-remove <slug> <task-id>`
+     5. **Skip this task** — do NOT attempt to fetch/process comments.
+   - **If `closed`**: The MR was closed without merging. Note it in the recap and skip.
+   - **If `open`**: Proceed with comment processing (steps 1–3).
+   - **If it prints `unknown`** (no MR URL/worktree/origin, or the forge query failed or returned
+     null — the helper exits 1): Note it as `mr-state-unknown` and skip.
+   
+   Announce the list, separating `open` tasks (will process) from `merged`/`closed`/`unknown`
+   tasks (will skip). Then, **for each task with an open MR**, do steps 1–3 in its own worktree:
 1. Fetch **every** open comment thread. **Read `tooling/docs/forges.md`'s "Standalone vs diff-anchored
    comments" section in full before writing this step** — it documents the exact fields, verified
    against real production MR data (an earlier version of this instruction relied on the wrong
@@ -175,10 +191,11 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      `## Items` section (create the file first via `pw-lib.sh review-init` if it doesn't exist yet),
      and a `LOG.md` line via the helper. The project dir stays the source of truth even for
      MR-driven changes.
-4. **Recap** a table — one row per task in the set: Task · Repo · MR · threads addressed (note how
-   many were general/no-diff-position) · verify (green/failed) · pushed? · build result (or
-   "skipped" if `--skip-build-check` was passed). Flag any task whose verify failed after the fix
-   (leave it for review) and any thread you couldn't resolve without a decision.
+4. **Recap** a table — one row per task in the set: Task · Repo · MR · state (open/merged/closed) ·
+   threads addressed (note how many were general/no-diff-position) · verify (green/failed) ·
+   pushed? · build result (or "skipped" if `--skip-build-check` was passed). Flag any task whose
+   verify failed after the fix (leave it for review) and any thread you couldn't resolve without a
+   decision. For `merged` tasks, note that the worktree was removed and docs updated.
 
 Process the set **serially by default** (each is a real edit-verify-push in a worktree); parallelize
 only independent repos if you're confident. Never merge an MR as part of this command — merging is a

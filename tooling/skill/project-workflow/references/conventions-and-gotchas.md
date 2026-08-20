@@ -46,6 +46,20 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   preview view). Log phase transitions, executor spawns, commits, pushes, MRs, review passes,
   close-out.
 - `pw-lib.sh phase <slug>` — read the current phase (used by `/pw-review` scoping + `/pw-status`).
+- `pw-lib.sh mr-state <slug> <task-id>` — query the forge (GitLab/GitHub) for an MR's current state.
+  Prints `open`, `merged`, `closed`, or `unknown` (the last on any lookup/query failure — no MR
+  URL/worktree/origin, or the forge query failed or returned null — with exit 1). Used by `/pw-sync`
+  and `/pw-ship comments` to detect MRs that were already merged downstream before attempting to
+  sync or process comments.
+- `pw-lib.sh task-accept <slug> <task-id>` — update a task's `Status:` field to `accepted` (used
+  when an MR is already merged).
+- `pw-lib.sh dashboard-task-status <slug> <task-id> <status>` — update a task's status in the
+  dashboard README.md task status table.
+- `pw-lib.sh dashboard-mr-state <slug> <task-id> <state>` — update an MR's state in the dashboard
+  README.md MR table (e.g., `merged`).
+- `pw-lib.sh worktree-remove <slug> <task-id>` — safely remove a task's worktree (refuses if the
+  worktree has uncommitted changes or is the current directory). Used when an MR is already merged
+  to clean up the worktree.
 - Per-task **timing + commit/MR outcome** go in the task file's `## Result` block and the PLAN
   task table's Time/Result columns. **Token/cost are NOT captured** — a running agent can't measure
   them; leave them to external session telemetry, don't fabricate.
@@ -63,7 +77,7 @@ a `done` project; a continue-dev adopt onto a project **past `context`** records
 existing slug yields a **mixed project** — routing is **per task by its `Branch:`**: a task extending
 an adopted unit continues on that branch (serial per branch), every other task gets a fresh
 `agent/…` branch off its base (parallel). Then `/pw-analyze <slug> [focus]`,
-`/pw-breakdown <slug>`, `/pw-review <slug> [phase|Tid|path]` (scoped to the current phase),
+`/pw-breakdown <slug>`, `/pw-review <slug> [phase|Tid(s)|path]` (scoped to the current phase; task ids can be a list),
 `/pw-execute <slug> [task-ids | "with <model/agent>"]` (stops at committed + verified),
 `/pw-ship <slug> [task-ids] [comments] [--skip-build-check]` (push + open MRs; the outward-facing
 publish step; by default also monitors the MR's pipeline to a terminal state before returning —

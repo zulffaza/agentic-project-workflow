@@ -2,7 +2,14 @@
 # ============================================================================
 # pw-teardown.sh — safely remove a project's git worktrees at close-out.
 #
-#   tooling/pw-teardown.sh <project-dir> [--yes]
+#   tooling/pw-teardown.sh <project-dir> [--yes] [worktree-path]
+#
+# With no [worktree-path], removes every worktree under <project-dir>/worktree.
+# With a [worktree-path], removes ONLY that one worktree (it must live under the
+# project's worktree/ dir) — this is the single-worktree mode `pw-lib.sh
+# worktree-remove` delegates to, so the safety guards below have exactly one owner.
+# It exits 1 when a single-target worktree could not be removed (so the caller
+# knows to look at the printed reason), and 0 when it went away.
 #
 # Why this exists: `git worktree remove` deletes the worktree directory. If that
 # directory is the one your editor (VS Code, JetBrains, …) currently has OPEN as
@@ -17,7 +24,8 @@ set -euo pipefail
 
 projdir="${1:-}"
 YES=0; [ "${2:-}" = "--yes" ] && YES=1
-[ -n "$projdir" ] && [ -d "$projdir" ] || { echo "usage: pw-teardown.sh <project-dir> [--yes]" >&2; exit 2; }
+target="${3:-}"
+[ -n "$projdir" ] && [ -d "$projdir" ] || { echo "usage: pw-teardown.sh <project-dir> [--yes] [worktree-path]" >&2; exit 2; }
 projdir="$(cd "$projdir" && pwd)"
 wtroot="$projdir/worktree"
 here="$PWD"
@@ -27,7 +35,25 @@ here="$PWD"
 removed=0 skipped_cwd=0 skipped_dirty=0
 
 # A worktree is a leaf dir under worktree/ that git recognises (has a .git file/dir).
+# Single-target mode: only the named worktree, which must be under wtroot; else every worktree.
+if [ -n "$target" ]; then
+  case "$target" in
+    /*) ;;
+    *) target="$projdir/$target" ;;
+  esac
+  [ -e "$target/.git" ] || { echo "not a worktree (no .git marker): $target" >&2; exit 2; }
+  target="$(cd "$target" && pwd)"
+  case "$target/" in
+    "$wtroot/"*) ;;
+    *) echo "target worktree not under $projdir/worktree: $target" >&2; exit 2 ;;
+  esac
+  marker_list="$target/.git"
+else
+  marker_list="$(find "$wtroot" -maxdepth 4 -name .git 2>/dev/null)"
+fi
+
 while IFS= read -r gitmarker; do
+  [ -n "$gitmarker" ] || continue
   wt="$(cd "$(dirname "$gitmarker")" && pwd)"
 
   # Guard 1: never remove the worktree we're standing in (the #14 editor-close bug).
@@ -52,9 +78,14 @@ while IFS= read -r gitmarker; do
   else
     echo "  ✗ could not remove: $wt (remove manually: git -C <real-repo> worktree remove '$wt')"
   fi
-done < <(find "$wtroot" -maxdepth 4 -name .git 2>/dev/null)
+done <<< "$marker_list"
 
 echo
 echo "Teardown: $removed removed, $skipped_cwd skipped (current dir), $skipped_dirty skipped (dirty)."
 [ "$skipped_cwd" -gt 0 ] && echo "Re-run from the project/bundle root (not inside a worktree) to finish."
+
+# Single-target mode: the caller needs to know whether the worktree actually went away.
+if [ -n "$target" ] && [ "$removed" -eq 0 ]; then
+  exit 1
+fi
 exit 0
