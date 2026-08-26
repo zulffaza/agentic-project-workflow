@@ -26,7 +26,7 @@ resolved **per repo, from that repo's own `origin` remote**, never assumed globa
 | Forge | CLI binary | Host signal | Create-MR invocation | Fetch-comments invocation | Build/CI-status invocation | Notes |
 |-------|-----------|--------------|----------------------|----------------------------|-----------------------------|-------|
 | `github` | `gh` | `github.com` (default; no override needed) | `gh pr create` (run from inside the repo/worktree) | `gh pr view --comments` (standalone/general PR conversation comments) **+** `gh api repos/:owner/:repo/pulls/<n>/comments` (diff-anchored review comments) — **both**, or inline review comments are missed entirely | `gh pr checks <number>` — poll it (see § Build/CI status below) until every check reports a terminal `state`/`conclusion` | No host env var needed — `gh` resolves `github.com` on its own. |
-| `gitlab` | `glab` | anything not `github.com` (default), or an exact `PW_FORGE_HOSTS` match | `GITLAB_HOST=<resolved-host> glab mr create` (run from inside the worktree) | `GITLAB_HOST=<resolved-host> glab api projects/:id/merge_requests/<iid>/discussions` — do **not** use `glab mr diff` for this, it only shows the code diff, no comments at all | `GITLAB_HOST=<resolved-host> glab api projects/:id/merge_requests/<iid>/pipelines` → take the newest entry's `id`, then poll `GITLAB_HOST=<resolved-host> glab api projects/:id/pipelines/<id>` for `.status` (see § Build/CI status below) | `<resolved-host>` = `gitlab.com` when auto-detected with no override, or the matched `PW_FORGE_HOSTS` host for a self-hosted instance. **Never hardcode a literal host in a command file** — that's the exact bug this registry fixes. |
+| `gitlab` | `glab` | anything not `github.com` (default), or an exact `PW_FORGE_HOSTS` match | `GITLAB_HOST=<resolved-host> glab mr create` (run from inside the worktree) | **Primary (discovery):** `GITLAB_HOST=<resolved-host> glab api projects/:id/merge_requests/<iid>/notes?sort=desc&order_by=updated_at` — always up-to-date, no indexing lag. **Secondary (reply/resolve only):** `GITLAB_HOST=<resolved-host> glab api projects/:id/merge_requests/<iid>/discussions` — use only when you need a `discussion_id` to reply in-thread or resolve. If the note isn't in `/discussions` yet (lag), reply with a plain top-level note. See "Use `/notes` as the primary source" below. | `GITLAB_HOST=<resolved-host> glab api projects/:id/merge_requests/<iid>/pipelines` → take the newest entry's `id`, then poll `GITLAB_HOST=<resolved-host> glab api projects/:id/pipelines/<id>` for `.status` (see § Build/CI status below) | `<resolved-host>` = `gitlab.com` when auto-detected with no override, or the matched `PW_FORGE_HOSTS` host for a self-hosted instance. **Never hardcode a literal host in a command file** — that's the exact bug this registry fixes. |
 | _`<future>`_ | _`<cli>`_ | _`<host signal>`_ | _`<invocation>`_ | _`<invocation>`_ | _`<invocation>`_ | Maintainer adds a row — no code change needed, but see "Adding a forge" below. |
 
 ## Standalone vs diff-anchored comments (both forges — read before writing a fetch-comments step)
@@ -65,43 +65,54 @@ or not — in a **local** table (`task/review/T0n.review.md`'s `## MR comment tr
 `pw-lib.sh ship comment-seen`) instead of relying solely on the forge's resolved bit — see
 [`docs/REVIEW.md`](../../docs/REVIEW.md#2-the-mr-review-flow-post-ship).
 
-**Optional sanity check (if `jq` is available)** — run this after fetching, to mechanically list
-what's still actionable instead of eyeballing a large JSON array (eyeballing is exactly how a real
-open thread got missed):
+**Optional sanity check (if `jq` is available)** — run this after fetching `/notes`, to mechanically
+list what's still actionable instead of eyeballing a large JSON array:
 ```bash
-GITLAB_HOST=<resolved-host> glab api "projects/:id/merge_requests/<iid>/discussions" | jq -c '
-  .[] | select([.notes[].system] | all(. != true))          # drop pure system/activity discussions
-      | select(.notes[-1].resolvable == false or .notes[-1].resolved == false)  # still actionable
-      | {id, resolvable: .notes[-1].resolvable, resolved: .notes[-1].resolved,
-         has_diff_position: (.notes[0].position != null), last_body: .notes[-1].body}'
+GITLAB_HOST=<resolved-host> glab api "projects/:id/merge_requests/<iid>/notes?sort=desc&order_by=updated_at" | jq -c '
+  .[] | select(.system != true)                              # drop system/activity notes
+       | select(.resolvable == false or .resolved == false)  # still actionable
+       | {id, resolvable, resolved, body: (.body | .[0:120])}'
 ```
 `has_diff_position` in the output is informational only (tells you whether the fix is line-specific
 or general) — it must never be used as the actionability filter itself.
 
-## `/discussions` can lag the raw notes table — a freshness canary is required
+## Use `/notes` as the primary source for GitLab, NOT `/discussions`
 
-> **⚠️ Verified 2026-08-10, self-hosted GitLab.** A brand-new, completely ordinary `DiffNote` (real
-> diff position, `resolvable: true`, `system: false`, visible immediately in the GitLab web UI) was
-> **still missing from `/discussions` 20+ minutes after being posted**, on both of two MRs it was
-> left on. `/discussions` groups the raw notes table into threads server-side; on at least this
-> instance, that grouping projection can lag the raw data by a meaningful amount — not seconds, and
-> not reliably fixed by a short retry.
+> **⚠️ Verified 2026-08-10 and 2026-08-26, self-hosted GitLab.** The `/discussions` endpoint has
+> persistent, multi-hour indexing lag. Notes are visible in the GitLab web UI and `/notes` API
+> immediately, but can take **20+ minutes** (or never, during a multi-hour review session) to appear
+> in `/discussions`. Using `/discussions` as the primary source silently misses unindexed threads —
+> this caused multiple reviewer comments to be missed across 2 consecutive review rounds on the same
+> MR, even with a freshness guard that checked the newest note ID.
 
-**Detecting it:** also fetch `glab api projects/:id/merge_requests/<iid>/notes?sort=desc&order_by=updated_at`
-(GitHub: the newest entries from `gh api repos/:owner/:repo/pulls/<n>/comments` / issue comments) —
-a flat list straight off the underlying table, with no `discussion_id` field (so it can't replace
-`/discussions` for replying/resolving, only for detecting staleness). If that list's newest
-`system == false` note isn't present anywhere in the `/discussions` pull, the `/discussions`
-snapshot is stale — **do not conclude "nothing open."**
+**Why `/discussions` is unreliable for discovery:** `/discussions` groups the raw notes table into
+threads server-side via an async projection. On at least this GitLab instance, that projection can
+lag the raw data by a meaningful amount — not seconds, and not reliably fixed by a short retry.
+Multiple notes posted in quick succession may index at different times, so checking only the newest
+note ID (the old freshness-guard approach) still misses older unindexed notes.
 
-**Handling it once detected (no `discussion_id` available yet):** retry `/discussions` once or
-twice with a short pause; if it's still missing, apply the fix and reply with a **plain new
-top-level note** (`POST .../notes`, body only — no `discussion_id` required) quoting the file/line
-and original text, note the lag explicitly in the reply, and record it in the local tracking table
-as `unresolvable` with a note flagging it for a human to double check once the real discussion
-eventually appears (the note ID and the eventual discussion ID aren't reconcilable from the API in
-any straightforward way — don't try to auto-merge them later, just flag it). See
-[`tooling/commands/pw-ship.md`](../commands/pw-ship.md)'s MR-comment mode step 1 for the full flow.
+**The correct approach — `/notes` for discovery, `/discussions` only for reply/resolve:**
+
+1. **Discovery (always use `/notes`):**
+   ```bash
+   glab api projects/:id/merge_requests/<iid>/notes?sort=desc&order_by=updated_at
+   ```
+   This returns all notes immediately, with no indexing lag. Filter out `system: true` notes, check
+   the local tracking table for already-handled note IDs, and process the rest.
+
+2. **Reply/resolve (use `/discussions` only when needed):**
+   When you need a `discussion_id` to reply in-thread or resolve a `resolvable: true` thread:
+   ```bash
+   glab api projects/:id/merge_requests/<iid>/discussions
+   ```
+   Search for the note ID within the response. If found, use the `discussion_id`. If **not found**
+   (still lagging), reply with a **plain new top-level note** (`POST .../notes` with just a `body`
+   — no `discussion_id` needed) that quotes the file/line and original text, explicitly noting the
+   thread hadn't synced into the discussions API yet. Record it in the local tracking table as
+   `unresolvable` with a note explaining the degraded reply, so a **human** re-checks once the real
+   discussion eventually appears (don't try to auto-reconcile the two IDs later — flag it instead).
+
+See [`tooling/commands/pw-ship.md`](../commands/pw-ship.md)'s MR-comment mode step 1 for the full flow.
 
 ## Build/CI status (runs by default — `/pw-ship … --skip-build-check` opts out)
 
@@ -127,10 +138,17 @@ it fires in each mode, and how `--skip-build-check` disables it for a given run)
   `/pw-ship` run on one slow pipeline. This is a monitoring convenience, not a blocking gate — the
   push/MR-open/MR-update it's checking already happened before polling started.
 
-**Report, never remediate.** A failed build is surfaced for a human to look at — this never triggers
-an automatic pipeline retry/re-run, and it never rolls back or blocks the push/MR that's already out.
-(Re-enqueuing an obviously-flaky CI failure is a judgment call for whoever's watching the MR
-afterward — including an autonomous maintenance pass — not something the build check itself does.)
+**What the command does with a terminal state** — this registry only defines the polling mechanics;
+the command-level contract lives in
+[`tooling/commands/pw-ship.md`](../commands/pw-ship.md)'s "Build-check fix loop":
+- `green` → the task is done for this round.
+- `red` → the task is **NOT done**: `/pw-ship` diagnoses the failing job's output, fixes the change
+  in the task's worktree, re-runs the task's `## Verify`, pushes, and re-monitors until the pipeline
+  passes — up to 3 fix rounds, then it stops and surfaces the failure. It never "fixes" an
+  unrelated/environmental failure that also reproduces on the untouched base.
+- `--skip-build-check` opts out of the whole check (and therefore the fix loop).
+The polling mechanism itself never retries/rolls back the pipeline — remediation is the agent's
+fix loop, not an API retry.
 
 ## Example config (`pw.config.sh`)
 ```sh

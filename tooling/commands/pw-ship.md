@@ -51,10 +51,12 @@ task; here we push branches and open MRs.
    - Record the MR in the task's `## Result → MR:` field **and** the dashboard **Merge requests**
      table (Task · Repo · MR url · Target branch · State=open · Build), then log it:
      `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> ship "T0n pushed <branch>; MR <url>"`.
-   - **Unless `--skip-build-check` was passed:** once the MR is open, monitor its pipeline/checks to
-     a terminal state (see "Build check" below) and fill the task's `## Result → Build check:` field
-     and the dashboard row's `Build` column with the outcome before moving to the next task. If
-     `--skip-build-check` was passed, leave both as `—` (not checked this run).
+    - **Unless `--skip-build-check` was passed:** once the MR is open, monitor its pipeline/checks to
+      a terminal state (see "Build check" below) and fill the task's `## Result → Build check:` field
+      and the dashboard row's `Build` column with the outcome before moving to the next task. A **red**
+      build → that task is **not done**: enter the build-check fix loop below (fix in the worktree,
+      re-verify, push, re-monitor) until it passes or the cap is hit. If
+      `--skip-build-check` was passed, leave both as `—` (not checked this run).
 4. Recap: one line per task (branch → MR url → state → build result, or "skipped" if
    `--skip-build-check` was passed). Remind me that **open/on-hold MRs don't block `/pw-close`** —
    `accepted` means verified + MR opened + my sign-off; merging is downstream.
@@ -108,17 +110,37 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
    comments" section in full before writing this step** — it documents the exact fields, verified
    against real production MR data (an earlier version of this instruction relied on the wrong
    field and a real reviewer follow-up was silently missed as a result):
-   - **GitLab:** `glab api projects/:id/merge_requests/<iid>/discussions` (run from inside the repo
-     with `GITLAB_HOST=<resolved-host>`) — one call returns everything. For each note, in order:
-     1. `notes[].system == true` → GitLab's own activity log (approvals, "added 1 commit", the
-        security-scan bot, description changes) — **not** reviewer feedback, skip it.
-     2. Otherwise, if `resolvable == true` → trust `resolved`. **Do not additionally filter on
-        whether the note has a diff `position`/is `type: DiffNote`** — a general "Start thread"
-        comment (no diff line) can be `resolvable: true` too, and is exactly as actionable as a
-        diff comment. Filtering on diff-position is the concrete bug that caused a real, open
-        reviewer thread to be missed entirely.
-     3. Otherwise (`resolvable == false`, not system) → a genuine one-off standalone comment; the
-        forge can **never** report it resolved. Check the local tracking table instead (below).
+   - **GitLab — use `/notes` as the primary source, NOT `/discussions`.**
+     The `/discussions` endpoint has persistent indexing lag — notes can be visible in the GitLab
+     web UI and `/notes` API **20+ minutes** before appearing in `/discussions`. Using `/discussions`
+     as the primary source silently misses unindexed threads. Verified 2026-08-26: multiple
+     DiffNote threads on the same MR were present in `/notes` but absent from `/discussions` for
+     the entire duration of a multi-hour review session.
+
+     **Discovery (always use `/notes`):**
+     ```bash
+     glab api projects/:id/merge_requests/<iid>/notes?sort=desc&order_by=updated_at
+     ```
+     For each note:
+     1. `system == true` → GitLab's own activity log — skip it.
+     2. Otherwise, check the local tracking table (below) for this note ID. If already recorded
+        with `replied=yes`, skip it.
+     3. Otherwise, this is an actionable note. Read its `body`, `position.new_path`,
+        `position.new_line`, `resolvable`, and `resolved` fields.
+
+     **Reply/resolve (use `/discussions` only when needed):**
+     When you need to reply in-thread or resolve a `resolvable: true` thread, look up the
+     `discussion_id` from `/discussions`:
+     ```bash
+     glab api projects/:id/merge_requests/<iid>/discussions
+     ```
+     Search for the note ID within the discussions response. If found, use the `discussion_id`
+     to reply (`POST .../discussions/<id>/notes`) and resolve (`PUT .../discussions/<id> -f resolved=true`).
+     If **not found** (still lagging), reply with a **plain new top-level note**
+     (`POST .../notes` with just a `body` — no `discussion_id` needed) that quotes the file/line
+     and the original comment text, explicitly noting the thread hadn't synced into the discussions
+     API yet. Record it in the local tracking table as `unresolvable` with a note explaining the
+     degraded reply, so a **human** re-checks once the real discussion eventually appears.
    - **GitHub:** two separate endpoints, both needed — `gh pr view --comments` (standalone/general
      PR conversation comments) **and** `gh api repos/:owner/:repo/pulls/<n>/comments` (diff-anchored
      review comments). `gh pr view --comments` alone misses every inline review comment.
@@ -131,37 +153,13 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      underlying line changes (a later push can silently flip `resolved` with no explicit API call)
      — but that auto-resolve does **not** happen for a resolvable *general* (no diff position)
      thread, so don't assume pushing a fix closed it out; you must explicitly resolve it (below).
-   - **Freshness guard — `/discussions` can lag the raw notes table.** Verified 2026-08-10: a
-     brand-new, perfectly normal `DiffNote` (visible immediately in the GitLab web UI) was still
-     completely absent from `/discussions` **20+ minutes** after posting, on a self-hosted GitLab
-     instance. Before concluding "nothing open," cross-check freshness:
-     - **GitLab:** also fetch `glab api projects/:id/merge_requests/<iid>/notes?sort=desc&order_by=updated_at`
-       (a flat, un-grouped list straight off the notes table — no `discussion_id` in it, so it can't
-       replace `/discussions` for replying/resolving, only for detecting staleness). Take its newest
-       `system == false` entry's `id`/`created_at`.
-     - **GitHub:** compare `gh api repos/:owner/:repo/pulls/<n>/comments` (or the issue-comments
-       list)'s newest entry the same way, if you suspect the same class of lag there.
-     - If that note's `id` doesn't appear anywhere in the `/discussions` pull, retry `/discussions`
-       once or twice with a short pause. If it's *still* missing:
-       - **Don't report "no open threads."** Surface the note's body/file/line in the recap as
-         "detected via /notes, not yet in /discussions — forge indexing lag" and read what it's
-         asking so you're not blocked on understanding it.
-       - You do **not** have a `discussion_id` yet, so you can't reply-in-thread or resolve it
-         properly. Apply the code fix in the worktree as normal, then reply with a **plain new
-         top-level note** (`POST .../notes` with just a `body` — no `discussion_id` needed) that
-         quotes the file/line and the original comment text, explicitly noting the thread hadn't
-         synced into the discussions API yet. Record it in the local tracking table (step 3) as
-         `unresolvable` with a note explaining the degraded reply, so a **human** re-checks once the
-         real discussion eventually appears (don't try to auto-reconcile the two IDs later — flag it
-         instead).
-       - This is a genuinely stuck case for the tool, not a decision to make silently — call it out
-         in the recap rather than treating the plain-note reply as equivalent to a normal resolved
-         thread.
    - A task whose MR has no open/unrecorded threads at all is skipped (note it in the recap).
 2. Apply the fixes in that task's **worktree**, re-run its `## Verify`, and push.
-   - **Unless `--skip-build-check` was passed:** monitor the pipeline/checks to a terminal state
-     right after this push (see "Build check" below), before moving on to step 3 — so a failed
-     build shows up in the recap and can be mentioned in the thread reply, not discovered later.
+    - **Unless `--skip-build-check` was passed:** monitor the pipeline/checks to a terminal state
+      right after this push (see "Build check" below), before moving on to step 3 — so a failed
+      build shows up in the recap and can be mentioned in the thread reply, not discovered later.
+      A **red** build → the task is **not done**: enter the build-check fix loop below (fix in the
+      worktree, re-verify, push, re-monitor) until it passes or the cap is hit.
 3. **Reply to every thread you acted on — general/no-diff comments included — AND mirror it into
    the internal record:**
    - **Reply on the thread itself.** GitLab: `POST` a new note into that same discussion (works
@@ -207,14 +205,26 @@ pushed (comment mode), poll that MR's pipeline/checks until they reach a termina
 **Build/CI status invocation** column in `tooling/docs/forges.md`'s Registry (same per-repo forge
 resolution as everything else here — never hardcode a host or a CLI). Pass `--skip-build-check` to
 skip this entirely for the run and get the old immediate-return behavior (dashboard/`## Result`
-`Build`/`Build check` fields stay `—`, recap says "skipped").
+`Build`/`Build check` fields stay `—`, recap says "skipped"). **A red build means that task is NOT
+done** — it is not shipped until the pipeline passes; see the fix loop below.
 - **Terminal states:** GitHub `SUCCESS`/`FAILURE`/`CANCELLED`/`SKIPPED` (via `gh pr checks`);
   GitLab `success`/`failed`/`canceled`/`skipped` (via the pipeline's `.status`). Anything else
   (`pending`/`running`/`created`) means keep polling.
 - **Timeout, not an infinite wait:** poll on a short interval (~30s) up to a ~15 minute budget. Still
   not terminal at the budget → report it as **"still running — not yet resolved"** in the recap and
   the `## Result → Build check:` field, rather than blocking the rest of the run on it.
-- **Report, never remediate:** this step only monitors and reports. A failing build is surfaced in
-  the recap and the task's `## Result` for a human to look at — it never triggers an automatic
-  retry/re-run of the pipeline, and it never blocks pushing or opening the MR itself (the push/open
-  already happened before the check starts).
+- **Build-check fix loop (a red build → the task is NOT done → keep fixing until green):**
+  1. **Diagnose** — read the failing job's output (GitLab: `glab api projects/:id/pipelines/<id>/jobs`
+     → the failed job's trace; GitHub: the failing check's details via `gh api`). Bounded: you need
+     the failing test/compile error, not the whole log.
+  2. **Attribution check** — if the failure reproduces on the untouched base branch, or is clearly
+     unrelated/environmental (a job that also fails on `main`, flaky infra), do **not** churn:
+     report it as "build failed — unrelated/environmental, not caused by this task" and stop the
+     loop (the task is still not done until a human decides). Only fix failures your change caused.
+  3. **Fix + push** — edit the task's worktree, re-run its `## Verify` locally, commit, and push to
+     the same branch (the MR updates in place; no new MR, no re-confirmation — the shipment was
+     already confirmed). Then re-monitor the pipeline.
+  4. **Repeat until green.** Cap: **at most 3 fix rounds per task per run.** Hitting the cap still
+     red → stop, report the remaining error in the recap and the task's `## Result`, and tell me the
+     task is NOT done — ask whether to keep fixing or take another action. Never claim `done` on a
+     failing build.

@@ -61,9 +61,14 @@ Rules you MUST follow:
     review rounds have landed fixes the original description never mentioned. Add a `## Changes`
     bullet, refresh `## Verification`'s output, adjust reviewer notes if warranted.
   - **Build check runs by default**, either mode of `/pw-ship` — polls the MR's pipeline/checks to
-    a terminal state and reports it, which means the run waits on CI before returning. Pass
-    `--skip-build-check` to opt out for a given run. Mechanics + per-forge invocation:
-    `tooling/docs/forges.md`.
+    a terminal state; **a red build means the task is NOT done**, so the agent fixes it in the
+    worktree, re-verifies, pushes, and re-monitors until the pipeline passes (up to 3 fix rounds,
+    then it stops and surfaces the failure). Pass `--skip-build-check` to opt out of the whole
+    check + fix loop for a given run. Mechanics + per-forge invocation: `tooling/docs/forges.md`;
+    the loop contract: `tooling/commands/pw-ship.md` "Build-check fix loop".
+  - **MR state is checked first** (`pw-lib.sh mr-state <slug> <T0n>`): `merged` → accept the task,
+    update the dashboard, remove the worktree, and skip; `closed`/`unknown` → note and skip; only
+    `open` MRs are actually processed.
   - **⚠️ Never filter by diff-position to decide what's actionable.** GitHub needs two endpoints
     (`gh pr view --comments` + `gh api .../pulls/<n>/comments`) or inline review comments are
     missed; GitLab's `discussions` API returns everything in one call, but classify by
@@ -82,13 +87,16 @@ Rules you MUST follow:
     upserts a row in `task/review/T0n.review.md`'s `## MR comment tracking` table, which the next
     `/pw-ship … comments` run checks before treating a thread as new. Same pattern as
     `pw-lib.sh rfc comment-seen` for RFC-platform comments.
-  - **⚠️ `/discussions` can lag the raw notes table** (verified: 20+ min on a self-hosted GitLab, a
-    real comment visible in the web UI, absent from the API the whole time). Cross-check freshness
-    against `.../notes?sort=desc&order_by=updated_at` (a flat list, no `discussion_id` — useful only
-    for detecting staleness, not for replying). If its newest non-system note isn't in the
-    `/discussions` pull, don't report "nothing open" — retry, and if still missing, reply with a
-    plain new top-level note (no `discussion_id` needed) and flag it in the recap for a human to
-    verify once the real discussion syncs. Full flow: `tooling/docs/forges.md`.
+  - **⚠️ Use `/notes` as the primary source for GitLab, NOT `/discussions`.**
+    The `/discussions` endpoint has persistent indexing lag — notes can be visible in the GitLab
+    web UI and `/notes` API **20+ minutes** before appearing in `/discussions`. Verified 2026-08-26:
+    multiple DiffNote threads on the same MR were present in `/notes` but absent from `/discussions`
+    for the entire duration of a multi-hour review session. Using `/discussions` as the primary
+    source silently misses unindexed threads.
+    - **Discovery:** `glab api projects/:id/merge_requests/<iid>/notes?sort=desc&order_by=updated_at`
+    - **Reply/resolve:** look up the `discussion_id` from `/discussions` for that note ID. If not
+      found (still lagging), reply with a plain new top-level note and flag it in the recap.
+    Full flow: `tooling/commands/pw-ship.md` step 1.
 - After a pass, report how many `[OPEN]` items remain: `grep -rln "pw-item-status: open" <project>/`
   (the actual machine marker — `[` / `]` are regex metacharacters, so grepping the literal bracket
   tag itself needs `-F` or escaping; the marker is simpler and more robust either way).
