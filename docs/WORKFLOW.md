@@ -121,12 +121,19 @@ why, changes, verification output, pinned-version rationale, risk, follow-ups), 
 the MR in the task's `## Result` and the dashboard's **Merge requests** table. It **confirms the
 push list with you first**. Zero-change tasks get no branch/MR. By default it also monitors each
 MR's pipeline to a terminal state and reports it — meaning the run waits on CI before finishing;
-pass `--skip-build-check` if you'd rather it return immediately, unchecked.
+pass `--skip-build-check` if you'd rather it return immediately, unchecked. A **red** pipeline means
+that task is **not done**: `/pw-ship` fixes the failing change in the worktree, re-verifies, pushes,
+and re-monitors until the build passes (up to 3 fix rounds, then it stops and surfaces the failure
+for you) — see the build-check fix loop in `tooling/commands/pw-ship.md`. MRs already merged or
+closed downstream are detected up front (`pw-lib.sh mr-state`) and skipped + cleaned up instead of
+being re-shipped or synced.
 
 Once MRs are open they drift out of date as their base branches move. **`/pw-sync <slug>
 [task-ids]`** brings them all back up to date in one sweep: it merges the latest base into each open
 MR's branch, re-runs each task's `Verify`, and pushes — reporting per-task which merged cleanly,
-which hit a conflict, and which fail verify after the merge. Review comments left on an MR are a
+which hit a conflict, and which fail verify after the merge. Each MR is pre-checked first
+(`pw-lib.sh mr-state`): `merged` → accept the task, update the dashboard, remove the worktree, and
+skip; `closed`/`unknown` → note and skip. Review comments left on an MR are a
 different loop — see the [MR review flow](./REVIEW.md#2-the-mr-review-flow-post-ship).
 
 ## Step 8 — Review results

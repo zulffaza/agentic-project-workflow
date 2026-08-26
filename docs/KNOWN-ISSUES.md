@@ -65,19 +65,23 @@ buried in `tooling/`.
 - Corrected 2026-08-10, verified against real production MR data. Full detail:
   [`tooling/docs/forges.md`](../tooling/docs/forges.md#standalone-vs-diff-anchored-comments-both-forges--read-before-writing-a-fetch-comments-step).
 
-### GitLab's `/discussions` endpoint can lag the raw notes table by 20+ minutes
-- **Symptom:** a brand-new, completely ordinary diff comment — visible immediately in the GitLab
-  web UI — was still missing from the `/discussions` API response over 20 minutes after being
-  posted, on a self-hosted instance.
+### ~~GitLab's `/discussions` endpoint can lag the raw notes table by 20+ minutes~~ — **superseded 2026-08-26**
+- **Symptom (historical):** a brand-new, completely ordinary diff comment — visible immediately in
+  the GitLab web UI — was still missing from the `/discussions` API response over 20 minutes after
+  being posted, on a self-hosted instance.
 - **Root cause:** `/discussions` groups the raw notes table into threads server-side; that grouping
   projection can lag the underlying data by more than a short retry would cover.
-- **Mitigation (built in):** cross-check freshness against the flat `notes?sort=desc&order_by=
-  updated_at` list. If its newest non-system note isn't in the `/discussions` pull, don't report
-  "nothing open" — retry once or twice, then fall back to a plain new top-level note (no
-  `discussion_id` needed) and flag the lag explicitly for a human to verify once the real
-  discussion syncs.
-- Verified 2026-08-10, self-hosted GitLab. Full detail:
-  [`tooling/docs/forges.md`](../tooling/docs/forges.md#discussions-can-lag-the-raw-notes-table--a-freshness-canary-is-required).
+- **Superseded by:** `/notes` is now the **primary** discovery source for GitLab MR comments, with
+  `/discussions` used only to look up a `discussion_id` for in-thread reply/resolve. Verified
+  2026-08-26: multiple DiffNote threads on the same MR were present in `/notes` but absent from
+  `/discussions` for an entire multi-hour review session — the old freshness-canary (below) checked
+  only the newest note and still missed older unindexed notes. See
+  [`tooling/commands/pw-ship.md`](../tooling/commands/pw-ship.md)'s fetch step and
+  [`tooling/docs/forges.md`](../tooling/docs/forges.md)'s "Use `/notes` as the primary source for
+  GitLab, NOT `/discussions`" section.
+- Original mitigation (retained for the record only): cross-check freshness against the flat
+  `notes?sort=desc&order_by=updated_at` list and fall back to a plain top-level note when a thread
+  hasn't synced into `/discussions` yet.
 
 ## KiloCode API Provider naming
 

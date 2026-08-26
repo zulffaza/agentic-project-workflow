@@ -35,7 +35,8 @@ agentic-project-workflow/        ← this bundle ($PW_HOME)
     │                              (→ RFC.md)
     └── skill/                   ← every shippable skill (seeded per provider): project-workflow/
                                    SKILL.md (+ references/*.md, loaded per-phase) · pw-review/SKILL.md
-                                   (standalone review method, usable by any agent)
+                                   (standalone review method, usable by any agent) · pw-rfc/SKILL.md
+                                   (RFC-authoring guide)
 ```
 
 ## Project anatomy (a scaffolded `<slug>/`)

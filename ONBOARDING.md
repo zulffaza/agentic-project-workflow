@@ -65,9 +65,10 @@ If `/pw-status` is recognized and prints a status, you're onboarded.
 - Resolved three path roots from the bundle's own location:
   `$PW_HOME` (this bundle) · `$PW_PROJECTS` (`$PW_HOME/..`, where projects go) ·
   `$PW_REPOS` (`$PW_PROJECTS/..`, where your git repos live).
-- Installed every shipped **skill** (`project-workflow`, and `pw-review` — the standalone
-  fresh-review method behind the optional AI-assisted review feature) into each enabled+detected
-  CLI's skills dir (symlinked to `tooling/skill/<name>`, so bundle updates propagate).
+- Installed every shipped **skill** (`project-workflow`, `pw-review` — the standalone fresh-review
+  method behind the optional AI-assisted review feature — and `pw-rfc`, the RFC-authoring guide)
+  into each enabled+detected CLI's skills dir (symlinked to `tooling/skill/<name>`, so bundle
+  updates propagate).
 - Generated the **`/pw-*` commands** for each enabled+detected CLI, with the real absolute paths
   stamped in (sources use `{{PW_*}}` tokens; the generator/scaffolder stamp them — the portability
   trick).
@@ -90,7 +91,7 @@ machine is actually in sync with the bundle, run:
 ```
 
 **What it checks, per enabled provider:** the CLI is actually on `PATH`; every shipped skill
-(`project-workflow`, `pw-review`) is installed and matches the bundle; every generated `/pw-*`
+(`project-workflow`, `pw-review`, `pw-rfc`) is installed and matches the bundle; every generated `/pw-*`
 command file matches its canonical source in `tooling/commands/`; the seeded sub-agents match
 `tooling/agents/`. Reading the
 output: `✓` = in sync, `✗` = drift (it says exactly what — missing, stale, or out of sync) — with
@@ -260,7 +261,8 @@ comment for the full safety contract.
 ## Notes for the maintainer (whoever shares this)
 
 - **Keep the shipped skills in sync.** The bundle ships its own copies at
-  `tooling/skill/project-workflow/SKILL.md` and `tooling/skill/pw-review/SKILL.md`. If you also
+  `tooling/skill/project-workflow/SKILL.md`, `tooling/skill/pw-review/SKILL.md`, and
+  `tooling/skill/pw-rfc/SKILL.md`. If you also
   maintain either elsewhere (e.g. a personal `ai-agent-dir`), refresh the bundle copy before
   committing/sharing: `cp <your-canonical>/SKILL.md tooling/skill/<name>/SKILL.md`.
 - **`providers.md` is machine/account-specific config**, not code — model IDs and available

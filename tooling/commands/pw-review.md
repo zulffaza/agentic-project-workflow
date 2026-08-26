@@ -1,10 +1,14 @@
 ---
-description: Apply my review comments for the current phase (or a given review file) — or, with the "ai" sub-verb, delegate a fresh review pass to pw-reviewer — or, with "config", view/change this project's AI Review settings
-args: <project-slug> [ai | config] [phase | Tid(s) | path-to-.review.md | <phase> <mode>]
+description: Apply my review comments for the current phase (or a given review file) — or, with the "ai" sub-verb, delegate a fresh review pass to pw-reviewer — or, with "config", view/change this project's AI Review settings; --skip-build-check disables the task-fix build loop
+args: <project-slug> [ai | config] [phase | Tid(s) | path-to-.review.md | <phase> <mode>] [--skip-build-check]
 ---
 Invoke the `project-workflow` skill (review rules). Arguments: {{ARGS}}.
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
+
+**`--skip-build-check`** (last argument, either flow) skips the task-fix build loop below — apply
+task fixes and flip their items without re-running the task's `## Verify`, noting in the reply that
+the fix was not re-verified; you'll re-run `/pw-execute <slug> T0n` yourself.
 
 **This command NEVER changes the dashboard `Status:` line or any other dashboard field.** Reviewing
 is not a phase transition — the phase only moves when the next `/pw-*` command runs. (If you meant
@@ -163,6 +167,22 @@ an answer, fold that answer into the reviewed doc, edit that SAME `### Qn · …
 blank quoted line between the two), and add a `---` rule before the next question. Leave unanswered
 `Qn` rows untouched and report them as still blocking.
 
+**Task-level fixes get a build loop (on by default — `--skip-build-check` to opt out).** For any
+item that fixes a TASK's code (`task/review/T0n.review.md` items, or a `verify-failed` task), the
+task's `## Verify` block IS its build check. After applying the fix in that task's worktree
+(`worktree/<repo>/<T0n>-<slug>/`), run its `## Verify`:
+- **Passes** → the task is done for this round: flip the item `[OPEN]→[RESOLVED]` and quote the real
+  Verify output in the `↳ agent:` reply.
+- **Fails** → the task is NOT done: diagnose the error, fix, re-run `## Verify`, repeat — up to
+  **3 fix rounds**, then stop and report the remaining failure (tell me the task is still
+  `verify-failed` and ask whether to keep going). If the failure reproduces on the untouched base or
+  is clearly unrelated/environmental, stop and report rather than churn.
+- A fix you could NOT verify is left `[OPEN]` with the reason in the reply — never flip it.
+- With `--skip-build-check`, apply the fix and flip the item but note in the reply that it was **not
+  re-verified**.
+(Analysis / PLAN / RFC-doc items are prose, not code — no build loop; this applies to task items
+only.)
+
 Never edit or delete my comment text (items OR my `↳ you:` answers). Never write the Sign-off row
 — only I clear the gate. Log the pass (this is the ONLY dashboard-adjacent write you make) — **one
 line per processed file**: `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> review "<n> items resolved in
@@ -186,7 +206,8 @@ whatever `PW_MEMORY_NOTES` already documents for this tool's buckets.
 
 When done, recap each resolved item (one line, grouped by its task/file), and tell me how many
 `[OPEN]` items remain **in the resolved scope** (and, as a footnote, across the whole project:
-`grep -rln "pw-item-status: open"` in the project dir). For a task review: after fixes are applied, remind me
-to re-run `/pw-execute <slug> T0n` to re-verify in its worktree. **If a gate got auto-reopened**
+`grep -rln "pw-item-status: open"` in the project dir). For a task review: task fixes are
+re-verified in the worktree by the build loop above — only point me at `/pw-execute <slug> T0n`
+if a fix was left unverified (`--skip-build-check`) or hit the 3-round cap. **If a gate got auto-reopened**
 (the check above), say so explicitly and name which file/phase — that's the one thing here that
 changes whether a *later* command will run, so it can't just be buried in the item recap.

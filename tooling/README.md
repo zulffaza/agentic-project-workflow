@@ -34,8 +34,9 @@ tooling/
 │                         — human peer for both: ../../docs/RFC.md
 ├── skill/              ← every subdir with a SKILL.md here is a shippable skill (bootstrap installs
 │   ├── project-workflow/SKILL.md      each one, per provider):
-│   └── pw-review/SKILL.md           ← standalone, portable review method — usable by ANY agent,
-│                                       not only the generated pw-reviewer sub-agent
+│   ├── pw-review/SKILL.md           ← standalone, portable review method — usable by ANY agent,
+│   │                                  not only the generated pw-reviewer sub-agent
+│   └── pw-rfc/SKILL.md              ← RFC-authoring guide for the /pw-rfc side-loop
 └── README.md
 ```
 

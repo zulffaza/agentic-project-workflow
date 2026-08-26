@@ -1986,6 +1986,6 @@ case "${1:-}" in
   dashboard-mr-state)    shift; cmd_dashboard_mr_state "$@" ;;
   worktree-remove)       shift; cmd_worktree_remove "$@" ;;
   selftest)    cmd_selftest ;;
-  -h|--help|"") sed -n '2,105p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h|--help|"") awk 'NR>1{ if ($0 ~ /^#/) { sub(/^# ?/, "", $0); print } else exit }' "$0" ;;
   *) die "unknown subcommand: $1 (try --help)" ;;
 esac

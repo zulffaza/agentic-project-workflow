@@ -110,6 +110,12 @@ them means going back into the task's worktree and pushing, which is ship-side w
 so you don't have to invoke it per task. It processes them serially (each is a real
 edit → verify → push) and recaps a per-task table at the end.
 
+**MR state is checked first, per task** (`$PW_HOME/tooling/pw-lib.sh mr-state <slug> <T0n>`):
+`merged` → the MR was already merged downstream — accept the task, update the dashboard, remove the
+worktree, and skip it (never process comments on a merged MR); `closed` → note it and skip; `unknown`
+(the forge query failed or couldn't resolve the MR) → note it as `mr-state-unknown` and skip. Only
+`open` MRs are actually processed. `/pw-sync` does the same pre-check before refreshing a branch.
+
 ### How it flows
 
 ```
@@ -118,10 +124,15 @@ reviewer leaves a comment on MR !123 (thread on file X, line N — OR a general/
         ▼
 /pw-ship <slug> T03 comments
         │
-        ├─ 1. FETCH open threads   glab api …/merge_requests/<iid>/discussions   (or gh pr view --comments
-        │                          + gh api …/pulls/<n>/comments — GitHub needs BOTH endpoints)
-        │                          — classify by `system`/`resolvable`/`resolved`, NEVER by whether
-        │                          it has a diff position (see box below); cross-check the local
+        ├─ 0. CHECK MR state   pw-lib.sh mr-state <slug> T03 — merged/closed/unknown ⇒
+        │                      accept/update dashboard/remove worktree + skip; only open MRs proceed
+        │
+        ├─ 1. FETCH open threads   GitHub: gh pr view --comments + gh api …/pulls/<n>/comments (BOTH
+        │                          endpoints, or inline review comments are missed).
+        │                          GitLab: glab api …/merge_requests/<iid>/notes — the PRIMARY source
+        │                          (/discussions lags 20+ min; use it only to look up discussion_id
+        │                          for reply/resolve). Classify by `system`/`resolvable`/`resolved`,
+        │                          NEVER by diff position (see box below); cross-check the local
         │                          tracking table, not just the forge's resolved flag
         ├─ 2. FIX in the worktree  worktree/<repo>/T03-<slug>/ … edit, re-run ## Verify, push
         │                          (build-check monitors the pipeline here too, unless
@@ -144,11 +155,15 @@ actively misleading. Refreshing it is as mandatory as replying on the thread, ju
 since the forge doesn't prompt for it the way an unresolved thread does.
 
 **Build check runs by default, in both modes:** polls the MR's pipeline/checks to a terminal state
-(green/red/still running) and shows the result in the recap and the task's `## Result` — meaning a
+(green/red/still-running) and shows the result in the recap and the task's `## Result` — meaning a
 plain run now waits on CI before it finishes. Pass `--skip-build-check` to opt out and get the
 immediate-return behavior back. See
 [`tooling/commands/pw-ship.md`](../tooling/commands/pw-ship.md)'s own "Build check" section for the
-exact per-forge mechanics and timeout handling.
+exact per-forge mechanics and timeout handling. **A red build means that task is NOT done:** the
+agent diagnoses the failure, fixes the change in the worktree, re-runs the task's `## Verify`,
+pushes, and re-monitors until the pipeline passes — up to 3 fix rounds, then it stops and surfaces
+the failure for you (see "Build-check fix loop" in `pw-ship.md`). With `--skip-build-check`, the
+whole check (and the fix loop) is skipped.
 
 ### ⚠️ A general MR comment (no diff line) can still need action
 A reviewer can "Start a thread" from an MR's Overview tab, not just from a diff line — that
