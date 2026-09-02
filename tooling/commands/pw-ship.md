@@ -43,11 +43,15 @@ task; here we push branches and open MRs.
 3. For each confirmed task, from its worktree
    (`{{PW_PROJECTS}}/<slug>/worktree/<repo>/<T0n>-<slug>`):
    - Push the branch to origin.
-   - Open an MR **targeting the task's Base branch** with a rich description (template below), title
-     per the ticket convention above. **Resolve the forge + CLI per `tooling/docs/forges.md`** (host
-     from this repo's own `origin` remote → `PW_FORGE_HOSTS` override, else auto-detect) — GitLab:
-     `glab` run from inside the worktree with `GITLAB_HOST=<resolved-host>`; GitHub: `gh pr create`.
-     Never hardcode a host.
+    - Open an MR **targeting the task's Base branch** with a rich description (template below), title
+      per the ticket convention above. **Resolve the forge + CLI per `tooling/docs/forges.md`** (host
+      from this repo's own `origin` remote → `PW_FORGE_HOSTS` override, else auto-detect) — GitLab:
+      `glab` run from inside the worktree with `GITLAB_HOST=<resolved-host>`; GitHub: `gh pr create`.
+      Never hardcode a host.
+    - **If the task has a `Landing unit:` field** (a must-land-together set from PLAN's `## Landing
+      units`): fill the description template's "**Landing unit:**" bullet with the unit name + the
+      sibling MRs/URLs of that unit's other tasks, so reviewers review the set as one unit and don't
+      mistake an interdependent MR for an independent one.
    - Record the MR in the task's `## Result → MR:` field **and** the dashboard **Merge requests**
      table (Task · Repo · MR url · Target branch · State=open · Build), then log it:
      `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> ship "T0n pushed <branch>; MR <url>"`.
@@ -58,16 +62,21 @@ task; here we push branches and open MRs.
       re-verify, push, re-monitor) until it passes or the cap is hit. If
       `--skip-build-check` was passed, leave both as `—` (not checked this run).
 4. Recap: one line per task (branch → MR url → state → build result, or "skipped" if
-   `--skip-build-check` was passed). Remind me that **open/on-hold MRs don't block `/pw-close`** —
-   `accepted` means verified + MR opened + my sign-off; merging is downstream.
+   `--skip-build-check` was passed) — **group tasks that share a `Landing unit:`** so it's obvious
+   which MRs must be reviewed/merged as a set. Remind me that **open/on-hold MRs don't block
+   `/pw-close`** — `accepted` means verified + MR opened + my sign-off; merging is downstream.
 
 ### MR description template (make it genuinely useful — this is what a reviewer reads first)
 ```
 ## What & why
 <1–3 sentences: the change and the reason. Link the task: task/T0n.md.>
 
-## Changes
-- <file/area>: <what changed>
+## High-level changes        ← the behavior, NOT the files (≤3 bullets, no file paths)
+- <one bullet per observable behavior change a reviewer should understand — e.g. "partner sync now
+  advances a CDC watermark instead of full re-scans", "the endpoint is now idempotent by cursor">
+
+## Low-level changes         ← the concrete diff, anchored to real files (1 line per file/module)
+- <file or module>: <what precisely changed — function/endpoint/class names>
 - …
 
 ## Verification
@@ -78,10 +87,16 @@ counts, etc. Note any pre-existing/environmental failures and that they reproduc
 - **Pinned/kept as-is:** <e.g. "kept lib X at 1.2 — bumping is out of scope, tracked as follow-up">
 - **Risk / blast radius:** <what could break, how it's mitigated / behind a flag>
 - **Follow-ups / out of scope:** <deliberately not done here>
+- **What to review first:** <the 1–2 riskiest spots to eyeball>
+- **Landing unit:** <only if this MR must merge as part of a set — the unit name + sibling MRs, so
+  reviewers review them together and don't mistake an interdependent MR for an independent one>
 
 Part of project `<slug>` (task T0n).
 ```
-Fill every section from the task file + its `## Result`; don't ship a bare "updates X" description.
+Fill every section from the task file + its `## Result` + the actual diff — don't ship a bare
+"updates X" description. Derive **High-level changes** from the task's goal/intent (behavioral,
+no paths — that forces real abstraction); derive **Low-level changes** by diffing the branch against
+its base (`git diff origin/<base>...<branch>`), grouped per file/module with real identifiers.
 
 ## MR-comment mode  (`/pw-ship <slug> [task-ids] comments`)
 Handle review comments left on the **MR itself**. **Scope:** with task IDs, only those; **with no
@@ -179,9 +194,11 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
    - **Refresh the MR description too — every round, not just the first.** Re-fetch the current
      description (`glab mr view <iid>` / `gh pr view <number> --json body`), then update it (`glab
      mr update <iid> --description '<updated body>'` / `gh pr edit <number> --body '<updated
-     body>'`) so it still matches the MR's real, current state: add a bullet under `## Changes` for
-     what this round fixed, refresh `## Verification`'s output if it changed, and add/adjust `##
-     Notes for the reviewer` if the fix introduced a new pinned-as-is/risk/follow-up. Do this even
+     body>'`) so it still matches the MR's real, current state: add a bullet under `## Low-level
+     changes` for what this round changed on disk (and under `## High-level changes` only if an
+     observable behavior actually changed), refresh `## Verification`'s output if it changed, and
+     add/adjust `## Notes for the reviewer` if the fix introduced a new pinned-as-is/risk/follow-up.
+     Do this even
      if the reply-on-thread already explains it — the description is what a reviewer (or you) reads
      first, and it goes stale fast once several review rounds have landed fixes the original
      description never mentioned.

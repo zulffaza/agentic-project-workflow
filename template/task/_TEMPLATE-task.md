@@ -10,6 +10,11 @@
 - **Branch:** `agent/<project-slug>/<T0n>-<slug>`
 - **Worktree:** `worktree/<repo>/<T0n>-<slug>/`
 - **depends_on:** <T-ids or none>          **Parallel group:** <Gn>
+- **Landing unit:** <short-name or none — OPTIONAL. Only when this task's MR must merge as a set
+  with other tasks' MRs (one logical change split by repo, not independently shippable). Every task
+  in the set shares the same name; PLAN gets a `## Landing units` note; `/pw-ship` names the set in
+  each MR description. If it can be a single task/MR, it should be — a landing unit is the fallback
+  for cross-repo coupling, not a license to slice one change into many MRs.>
 - **Status:** todo | in-progress | verify-failed | done | accepted
 - **Execute with:** <provider:model-or-agent> — e.g. `claude:sonnet`, `claude:claude-opus-4-8`
   (pinned), `kilo:command_code/<model>`, or an existing agent (e.g. `code-implementation`).
@@ -47,6 +52,11 @@ executor is debugging why THIS exact, given step didn't work** (a flaky command,
 generated snippet) — never deciding what a step should do. If following steps to the letter can't
 possibly work (the file doesn't exist, the snippet doesn't apply), that's a breakdown mistake, not
 something for the executor to improvise around.
+
+**Code comments you write are for the global team** — never cite this pipeline's internal IDs
+(`Rn`/`Qn`/`Pn`, review-file anchors, task-file headings) in committed code or commit messages;
+comment only what a future maintainer or an external reviewer (with no access to this project's
+internal docs) needs. Internal cross-references belong in `## Result`, not the artifact.
 
 <!-- SUB-SECTIONING — once Steps would run past ~8-10 flat numbered items, split into named phase
      sub-headings: `### A. <phase name>`, `### B. <phase name>`, … Numbering continues straight

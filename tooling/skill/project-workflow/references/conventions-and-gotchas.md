@@ -103,6 +103,13 @@ per-provider copies.
 - **Done:** only after running the task's `## Verify` and pasting real output. Report failures
   and skips faithfully — never claim done on unverified work.
 - **Commits:** Conventional Commits.
+- **Comments are for the global team:** write a code comment (and commit-message detail) only when
+  it helps a future maintainer or an external reviewer who has NO access to this project's internal
+  docs. Never cite internal pipeline IDs (`Rn`/`Qn`/`Pn`, review-file item anchors,
+  `task/T0n.md` headings) in committed code, commit messages, or MR-visible text — internal
+  cross-references belong in the project record (`## Result`, `LOG.md`), never in the artifact.
+  When a comment would only make sense to whoever filed the review item, don't write it — explain in
+  the `↳ agent:` reply instead.
 
 ## Scaffolded project dirs are plain (not git repos)
 This is by design — version history lives in the real repos, and workflow learnings go in the

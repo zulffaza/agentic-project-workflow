@@ -30,6 +30,10 @@ parallel (separate per-task branches), tasks under different pairs are independe
 - **Verify before done:** run the task's `## Verify` block; paste real output; only then report done.
 - **On failure/ambiguity:** stop and report — do not improvise beyond the task's scope.
 - **Reporting:** faithful — failing/ skipped steps are stated, not hidden.
+- **Comments are for the global team:** code comments (and commit-message detail) exist only to help
+  a future maintainer or an external reviewer who has no access to this project's internal docs —
+  never cite internal pipeline IDs (`Rn`/`Qn`/`Pn`, review anchors, task-file headings) in committed
+  code, commit messages, or MR-visible text.
 - <any project-specific global rule, e.g. "bump versions via the parent BOM only">
 
 ## Breakdown rules / execution routing (project-specific)  [🤖🧑 both — you seed, agent records]
@@ -53,6 +57,16 @@ G1 (parallel):  T01   T02
 G2:                     T03   (depends_on: T01, T02)
 G3:                     T04   (depends_on: T03)
 ```
+
+## Landing units (must-land-together sets)  [🤖 agent — only when present]
+Tasks whose MRs must merge **as a set** (one logical change that repos force across several
+worktrees — not independently shippable pieces) share a `Landing unit:` name. The default is that
+**every MR is independently shippable** — a landing unit is the exception, only when a change can't
+be one task/MR. Name the set here so ship marks each MR description and reviewers review it as one
+unit:
+- `cdc-sync → T02 (api change), T03 (consumer wiring)`: must land together — cross-repo; each MR
+  description names the unit + sibling MRs.
+- <none — every MR stands alone>   ← keep it this way wherever the repos allow one task per change
 
 ## Task table
 **Filled by:** [🤖 agent] at breakdown; `Status`/`Time`/`Result` [🤖 agent] during execution,

@@ -58,8 +58,10 @@ Rules you MUST follow:
   **mirror the change into the internal record** (task `## Result` + `task/review/` + `LOG.md`); the
   project dir stays the source of truth even for MR-driven fixes.
   - **Refresh the MR description every round**, not just at open — it goes stale fast once several
-    review rounds have landed fixes the original description never mentioned. Add a `## Changes`
-    bullet, refresh `## Verification`'s output, adjust reviewer notes if warranted.
+    review rounds have landed fixes the original description never mentioned. Add a `## Low-level
+    changes` bullet for what this round changed on disk (and a `## High-level changes` bullet only
+    if observable behavior changed), refresh `## Verification`'s output, adjust reviewer notes if
+    warranted.
   - **Build check runs by default**, either mode of `/pw-ship` — polls the MR's pipeline/checks to
     a terminal state; **a red build means the task is NOT done**, so the agent fixes it in the
     worktree, re-verifies, pushes, and re-monitors until the pipeline passes (up to 3 fix rounds,

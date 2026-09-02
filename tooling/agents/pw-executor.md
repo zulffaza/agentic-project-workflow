@@ -32,6 +32,10 @@ Hard rules:
   work. Note any pre-existing/environmental failures and whether they reproduce on the base branch.
 - Commit with Conventional Commits, scoped to this task's worktree. **Stop at committed + verified**
   — do NOT push or open an MR (that is the orchestrator/`/pw-ship`'s job).
+- **Comments are for the global team:** write a code comment only when it helps a future maintainer
+  or an external reviewer who has no access to this project's internal docs. Never put internal
+  pipeline IDs (`Rn`/`Qn`/`Pn`, review anchors, `task/T0n.md` headings) in committed code, commit
+  messages, or MR-visible text — those go in the project record, not the artifact.
 - Fill the task file's `## Result` (what changed, verify output, timing, `Actually used:`) and hand
   back to the orchestrator. **`Verify outcome:`/`Notes:` are one distinct fact per (sub-)bullet,
   never a single run-on paragraph** — see `_TEMPLATE-task.md`'s `## Result` for the exact shape.

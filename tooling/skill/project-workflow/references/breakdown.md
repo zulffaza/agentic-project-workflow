@@ -18,7 +18,17 @@ PLAN + task set spanning every analysis doc — never one PLAN per doc:
    sub-headings with continuous numbering (see `_TEMPLATE-task.md`'s sub-sectioning note). **Default
    each task's provider to "Produced by"** so the human isn't forced to switch agents; only route
    elsewhere with a `Why:`. See `references/execution-and-routing.md` for the full
-   model/provider-routing rules that apply when filling in `Execute with:`.
+    model/provider-routing rules that apply when filling in `Execute with:`.
+
+**Task boundary rules — one task = one independently shippable MR.** An MR must be mergeable alone
+with the system staying coherent; if a piece is meaningless without a sibling MR, it's the SAME task
+(use `### A./### B./…` sub-phases), or — only when repos force separate worktrees — an explicit
+**landing unit**. Split only on an independently-shippable seam (different repo; a feature-flagged /
+backward-compatible increment valuable alone; a raw review-size ceiling on a single unit). Never
+split by internal mechanics ("one task per pipeline step / file / module / endpoint") — that's how
+one logical change becomes several interdependent MRs nobody can review alone. A must-land-together
+set gets one shared `Landing unit: <name>` across its task files + a `## Landing units` note in
+PLAN; ship records it in each MR description so the set is reviewed as one unit.
 
 **Last step, mandatory:** `pw-lib.sh status <slug> breakdown` + a `pw-lib.sh log` line (see
 `references/conventions-and-gotchas.md`). Remind the human that **only the PLAN sign-off gates

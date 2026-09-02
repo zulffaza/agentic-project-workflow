@@ -96,8 +96,28 @@ Then produce, from `{{PW_HOME}}/template/task/`:
    sequential person-days (ΣSP÷2), and critical-path calendar days (ΣSP along the longest
    dependency chain ÷2). This is the *manual* estimate for planning; agent execution is faster.
 
-Size each task as one worktree / one reviewable unit. Split anything needing two repos and add a
-dependency edge.
+**Task boundary rules — one task = one independently shippable change.** A task's MR must be
+mergeable on its own with the system staying coherent. **If an MR would be broken or meaningless
+without a sibling MR merged, those pieces are NOT separate tasks** — make them ONE task (use the
+`### A./### B./…` sub-phase headings inside it), or — only when they're in different repos or
+otherwise can't share one worktree — an explicitly-marked **landing unit** (below).
+- **Split ONLY on an independently-shippable seam:** (i) a different repo — forced, a worktree can't
+  span two; (ii) a genuinely separable increment that's valuable on its own (a feature-flagged or
+  backward-compatible layer); (iii) a raw review-size ceiling on a change that IS already one unit.
+- **Do NOT split by internal mechanics** — not "one task per step of a pipeline", not per file,
+  per module, per endpoint, or per code-path. A tightly-coupled change gets FEWER, larger MRs, not a
+  train of interdependent ones reviewers must hold in their heads together. (Real example that drove
+  this rule: one CDC-sync API change was cut into several tasks/MRs that only made sense as a set —
+  hard to review, hard to maintain, no single MR reviewable alone.)
+- **Landing unit (must-land-together set):** when a change is one logical unit but genuinely can't
+  be one task (cross-repo, or repo-internal seams that are only shippable together):
+  - Give every task in the set the same `Landing unit: <short-name>` field (task file + PLAN), and
+    add a `## Landing units` note to PLAN naming the set.
+  - Each task's MR description carries "**Landing unit:** <name> — MRs …, merge as a set" so
+    reviewers treat them as one unit (see `/pw-ship`). A set whose members are only coherent when
+    ALL land is still a smell — prefer shrinking to one task where the repos allow it.
+
+Size each task as one worktree / one reviewable unit.
 
 **Adopted units present?** If the dashboard has an `Adopted:` note (from `/pw-adopt`; the units are
 in `context/ADOPTED.md`), read every adopted unit `(repo, branch, base)` and route **per task** —
