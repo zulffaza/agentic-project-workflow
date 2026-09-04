@@ -22,12 +22,30 @@ tooling/agents/
 provider's `render_<name>_agent` hook wraps the body in that provider's frontmatter (see
 `../pw-common.sh`).
 
+## The three facts about Kilo registration these files keep tripping on
+1. **Kilo registers on *two* surfaces at once.** `gen-agents.sh` writes `~/.config/kilo/agent/<name>.md`
+   (generator-owned build output — what `mode:`/`permission:` register from), and the user *may* also
+   keep a `kilo.jsonc → agent` map block mirroring it (their own config, their own paste/edit). A
+   name can also exist on one surface only (a map block with no md; an md with no map block = the
+   new three, until mirrored — whether that md-only path registers is checked at install time with a
+   reload via `pw-doctor` + the §6.4.4 Q1 test in the sub-agent plan, never assumed).
+2. **`gen-agents.sh` refreshes only generated files.** It has **no `--prune`**, and it **never
+   writes `kilo.jsonc`** — a generator rewriting user config (and its `permission`/`mcp`/`enabled_*`
+   policy blocks) is the bug nobody wants. Retirement = delete *every surface holding a copy*, by
+   hand, per the mapping docs (`docs/EXECUTION.md` + the agent plans).
+3. **`pw-doctor`'s agent check is report-and-point, never self-heal into your config.** It compares
+   canonical ⇄ generated md ⇄ your map blocks (where present), flags drift, and prints the refresh
+   command for the md; fixing a *map* block stays your own edit.
+
 ## Reuse before you create
-The three shipped agents cover the three roles the workflow needs. **Execution can still reuse an
-existing agent you already have** (e.g. `code-implementation`) — a task's `Execute with:` names
+The six shipped agents cover the workflow's roles (orchestrator, researcher, analyst, writer-task,
+executor, reviewer — `pw-reviewer` is spawned only by `/pw-review … ai`). **Execution can still
+reuse an existing agent you already have** (e.g. `pw-executor`) — a task's `Execute with:` names
 whatever should run it, and the discipline (worktree isolation, running `## Verify`, faithful
 reporting) comes from the `project-workflow` skill + the task file, not from a bespoke agent. Ship
-`pw-executor` is there for teammates who *don't* have a code agent. `pw-reviewer` is optional —
+`pw-executor` is the *single* dedicated executor concept (ad-hoc non-pw implementation runs on the
+main agent or a default-agent session named by provider+model — not a second implementer
+definition). `pw-reviewer` is optional —
 every review point defaults to human-only (AI Review mode `off`); it only ever runs when a
 project's dashboard turns it on for a specific phase.
 
@@ -60,7 +78,7 @@ Two kinds of thing live here, and the difference is load-bearing:
   that crosses a provider boundary.
 
 When a task's `Execute with:` names an agent, resolve its provider: an explicit prefix wins
-(`kilo:db-migration-runner`, `claude:code-implementation`) → else the agent's own provider → else (a
+(`kilo:db-migration-runner`, `claude:db-migration-runner`) → else the agent's own provider → else (a
 built-in with no def here) the orchestrator's own provider. Then:
 - **Same provider as the orchestrator** → spawn the sub-agent in-process (the normal path).
 - **Different provider** → shell out to that CLI (`kilo run --auto -m <model> …`, or `claude`)
@@ -69,4 +87,19 @@ built-in with no def here) the orchestrator's own provider. Then:
   does NOT use kilo's `pw-executor`; kilo's default agent runs the task file instead. So each
   provider's `pw-executor` only helps when *that* provider is the orchestrator.
 
-Record the concrete `provider:model(+flags)` in the task's `Actually used:`.
+Record the concrete `provider:model(+flags)` in the task's `Actually used:` — and, for every spawn a
+`LOG.md` line records, the provider's **session id** too (`pw-research` docs in
+`docs/EXECUTION.md` §Spawn ledger): a later fix/resume/re-review pass **resumes the same session**
+(`kilo run --session <ses_…>` / `-c`, `--fork`; claude `--resume`/`/resume`) instead of cold-spawning
+when the id is live, and cold-spawns a plain-model session with the recorded seed only when it's
+dead. The session id is a machine-local pointer — never pushed into MR text or committed artifacts;
+the on-disk PLAN/dashboard/task state stays the durable cross-machine recovery.
+
+The phase roles without a task file (researcher / analyst / writer-task / reviewer / verifier)
+bind their model one rung up the ladder: an interactive override for that spawn, the project
+dashboard's `- **AI Models:**` line (`pw-lib.sh ai-model <slug> [role <provider:model>]`, the
+sibling of `- **AI Review:**`; also settable via `/pw-review <slug> config`), or nothing — which
+falls through to the provider's floor (`small_model`/`subagent_model` on kilo; the session model on
+claude). Canonical defs ship with `model:` **unset** on purpose: a provider alias baked into a def
+is a false pin on the other provider. The executor keeps its per-task `Execute with:`; the ladder
+never overrides a task file.
