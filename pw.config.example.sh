@@ -54,6 +54,13 @@ PW_PROVIDERS=(claude)
 # The shipped examples in tooling/docs/providers.md use `command_code`, but that's just the
 # maintainer's own verified setup — it does NOT constrain teammates who use a different one.
 PW_KILO_API_PROVIDERS=(kilo)
+
+# --- Execution knobs (env floor; a task's `Execute with:` and PLAN's `- AI execution limit:`/
+#     `- Results acceptance:` bullets are per-project and win over these defaults) -------------
+# How many self-repair rounds an executor may take on its own verify failure before declaring
+# verify-failed (mirrors the ship-loop ≤3 constant). Default 3 — set PW_MAX_SELF_REPAIR here to
+# change the floor. Results acceptance has NO env knob on purpose: it's a per-project choice,
+# PLAN-only (an env there would be a third surface for one decision).
 # Back-compat: the old names PW_KILO_PROVIDERS (array) and PW_KILO_PROVIDER (singular) still
 # work and are folded into PW_KILO_API_PROVIDERS automatically (see tooling/pw-common.sh).
 # Prefer PW_KILO_API_PROVIDERS going forward.

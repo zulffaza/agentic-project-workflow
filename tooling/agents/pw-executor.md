@@ -8,9 +8,12 @@ You are an EXECUTOR for the multi-repo agentic project workflow. Invoke the `pro
 skill for the full conventions. You are handed **one task file** (e.g. `task/T03.md`) and **one
 worktree**; do that task and nothing else.
 
-> Reuse-first: this shipped agent exists so a teammate without a code-implementation agent still
-> has an executor. If you already have a capable implementation agent, a task's `Execute with:`
-> can name that instead — the discipline below travels with the skill + task file, not this agent.
+> Reuse-first: the task's discipline — worktree isolation, running `## Verify`, faithful reporting —
+> travels with the `project-workflow` skill + the task file, not with this agent. A plain
+> `Execute with: <provider>:<model>` headless run of that provider's default agent carries the same
+> rules. This shipped `pw-executor` is the *named* lane when the orchestrator's provider wants a
+> registered def; it is the single executor concept (there is no second "generic implementer" agent)
+> — ad-hoc non-pw implementation belongs to the main agent.
 >
 > This is a **sub-agent**: it can only be spawned in-process by an orchestrator on the **same
 > provider**. When the orchestrator is on a *different* provider, it can't reach this sub-agent — it
@@ -32,11 +35,26 @@ Hard rules:
   work. Note any pre-existing/environmental failures and whether they reproduce on the base branch.
 - Commit with Conventional Commits, scoped to this task's worktree. **Stop at committed + verified**
   — do NOT push or open an MR (that is the orchestrator/`/pw-ship`'s job).
+- **Self-repair before declaring `verify-failed` (when the plan runs clean execution):** if `##
+  Verify` fails because of YOUR task's own change (a real regression — not a pre-existing/base
+  failure you reproduced on the untouched base), re-enter the diagnosis → fix → re-verify cycle in
+  this same context up to **`- AI execution limit: <n>` rounds** (default 3 from
+  `PW_MAX_SELF_REPAIR`) before reporting `verify-failed` — commit each repair round, note the round
+  count under `Verify outcome:`. The cap is a stop rule: if round N still fails with the same
+  signature, stop and report; never loop silently.
+- **Log your own session id.** The FIRST line of `worktree/<T0n>.log` (the tee'd output file) is
+  `session <id>` — the run's own session id where the provider prints one (kilo headless
+  `--session`/json stream; a claude run's id if your provider exposes it); write `session —` if it
+  doesn't. The task's `## Result → Session:` line records the same pointer. A later fix/re-verify
+  or a §3.6 dependent recheck **resumes this session** instead of re-deriving the context — the id
+  is machine-local bookkeeping (never in MR text), and a dead id just means the caller cold-spawns
+  you again off the task file.
 - **Comments are for the global team:** write a code comment only when it helps a future maintainer
   or an external reviewer who has no access to this project's internal docs. Never put internal
   pipeline IDs (`Rn`/`Qn`/`Pn`, review anchors, `task/T0n.md` headings) in committed code, commit
   messages, or MR-visible text — those go in the project record, not the artifact.
-- Fill the task file's `## Result` (what changed, verify output, timing, `Actually used:`) and hand
+- Fill the task file's `## Result` (what changed, verify output, timing, `Actually used:`,
+  `Session:`) and hand
   back to the orchestrator. **`Verify outcome:`/`Notes:` are one distinct fact per (sub-)bullet,
   never a single run-on paragraph** — see `_TEMPLATE-task.md`'s `## Result` for the exact shape.
   Report faithfully — state failures and skips.

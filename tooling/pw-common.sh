@@ -27,6 +27,13 @@ declare -p PW_FORGE_HOSTS >/dev/null 2>&1 || PW_FORGE_HOSTS=()
 # enough under set -u, but set it here too so every script sees the same resolved value.
 : "${PW_RFC_BACKEND:=markdown}"
 
+# Self-repair cap for the §3.5 in-run executor loop (opt-in clean mode): how many fix-and-
+# re-verify rounds an executor may take on its own regression before declaring verify-failed.
+# Mirrors today's ship-loop constant (`docs/WORKFLOW.md`: build fixes "up to 3 rounds"). Only a
+# *floor/default* here — the per-project choice lives in PLAN's `- AI execution limit:` bullet,
+# which wins over this env value. Default 3.
+: "${PW_MAX_SELF_REPAIR:=3}"
+
 # Model allowlist (see docs/EXECUTION.md's "Model allowlist" section) — one optional scalar per
 # Agent Provider, a comma-separated list of glob patterns. THE RULE: empty/unset = ALL models
 # allowed for that provider — the default, deliberately, so nothing is restricted unless you set

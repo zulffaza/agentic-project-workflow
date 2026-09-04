@@ -16,6 +16,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # tooling/
 PW_HOME="$(cd "$HERE/.." && pwd)"
 . "$HERE/pw-common.sh"
 SKILL_DIR="$PW_HOME/tooling/skill"   # every subdir with a SKILL.md here is a shippable skill
+CANON_AGENTS="$PW_HOME/tooling/agents"
+KJCF="$HOME/.config/kilo/kilo.jsonc"
 
 FIX=0
 case "${1:-}" in
@@ -58,6 +60,88 @@ else
   echo "  – pw-env.sh missing (source it after ./bootstrap.sh)"
 fi
 echo
+
+# Registered-subagent drift check (report-only — NEVER rewrites the user's config). The bundle
+# registers agents on surfaces a provider loads independently: generated `~/.config/kilo/agent/*.md`
+# (generator-owned) and the user's own `agent`-map blocks in `~/.config/kilo/kilo.jsonc` (user-curated
+# prompt/model mirror). Ground truth of what the CLI actually registers is `kilo agent list`; we
+# check the canonical defs land on the surfaces we own + warn when the user's map mirrors are missing
+# or stale. Verified 2026-09-04: an md with `mode:` + `options:` registers on its own (md-only Q1),
+# and a `model:` line in the md binds even when the map block also sets one (map-vs-md Q2: md wins).
+_pw_doctor_agents_drift() {
+  local prov="$1" adir="$2"
+  local canonical names c n gd installed
+  names="$(cd "$CANON_AGENTS" && ls *.md 2>/dev/null | grep -v '^README.md$' | sed 's/\.md$//')"
+  [ -n "$names" ] || { echo "    – no canonical agent defs found"; return 0; }
+  for c in $names; do
+    if [ ! -f "$adir/$c.md" ]; then
+      echo "    ✗ $prov: canonical agent '$c' NOT generated ($adir/$c.md missing — run gen-agents.sh)"
+      issues=$((issues+1))
+      continue
+    fi
+    if [ "$prov" = "kilo" ] && [ -n "$KJCF" ] && [ -f "$KJCF" ]; then
+      if ! grep -q ""agent":" "$KJCF"; then
+        echo "    · kilo map: no "agent" block in kilo.jsonc — agents ride the generated md path only"
+        continue
+      fi
+      installed="$(python3 - "$KJCF" "$c" <<'PY'
+import json, re, sys
+s = open(sys.argv[1]).read()
+s = re.sub(r'(?<![\\]):\s*"agent":\s*\{', lambda m: m.group(0), s)
+m = re.search(r'"agent":\s*\{', s)
+if not m:
+    print("no-map"); sys.exit()
+# naive balanced-brace scan from the agent block start
+depth = 0; i = m.end() - 1; start = i
+while i < len(s):
+    ch = s[i]
+    if ch == '{': depth += 1
+    elif ch == '}':
+        depth -= 1
+        if depth == 0: break
+    elif ch == '"':
+        j = i + 1
+        while j < len(s) and s[j] != '"':
+            if s[j] == '\\': j += 1
+            j += 1
+        i = j
+    i += 1
+body = s[start+1:i]
+key = '"' + sys.argv[2] + '":\s*\{'
+km = re.search(key, body)
+if not km:
+    print("absent"); sys.exit()
+depth = 0; i = km.end() - 1
+while i < len(body):
+    ch = body[i]
+    if ch == '{': depth += 1
+    elif ch == '}':
+        depth -= 1
+        if depth == 0: break
+    elif ch == '"':
+        j = i + 1
+        while j < len(body) and body[j] != '"':
+            if body[j] == '\\': j += 1
+            j += 1
+        i = j
+    i += 1
+blk = body[km.end():i]
+mm = re.search(r'"model":\s*"([^"]*)"', blk)
+print((mm.group(1) if mm else "").replace("\n", " ")[:60])
+PY
+)"
+      case "$installed" in
+        absent) echo "    · kilo map: '$c' has no mirror block — riding the generated md (fine; paste-block in tooling/agents/README.md if you want a map mirror)" ;;
+        no-map) echo "    · kilo map: no "agent" block at all — agents ride the generated md path only" ;;
+        *)
+          mdmodel="$(sed -n '/^model: /{ s/^model: //; p; q }' "$adir/$c.md" 2>/dev/null || true)"
+          if [ -n "$mdmodel" ] && [ "$mdmodel" != "$installed" ]; then
+            echo "    ⚠ kilo map: '$c' mirror block sets model='$installed' while generated md sets '$mdmodel' — md wins in this build; refresh the block yourself if you meant it (user's own edit — pw-doctor never writes kilo.jsonc)"
+          fi ;;
+      esac
+    fi
+  done
+}
 
 # Live model catalog for one Agent Provider, one line per model id (provider-prefix included),
 # or nothing on any failure — every call site treats "nothing" as "can't check", never an error.
@@ -152,6 +236,11 @@ for p in "${PW_PROVIDERS[@]}"; do
   done
   if [ "$unsub" -gt 0 ]; then
     echo "    ✗ {{ARGS}} left unsubstituted in $unsub rendered command file(s) — render_${p}_command never maps it to this CLI's argument placeholder"; issues=$((issues+1))
+  fi
+
+  # agents: generation drift + registration-surface check (report-only, never writes user config)
+  if pw_provider_has_agent_hooks "$p"; then
+    _pw_doctor_agents_drift "$p" "$("${p}_agentdir")"
   fi
 
   # agents: generate to a SEPARATE temp subdir (the commands check already populated $tmp/$p),

@@ -34,6 +34,12 @@
 #   pw-lib.sh ai-review    <slug> [<phase> <mode>]   get (no extra args) or set one phase's AI-review
 #                                                     mode on the dashboard (phase: analysis|plan|
 #                                                     task-plan|task-exec|ship; mode: off|advisory|auto)
+#   pw-lib.sh ai-model     <slug> [<role> <provider:model|—>]
+#                                                     get/set one spawn-lane's model row on the
+#                                                     dashboard (role: researcher|analyst|
+#                                                     writer-task|reviewer|verifier — never the
+#                                                     executor, whose pin lives in its task file's
+#                                                     `Execute with:`; — = no row = provider default)
 #   pw-lib.sh review note-init    <slug>              create REVIEWER-NOTES.md if missing (idempotent)
 #   pw-lib.sh review auto-signoff <slug> <review-rel-path> <phase>
 #                                                     write a Sign-off row WITHOUT a human — refuses
@@ -625,6 +631,69 @@ cmd_ship() {
     comment-seen) shift; cmd_ship_comment_seen "$@" ;;
     *) die "usage: ship comment-seen <slug> <task-id> <thread-id> <kind:resolvable|unresolvable> <replied:yes|no> [note...]" ;;
   esac
+}
+
+# --- AI Models (per-lane model row for the spawned sub-agent lanes — plan 01 §5.1) -----------
+# The model sibling of the AI Review config block below: which model a *lane* should run on when a
+# phase spawns it, per project. Roles = spawn lanes (researcher / analyst / writer-task / reviewer /
+# verifier). The **executor is never a row** — a task's `Execute with:` already pins its per-unit
+# model (a dashboard copy would only drift from it) — and clean-execution choices (`Results
+# acceptance`, `- AI execution limit`) live in PLAN's Execution strategy, not the dashboard.
+# `—` = no row = provider/session default (the kilo `small_model`/`subagent_model` floor, or
+# claude's session/def model). Values are `<provider>:<model>`-shaped — the same syntax as
+# `Execute with:` (tooling/docs/providers.md). Where a provider can't bind the row at spawn time
+# (kilo's Task-tool spawn has no model arg), the driver runs the row as a **headless session** of
+# that model over the same work order, and records what actually ran — a pin that can't fire says
+# so in the result, instead of silently running the floor model while the row claims a pin.
+AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier"
+
+# Idempotent: insert the dashboard line, all-—, if it doesn't exist yet (covers projects scaffolded
+# before this feature existed — same ensure-if-missing idiom as _ai_review_line_ensure).
+_ai_models_line_ensure() {
+  local f="$1"
+  grep -q '^- \*\*AI Models:\*\*' "$f" && return 0
+  local default="" r
+  for r in $AI_MODEL_ROLES; do default="$default $r=—"; done
+  default="${default# }"
+  grep -q '^- \*\*One-liner:\*\*' "$f" || die "no '- **One-liner:**' line to anchor AI Models: after in $f"
+  awk -v t="$default" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **AI Models:** " t; d=1}' \
+    "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+}
+
+# Get (no extra args) or set (role + value; — clears to no-row).
+#   ai-model <slug>                                -> "researcher=— analyst=— writer-task=— reviewer=— verifier=—"
+#   ai-model <slug> <role> <provider:model|—>      -> sets just that lane, leaves the other four untouched
+cmd_ai_model() {
+  [ $# -ge 1 ] || die "usage: ai-model <slug> [<role> <provider:model|—>]   (role: $AI_MODEL_ROLES)"
+  local slug="$1"; shift
+  local f; f="$(proj_dir "$slug")/README.md"
+  [ -f "$f" ] || die "no README.md in project $slug"
+  _ai_models_line_ensure "$f"
+  if [ $# -eq 0 ]; then
+    grep '^- \*\*AI Models:\*\*' "$f" | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//'
+    return 0
+  fi
+  [ $# -eq 2 ] || die "usage: ai-model <slug> <role> <provider:model|—>   (role: $AI_MODEL_ROLES)"
+  local role="$1" value="$2"
+  case " $AI_MODEL_ROLES " in *" $role "*) ;; *) die "invalid role '$role' (allowed: $AI_MODEL_ROLES)" ;; esac
+  case "$value" in
+    —|-) ;;  # clearing to no-row is always valid
+    *:*) ;;
+    *) die "invalid value '$value' — write <provider>:<model> (e.g. kilo:command_code/<m>, claude:sonnet) or — for no row" ;;
+  esac
+  local cur; cur="$(grep '^- \*\*AI Models:\*\*' "$f" | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//')"
+  local new="" found=0 kv k
+  for kv in $cur; do
+    k="${kv%%=*}"
+    if [ "$k" = "$role" ]; then new="$new $role=$value"; found=1
+    else new="$new $kv"; fi
+  done
+  [ "$found" -eq 1 ] || new="$new $role=$value"
+  new="${new# }"
+  awk -v t="$new" '!d && /^- \*\*AI Models:\*\*/ {print "- **AI Models:** " t; d=1; next} {print}' \
+    "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  cmd_log "$slug" ai-model "$role -> $value"
+  echo "$slug: AI Model $role -> $value"
 }
 
 # --- AI-assisted review (optional delegated review pass — see docs/REVIEW.md + the pw-review
@@ -1964,6 +2033,31 @@ cmd_selftest() {
   [ "$(cat "$tmp/demo/README.md")" = "$readme_before" ] \
     || die "selftest FAIL: failed dashboard-task-status still mutated the file"
 
+  # ai-model: the lane row exists, defaults to all-—, updates one lane only, clears back, refuses
+  # the executor lane and a bare model name. Regression guard behind the row: a model line that
+  # duplicated a task's `Execute with:` would silently drift from it — the executor is pinned in
+  # its task file, never here (§5.1). The row IS advisory on kilo at Task-spawn time (a headless
+  # session carries it instead, §8c) — recorded in the result, never silently ignored.
+  local got_m; got_m="$(PW_PROJECTS_DIR="$tmp" "$0" ai-model demo2)"
+  [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=—" ] \
+    || die "selftest FAIL: ai-model default line wrong: '$got_m'"
+  PW_PROJECTS_DIR="$tmp" "$0" ai-model demo2 researcher kilo:command_code/x >/dev/null
+  got_m="$(PW_PROJECTS_DIR="$tmp" "$0" ai-model demo2)"
+  [ "$got_m" = "researcher=kilo:command_code/x analyst=— writer-task=— reviewer=— verifier=—" ] \
+    || die "selftest FAIL: ai-model set not isolated to researcher: '$got_m'"
+  PW_PROJECTS_DIR="$tmp" "$0" ai-model demo2 researcher — >/dev/null
+  got_m="$(PW_PROJECTS_DIR="$tmp" "$0" ai-model demo2)"
+  [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=—" ] \
+    || die "selftest FAIL: ai-model clear-to-default failed: '$got_m'"
+  if PW_PROJECTS_DIR="$tmp" "$0" ai-model demo2 executor claude:sonnet >/dev/null 2>&1; then
+    die "selftest FAIL: ai-model accepted the executor lane (the task file binds the executor)"
+  fi
+  if PW_PROJECTS_DIR="$tmp" "$0" ai-model demo2 analyst sonnet-no-provider >/dev/null 2>&1; then
+    die "selftest FAIL: ai-model accepted a row without <provider>:<model> form"
+  fi
+  grep -q '^- \*\*AI Models:\*\*' "$tmp/demo2/README.md" \
+    || die "selftest FAIL: ai-model line vanished after clears"
+
   echo "selftest OK"
 }
 
@@ -1978,6 +2072,7 @@ case "${1:-}" in
   rfc)         shift; cmd_rfc "$@" ;;
   ship)        shift; cmd_ship "$@" ;;
   ai-review)   shift; cmd_ai_review "$@" ;;
+  ai-model)    shift; cmd_ai_model "$@" ;;
   review)      shift; cmd_review "$@" ;;
   model-check) shift; cmd_model_check "$@" ;;
   mr-state)    shift; cmd_mr_state "$@" ;;
