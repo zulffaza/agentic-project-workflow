@@ -19,8 +19,8 @@ tooling/
 │   ├── pw-analyze.md
 │   ├── … (pw-adopt, pw-breakdown, pw-review, pw-execute, pw-ship, pw-sync, pw-status, pw-doctor)
 │   └── pw-close.md
-├── agents/             ← THE source of truth for seedable sub-agents (pw-orchestrator, pw-executor,
-│                         pw-reviewer — the last optional, only spawned by /pw-review … ai)
+├── agents/             ← THE source of truth for seedable sub-agents: pw-orchestrator, pw-executor,│                         pw-reviewer (optional, only spawned by /pw-review … ai), pw-researcher,
+│                         pw-analyst, pw-writer-task (the phase lanes — see agents/README.md)
 ├── docs/               ← registries/policy the AGENTS read (each has a human-facing peer doc);
 │                         maintainer-owned reference — you never edit these, see below:
 │   ├── providers.md      cross-provider execution mechanism (headless invocation hooks)

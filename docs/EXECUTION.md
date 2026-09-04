@@ -80,7 +80,8 @@ forced to switch agents mid-workflow — a task is routed elsewhere only with a 
 | `haiku` | claude | trivial mechanical bulk edits |
 | `kilo/<model>` | kilo | KiloCode's own built-in gateway — the **default** API Provider, no separate credential (proxies Claude/GPT/Gemini/etc. through KiloCode itself) |
 | `command_code/MiniMaxAI/MiniMax-M3`, `openrouter/<model>`, … | kilo | open-weight/third-party models — needs its own credential; routed via any *additional* KiloCode API Provider you've listed in `PW_KILO_API_PROVIDERS` (`kilo models <provider>`) |
-| a same-provider def (`pw-executor`) | (that provider) | reuse a registered executor natively; across providers a **model + task file** is the portable form (sub-agent names don't cross) || a custom `tooling/agents/` def | (its provider) | a genuinely new recurring role. Note (verified): `kilo run --agent <name>` targets **primary** agents only — hand it a `mode: subagent` def and it says so and runs the default agent anyway; on claude, `--agents '<json>'` injects custom defs into the session — route by model, and don't assume cross-provider names resolve |
+| a same-provider def (`pw-executor`, etc.) | (that provider) | reuse a registered executor natively; across providers a **model + task file** is the portable form (sub-agent names don't cross — `kilo run --agent` takes **primary** defs only and silently continues on the default agent otherwise; claude `--agents '<json>'` injects session defs that carry only a model) |
+| a custom `tooling/agents/` def | (its provider) | a genuinely new recurring role — same cross-provider caveat: a `mode: subagent` def is not addressable from the other CLI |
 
 **How the agent knows what's actually available:** claude's models are the fixed set in the table
 above — nothing to look up. kilo and opencode both have a real, changeable catalog, so
@@ -197,7 +198,7 @@ These two words are **not** interchangeable — the distinction decides how a ta
 | | **Sub-agent** | **Agent** (primary / invocable) |
 |---|---|---|
 | What | spawned **in-process** by an orchestrator | a top-level agent invoked through a provider's **CLI** |
-| How | Claude's Task tool `subagent_type`; KiloCode `mode: subagent` | `kilo run --agent <name>`, or `claude` invoked headlessly |
+| How | Claude's Task tool `subagent_type`; KiloCode `mode: subagent` | that provider's CLI: `kilo run --agent <primary-agent>` / `claude -p` (a sub-agent def is NOT nameable from across the boundary) |
 | Boundary | **same provider only** — a provider can spawn only its *own* sub-agents | the **only** unit that crosses a provider boundary |
 | Here | `pw-executor` | `pw-orchestrator` |
 

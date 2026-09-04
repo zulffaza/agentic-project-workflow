@@ -13,7 +13,7 @@ state lives on disk, not in an agent's head.
 | # | Step | Who | Produces | Gate | Command |
 |---|------|-----|----------|------|---------|
 | 1 | Drop context | You | files in `context/` + a row in `context/INDEX.md` | — | `/pw-new` |
-| 2 | Analyze | any agent (lanes spawn on demand: `pw-researcher` Mode B grounds a thin/unverifiable context, `pw-analyst` drafts from its seed — either optional, the driver owns the doc) | `analysis/<topic>.md` + dashboard one-liner | — | `/pw-analyze` |
+| 2 | Analyze | any agent (optional lanes: `pw-researcher` Mode B grounds a thin/unverifiable context, `pw-analyst` drafts from its seed — either optional; the driver pre-flights/exit-checks, and owns the doc) | `analysis/<topic>.md` + dashboard one-liner | — | `/pw-analyze` |
 | 3 | Review analysis | You + agent | `analysis/review/<t>.review.md` + fixes | analysis approved | `/pw-review` |
 | 4 | Break down | any agent (lane: `pw-writer-task` drafts per-task docs from your decisions — independent docs batched under `- Max parallelism:`; DAG + every decision field stays yours) | `task/PLAN.md` + `task/T01…Tnn.md` | — | `/pw-breakdown` |
 | 5 | Review tasks | You | `task/review/PLAN.review.md` + fixes | **plan approved (only hard gate)** | `/pw-review` |
