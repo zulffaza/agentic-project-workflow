@@ -19,8 +19,21 @@ Given a project under `{{PW_PROJECTS}}/<slug>/`:
   (`pw-lib.sh log … "spawned … · session=<id> · seed=… · out=…"`), a `Session:` line in the task's
   `## Result`. A fix later (a review batch, a §3.6 recheck) **resumes the recorded session id**
   where live instead of cold-re-deriving; the recorded seed is the cold fallback.
-- Walk the dependency DAG. Spawn ONE executor per task, only once its `depends_on` are all done.
-  Parallelize independent tasks up to the plan's max parallelism.
+- Walk the dependency DAG. Spawn ONE executor per task, only once its `depends_on` are all done.  Parallelize independent tasks up to the plan's max parallelism. **You are a driver, not an
+  implementer** — when the phase calls for a researcher (Mode A answer / Mode B grounding), an
+  analyst draft, or a task-doc writer, spawn that lane *seeded* (a §4.1-style executive summary +
+  pointers, never raw context) and exit-check its result against the brief's scope; a lane model comes
+  from the project's `- **AI Models:**` row (unset = provider default), and lanes that can't bind
+  server-side (kilo spawn has no model arg) run headless on that row's model (see
+  `docs/EXECUTION.md` Phase-lane spawns).
+- **Keep the ledger** — every spawn logs `· session=<id>` (+ `seed=`/`out=`) with
+  `pw-lib.sh log`; re-repair and §3.6 recheck passes **resume** those ids first (kilo
+  `kilo run -s <id>`, claude `--resume <id>`/`/resume`), cold-spawn only from the seed when the id
+  is dead. A landed fix on a task whose dependents already ran fans **one** capped §3.6 pass: each
+  dependent re-merges + re-runs its own `## Verify` (conflict = *their* `verify-failed`, statuses
+  are your flips, never the fixer's), and file-overlap dependents also get ≤1 reviewer-style
+  `dep-impact` pass whose items queue into that dependent's next batch. A batched fix is ONE pass per
+  artifact — never one spawn per item.
 - For each task, resolve its `Execute with:`: **a plain `<provider>:<model>`** (the default form,
   the PLAN's produced-by provider) runs a session on that model **with the task file as the work
   order** — your own CLI's default agent in-process, or the other provider's CLI headlessly; **an

@@ -7,6 +7,15 @@ second token scopes the analysis to a topic; `--ignore-fetch-errors` — see ste
 anywhere after the slug).
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
+
+**Optional lane spawns — see `tooling/skill/project-workflow/references/execution-and-routing.md`
+§Spawn lanes (seeds)/§Spawn ledger, and docs/EXECUTION.md §Spawning phase work.** Every delegated
+step here gets: (a) a seeded brief (pointer-list, no re-gathering), (b) your **pre-flight** that the
+seed covers its scope, (c) a `LOG.md` spawn line with `· session=<id>` + `seed=` + `out=`, and
+(d) an **exit-check** against the brief — a thin result is fixed by resuming that id with a seed
+patch (kilo `kilo run -s <id>`, claude `--resume`), not by a cold respawn. Lane models come from
+the dashboard's `AI Models:` row; the executor lane never does (tasks bind it per unit).
+
 **Optional lane spawns (grounding + drafting) — see the skill's
 `references/execution-and-routing.md` §Spawn lanes + §Spawn ledger.** If `context/` is thin or
 unverifiable, spawn `pw-researcher` (Mode B) on the dropped inputs to get a ground-truth pack +
@@ -104,7 +113,8 @@ decisions (options not converged, Q0 rules, the final doc) stay yours.
      bookkeeping), seed it — reuse that fact's own §5.1 Decisions-log one-liner as the payload,
      never a separate authoring pass. Scope project-specific vs. cross-project per whatever
      `PW_MEMORY_NOTES` already documents for this tool's buckets.
-2b. **Exit check before you call it drafted:** diff the doc against the brief's scope list — a    dropped item is a **targeted re-read/patch on the seed** (resume the analyst by its id,
+2b. **Exit check before you call it drafted:** diff the doc against the brief's scope list — a
+    dropped item is a **targeted re-read/patch on the seed** (resume the analyst by its id,
     §Spawn lanes), not a fresh drafting pass.
 3. **Open questions (QnA):** if anything is hard to analyze or needs my decision, DON'T guess —
    list it in the analysis §5.3 as `Q1/Q2…` (with why it matters), AND seed a matching `Qn` row
