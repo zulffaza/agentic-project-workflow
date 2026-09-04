@@ -61,6 +61,15 @@ PW_KILO_API_PROVIDERS=(kilo)
 # verify-failed (mirrors the ship-loop ≤3 constant). Default 3 — set PW_MAX_SELF_REPAIR here to
 # change the floor. Results acceptance has NO env knob on purpose: it's a per-project choice,
 # PLAN-only (an env there would be a third surface for one decision).
+
+# Per-project AI Review + spawn-lane model defaults (written into a new project's dashboard by
+# scaffold.sh — a project can always flip them later via /pw-review <slug> config [model …]).
+#   PW_AI_REVIEW_DEFAULT=off                     # off|advisory|auto — the per-phase starting mode
+#   PW_AI_MODEL_DEFAULT_RESEARCHER=—             # e.g. kilo:command_code/MiniMaxAI/MiniMax-M3,
+#   PW_AI_MODEL_DEFAULT_ANALYST=—                #     claude:sonnet — `—` = provider default
+# (writer-task / reviewer / verifier follow the same PW_AI_MODEL_DEFAULT_<ROLE> pattern; the
+#  EXECUTOR is never a row — its pin is a task's `Execute with:`.)
+
 # Back-compat: the old names PW_KILO_PROVIDERS (array) and PW_KILO_PROVIDER (singular) still
 # work and are folded into PW_KILO_API_PROVIDERS automatically (see tooling/pw-common.sh).
 # Prefer PW_KILO_API_PROVIDERS going forward.

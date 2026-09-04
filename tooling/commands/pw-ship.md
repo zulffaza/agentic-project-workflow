@@ -99,7 +99,13 @@ no paths — that forces real abstraction); derive **Low-level changes** by diff
 its base (`git diff origin/<base>...<branch>`), grouped per file/module with real identifiers.
 
 ## MR-comment mode  (`/pw-ship <slug> [task-ids] comments`)
-Handle review comments left on the **MR itself**. **Scope:** with task IDs, only those; **with no
+Handle review comments left on the **MR itself** — **all open threads on one task arrive as ONE fixer pass** for that task's worktree (a batched `seed-review-batch`, per-thread replies mirrored
+into `task/review/T0n.review.md`; resume the task's `## Result → Session:` executor by id, cold
+re-spawn only if dead), not one run per comment. And when a fix *lands* on a task whose dependents
+already ran, apply the **§3.6 fan** exactly once: merge the fixed branch → re-run each already-run
+dependent's own `## Verify` (clean → stays `done`; conflict/regression → that dependent's own flip,
+driver-side) + ≤1 `dep-impact:T0n` review-style pass where their files/landing units actually
+overlap — filed as items for the dependent's batch, never a direct edit into it. **Scope:** with task IDs, only those; **with no
 task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, state open) — so
 `/pw-ship <slug> comments` clears review comments across all of the project's MRs in one run.
 
@@ -169,7 +175,14 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      — but that auto-resolve does **not** happen for a resolvable *general* (no diff position)
      thread, so don't assume pushing a fix closed it out; you must explicitly resolve it (below).
    - A task whose MR has no open/unrecorded threads at all is skipped (note it in the recap).
-2. Apply the fixes in that task's **worktree**, re-run its `## Verify`, and push.
+2. **One executor pass per task, not one spawn per comment** (the §4.8 batch): apply *all* the   open thread fixes in that task's **worktree**, re-run its `## Verify` once for the batch, and
+   push. Resume that task's own executor session first when its `## Result → Session:` id is live —
+   you are handing it a work order, not re-deriving context from a cold spawn.
+   - **A landed fix on a dependency fans the §3.6 passthrough** onto tasks *already run* from it:
+     each affected dependent re-merges its dependency and re-runs **its own** `## Verify` (conflict
+     = that dependent's own `verify-failed`; the driver flips statuses, never the fixer); where
+     file/landing-unit overlap is real, one `dep-impact` reviewer pass files items into the
+     dependent's queue — no edit-backward into the fixed task, new DAG task if it needs one.
     - **Unless `--skip-build-check` was passed:** monitor the pipeline/checks to a terminal state
       right after this push (see "Build check" below), before moving on to step 3 — so a failed
       build shows up in the recap and can be mentioned in the thread reply, not discovered later.

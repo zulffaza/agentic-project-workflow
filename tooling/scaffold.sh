@@ -19,6 +19,18 @@ AI_REVIEW_PHASES="analysis plan task-plan task-exec ship"
 ai_review_default_line=""
 for p in $AI_REVIEW_PHASES; do ai_review_default_line="$ai_review_default_line $p=${PW_AI_REVIEW_DEFAULT:-off}"; done
 ai_review_default_line="${ai_review_default_line# }"
+# spawn-lane model rows (docs/EXECUTION.md §Spawning phase work) — every lane defaults unbound
+# (`—` = provider's own default), same config-driven shape as the AI Review line above.
+AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier"
+ai_model_default_line=""
+for r in $AI_MODEL_ROLES; do
+  rv="$(printf '%s' "$r" | tr '[:lower:]' '[:upper:]' | tr '-' '_')"
+  _rv_var="PW_AI_MODEL_DEFAULT_${rv}"
+  rv_val="${!_rv_var:-—}"
+  ai_model_default_line="$ai_model_default_line $r=$rv_val"
+done
+ai_model_default_line="${ai_model_default_line# }"
+
 
 slug="${1:-}"
 if [[ -z "$slug" ]]; then
@@ -44,7 +56,7 @@ rsync -a \
   "$TEMPLATE_DIR"/ "$dest"/
 
 # Render the project dashboard as the project's README.md.
-sed "s/<PROJECT_NAME>/$slug/g; s|<CREATED>|$(date '+%F %H:%M')|; s|<AI_REVIEW_DEFAULT>|$ai_review_default_line|" \
+sed "s/<PROJECT_NAME>/$slug/g; s|<CREATED>|$(date '+%F %H:%M')|; s|<AI_REVIEW_DEFAULT>|$ai_review_default_line|; s|<AI_MODELS_DEFAULT>|$ai_model_default_line|" \
   "$TEMPLATE_DIR/PROJECT.template.md" > "$dest/README.md"
 
 # Stamp {{PW_*}} tokens (absolute paths) into every copied markdown file.

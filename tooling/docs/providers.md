@@ -54,7 +54,15 @@ sync by whoever maintains the bundle, not something you edit here to change beha
 - **kilo** — `kilo run --auto -m <api-provider>/<model> "<prompt>" --dir <path> [--variant <low|
   medium|high|max|minimal>] [--thinking] [--format json]`. `--auto` is **required** headless
   (without it, `kilo run` auto-*rejects* every permission — it can't even read the task file).
-  Add `--agent <name>` when targeting a native agent instead of a bare model. `<api-provider>` is
+  Add `--agent <name>` only when targeting a **primary** agent, never a sub-agent: verified    2026-09-04, `--agent pw-executor` prints *"agent 'pw-executor' is a subagent, not a primary
+    agent. Falling back to default agent"* and runs the fallback model anyway (unknown names likewise
+    fall back silently) — so cross-provider *execution* always carries the **task file as the work
+    order** on a `<api-provider>/<model>`, never a sub-agent name. Two related kilo facts from the
+    same probe session (`kilo agent list` / `kilo debug agent <name>`): an `agent/*.md` file with
+    `mode:` + `options:` registers on its own (no map block needed), and a `model:` line *in that md*
+    binds — outranking a `kilo.jsonc` map block if both set it. So a dashboard `- **AI Models:**` row
+    can reach kilo's md path without any user-config edit once `render_kilo_agent` prints a canonical
+    `model:`. `<api-provider>` is
   one of `PW_KILO_API_PROVIDERS` (`pw.config.sh`) — e.g. `kilo`, `command_code`, `openrouter`.
 - **opencode** — `opencode run --auto -m <api-provider>/<model> "<prompt>" [--format json]
   [--attach <url>]`. `--auto` is required headless. **Not yet run end-to-end in this bundle**
@@ -99,6 +107,33 @@ running a provider's CLI by hand, and never blocks `/pw-doctor` itself. (kilo's 
 browsable directly via `kilo models [provider-id]`, opencode's via `opencode models [provider-id]`,
 if you want to look yourself — but `/pw-doctor` is the one that actually validates your config.)
 
+## Verified agent/session facts (probed 2026-09-04, this machine — re-run before trusting them elsewhere)
+
+- **Registered set = ground truth via `kilo agent list`** (prints `name (mode)` + resolved
+  permission JSON); `kilo debug agent <name>` prints the **effective config incl. the model a
+  resolution landed on**. Use these instead of guessing from files, and *after* editing either
+  surface — a client reload is what applies config edits.
+- **Kilo reads agent definitions from BOTH surfaces** — the generated `~/.config/kilo/agent/*.md`
+  (mode/description/options/permission + body) **and** a `kilo.jsonc → agent` mirror block (the
+  mirror can carry `model:` and `prompt:`). md-only registers too (`options:` + `mode:` are what
+  makes a bare md resolve). **When both exist and set `model:`, the md's model wins** (probed).
+- **`kilo run` headless surface**: `-m <apiProvider>/<model>` binds the model; `--agent <name>`
+  resolves **only primary** agents (probed: a `mode: subagent` def prints "…is a subagent, not a
+  primary agent. Falling back to default agent" with no error exit — it silently *continues* with
+  the default agent, so never treat a headless `--agent` on a sub-agent as "worked"); **`-c` /
+  `-s <ses_…>` / `--fork`** resume sessions; **`--dir <path>`** runs in another directory (see
+  `PW_KILO_WORKDIR` below).
+- **`claude -p` headless surface**: `--model` binds; `--agents '<json>'` injects *session-level*
+  custom defs (probed to work for a headless `-p` run); `--permission-mode` is real
+  (`choices: … auto …` — `auto` = the background classifier, best for unattended nested spawns);
+  session resume is the CLI's own (`-c`/`/resume`).
+- **Both CLIs take a working-directory flag** (`kilo run --dir <path>`; `pw-common.sh` wires the
+  same idea for claude as `-C <path>` via the `PW_CLAUDE_WORKDIR` env — the config hook is
+  `*_bin()`/`*_headless` envs; there is no `PW_KILO_BIN`/`PW_CLAUDE_BIN` variable set anywhere in
+  this bundle: the two binaries are the `kilo`/`claude` hooks and the headless *shape* is the
+  `<name>_headless` doc-block). A machine that lacks a repo locally can still run an executor headless
+  against ITS own dir.
+
 ## Cross-provider execution (how the orchestrator routes)
 
 This is how a task written in one provider's format gets handed to another provider's CLI
@@ -123,7 +158,9 @@ than inline here.
    provider boundary; only a provider's own primary agents are invocable from outside, and a lone
    task just needs the default agent + task file. The discipline travels with the task, not the
    provider — the other CLI still follows the `project-workflow` skill + the task file.
-   Concretely (note: `-m <model>`, **no** `--agent`):
+      Concretely (`-m <model>` always carries the routing; `--agent` is optional and names **primary**
+   agents only — a `mode: subagent` def is rejected headless, verified 2026-09-04 — so the portable
+   invocation passes the task file as the work order and lets that CLI's default agent run it):
    ```bash
    # Claude-Code orchestrator → hand a kilo:* task to KiloCode (command_code API Provider):
    PROMPT="Follow the project-workflow skill (executor role). Execute the task in \

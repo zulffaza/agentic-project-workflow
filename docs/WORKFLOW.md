@@ -13,13 +13,13 @@ state lives on disk, not in an agent's head.
 | # | Step | Who | Produces | Gate | Command |
 |---|------|-----|----------|------|---------|
 | 1 | Drop context | You | files in `context/` + a row in `context/INDEX.md` | — | `/pw-new` |
-| 2 | Analyze | any agent | `analysis/<topic>.md` + dashboard one-liner | — | `/pw-analyze` |
+| 2 | Analyze | any agent (lanes spawn on demand: `pw-researcher` Mode B grounds a thin/unverifiable context, `pw-analyst` drafts from its seed — either optional, the driver owns the doc) | `analysis/<topic>.md` + dashboard one-liner | — | `/pw-analyze` |
 | 3 | Review analysis | You + agent | `analysis/review/<t>.review.md` + fixes | analysis approved | `/pw-review` |
-| 4 | Break down | any agent | `task/PLAN.md` + `task/T01…Tnn.md` | — | `/pw-breakdown` |
+| 4 | Break down | any agent (lane: `pw-writer-task` drafts per-task docs from your decisions — independent docs batched under `- Max parallelism:`; DAG + every decision field stays yours) | `task/PLAN.md` + `task/T01…Tnn.md` | — | `/pw-breakdown` |
 | 5 | Review tasks | You | `task/review/PLAN.review.md` + fixes | **plan approved (only hard gate)** | `/pw-review` |
-| 6 | Execute | Executor agent | commits/branches in `worktree/*` (committed + verified) | per-task DoD | `/pw-execute` |
-| 7 | Ship | Executor agent | pushed branches + MRs (rich description) | you confirm the push | `/pw-ship` |
-| 8 | Review results | You + agent | accepted tasks (optional `task/review/T0n`) | you accept each task | `/pw-review` |
+| 6 | Execute | Orchestrator + executor sessions/lanes (one per ready task; `Execute with:` → same-provider def or `provider:model`; each spawn ledgered `session=<id>` in `LOG.md`+`## Result`) | commits/branches in `worktree/*` (committed + verified) | per-task DoD | `/pw-execute` — opt-in `- Results acceptance: auto` + `--acceptance`/`--then-ship` |
+| 7 | Ship | Executor agent (strong) | pushed branches + MRs (rich description) | you confirm the push | `/pw-ship` (`--then-ship` chains it after a run) |
+| 8 | Review results | You + agent (fixes return through the task's own executor: one batched pass per artifact, resume-by-id first; a landed fix fans the capped §3.6 dependent recheck) | accepted tasks (optional `task/review/T0n`) | you accept each task — *the clean-execution option moves only green, item-free tasks, and remains human-reversible* | `/pw-review` |
 | 9 | Learn + close | You + agent | memory (if configured), worktrees torn down, Status→done | — | `/pw-close` |
 
 Keeping an MR up to date after it's open is a side-loop, not a numbered step: **`/pw-sync`** (see
@@ -87,12 +87,20 @@ Ask any agent to turn approved analysis into a breakdown:
 The **PLAN sign-off is the only hard gate for execution**. Per-task reviews are optional.
 
 ## Step 6 — Execution
-Hand `task/PLAN.md` to one **orchestrator** agent. It reads the DAG and spawns **executor**
-sub-agents — one per task, respecting dependencies. **Same-provider tasks run as native in-process
-sub-agents** (easy to monitor); a different-provider task is shelled out to that CLI. Either way the
+Hand `task/PLAN.md` to one **orchestrator** agent. It reads the DAG and spawns **executor**sessions/lanes — one per task, respecting dependencies. **Same-provider tasks run as native
+in-process sub-agents** (easy to monitor); a different-provider task is shelled out to that CLI with
+the task file as the work order (a *sub-agent* name never crosses a provider boundary — Kilo's
+`kilo run --agent` even refuses a `mode: subagent` def; see docs/EXECUTION.md). Either way the
 executor **tees its output to `worktree/<T0n>.log`** so you can `tail -f` a run in your own window.
-Each executor works in its **own worktree**, runs the task's `Verify` block, reports the actual
-output, and fills the task file's `## Result`. **Execution stops at committed + verified** — it does
+Each executor works in its **own worktree**, runs the task's `Verify` block (a same-changeregression may self-repair inside the run, bounded by `- AI execution limit:` /
+`PW_MAX_SELF_REPAIR`, before declaring `verify-failed`), reports the actual output, and fills the
+task file's `## Result`. **Every spawn is ledgered** — `pw-lib.sh log` records `session=<id>` +
+seed/outcome, and the task's `## Result → Session:` carries it — so a later Row 8 repair *resumes*
+the executor's own session instead of re-deriving the context, and MR-comment fixes arrive to the
+executor as **one batched pass per artifact** (per-item replies preserved). When a landed fix
+followed a dependent that already ran, the driver fans one capped §3.6 recheck (mechanical
+re-`Verify` per dependent + ≤1 `dep-impact` review pass where files overlap, filed as items — no
+edit-backward into the dependency). **Execution stops at committed + verified** — it does
 *not* push or open MRs.
 
 Full detail on roles, model/agent choice, and cross-provider execution:
@@ -139,8 +147,10 @@ different loop — see the [MR review flow](./REVIEW.md#2-the-mr-review-flow-pos
 ## Step 8 — Review results
 `done` (committed + verified) isn't the same as `accepted` — that's a separate decision you make
 after actually looking at what an executor produced. Two outcomes:
-- **You're satisfied** → flip the task's `Status: accepted`. This is the only status only you ever
-  set; nothing else in the pipeline can self-approve it.
+- **You're satisfied** → flip the task's `Status: accepted`. This is the only status that is yours;  nothing else in the pipeline can self-approve it — **the one documented exception** is a project
+  that opted into clean execution (`PLAN.md → - Results acceptance: auto`, docs/EXECUTION.md): the
+  *driver* then flips only tasks that are `done`, green on `## Verify`, and free of open review/
+  `dep-impact` items, and a human can rewind any of them. Default `manual` = exactly today.
 - **You're not** → flip `Status: verify-failed` and either add items to `task/review/T0n.review.md`
   or just tell the agent what's wrong (`/pw-review <slug> T0n` creates that file from your feedback
   if it's missing). `/pw-execute <slug> T0n` then re-runs and re-verifies **just that task**, in its

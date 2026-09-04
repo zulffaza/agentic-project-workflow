@@ -5,6 +5,15 @@ args: <project-slug>
 Invoke the `project-workflow` skill. Arguments: {{ARGS}} (project slug).
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
+**Drafting lanes (optional — skill: `references/execution-and-routing.md` §Spawn lanes):** the
+*decisions* in steps 1–4 below are yours (boundaries, DAG, per-task provider, SP, landing units);
+**task-file drafting can delegate per task to `pw-writer-task`** — one spawn per task-doc,
+independent ones batched in parallel (they write different files, so batching is capped by `- Max parallelism:`
+n at a time), each getting the task's decisions as a compact seed + the template. It cannot change
+what the step does; a spawn that goes beyond its decisions gets stopped (exit-check like every
+lane result). Read the lane models from `- **AI Models:**` (`pw-lib.sh ai-model` — no row =
+provider default) and log each spawn with its `session=<id>` for later repair/§review-batch
+resumption.
 
 First check the analysis gate — **per analysis doc, its CURRENT Sign-off decision, not "was it
 ever approved":** for each real `<project>/analysis/<topic>.md`, run
@@ -56,12 +65,19 @@ Then produce, from `{{PW_HOME}}/template/task/`:
    **including the Execute with column and clickable `[T0n](./T0n.md)` links**. Fill **Produced
    by:** with the provider you (this breakdown agent) are running under — that becomes the
    **default execution provider** for every task (see routing).
-2. One `<project>/task/T01.md … Tnn.md` per task (from `_TEMPLATE-task.md`), each self-contained,
+2. One `<project>/task/T01.md … Tnn.md` per task (from `_TEMPLATE-task.md`), each self-contained —   **drafted via `pw-writer-task` when a spawn is available** (per-task; parallelizable with the
+   plan's `Parallelism:`, independent tasks batched together with one shared decisions seed — the
+   same batching rule as §4.8 fixes, never one spawn per file; log each spawn + `Session:`), you
+   fill/verify the decisions fields below and `PLAN.md` yourself:
    with its **`Repo:` + `Base branch:`** set (the base the task forks from — two tasks in the same
    repo may declare different bases, e.g. `master` vs `spring3`), a runnable `## Verify` block, an
    `Execute with: <provider>:<model-or-agent>` + `Why:`, a **`Story points:`** estimate, optional
    **`Effort:`**/**`Thinking:`**, and an empty `## Result` block.
-   - **Default the provider to "Produced by"** (this agent) so I don't have to switch agents;
+      - **Per-lane model default on top of "Produced by":** the dashboard's `- **AI Models:**` line is        what the *next* run's lane spawns will use (`pw-lib.sh ai-model <slug> [role <provider:model>]`
+        reads/sets it — researcher/analyst/writer-task/reviewer/verifier; the **executor is never a
+        row**, a task's `Execute with:` is its only pin). Surface the current rows in your summary so I
+        can change one before I sign off (e.g. "writer-task=— → say the word to pin it cheap").
+      - **Default the provider to "Produced by"** (this agent) so I don't have to switch agents;
      only route a task elsewhere when it genuinely needs a stronger/cheaper/open-weight model, and
      justify it in `Why:`. Fold in any custom routing I gave ("run the mechanical bumps in
      KiloCode", "T03 → opus"). Resolve providers via `{{PW_HOME}}/tooling/docs/providers.md`. **Pin the

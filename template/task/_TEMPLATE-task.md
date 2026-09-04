@@ -16,8 +16,9 @@
   each MR description. If it can be a single task/MR, it should be — a landing unit is the fallback
   for cross-repo coupling, not a license to slice one change into many MRs.>
 - **Status:** todo | in-progress | verify-failed | done | accepted
-- **Execute with:** <provider:model-or-agent> — e.g. `claude:sonnet`, `claude:claude-opus-4-8`
-  (pinned), `kilo:command_code/<model>`, or an existing agent (e.g. `code-implementation`).
+- **Execute with:** <provider:model-or-agent> — e.g. `claude:sonnet`, `claude:claude-opus-4-8`  (pinned), `kilo:command_code/<model>`; or the same-provider `pw-executor` def. A plain
+  `provider:model` = that provider's default agent on this task file as its work order (portable
+  across providers); a named sub-agent only resolves when the orchestrator shares its provider.
   Defaults to the same provider that ran the breakdown (`PLAN.md` → "Produced by") — route
   elsewhere only when this task genuinely needs a stronger/cheaper/open-weight model, and say why
   in `Why:`. Aliases (`opus`/`sonnet`/…) track the *latest* version — pin the full name when
@@ -134,6 +135,12 @@ cd {{PW_PROJECTS}}/<project-slug>/worktree/<repo>/<T0n>-<slug>
 
 ## Result (filled by the executor at run time)
 - **Actually used:** <model/agent it ran with, if different from Execute with>
+- **Result produced by:** <lane that filled this: `pw-executor` | default-agent session (provider) — and
+  the `Model used:` its def records, if any>
+- **Session:** <provider session id of this run — first line of `worktree/<T0n>.log` is the same;
+  a later fix/re-verify/§3.6 dependent recheck **resumes this session** instead of cold-re-deriving;
+  dead/absent id ⇒ cold-spawn a fresh agent on the task file. Machine-local pointer: never put it
+  in an MR or anything outward-facing.>
 - **Time:** <wall-clock, e.g. 12m>
 - **Log:** `worktree/<T0n>.log` <executor tees its output here so you can tail the run>
 - **Commit(s):** <short-sha(s), or `zero-change` if nothing was removable>

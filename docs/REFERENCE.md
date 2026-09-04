@@ -26,7 +26,7 @@ agentic-project-workflow/        ← this bundle ($PW_HOME)
     │                              the machinery actually works.)
     ├── scaffold.sh · gen-commands.sh · gen-agents.sh · pw-lib.sh · pw-doctor.sh
     ├── pw-common.sh · pw-teardown.sh
-    ├── commands/                ← canonical /pw-* sources (generated per provider)
+    ├── commands/                ← canonical /pw-* sources (generated per provider; 13 commands incl. `pw-research`/`pw-verify`)
     ├── agents/                  ← canonical sub-agents (seeded per provider): pw-orchestrator,
     │                              pw-executor, pw-reviewer (optional — see REVIEW.md)
     ├── docs/                    ← registries/policy docs the AGENTS read (their docs/ human peer
@@ -113,6 +113,8 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | `/pw-status <slug>` | status |
 | `/pw-status <slug> rewind <phase>` | move the dashboard `Status:` back to an earlier phase — the human-facing surface for this, never `pw-lib.sh status … --rewind` directly (see [Going back a phase](./WORKFLOW.md#going-back-a-phase-rewind)) |
 | `/pw-close <slug>` | learn + close-out |
+| `/pw-research <question>` | ad-hoc `pw-researcher` Mode B answer pass (seed rules from the skill; no project needed) |
+| `/pw-verify <target-of-verification>` | independent fresh-context `pw-verifier` stand-alone check (§3.4 — not part of the default executor flow; lands findings as review items, never edits) |
 | `/pw-doctor [--fix]` | check (or repair) that installed commands + agents + skill match this bundle |
 | `/pw-rfc <slug> [--target <ref>]` | optional side-loop: publish approved analysis to an RFC doc (see [docs/RFC.md](./RFC.md)) |
 | `/pw-rfc <slug> milestone` | same side-loop, Wave 2 — fills Milestone + Conclusion from an approved PLAN |

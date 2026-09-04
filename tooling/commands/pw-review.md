@@ -53,10 +53,18 @@ the internal mechanism this sub-verb wraps, not something I should need to know 
    (`off`/`advisory`/`auto`) as a small table, in plain language — not the raw
    `analysis=off plan=off …` line verbatim. One line reminding me what each mode means: `off` = no
    AI reviewer, `advisory` = it files items but I still sign off, `auto` = it may sign off itself
-   on a genuinely clean pass. Tell me how to change one: `/pw-review <slug> config <phase> <mode>`.
+      on a genuinely clean pass. Tell me how to change one: `/pw-review <slug> config <phase> <mode>`.   1b. **Also run** `…/{{PW_HOME}}/tooling/pw-lib.sh ai-model <slug>` and show the five lane rows
+       (`researcher`/`analyst`/`writer-task`/`reviewer`/`verifier`; `—` = provider default, executor not a
+       row). Same one-line explanation: this is *which model* the next lane spawn runs on (row → else
+       provider/session default); changing one is
+       `/pw-review <slug> config model <role> <provider:model>` (see docs/EXECUTION.md §Spawning phase
+       work). This is a **view**, not a re-approval — never flip anything from here without my words.
 2. **`<phase> <mode>` given** → validate `<phase>` is one of the five above and `<mode>` is one of
    `off`/`advisory`/`auto` yourself (a friendlier error than the tool's if not), then run
-   `…/{{PW_HOME}}/tooling/pw-lib.sh ai-review <slug> <phase> <mode>` and confirm back in plain
+   `…/{{PW_HOME}}/tooling/pw-lib.sh ai-review <slug> <phase> <mode>` (or `ai-model <slug> <lane>
+   <provider:model|—>` for a model lane — never an executor lane: a lane that can't take a per-spawn
+   model records the provider default it actually ran with, §docs/EXECUTION.md The per-spawn ledger)
+   and confirm back in plain
    language — e.g. *"AI review for the plan-approval gate is now `auto` — a clean pw-reviewer pass
    can sign off the PLAN itself now, no human needed, unless something's still open."* If `plan`
    is being set to `auto`, add a one-line reminder that it's the only hard gate, so I know what
@@ -211,3 +219,15 @@ re-verified in the worktree by the build loop above — only point me at `/pw-ex
 if a fix was left unverified (`--skip-build-check`) or hit the 3-round cap. **If a gate got auto-reopened**
 (the check above), say so explicitly and name which file/phase — that's the one thing here that
 changes whether a *later* command will run, so it can't just be buried in the item recap.
+
+## Fixer routing for local review files (batched, resume-first)
+
+When the review pass is over and items exist on **one** artifact, fixes don't fan out per item: the
+driver spawns **one** fixer pass for that artifact holding all its `[OPEN]` items — human,
+`pw-reviewer`, verifier and `dep-impact:T0n` items share that queue (docs/EXECUTION.md §The
+per-spawn ledger; `tooling/skill/project-workflow/references/review.md`). Where the artifact has a
+producer session worth resuming (the task's `pw-executor` `## Result → Session:`), the spawn-list
+carries its id and the driver resumes it first; decision items (`Qn`/"you decide") are human answers
+and are excluded from any batched fix. Reviewers read; fixers are the executor-side (and re-run
+their own `## Verify` once).
+

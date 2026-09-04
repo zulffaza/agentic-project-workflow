@@ -33,3 +33,14 @@ PLAN; ship records it in each MR description so the set is reviewed as one unit.
 **Last step, mandatory:** `pw-lib.sh status <slug> breakdown` + a `pw-lib.sh log` line (see
 `references/conventions-and-gotchas.md`). Remind the human that **only the PLAN sign-off gates
 execution** — per-task reviews (`task/review/T0n.review.md`) are optional, created on demand.
+
+
+## Lane spawn (optional — see references/execution-and-routing.md §Spawn lanes)
+
+Once **your** decisions are fixed (manifest, DAG, boundaries, per-task `Execute with:`/`Why:`/SP),
+task-file *drafting* can be delegated: spawn **`pw-writer-task`** with that task's decisions as its
+brief (`seed-task` = task file + PLAN rows + the `## Verify` shape). Independent task docs batch in
+parallel — different files, no shared-state race — capped by PLAN's `- Max parallelism:`; model from the
+`AI Models: writer-task=` row. It returns the drafted docs + `Model used:`; **you** still fill the
+judgment-bearing fields you own, run the gates/checks, write `PLAN.md`'s tables yourself, and
+review-init. Spawn-less fallback = headless session or canonical body as prompt (§Spawn lanes).

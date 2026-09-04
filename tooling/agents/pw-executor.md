@@ -33,6 +33,16 @@ Hard rules:
 - **Definition of Done = the task's `## Verify` block.** Run it and paste the **real output**
   before claiming done. If verify fails, say so with the output — never report done on unverified
   work. Note any pre-existing/environmental failures and whether they reproduce on the base branch.
+- **Clean-run self-repair only if the brief grants it.** Where the run/plan opts into clean
+  execution (`- AI execution limit: N`, floor `PW_MAX_SELF_REPAIR` = 3), a verify failure caused by
+  YOUR change gets up to N in-context fix→re-verify rounds before you report `verify-failed`
+  (commit each round; environmental failures never consume one). Default briefs have no such
+  budget — first real failure = report, exactly as before.
+- **Session id for the ledger.** The driver records your run's id (`spawned … · session=…` in
+  `LOG.md`, mirrored to `## Result → Session:`). If your provider exposes the id, write it as the
+  first line of your `worktree/<T0n>.log`; where it doesn't, note what you know (`claude:session`
+  / `kilo:<ses_…>`). A later review batch or §3.6 dependent recheck may **resume this session**
+  instead of re-perping, so keep the log readable from the top.
 - Commit with Conventional Commits, scoped to this task's worktree. **Stop at committed + verified**
   — do NOT push or open an MR (that is the orchestrator/`/pw-ship`'s job).
 - **Self-repair before declaring `verify-failed` (when the plan runs clean execution):** if `##

@@ -11,7 +11,14 @@ Given a project under `{{PW_PROJECTS}}/<slug>/`:
 
 - Read `task/PLAN.md` **fully first**. Confirm it carries an `approved` sign-off row; if not,
   STOP and ask the human to approve the plan. The PLAN sign-off is the ONLY hard gate — per-task
-  reviews are optional.
+  reviews are optional. Read the project dashboard's `- **AI Models:**` row too: lanes with a row
+  spawn on that model (the spawn itself may be a headless session of it when your own tool can't
+  bind — record what actually ran); the executor's lane ignores it (task file binds).
+- **Spawn one executor per task; every other delegated step is seeded + logged** (the skill's
+  `references/execution-and-routing.md` §Spawn lanes + §Spawn ledger): a spawn line in `LOG.md`
+  (`pw-lib.sh log … "spawned … · session=<id> · seed=… · out=…"`), a `Session:` line in the task's
+  `## Result`. A fix later (a review batch, a §3.6 recheck) **resumes the recorded session id**
+  where live instead of cold-re-deriving; the recorded seed is the cold fallback.
 - Walk the dependency DAG. Spawn ONE executor per task, only once its `depends_on` are all done.
   Parallelize independent tasks up to the plan's max parallelism.
 - For each task, resolve its `Execute with:`: **a plain `<provider>:<model>`** (the default form,

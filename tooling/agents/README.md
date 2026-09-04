@@ -10,6 +10,10 @@ copies; edit the canonical file here and re-run [`gen-agents.sh`](../gen-agents.
 tooling/agents/
 ├── pw-orchestrator.md   ← reads task/PLAN.md, owns the DAG, spawns executors; never edits repo code
 ├── pw-executor.md       ← runs ONE task in ONE worktree, runs ## Verify, reports; nothing else
+├── pw-researcher.md     ← context/answer lane (Mode A answer w/ evidence; Mode B ground a scope →
+                            pack + seed); reads context + docs + tickets; never decides
+├── pw-analyst.md        ← drafts an analysis doc from a seed (options, trade-offs, Qn); read-only
+├── pw-writer-task.md    ← drafts task docs from a caller's decisions; never fills ## Result
 └── pw-reviewer.md       ← optional, fresh-session review pass on ONE artifact; never edits it —
                             see docs/REVIEW.md + the `pw-review` skill
 ```
@@ -103,3 +107,20 @@ falls through to the provider's floor (`small_model`/`subagent_model` on kilo; t
 claude). Canonical defs ship with `model:` **unset** on purpose: a provider alias baked into a def
 is a false pin on the other provider. The executor keeps its per-task `Execute with:`; the ladder
 never overrides a task file.
+
+## What the *surfaces* actually do (probed 2026-09-04; `kilo agent list` / `kilo debug agent <name>`
+are the ground truth — reload the client before trusting either)
+
+1. **A generated `agent/<name>.md` with `mode:` + `options:` registers on its own** — no map block
+   needed. A `kilo.jsonc → agent` mirror block is the user's convenience (prompt/`model:` there);
+   `pw-doctor`'s drift check compares canonical ⇄ generated md ⇄ map block, report-only. `model:`
+   in the **md wins** over a mirror block's `model:` on this build.
+2. **`kilo run --agent <name>`** resolves *primary* defs only; a `mode: subagent` name prints a
+   falling-back-to-default warning and keeps going (never assume the headless run used the def), and
+   an unknown name falls back **silently**. Cross-provider work order = the task file, not a name.
+3. **Claude defs carry a `model:` line when a canonical sets one; Kilo generated md do too** (as of
+   the 2026-09 regen) — but **canonical bundle defs ship `model:` unset** (ladder §AI Models above):
+   a provider id baked into a shared def is a false promise on the other provider. Per-agent model
+   pinning on kilo is still possible *for the user* via their own map-block mirror; the bundle never
+   writes one (generator-never-touches-config rule; see docs/EXECUTION.md's provider-capability
+   note).

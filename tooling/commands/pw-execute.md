@@ -1,6 +1,6 @@
 ---
 description: Execute a project's PLAN.md via orchestrated worktree sub-agents
-args: <project-slug> [task-ids | "with <model/agent>" | --wave]
+args: <project-slug> [task-ids | "with <model/agent>" | --wave | --acceptance auto | --then-ship]
 agent: pw-orchestrator
 ---
 Follow the `project-workflow` skill. Act as the ORCHESTRATOR — never edit repo code yourself.
@@ -66,11 +66,14 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
    ```
    If it refuses, STOP that task and tell me — don't substitute a different model yourself or run
    it anyway.
-   - **Same provider you're running under → spawn a native, in-process SUB-AGENT** (NOT a shell
-     invocation). Native sub-agents are easier to monitor and cheaper to supervise. If `Execute
-     with:` names an agent (an existing one like `code-implementation`, the shipped `pw-executor`,
-     or a custom `{{PW_HOME}}/tooling/agents/<name>.md`), spawn that; otherwise spawn a generic
-     executor with the named model + the task file as its work order.
+   - **Same provider you're running under → spawn a native, in-process SUB-AGENT** (NOT a shell      invocation). A task naming a same-provider def (`pw-executor`/custom `tooling/agents/` role)
+      spawns it; **a plain `provider:model` is not an agent name** — it runs that provider's default
+      agent on this task file as its work order (Option A: one executor concept — no bespoke
+      implementer def, ad-hoc code work belongs to the *main* agent). Native sub-agents are easier to monitor and cheaper to supervise. If `Execute
+          with:` names a registered same-provider def (`pw-executor` or a custom          `{{PW_HOME}}/tooling/agents/<name>.md`), spawn that; otherwise — the plain `provider:model`
+          default — run a session on that **provider's default agent with the task file as its work
+          order** (Option A: one executor concept; ad-hoc non-pw code work is the *main* agent's, there
+          is deliberately no second generic-implementer def to keep in sync).
    - **Different provider → shell out to that CLI headlessly** (per the registry's invocation
      column), passing the task file as the work order — e.g. a Claude-Code orchestrator hands a
      `kilo:command_code/MiniMaxAI/MiniMax-M3` task to `kilo run --auto -m … --format json`
@@ -85,9 +88,24 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
      them. Route to a capable model (tiny models stop mid-task). Capture the final text for the
      report, but **confirm the real git artifacts** (branch/commit/Verify), not the CLI's
      self-report.
-   - **Either way, tee the run to a log** so I can watch it: append the executor's combined output
-     to `{{PW_PROJECTS}}/<slug>/worktree/<T0n>.log`. Tell me the path so I can `tail -f` it in my
-     own window. Record it in the task's `## Result → Log:` field.
+      - **Ledger it every time.** One `pw-lib.sh log` line per executor spawn —        `spawned T0n (provider:model) · session=<id> · seed=task/T0n.md · out=worktree/<T0n>.log ·
+        <outcome>` — plus the same session id into the task's `## Result → Session:` (executor also
+        writes it as the first line of that log when the run is theirs). A later **re-repair, Row-8
+        batch, or §3.6 dependent recheck resumes that id** (`kilo run -s <id>`/`--fork`,
+        `claude --resume <id>`/`-c`) instead of cold-re-spawning — cold-respawn is only the fallback
+        when the id is dead/crashed (machine restarts can invalidate ids; on-disk PLAN/task state is
+        the durable recovery).
+      - **Either way, tee the run to a log** so I can watch it: append the executor's combined output        to `{{PW_PROJECTS}}/<slug>/worktree/<T0n>.log` — the FIRST line of that log is
+        `session <id>` — and log the spawn so it's resumable:
+        `pw-lib.sh log <slug> execute "spawned T0n (provider:model) · session=<id> · seed=task/T0n.md ·
+        out=worktree/<T0n>.log · <outcome>"` + in the task's `## Result → Session: <provider>:<id>`.
+        (kilo prints a session id on headless runs; where none is observable, write `session —` and
+        cold-resume from the task file. Ids stay machine-local — never in MR text.)
+      - **Regression-first self-repair (opt-in, PLAN `- AI execution limit:` + `PW_MAX_SELF_REPAIR`
+        default 3):** if this run owns clean execution (PLAN `- Results acceptance:` or `--acceptance`),
+        a *real regression* from the task's own change goes back to the executor (resume its session)
+        for a bounded diagnose→fix→re-verify loop, instead of jumping straight to `verify-failed`;
+        environmental/pre-existing failures follow today's `done`+caveat rule and never loop.
    - **Apply `Effort:`/`Thinking:`** via the provider's flag (claude `--effort`, kilo
      `--variant` + `--thinking`) per `providers.md`. **Honor version pins** — a full name
      (`claude-opus-4-8`) is passed verbatim, never swapped for the alias. Record resolved flags in
@@ -109,7 +127,21 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
    - **A real regression** (fails on this branch, passes on the untouched base) → `Status:
      verify-failed`. This blocks *that task's own dependents* only — every other independent task
      (a different branch, a different repo, an unrelated chain) still proceeds in this same run.
-6. **Stop at committed + verified — but only once the WHOLE resolved scope is there, or genuinely
+6. **Optional clean-mode finish (`- Results acceptance: auto` in PLAN, or `--acceptance auto`   for this run only — default `manual` = stop at verified, exactly like before).** When the
+   whole resolved scope is `done`/`accepted`: flip every task that is `done`, green on its own
+   `## Verify` (self-repair rounds included), and with **zero open review/`dep-impact` items** to
+   `accepted` via `pw-lib.sh task-accept`, then report the clean list as an explicit result
+   ("auto-accepted N; leftovers: …"). Anything not cleanly closed — exhausted self-repair, an
+   open human item — stays visible/`verify-failed` as today. The PLAN gate is still checked on
+   every invocation, and no `--push`/outward action happens here either way.
+   - **A landed fix fans one capped §3.6 pass.** If a task this run (or right after, via
+     `- Results acceptance`) repaired itself *after* a dependent already reached `done`: merge the
+     fixed branch into each already-run dependent, re-run **that dependent's** `## Verify` once
+     (clean → stays `done`; conflict/regression → its own flip, driver-side), and where their
+     files/landing units overlap, run ≤1 `pw-reviewer`-style **dep-impact** coherence pass filing
+     `dep-impact:<dep>` items into that dependent's queue — never edit another task's branch from
+     this pass. Not-yet-run dependents need nothing (they already fork the fixed state).
+7. **Stop at committed + verified — but only once the WHOLE resolved scope is there, or genuinely
    blocked.** `/pw-execute` does NOT push or open MRs — that's the separate, explicit `/pw-ship
    <slug> [task-ids]` step, so nothing goes outward until I ask. Set each task's `## Result → MR: —`
    (not shipped yet). Keep the dashboard task-status table current and log each action via the
@@ -135,6 +167,14 @@ them:
   yet `accepted` — including any task still `verify-failed` — through to the end of what's ready,
   in one invocation. It is not the same as re-running one task; don't stop early just because the
   run started from a partial/failed state.
+
+**`--then-ship` (opt-in chain, never a default).** With this flag (and the PLAN gate intact +
+`- Results acceptance` handling as above), when the whole resolved scope is committed + verified you
+**continue straight into row 7 in the same invocation**: run `/pw-ship`'s steps — confirm the push
+list with me exactly once, push each verified branch, open MRs, monitor the CI default — instead of
+stopping for a second command. Ship is still its own *deliberate* step and still human-gated on the
+push; the flag chains it, it doesn't skip the confirmation. Without the flag, this command stops at
+verified, unchanged.
 
 When you're ready to publish verified work (and to handle review comments left on an MR), use
 `/pw-ship`. **A project does NOT need its MRs merged to be closeable** — see `/pw-close`.

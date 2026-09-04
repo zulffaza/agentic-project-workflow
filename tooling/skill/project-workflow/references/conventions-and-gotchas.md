@@ -46,6 +46,14 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   preview view). Log phase transitions, executor spawns, commits, pushes, MRs, review passes,
   close-out.
 - `pw-lib.sh phase <slug>` — read the current phase (used by `/pw-review` scoping + `/pw-status`).
+- `pw-lib.sh ai-review <slug> [<phase> <mode>]` / `pw-lib.sh ai-model <slug> [<lane> <provider:model|—>]` —
+  the two dashboard config lines (see `docs/EXECUTION.md` for what they bind). `ai-model` lanes =
+  researcher / analyst / writer-task / reviewer / verifier (NOT executor — that pin is the task file).
+  A bare model name or an executor lane is refused.
+- **Spawn bookkeeping (the §8.5 ledger):** every delegated spawn logs one line through
+  `pw-lib.sh log`, carrying `· session=<id> · seed=<ref> · out=<artifact>` so a later
+  repair/cascade/recheck can **resume that session** instead of re-deriving it (machine-local
+  pointer only — never in MR text; PLAN/dashboard/on-disk state is the durable cross-machine truth).
 - `pw-lib.sh mr-state <slug> <task-id>` — query the forge (GitLab/GitHub) for an MR's current state.
   Prints `open`, `merged`, `closed`, or `unknown` (the last on any lookup/query failure — no MR
   URL/worktree/origin, or the forge query failed or returned null — with exit 1). Used by `/pw-sync`
@@ -116,3 +124,14 @@ This is by design — version history lives in the real repos, and workflow lear
 project's "Decisions & learnings" section (and your memory tool at close-out, if `PW_MEMORY` names
 one). The reusable **bundle itself IS a git repo** (so it's shareable + reset-recoverable via
 `bootstrap.sh`); its own tooling changes are tracked there. Distil durable learnings at close-out.
+
+## LOG.md spawn lines (the resume spine)
+
+Every **delegated** spawn gets one line via `pw-lib.sh log <slug> <actor> "<msg>"` — free text by
+design, with one fixed spine so a resume can find it later:
+`spawned <lane-or-T0n> (<provider>:<model>) · session=<id> · seed=<seed ref> · out=<artifact> · <outcome>`.
+A resume/repair/cascade appends its **own** line and updates the prior line's outcome — the trail
+reads as a chain, every link resumable. Rules (§Spawn lanes + references/review.md): resume by
+that recorded id first, cold-spawn only when dead; session ids never leave the workspace and never
+into MR text (they're machine-local; on-disk PLAN/dashboard/worktree state is the cross-machine
+recovery).

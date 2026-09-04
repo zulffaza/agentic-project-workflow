@@ -6,6 +6,12 @@ Human feedback on any doc lives in a review file under a **`review/` subdir** be
 `task/T0n.md`→`task/review/T0n.review.md` (from `agentic-project-workflow/template/_REVIEW.template.md`).
 Rules you MUST follow:
 
+- **Fixes are batched, per artifact, and resume-first.** All `[OPEN]` items on one artifact go to  its **producer** as one fix pass (the task's executor session, resumed by its logged id when
+  live — §Spawn ledger) holding every item for that artifact at once (human + `pw-reviewer` AI
+  items + `dep-impact:T0n` items + verifier items all share that one queue), with **per-item
+  `↳ agent:` replies** preserved for each thing it handled. Human *decisions* (Qn/"you decide"
+  rows) are never batch-auto-resolved — those wait for the human. Reviewers never edit the
+  artifact (that rule holds: reviewer = read + file; the fixer = the producer).
 - **`/pw-review` is scoped to the current phase** (resolved from the dashboard `Status:`), not the
   whole project — process only that phase's `review/` dir, don't open every `.review.md`.
 - **`/pw-review` NEVER changes the dashboard `Status:`** — reviewing is not a phase transition.
@@ -124,3 +130,17 @@ recurred once) gets filed as a [OPEN] escalation instead of an ordinary finding,
 stays blocked by the tool's own check rather than by the reviewer remembering not to call it. Full
 method: the `pw-review` skill. Full human-facing explanation: `docs/REVIEW.md`'s "AI-assisted
 review" section.
+
+
+## Fixer routing (batched + resume-first)
+
+All `[OPEN]` items on **one** artifact — yours, `pw-reviewer`'s, an independent verifier's, and
+`dep-impact:T0n` items a §3.6 dependency fan filed — share **one queue** that drains as **one**
+fixer pass per artifact (not one spawn per comment; N spawns → 1): the driver spawns the artifact's
+producer fixer with the item-id list + pointers (`seed-review-batch`), **resuming the recorded
+`Session:` id first** when there is one, else a fresh spawn off the seed. Per-item
+`[OPEN]→[RESOLVED]` + `↳ agent:` replies stay exactly per-item; the fixer never touches a human's
+ask text, and review itself stays read-only for `pw-reviewer` (it raises items; the task's
+*executor* resolves them and re-runs its own `## Verify`). `Qn` / "you decide" rows are human
+answers — never auto-resolved by a batch. Cost + rules: docs/EXECUTION.md §The per-spawn ledger +
+references/execution-and-routing.md.

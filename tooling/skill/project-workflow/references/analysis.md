@@ -51,3 +51,25 @@ Asked to analyze `context/`:
    `references/conventions-and-gotchas.md` for the full helper contract).
 5. Iterate with the human until approved — see `references/review.md` for how the review loop
    works (local `.review.md` file, QnA, the Sign-off gate).
+
+
+## Lane spawns (optional — see references/execution-and-routing.md §Spawn lanes + §Spawn ledger)
+
+Two steps of phase 2 may be **delegated** (both read-mostly; the human-dropped `context/` +
+`context/INDEX.md` stay the inputs of record — a spawn never replaces the ground truth, it grounds
+it):
+
+- **`pw-researcher` Mode B — the grounding pre-step.** When context is thin or not
+  ground-truthable from the inputs alone (and always as the continuation pass on `/pw-adopt`): it
+  fetches the bare-URL INDEX rows at the precedence above, checks each repo actually on its base
+  branch, and returns a **ground-truth pack + seed** (provenance, confidence labels, open
+  questions). Its `Model used:` line + your `LOG.md` spawn line (`· session=<id> · seed=… ·
+  out=<pack>`) are what the ledger records.
+- **`pw-analyst` — the draft.** Non-thin projects: hand it the seed + a §4.1 brief; it drafts per
+  the numbered rules above (options never pre-converged, heading index current, `Q0`/`Qn` seeded),
+  ending with `Model used:` + a `## Review handoff` scope-diff. **You** still review, edit, and own
+  the final doc, the review-init, and the Status move; a scope-check failure resumes the analyst
+  with a seed patch (by the logged id), it does not re-run it cold.
+
+Same provider only for in-process spawns; on another provider or without spawn support, the same
+roles run as a headless session over the same work order (docs/EXECUTION.md §Spawning phase work).

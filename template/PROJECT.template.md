@@ -10,9 +10,14 @@
        this as its last step — don't hand-edit except to match that vocabulary. -->
 - **One-liner:** <what this project is>
   <!-- 🤖 set by /pw-analyze. Leave the placeholder until analysis fills it. -->
-- **AI Review:** <AI_REVIEW_DEFAULT>
-  <!-- 🤖 set via `/pw-review <slug> config <phase> <mode>` — off (default)/advisory/auto per
-       phase. `/pw-review <slug> config` alone shows current settings. See docs/REVIEW.md. -->
+- **AI Models:** <AI_MODELS_DEFAULT>
+  <!-- 🤖 set via `/pw-review <slug> config model <role> <provider:model>` — one row per spawn
+       lane (researcher/analyst/writer-task/reviewer/verifier); `—` = no row = the provider's own
+       default (kilo `small_model`/`subagent_model`; claude the session model). The EXECUTOR is not
+       a row — its pin is the task file's `Execute with:`/the PLAN's produced-by. Where a spawn
+       can't bind the row (Kilo's Task-tool has no model arg), the driver runs the row as a headless
+       session of that model over the same work order and the result says which actually ran.
+       See docs/EXECUTION.md §Spawning phase work + `pw-lib.sh ai-model`. -->
 
 
 ## Where things are

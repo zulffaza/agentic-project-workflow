@@ -111,9 +111,15 @@ declare -f render_kilo_command >/dev/null 2>&1 || render_kilo_command() {
   [ -n "$agent" ] && printf -- 'agent: %s\n' "$agent"
   printf -- '---\n%s' "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
 }
-declare -f render_kilo_agent >/dev/null 2>&1 || render_kilo_agent() {
-  local mode="subagent"; [ "$role" = "orchestrator" ] && mode="primary"
+declare -f render_kilo_agent >/dev/null 2>&1 || render_kilo_agent() {  local mode="subagent"; [ "$role" = "orchestrator" ] && mode="primary"
   printf -- '---\nmode: %s\ndescription: %s\n' "$mode" "$desc"
+  # A canonical `model:` now renders through to kilo as well (verified 2026-09-04 with a probe md:
+  # an `agent/*.md` file with `mode:`+`options:` registers without any kilo.jsonc map block, and a
+  # `model:` line in that md binds the agent — outranking a map block for the same name if both
+  # carry one). Bundle defs still ship `model:` UNSET (provider ids in canonical files are false
+  # pins across providers; docs/EXECUTION.md §Spawning phase work). If a user mirror exists in
+  # kilo.jsonc and sets a different model, the md wins here — pw-doctor's drift check reports it.
+  [ -n "$model" ] && printf -- 'model: %s\n' "$model"
   printf -- 'options:\n  displayName: %s\n  id: %s\n' "${displayName:-$agentname}" "$agentname"
   printf -- 'permission:\n  read: allow\n'
   # Do not put a worktree edit denial on the orchestrator session. Kilo propagates

@@ -80,8 +80,8 @@ _pw_doctor_agents_drift() {
       continue
     fi
     if [ "$prov" = "kilo" ] && [ -n "$KJCF" ] && [ -f "$KJCF" ]; then
-      if ! grep -q ""agent":" "$KJCF"; then
-        echo "    · kilo map: no "agent" block in kilo.jsonc — agents ride the generated md path only"
+      if ! grep -q '"agent":' "$KJCF"; then
+        echo '    · kilo map: no "agent" block in kilo.jsonc — agents ride the generated md path only'
         continue
       fi
       installed="$(python3 - "$KJCF" "$c" <<'PY'
@@ -132,7 +132,7 @@ PY
 )"
       case "$installed" in
         absent) echo "    · kilo map: '$c' has no mirror block — riding the generated md (fine; paste-block in tooling/agents/README.md if you want a map mirror)" ;;
-        no-map) echo "    · kilo map: no "agent" block at all — agents ride the generated md path only" ;;
+        no-map) echo '    · kilo map: no "agent" block at all — agents ride the generated md path only' ;;
         *)
           mdmodel="$(sed -n '/^model: /{ s/^model: //; p; q }' "$adir/$c.md" 2>/dev/null || true)"
           if [ -n "$mdmodel" ] && [ "$mdmodel" != "$installed" ]; then

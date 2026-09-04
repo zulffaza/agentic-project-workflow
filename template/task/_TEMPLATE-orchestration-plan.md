@@ -79,7 +79,7 @@ took; `Result` = commit short-sha / MR ref / `zero-change`.
 | [T01](./T01.md) | … | hera | — | G1 | sonnet | 2 | todo | — | — |
 | [T02](./T02.md) | … | valas-service | — | G1 | kilo:command_code/MiniMaxAI/MiniMax-M3 | 1 | todo | — | — |
 | [T03](./T03.md) | … | hera | T01, T02 | G2 | opus | 3 | todo | — | — |
-| [T04](./T04.md) | … | hera | T03 | G3 | code-implementation | 2 | todo | — | — |
+| [T04](./T04.md) | … | hera | T03 | G3 | kilo:command_code/<model> | 2 | todo | — | — |
 
 _Status values: todo → in-progress → verify-failed / done → accepted._
 _Time/Result: leave `—` until executed. Token/cost are NOT captured here — a running agent can't
@@ -107,11 +107,14 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
 | `haiku` | claude | trivial, mechanical bulk edits (renames, config bumps) |
 | `kilo/<model>` | kilo | KiloCode's own built-in gateway — the **default** API Provider, no separate credential |
 | `command_code/<model>` | kilo | open-weight/third-party models — needs its own credential; `kilo models command_code` for the full list |
-| an existing agent | (its provider) | reuse one you already have (e.g. `code-implementation`) |
+| a registered agent / a model | (its provider) | same-provider reuse only — e.g. `pw-executor`; a cross-provider task always routes as `provider:model` (a *sub-agent* name is unreachable from the other CLI's headless path; `--agent` accepts **primary** defs only, verified 2026-09-04) |
 | `pw-executor` / a `tooling/agents/` def | (its provider) | the shipped executor, or a custom role no existing agent covers |
 
-- **Pin risky tasks:** claude aliases (`opus`/`sonnet`/…) track the *latest* version — use the full
-  name (`claude-opus-4-8` vs `claude-opus-5`) when reproducibility matters.
+- **Pin risky tasks:** claude aliases (`opus`/`sonnet`/…) track the *latest* version — use the full  name (`claude-opus-4-8` vs `claude-opus-5`) when reproducibility matters.
+- **Phase lanes are separate pins:** the dashboard's `- **AI Models:**` line binds the *lane* agents
+  the phases spawn (researcher/analyst/writer-task/reviewer/verifier), never this task table. The
+  row is what the executor-side `Actually used:`/`Session:` ledger compares against — an unset row
+  means provider default, not "anything goes".
 - **No bespoke executor agent** — the orchestrator spawns/shells out to whatever `Execute with:`
   names; the discipline comes from the skill + task file, not a special agent.
 - **Override at run time:** "run T03 with opus" — the orchestrator records what it actually used in
@@ -121,6 +124,14 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
 
 ## Execution strategy
 - Max parallelism: <n> concurrent executors.
+- **Results acceptance:** <manual — the human flips `accepted` at review (default, matches
+  `/pw-review`'s gate discipline) | auto — at the end of a clean run the driver flips every task
+  that is `done`, green on `## Verify`, and with zero open review items via `pw-lib.sh task-accept`;
+  anything else stays visible for the human. `--acceptance` overrides per invocation — but the
+  PLAN line is what the next reader assumes (a hidden run flag is how a project drifts).
+- **AI execution limit:** <n> (default 3 — `PW_MAX_SELF_REPAIR`) self-repair rounds an executor may
+  take on its own verify failure before declaring `verify-failed`; environmental pre-existing
+  failures never loop (they follow today's `done`-with-caveat rule).
 - **Same-provider tasks run as native sub-agents** (in-process, natively monitorable); a
   different-provider task is shelled out to that CLI headlessly. Either way the executor **tees its
   output to `worktree/<T0n>.log`** so you can `tail -f` any run in a window of your choosing.
@@ -130,4 +141,11 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
 - **Gate:** only the **PLAN** sign-off (`task/review/PLAN.review.md → approved`) is required to
   execute. Per-task review is **optional** — add a `task/review/T0n.review.md` only when you want to
   send a task back.
+- **Ledger:** every spawn logs one `LOG.md` line (`spawned <lane/T0n> (<provider>:<model>) ·
+  session=<id> · seed=<ref> · out=<artifact> · <outcome>`) and a task's `## Result → Session:`
+  records its own run — fixes/repairs **resume those ids** (§Spawn ledger; docs/EXECUTION.md).
+- **A fix that lands after dependents ran** triggers the one capped §3.6 cascade: each already-run
+  dependent re-merges + re-runs *its own* `## Verify`; only file-overlap dependents also get ≤1
+  `dep-impact` reviewer pass filed into their queues (statuses are the driver's flips; no edits
+  backward into the dependency).
 - Rollback plan if a group fails: <…>

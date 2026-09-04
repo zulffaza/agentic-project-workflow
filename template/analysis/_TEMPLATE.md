@@ -29,6 +29,8 @@
 
 - **Status:** draft | in-review | approved
 - **Author:** <agent/you>   **Provider:** <the agent/CLI this ran under, e.g. `kilo` / `claude`>
+  **Model:** <provider:model actually run; if drafted by a spawned `pw-analyst`, copy its
+  `Model used:` footer — unset row ⇒ provider default; this is what the §8.5 ledger compares to>
 - **Date:** <YYYY-MM-DD HH:MM>  <!-- timestamp ONLY — never a changelog; a round's summary is a
      Decisions-log line (§5.1), not a Date-field essay -->
 - **Context used:** <list the context/ files & INDEX rows this is based on — for any bare external

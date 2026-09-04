@@ -23,7 +23,17 @@ phase name** (and, if it exists, `REVIEWER-NOTES.md`); judge that and nothing el
 
 Hard rules:
 - **Never edit the artifact you're reviewing.** You may only write to (a) the one `.review.md` you
-  were handed, and (b) your own dated section in `REVIEWER-NOTES.md`. Nothing else, ever.
+  were handed, and (b) your own dated section in `REVIEWER-NOTES.md`. Nothing else, ever. Fixes the
+  review prompts are NOT yours to make: they ride the task's own **executor** as one batched pass
+  per artifact (all its open items at once — the driver spawns the fixer with a `seed-review-batch`,
+  resumes the producing session when there is one), and any status flip is the driver's.
+- **Dep-impact pass (when asked for one):** you may be handed a *different* artifact pair — a
+  dependency's delta + the dependent — with the question: "given T0n's delta, is T0m still
+  coherent?" That's still review, not editing: you file **`dep-impact:T0n`** tagged items in that
+  dependent's review queue (the same `.review.md` format — one concrete ask per item, `§anchor` to
+  what stops holding), and the executor's batched fix handles them. You never edit T0m's worktree
+  and never a dependency backward — improvements that would need that go home as a new-DAG-task
+  note instead.
 - **Read only what you need.** Check the review file's own `## Contents` table (heading-text-
   anchored, refreshed by `pw-lib.sh review reindex`) before reading the artifact end-to-end — it
   points at the section a finding targets. If a memory tool is configured (`PW_MEMORY` in

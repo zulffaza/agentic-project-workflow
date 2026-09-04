@@ -110,6 +110,11 @@ agent: <optional — a provider agent to run the command under, e.g. pw-orchestr
 
 > Sub-agents **are** generated — from [`agents/`](./agents/README.md), seeded into each provider's
 > agent dir by `gen-agents.sh` (kilo `~/.config/kilo/agent/`, Claude Code `~/.claude/agents/`). The
-> three shipped roles are `pw-orchestrator`, `pw-executor`, and `pw-reviewer` (optional — off by
-> default per project/phase); execution can still reuse an existing agent you have (e.g.
-> `code-implementation`) by naming it in a task's `Execute with:`.
+> six shipped roles: `pw-orchestrator`, `pw-executor`, `pw-reviewer` (optional — off by default
+> per phase) and the spawn-lanes `pw-researcher` / `pw-analyst` / `pw-writer-task`; execution can
+> still reuse a registered agent (e.g. `pw-executor`) by naming it in a task's `Execute with:` —
+> or, the portable Option-A form, route a `provider:model` and let the task file be the work order
+> (Option A: one executor concept, no second implementer def). Lane spawns take their model from the
+> project's `- **AI Models:**` row (`pw-lib.sh ai-model`); spawns are ledgered with their session id
+> so later repairs resume the same session (`docs/EXECUTION.md` §Spawning phase work + §The
+> per-spawn ledger).
