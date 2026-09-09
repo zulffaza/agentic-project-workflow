@@ -8,7 +8,8 @@
 #   ./offboard.sh                        dry-run: report what WOULD be removed
 #   ./offboard.sh --yes                  actually remove it
 #   ./offboard.sh --provider kilo        scope to one/more providers (comma-separated)
-#   ./offboard.sh --all-known            also sweep built-in providers (claude, kilo) even
+#   ./offboard.sh --all-known            also sweep built-in providers (claude, kilo,
+#                                          opencode, cursor) even
 #                                        if no longer listed in PW_PROVIDERS — catches files
 #                                        orphaned by disabling a provider in pw.config.sh
 #
@@ -28,7 +29,8 @@
 # KNOWN LIMITATION: a fully custom provider whose hooks were later deleted entirely from
 # pw.config.sh can't have its install paths recomputed — there's nothing left to compute them
 # from. Best-effort only; not tracked by a separate install manifest. --all-known covers the
-# two built-ins (claude, kilo), which always have hooks available regardless of PW_PROVIDERS.
+# four built-ins (claude, kilo, opencode, cursor), which always have hooks available
+# regardless of PW_PROVIDERS.
 # ============================================================================
 set -euo pipefail
 
@@ -57,7 +59,10 @@ export PW_PROJECTS PW_REPOS
 . "$PW_HOME/tooling/pw-common.sh"
 
 # --- known built-ins (always have hooks, regardless of PW_PROVIDERS membership) ---
-KNOWN_PROVIDERS=(claude kilo)
+# (opencode + cursor added 2026-09: this list had drifted since each went live. Sweep
+# --all-known now covers ALL four built-ins; removal stays byte-exact, and each provider's
+# install surface is strictly its own dirs — offboard never touches another provider's.)
+KNOWN_PROVIDERS=(claude kilo opencode cursor)
 
 echo "project-workflow offboard"
 echo "  PW_HOME     = $PW_HOME"

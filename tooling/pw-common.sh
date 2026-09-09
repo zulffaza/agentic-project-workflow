@@ -15,7 +15,7 @@ if   [ -f "$PW_HOME/pw.config.sh" ];         then . "$PW_HOME/pw.config.sh"
 elif [ -f "$PW_HOME/pw.config.example.sh" ]; then . "$PW_HOME/pw.config.example.sh"
 fi
 # PW_PROVIDERS = your Agent Providers (the AI-agent CLI(s) you actually run: claude, kilo,
-# opencode, … — see "built-in vs enabled" below). Default when unset: claude only.
+# opencode, cursor, … — see "built-in vs enabled" below). Default when unset: claude only.
 declare -p PW_PROVIDERS >/dev/null 2>&1 || PW_PROVIDERS=(claude)
 
 # Forge host overrides (see tooling/docs/forges.md) — default to empty (pure auto-detect) so a
@@ -42,9 +42,14 @@ declare -p PW_FORGE_HOSTS >/dev/null 2>&1 || PW_FORGE_HOSTS=()
 : "${PW_MODEL_ALLOWLIST_CLAUDE:=}"
 : "${PW_MODEL_ALLOWLIST_KILO:=}"
 : "${PW_MODEL_ALLOWLIST_OPENCODE:=}"
+: "${PW_MODEL_ALLOWLIST_CURSOR:=}"
 
+# Cursor — its own single gateway (api2.cursor.sh); no PW_CURSOR_API_PROVIDERS axis (the
+# API-Provider concept doesn't apply to it). Model ids: `agent models` (200+ entries incl.
+# per-variant ids and [param=…] syntax); `cursor:<id>` is the explicit-prefix form in tasks.
 # --- Agent Provider vs API Provider — two different axes, don't conflate them ---------------
-#   Agent Provider = PW_PROVIDERS above: the CLI you actually run (claude, kilo, opencode, …).
+#   Agent Provider = PW_PROVIDERS above: the CLI you actually run (claude, kilo, opencode,
+#                      cursor, …).
 #   API Provider    = which model backend a given Agent Provider talks to underneath. Only kilo
 #                      needs this today — it can route to several backends at once (command_code,
 #                      openrouter, …) — hence PW_KILO_API_PROVIDERS below, scoped to kilo alone.
@@ -64,8 +69,9 @@ if ! declare -p PW_KILO_API_PROVIDERS >/dev/null 2>&1; then
 fi
 
 # --- built-in provider hooks (a function defined in pw.config.sh overrides these) ---
-# Each Agent Provider needs 4 required hooks (bin/skilldir/commanddir/render_*_command) and,
-# optionally, 2 more to also seed sub-agents (agentdir/render_*_agent). See ONBOARDING.md's
+# Each Agent Provider needs the four REQUIRED hooks (bin/skilldir/commanddir/
+# render_*_command; cursor adds cursor_* to the family), plus the optional agent-seeding
+# pair (agentdir/render_*_agent) and headless template (<prov>_headless). See ONBOARDING.md's
 # "Register a new provider" for the full contract — including exactly which variables each
 # render_* hook receives — before writing a new one from scratch.
 declare -f claude_bin        >/dev/null 2>&1 || claude_bin()        { echo claude; }
@@ -163,6 +169,48 @@ declare -f opencode_headless >/dev/null 2>&1 || opencode_headless() {
 opencode run --auto -m <api-provider>/<model> "<prompt>" [--format json] [--attach <url>]
 --auto is REQUIRED headless — auto-approves permissions not explicitly denied.
 --attach <url> connects to an already-running server, avoiding a cold-boot delay.
+EOF
+}
+
+# --- Cursor CLI (.cursor) — native surfaces, verified against the installed CLI on
+# 2026-09-09. Provider-independence (D9): everything below installs ONLY under ~/.cursor;
+# Cursor's vendor compat read of ~/.claude/* is never a dependency (pw-doctor flags it as
+# informational bleed). Hooks/generators never touch ~/.cursor/cli-config.json — the
+# generator-never-writes-user-config rule spans kilo.jsonc AND cli-config.json.
+declare -f cursor_bin        >/dev/null 2>&1 || cursor_bin()        { echo agent; }
+declare -f cursor_skilldir   >/dev/null 2>&1 || cursor_skilldir()   { echo "$HOME/.cursor/skills"; }   # never skills-cursor/ (Cursor's own built-ins)
+declare -f cursor_commanddir >/dev/null 2>&1 || cursor_commanddir() { echo "$HOME/.cursor/commands"; }
+declare -f cursor_agentdir   >/dev/null 2>&1 || cursor_agentdir()   { echo "$HOME/.cursor/agents"; }
+declare -f render_cursor_command >/dev/null 2>&1 || render_cursor_command() {
+  # Command name derives from the FILENAME (pw-status.md -> /pw-status); `agent:` is Kilo-only
+  # sugar and has no cursor equivalent — omitted (inline lane-persona bodies self-execute).
+  # $ARGUMENTS + positional $1..$n expansion and `argument-hint` verified in the CLI bundle.
+  printf -- '---\ndescription: %s\n' "$desc"
+  [ -n "$args" ] && printf -- 'argument-hint: %s\n' "$args"
+  printf -- '---\n%s' "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
+}
+declare -f render_cursor_agent >/dev/null 2>&1 || render_cursor_agent() {
+  # No `mode:`/primary slot on Cursor (Claude-code class; Flow B main-session orchestration +
+  # Flow C direct-spawn, see docs/EXECUTION.md). Spawn permission is ambient — no tools: key;
+  # $claude_tools intentionally ignored here. `model:` passes through when set (verified
+  # accepted + nested spawn still works 2026-09-09); canonical defs ship it unset (false-pin
+  # rule — docs/EXECUTION.md §Spawning phase work).
+  printf -- '---\nname: %s\ndescription: %s\n' "$agentname" "$desc"
+  [ -n "$model" ] && printf -- 'model: %s\n' "$model"
+  printf -- '---\n%s' "$bodytext"
+}
+declare -f cursor_headless >/dev/null 2>&1 || cursor_headless() {
+  cat <<'EOF'
+agent -p --force [--trust] --model <model-id> [--resume <session_id>] [--workspace <path>]
+Pipe the prompt via STDIN as a plain redirect — printf '%s' "$PROMPT" | agent -p ... ; do NOT pass
+`-` as the prompt (it is sent literally, verified 2026-09-09). --force is REQUIRED headless (alias
+--yolo; without it tool approvals have no TTY). --trust clears the untrusted-folder gate.
+--output-format json emits ONE final event: {result, session_id, is_error, usage} — the session_id
+resumes with --resume (live round-trip verified 2026-09-09). Blocked/gated models exit non-zero
+with "ActionRequiredError" text (no JSON event) — treat unparsable output as an error, never blank
+success. Model ids from `agent models` (per-variant ids, e.g. claude-opus-5-thinking-xhigh; bracket
+params like '[context=1m,effort=high]' also accepted). --workspace targets a tree different from
+the invocation cwd (verified).
 EOF
 }
 

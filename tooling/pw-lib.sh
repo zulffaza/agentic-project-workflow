@@ -1916,6 +1916,18 @@ cmd_selftest() {
   if PW_MODEL_ALLOWLIST_CLAUDE="sonnet,haiku" "$0" model-check claude opus >/dev/null 2>&1; then
     die "selftest FAIL: model-check allowed a model NOT in its configured allowlist"
   fi
+  # ...cursor provider (2026-09): the rules are provider-generic, but the bracket-param quirk is
+  # cursor-specific and worth locking: catalog ids carry 'gpt-5.6-sol-high[effort=high]' style
+  # suffixes; model-check's shell `case` GLOB treats a bracket literal-ish (char class), so docs
+  # steer allowlist patterns to the suffix-free id part with '*' — here we assert the plain, glob,
+  # and refuse paths so a future refactor can't silently change that contract.
+  mc="$(PW_MODEL_ALLOWLIST_CURSOR="" "$0" model-check cursor cursor-grok-4.6-low)" \
+    || die "selftest FAIL: model-check refused cursor with an empty allowlist (should always pass)"
+  PW_MODEL_ALLOWLIST_CURSOR="claude-opus-5*,gpt-5*" "$0" model-check cursor gpt-5.6-sol >/dev/null \
+    || die "selftest FAIL: model-check refused cursor model matching an allowlist glob"
+  if PW_MODEL_ALLOWLIST_CURSOR="claude-opus-5*" "$0" model-check cursor gpt-5.6-everything >/dev/null 2>&1; then
+    die "selftest FAIL: model-check allowed a cursor model NOT in its configured allowlist"
+  fi
 
   # --- cmd_log duplicate-guard ---------------------------------------------------------
   # The real, observed bug: a live project's LOG.md had the identical actor+message logged twice

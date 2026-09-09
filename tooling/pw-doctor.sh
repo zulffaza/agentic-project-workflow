@@ -145,8 +145,9 @@ PY
 
 # Live model catalog for one Agent Provider, one line per model id (provider-prefix included),
 # or nothing on any failure — every call site treats "nothing" as "can't check", never an error.
-# Only kilo/opencode have a queryable catalog at all (claude has a fixed alias set — see
-# docs/EXECUTION.md); callers check that before ever reaching here.
+# kilo/opencode/cursor have a queryable catalog (`kilo models | opencode models | agent models`);
+# claude alone doesn't (fixed alias set — see docs/EXECUTION.md); callers check that before
+# ever reaching here.
 _pw_doctor_model_catalog() {
   local prov="$1" ap
   case "$prov" in
@@ -158,6 +159,7 @@ _pw_doctor_model_catalog() {
       fi
       ;;
     opencode) opencode models 2>/dev/null || true ;;
+    cursor) agent models 2>/dev/null || true ;;
   esac
   return 0
 }
@@ -298,6 +300,27 @@ for p in "${PW_PROVIDERS[@]}"; do
   fi
   echo
 done
+
+# --- provider-independence (D9) bleed check -------------------------------------------------
+# A Cursor CLI also reads ~/.claude/{skills,agents} as a *vendor* compat fallback. Those files —
+# if present — belong to the claude Agent Provider's install; pw never installs INTO another
+# provider's surface and never DEPENDS on this read (the quarantine proof in the plan certifies
+# cursor works with ~/.claude hidden). Informational while claude stays configured; deleting is
+# offboard.sh --provider claude's job, never this check's.
+if printf '%s\n' "${PW_PROVIDERS[@]:-}" | grep -qx cursor; then
+  _bleed=()
+  for _f in "$HOME"/.claude/agents/pw-*.md "$HOME"/.claude/skills/project-workflow \
+            "$HOME"/.claude/skills/pw-review "$HOME"/.claude/skills/pw-rfc; do
+    [ -e "$_f" ] || continue
+    _bleed+=("$_f")
+  done
+  if [ "${#_bleed[@]}" -gt 0 ]; then
+    echo "    ⚠ provider-independence (D9) bleed: cursor also sees ${#_bleed[@]} pw file(s) under ~/.claude"
+    echo "      via Cursor's vendor compat read (e.g. ${_bleed[0]##*/}) — BLEED, not contract (informational:"
+    echo "      cursor's own ~/.cursor install is complete and load-bearing; nothing in pw rides on these"
+    echo "      claude-provider copies. Presence while the claude provider is configured is expected.)"
+  fi
+fi
 
 # --- verdict -----------------------------------------------------------------
 if [ "$issues" -eq 0 ]; then

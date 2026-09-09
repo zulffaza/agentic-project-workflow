@@ -10,11 +10,12 @@
 # ============================================================================
 
 # --- Which Agent Providers to wire up ---------------------------------------
-# An "Agent Provider" is the AI-agent CLI you actually run (claude, kilo, opencode, …) — not
+# An "Agent Provider" is the AI-agent CLI you actually run (claude, kilo, opencode, cursor, …) — not
 # to be confused with an "API Provider" (see the KiloCode section below), which is a different,
 # narrower concept: which model BACKEND a given Agent Provider talks to underneath.
 #
-# Built-in (claude, kilo, opencode) means the hooks already exist in tooling/pw-common.sh — you
+# Built-in (claude, kilo, opencode, cursor) means the hooks already exist in
+# tooling/pw-common.sh — you
 # never write bin/skilldir/commanddir/render_* functions for these. But "built-in" is NOT the
 # same as "enabled": you still list a provider's name here yourself for it to become active.
 # List ONLY the CLIs you actually use; others are ignored even if installed.
@@ -99,9 +100,13 @@ PW_MEMORY_NOTES=""
 #                                    # against a live list (see docs/EXECUTION.md).
 #   PW_MODEL_ALLOWLIST_KILO=""       # e.g. "command_code/deepseek/*,kilo/anthropic/claude-haiku*"
 #   PW_MODEL_ALLOWLIST_OPENCODE=""   # e.g. "anthropic/claude-haiku*"
+#   PW_MODEL_ALLOWLIST_CURSOR=""     # e.g. "claude-opus-5*,gpt-5*" — ids from `agent models`;
+#                                    # prefer suffix-free id forms + '*' — model-check globs treat
+#                                    # a literal '[…]' bracket awkwardly (see selftest asserts)
 PW_MODEL_ALLOWLIST_CLAUDE=""
 PW_MODEL_ALLOWLIST_KILO=""
 PW_MODEL_ALLOWLIST_OPENCODE=""
+PW_MODEL_ALLOWLIST_CURSOR=""
 
 # --- AI-assisted review (OPTIONAL — off leaves today's human-only review unchanged) ----------
 # Every scaffolded project gets a per-phase "AI Review" dashboard line (off|advisory|auto for each
@@ -132,7 +137,7 @@ PW_RFC_LARK_SPACE=""
 PW_RFC_NOTES=""
 
 # --- Onboard a brand-new Agent Provider without touching the scripts --------
-# First check: is your CLI already claude, kilo, or opencode? Those are built into
+# First check: is your CLI already claude, kilo, opencode, or cursor? Those are built into
 # tooling/pw-common.sh — just add the name to PW_PROVIDERS above, nothing else. Everything
 # below is ONLY for a CLI that ISN'T on that list — don't redefine a built-in provider's hooks
 # here, since a function you define in this file always wins over the built-in default, and a
@@ -159,7 +164,8 @@ PW_RFC_NOTES=""
 #   myprov_agentdir()     { echo "$HOME/.myprov/agents"; }  # where it reads sub-agents
 #   render_myprov_agent() { … }  # same idea, but gen-agents.sh sets $agentname $desc
 #                                # $displayName $role $claude_tools $model $bodytext instead —
-#                                # see render_claude_agent/render_kilo_agent for full examples.
+#                                # see render_claude_agent/render_kilo_agent/render_cursor_agent
+#                                # for full examples.
 # Providers without these two hooks just skip agent-seeding — commands still work.
 #
 # OPTIONAL — to let an orchestrator running under a DIFFERENT provider hand tasks to this one
@@ -172,4 +178,5 @@ PW_RFC_NOTES=""
 #   }
 # Without this hook, the provider is still fully usable same-provider (spawning an in-process
 # sub-agent) — it just can't be a cross-provider execution TARGET. See
-# claude_headless/kilo_headless/opencode_headless in tooling/pw-common.sh for real examples.
+# claude_headless/kilo_headless/opencode_headless/cursor_headless in tooling/pw-common.sh for
+# real examples.
