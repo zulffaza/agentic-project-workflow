@@ -13,7 +13,8 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 step here gets: (a) a seeded brief (pointer-list, no re-gathering), (b) your **pre-flight** that the
 seed covers its scope, (c) a `LOG.md` spawn line with `· session=<id>` + `seed=` + `out=`, and
 (d) an **exit-check** against the brief — a thin result is fixed by resuming that id with a seed
-patch (kilo `kilo run -s <id>`, claude `--resume`), not by a cold respawn. Lane models come from
+patch (kilo `kilo run -s <id>`, claude `--resume`, cursor `agent -p --force --resume <session_id>`),
+not by a cold respawn. Lane models come from
 the dashboard's `AI Models:` row; the executor lane never does (tasks bind it per unit).
 
 **Optional lane spawns (grounding + drafting) — see the skill's

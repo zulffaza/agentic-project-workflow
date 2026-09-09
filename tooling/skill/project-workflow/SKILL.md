@@ -42,7 +42,8 @@ phase runs. Don't skip a gate.
   `Status:` line, `LOG.md`, or a review file's structure. Exact subcommands + what each does:
   [`references/conventions-and-gotchas.md`](references/conventions-and-gotchas.md).
 - **Never hand-edit a generated command/agent file** (`~/.claude/commands`,
-  `~/.config/kilo/command`, `~/.claude/agents`, `~/.config/kilo/agent`) — they're build output from
+  `~/.config/kilo/command`, `~/.claude/agents`, `~/.config/kilo/agent`, `~/.cursor/commands`,
+  `~/.cursor/agents`) — they're build output from
   `tooling/commands/`/`tooling/agents/`. Edit the canonical source and re-run the generator
   (`gen-commands.sh`/`gen-agents.sh`, or `./bootstrap.sh`).
 - **Agent vs sub-agent, across providers — load-bearing, get it right.** A **sub-agent** is spawned

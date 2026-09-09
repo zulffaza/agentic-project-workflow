@@ -31,8 +31,9 @@ is the one case that *does* stop after just that task.
 ## Model / agent per task + provider routing
 
 Every task carries `Execute with: <provider>:<model-or-agent>` + `Why:` + `Story points:`, and
-optional `Effort:` (`low`/`medium`/`high`/`xhigh`/`max` → claude `--effort`, kilo `--variant`) +
-`Thinking:` (kilo `--thinking`). `PLAN.md` mirrors it in **Execute with** + **SP** columns.
+optional `Effort:` (`low`/`medium`/`high`/`xhigh`/`max` → claude `--effort`, kilo `--variant`,
+cursor nearest id-variant / `[effort=…]` bracket param) + `Thinking:` (kilo `--thinking`; cursor
+via `-thinking-` id segment). `PLAN.md` mirrors it in **Execute with** + **SP** columns.
 **Default the provider to the plan's "Produced by"** (the agent that did the breakdown) so a run
 doesn't force an agent switch; route a task to a different provider only with a stated `Why:`.
 **Claude aliases (`opus`/`sonnet`/…) follow the latest version — pin the full name
@@ -45,7 +46,7 @@ proxies Claude/GPT/Gemini). Open-weight/third-party models instead route through
 `kilo:command_code/MiniMaxAI/MiniMax-M3` or `kilo:openrouter/<model>` (`kilo models <provider>` for
 each provider's list).
 
-- **Discover real kilo/opencode model ids by querying the live catalog — never recall/guess one
+- **Discover real kilo/opencode/cursor model ids by querying the live catalog — never recall/guess one
   from memory.** There's no fixed roster to read off anymore; a plausible-looking id can simply
   not exist, or a display name can differ from the real id (verified case: KiloCode's own `auth
   list` shows "Kilo Gateway," but the id it actually resolves under is `kilo`, not `kilo_gateway`
@@ -53,13 +54,14 @@ each provider's list).
   ```bash
   kilo models <api-provider>      # once per entry in PW_KILO_API_PROVIDERS (pw.config.sh)
   opencode models                 # opencode manages its own provider config internally
+  agent models                    # cursor (one gateway, no provider arg; ids like `claude-opus-5-thinking-xhigh`, variants via '[…]' brackets too)
   ```
   Pick an id from that actual output. Claude has no live catalog to query — its fixed alias set
   (`opus`/`sonnet`/`haiku`/`fable` + pinned full names) is already fully documented in the
   registry and `docs/EXECUTION.md`'s table, so there's nothing to discover there.
 - **Cross-provider execution mechanism** = `agentic-project-workflow/tooling/docs/providers.md`:
   explains how the orchestrator reads a provider's `<name>_headless()` hook (built-in for claude/
-  kilo/opencode; added or overridden in `pw.config.sh` — never edited in `tooling/` directly) to
+  kilo/opencode/cursor; added or overridden in `pw.config.sh` — never edited in `tooling/` directly) to
   invoke it non-interactively.
 - **Model allowlist — check before you write, and again before you run.** No model is off-limits
   by default; `PW_MODEL_ALLOWLIST_<PROVIDER>` in `pw.config.sh` is empty/unset for every provider
@@ -161,7 +163,9 @@ nine rows — PLAN gate, human confirmation for outward pushes, leftover reporti
 
 **Lanes bind model via the dashboard (`AI Models`), not the task file.** The driver reads the row
 before each spawn; claude per-spawn model is direct, kilo's route is a map pin or a headless
-`kilo run --auto -m <provider/model> [--dir <repo/path>]` session over the same work order; the
+`kilo run --auto -m <provider/model> [--dir <repo/path>]` session over the same work order;
+cursor's is the seeded def's `model:` or the same headless route via `cursor_headless()`
+(`agent -p --force --model <id>` over the work order — `--model` binds per-run, not per-spawn); the
 spawn records `Model used:` so the ledger shows *actual*, never folklore; a row that can't fire is
 visible, not assumed. Where the executor would otherwise run "generic with named model", it runs the
 provider's **default agent** (Option A: no generic implementer def ships; `pw-executor` is the one
@@ -195,3 +199,11 @@ git -C $PW_REPOS/<repo> worktree add \
   producing no output (no TTY to answer a tool-approval prompt) — same spirit as kilo's `--auto`.
   See `tooling/docs/providers.md`'s Cross-provider execution + Verification-notes sections for the
   full verified pattern.
+- **Cursor headless specifics (verified 2026-09-09):** `agent -p` needs `--force` (tool approvals
+  have no TTY — `--trust` too in a new folder); pass the prompt via a plain **stdin pipe, never
+  the `-` sentinel** (that's treated as the literal prompt text). Blocked/gated models exit
+  non-zero printing `ActionRequiredError: …` *without* any JSON event — `--output-format json`
+  yields one final `{result, session_id, is_error, usage}` only on success, so treat unparsable
+  output as failure. `session_id` (plain UUID) feeds the ledger; resume with `--resume <id>`.
+  `agent ls` is an interactive TUI and errors on non-tty stdin — don't script it (use workspace
+  files + `agent models`).

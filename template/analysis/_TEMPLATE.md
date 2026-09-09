@@ -28,7 +28,7 @@
      on rewrite, forcing a wasted re-read-and-retry cycle instead of a clean one-shot edit. -->
 
 - **Status:** draft | in-review | approved
-- **Author:** <agent/you>   **Provider:** <the agent/CLI this ran under, e.g. `kilo` / `claude`>
+- **Author:** <agent/you>   **Provider:** <the agent/CLI this ran under, e.g. `kilo` / `claude` / `cursor`>
   **Model:** <provider:model actually run; if drafted by a spawned `pw-analyst`, copy its
   `Model used:` footer — unset row ⇒ provider default; this is what the §8.5 ledger compares to>
 - **Date:** <YYYY-MM-DD HH:MM>  <!-- timestamp ONLY — never a changelog; a round's summary is a

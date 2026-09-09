@@ -82,12 +82,14 @@ Then produce, from `{{PW_HOME}}/template/task/`:
      justify it in `Why:`. Fold in any custom routing I gave ("run the mechanical bumps in
      KiloCode", "T03 → opus"). Resolve providers via `{{PW_HOME}}/tooling/docs/providers.md`. **Pin the
      Claude version** (full name like `claude-opus-4-8`) on risky tasks; raise `Effort:` for complex ones.
-   - **Picking a kilo or opencode model: query the live catalog, never recall/guess an id from
-     memory.** A plausible-looking id can simply not exist, or its display name can differ from
-     the real id.
+   - **Picking a kilo, opencode, or cursor model: query the live catalog, never recall/guess an
+     id from memory.** A plausible-looking id can simply not exist, or its display name can differ
+     from the real id.
      ```bash
      kilo models <api-provider>      # once per entry in PW_KILO_API_PROVIDERS (pw.config.sh)
      opencode models                 # opencode manages its own provider config internally
+     agent models                    # cursor — one gateway, no provider arg; effort/thinking are
+                                     # catalog-id variants (e.g. claude-opus-5-thinking-xhigh)
      ```
      Pick the id from that actual output. Claude has no live catalog — its fixed alias set is
      already fully documented in `{{PW_HOME}}/tooling/docs/providers.md`.

@@ -45,9 +45,11 @@ pending. Full semantics: [`tooling/commands/pw-execute.md`](../tooling/commands/
 — because a lane is spawned by a phase, not by a task file. Four rungs, highest wins; what a run
 actually used is *recorded*, so a pin silently failing becomes visible drift, not folklore:
 **(1)** run-time override this call → **(2)** the project's `AI Models:` row for that lane →
-**(3)** the registered def's own model (kilo map block or generated md; **claude per-agent only via
-the def** — see §Providers & the registry) → **(4)** the provider/session floor (`small_model`/
-`subagent_model` on kilo; session `/model` on claude). On kilo the in-process `Task`-tool spawn can't
+**(3)** the registered def's own model (kilo map block/generated md, cursor seeded def's `model:`,
+**claude per-agent only via the def** — see §Providers & the registry) → **(4)** the provider/session
+floor (`small_model`/`subagent_model` on kilo; session `/model` on claude; the `auto` router or
+`cli-config.json → selectedModel` on cursor). On kilo — and likewise on cursor, whose named spawns
+carry no per-run model parameter — the in-process spawn can't
 carry a model at all, so a lane row there is served as a **headless session of that model over the
 same work order** (`kilo run --auto -m <api>/<model> … --dir <path>`) — a row that can't bind in an
 in-process spawn says so in the ledger instead of lying (docs: §Spawning phase work below; provider
@@ -64,7 +66,9 @@ in an agent's head:
     `kilo:command_code/MiniMaxAI/MiniMax-M3`; or a same-provider def name like `pw-executor`). The    **provider** decides which
   CLI runs it. Claude aliases (`opus`/`sonnet`/…) follow the *latest* version — **pin the full
   name** (`claude-opus-4-8` vs `claude-opus-5`) when reproducibility matters.
-- `Effort:` / `Thinking:` — optional reasoning tuning (→ claude `--effort`, kilo `--variant`/`--thinking`).
+- `Effort:` / `Thinking:` — optional reasoning tuning (→ claude `--effort`, kilo
+  `--variant`/`--thinking`; cursor: nearest catalog-id variant (`…-thinking-xhigh`, `…-high-fast`) or
+  a `[effort=…]` bracket param — full mapping in `tooling/docs/providers.md`'s effort table).
 - `Why:` — one line of rationale.
 - `Story points:` — manual-effort estimate (2 SP = 1 person-day).
 - `Actually used:` — what the orchestrator really ran it with (if it differed).
@@ -81,12 +85,13 @@ forced to switch agents mid-workflow — a task is routed elsewhere only with a 
 | `kilo/<model>` | kilo | KiloCode's own built-in gateway — the **default** API Provider, no separate credential (proxies Claude/GPT/Gemini/etc. through KiloCode itself) |
 | `command_code/MiniMaxAI/MiniMax-M3`, `openrouter/<model>`, … | kilo | open-weight/third-party models — needs its own credential; routed via any *additional* KiloCode API Provider you've listed in `PW_KILO_API_PROVIDERS` (`kilo models <provider>`) |
 | a same-provider def (`pw-executor`, etc.) | (that provider) | reuse a registered executor natively; across providers a **model + task file** is the portable form (sub-agent names don't cross — `kilo run --agent` takes **primary** defs only and silently continues on the default agent otherwise; claude `--agents '<json>'` injects session defs that carry only a model) |
+| `cursor:cursor-grok-4.5-high`, `cursor:claude-opus-5-thinking-xhigh[context=1m]` | cursor | Cursor's own single model gateway — no API-Provider axis; ids from `agent models`; effort/fast/thinking are **catalog-id variants** (or bracket params), not flags |
 | a custom `tooling/agents/` def | (its provider) | a genuinely new recurring role — same cross-provider caveat: a `mode: subagent` def is not addressable from the other CLI |
 
 **How the agent knows what's actually available:** claude's models are the fixed set in the table
-above — nothing to look up. kilo and opencode both have a real, changeable catalog, so
-`/pw-breakdown` is instructed to **query it live** (`kilo models <api-provider>` /
-`opencode models`) rather than recall an id from memory before writing a task's `Execute with:` —
+above — nothing to look up. kilo, opencode, and cursor each have a real, changeable catalog,
+so `/pw-breakdown` is instructed to **query it live** (`kilo models <api-provider>` /
+`opencode models` / `agent models`) rather than recall an id from memory before writing a task's `Execute with:` —
 a plausible-looking id can simply not exist, or a display name can differ from the actual id
 (verified case: KiloCode's own credential list shows "Kilo Gateway," but the usable id is `kilo`,
 not `kilo_gateway`). This is a separate concern from the allowlist below — discovery is about
@@ -165,11 +170,13 @@ that implies symmetry.
 ## Model allowlist (optional — a cost guard, not a routing mechanism)
 
 There's no fixed, pre-approved model list in this bundle — an agent (during `/pw-breakdown`) or
-you can pick any model any configured API Provider serves, for claude, kilo, or opencode alike.
+you can pick any model any configured API Provider serves, for claude, kilo, opencode, or
+cursor alike.
 
 **If you want to rule some OUT** — typically to stop an agent reaching for an unexpectedly
 expensive model — set an allowlist per Agent Provider in `pw.config.sh`
-(`PW_MODEL_ALLOWLIST_CLAUDE` / `_KILO` / `_OPENCODE`), a comma-separated list of glob patterns
+(`PW_MODEL_ALLOWLIST_CLAUDE` / `_KILO` / `_OPENCODE` / `_CURSOR`), a comma-separated list of glob
+patterns
 matched against the model id (everything after the `<provider>:` prefix, e.g. `sonnet` or
 `command_code/deepseek/*`).
 
@@ -198,7 +205,7 @@ These two words are **not** interchangeable — the distinction decides how a ta
 | | **Sub-agent** | **Agent** (primary / invocable) |
 |---|---|---|
 | What | spawned **in-process** by an orchestrator | a top-level agent invoked through a provider's **CLI** |
-| How | Claude's Task tool `subagent_type`; KiloCode `mode: subagent` | that provider's CLI: `kilo run --agent <primary-agent>` / `claude -p` (a sub-agent def is NOT nameable from across the boundary) |
+| How | Claude's Task tool `subagent_type`; KiloCode `mode: subagent`; Cursor auto-delegation on def `description` (or explicit `/pw-<agent>` — and a **direct** cursor sub-agent can itself fan out one more level, verified 2026-09-09) | that provider's CLI: `kilo run --agent <primary-agent>` / `claude -p` / cursor `agent -p --force --model <id>`+task file (a sub-agent def is NOT nameable from across the boundary; cursor has no CLI primary-agent slot at all) |
 | Boundary | **same provider only** — a provider can spawn only its *own* sub-agents | the **only** unit that crosses a provider boundary |
 | Here | `pw-executor` | `pw-orchestrator` |
 
@@ -239,7 +246,7 @@ Seeds are a contract, not a vibe (lane defs + `tooling/skill/…/references/exec
 is fixed at the producer — a cheap researcher pass — never by spawning a floundering analyst),
 pointers-as-menu, never raw dumps/credentials. After a draft, an **exit check**: diff result vs the
 brief's scope list; a gap means a **resume with a seed patch** (`kilo run -s <id>` / claude
-`--resume <id>`), not a cold re-spawn. N review items on ONE artifact (human / `pw-reviewer` /
+`--resume <id>` / cursor `agent -p --force --resume <session_id>`), not a cold re-spawn. N review items on ONE artifact (human / `pw-reviewer` /
 verifier / `dep-impact` items share that queue) get ONE batched fix spawn, per-item replies intact
 — never one spawn per comment.
 
@@ -265,7 +272,8 @@ Every delegated spawn writes one line where the pipeline already logs, so later 
 carries `· session=<id> · seed=<ref> · out=<artifact> · <outcome>`; the task's `## Result →
 Session:` records its run's id, and the executor writes `session <id>` as the first line of
 `worktree/<T0n>.log` when the provider exposes one — `-` if not). A Row-8 rejection, an MR-comment
-batch, or a dependency's §3.6 recheck **resumes that id** (`kilo run -s <id>`) when live; cold —
+batch, or a dependency's §3.6 recheck **resumes that id** (`kilo run -s <id>` / cursor
+`agent -p --force --resume <id>`; ids are `ses_…` on kilo, plain UUIDs on cursor) when live; cold —
 spawn with the task file / recorded seed — is the fallback, because session stores are
 machine-local (never cross-machine) and a dead id must not strand the work. Session ids are
 **machine-local pointers** — they stay in the workspace; nothing goes into MR text. State that

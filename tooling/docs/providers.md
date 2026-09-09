@@ -12,7 +12,8 @@ means defining `<name>_headless()` in `pw.config.sh` — see
 > hook at all, and a headless hook means nothing without that CLI also being a registered Agent
 > Provider.
 >
-> **Terminology:** an **Agent Provider** is the CLI itself (`claude`, `kilo`, `opencode`, …). An
+> **Terminology:** an **Agent Provider** is the CLI itself (`claude`, `kilo`, `opencode`,
+> `cursor`, …). An
 > **API Provider** is a narrower, different thing: which model *backend* a given Agent Provider
 > talks to underneath (e.g. `command_code`/`openrouter` inside KiloCode). One Agent Provider can
 > have several API Providers; don't conflate the two when reading this file.
@@ -33,7 +34,7 @@ there won't be one again — see "Choosing a model" below for why); write it exp
 ## How headless invocation actually works
 
 Each Agent Provider has an **optional** `<name>_headless()` hook — built-in for claude/kilo/
-opencode in `tooling/pw-common.sh`, overridable (or added fresh, for a provider that isn't
+opencode/cursor in `tooling/pw-common.sh`, overridable (or added fresh, for a provider that isn't
 built-in) in `pw.config.sh` — that prints the exact non-interactive invocation template plus
 operational gotchas for that CLI. The orchestrator reads **that hook's output**, not a markdown
 table, when routing a task to a *different* provider than its own. A provider without this hook
@@ -41,7 +42,8 @@ is still fully usable same-provider; it just can't be a cross-provider **target*
 treatment as `agentdir`/`render_*_agent` for sub-agent seeding).
 
 **What the built-in hooks currently return** (source of truth is `tooling/pw-common.sh`'s
-`claude_headless`/`kilo_headless`/`opencode_headless` — the lines below are illustrative, kept in
+`claude_headless`/`kilo_headless`/`opencode_headless`/`cursor_headless` — the lines below are
+illustrative, kept in
 sync by whoever maintains the bundle, not something you edit here to change behavior):
 
 - **claude** — `claude --print --dangerously-skip-permissions --model <model> [--effort <low|
@@ -66,16 +68,28 @@ sync by whoever maintains the bundle, not something you edit here to change beha
   one of `PW_KILO_API_PROVIDERS` (`pw.config.sh`) — e.g. `kilo`, `command_code`, `openrouter`.
 - **opencode** — `opencode run --auto -m <api-provider>/<model> "<prompt>" [--format json]
   [--attach <url>]`. `--auto` is required headless. **Not yet run end-to-end in this bundle**
-  (unlike claude/kilo — see Verification notes); confirmed against OpenCode's own CLI docs only.
+  (unlike claude/kilo/cursor — see Verification notes); confirmed against OpenCode's own docs only.
+- **cursor** — `agent -p --force [--trust] --model <id> [--output-format json] [--resume
+  <session_id>] [--workspace <path>]`. `--force` (alias `--yolo`) is **required headless** (no TTY
+  for approvals; `--trust` clears the per-folder gate when needed). **Pipe the prompt via a plain
+  stdin redirect; never pass `-` as the argument** — `-` is sent as the literal prompt (verified
+  2026-09-09); stdin itself carries long prompts fine, same doctrine as claude. `--output-format
+  json` closes with ONE final event `{result, session_id, is_error, usage}` — `session_id` is the
+  ledger/resume handle (`--resume <session_id>` round-trip verified). Blocked or plan-gated model
+  ids exit non-zero with `ActionRequiredError` **text, not JSON** — treat unparsable output as an
+  error, never blank success. No `PW_CURSOR_API_PROVIDERS` axis: one gateway (`agent models` =
+  the catalog). Like kilo's rule: cross-provider `cursor:*` tasks carry the **task file as work
+  order** on a `--model <id>`; a named sub-agent can't cross the boundary (cursor has no primary
+  CLI slot at all).
 
 ## Effort / variant / thinking (per-task tuning)
 A task may carry two optional fields alongside `Execute with:` — the orchestrator maps them to the
 right CLI flag by provider:
 
-| Task field | `claude` maps to | `kilo` maps to |
-|------------|------------------|----------------|
-| `Effort:` (`low`/`medium`/`high`/`xhigh`/`max`) | `--effort <level>` | `--variant <level>` (provider-specific: `high`/`max`/`minimal`/…; nearest match) |
-| `Thinking:` (`on`/`off`) | (n/a — omit; effort covers reasoning) | `--thinking` when `on` |
+| Task field | `claude` maps to | `kilo` maps to | `cursor` maps to |
+|------------|------------------|----------------|----------------|
+| `Effort:` (`low`/`medium`/`high`/`xhigh`/`max`) | `--effort <level>` | `--variant <level>` (provider-specific: `high`/`max`/`minimal`/…; nearest match) | nearest `cursor:<id>-<level>[-fast]` catalog id (e.g. `claude-opus-5-thinking-xhigh`); bracket `[effort=…]` params per-run |
+| `Thinking:` (`on`/`off`) | (n/a — omit; effort covers reasoning) | `--thinking` when `on` | encoded in catalog ids (`-thinking-<level>` variants); no standalone flag |
 
 - **Version pinning (Claude):** `opus`/`sonnet`/`haiku`/`fable` resolve to the *latest* of that
   family. To pin, use the full name — `claude:claude-opus-4-8` vs `claude:claude-opus-5`,
@@ -86,7 +100,8 @@ right CLI flag by provider:
 ## Choosing a model — no fixed roster, model-agnostic by default
 
 There's deliberately no fixed "blessed models" list, and no static model→provider catalog either
-— any model any configured API Provider serves is fair game, for kilo, opencode, or claude alike.
+— any model any configured API Provider serves is fair game, for kilo, opencode, cursor, or
+claude alike.
 An agent (during `/pw-breakdown`) or you can pick whatever fits the task, but **always write the
 explicit `<provider>:` prefix** — this is exactly why: a static catalog goes stale (a display name
 can differ from the real id — verified case: KiloCode's own "Kilo Gateway" credential resolves
@@ -94,7 +109,8 @@ under the id `kilo`, not `kilo_gateway`), so there's nothing here to infer a pro
 
 **If you don't want that fully open** — e.g. to keep an agent from reaching for an unexpectedly
 expensive model — set an optional **model allowlist** per Agent Provider in `pw.config.sh`
-(`PW_MODEL_ALLOWLIST_CLAUDE` / `_KILO` / `_OPENCODE`, comma-separated glob patterns). **The
+(`PW_MODEL_ALLOWLIST_CLAUDE` / `_KILO` / `_OPENCODE` / `_CURSOR`, comma-separated glob
+  patterns). **The
 rule: empty/unset = ALL models allowed — the default.** Nothing is restricted unless you set a
 pattern yourself. `/pw-breakdown` checks a task's chosen model against it while filling `Execute
 with:`; `/pw-execute` checks again right before running it.
@@ -104,10 +120,10 @@ with:`; `/pw-execute` checks again right before running it.
 a configured pattern that matches zero models (a likely typo, a deprecated id, or a model your
 authenticated API Providers don't cover). It's informational only — never something you check by
 running a provider's CLI by hand, and never blocks `/pw-doctor` itself. (kilo's own catalog is
-browsable directly via `kilo models [provider-id]`, opencode's via `opencode models [provider-id]`,
-if you want to look yourself — but `/pw-doctor` is the one that actually validates your config.)
+browsable directly via `kilo models [provider-id]`, opencode's via `opencode models
+[provider-id]`, cursor's via `agent models`, if you want to look yourself — but `/pw-doctor` is the one that actually validates your config.)
 
-## Verified agent/session facts (probed 2026-09-04, this machine — re-run before trusting them elsewhere)
+## Verified agent/session facts (probed 2026-09-04 kilo/claude + 2026-09-09 cursor, this machine — re-run before trusting elsewhere)
 
 - **Registered set = ground truth via `kilo agent list`** (prints `name (mode)` + resolved
   permission JSON); `kilo debug agent <name>` prints the **effective config incl. the model a
@@ -130,9 +146,33 @@ if you want to look yourself — but `/pw-doctor` is the one that actually valid
 - **Both CLIs take a working-directory flag** (`kilo run --dir <path>`; `pw-common.sh` wires the
   same idea for claude as `-C <path>` via the `PW_CLAUDE_WORKDIR` env — the config hook is
   `*_bin()`/`*_headless` envs; there is no `PW_KILO_BIN`/`PW_CLAUDE_BIN` variable set anywhere in
-  this bundle: the two binaries are the `kilo`/`claude` hooks and the headless *shape* is the
+  this bundle: the binaries are the `kilo`/`claude`/`cursor` hooks and the headless *shape* is the
   `<name>_headless` doc-block). A machine that lacks a repo locally can still run an executor headless
   against ITS own dir.
+
+- **`agent -p` (Cursor) headless surface** — probed live 2026-09-09 on build `2026.09.02-c22c1a3`
+  with `--output-format json`: exactly one final result event; `session_id` is a plain UUID (not
+  kilo's `ses_…` shape) — ledger `Provider`-conditional; **`--resume <uuid>` round-trips context**
+  (verified). A second probe proved **separate `-p` runs in the SAME `--workspace` do NOT
+  auto-continue** each other (per-run sessions; only `--resume` reconnects).
+- **Model observability is zero at the surface**: no json field, `agent ls`, or status line names
+  what actually ran (the `--model` floor equals `cli-config.json → selectedModel`, e.g.
+  `grok-4.6[effort=high,fast=true]` here), so the `Model used:` discipline (EXECUTION.md) can only
+  record what was **requested** on GOTO-team accounts. Blocked/gated ids (`(NO ZDR)` rows;
+  `claude-fable-5-*`) fail loud — `ActionRequiredError: Model Blocked`, exit 1, non-JSON — so
+  admin-block ≠ silent-fallback; the *silent* case is plan-gated models per Cursor docs, unprobed
+  here (docs-claimed feature, plan-12 §Risk).
+- **`~/.cursor/{skills,commands,agents}` fully self-sufficient (D9 quarantine proof, 2026-09-09):**
+  with `~/.claude/{agents,skills}` moved to quarantine, `/pw-hello` still expanded (from
+  `~/.cursor/commands` — the CLI has **no** `.claude/commands` compat read at all, verified by
+  bundle grep) and the skills palette still resolved — every surface cursor used came from its own
+  native install. `~/.claude` was restored afterward; the 20 claude artifacts stayed byte-identical
+  across the whole plan (md5 baseline) and the 3 `~/.claude/skills/*` bundle symlinks stayed live.
+- **Naming caveat:** the Cursor CLI binary is `agent` (`cursor-agent` is the same thing; both are
+  symlinks the installer drops next to it). In this bundle's docs a backticked `agent` in a CLI
+  context means the Cursor binary; sub-agent roles are always written `pw-*` or "sub-agent".
+  `cursor_bin()` → `agent` — a machine where something shadows that name overrides the hook in
+  `pw.config.sh`.
 
 ## Cross-provider execution (how the orchestrator routes)
 
@@ -195,6 +235,17 @@ required reading to just use this mechanism. A dated symptom/root-cause/mitigati
 [`docs/KNOWN-ISSUES.md`](../../docs/KNOWN-ISSUES.md) — read that instead of this whole section.
 
 **Built-in headless hooks** — verified 2026-08-04 against the installed CLIs.
+
+**Cursor CLI, verified end-to-end 2026-09-09** (bundled probes for plan-12; kilo→cursor pairing
+below): `agent -p --force --trust` writes/loops headlessly; `/pw-*` and `$ARGUMENTS` expand in
+print mode; workspace `.cursor/commands` + `~/.cursor/agents` both load (defs win over same-named
+commands on name-collision, and **workspace def wins over global** — probe-4); `argument-hint`
+renders fine. Gotchas recorded: `-` is a literal prompt (see cursor hook bullet); non-JSON output
+means error (blocked model / not-logged-in); nested two-level sub-agent delegation works but is
+**unreliable on fast-tier ids** (e.g. `cursor-grok-4.6-low-fast` confabulated NO-SPAWN/“already
+completed” once while succeeding on retry) — route executor/orchestrator roles to capable models
+per the MiniMax doctrine above. `.claude`-compat bleed noted by `pw-doctor` (informational; the
+native install is verified complete — see quarantine proof above).
 
 **Claude stdin-vs-argument bug** — confirmed 2026-08-08, kilo→claude: `claude` reported "Input must
 be provided either through stdin or as a prompt argument" with the prompt right there in the

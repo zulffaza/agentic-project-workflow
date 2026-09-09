@@ -25,7 +25,8 @@ the project without reading the whole base guide. Cover, concisely:
    replies `↳ agent:` and flips `[OPEN]`→`[RESOLVED]`; if the agent has an open question it seeds a `Qn` row I
    answer with `↳ you:`; only I write the Sign-off (date-time to the minute) that clears a gate.
 5. **Execution routing** — tasks carry `Execute with: <provider>:<model>` — **always write the
-   explicit `<provider>:` prefix** (e.g. `claude:opus`, `kilo:command_code/...`) — there's no
+   explicit `<provider>:` prefix** (e.g. `claude:opus`, `kilo:command_code/...`,
+   `cursor:cursor-grok-4.5-high`) — there's no
    static model→provider lookup to infer it from. As a rough mental model: Claude models tend to
    run via Claude Code, open-weight/third-party ones via KiloCode; the exact mechanics are in
    `{{PW_HOME}}/tooling/docs/providers.md`. `/pw-execute` stops at committed + verified, and

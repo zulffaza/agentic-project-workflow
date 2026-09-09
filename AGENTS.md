@@ -53,9 +53,16 @@ real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./do
   (`status|oneliner|adopted|adopt|log|phase`). Hand-editing these load-bearing, format-sensitive
   bits is what causes drift and clobbers — always go through the helper.
 - **Never hand-edit generated artifacts.** The per-provider command files (`~/.claude/commands`,
-  `~/.config/kilo/command`) and seeded agents (`~/.claude/agents`, `~/.config/kilo/agent`) are build
+  `~/.config/kilo/command`, `~/.cursor/commands`) and seeded agents (`~/.claude/agents`,
+  `~/.config/kilo/agent`, `~/.cursor/agents`) are build
   output. Change the **canonical source** in `tooling/commands/` or `tooling/agents/`, then run
   `/pw-doctor --fix` to resync (it regenerates + relinks everything the generators would).
+- **Provider independence (D9).** Each Agent Provider's install is self-contained in its **own**
+  dirs (`~/.claude/*` for claude, `~/.cursor/*` for cursor, …) generated solely from the bundle's
+  registry. Vendor CLIs sometimes *also* glob other vendors' dirs as compat fallback (Cursor reads
+  `~/.claude/{skills,agents}`); that is unmanaged bleed, never a contract you may build on across
+  providers — hooks, generated files, and docs must not assume another provider is installed.
+  `pw-doctor.sh` flags such bleed informationally.
 - **Configure via `pw.config.sh`, never the scripts** — enabling/adding a provider or model lives
   there (gitignored, yours). Keep command/agent/skill sources tokenized with `{{PW_HOME}}` /
   `{{PW_PROJECTS}}` / `{{PW_REPOS}}`; never hardcode an absolute path.

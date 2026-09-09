@@ -58,7 +58,8 @@ Run `pw-lib.sh selftest` after changing it.
 
 `providers.md` documents the cross-provider execution mechanism — how the orchestrator invokes a
 *different* Agent Provider's CLI headlessly, reading that provider's `<name>_headless()` hook
-(built-in for claude/kilo/opencode in `pw-common.sh`, added or overridden in `pw.config.sh` —
+(built-in for claude/kilo/opencode/cursor in `pw-common.sh`, added or overridden in
+`pw.config.sh` —
 never edited here). `forges.md` and `rfc-backends.md` are maintainer-owned the same way — the
 day-to-day settings you actually set (`PW_FORGE_HOSTS`, `PW_RFC_BACKEND`/`PW_RFC_LARK_*`) already
 live in `pw.config.sh`; `forges.md` documents how a repo's git host resolves to the `gh`/`glab`
@@ -80,14 +81,15 @@ Outputs (overwritten each run):
 `{{ARGS}}` is replaced with each provider's argument placeholder (both use `$ARGUMENTS` today).
 
 ## Add / enable an Agent Provider
-Already `claude`, `kilo`, or `opencode`? Those are **built in** — just add the name to
+Already `claude`, `kilo`, `opencode`, or `cursor`? Those are **built in** — just add the name to
 `PW_PROVIDERS=(…)` in `../pw.config.sh`, nothing else. For any other CLI, **you never edit these
 scripts** — everything else also goes in `../pw.config.sh`:
 1. Add its name to `PW_PROVIDERS=(…)`.
 2. Define `<name>_bin` / `<name>_skilldir` / `<name>_commanddir` / `render_<name>_command` (the
    scripts only supply defaults for the built-ins, so yours win — never redefine a built-in
    provider's hooks here, it'll silently replace the working default). Copy
-   `render_claude_command`/`render_kilo_command` from `pw-common.sh` as a starting point; full
+   `render_claude_command`/`render_kilo_command`/`render_cursor_command` from `pw-common.sh` as
+   a starting point; full
    variable contract in [ONBOARDING.md](../ONBOARDING.md#register-a-new-provider). *(Optional)*
    to also seed the sub-agents for it, define `<name>_agentdir` + `render_<name>_agent`;
    providers without those just skip agent-seeding.
@@ -109,7 +111,8 @@ agent: <optional — a provider agent to run the command under, e.g. pw-orchestr
 ```
 
 > Sub-agents **are** generated — from [`agents/`](./agents/README.md), seeded into each provider's
-> agent dir by `gen-agents.sh` (kilo `~/.config/kilo/agent/`, Claude Code `~/.claude/agents/`). The
+> agent dir by `gen-agents.sh` (kilo `~/.config/kilo/agent/`, Claude Code `~/.claude/agents/`,
+> Cursor `~/.cursor/agents/`). The
 > six shipped roles: `pw-orchestrator`, `pw-executor`, `pw-reviewer` (optional — off by default
 > per phase) and the spawn-lanes `pw-researcher` / `pw-analyst` / `pw-writer-task`; execution can
 > still reuse a registered agent (e.g. `pw-executor`) by naming it in a task's `Execute with:` —

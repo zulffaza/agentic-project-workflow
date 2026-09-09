@@ -21,6 +21,8 @@ Want to see this in action first, with no setup at all? → [docs/WALKTHROUGH.md
     which needs no separate credential; `command_code`/`openrouter`/etc. shown elsewhere as
     examples are just the maintainer's own additional setup, not a requirement)
   - **OpenCode** — `opencode`
+  - **Cursor CLI** — `agent`  (its own single model gateway — no API-Provider axis; ids
+    come from `agent models`)
   - Something else? You can add it — see [Register a new provider](#register-a-new-provider).
 
 ## Onboard in 3 steps
@@ -141,14 +143,21 @@ including *why* you'd want one: **[docs/MEMORY.md](./docs/MEMORY.md)**.
 ## Register a new provider
 
 **Two different meanings of "provider," worth separating up front:**
-- An **Agent Provider** is the AI-agent CLI you actually run — `claude`, `kilo`, `opencode`, or a
-  new one you're wiring up here. This section is about registering one of those.
+- An **Agent Provider** is the AI-agent CLI you actually run — `claude`, `kilo`, `opencode`,
+  `cursor`, or a new one you're wiring up here. This section is about registering one of those.
 - An **API Provider** is a narrower, different thing — which model *backend* a given Agent
   Provider talks to underneath (e.g. KiloCode alone can route to several: its own built-in `kilo`
   gateway, or `command_code`/`openrouter`/…). That's `PW_KILO_API_PROVIDERS` in `pw.config.sh`,
   unrelated to what follows.
 
-**Is your CLI already `claude`, `kilo`, or `opencode`?** Those three are **built into**
+**Provider independence (D9).** Every provider's install must be **self-contained in its own
+  dirs** — `pw.env.sh`-style shared config aside, one provider never reads or depends on another
+  provider's install surface. Some vendor CLIs *additionally* glob other vendors' config dirs as a
+  compat fallback (Cursor reads `~/.claude/{skills,agents}`); that is unmanaged **bleed**, not
+  contract — never build on it, and `pw-doctor.sh` flags it informationally. A provider's hooks,
+  generated files, and runtime behavior must survive another provider's install or removal entirely.
+  
+**Is your CLI already `claude`, `kilo`, `opencode`, or `cursor`?** Those four are **built into**
 `tooling/pw-common.sh` — you don't need anything below. Just add the name to `PW_PROVIDERS=(…)`
 in `pw.config.sh` and re-run `./bootstrap.sh`. **Built-in is not the same as enabled** — a
 built-in provider still does nothing until you list it in `PW_PROVIDERS` yourself; skip this
@@ -161,7 +170,7 @@ bootstrap; gitignored, so it stays yours):
 1. Add its name to `PW_PROVIDERS=(…)`.
 2. Define its **required** hooks in the same file (the scripts only supply defaults for the
    built-ins, so yours win — this is also why you should never redefine `claude_*`/`kilo_*`/
-   `opencode_*` here: your version would silently replace the working built-in one):
+   `opencode_*`/`cursor_*` here: your version would silently replace the working built-in one):
    - `<name>_bin()` — the command to detect on `PATH`
    - `<name>_skilldir()` — where it reads skills (these are plain files/dirs, copied or
      symlinked as-is — no rendering involved)
@@ -184,12 +193,13 @@ bootstrap; gitignored, so it stays yours):
    (`pw-orchestrator`, `pw-executor`, `pw-reviewer`) for it. Same idea as `render_<name>_command`,
    but `gen-agents.sh` sets a different variable set beforehand: `$agentname` (the file's
    basename), `$desc`, `$displayName`, `$role`, `$claude_tools`, `$model`, `$bodytext` — see
-   `render_claude_agent`/`render_kilo_agent` in `tooling/pw-common.sh` for full examples.
+   `render_claude_agent`/`render_kilo_agent`/`render_cursor_agent` in `tooling/pw-common.sh`.
    Providers without these two hooks just skip agent-seeding — the `/pw-*` commands still work.
 4. *(Optional)* `<name>_headless()` — prints the exact non-interactive invocation template for
    this CLI (e.g. an auto-approve flag, how the model/prompt gets passed), so an orchestrator
    running under a *different* provider can shell out to this one for cross-provider execution.
-   See `claude_headless`/`kilo_headless`/`opencode_headless` in `tooling/pw-common.sh` for real
+   See `claude_headless`/`kilo_headless`/`opencode_headless`/`cursor_headless` in
+   `tooling/pw-common.sh` for real
    examples. Without it, this provider is still fully usable same-provider — it just can't be a
    cross-provider execution **target**. Full mechanics: `tooling/docs/providers.md` (a
    maintainer-owned reference doc — you never edit it directly; this hook is the only thing you
@@ -247,7 +257,8 @@ commands, and seeded sub-agents per provider.
 ./offboard.sh                    # dry-run (default, always) — reports what WOULD be removed
 ./offboard.sh --yes              # actually remove it
 ./offboard.sh --provider kilo    # scope to one/more providers (comma-separated)
-./offboard.sh --all-known        # also sweep claude/kilo even if no longer in PW_PROVIDERS —
+./offboard.sh --all-known        # also sweep ALL built-ins (claude, kilo, opencode, cursor)
+                                 # even if no longer in PW_PROVIDERS —
                                   # catches files orphaned by disabling a provider in pw.config.sh
 ```
 

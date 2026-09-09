@@ -77,7 +77,11 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
    - **Different provider → shell out to that CLI headlessly** (per the registry's invocation
      column), passing the task file as the work order — e.g. a Claude-Code orchestrator hands a
      `kilo:command_code/MiniMaxAI/MiniMax-M3` task to `kilo run --auto -m … --format json`
-     (`--auto` is REQUIRED or kilo auto-rejects every permission). **Pipe the prompt via stdin,
+     (`--auto` is REQUIRED or kilo auto-rejects every permission), or a `cursor:<id>` task to
+     `agent -p --force --model <id> --output-format json` (`--force` required; prompt on plain
+     stdin — a bare `-` arg is treated as LITERAL prompt text; scrape `.result`; a blocked model
+     exits non-zero printing `ActionRequiredError` with NO json event → treat unparsable output as
+     failure). **Pipe the prompt via stdin,
      never as a trailing CLI argument** — a long inline argument can vanish entirely across the
      shell-out boundary (confirmed 2026-08-08, kilo→claude: `claude --print` reported no prompt was
      received even though it was right there in the command; the CLI's own syntax was fine in
@@ -107,7 +111,8 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
         for a bounded diagnose→fix→re-verify loop, instead of jumping straight to `verify-failed`;
         environmental/pre-existing failures follow today's `done`+caveat rule and never loop.
    - **Apply `Effort:`/`Thinking:`** via the provider's flag (claude `--effort`, kilo
-     `--variant` + `--thinking`) per `providers.md`. **Honor version pins** — a full name
+     `--variant` + `--thinking`; cursor: choose the catalog id variant up front — effort/thinking
+     live *in* `--model <id>`, or as `[effort=…]` bracket params) per `providers.md`. **Honor version pins** — a full name
      (`claude-opus-4-8`) is passed verbatim, never swapped for the alias. Record resolved flags in
      `Actually used:` (e.g. `claude:claude-opus-4-8 --effort high`). Don't use a bespoke executor
      agent; the discipline comes from the skill + task file. Unverified flags → check `--help` or

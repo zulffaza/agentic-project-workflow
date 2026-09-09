@@ -16,7 +16,9 @@
   each MR description. If it can be a single task/MR, it should be — a landing unit is the fallback
   for cross-repo coupling, not a license to slice one change into many MRs.>
 - **Status:** todo | in-progress | verify-failed | done | accepted
-- **Execute with:** <provider:model-or-agent> — e.g. `claude:sonnet`, `claude:claude-opus-4-8`  (pinned), `kilo:command_code/<model>`; or the same-provider `pw-executor` def. A plain
+- **Execute with:** <provider:model-or-agent> — e.g. `claude:sonnet`, `claude:claude-opus-4-8`
+  (pinned), `kilo:command_code/<model>`, `cursor:gpt-5.6-sol-high`; or the same-provider
+  `pw-executor` def. A plain
   `provider:model` = that provider's default agent on this task file as its work order (portable
   across providers); a named sub-agent only resolves when the orchestrator shares its provider.
   Defaults to the same provider that ran the breakdown (`PLAN.md` → "Produced by") — route
@@ -24,8 +26,10 @@
   in `Why:`. Aliases (`opus`/`sonnet`/…) track the *latest* version — pin the full name when
   reproducibility matters. Full detail: `{{PW_HOME}}/tooling/docs/providers.md`.
 - **Effort:** <low|medium|high|xhigh|max — optional> — reasoning effort. Maps to `--effort`
-  (claude) / `--variant` (kilo). Omit for the CLI default.
-- **Thinking:** <on|off — optional, kilo only> — emit thinking blocks (`--thinking`).
+  (claude) / `--variant` (kilo) / nearest catalog-id variant or `[effort=…]` bracket param (cursor).
+  Omit for the CLI default.
+- **Thinking:** <on|off — optional> — kilo `--thinking`; cursor via a `-thinking-` id variant.
+  Claude: omit (effort covers reasoning).
 - **Why:** <one line — why this model/agent/effort fits this task>
 - **Story points:** <n> — manual-effort estimate (2 SP = 1 person-day). [🤖 set at breakdown]
 - **Actually used:** <filled by the orchestrator at run time — e.g. `kilo:command_code/MiniMaxAI/MiniMax-M3 --variant high`>

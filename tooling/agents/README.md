@@ -21,6 +21,10 @@ tooling/agents/
 **Where they land** (per provider, via each provider's `<name>_agentdir` hook):
 - **Claude Code** → `~/.claude/agents/*.md` (frontmatter `name` + `description` + `tools`)
 - **kilo** → `~/.config/kilo/agent/*.md` (frontmatter `mode` + `permission` block)
+- **Cursor** → `~/.cursor/agents/*.md` (frontmatter `name` + `description` + optional `model:`;
+  **no** tools/permission keys — spawn access is ambient on Cursor). Its vendor compat read of
+  `~/.claude/agents` is out-of-contract bleed (AGENTS golden rule: provider independence) — the
+  native dir is always seeded regardless.
 
 `gen-agents.sh` stamps `{{PW_HOME}}` / `{{PW_PROJECTS}}` / `{{PW_REPOS}}` into the bodies, then each
 provider's `render_<name>_agent` hook wraps the body in that provider's frontmatter (see
@@ -82,10 +86,12 @@ Two kinds of thing live here, and the difference is load-bearing:
   that crosses a provider boundary.
 
 When a task's `Execute with:` names an agent, resolve its provider: an explicit prefix wins
-(`kilo:db-migration-runner`, `claude:db-migration-runner`) → else the agent's own provider → else (a
+(`kilo:db-migration-runner`, `claude:db-migration-runner`, `cursor:db-migration-runner`) → else the
+agent's own provider → else (a
 built-in with no def here) the orchestrator's own provider. Then:
 - **Same provider as the orchestrator** → spawn the sub-agent in-process (the normal path).
-- **Different provider** → shell out to that CLI (`kilo run --auto -m <model> …`, or `claude`)
+- **Different provider** → shell out to that CLI (`kilo run --auto -m <model> …`, `claude -p`, or
+  `agent -p --force --model <id>` for cursor) via its `<name>_headless()` template
   passing the **task file + skill inline** to its default/primary agent. You **cannot** name the
   other provider's *sub-agent* across the boundary — e.g. a Claude orchestrator delegating to kilo
   does NOT use kilo's `pw-executor`; kilo's default agent runs the task file instead. So each
@@ -94,7 +100,8 @@ built-in with no def here) the orchestrator's own provider. Then:
 Record the concrete `provider:model(+flags)` in the task's `Actually used:` — and, for every spawn a
 `LOG.md` line records, the provider's **session id** too (`pw-research` docs in
 `docs/EXECUTION.md` §Spawn ledger): a later fix/resume/re-review pass **resumes the same session**
-(`kilo run --session <ses_…>` / `-c`, `--fork`; claude `--resume`/`/resume`) instead of cold-spawning
+(`kilo run --session <ses_…>` / `-c`, `--fork`; claude `--resume`/`/resume`; cursor
+`agent -p --force --resume <session-id>` — plain UUID, not kilo's `ses_…`) instead of cold-spawning
 when the id is live, and cold-spawns a plain-model session with the recorded seed only when it's
 dead. The session id is a machine-local pointer — never pushed into MR text or committed artifacts;
 the on-disk PLAN/dashboard/task state stays the durable cross-machine recovery.
@@ -108,7 +115,18 @@ claude). Canonical defs ship with `model:` **unset** on purpose: a provider alia
 is a false pin on the other provider. The executor keeps its per-task `Execute with:`; the ladder
 never overrides a task file.
 
-## What the *surfaces* actually do (probed 2026-09-04; `kilo agent list` / `kilo debug agent <name>`
+## Cursor-specifics (probed 2026-09-09)
+- Defs auto-register from `~/.cursor/agents/*.md`; unknown frontmatter keys are tolerated (gray-matter),
+  so a bundle `model:` line rides through when a canonical ever sets one — verified accepted.
+- No CLI primary-agent slot: cross-provider → cursor is always **model + task file**
+  (`agent -p --force --model <id>` per `cursor_headless()`), never `--agent <name>`.
+- Spawn is ambient: a sub-agent is picked by `description` match or explicit `/pw-<agent>`. A
+  **direct** sub-agent may itself spawn one more level (verified 2-level; grandchildren-of-grandchildren
+  not attempted) — that fan-out is what makes Flow C (spawn `/pw-orchestrator` for one bounded wave)
+  workable on cursor; fast-tier ids are unreliable at it — route orchestrator/executors to capable
+  models (same doctrine as kilo's MiniMax-vs-flash-lite line in providers.md).
+
+## What the *surfaces* actually do (probed 2026-09-04 kilo; `kilo agent list` / `kilo debug agent <name>`
 are the ground truth — reload the client before trusting either)
 
 1. **A generated `agent/<name>.md` with `mode:` + `options:` registers on its own** — no map block

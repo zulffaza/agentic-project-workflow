@@ -2,7 +2,7 @@
 
 - **Status:** draft | approved-for-execution
 - **Based on analysis:** <link to analysis/*.md that is approved>
-- **Produced by:** <provider the breakdown ran under, e.g. `kilo` / `claude`> — [🤖 agent records]
+- **Produced by:** <provider the breakdown ran under, e.g. `kilo` / `claude` / `cursor`> — [🤖 agent records]
   the default `Execute with:` provider for every task below (minimises agent-switching; see routing).
 - **Date:** <YYYY-MM-DD HH:MM>
 
@@ -107,10 +107,13 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
 | `haiku` | claude | trivial, mechanical bulk edits (renames, config bumps) |
 | `kilo/<model>` | kilo | KiloCode's own built-in gateway — the **default** API Provider, no separate credential |
 | `command_code/<model>` | kilo | open-weight/third-party models — needs its own credential; `kilo models command_code` for the full list |
+| `cursor-grok-4.5-high` / `…-low-fast`, `claude-opus-5-thinking-xhigh` | cursor | Cursor's own single gateway — effort/thinking are catalog-id variants (or `[context=1m,effort=…]` bracket params); `agent models` for the list |
 | a registered agent / a model | (its provider) | same-provider reuse only — e.g. `pw-executor`; a cross-provider task always routes as `provider:model` (a *sub-agent* name is unreachable from the other CLI's headless path; `--agent` accepts **primary** defs only, verified 2026-09-04) |
 | `pw-executor` / a `tooling/agents/` def | (its provider) | the shipped executor, or a custom role no existing agent covers |
 
-- **Pin risky tasks:** claude aliases (`opus`/`sonnet`/…) track the *latest* version — use the full  name (`claude-opus-4-8` vs `claude-opus-5`) when reproducibility matters.
+- **Pin risky tasks:** claude aliases (`opus`/`sonnet`/…) track the *latest* version — use the full  name (`claude-opus-4-8` vs `claude-opus-5`) when reproducibility matters. Cursor ids from
+  `agent models` are already exact — pin the full variant (`cursor:claude-opus-5-thinking-high`);
+  `cursor:auto` routes by Cursor's own router — avoid it for risky tasks.
 - **Phase lanes are separate pins:** the dashboard's `- **AI Models:**` line binds the *lane* agents
   the phases spawn (researcher/analyst/writer-task/reviewer/verifier), never this task table. The
   row is what the executor-side `Actually used:`/`Session:` ledger compares against — an unset row
