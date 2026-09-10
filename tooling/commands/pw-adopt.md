@@ -21,6 +21,11 @@ the whole batch — one phase transition, one combined recap listing every adopt
 
 Project dir: `{{PW_PROJECTS}}/<slug>`. Repo: `{{PW_REPOS}}/<repo>`.
 
+<!-- Pre-flight: snapshot git state before adoption -->
+```bash
+{{PW_HOME}}/tooling/pw-adopt-snapshot.sh <slug> <repo> <branch> [mr-url]
+```
+
 ## Two intents — which phase the adopt lands at
 Adoption is a **baseline/input action** (that's why `ADOPTED.md` lives in `context/`). It's only
 meaningful at two moments, chosen by *why* you're adopting — never to sit in a mid-pipeline phase:

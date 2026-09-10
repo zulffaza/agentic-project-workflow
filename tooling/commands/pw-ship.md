@@ -16,6 +16,12 @@ plain run now waits on CI** (up to the timeout below) before it finishes, unlike
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
+<!-- Pre-flight: deterministic checks before agent reasoning -->
+```bash
+{{PW_HOME}}/tooling/pw-preflight.sh ship <slug> || exit 1
+{{PW_HOME}}/tooling/pw-doc-lint.sh task <slug> --all || exit 1
+```
+
 Publishing is **outward-facing** — this is the explicit "make it public" step, kept separate from
 `/pw-execute` so nothing pushes until you run it. `/pw-execute` already committed + verified each
 task; here we push branches and open MRs.

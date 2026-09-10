@@ -8,6 +8,11 @@ anywhere after the slug).
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
+<!-- Pre-flight: fetch context URLs before agent reasoning -->
+```bash
+{{PW_HOME}}/tooling/pw-context-fetch.sh <slug> [--ignore-errors]
+```
+
 **Optional lane spawns — see `tooling/skill/project-workflow/references/execution-and-routing.md`
 §Spawn lanes (seeds)/§Spawn ledger, and docs/EXECUTION.md §Spawning phase work.** Every delegated
 step here gets: (a) a seeded brief (pointer-list, no re-gathering), (b) your **pre-flight** that the

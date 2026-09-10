@@ -6,6 +6,12 @@ Invoke the `project-workflow` skill (close phase — learn + teardown). Argument
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
+<!-- Pre-flight: deterministic checks before agent reasoning -->
+```bash
+{{PW_HOME}}/tooling/pw-preflight.sh close <slug> || exit 1
+{{PW_HOME}}/tooling/pw-doc-lint.sh all <slug> || exit 1
+```
+
 1. **Verify done.** Confirm every task in `task/PLAN.md` is `accepted` (or explicitly dropped with
    a note). If any isn't, list them and STOP — don't close a project with unaccepted work.
    **`accepted` ≠ merged:** a task is accepted when it's verified, its MR is opened, and I've

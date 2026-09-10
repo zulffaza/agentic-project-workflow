@@ -9,6 +9,13 @@ Arguments: {{ARGS}} (first token = project slug; optional remainder = task IDs, 
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
+<!-- Pre-flight: deterministic checks before agent reasoning -->
+```bash
+{{PW_HOME}}/tooling/pw-preflight.sh execute <slug> || exit 1
+{{PW_HOME}}/tooling/pw-doc-lint.sh plan <slug> || exit 1
+{{PW_HOME}}/tooling/pw-doc-lint.sh task <slug> --all || exit 1
+```
+
 1. Read `<project>/task/PLAN.md` fully. **Gate:** `…/{{PW_HOME}}/tooling/pw-lib.sh review gate
    <slug> task/review/PLAN.review.md` — this is the file's CURRENT Sign-off decision only, never
    "was it ever approved"; if it exits non-zero (missing file, `in-review`, or `changes-requested`),

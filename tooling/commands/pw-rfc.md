@@ -21,6 +21,11 @@ needs `task/PLAN.md` `approved`, since there's no meaningful "draft milestone" t
 over. Never block a phase or refuse to run because a backend is unset/unreachable — that's a
 config choice, not an error.
 
+<!-- For comments subcommand: fetch RFC comments mechanically -->
+```bash
+{{PW_HOME}}/tooling/pw-rfc-comments.sh <slug>
+```
+
 ## Resolve the backend + target (every invocation — read-only computation, no gate check yet)
 This step only **computes** values and, if you explicitly gave `--target`, **records** it — it
 never decides to publish anything and never asks you a question. **Whether a wave actually

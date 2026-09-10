@@ -5,6 +5,13 @@ args: <project-slug>
 Invoke the `project-workflow` skill. Arguments: {{ARGS}} (project slug).
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
+
+<!-- Pre-flight: deterministic checks before agent reasoning -->
+```bash
+{{PW_HOME}}/tooling/pw-preflight.sh breakdown <slug> || exit 1
+{{PW_HOME}}/tooling/pw-doc-lint.sh analysis <slug> --all || exit 1
+```
+
 **Drafting lanes (optional — skill: `references/execution-and-routing.md` §Spawn lanes):** the
 *decisions* in steps 1–4 below are yours (boundaries, DAG, per-task provider, SP, landing units);
 **task-file drafting can delegate per task to `pw-writer-task`** — one spawn per task-doc,
