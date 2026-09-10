@@ -21,13 +21,13 @@ proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1
 SLUG=""
 BACKEND="${PW_RFC_BACKEND:-markdown}"
 
-for arg in "$@"; do
-  case "$arg" in
+while [ $# -gt 0 ]; do
+  case "$1" in
     --backend) shift; BACKEND="${1:-$BACKEND}"; shift ;;
-    --backend=*) BACKEND="${arg#--backend=}" ;;
-    -h|--help) grep '^#' "$0" | sed 's/^# \?//'; exit 0 ;;
-    -*) die "unknown option: $arg" ;;
-    *) SLUG="$arg" ;;
+    --backend=*) BACKEND="${1#--backend=}"; shift ;;
+    -h|--help) pw_usage ;;
+    -*) die "unknown option: $1" ;;
+    *) SLUG="$1"; shift ;;
   esac
 done
 

@@ -14,6 +14,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/.." && pwd)"
 . "$HERE/pw-common.sh"
+# -h/--help before positional parsing: without this, "-h" would be taken as a slug/arg.
+case "${1:-}" in -h|--help) pw_usage ;; esac
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../.." && pwd)}"
 
@@ -36,11 +38,13 @@ if [ ${#TASK_IDS[@]} -eq 0 ]; then
   while IFS='|' read -r _ task_id _; do
     task_id="$(echo "$task_id" | xargs)"
     [[ "$task_id" =~ ^T[0-9]+ ]] && TASK_IDS+=("$task_id")
-  done < <(awk '/^## Tasks/{p=1; next} p && /^\|/{print}' "$PLAN" | grep -v '^|[-: ]' || true)
+  done < <(awk '/^## Task( |s)/{p=1; next} p && /^\|/{print}' "$PLAN" | grep -vE '^\|[-: |(]*\|?$' || true)
 fi
 
 # Check MR state for each task
-for task_id in "${TASK_IDS[@]}"; do
-  STATE="$("$HERE/pw-lib.sh" mr-state "$SLUG" "$task_id" 2>/dev/null || echo "unknown")"
+for task_id in ${TASK_IDS[@]+"${TASK_IDS[@]}"}; do
+  # pw-lib mr-state may itself print "unknown" AND exit non-zero — capture once, default after.
+  STATE="$("$HERE/pw-lib.sh" mr-state "$SLUG" "$task_id" 2>/dev/null || true)"
+  [ -n "$STATE" ] || STATE="unknown"
   echo "$task_id|$STATE"
 done

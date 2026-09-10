@@ -2,8 +2,8 @@
 # ============================================================================
 # pw-doc-lint.sh — validate document structure and conventions
 #
-#   pw-doc-lint.sh analysis <slug> <topic>   validate analysis/<topic>.md
-#   pw-doc-lint.sh task <slug> <task-id>     validate task/T0n.md
+#   pw-doc-lint.sh analysis <slug> <topic|--all>   validate analysis/<topic>.md (or all topics)
+#   pw-doc-lint.sh task <slug> <task-id|--all>     validate task/T0n.md (or all task files)
 #   pw-doc-lint.sh plan <slug>               validate task/PLAN.md
 #   pw-doc-lint.sh review <slug> <path>      validate review file structure
 #   pw-doc-lint.sh dashboard <slug>          validate README.md tables
@@ -16,6 +16,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/.." && pwd)"
 . "$HERE/pw-common.sh"
+# -h/--help before positional parsing: without this, "-h" would be taken as a slug/arg.
+case "${1:-}" in -h|--help) pw_usage ;; esac
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../.." && pwd)}"
 
@@ -123,11 +125,11 @@ lint_plan() {
   grep -q '^## Dependency' "$f" || add_error "$f: missing '## Dependency' section"
   
   # Check task table
-  grep -q '^## Tasks' "$f" || add_error "$f: missing '## Tasks' section"
+  grep -qE '^## Task( |s)' "$f" || add_error "$f: missing task-table section (expected '## Task table')"
   
   # Check task table has required columns
-  if grep -q '^## Tasks' "$f"; then
-    HEADER="$(awk '/^## Tasks/{p=1; next} p && /^\|/{print; exit}' "$f")"
+  if grep -qE '^## Task( |s)' "$f"; then
+    HEADER="$(awk '/^## Task( |s)/{p=1; next} p && /^\|/{print; exit}' "$f")"
     echo "$HEADER" | grep -q 'Task' || add_error "$f: task table missing 'Task' column"
     echo "$HEADER" | grep -q 'Repo' || add_error "$f: task table missing 'Repo' column"
     echo "$HEADER" | grep -q 'Branch' || add_error "$f: task table missing 'Branch' column"
@@ -143,8 +145,8 @@ lint_plan() {
   fi
   
   # Check task count matches actual task files
-  if grep -q '^## Tasks' "$f"; then
-    PLAN_TASKS="$(awk '/^## Tasks/{p=1; next} p && /^\|.*T[0-9]/{count++} END{print count+0}' "$f")"
+  if grep -qE '^## Task( |s)' "$f"; then
+    PLAN_TASKS="$(awk '/^## Task( |s)/{p=1; next} p && /^\|.*T[0-9]/{count++} END{print count+0}' "$f")"
     ACTUAL_TASKS="$(ls -1 "$D/task"/T*.md 2>/dev/null | wc -l | xargs)"
     if [ "$PLAN_TASKS" != "$ACTUAL_TASKS" ]; then
       add_error "$f: task count mismatch (PLAN has $PLAN_TASKS, found $ACTUAL_TASKS task files)"
@@ -166,7 +168,7 @@ lint_review() {
   if grep -q '^## Items' "$f"; then
     ITEMS="$(awk '/^## Items/{p=1; next} /^## /{p=0} p && /^### /{count++} END{print count+0}' "$f")"
     if [ "$ITEMS" -gt 0 ]; then
-      MARKERS="$(grep -c 'pw-item-status:' "$f" || echo 0)"
+      MARKERS="$(grep -c 'pw-item-status:' "$f" || true)"; MARKERS="${MARKERS:-0}"
       if [ "$MARKERS" -lt "$ITEMS" ]; then
         add_error "$f: some items missing pw-item-status markers"
       fi
@@ -179,8 +181,8 @@ lint_dashboard() {
   [ -f "$f" ] || die "README.md not found: $f"
   
   # Check task table rows match task files
-  if grep -q '^## Tasks' "$f"; then
-    DASHBOARD_TASKS="$(awk '/^## Tasks/{p=1; next} /^## /{p=0} p && /^\|.*T[0-9]/{count++} END{print count+0}' "$f")"
+  if grep -qE '^## Task( |s)' "$f"; then
+    DASHBOARD_TASKS="$(awk '/^## Task( |s)/{p=1; next} /^## /{p=0} p && /^\|.*T[0-9]/{count++} END{print count+0}' "$f")"
     ACTUAL_TASKS="$(ls -1 "$D/task"/T*.md 2>/dev/null | wc -l | xargs)"
     if [ "$DASHBOARD_TASKS" != "$ACTUAL_TASKS" ]; then
       add_error "$f: task table row count ($DASHBOARD_TASKS) doesn't match task files ($ACTUAL_TASKS)"
@@ -190,12 +192,33 @@ lint_dashboard() {
 
 case "$TYPE" in
   analysis)
-    [ $# -ge 1 ] || die "usage: pw-doc-lint.sh analysis <slug> <topic>"
-    lint_analysis "$1"
+    [ $# -ge 1 ] || die "usage: pw-doc-lint.sh analysis <slug> <topic|--all>"
+    if [ "$1" = "--all" ]; then
+      found=0
+      for topic_file in "$D/analysis"/*.md; do
+        [ -f "$topic_file" ] || continue
+        case "$(basename "$topic_file")" in _*|README.md) continue ;; esac   # scaffold, not a real doc
+        lint_analysis "$(basename "$topic_file" .md)"
+        found=1
+      done
+      [ "$found" = 1 ] || add_error "$D/analysis: no analysis docs to lint (--all matched none)"
+    else
+      lint_analysis "$1"
+    fi
     ;;
   task)
-    [ $# -ge 1 ] || die "usage: pw-doc-lint.sh task <slug> <task-id>"
-    lint_task "$1"
+    [ $# -ge 1 ] || die "usage: pw-doc-lint.sh task <slug> <task-id|--all>"
+    if [ "$1" = "--all" ]; then
+      found=0
+      for task_file in "$D/task"/T*.md; do
+        [ -f "$task_file" ] || continue
+        lint_task "$(basename "$task_file" .md)"
+        found=1
+      done
+      [ "$found" = 1 ] || add_error "$D/task: no task files to lint (--all matched none)"
+    else
+      lint_task "$1"
+    fi
     ;;
   plan)
     lint_plan
@@ -212,8 +235,8 @@ case "$TYPE" in
     if [ -d "$D/analysis" ]; then
       for topic_file in "$D/analysis"/*.md; do
         [ -f "$topic_file" ] || continue
-        topic="$(basename "$topic_file" .md)"
-        lint_analysis "$topic"
+        case "$(basename "$topic_file")" in _*|README.md) continue ;; esac   # scaffold, not a real doc
+        lint_analysis "$(basename "$topic_file" .md)"
       done
     fi
     if [ -f "$D/task/PLAN.md" ]; then

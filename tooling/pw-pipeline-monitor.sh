@@ -30,7 +30,7 @@ while [ $# -gt 0 ]; do
     --timeout=*) TIMEOUT_MIN="${1#--timeout=}" ;;
     --interval) shift; INTERVAL_SEC="${1:-$INTERVAL_SEC}"; shift ;;
     --interval=*) INTERVAL_SEC="${1#--interval=}" ;;
-    -h|--help) grep '^#' "$0" | sed 's/^# \?//'; exit 0 ;;
+    -h|--help) pw_usage ;;
     -*) die "unknown option: $1" ;;
     *)
       if [ -z "$SLUG" ]; then
@@ -68,12 +68,18 @@ else
   die "cannot determine forge from MR URL: $MR_URL"
 fi
 
-# Extract MR IID/number
+command -v "$FORGE_CLI" >/dev/null 2>&1 || die "$FORGE_CLI not found (needed to monitor $MR_URL)"
+
+# Extract MR IID/number (+ owner/repo so the query has a repository context regardless of CWD)
 MR_IID=""
+GH_REPO=""
+GL_REPO=""
 if [ "$FORGE_CLI" = "glab" ]; then
   MR_IID="$(echo "$MR_URL" | grep -o 'merge_requests/[0-9]*' | sed 's/merge_requests\///')"
+  GL_REPO="$(echo "$MR_URL" | sed -nE 's#.*gitlab\.com/([^?#]+)/-?/?merge_requests.*#\1#p')"
 elif [ "$FORGE_CLI" = "gh" ]; then
   MR_IID="$(echo "$MR_URL" | grep -o 'pull/[0-9]*' | sed 's/pull\///')"
+  GH_REPO="$(echo "$MR_URL" | sed -nE 's#.*github\.com/([^/]+/[^/]+)/pull.*#\1#p')"
 fi
 
 [ -n "$MR_IID" ] || die "cannot extract MR IID from URL: $MR_URL"
@@ -83,6 +89,7 @@ TIMEOUT_SEC=$((TIMEOUT_MIN * 60))
 ELAPSED=0
 START_TIME="$(date +%s)"
 
+UNKNOWN_STREAK=0
 echo "Monitoring pipeline for $TASK_ID (MR !$MR_IID)..."
 echo "  Timeout: ${TIMEOUT_MIN}m, Interval: ${INTERVAL_SEC}s"
 echo
@@ -91,12 +98,21 @@ while true; do
   STATUS=""
   
   if [ "$FORGE_CLI" = "glab" ]; then
-    # GitLab: check pipeline status
-    STATUS="$(glab api "projects/:id/merge_requests/$MR_IID/pipelines" 2>/dev/null | grep -o '"status":"[^"]*"' | head -1 | sed 's/"status":"//;s/"//' || echo "unknown")"
+    # GitLab: pipelines list. "[]" = none registered yet (cold-start race) → keep waiting.
+    RAW="$(glab api "projects/:id/merge_requests/$MR_IID/pipelines" ${GL_REPO:+-R "$GL_REPO"} 2>/dev/null || true)"
+    if [ -n "$RAW" ]; then
+      STATUS="$(echo "$RAW" | grep -o '"status":"[^"]*"' | head -1 | sed 's/"status":"//;s/"//' || true)"
+      [ -n "$STATUS" ] || STATUS="pending"
+    fi
   elif [ "$FORGE_CLI" = "gh" ]; then
-    # GitHub: check PR checks status
-    STATUS="$(gh pr checks "$MR_IID" 2>/dev/null | awk 'NR>1{print $2}' | sort -u | head -1 || echo "unknown")"
+    # GitHub: check PR checks status ("no checks reported" cold-start keeps waiting).
+    RAW="$(gh pr checks "$MR_IID" ${GH_REPO:+-R "$GH_REPO"} 2>/dev/null || true)"
+    if [ -n "$RAW" ]; then
+      STATUS="$(echo "$RAW" | awk 'NR>1{print $2}' | sort -u | head -1 || true)"
+      [ -n "$STATUS" ] || STATUS="pending"
+    fi
   fi
+  STATUS="${STATUS:-unknown}"
   
   NOW="$(date +%s)"
   ELAPSED=$((NOW - START_TIME))
@@ -116,8 +132,9 @@ while true; do
         fi
       fi
       
-      # Update dashboard
-      "$HERE/pw-lib.sh" dashboard-mr-state "$SLUG" "$TASK_ID" "merged" 2>/dev/null || true
+      # The dashboard is NOT touched here: CI green ≠ merged. The State column belongs to
+      # actual merged-ness (pw-lib.sh mr-state via /pw-ship or /pw-sync); the Build result is
+      # already recorded in the task file's `- Build check:` line above.
       
       exit 0
       ;;
@@ -133,6 +150,17 @@ while true; do
       fi
       
       exit 1
+      ;;
+    unknown)
+      # A query that can't resolve state (auth, bad URL, CLI error) must fail fast —
+      # waiting for a terminal state that may never arrive is worse than stopping.
+      UNKNOWN_STREAK=$((UNKNOWN_STREAK+1))
+      if [ "$UNKNOWN_STREAK" -ge 3 ]; then
+        die "pipeline state unreadable after ${UNKNOWN_STREAK} polls — check $FORGE_CLI auth and the MR id ($MR_URL)"
+      fi
+      ;;
+    *)
+      UNKNOWN_STREAK=0
       ;;
   esac
   

@@ -15,6 +15,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/.." && pwd)"
 . "$HERE/pw-common.sh"
+# -h/--help before positional parsing: without this, "-h" would be taken as a slug/arg.
+case "${1:-}" in -h|--help) pw_usage ;; esac
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../.." && pwd)}"
 REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
@@ -60,14 +62,21 @@ if grep -q '^## Result' "$TASK_FILE"; then
   MR_URL="$(awk '/^## Result/{p=1; next} /^## /{p=0} p && /MR:/{print; exit}' "$TASK_FILE" | sed 's/.*MR: *//' | xargs || echo "")"
 fi
 
-# Determine forge CLI
+# Determine forge CLI — by the repo's actual origin host (docs/forges.md resolution, simplified:
+# github.com → gh, anything else → glab; self-hosted GitLab needs gitlab in its URL or falls to
+# the availability order below). Prefer correct-over-merely-installed, then fall back.
+ORIGIN_URL="$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || echo "")"
 FORGE_CLI=""
-if command -v glab >/dev/null 2>&1; then
-  FORGE_CLI="glab"
-elif command -v gh >/dev/null 2>&1; then
-  FORGE_CLI="gh"
-else
-  die "no forge CLI found (need glab or gh)"
+if echo "$ORIGIN_URL" | grep -q github; then
+  command -v gh >/dev/null 2>&1 && FORGE_CLI="gh"
+elif echo "$ORIGIN_URL" | grep -q gitlab; then
+  command -v glab >/dev/null 2>&1 && FORGE_CLI="glab"
+fi
+if [ -z "$FORGE_CLI" ]; then
+  if command -v glab >/dev/null 2>&1; then FORGE_CLI="glab"
+  elif command -v gh >/dev/null 2>&1; then FORGE_CLI="gh"
+  else die "no forge CLI found (need glab or gh)"
+  fi
 fi
 
 # Create or update MR
@@ -86,21 +95,22 @@ else
   DESCRIPTION="$(cat "$DESC_FILE")"
   
   # Create MR
+  # Run from inside the repo so both CLIs resolve their project/host context (see forges.md).
   if [ "$FORGE_CLI" = "glab" ]; then
-    MR_OUTPUT="$(glab mr create \
+    MR_OUTPUT="$( cd "$REPO_DIR" && glab mr create \
       --source-branch "$BRANCH" \
       --target-branch "$BASE" \
       --title "$MR_TITLE" \
       --description "$DESCRIPTION" \
       --no-editor \
-      --output json 2>&1 || echo "")"
+      --output json 2>&1 || true)"
     MR_URL="$(echo "$MR_OUTPUT" | grep -o '"web_url":"[^"]*"' | sed 's/"web_url":"//;s/"//' || echo "")"
   elif [ "$FORGE_CLI" = "gh" ]; then
-    MR_OUTPUT="$(gh pr create \
+    MR_OUTPUT="$( cd "$REPO_DIR" && gh pr create \
       --head "$BRANCH" \
       --base "$BASE" \
       --title "$MR_TITLE" \
-      --body "$DESCRIPTION" 2>&1 || echo "")"
+      --body "$DESCRIPTION" 2>&1 || true)"
     MR_URL="$(echo "$MR_OUTPUT" | grep -o 'https://github.com/[^ ]*' || echo "")"
   fi
   
@@ -117,11 +127,15 @@ else
       printf '\n## Result\n\n- MR: %s\n' "$MR_URL" >> "$TASK_FILE"
     fi
   else
-    echo "Warning: MR creation output unclear, check manually"
+    # No URL back = no MR exists; do not let a partial ship pass as success, and never mark
+    # the dashboard open for an MR that wasn't created.
+    echo "pw-ship-exec: branch pushed, but $FORGE_CLI returned no MR URL — first line of its output:" >&2
+    echo "  $(echo "$MR_OUTPUT" | head -1)" >&2
+    die "MR creation failed (push itself succeeded — safe to re-run after fixing auth/context)"
   fi
 fi
 
-# Update dashboard
+# Update dashboard (only reached on creation-success or existing-MR paths)
 "$HERE/pw-lib.sh" dashboard-mr-state "$SLUG" "$TASK_ID" "open" 2>/dev/null || true
 
 echo "Ship execution complete for $TASK_ID"

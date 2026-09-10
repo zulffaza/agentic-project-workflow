@@ -27,7 +27,7 @@ for arg in "$@"; do
     --dashboard-only) SYNC_MODE="dashboard" ;;
     --plan-only) SYNC_MODE="plan" ;;
     --tasks-only) SYNC_MODE="tasks" ;;
-    -h|--help) grep '^#' "$0" | sed 's/^# \?//'; exit 0 ;;
+    -h|--help) pw_usage ;;
     -*) die "unknown option: $arg" ;;
   esac
 done
@@ -69,7 +69,7 @@ sync_dashboard() {
           # Update README task table
           awk -v tid="$task_id" -v new_status="$ACTUAL_STATUS" '
             BEGIN { in_table=0 }
-            /^## Tasks/ { in_table=1; print; next }
+            /^## Task( |s)/ { in_table=1; print; next }
             /^## / { in_table=0 }
             in_table && $0 ~ "\\|" tid "\\|" {
               gsub(/\| *(todo|in-progress|done|accepted|verify-failed) *\|/, "| " new_status " |")
@@ -78,7 +78,7 @@ sync_dashboard() {
           ' "$README" > "$README.tmp" && mv "$README.tmp" "$README"
         fi
       fi
-    done < <(awk '/^## Tasks/{p=1; next} p && /^\|/{print}' "$PLAN" | grep -v '^|[-: ]' || true)
+    done < <(awk '/^## Task( |s)/{p=1; next} p && /^\|/{print}' "$PLAN" | grep -vE '^\|[-: |(]*\|?$' || true)
   fi
   
   # Sync MR table

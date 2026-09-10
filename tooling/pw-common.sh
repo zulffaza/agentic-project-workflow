@@ -237,3 +237,11 @@ pw_provider_has_agent_hooks() {
 pw_provider_has_headless_hook() {
   declare -f "${1}_headless" >/dev/null 2>&1
 }
+
+# pw_usage — print the invoking script's own header comment (its usage block) and exit 0.
+# Every automation script routes -h/--help here so help works uniformly everywhere,
+# including scripts whose positional args would otherwise mistake "-h" for a slug.
+pw_usage() {
+  grep '^#' "$0" | grep -v '^#!' | sed -E 's/^# =+$/====/; s/^# ?//'
+  exit 0
+}

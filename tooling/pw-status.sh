@@ -29,7 +29,7 @@ for arg in "$@"; do
   case "$arg" in
     --skip-cli-check) SKIP_CLI_CHECK=1 ;;
     --selftest) SELFTEST=1 ;;
-    -h|--help) grep '^#' "$0" | sed 's/^# \?//'; exit 0 ;;
+    -h|--help) pw_usage ;;
     -*) die "unknown option: $arg (try --help)" ;;
     *) SLUG="$arg" ;;
   esac
@@ -40,6 +40,7 @@ if [ "$SELFTEST" -eq 1 ]; then
   TMPDIR="$(mktemp -d)"
   trap 'rm -rf "$TMPDIR"' EXIT
   PROJECTS_DIR="$TMPDIR"
+  export PW_PROJECTS_DIR="$TMPDIR"   # child pw-lib.sh calls resolve projects from the env
   SLUG="test-project"
   mkdir -p "$TMPDIR/$SLUG/context" "$TMPDIR/$SLUG/analysis/review" "$TMPDIR/$SLUG/task/review"
   cat > "$TMPDIR/$SLUG/README.md" <<'EOF'
@@ -50,7 +51,7 @@ if [ "$SELFTEST" -eq 1 ]; then
 - **AI Review:** analysis=off plan=off task-plan=off task-exec=off ship=off
 - **AI Models:** researcher=— analyst=— writer-task=— reviewer=— verifier=—
 
-## Tasks
+## Task status
 
 | Task | Repo | Branch | Status |
 |------|------|--------|--------|
@@ -66,7 +67,7 @@ EOF
   cat > "$TMPDIR/$SLUG/task/PLAN.md" <<'EOF'
 # PLAN — test-project
 
-## Tasks
+## Task table
 
 | Task | Repo | Branch | SP | Execute with | Depends on | Status |
 |------|------|--------|----|--------------|------------|--------|
@@ -99,8 +100,8 @@ echo
 
 # Task status table from README
 echo "## Tasks"
-if grep -q '^## Tasks' "$README"; then
-  awk '/^## Tasks/{p=1; print; next} /^## /{p=0} p' "$README"
+if grep -qE '^## Task( |s)' "$README"; then
+  awk '/^## Task( |s)/{p=1; print; next} /^## /{p=0} p' "$README"
 else
   echo "(no task table in README.md)"
 fi
@@ -109,8 +110,8 @@ echo
 # PLAN task table with SP/Time/Result
 if [ -f "$PLAN" ]; then
   echo "## PLAN"
-  if grep -q '^## Tasks' "$PLAN"; then
-    awk '/^## Tasks/{p=1; print; next} /^## /{p=0} p' "$PLAN"
+  if grep -qE '^## Task( |s)' "$PLAN"; then
+    awk '/^## Task( |s)/{p=1; print; next} /^## /{p=0} p' "$PLAN"
   else
     echo "(no task table in PLAN.md)"
   fi
@@ -119,11 +120,13 @@ fi
 
 # Unresolved review items
 echo "## Unresolved review items"
-OPEN_ITEMS="$(grep -rln "pw-item-status: open" "$D" 2>/dev/null || true)"
+# Only real review files (*.review.md) — the project-root _REVIEW.template.md carries
+# example status markers and must never be reported as open items.
+OPEN_ITEMS="$(grep -rln "pw-item-status: open" "$D" 2>/dev/null | grep '\.review\.md$' || true)"
 if [ -n "$OPEN_ITEMS" ]; then
   echo "$OPEN_ITEMS" | while read -r f; do
     REL="${f#$D/}"
-    COUNT="$(grep -c "pw-item-status: open" "$f" || echo 0)"
+    COUNT="$(grep -c "pw-item-status: open" "$f" || true)"; COUNT="${COUNT:-0}"
     echo "  - $REL ($COUNT open)"
   done
 else

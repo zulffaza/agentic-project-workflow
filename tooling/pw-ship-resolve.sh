@@ -16,6 +16,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/.." && pwd)"
 . "$HERE/pw-common.sh"
+# -h/--help before positional parsing: without this, "-h" would be taken as a slug/arg.
+case "${1:-}" in -h|--help) pw_usage ;; esac
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../.." && pwd)}"
 REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
@@ -32,17 +34,7 @@ INDEX="$D/context/INDEX.md"
 
 [ -f "$PLAN" ] || die "PLAN.md not found"
 
-# Build ticket map from context/INDEX.md
-declare -A TICKET_MAP
-if [ -f "$INDEX" ]; then
-  while IFS='|' read -r _ file _ _; do
-    file="$(echo "$file" | xargs)"
-    if [[ "$file" =~ ^\`?([A-Z]+-[0-9]+)\`?$ ]]; then
-      ticket="${BASH_REMATCH[1]}"
-      TICKET_MAP["$ticket"]="$ticket"
-    fi
-  done < <(awk '/^\|/{print}' "$INDEX" | grep -v '^|[-: ]' || true)
-fi
+# (ticket resolution is per-task from the task file's `Ticket:` field — below)
 
 # Process each task in PLAN
 while IFS='|' read -r _ task_id repo branch _ _ depends status _; do
@@ -104,4 +96,4 @@ while IFS='|' read -r _ task_id repo branch _ _ depends status _; do
   # Output line
   echo "$task_id|$repo|$branch|$BASE|$TICKET|$TITLE|$HAS_COMMIT|$HAS_MR"
   
-done < <(awk '/^## Tasks/{p=1; next} p && /^\|/{print}' "$PLAN" | grep -v '^|[-: ]' || true)
+done < <(awk '/^## Task( |s)/{p=1; next} p && /^\|/{print}' "$PLAN" | grep -vE '^\|[-: |(]*\|?$' || true)

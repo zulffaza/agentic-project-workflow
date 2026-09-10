@@ -15,6 +15,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/.." && pwd)"
 . "$HERE/pw-common.sh"
+# -h/--help before positional parsing: without this, "-h" would be taken as a slug/arg.
+case "${1:-}" in -h|--help) pw_usage ;; esac
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../.." && pwd)}"
 
@@ -78,13 +80,13 @@ case "$TYPE" in
     [ -f "$f" ] || die "PLAN.md not found: $f"
     
     # Count tasks
-    TASK_COUNT="$(awk '/^## Tasks/{p=1; next} p && /^\|.*T[0-9]/{count++} END{print count+0}' "$f")"
+    TASK_COUNT="$(awk '/^## Task( |s)/{p=1; next} p && /^\|.*T[0-9]/{count++} END{print count+0}' "$f")"
     
     # Sum SP
-    TOTAL_SP="$(awk '/^## Tasks/{p=1; next} p && /^\|.*T[0-9]/{split($0,a,"|"); for(i in a){gsub(/ /,"",a[i]); if(a[i] ~ /^[0-9]+$/){sum+=a[i]}}} END{print sum+0}' "$f")"
+    TOTAL_SP="$(awk '/^## Task( |s)/{p=1; next} p && /^\|.*T[0-9]/{split($0,a,"|"); for(i in a){gsub(/ /,"",a[i]); if(a[i] ~ /^[0-9]+$/){sum+=a[i]}}} END{print sum+0}' "$f")"
     
     # Extract repos
-    REPOS="$(awk '/^## Repos in scope/{p=1; next} /^## /{p=0} p && /^\|.*`[^`]+`/{match($0, /`([^`]+)`/, arr); if(arr[1] != "Repo") print arr[1]}' "$f" | tr '\n' ',' | sed 's/,$//')"
+    REPOS="$(awk '/^## Repos in scope/{p=1; next} /^## /{p=0} p' "$f" | grep -oE '`[^`]+`' | tr -d '`' | grep -vx Repo | paste -sd, -)"
     
     # Extract produced by
     PRODUCED_BY="$(grep '^\*\*Produced by:\*\*' "$f" | sed 's/^\*\*Produced by:\*\* *//' || echo "(not set)")"
@@ -107,10 +109,10 @@ case "$TYPE" in
     echo "Phase: $PHASE"
     
     # Count tasks by status
-    TODO="$(awk '/^## Tasks/{p=1; next} /^## /{p=0} p && /\|.*todo.*\|/{count++} END{print count+0}' "$f")"
-    IN_PROGRESS="$(awk '/^## Tasks/{p=1; next} /^## /{p=0} p && /\|.*in-progress.*\|/{count++} END{print count+0}' "$f")"
-    DONE="$(awk '/^## Tasks/{p=1; next} /^## /{p=0} p && /\|.*done.*\|/{count++} END{print count+0}' "$f")"
-    ACCEPTED="$(awk '/^## Tasks/{p=1; next} /^## /{p=0} p && /\|.*accepted.*\|/{count++} END{print count+0}' "$f")"
+    TODO="$(awk '/^## Task( |s)/{p=1; next} /^## /{p=0} p && /\|.*todo.*\|/{count++} END{print count+0}' "$f")"
+    IN_PROGRESS="$(awk '/^## Task( |s)/{p=1; next} /^## /{p=0} p && /\|.*in-progress.*\|/{count++} END{print count+0}' "$f")"
+    DONE="$(awk '/^## Task( |s)/{p=1; next} /^## /{p=0} p && /\|.*done.*\|/{count++} END{print count+0}' "$f")"
+    ACCEPTED="$(awk '/^## Task( |s)/{p=1; next} /^## /{p=0} p && /\|.*accepted.*\|/{count++} END{print count+0}' "$f")"
     
     echo "Tasks: $TODO todo, $IN_PROGRESS in-progress, $DONE done, $ACCEPTED accepted"
     ;;

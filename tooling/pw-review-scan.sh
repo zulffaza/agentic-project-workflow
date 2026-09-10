@@ -22,13 +22,13 @@ proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1
 SLUG=""
 PHASE_FILTER=""
 
-for arg in "$@"; do
-  case "$arg" in
-    --phase) shift; PHASE_FILTER="${1:-}"; shift || die "--phase requires an argument" ;;
-    --phase=*) PHASE_FILTER="${arg#--phase=}" ;;
-    -h|--help) grep '^#' "$0" | sed 's/^# \?//'; exit 0 ;;
-    -*) die "unknown option: $arg (try --help)" ;;
-    *) SLUG="$arg" ;;
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --phase) [ $# -ge 2 ] || die "--phase requires an argument"; PHASE_FILTER="$2"; shift 2 ;;
+    --phase=*) PHASE_FILTER="${1#--phase=}"; shift ;;
+    -h|--help) pw_usage ;;
+    -*) die "unknown option: $1 (try --help)" ;;
+    *) SLUG="$1"; shift ;;
   esac
 done
 
@@ -58,13 +58,13 @@ for f in "${REVIEW_FILES[@]}"; do
   REL="${f#$D/}"
   
   # Count open items
-  OPEN="$(grep -c "pw-item-status: open" "$f" 2>/dev/null || echo 0)"
+  OPEN="$(grep -c "pw-item-status: open" "$f" 2>/dev/null || true)"; OPEN="${OPEN:-0}"
   
   # Count resolved items
-  RESOLVED="$(grep -c "pw-item-status: resolved" "$f" 2>/dev/null || echo 0)"
+  RESOLVED="$(grep -c "pw-item-status: resolved" "$f" 2>/dev/null || true)"; RESOLVED="${RESOLVED:-0}"
   
   # Count pending questions
-  PENDING="$(grep -c "pw-question-status: pending" "$f" 2>/dev/null || echo 0)"
+  PENDING="$(grep -c "pw-question-status: pending" "$f" 2>/dev/null || true)"; PENDING="${PENDING:-0}"
   
   # Check sign-off status
   SIGNOFF=""
