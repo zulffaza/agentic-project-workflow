@@ -1,5 +1,8 @@
 # Memory policy (optional, pluggable)
 
+> **Audience:** behavioral — entirely. How memory integrates with the pipeline (and why its
+> absence never blocks); a user of the workflow may read it. Peer doc: `../../docs/MEMORY.md`.
+
 The pipeline **does not depend on any specific memory tool.** Memory is a bonus, never a gate — if
 you don't use one, the workflow runs exactly the same and nothing blocks.
 

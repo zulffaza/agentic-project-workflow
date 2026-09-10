@@ -25,6 +25,12 @@ config choice, not an error.
 ```bash
 {{PW_HOME}}/tooling/pw-rfc-comments.sh <slug>
 ```
+**Reading it:** one summary line — `RFC comments: N new, N updated, N resolved externally`
+(items are appended to `analysis/review/RFC.review.md` by the script; `backend=markdown` prints
+"no external comments to fetch" — that's success, exit 0). Then recap the new items and remind
+the user to triage via `/pw-review`. Exit 2 messages (`rfc/META.md not found` / `no Target:` /
+`lark-cli not found`) are publish-setup state, not review findings — point the user at
+`/pw-rfc … publish` or `pw.config.sh` (`tooling/docs/scripts/workflow-automation.md`).
 
 ## Resolve the backend + target (every invocation — read-only computation, no gate check yet)
 This step only **computes** values and, if you explicitly gave `--target`, **records** it — it

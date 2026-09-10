@@ -6,6 +6,10 @@ Human feedback on any doc lives in a review file under a **`review/` subdir** be
 `task/T0n.md`→`task/review/T0n.review.md` (from `agentic-project-workflow/template/_REVIEW.template.md`).
 Rules you MUST follow:
 
+- **Orient with the scan script first:** `{{PW_HOME}}/tooling/pw-review-scan.sh <slug>
+  [--phase <phase>]` prints one line per review file — open/resolved/pending counts + last
+  sign-off state — so you go straight to the files with live `[OPEN]` items instead of
+  grep-walking `review/` (same scan `/pw-review` pre-flight and `pw-status.sh` use).
 - **Fixes are batched, per artifact, and resume-first.** All `[OPEN]` items on one artifact go to  its **producer** as one fix pass (the task's executor session, resumed by its logged id when
   live — §Spawn ledger) holding every item for that artifact at once (human + `pw-reviewer` AI
   items + `dep-impact:T0n` items + verifier items all share that one queue), with **per-item

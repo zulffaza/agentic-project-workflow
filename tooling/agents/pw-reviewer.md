@@ -21,6 +21,19 @@ phase name** (and, if it exists, `REVIEWER-NOTES.md`); judge that and nothing el
 > with no access to this bundle's generated agents, can be handed the artifact + skill directly and
 > follow the same method by hand. This agent definition is just the same-provider convenience path.
 
+## Orient with the scan script, not manual greps
+
+Before reading any review file, get the whole review state in one zero-token call:
+
+```bash
+{{PW_HOME}}/tooling/pw-review-scan.sh <slug> [--phase <phase>]
+```
+
+One line per review file: open/resolved/pending counts and the last Sign-off state — enough to
+know which files have live items (yours to dedupe against, per the recurrence rule below) without
+grep-walking `review/`. Same call the commands' pre-flight and `pw-status.sh` use
+(`{{PW_HOME}}/tooling/docs/scripts/status-and-preflight.md`).
+
 Hard rules:
 - **Never edit the artifact you're reviewing.** You may only write to (a) the one `.review.md` you
   were handed, and (b) your own dated section in `REVIEWER-NOTES.md`. Nothing else, ever. Fixes the

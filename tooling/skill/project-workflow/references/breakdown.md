@@ -1,5 +1,11 @@
 # Breakdown phase (`/pw-breakdown`)
 
+**Pre-flight first (scripts, not reasoning):**
+`{{PW_HOME}}/tooling/pw-preflight.sh breakdown <slug> || exit 1` and
+`{{PW_HOME}}/tooling/pw-doc-lint.sh analysis <slug> --all || exit 1`. `/pw-breakdown` runs these
+already; when reached without it, run them yourself — a nonzero exit means STOP and relay stderr
+(it names the unapproved gate or broken doc), don't reason onward to a PLAN nobody approved.
+
 Asked to break analysis into tasks — refuses unless **every** real `analysis/<topic>.md`'s review
 file has an `approved` sign-off (see `references/review.md`) — a project may have more than one
 analysis doc (large, mostly-independent solution areas analyzed separately; see the analysis

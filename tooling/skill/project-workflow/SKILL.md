@@ -31,6 +31,7 @@ phase runs. Don't skip a gate.
 | execute `task/PLAN.md`, or pick a model/provider for a task | [`references/execution-and-routing.md`](references/execution-and-routing.md) |
 | apply review comments (local `.review.md` or MR/PR feedback) | [`references/review.md`](references/review.md) |
 | close out a finished project | [`references/close.md`](references/close.md) |
+| call an automation script (gates, lint, status, ship, fetch — the 14 `pw-*.sh` helpers) | [`tooling/docs/scripts/README.md`](../../docs/scripts/README.md) |
 | anything else — `pw-lib.sh` helper subcommands, the slash-command list, branch/worktree naming, the rewind flow | [`references/conventions-and-gotchas.md`](references/conventions-and-gotchas.md) |
 
 ## Golden rules (every phase — no reference file needed for these)
@@ -41,6 +42,15 @@ phase runs. Don't skip a gate.
   (`status|oneliner|adopted|adopt|review-init|log|phase`) — never hand-edit the dashboard
   `Status:` line, `LOG.md`, or a review file's structure. Exact subcommands + what each does:
   [`references/conventions-and-gotchas.md`](references/conventions-and-gotchas.md).
+- **Script the mechanical — call the automation scripts, don't re-implement them.** Pre-phase:
+  `pw-preflight.sh <cmd> <slug>` + `pw-doc-lint.sh …` (nonzero → STOP, relay stderr). Cheap reads
+  instead of manual file-walking: `pw-status.sh`, `pw-review-scan.sh`, `pw-doc-summary.sh`.
+  Mechanics: `pw-ship-resolve.sh`/`pw-ship-exec.sh`, `pw-mr-state-batch.sh`,
+  `pw-pipeline-monitor.sh`, `pw-worktree-create.sh`, `pw-context-fetch.sh`, `pw-rfc-comments.sh`,
+  `pw-adopt-snapshot.sh`, `pw-doc-sync.sh`. The `/pw-*` commands already invoke their share; when
+  you reach a phase **without** the command (direct spawn, skill-only session), run the same calls
+  yourself — identical behavior whichever path triggers the work is the point.
+  Reference: [`tooling/docs/scripts/README.md`](../../docs/scripts/README.md).
 - **Never hand-edit a generated command/agent file** (`~/.claude/commands`,
   `~/.config/kilo/command`, `~/.claude/agents`, `~/.config/kilo/agent`, `~/.cursor/commands`,
   `~/.cursor/agents`) — they're build output from

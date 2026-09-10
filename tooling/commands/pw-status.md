@@ -29,4 +29,7 @@ everything below and follow this instead** (3rd argument is the phase to rewind 
 ```
 
 The script produces the full status report (phase, task table, review items, AI Review modes,
-LOG.md lines, blockers, next action, CLI auth status). No agent invocation needed for report mode.
+LOG.md lines, blockers, next action, CLI auth status) — show it to the user as-is; `## Blockers`
+is heuristic, so trust `pw-preflight.sh` over it for gate decisions. Exit 2 + `pw-status: …` =
+bad slug / no such project. No agent invocation needed for report mode — only reason on top of
+the report if the user asks a follow-up the fixed sections don't answer.

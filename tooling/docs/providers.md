@@ -1,5 +1,9 @@
 # Cross-provider execution (how a task routes to another Agent Provider's CLI)
 
+> **Audience:** technical — maintainer/agent reference for the invocation machinery; ordinary
+> users don't need it (their peer doc is `../../docs/EXECUTION.md`). One behavioral exception:
+> "Choosing a model" is safe for users to read.
+
 **Filled by:** [🤖 maintainer] — this documents the mechanism; you never edit this file to
 register a provider or a model. Adding cross-provider execution support for a new Agent Provider
 means defining `<name>_headless()` in `pw.config.sh` — see

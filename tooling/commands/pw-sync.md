@@ -19,11 +19,14 @@ history rewrite). Pushing is **outward-facing**, so confirm before anything goes
    and an MR recorded in its `## Result → MR:` (and the dashboard **Merge requests** table).
    Skip zero-change tasks and `verify-failed` tasks. If task IDs were given, restrict to those.
 
-2. **Check MR state for each task.** Before syncing, verify each MR is still open:
+2. **Check MR state for every task in the set — one batch call, not a per-task loop.** Before
+   syncing, verify each MR is still open:
    ```bash
-   {{PW_HOME}}/tooling/pw-lib.sh mr-state <slug> <task-id>
+   {{PW_HOME}}/tooling/pw-mr-state-batch.sh <slug> [task-ids…]   # no ids = every PLAN task
    ```
-   This queries the forge (GitLab/GitHub) and prints `open`, `merged`, `closed`, or `unknown`.
+   This queries the forge (GitLab/GitHub) once per task and prints `task-id|state` lines, with
+   `state` one of `open`, `merged`, `closed`, or `unknown` (per-task handling below is unchanged;
+   a mid-flow recheck of a single task may use `pw-lib.sh mr-state <slug> <task-id>` directly).
    - **If `merged`**: The MR was already merged downstream. Handle it:
      1. Update task status: `{{PW_HOME}}/tooling/pw-lib.sh task-accept <slug> <task-id>`
      2. Update dashboard task table: `{{PW_HOME}}/tooling/pw-lib.sh dashboard-task-status <slug> <task-id> "accepted (MR merged)"`

@@ -21,15 +21,28 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 {{PW_HOME}}/tooling/pw-preflight.sh ship <slug> || exit 1
 {{PW_HOME}}/tooling/pw-doc-lint.sh task <slug> --all || exit 1
 ```
+**Reading the pre-flight:** `pw-preflight.sh ship` checks at least one task is actually shippable
+(`done`, verified) in a legal phase; `pw-doc-lint task --all` checks every task file's format
+(`Repo:`/`Branch:`/`## Verify`/`## Result` the ship mechanics below read). Non-zero + `pw-…:`
+stderr = STOP and relay it — never push against an unmet gate. Once confirmed, the mechanical
+halves are scripted: `pw-ship-resolve.sh` (candidate list), `pw-ship-exec.sh` (push + MR),
+`pw-mr-state-batch.sh` / `pw-pipeline-monitor.sh` (state + CI waits) — how to read each:
+`{{PW_HOME}}/tooling/docs/scripts/ship-and-sync.md`.
 
 Publishing is **outward-facing** — this is the explicit "make it public" step, kept separate from
 `/pw-execute` so nothing pushes until you run it. `/pw-execute` already committed + verified each
 task; here we push branches and open MRs.
 
 ## Ship mode (default)
-1. Determine which tasks are shippable: `Status: done`/`accepted`, verify passed, a real commit on
-   their branch. **Skip zero-change tasks** (note "zero-change — no branch/MR" in their Result) and
-   any already-shipped task (Result → MR already set).
+1. Determine which tasks are shippable — **run the resolver, don't re-derive it by hand**:
+   ```bash
+   {{PW_HOME}}/tooling/pw-ship-resolve.sh <slug>
+   ```
+   One line per `done`-status task: `task-id|repo|branch|base|ticket|title|has-commits|has-mr`
+   (`—`/`none` where absent). Treat the flags exactly as the criteria you'd check: a `no`
+   has-commits means the status lies → surface it, don't ship; `has-mr` set means already-shipped →
+   it belongs to comment/sync handling, not here. **Skip zero-change tasks** (note "zero-change —
+   no branch/MR" in their Result) and any already-shipped task (Result → MR already set).
    - **Adopted (continuation) project** (dashboard `Adopted:` note / `context/ADOPTED.md`): ship
      **per adopted branch**, not per task — each adopted branch is one shipment. For each, push the
      branch and, if an MR already exists (from `ADOPTED.md → MR:` or a `glab/gh` lookup on the
@@ -62,8 +75,10 @@ task; here we push branches and open MRs.
      table (Task · Repo · MR url · Target branch · State=open · Build), then log it:
      `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> ship "T0n pushed <branch>; MR <url>"`.
     - **Unless `--skip-build-check` was passed:** once the MR is open, monitor its pipeline/checks to
-      a terminal state (see "Build check" below) and fill the task's `## Result → Build check:` field
-      and the dashboard row's `Build` column with the outcome before moving to the next task. A **red**
+      a terminal state with `{{PW_HOME}}/tooling/pw-pipeline-monitor.sh <slug> <task-id>`
+      (exit 0 green / 1 red / 2 still-running — it records the task file's `## Result → Build
+      check:` line itself; you fill the dashboard row's `Build` column from that outcome) before
+      moving to the next task. A **red**
       build → that task is **not done**: enter the build-check fix loop below (fix in the worktree,
       re-verify, push, re-monitor) until it passes or the cap is hit. If
       `--skip-build-check` was passed, leave both as `—` (not checked this run).
@@ -116,10 +131,14 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
 `/pw-ship <slug> comments` clears review comments across all of the project's MRs in one run.
 
 0. **Resolve the set** of tasks to process (the given IDs, or all tasks with an MR). **Check MR
-   state for each task** before proceeding:
+   state for the whole set in one call** before proceeding — `pw-mr-state-batch.sh` (no task-ids =
+   every PLAN task; prints `task-id|state` per line, plain-text pipe-delimited; per-line semantics
+   identical to the helper it wraps):
    ```bash
-   {{PW_HOME}}/tooling/pw-lib.sh mr-state <slug> <task-id>
+   {{PW_HOME}}/tooling/pw-mr-state-batch.sh <slug> [given task-ids…]
    ```
+   Read each line's state per the bullets below (a single-task `state` recheck mid-flow can still
+   use `pw-lib.sh mr-state <slug> <task-id>`).
    - **If `merged`**: The MR was already merged downstream. Handle it:
      1. Update task status: `{{PW_HOME}}/tooling/pw-lib.sh task-accept <slug> <task-id>`
      2. Update dashboard task table: `{{PW_HOME}}/tooling/pw-lib.sh dashboard-task-status <slug> <task-id> "accepted (MR merged)"`
@@ -190,7 +209,8 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      file/landing-unit overlap is real, one `dep-impact` reviewer pass files items into the
      dependent's queue — no edit-backward into the fixed task, new DAG task if it needs one.
     - **Unless `--skip-build-check` was passed:** monitor the pipeline/checks to a terminal state
-      right after this push (see "Build check" below), before moving on to step 3 — so a failed
+      right after this push via `{{PW_HOME}}/tooling/pw-pipeline-monitor.sh <slug> <task-id>`
+      (same contract as ship mode — see "Build check" below), before moving on to step 3 — so a failed
       build shows up in the recap and can be mentioned in the thread reply, not discovered later.
       A **red** build → the task is **not done**: enter the build-check fix loop below (fix in the
       worktree, re-verify, push, re-monitor) until it passes or the cap is hit.

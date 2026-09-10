@@ -1,5 +1,9 @@
 # RFC backend registry (publish routing)
 
+> **Audience:** technical — per-backend implementation contract for maintainers; ordinary users
+> don't need it. One behavioral exception: the "Registry" table (which backends exist) is safe
+> for users to read.
+
 **Filled by:** [🤖 maintainer] — the day-to-day settings you actually set are `PW_RFC_BACKEND` /
 `PW_RFC_LARK_*` / `PW_RFC_NOTES` in `pw.config.sh`. This file itself is a maintainer-owned
 implementation spec — a registry `/pw-rfc` reads at publish time — not something you edit

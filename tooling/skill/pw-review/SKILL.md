@@ -45,7 +45,11 @@ fresh is that it doesn't.
 
 ## Read only what you need — never the whole file to find one section
 
-Before reading the artifact end-to-end, check the review file's own `## Contents` table
+With bundle access, orient first via the script — `tooling/pw-review-scan.sh <slug>
+[--phase <phase>]` prints open/resolved/pending counts + last sign-off state per review file, so
+you target the files worth reading at all (a standalone agent without the bundle greps
+`[OPEN]`/`[PENDING]` instead). Then, before reading the artifact end-to-end, check the review
+file's own `## Contents` table
 (heading-text-anchored, 🤖-owned, refreshed by `pw-lib.sh review reindex`) for the section your
 finding targets. **IF a memory tool is configured** (`PW_MEMORY` in `pw.config.sh` — skip this
 silently if `none`), you can also query it for the concepts in what you're about to flag, BEFORE

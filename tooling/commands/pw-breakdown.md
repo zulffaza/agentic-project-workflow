@@ -11,6 +11,11 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 {{PW_HOME}}/tooling/pw-preflight.sh breakdown <slug> || exit 1
 {{PW_HOME}}/tooling/pw-doc-lint.sh analysis <slug> --all || exit 1
 ```
+**Reading the pre-flight:** `pw-preflight.sh breakdown` checks every analysis review file is
+`approved` (and RFC open items are clear if the side-loop runs); `pw-doc-lint analysis --all`
+checks each analysis doc's §1–5. Silent = pass; a non-zero exit + `pw-…:` stderr line is a hard
+STOP — relay it (it names which doc/gate needs `/pw-review` first), don't draft a PLAN on
+unapproved analysis. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
 
 **Drafting lanes (optional — skill: `references/execution-and-routing.md` §Spawn lanes):** the
 *decisions* in steps 1–4 below are yours (boundaries, DAG, per-task provider, SP, landing units);

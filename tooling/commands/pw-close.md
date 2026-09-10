@@ -11,6 +11,10 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 {{PW_HOME}}/tooling/pw-preflight.sh close <slug> || exit 1
 {{PW_HOME}}/tooling/pw-doc-lint.sh all <slug> || exit 1
 ```
+**Reading the pre-flight:** `pw-preflight.sh close` checks every task is `accepted` in a legal
+phase; `pw-doc-lint all` checks every doc kind (analysis §1–5, PLAN, tasks, reviews, dashboard
+row-count) at once. Non-zero + `pw-…:` stderr = STOP and relay it — closing is exactly the wrong
+moment to skip a lint. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
 
 1. **Verify done.** Confirm every task in `task/PLAN.md` is `accepted` (or explicitly dropped with
    a note). If any isn't, list them and STOP — don't close a project with unaccepted work.

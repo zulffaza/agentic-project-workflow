@@ -12,6 +12,12 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 ```bash
 {{PW_HOME}}/tooling/pw-context-fetch.sh <slug> [--ignore-errors]
 ```
+**Reading the fetch script:** each `Fetching:` block is already-fetched content — cite it, never
+re-fetch. Rows it can't CLI-fetch print as agent-handled (`Lark URL — agent handles via platform
+skill`, `(no CLI fetched this — agent handles via WebFetch / platform skill)`) — **you** fetch
+those next, per the precedence rules below. Exit 1 = a bare ticket row with no working `jira`
+CLI: STOP and ask the user (add `--ignore-errors` only if they choose to continue without it).
+(`{{PW_HOME}}/tooling/docs/scripts/workflow-automation.md`)
 
 **Optional lane spawns — see `tooling/skill/project-workflow/references/execution-and-routing.md`
 §Spawn lanes (seeds)/§Spawn ledger, and docs/EXECUTION.md §Spawning phase work.** Every delegated

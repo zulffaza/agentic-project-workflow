@@ -14,6 +14,11 @@ tooling/
 │                         gate|reopen
 ├── pw-doctor.sh        ← checks installed skills + commands + agents match this bundle (--fix repairs)
 ├── pw-teardown.sh      ← safe worktree removal at close-out (won't nuke your CWD / dirty trees)
+├── pw-status.sh        ┐
+├── pw-preflight.sh     │
+├── pw-doc-lint.sh      │ 14 automation scripts — deterministic status/gates/doc/ship/workflow
+├── … (11 more pw-*.sh) │ work that runs without an agent; usage: docs/scripts/README.md
+├── pw-worktree-create.sh┘
 ├── commands/           ← THE source of truth for /pw-* (provider-neutral)
 │   ├── pw-new.md        frontmatter: description, args, [agent]; body uses {{ARGS}} + {{PW_*}}
 │   ├── pw-analyze.md
@@ -23,6 +28,8 @@ tooling/
 │                         pw-analyst, pw-writer-task (the phase lanes — see agents/README.md)
 ├── docs/               ← registries/policy the AGENTS read (each has a human-facing peer doc);
 │                         maintainer-owned reference — you never edit these, see below:
+│   ├── scripts/          usage reference for the 14 automation scripts (how to call, how to
+│   │   └── README.md       read the output, what to do on failure — no internals)
 │   ├── providers.md      cross-provider execution mechanism (headless invocation hooks)
 │   │                     — human peer: ../../docs/EXECUTION.md
 │   ├── memory.md         optional/pluggable memory policy (the pipeline works with none)
@@ -55,6 +62,23 @@ rather than asking the agent to edit the dashboard (or copy a review template) b
 refuses accidental backward phase moves (`--rewind` to intend one); `review-init` is idempotent, so
 calling it on every `/pw-analyze`/`/pw-breakdown` run never clobbers a review already in progress.
 Run `pw-lib.sh selftest` after changing it.
+
+The **14 automation scripts** (`pw-status.sh`, `pw-preflight.sh`, `pw-doc-lint.sh`,
+`pw-doc-summary.sh`, `pw-doc-sync.sh`, `pw-review-scan.sh`, `pw-ship-resolve.sh`,
+`pw-ship-exec.sh`, `pw-mr-state-batch.sh`, `pw-pipeline-monitor.sh`, `pw-rfc-comments.sh`,
+`pw-context-fetch.sh`, `pw-adopt-snapshot.sh`, `pw-worktree-create.sh`) push that idea further:
+whole deterministic steps — gates, doc validation, status reports, ship mechanics, URL fetching —
+run as zero-token scripts instead of agent reasoning. **Commands call them as pre-flight; agents
+and skills call the same ones** so behavior is identical whichever path triggers the work (see
+each agent/skill's script notes, and `docs/scripts/README.md` for the reference).
+
+**Information boundary in `docs/`:** two kinds live there. *Behavioral* docs answer "how does
+this part of the workflow work" and a curious user may read them (`forges.md`, `memory.md`,
+`rfc.md`, plus everything under `scripts/`). *Technical* docs are maintainer implementation
+reference — registries and invocation mechanics an agent reads at runtime (`providers.md`,
+`rfc-backends.md`). Each file carries an `Audience:` note saying which; neither kind leaks into
+the bundle's user-facing `../docs/` — users drive everything through `/pw-*` commands and never
+need to know a script ran.
 
 `providers.md` documents the cross-provider execution mechanism — how the orchestrator invokes a
 *different* Agent Provider's CLI headlessly, reading that provider's `<name>_headless()` hook

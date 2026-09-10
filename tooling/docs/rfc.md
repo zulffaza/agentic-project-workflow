@@ -1,5 +1,8 @@
 # RFC-publishing policy (optional, pluggable)
 
+> **Audience:** behavioral — entirely. What the RFC side-loop does (waves, gates, hygiene,
+> comment loop); a user of the workflow may read it. Peer doc: `../../docs/RFC.md`.
+
 The pipeline **does not depend on any specific RFC doc platform.** Publishing is a bonus side-loop,
 never a gate — if you don't configure a backend, `/pw-rfc` still works, generating a local doc, and
 nothing in the pipeline blocks.

@@ -2,6 +2,14 @@
 
 ## Execution phase
 
+**Pre-flight before anything else:**
+`{{PW_HOME}}/tooling/pw-preflight.sh execute <slug>` + `pw-doc-lint.sh plan <slug>` +
+`pw-doc-lint.sh task <slug> --all` (each `|| exit 1`). `/pw-execute` runs these itself — when you
+reach execution WITHOUT the command (direct orchestrator spawn, skill-only session), run the same
+three; a nonzero exit is a hard stop: relay its stderr line, don't reason onward. (These, plus
+`pw-worktree-create.sh` / `pw-review-scan.sh` / `pw-status.sh` below, are what keep the
+scriptless legacy path from diverging — `tooling/docs/scripts/README.md`.)
+
 **Before routing, skim `REVIEWER-NOTES.md` if it exists** (project root) — anything a past
 `pw-reviewer` pass flagged as worth knowing (see `references/review.md`'s AI-assisted review
 section). Optional and best-effort: a missing file means no AI review has run yet, not a problem.
@@ -175,7 +183,15 @@ executor concept for task breakdowns; ad-hoc non-pw code work belongs to the mai
 
 **Fork the new branch from the task's `Base branch:`** (`origin/<base>`), not from whatever HEAD is —
 this is what lets two tasks in the SAME repo target different bases (e.g. `master` and `spring3`),
-each its own branch + worktree + MR:
+each its own branch + worktree + MR. **Prefer the script** — naming convention, fetch, and
+idempotent re-attach built in; the worktree path is its LAST output line (capture it for the
+executor handoff):
+
+```bash
+{{PW_HOME}}/tooling/pw-worktree-create.sh <project-slug> <task-id> <repo> <base-branch>
+```
+
+The raw equivalent (what the script does — manual use only if the script is unavailable):
 
 ```bash
 git -C $PW_REPOS/<repo> fetch -q origin <base-branch>

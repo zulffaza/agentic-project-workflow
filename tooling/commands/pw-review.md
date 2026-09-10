@@ -81,6 +81,12 @@ nothing, fall back to the file's own `## Contents` table (below). **If `PW_MEMOR
 step silently — do not block.**
 
 **Resolve WHICH review files to process (apply-comments flow — do NOT scan the whole project):**
+
+**Start mechanical:** `{{PW_HOME}}/tooling/pw-preflight.sh review <slug> [phase-word]` confirms
+the phase's review files exist (exit 1 + `pw-preflight:` line = report and stop — nothing to
+apply), then `{{PW_HOME}}/tooling/pw-review-scan.sh <slug> [--phase <phase>]` prints
+`<file>: N open[, N resolved][, N pending] (sign-off)` per review file — pick which files to
+open from that instead of reading them blind. Mapping rules below still decide the scope set.
 - If the 2nd arg is a **path** to a `.review.md`, use exactly that file.
 - If the 2nd+ args are **task ids** (`T0n`, one or many — `T01 T03 T05 T06` works), process each
   named task's `task/review/<T0n>.review.md` in **ONE pass**: apply all `[OPEN]` items across the
@@ -214,7 +220,8 @@ whatever `PW_MEMORY_NOTES` already documents for this tool's buckets.
 
 When done, recap each resolved item (one line, grouped by its task/file), and tell me how many
 `[OPEN]` items remain **in the resolved scope** (and, as a footnote, across the whole project:
-`grep -rln "pw-item-status: open"` in the project dir). For a task review: task fixes are
+a final `{{PW_HOME}}/tooling/pw-review-scan.sh <slug>` run — its per-file `N open` counts, not a
+raw grep, which would also count the root `_REVIEW.template.md`'s example markers). For a task review: task fixes are
 re-verified in the worktree by the build loop above — only point me at `/pw-execute <slug> T0n`
 if a fix was left unverified (`--skip-build-check`) or hit the 3-round cap. **If a gate got auto-reopened**
 (the check above), say so explicitly and name which file/phase — that's the one thing here that

@@ -5,17 +5,23 @@ Asked to analyze `context/`:
 1. **Search memory first — only if a memory tool is configured** (`PW_MEMORY`; see
    `tooling/docs/memory.md`) — fold in and cite what's relevant; skip silently if none configured.
 2. Read everything in `context/` — **including fetching any bare external URL** in
-   `context/INDEX.md`, in this precedence order: Jira (the `jira` CLI if installed, e.g. `jira
-   issue view <KEY>`) → GitHub issue/PR (`gh issue view`/`gh pr view` if installed) → GitLab
-   issue/MR (`glab issue view`/`glab mr view` if installed) → Lark (`lark-doc`/`lark-wiki` skill,
-   unchanged) → `WebFetch` for anything else, or whenever the matching CLI isn't installed
-   (optional enrichment, same as everywhere else — fall through, never fail because a CLI is
-   missing). Cite what it **actually said**, not just the link — an unfetched citation isn't
-   "used", and is especially wrong to leave unfetched when its Trust notes marks it authoritative.
-   **If fetching genuinely fails: STOP — do not write the analysis doc at all**, unless `/pw-analyze`
-   was invoked with `--ignore-fetch-errors`, in which case list that row in "Context used" as
-   `<row> — NOT fetched (--ignore-fetch-errors); treat with reduced confidence` instead of silently
-   proceeding as if it were absent.
+   `context/INDEX.md`. **Run the fetch script first for the CLI-handleable rows:**
+   `{{PW_HOME}}/tooling/pw-context-fetch.sh <slug>` (`[--ignore-errors]` mirrors the command's
+   `--ignore-fetch-errors`) — it covers Jira (`jira issue view`) → GitHub (`gh issue/pr view`) →
+   GitLab (`glab issue/mr view`) in exactly the precedence below, and its `Fetching:` blocks are
+   already-fetched content: **cite what they actually said, never re-fetch them.** The script
+   deliberately leaves two kinds of row to you (fall-through rules unchanged): Lark URLs
+   (`Lark URL — agent handles via platform skill` → `lark-doc`/`lark-wiki` skill) and
+   `(no CLI fetched this — agent handles via WebFetch / platform skill)` lines → `WebFetch`; also
+   handle any row via the manual CLI yourself whenever a listed CLI is missing or the script's
+   attempt failed (optional enrichment — fall through, never fail because a CLI is missing). Cite
+   what it
+   **actually said**, not just the link — an unfetched citation isn't "used", and is especially
+   wrong to leave unfetched when its Trust notes marks it authoritative. **If fetching genuinely
+   fails: STOP — do not write the analysis doc at all** (the script's stop-with-errors exit 1 is
+   exactly this rule), unless `/pw-analyze` was invoked with `--ignore-fetch-errors`, in which
+   case list that row in "Context used" as `<row> — NOT fetched (--ignore-fetch-errors); treat
+   with reduced confidence` instead of silently proceeding as if it were absent.
 3. Write `analysis/<topic>.md` from `analysis/_TEMPLATE.md` (record the authoring `Provider:`).
    Describe *what & why*, **confirmed** affected repos (verify real state on the actual base
    branch — not a stale/parked feature branch), **genuinely distinct approach options** (§4 — the

@@ -1,5 +1,9 @@
 # Git forge registry (shipment routing)
 
+> **Audience:** behavioral — this explains how a repo's host resolves to a forge CLI and how
+> ship/comment/build-check calls behave; users of the workflow may read it. One exception:
+> "Adding a forge" below is maintainer-only.
+
 **Filled by:** [🤖 maintainer] — the day-to-day override you actually set is `PW_FORGE_HOSTS` in
 `pw.config.sh` (a self-hosted GitLab host, or any forge whose CLI needs a host env var). This file
 itself is maintainer-owned reference: the resolution algorithm + the Registry's exact CLI
