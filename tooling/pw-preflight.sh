@@ -142,7 +142,7 @@ case "$COMMAND" in
     LINKED=0
     for tf in "$D"/task/T*.md; do
       [ -e "$tf" ] || continue
-      MR="$(_pw_url_from_line "$(pw_field "$tf" MR || true)")"
+      MR="$(pw_task_mr_url "$tf")"  # Result-scoped MR field (see pw_task_mr_url)
       case "${MR:-}" in http*) LINKED=$((LINKED + 1)) ;; esac
     done
     if [ "$LINKED" -eq 0 ]; then

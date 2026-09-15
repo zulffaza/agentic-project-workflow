@@ -56,11 +56,9 @@ REPO_DIR="$REPOS_DIR/$REPO"
 echo "Pushing $BRANCH to origin..."
 git -C "$REPO_DIR" push origin "$BRANCH" || die "push failed"
 
-# Check for existing MR
-MR_URL=""
-if grep -q '^## Result' "$TASK_FILE"; then
-  MR_URL="$(_pw_url_from_line "$(awk '/^## Result/{p=1; next} /^## /{p=0} p && /MR:/{print; exit}' "$TASK_FILE")")"
-fi
+# Check for existing MR — Result-scoped resolution (`**MR:**` field first; a whole-file grep lets
+# decoy URLs in ## Steps win, which once made this call mis-see "existing MR"). See pw_task_mr_url.
+MR_URL="$(pw_task_mr_url "$TASK_FILE")"
 
 # Determine forge CLI — by the repo's actual origin host (docs/forges.md resolution, simplified:
 # github.com → gh, anything else → glab; self-hosted GitLab needs gitlab in its URL or falls to

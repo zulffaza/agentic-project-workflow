@@ -66,14 +66,12 @@ while IFS='|' read -r task_id status; do
     fi
   fi
   
-  # Check for existing MR
+  # Check for existing MR — Result-scoped `**MR:**` field first, then a bare URL in the block
+  # (pw_task_mr_url). Only a genuine http(s) URL counts as shipped; `(none)`/odd text does not.
   HAS_MR="no"
-  if [ -f "$TASK_FILE" ] && grep -q '^## Result' "$TASK_FILE"; then
-    _MR_LINE="$(awk '/^## Result/ {p=1; next} /^## / {p=0} p && /MR:/ {print; exit}' "$TASK_FILE")"
-    MR_URL="$(_pw_url_from_line "$_MR_LINE")"
-    if [ -n "$MR_URL" ] && [ "$MR_URL" != "(none)" ]; then
-      HAS_MR="yes"
-    fi
+  if [ -f "$TASK_FILE" ]; then
+    MR_URL="$(pw_task_mr_url "$TASK_FILE")"
+    case "$MR_URL" in http*) HAS_MR="yes" ;; esac
   fi
   
   # Resolve ticket

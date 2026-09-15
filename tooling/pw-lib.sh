@@ -1252,6 +1252,32 @@ cmd_model_check() {
 # the forge CLI can be run from inside the repo (glab needs repo context to resolve :id).
 # Emit an mr-state lookup failure: diagnostic to stderr, "unknown" to stdout, exit 1. set -e-safe:
 # always invoke as `_mr_unknown "…" || return 1` so the failing call sits in an OR-list.
+# Resolve the task file's MR URL scoped to `## Result`: the `- **MR:**` / `- MR:` field line first
+# (its URL — else its trimmed sentinel value like `(none)`), then the first bare http(s) URL in
+# the Result block, else empty (caller falls back to the dashboard table). Section-scoping is the
+# point: a whole-file `grep 'https://' | head -1` lets decoy literal URLs in ## Steps beat the real
+# field — seen 2026-09, where a stencil placeholder URL left mr-state "found-but-unparseable" and
+# the task unknown forever despite a correct `- **MR:**` line. Mirror of pw_task_mr_url in
+# pw-common.sh (pw-lib is standalone and cannot source it) — update both together.
+_resolve_task_mr_url() {
+  local sec line val url
+  [ -f "$1" ] || return 0
+  sec="$(awk '/^## Result/{p=1; next} /^## /{p=0} p' "$1" 2>/dev/null)" || return 0
+  [ -n "$sec" ] || return 0
+  line="$(printf '%s\n' "$sec" | grep -m1 -E '^[[:space:]]*([-*][[:space:]]*)?\*{0,2}MR\*{0,2}[[:space:]]*:' || true)"
+  if [ -n "$line" ]; then
+    val="$(printf '%s' "$line" | sed -E \
+      -e 's/^[[:space:]]*([-*][[:space:]]*)?\*{0,2}MR\*{0,2}[[:space:]]*:[[:space:]]*//' \
+      -e 's/^[*_[:space:]]+//' -e 's/[[:space:]]+\*\*.*$//' -e 's/[[:space:]]+$//')"
+    if [ -n "$val" ]; then
+      url="$(printf '%s' "$val" | grep -oE "https?://[^ )>|\"\`]+" | head -1 || true)"
+      [ -n "$url" ] && { printf '%s' "$url"; return 0; }
+      printf '%s' "$val"; return 0
+    fi
+  fi
+  printf '%s\n' "$sec" | grep -oE "https?://[^ )>|\"\`]+" | head -1 || true
+}
+
 _mr_unknown() {
   echo "mr-state: $*" >&2
   echo "unknown"
@@ -1265,12 +1291,14 @@ cmd_mr_state() {
   local taskfile="$d/task/$task.md"
 
   # MR URL: task file "## Result" block first (field "MR:" or a bare URL), else dashboard table row.
+  # Result-scoping — see _resolve_task_mr_url. The dashboard pattern takes the URL from ANY column of
+  # the row (`| T02 | repo | [MR 18](url) |` markdown-link cell included); the old one demanded the
+  # URL immediately after the task cell and silently never matched real rows.
   local mr_url=""
-  if [ -f "$taskfile" ]; then
-    mr_url="$(grep -E 'MR:|https://' "$taskfile" 2>/dev/null | grep -oE 'https://[^ )|]+' | head -1 || true)"
-  fi
+  mr_url="$(_resolve_task_mr_url "$taskfile")"
   if [ -z "$mr_url" ]; then
-    mr_url="$(grep -E "^\| *$task *\| *https://" "$d/README.md" 2>/dev/null | grep -oE 'https://[^ )|]+' | head -1 || true)"
+    mr_url="$(grep -E "^\|[[:space:]]*\**$task\**[[:space:]]*\|" "$d/README.md" 2>/dev/null \
+              | grep -oE "https?://[^ )>|\"\`]+" | head -1 || true)"
   fi
   [ -n "$mr_url" ] || _mr_unknown "no MR URL found for $task (task file or dashboard table)" || return 1
 
@@ -2045,6 +2073,25 @@ cmd_selftest() {
   fi
   [ "$(cat "$tmp/demo/README.md")" = "$readme_before" ] \
     || die "selftest FAIL: failed dashboard-task-status still mutated the file"
+
+  # _resolve_task_mr_url — the 2026-09 regression family: a decoy literal URL earlier in the task
+  # file (## Steps quoting placeholder URLs) must NOT beat the real `- **MR:**` field, the sentinel
+  # must survive, the bare-URL-in-Result fallback must work, and no-Result-yet must return empty.
+  printf '# T90\n## Steps\n1. Point the converter at `https://decoy.example.com/v1/schemas/<x>/versions/<y>`\n\n## Result\n- **Commit(s):** 1234567\n- **MR:** https://forge.example.com/g/p/-/merge_requests/18\n' > "$tmp/demo/T90.md"
+  got="$( _resolve_task_mr_url "$tmp/demo/T90.md")"
+  [ "$got" = "https://forge.example.com/g/p/-/merge_requests/18" ] \
+    || die "selftest FAIL: _resolve_task_mr_url picked a ## Steps decoy URL over the MR field (got: $got)"
+  printf '# T91\n## Result\n- **MR:** (none)\n' > "$tmp/demo/T91.md"
+  got="$(_resolve_task_mr_url "$tmp/demo/T91.md")"
+  [ "$got" = "(none)" ] \
+    || die "selftest FAIL: _resolve_task_mr_url lost the (none) sentinel (got: $got)"
+  printf '# T92\n## Result\n- See the MR at https://forge.example.com/g/p/-/merge_requests/9\n' > "$tmp/demo/T92.md"
+  got="$(_resolve_task_mr_url "$tmp/demo/T92.md")"
+  [ "$got" = "https://forge.example.com/g/p/-/merge_requests/9" ] \
+    || die "selftest FAIL: _resolve_task_mr_url lost the bare-URL fallback (got: $got)"
+  got="$(_resolve_task_mr_url "$tmp/demo/nope.md")"
+  [ -z "$got" ] \
+    || die "selftest FAIL: _resolve_task_mr_url invented a URL for a missing file (got: $got)"
 
   # ai-model: the lane row exists, defaults to all-—, updates one lane only, clears back, refuses
   # the executor lane and a bare model name. Regression guard behind the row: a model line that

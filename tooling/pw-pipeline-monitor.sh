@@ -50,23 +50,34 @@ TASK_FILE="$D/task/$TASK_ID.md"
 
 [ -f "$TASK_FILE" ] || die "task file not found: $TASK_FILE"
 
-# Extract MR URL
+# Extract MR URL — Result-scoped (`- **MR:**` field first, bare URL second). Deliberately NOT a
+# whole-file grep: decoy literal URLs in a task's own ## Steps beat the field with that method.
 MR_URL=""
-if grep -q '^## Result' "$TASK_FILE"; then
-  MR_URL="$(_pw_url_from_line "$(awk '/^## Result/{p=1; next} /^## /{p=0} p && /MR:/{print; exit}' "$TASK_FILE")")"
+if [ -f "$TASK_FILE" ]; then
+  MR_URL="$(pw_task_mr_url "$TASK_FILE")"
 fi
 
 [ -n "$MR_URL" ] && [ "$MR_URL" != "(none)" ] || die "no MR URL found in task file"
 
-# Determine forge CLI
-FORGE_CLI=""
-if echo "$MR_URL" | grep -q 'gitlab'; then
-  FORGE_CLI="glab"
-elif echo "$MR_URL" | grep -q 'github'; then
-  FORGE_CLI="gh"
-else
-  die "cannot determine forge from MR URL: $MR_URL"
+# Resolve forge per tooling/docs/forges.md: MR-URL host → PW_FORGE_HOSTS override, else
+# auto-detect (github.com → github, else gitlab). Mirrors pw-lib.sh mr-state. A URL-substring
+# grep cannot identify self-hosted GitLab (e.g. source.golabs.io contains no "gitlab").
+if [ -f "$PW_HOME/pw.config.sh" ]; then . "$PW_HOME/pw.config.sh"; fi
+MR_HOST="$(echo "$MR_URL" | sed -E 's#^https?://([^/:?#]+).*#\1#')"
+FORGE="gitlab"
+case "$MR_HOST" in github.com) FORGE="github" ;; esac
+if declare -p PW_FORGE_HOSTS >/dev/null 2>&1; then
+  for entry in "${PW_FORGE_HOSTS[@]}"; do
+    h="${entry%%=*}"; f="${entry#*=}"
+    [ "$h" = "$MR_HOST" ] && { FORGE="$f"; break; }
+  done
 fi
+FORGE_CLI=""
+case "$FORGE" in
+  github) FORGE_CLI="gh" ;;
+  gitlab) FORGE_CLI="glab" ;;
+  *) die "unknown forge '$FORGE' mapped for host $MR_HOST (check PW_FORGE_HOSTS)" ;;
+esac
 
 command -v "$FORGE_CLI" >/dev/null 2>&1 || die "$FORGE_CLI not found (needed to monitor $MR_URL)"
 
@@ -76,11 +87,16 @@ GH_REPO=""
 GL_REPO=""
 if [ "$FORGE_CLI" = "glab" ]; then
   MR_IID="$(echo "$MR_URL" | grep -o 'merge_requests/[0-9]*' | sed 's/merge_requests\///')"
-  GL_REPO="$(echo "$MR_URL" | sed -nE 's#.*gitlab\.com/([^?#]+)/-?/?merge_requests.*#\1#p')"
+  # Full project path between host and /-/merge_requests on ANY host (self-managed included);
+  # passed as --repo below so the query has repo context regardless of CWD.
+  GL_REPO="$(echo "$MR_URL" | sed -E "s#^https?://[^/]+/##; s#/-/merge_requests(/[0-9]+).*##")"
 elif [ "$FORGE_CLI" = "gh" ]; then
   MR_IID="$(echo "$MR_URL" | grep -o 'pull/[0-9]*' | sed 's/pull\///')"
   GH_REPO="$(echo "$MR_URL" | sed -nE 's#.*github\.com/([^/]+/[^/]+)/pull.*#\1#p')"
 fi
+
+# Self-managed GitLab must be pinned to the URL's host — glab defaults to gitlab.com otherwise.
+export GITLAB_HOST="${GITLAB_HOST:-$MR_HOST}"
 
 [ -n "$MR_IID" ] || die "cannot extract MR IID from URL: $MR_URL"
 

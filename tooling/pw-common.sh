@@ -347,3 +347,33 @@ _pw_url_from_line() {  # $1=line from a Result MR: bullet -> plain URL (falls ba
   if [ -n "$u" ]; then printf '%s' "$u"; return 0; fi
   printf '%s' "$1" | sed -E "s/^[-*[:space:]]*[*]*MR[*]*:[[:space:]]*//; s/^[*_[:space:]]+//; s/[[:space:]]+$//"
 }
+
+pw_task_mr_url() {  # $1 = task file -> MR URL (or sentinel text like `(none)`) scoped to ## Result;
+  # empty when there is no Result section or nothing URL-like in it (caller decides the fallback).
+  # Resolution order INSIDE the `## Result` block:
+  #   1. the MR field line (`- **MR:** <url>` or bare `- MR: <url>`; the value is cut at the next
+  #      bold key the way pw_field does, so packed lines cannot leak the following field's text)
+  #      -> that value's URL, else the trimmed value (the sentinel).
+  #   2. no field line -> first http(s) URL anywhere in the Result block (the "bare URL" case).
+  # The section-scoping is the whole point: a file-wide `grep 'https://' | head -1` lets a decoy
+  # literal URL earlier in the task (## Steps quoting placeholder URLs) beat the real field — seen
+  # 2026-09: one such Steps URL made pw-lib's mr-state resolve-but-fail ("unknown" forever) on a
+  # task whose `- **MR:**` line sat correctly in its own ## Result. pw-lib.sh cannot source this
+  # file (standalone doctrine) and carries the mirror _resolve_task_mr_url — update both together.
+  local sec line val url
+  [ -f "$1" ] || return 0
+  sec="$(awk '/^## Result/{p=1; next} /^## /{p=0} p' "$1" 2>/dev/null)" || return 0
+  [ -n "$sec" ] || return 0
+  line="$(printf '%s\n' "$sec" | grep -m1 -E '^[[:space:]]*([-*][[:space:]]*)?\*{0,2}MR\*{0,2}[[:space:]]*:' || true)"
+  if [ -n "$line" ]; then
+    val="$(printf '%s' "$line" | sed -E \
+      -e 's/^[[:space:]]*([-*][[:space:]]*)?\*{0,2}MR\*{0,2}[[:space:]]*:[[:space:]]*//' \
+      -e 's/^[*_[:space:]]+//' -e 's/[[:space:]]+\*\*.*$//' -e 's/[[:space:]]+$//')"
+    if [ -n "$val" ]; then
+      url="$(printf '%s' "$val" | grep -oE "https?://[^ )>|\"\`]+" | head -1 || true)"
+      [ -n "$url" ] && { printf '%s' "$url"; return 0; }
+      printf '%s' "$val"; return 0
+    fi
+  fi
+  printf '%s\n' "$sec" | grep -oE "https?://[^ )>|\"\`]+" | head -1 || true
+}

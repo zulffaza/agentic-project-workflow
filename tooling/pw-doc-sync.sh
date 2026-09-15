@@ -67,7 +67,7 @@ sync_dashboard() {
     branch="$(pw_field "$tf" Branch)"; branch="${branch//\`/}"; branch="${branch%% *}"
     base="$(pw_field "$tf" 'Base branch')"; base="${base//\`/}"; base="${base%% *}"; [ -n "$base" ] || base="—"
     title="$(grep '^# ' "$tf" | head -1 | sed 's/^# //; s/^T[0-9]*[: ]*//' | pw_trim)"; [ -n "$title" ] || title="—"
-    mr="$(_pw_url_from_line "$(awk '/^## Result/{p=1; next} /^## /{p=0} p && /MR:/{print; exit}' "$tf")")"
+    mr="$(pw_task_mr_url "$tf")"  # Result-scoped: **MR:** field -> its URL/sentinel, else bare URL
     [ "$mr" = "(none)" ] && mr="—"
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$st" "$repo" "$branch" "$base" "$title" "$mr" >> "$TASKROWS"
   done
