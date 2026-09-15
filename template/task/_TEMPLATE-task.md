@@ -158,6 +158,8 @@ cd {{PW_PROJECTS}}/<project-slug>/worktree/<repo>/<T0n>-<slug>
 - **Log:** `worktree/<T0n>.log` <executor tees its output here so you can tail the run>
 - **Commit(s):** <short-sha(s), or `zero-change` if nothing was removable>
 - **MR:** <url / number, or `—` if not shipped yet (see /pw-ship)>
+  <!-- Machine-read: ship/sync/mr-state resolve the MR URL from THIS Result field only — a forge-like
+       URL anywhere else in the file is ignored. Keep exactly one real MR URL here once shipped. -->
 - **Build check:** <build-check runs by default at ship time — `green` / `red` (link the failing
   job) / `still running — not yet resolved`. `—` only if this ship/comment run passed
   `--skip-build-check`; that means "not checked," not "passed.">

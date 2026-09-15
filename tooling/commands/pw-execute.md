@@ -78,7 +78,11 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
    {{PW_HOME}}/tooling/pw-lib.sh model-check <provider> <model-id>
    ```
    If it refuses, STOP that task and tell me — don't substitute a different model yourself or run
-   it anyway.
+   it anyway. **The task file binds the model:** the resolved `Execute with:` (or the plan's
+   Produced-by default) is the *only* model the spawn runs under — pass it explicitly with the
+   provider's bind flag (`kilo run -m`, `claude --model`, cursor `--model`). Never let the
+   spawner's own session tokens (your harness's `model=`/`variant=` values) ride along — that
+   silently rebinds a task away from what breakdown approved.
    - **Same provider you're running under → spawn a native, in-process SUB-AGENT** (NOT a shell      invocation). A task naming a same-provider def (`pw-executor`/custom `tooling/agents/` role)
       spawns it; **a plain `provider:model` is not an agent name** — it runs that provider's default
       agent on this task file as its work order (Option A: one executor concept — no bespoke

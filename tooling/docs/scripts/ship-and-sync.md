@@ -74,7 +74,12 @@ Polls a task's MR pipeline to a terminal state after push — replaces agent-pol
 $PW_HOME/tooling/pw-pipeline-monitor.sh <slug> <task-id> [--timeout <minutes>] [--interval <seconds>]
 ```
 
-Reads the MR URL from the task file's `## Result`, detects the forge from the URL. Records the
+Machine-reads the MR URL **from the task file's `## Result` only** (the bold `- **MR:**` field, with a
+bare-URL fallback within that block — URLs elsewhere in the file, e.g. example endpoints in `## Steps`,
+are deliberately ignored; keep only the true MR URL in `## Result`; `mr-state`, `ship-status`, and
+preflight resolve it the same way). The forge host is resolved through `PW_FORGE_HOSTS` and the CLI env
+(`GITLAB_HOST` etc.), so **source `pw.config.sh`** when running from a headless wrapper; an unknown host
+exits 2 naming what's missing. Records the
 outcome in the task file only — the dashboard's MR `State` column is deliberately untouched (CI
 green ≠ merged; that column belongs to true merged-ness from `pw-mr-state-batch.sh`).
 

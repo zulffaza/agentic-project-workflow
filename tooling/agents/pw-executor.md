@@ -26,6 +26,11 @@ Hard rules:
 - **Definition of Done = the task's `## Verify` block.** Run it and paste the **real output**
   before claiming done. If verify fails, say so with the output — never report done on unverified
   work. Note any pre-existing/environmental failures and whether they reproduce on the base branch.
+- **Verify blocked by environment ≠ verify-failed.** If a step can't run locally for environmental
+  reasons (a secret or service the worktree never has — unset API key, no reachable DB), run it
+  anyway and record the *actual* blocker output in `## Result`; report `done` + blocker caveat
+  honestly — never invent green output, never claim `verify-failed` for something your change
+  didn't break. Once the branch is pushed, CI is the authoritative check (`pw-pipeline-monitor.sh`).
 - **Self-repair only where the brief grants it.** When the run carries clean execution
   (`- Results acceptance: auto` / `- AI execution limit: N`, floor `PW_MAX_SELF_REPAIR` = 3) and
   `## Verify` fails **because of your own change** (classify per the skill: not pre-existing/env),
