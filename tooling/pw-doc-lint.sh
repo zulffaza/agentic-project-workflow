@@ -34,7 +34,9 @@ D="$(proj_dir "$SLUG")"
 ERRORS=()
 
 add_error() {
-  ERRORS+=("$1")
+  # add_error "problem" [remediation] — remediation, when given, prints as a
+  # second line so no gate failure is ever a dead end.
+  if [ $# -ge 2 ]; then ERRORS+=("$1"$'\t'"$2"); else ERRORS+=("$1"); fi
 }
 
 lint_analysis() {
@@ -43,38 +45,43 @@ lint_analysis() {
   [ -f "$f" ] || die "analysis doc not found: $f"
   
   # Check required sections
-  grep -q '^# 1\. Problem' "$f" || add_error "$f: missing §1 (Problem)"
-  grep -q '^# 2\. Current state' "$f" || add_error "$f: missing §2 (Current state)"
-  grep -q '^# 3\. Affected repos' "$f" || add_error "$f: missing §3 (Affected repos)"
-  grep -q '^# 4\. Approach options' "$f" || add_error "$f: missing §4 (Approach options)"
-  grep -q '^# 5\. Decisions' "$f" || add_error "$f: missing §5 (Decisions)"
+  _tpl="section shape: $D/analysis/_TEMPLATE.md"
+  grep -qE '^#{1,6}[[:space:]]+1\.' "$f" || add_error "$f: missing §1 (Problem/goal)" "$_tpl"
+  grep -qE '^#{1,6}[[:space:]]+2\.' "$f" || add_error "$f: missing §2 (Current state)" "$_tpl"
+  grep -qE '^#{1,6}[[:space:]]+3\.' "$f" || add_error "$f: missing §3 (Affected repos)" "$_tpl"
+  grep -qE '^#{1,6}[[:space:]]+4\.' "$f" || add_error "$f: missing §4 (approach options)" "$_tpl"
+  grep -qE '^#{1,6}[[:space:]]+5\.' "$f" || add_error "$f: missing §5 (decisions/risks)" "$_tpl"
   
   # Check §4 has 2+ options OR explicit justification
-  if grep -q '^# 4\. Approach options' "$f"; then
-    OPTIONS="$(awk '/^# 4\. Approach options/{p=1; next} /^# /{p=0} p && /^## Option/{count++} END{print count+0}' "$f")"
+  if grep -qE '^#{1,6}[[:space:]]+4\.' "$f"; then
+    OPTIONS="$(awk '
+      /^#{1,2}[ \t]+4\./ { insec = 1; next }
+      /^#{1,2}[ \t]/     { insec = 0 }
+      insec && /^#{3,}[ \t]/ && ($0 ~ /[Oo]ption|[Ss]olution area|[0-9]+\.[0-9]+ [A-Z]/) { count++ }
+      END { print count+0 }' "$f")"
     if [ "$OPTIONS" -lt 2 ]; then
       if ! grep -q 'only one approach' "$f"; then
-        add_error "$f: §4 should have 2+ options or explicit 'only one approach' justification"
+        add_error "$f: §4 should have 2+ options or explicit 'only one approach' justification" "add '### 4.1 …' / '### 4.2 …' option subsections under §4, or state 'only one approach' with justification"
       fi
     fi
   fi
   
   # Check §5.1 has decisions log
-  if grep -q '^# 5\. Decisions' "$f"; then
-    if ! grep -q '## 5\.1 Decisions log' "$f"; then
-      add_error "$f: missing §5.1 (Decisions log)"
+  if grep -qE '^#{1,6}[[:space:]]+5\.' "$f"; then
+    if ! grep -qE '^#{2,6}[[:space:]]+5\.1 ' "$f"; then
+      add_error "$f: missing §5.1 (Decisions log)" "add '### 5.1 Decisions log' under §5 — (Rn)/(Qn) decision entries live there"
     fi
   fi
   
   # Check no (Rn)/(Qn) tags in §1-4 prose
-  if awk '/^# 1\. Problem/,/^# 5\. Decisions/' "$f" | grep -qE '\([RQ][0-9]+\)' 2>/dev/null; then
-    add_error "$f: (Rn)/(Qn) tags belong in §5.1 only, not §1-4"
+  if awk '/^#{1,2}[ \t]+1\./, /^#{1,2}[ \t]+5\./' "$f" | grep -qE '\([RQ][0-9]+\)' 2>/dev/null; then
+    add_error "$f: (Rn)/(Qn) tags belong in §5.1 only, not §1-4" "move each '(Rn)'/'(Qn)' citation into §5.1; §1–4 prose refers to decisions by name, not tag"
   fi
   
   # Check chosen approach is filled
   if grep -q '^\*\*Chosen approach:\*\*' "$f"; then
     if grep '^\*\*Chosen approach:\*\*' "$f" | grep -q '_pending'; then
-      add_error "$f: 'Chosen approach' is not filled in"
+      add_error "$f: 'Chosen approach' is not filled in" "fill the '**Chosen approach:**' line with the picked §4 option (human decision)"
     fi
   fi
 }
@@ -85,30 +92,28 @@ lint_task() {
   [ -f "$f" ] || die "task file not found: $f"
   
   # Check required fields
-  grep -q '^Repo:' "$f" || add_error "$f: missing 'Repo:' field"
-  grep -q '^Base branch:' "$f" || add_error "$f: missing 'Base branch:' field"
-  grep -q '^Branch:' "$f" || add_error "$f: missing 'Branch:' field"
-  grep -q '^Execute with:' "$f" || add_error "$f: missing 'Execute with:' field"
-  grep -q '^Story points:' "$f" || add_error "$f: missing 'Story points:' field"
-  grep -q '^## Verify' "$f" || add_error "$f: missing '## Verify' section"
-  grep -q '^## Steps' "$f" || add_error "$f: missing '## Steps' section"
-  grep -q '^## Result' "$f" || add_error "$f: missing '## Result' section"
+  for _fl in "Repo" "Base branch" "Branch" "Execute with" "Story points"; do
+    pw_has_field "$f" "$_fl" || add_error "$f: missing '$_fl' field (as '- **$_fl:**' bullet or '^$_fl:' line)" "add '- **$_fl:** <value>' in the header bullets — value must agree with the task's PLAN row"
+  done
+  grep -q '^## Verify' "$f" || add_error "$f: missing '## Verify' section" "see $D/task/_TEMPLATE-task.md for the required sections"
+  grep -q '^## Steps' "$f" || add_error "$f: missing '## Steps' section" "see $D/task/_TEMPLATE-task.md for the required sections"
+  grep -q '^## Result' "$f" || add_error "$f: missing '## Result' section" "see $D/task/_TEMPLATE-task.md for the required sections"
   
   # Check ## Steps has 3+ items
   if grep -q '^## Steps' "$f"; then
     STEPS="$(awk '/^## Steps/{p=1; next} /^## /{p=0} p && /^[0-9]+\./{count++} END{print count+0}' "$f")"
     if [ "$STEPS" -lt 3 ]; then
-      add_error "$f: ## Steps should have 3+ items (has $STEPS)"
+      add_error "$f: ## Steps should have 3+ items (has $STEPS)" "expand '## Steps' to 3+ numbered steps (small enough to be one agent turn each)"
     fi
   fi
   
   # Check ## Result is filled if Status is done or accepted
-  STATUS="$(grep '^Status:' "$f" | sed 's/^Status: *//' || echo "")"
+  STATUS="$(pw_field "$f" Status)"
   if [ "$STATUS" = "done" ] || [ "$STATUS" = "accepted" ]; then
     if grep -q '^## Result' "$f"; then
       RESULT="$(awk '/^## Result/{p=1; next} /^## /{p=0} p' "$f" | wc -l)"
       if [ "$RESULT" -lt 2 ]; then
-        add_error "$f: ## Result should be filled when Status is $STATUS"
+        add_error "$f: ## Result should be filled when Status is $STATUS" "the executor fills '## Result' when it completes — re-run: /pw-execute <slug> $task_id (or fill it by hand if the work is genuinely done)"
       fi
     fi
   fi
@@ -119,37 +124,37 @@ lint_plan() {
   [ -f "$f" ] || die "PLAN.md not found: $f"
   
   # Check repo manifest table
-  grep -q '^## Repos in scope' "$f" || add_error "$f: missing '## Repos in scope' section"
+  grep -qE '^## (Repo manifest|Repos in scope)' "$f" || add_error "$f: missing repo-manifest section (template heading '## Repo manifest')" "add '## Repo manifest' with the repo/base-branch table — see $D/task/_TEMPLATE-orchestration-plan.md"
   
   # Check dependency DAG
-  grep -q '^## Dependency' "$f" || add_error "$f: missing '## Dependency' section"
+  grep -q '^## Dependency' "$f" || add_error "$f: missing '## Dependency' section" "add the '## Dependency DAG' mermaid section — see $D/task/_TEMPLATE-orchestration-plan.md"
   
   # Check task table
-  grep -qE '^## Task( |s)' "$f" || add_error "$f: missing task-table section (expected '## Task table')"
+  grep -qE '^## Task( |s)' "$f" || add_error "$f: missing task-table section (expected '## Task table')" "add '## Task table' (ID|Title|Repo|depends_on|Group|Execute with|SP|Status|Time|Result columns)"
   
   # Check task table has required columns
   if grep -qE '^## Task( |s)' "$f"; then
     HEADER="$(awk '/^## Task( |s)/{p=1; next} p && /^\|/{print; exit}' "$f")"
-    echo "$HEADER" | grep -q 'Task' || add_error "$f: task table missing 'Task' column"
-    echo "$HEADER" | grep -q 'Repo' || add_error "$f: task table missing 'Repo' column"
-    echo "$HEADER" | grep -q 'Branch' || add_error "$f: task table missing 'Branch' column"
-    echo "$HEADER" | grep -q 'SP' || add_error "$f: task table missing 'SP' column"
-    echo "$HEADER" | grep -q 'Execute with' || add_error "$f: task table missing 'Execute with' column"
+    _col() { printf '%s\n' "$HEADER" | awk -F'|' -v re="$1" '{ for (i = 1; i <= NF; i++) { v = $i; gsub(/[ \t`*]/, "", v); if (tolower(v) ~ re) found = 1 } } END { exit found ? 0 : 1 }'; }
+    _col '^(task|id)$'      || add_error "$f: task table missing an ID/Task column" "rebuild the header row from $D/task/_TEMPLATE-orchestration-plan.md"
+    _col '^repo$'           || add_error "$f: task table missing 'Repo' column" "rebuild the header row from $D/task/_TEMPLATE-orchestration-plan.md"
+    _col '^sp$'             || add_error "$f: task table missing 'SP' column" "rebuild the header row from $D/task/_TEMPLATE-orchestration-plan.md"
+    _col '^executewith$'    || add_error "$f: task table missing 'Execute with' column" "rebuild the header row from $D/task/_TEMPLATE-orchestration-plan.md"
+    _col '^status$'         || add_error "$f: task table missing 'Status' column" "rebuild the header row from $D/task/_TEMPLATE-orchestration-plan.md"
   fi
   
-  # Check Produced by is filled
-  if grep -q '^\*\*Produced by:\*\*' "$f"; then
-    if grep '^\*\*Produced by:\*\*' "$f" | grep -q '_pending'; then
-      add_error "$f: 'Produced by' is not filled in"
-    fi
+  # Check Produced by is filled (line-start bold or '- **Produced by:**' bullet)
+  _PB="$(pw_field "$f" 'Produced by')"
+  if [ -n "$_PB" ] && printf '%s' "$_PB" | grep -q '_pending'; then
+    add_error "$f: 'Produced by' is not filled in" "fill '- **Produced by:**' with the breakdown run's agent/model stamp"
   fi
   
   # Check task count matches actual task files
   if grep -qE '^## Task( |s)' "$f"; then
     PLAN_TASKS="$(awk '/^## Task( |s)/{p=1; next} p && /^\|.*T[0-9]/{count++} END{print count+0}' "$f")"
-    ACTUAL_TASKS="$(ls -1 "$D/task"/T*.md 2>/dev/null | wc -l | xargs)"
+    ACTUAL_TASKS="$(ls -1 "$D/task"/T*.md 2>/dev/null | wc -l | pw_trim)"
     if [ "$PLAN_TASKS" != "$ACTUAL_TASKS" ]; then
-      add_error "$f: task count mismatch (PLAN has $PLAN_TASKS, found $ACTUAL_TASKS task files)"
+      add_error "$f: task count mismatch (PLAN has $PLAN_TASKS, found $ACTUAL_TASKS task files)" "align the task table with task/*.md — add missing rows or delete stale ones (then pw-doc-sync.sh <slug> --dashboard-only)"
     fi
   fi
 }
@@ -160,9 +165,9 @@ lint_review() {
   [ -f "$f" ] || die "review file not found: $f"
   
   # Check required sections
-  grep -q '^## Items' "$f" || add_error "$f: missing '## Items' section"
-  grep -q '^## Open questions' "$f" || add_error "$f: missing '## Open questions' section"
-  grep -q '^## Sign-off' "$f" || add_error "$f: missing '## Sign-off' section"
+  grep -q '^## Items' "$f" || add_error "$f: missing '## Items' section" "review files start from $D/_REVIEW.template.md (created via /pw-review)"
+  grep -q '^## Open questions' "$f" || add_error "$f: missing '## Open questions' section" "review files start from $D/_REVIEW.template.md (created via /pw-review)"
+  grep -q '^## Sign-off' "$f" || add_error "$f: missing '## Sign-off' section" "review files start from $D/_REVIEW.template.md (created via /pw-review)"
   
   # Check items have pw-item-status markers
   if grep -q '^## Items' "$f"; then
@@ -170,7 +175,7 @@ lint_review() {
     if [ "$ITEMS" -gt 0 ]; then
       MARKERS="$(grep -c 'pw-item-status:' "$f" || true)"; MARKERS="${MARKERS:-0}"
       if [ "$MARKERS" -lt "$ITEMS" ]; then
-        add_error "$f: some items missing pw-item-status markers"
+        add_error "$f: some items missing pw-item-status markers" "add '<!-- pw-item-status: open|closed|wontfix -->' under each '###' item in ## Items"
       fi
     fi
   fi
@@ -183,14 +188,15 @@ lint_dashboard() {
   # Check task table rows match task files
   if grep -qE '^## Task( |s)' "$f"; then
     DASHBOARD_TASKS="$(awk '/^## Task( |s)/{p=1; next} /^## /{p=0} p && /^\|.*T[0-9]/{count++} END{print count+0}' "$f")"
-    ACTUAL_TASKS="$(ls -1 "$D/task"/T*.md 2>/dev/null | wc -l | xargs)"
+    ACTUAL_TASKS="$(ls -1 "$D/task"/T*.md 2>/dev/null | wc -l | pw_trim)"
     if [ "$DASHBOARD_TASKS" != "$ACTUAL_TASKS" ]; then
-      add_error "$f: task table row count ($DASHBOARD_TASKS) doesn't match task files ($ACTUAL_TASKS)"
+      add_error "$f: task table row count ($DASHBOARD_TASKS) doesn't match task files ($ACTUAL_TASKS)" "run: $HERE/pw-doc-sync.sh <slug> --dashboard-only (rebuilds the table from task-file truth)"
     fi
   fi
 }
 
 case "$TYPE" in
+  readme|project) die "user-friendly alias — use 'dashboard' for the README task table or 'all' for the full sweep" ;;
   analysis)
     [ $# -ge 1 ] || die "usage: pw-doc-lint.sh analysis <slug> <topic|--all>"
     if [ "$1" = "--all" ]; then
@@ -201,7 +207,7 @@ case "$TYPE" in
         lint_analysis "$(basename "$topic_file" .md)"
         found=1
       done
-      [ "$found" = 1 ] || add_error "$D/analysis: no analysis docs to lint (--all matched none)"
+      [ "$found" = 1 ] || add_error "$D/analysis: no analysis docs to lint (--all matched none)" "run /pw-analyze to produce them from the context/ notes"
     else
       lint_analysis "$1"
     fi
@@ -215,7 +221,7 @@ case "$TYPE" in
         lint_task "$(basename "$task_file" .md)"
         found=1
       done
-      [ "$found" = 1 ] || add_error "$D/task: no task files to lint (--all matched none)"
+      [ "$found" = 1 ] || add_error "$D/task: no task files to lint (--all matched none)" "run /pw-breakdown to produce them from the approved analysis"
     else
       lint_task "$1"
     fi
@@ -269,7 +275,9 @@ esac
 if [ ${#ERRORS[@]} -gt 0 ]; then
   echo "pw-doc-lint: found ${#ERRORS[@]} error(s):" >&2
   for err in "${ERRORS[@]}"; do
-    echo "  - $err" >&2
+    _msg="${err%%	*}"; _fix="${err#*	}"
+    echo "  - $_msg" >&2
+    [ "$_fix" != "$_msg" ] && echo "      → fix: $_fix" >&2
   done
   exit 1
 fi

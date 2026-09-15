@@ -32,37 +32,35 @@ D="$(proj_dir "$SLUG")"
 PLAN="$D/task/PLAN.md"
 INDEX="$D/context/INDEX.md"
 
-[ -f "$PLAN" ] || die "PLAN.md not found"
+[ -f "$PLAN" ] || die "PLAN.md not found ($PLAN) — run /pw-breakdown <slug> to produce it"
 
 # (ticket resolution is per-task from the task file's `Ticket:` field — below)
 
-# Process each task in PLAN
-while IFS='|' read -r _ task_id repo branch _ _ depends status _; do
-  task_id="$(echo "$task_id" | xargs)"
-  repo="$(echo "$repo" | xargs)"
-  branch="$(echo "$branch" | xargs)"
-  status="$(echo "$status" | xargs)"
-  
-  # Skip non-shippable tasks
+# Process each task in PLAN — column-NAME driven rows (works with both PLAN
+# generations); repo/branch/base/ticket/title read from the task file itself
+# in bold-bullet or legacy line-start shape via pw_field().
+while IFS='|' read -r task_id status; do
+  task_id="$(echo "$task_id" | pw_trim)"
+  status="$(echo "$status" | pw_trim)"
   [[ "$task_id" =~ ^T[0-9]+ ]] || continue
   [ "$status" = "done" ] || continue
+  
+  TASK_FILE="$D/task/$task_id.md"
+  repo=""; branch=""
+  BASE="$(pw_field "$TASK_FILE" 'Base branch' 2>/dev/null || true)"
+  BASE="${BASE//\`/}"; BASE="${BASE%% *}"; BASE="${BASE:-master}"
+  if [ -f "$TASK_FILE" ]; then
+    repo="$(pw_field "$TASK_FILE" Repo)"
+    branch="$(pw_field "$TASK_FILE" Branch)"; branch="${branch//\`/}"; branch="${branch%% *}"
+  fi
   
   # Check for real commits
   HAS_COMMIT="no"
   REPO_DIR="$REPOS_DIR/$repo"
-  if [ -d "$REPO_DIR" ]; then
-    # Get base branch from task file
-    TASK_FILE="$D/task/$task_id.md"
-    BASE=""
-    if [ -f "$TASK_FILE" ]; then
-      BASE="$(grep '^Base branch:' "$TASK_FILE" | sed 's/^Base branch: *//' | xargs)"
-    fi
-    [ -n "$BASE" ] || BASE="master"
-    
-    # Check for commits
+  if [ -n "$repo" ] && [ -d "$REPO_DIR" ] && [ -n "$branch" ]; then
     if git -C "$REPO_DIR" rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
-      COMMIT_COUNT="$(git -C "$REPO_DIR" log --oneline "origin/$BASE..origin/$branch" 2>/dev/null | wc -l | xargs)"
-      if [ "$COMMIT_COUNT" -gt 0 ]; then
+      COMMIT_COUNT="$(git -C "$REPO_DIR" log --oneline "origin/$BASE..origin/$branch" 2>/dev/null | wc -l | pw_trim)"
+      if [ "${COMMIT_COUNT:-0}" -gt 0 ] 2>/dev/null; then
         HAS_COMMIT="yes"
       fi
     fi
@@ -70,30 +68,21 @@ while IFS='|' read -r _ task_id repo branch _ _ depends status _; do
   
   # Check for existing MR
   HAS_MR="no"
-  TASK_FILE="$D/task/$task_id.md"
-  if [ -f "$TASK_FILE" ]; then
-    if grep -q '^## Result' "$TASK_FILE"; then
-      MR_URL="$(awk '/^## Result/{p=1; next} /^## /{p=0} p && /MR:/{print; exit}' "$TASK_FILE" | sed 's/.*MR: *//' | xargs)"
-      if [ -n "$MR_URL" ] && [ "$MR_URL" != "(none)" ]; then
-        HAS_MR="yes"
-      fi
+  if [ -f "$TASK_FILE" ] && grep -q '^## Result' "$TASK_FILE"; then
+    _MR_LINE="$(awk '/^## Result/ {p=1; next} /^## / {p=0} p && /MR:/ {print; exit}' "$TASK_FILE")"
+    MR_URL="$(_pw_url_from_line "$_MR_LINE")"
+    if [ -n "$MR_URL" ] && [ "$MR_URL" != "(none)" ]; then
+      HAS_MR="yes"
     fi
   fi
   
   # Resolve ticket
-  TICKET=""
-  if [ -f "$TASK_FILE" ]; then
-    TICKET="$(grep '^Ticket:' "$TASK_FILE" | sed 's/^Ticket: *//' | xargs || echo "")"
-  fi
+  TICKET="$(pw_field "$TASK_FILE" Ticket 2>/dev/null || true)"
   
   # Extract title from task file
-  TITLE=""
-  if [ -f "$TASK_FILE" ]; then
-    TITLE="$(grep '^# ' "$TASK_FILE" | head -1 | sed 's/^# //' | xargs)"
-  fi
+  TITLE="$(grep '^# ' "$TASK_FILE" 2>/dev/null | head -1 | sed 's/^# //; s/^T[0-9]*[: ]*//' | pw_trim)"
   [ -n "$TITLE" ] || TITLE="$task_id"
   
-  # Output line
   echo "$task_id|$repo|$branch|$BASE|$TICKET|$TITLE|$HAS_COMMIT|$HAS_MR"
   
-done < <(awk '/^## Task( |s)/{p=1; next} p && /^\|/{print}' "$PLAN" | grep -vE '^\|[-: |(]*\|?$' || true)
+done < <(pw_plan_pairs "$PLAN")

@@ -245,3 +245,105 @@ pw_usage() {
   grep '^#' "$0" | grep -v '^#!' | sed -E 's/^# =+$/====/; s/^# ?//'
   exit 0
 }
+
+# --- task-file field readers -------------------------------------------------
+# The canonical task template writes one bold bullet per field
+# ("- **Repo:** svc"); pre-2026-09-15 templates packed two per line
+# ("- **Repo:** svc   **Base branch:** master"), and older projects use the
+# line-start form ("Repo: svc"). pw_field prints the first non-empty value in
+# ANY shape: it cuts the value at the next "**" (packed-line safety) and trims
+# surrounding whitespace.
+pw_field() {
+  awk -v l="$2" '
+    BEGIN { b = "**" l ":**" }
+    {
+      v = ""
+      p = index($0, b)
+      if (p) { v = substr($0, p + length(b)); got = 1 }
+      else if ($0 ~ ("^[ \t]*" l ":")) { sub(("^[ \t]*" l ":[ \t]*"), "", $0); v = $0; got = 1 }
+      else got = 0
+      if (got) {
+        q = index(v, "**"); if (q) v = substr(v, 1, q - 1)
+        gsub(/^[ \t]+/, "", v); gsub(/[ \t]+$/, "", v)
+        if (v != "") { print v; exit }
+      }
+    }' "$1"
+}
+pw_has_field() { [ -n "$(pw_field "$1" "$2")" ]; }
+
+# --- phase reading (canonical machine token) -----------------------------------
+# The dashboard's `- **Status:**` line must START with one token of the lifecycle;
+# real projects have drifted into free prose (e.g. "Status: executed — 11/11 done
+# (verify ✓) awaiting acceptance…"), which every phase gate must handle honestly.
+# pw_phase_token cuts the leading token; pw_phase_hint is the uniform remediation
+# line gates append when the token is missing/unknown.
+PW_VALID_PHASES="context analysis breakdown executing review done"
+pw_phase_token() { printf '%s\n' "${1%%[[:space:]—-]*}"; }
+pw_phase_valid() { case " $PW_VALID_PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+pw_phase_hint() { printf 'fix the Status line: it must start with one of %s (free prose may follow the token) — repair with: pw-lib.sh status <slug> <phase> [--rewind]' "$PW_VALID_PHASES"; }
+
+# pw_trim strips surrounding whitespace from stdin. NEVER use `| xargs` for this:
+# xargs parses quotes, so a title/path containing an unbalanced apostrophe
+# ("adapter's Redis…") fails the trim outright (found via mm-spring-redis-sentinel T01).
+pw_trim() { sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+
+# --- PLAN.md task-table readers (column-NAME driven) ---------------------------
+# Two task-table generations exist: legacy (Task|Repo|Branch|SP|Execute with|
+# Depends on|Status) and current (ID|Title|Repo|depends_on|Group|Execute with|
+# SP|Status|Time|Result). Never read PLAN task rows by positional index again —
+# map the header row's cell names and pull values by that map.
+_pw_plan_map() {
+  awk -F'|' '
+    /^## Task/ { p=1; next }
+    p && /^## / { exit }
+    p && /^[ \t]*\|/ {
+      n = split($0, c, "|")
+      for (i = 1; i <= n; i++) {
+        v = c[i]; gsub(/[ \t`*]/, "", v); V = tolower(v)
+        if (V == "id" || V == "task") idi = i
+        if (V == "status") sti = i
+        if (V == "executewith") bei = i
+      }
+      if (idi || sti || bei) { print (idi+0) " " (sti+0) " " (bei+0); exit }
+    }' "$1"
+}
+# pw_plan_pairs <plan> — "T0n|status" per task row
+pw_plan_pairs() {
+  local spec idi sti bei
+  spec="$(_pw_plan_map "$1")"
+  idi="${spec%% *}"; rest="${spec#* }"; sti="${rest%% *}"; bei="${rest##* }"
+  [ "${idi:-0}" -gt 0 ] 2>/dev/null || return 0
+  [ "${sti:-0}" -gt 0 ] 2>/dev/null || return 0
+  awk -F'|' -v idi="$idi" -v sti="$sti" '
+    /^## Task/ { p=1; next }
+    p && /^## / { exit }
+    p && /^[ \t]*\|/ && !($0 ~ /^[ \t]*\|[ \t:|+-]*\|[ \t]*$/) {
+      id = $(idi + 0); gsub(/[ \t]/, "", id)
+      if (match(id, /T[0-9]+/)) { id = substr(id, RSTART, RLENGTH) } else { id = "" }
+      st = $(sti + 0); gsub(/^[ \t]+/, "", st); gsub(/[ \t]+$/, "", st)
+      if (id ~ /^T[0-9]+/) print id "|" st
+    }' "$1"
+}
+# pw_plan_execs <plan> — Execute-with column value per task row
+pw_plan_execs() {
+  local spec idi sti bei
+  spec="$(_pw_plan_map "$1")"
+  idi="${spec%% *}"; rest="${spec#* }"; sti="${rest%% *}"; bei="${rest##* }"
+  [ "${bei:-0}" -gt 0 ] 2>/dev/null || return 0
+  awk -F'|' -v bei="$bei" '
+    /^## Task/ { p=1; next }
+    p && /^## / { exit }
+    p && /^[ \t]*\|/ && !($0 ~ /^[ \t]*\|[ \t:|+-]*\|[ \t]*$/) {
+      split($0, c, "|")
+      id = c[idi + 0]; gsub(/[ \t]/, "", id)
+      if (match(id, /T[0-9]+/)) { id = substr(id, RSTART, RLENGTH) } else { id = "" }
+      v = $(bei + 0); gsub(/^[ \t]+/, "", v); gsub(/[ \t]+$/, "", v)
+      if (id ~ /^T[0-9]+/) print v
+    }' "$1"
+}
+_pw_url_from_line() {  # $1=line from a Result MR: bullet -> plain URL (falls back to sentinel text)
+  local u
+  u="$(printf '%s' "$1" | grep -oE "https?://[^ )>|\"\`]+" | head -1)"
+  if [ -n "$u" ]; then printf '%s' "$u"; return 0; fi
+  printf '%s' "$1" | sed -E "s/^[-*[:space:]]*[*]*MR[*]*:[[:space:]]*//; s/^[*_[:space:]]+//; s/[[:space:]]+$//"
+}

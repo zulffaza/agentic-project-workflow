@@ -53,7 +53,7 @@ TASK_FILE="$D/task/$TASK_ID.md"
 # Extract MR URL
 MR_URL=""
 if grep -q '^## Result' "$TASK_FILE"; then
-  MR_URL="$(awk '/^## Result/{p=1; next} /^## /{p=0} p && /MR:/{print; exit}' "$TASK_FILE" | sed 's/.*MR: *//' | xargs || echo "")"
+  MR_URL="$(_pw_url_from_line "$(awk '/^## Result/{p=1; next} /^## /{p=0} p && /MR:/{print; exit}' "$TASK_FILE")")"
 fi
 
 [ -n "$MR_URL" ] && [ "$MR_URL" != "(none)" ] || die "no MR URL found in task file"

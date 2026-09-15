@@ -16,17 +16,24 @@ plain run now waits on CI** (up to the timeout below) before it finishes, unlike
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
-<!-- Pre-flight: deterministic checks before agent reasoning -->
+<!-- Pre-flight: deterministic checks before agent reasoning. Mode-scoped on purpose:
+     PUSH needs shippable ('done') tasks; COMMENTS/SYNC need existing MR links but NOT
+     'done' status (acceptance moves past done). Each gate's failure prints a
+     "→ fix:" line — relay it verbatim; do not work around the gate. The task-format
+     lint belongs ONLY to Ship mode step 1. -->
 ```bash
+# Ship (push) mode:
 {{PW_HOME}}/tooling/pw-preflight.sh ship <slug> || exit 1
-{{PW_HOME}}/tooling/pw-doc-lint.sh task <slug> --all || exit 1
+# Comments / sync mode (instead of the line above):
+{{PW_HOME}}/tooling/pw-preflight.sh comments <slug> || exit 1
 ```
 **Reading the pre-flight:** `pw-preflight.sh ship` checks at least one task is actually shippable
-(`done`, verified) in a legal phase; `pw-doc-lint task --all` checks every task file's format
-(`Repo:`/`Branch:`/`## Verify`/`## Result` the ship mechanics below read). Non-zero + `pw-…:`
-stderr = STOP and relay it — never push against an unmet gate. Once confirmed, the mechanical
-halves are scripted: `pw-ship-resolve.sh` (candidate list), `pw-ship-exec.sh` (push + MR),
-`pw-mr-state-batch.sh` / `pw-pipeline-monitor.sh` (state + CI waits) — how to read each:
+(`done`, verified) in a legal phase; `pw-preflight.sh comments` just requires a legal phase plus at
+least one task with a linked MR (nothing to comment on before the first push). Non-zero +
+`pw-…:` stderr = STOP and relay it — never push against an unmet gate. Once confirmed, the
+mechanical halves are scripted:
+`pw-ship-resolve.sh` (candidate list), `pw-ship-exec.sh` (push + MR), `pw-mr-state-batch.sh` /
+`pw-pipeline-monitor.sh` (state + CI waits) — how to read each:
 `{{PW_HOME}}/tooling/docs/scripts/ship-and-sync.md`.
 
 Publishing is **outward-facing** — this is the explicit "make it public" step, kept separate from
@@ -34,7 +41,12 @@ Publishing is **outward-facing** — this is the explicit "make it public" step,
 task; here we push branches and open MRs.
 
 ## Ship mode (default)
-1. Determine which tasks are shippable — **run the resolver, don't re-derive it by hand**:
+1. **Task-format gate, then candidates.** First
+   `{{PW_HOME}}/tooling/pw-doc-lint.sh task <slug> --all || exit 1` — push mechanics read exactly
+   the fields lint checks (`Repo`/`Branch`/`## Verify`/`## Result`), so a malformed task file must
+   stop the push (relay stderr; the named task needs its fields completed — usually by re-running
+   `/pw-breakdown` or a small edit + `/pw-review`). Then determine which tasks are shippable —
+   **run the resolver, don't re-derive it by hand**:
    ```bash
    {{PW_HOME}}/tooling/pw-ship-resolve.sh <slug>
    ```

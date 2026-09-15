@@ -43,6 +43,7 @@ Checks **all** gates for one command and fails fast — run it before invoking t
 $PW_HOME/tooling/pw-preflight.sh execute      <slug>   # PLAN approved, phase valid, scope/model resolvable
 $PW_HOME/tooling/pw-preflight.sh breakdown    <slug>   # analysis reviews approved, RFC open items resolved
 $PW_HOME/tooling/pw-preflight.sh ship         <slug>   # shippable tasks exist, verify passed
+$PW_HOME/tooling/pw-preflight.sh comments     <slug>   # ≥1 task has a linked MR (for /pw-ship <slug> comments — no 'done' requirement)
 $PW_HOME/tooling/pw-preflight.sh close        <slug>   # all tasks accepted
 $PW_HOME/tooling/pw-preflight.sh review <slug> [phase] # review files exist for phase: analysis|plan|task-plan|task-exec
 ```
@@ -51,7 +52,8 @@ $PW_HOME/tooling/pw-preflight.sh review <slug> [phase] # review files exist for 
 it names the gate *and* the fix, e.g.:
 
 ```
-pw-preflight: PLAN review gate not approved (run /pw-review to approve)
+pw-preflight: PLAN review gate not approved
+  → fix: approve it in <project>/task/review/PLAN.review.md (## Sign-off row) or run /pw-review <slug>
 ```
 
 **Reading failures:** every message is terminal for that command — do the named action, re-run.

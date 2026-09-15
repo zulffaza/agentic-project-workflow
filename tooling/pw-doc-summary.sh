@@ -36,10 +36,10 @@ case "$TYPE" in
     [ $# -ge 1 ] || die "usage: pw-doc-summary.sh analysis <slug> <topic>"
     TOPIC="$1"
     f="$D/analysis/$TOPIC.md"
-    [ -f "$f" ] || die "analysis doc not found: $f"
+    [ -f "$f" ] || die "analysis doc not found: $f — /pw-analyze produces analysis docs (ls $D/analysis)"
     
     # Extract §1 problem (first paragraph after §1 heading)
-    PROBLEM="$(awk '/^# 1\. Problem/{p=1; next} /^# /{p=0} p && /^$/{if(got_para) exit; next} p{got_para=1; print; exit}' "$f")"
+    PROBLEM="$(awk '/^#{1,6}[ \t]+1\./{p=1; next} /^#{1,2}[ \t]/{p=0} p && /^$/{if(got_para) exit; next} p{got_para=1; print; exit}' "$f")"
     [ -n "$PROBLEM" ] || PROBLEM="(summary unavailable — read the doc)"
     echo "Problem: $PROBLEM"
     
@@ -49,7 +49,7 @@ case "$TYPE" in
     echo "Chosen approach: $CHOSEN"
     
     # Extract affected repos
-    REPOS="$(awk '/^# 3\. Affected repos/{p=1; next} /^# /{p=0} p && /^- /{gsub(/^- `?/, ""); gsub(/`?.*/, ""); print}' "$f" | tr '\n' ',' | sed 's/,$//')"
+    REPOS="$(awk '/^#{1,6}[ \t]+3\./{p=1; next} /^#{1,2}[ \t]/{p=0} p && /^- /{gsub(/^- `?/, ""); gsub(/`?.*/, ""); print}' "$f" | tr '\n' ',' | sed 's/,$//')"
     [ -n "$REPOS" ] || REPOS="(none listed)"
     echo "Affected repos: $REPOS"
     ;;
@@ -58,26 +58,27 @@ case "$TYPE" in
     [ $# -ge 1 ] || die "usage: pw-doc-summary.sh task <slug> <task-id>"
     TASK_ID="$1"
     f="$D/task/$TASK_ID.md"
-    [ -f "$f" ] || die "task file not found: $f"
+    [ -f "$f" ] || die "task file not found: $f — check the task id against $D/task/T*.md"
     
-    REPO="$(grep '^Repo:' "$f" | sed 's/^Repo: *//' || echo "(not set)")"
-    echo "Repo: $REPO"
+    REPO="$(pw_field "$f" Repo)"
+    echo "Repo: ${REPO:-(not set)}"
     
-    BRANCH="$(grep '^Branch:' "$f" | sed 's/^Branch: *//' || echo "(not set)")"
-    echo "Branch: $BRANCH"
+    BRANCH="$(pw_field "$f" Branch)"; BRANCH="${BRANCH//\`/}"; BRANCH="${BRANCH%% *}"
+    echo "Branch: ${BRANCH:-(not set)}"
     
-    # Extract goal from first step
-    GOAL="$(awk '/^## Steps/{p=1; next} /^## /{p=0} p && /^[0-9]+\./{gsub(/^[0-9]+\. */, ""); print; exit}' "$f")"
+    # Goal: current template has a ## Goal section; legacy tasks carry it in step 1
+    GOAL="$(awk '/^## Goal/{p=1; next} /^#/{p=0} p && NF {print; exit}' "$f")"
+    [ -n "$GOAL" ] || GOAL="$(awk '/^## Steps/{p=1; next} /^#/{p=0} p && /^[0-9]+\./{gsub(/^[0-9]+\. */, ""); print; exit}' "$f")"
     [ -n "$GOAL" ] || GOAL="(no steps defined)"
     echo "Goal: $GOAL"
     
-    SP="$(grep '^Story points:' "$f" | sed 's/^Story points: *//' || echo "?")"
-    echo "SP: $SP"
+    SP="$(pw_field "$f" 'Story points')"
+    echo "SP: ${SP:-?}"
     ;;
     
   plan)
     f="$D/task/PLAN.md"
-    [ -f "$f" ] || die "PLAN.md not found: $f"
+    [ -f "$f" ] || die "PLAN.md not found: $f — run /pw-breakdown first"
     
     # Count tasks
     TASK_COUNT="$(awk '/^## Task( |s)/{p=1; next} p && /^\|.*T[0-9]/{count++} END{print count+0}' "$f")"
@@ -86,10 +87,13 @@ case "$TYPE" in
     TOTAL_SP="$(awk '/^## Task( |s)/{p=1; next} p && /^\|.*T[0-9]/{split($0,a,"|"); for(i in a){gsub(/ /,"",a[i]); if(a[i] ~ /^[0-9]+$/){sum+=a[i]}}} END{print sum+0}' "$f")"
     
     # Extract repos
-    REPOS="$(awk '/^## Repos in scope/{p=1; next} /^## /{p=0} p' "$f" | grep -oE '`[^`]+`' | tr -d '`' | grep -vx Repo | paste -sd, -)"
+    REPOS="$(awk -F'|' '/^## Repo( manifest|s in scope)/{p=1; next} /^## /{p=0} p && /^[ \t]*\|/ && !(/^[ \t]*\|[ \t:|-]+\|[ \t]*$/) { v = $2; gsub(/[ \t`*]/, "", v); if (v != "" && tolower(v) != "repo") print v }' "$f" | paste -sd, -)"
+    [ -n "$REPOS" ] || REPOS="(none listed)"
     
     # Extract produced by
-    PRODUCED_BY="$(grep '^\*\*Produced by:\*\*' "$f" | sed 's/^\*\*Produced by:\*\* *//' || echo "(not set)")"
+    PRODUCED_BY="$(pw_field "$f" 'Produced by')"; PRODUCED_BY="${PRODUCED_BY//\`/}"
+    PRODUCED_BY="${PRODUCED_BY%%—*}"
+    [ -n "$PRODUCED_BY" ] || PRODUCED_BY="(not set)"
     
     echo "Tasks: $TASK_COUNT (ΣSP=$TOTAL_SP)"
     echo "Repos: $REPOS"

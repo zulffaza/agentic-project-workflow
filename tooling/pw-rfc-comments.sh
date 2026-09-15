@@ -46,7 +46,7 @@ fi
 [ -f "$META" ] || die "rfc/META.md not found"
 
 # Resolve backend target
-TARGET="$(grep '^Target:' "$META" | sed 's/^Target: *//' | xargs || echo "")"
+TARGET="$(grep '^Target:' "$META" | sed 's/^Target: *//' | pw_trim)"
 [ -n "$TARGET" ] || die "no Target: in rfc/META.md"
 
 # Fetch comments from backend (platform-specific)

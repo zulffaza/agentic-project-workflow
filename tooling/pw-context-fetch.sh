@@ -37,14 +37,14 @@ done
 D="$(proj_dir "$SLUG")"
 INDEX="$D/context/INDEX.md"
 
-[ -f "$INDEX" ] || die "context/INDEX.md not found"
+[ -f "$INDEX" ] || die "context/INDEX.md not found — run /pw-context <slug> to build the context pack"
 
 ERRORS=()
 SEP_RE='^[-: ]+$'   # markdown table separator cells ("---", ":---:", …)
 
 # Extract URLs from INDEX.md
 while IFS='|' read -r file _what _source _date _trust; do
-  file="$(echo "$file" | xargs)"
+  file="$(echo "$file" | pw_trim)"
   link="$file"   # provenance table col 1 = "File / link" — filename, bare URL, ticket key, or md link
   
   # Skip header/separator rows

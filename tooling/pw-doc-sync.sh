@@ -50,64 +50,130 @@ PLAN="$D/task/PLAN.md"
 
 sync_dashboard() {
   echo "Syncing dashboard (README.md)..."
+  [ -f "$PLAN" ] || { echo "PLAN.md not found, skipping"; return 0; }
   
-  # Sync task status table
-  if [ -f "$PLAN" ]; then
-    # Extract task statuses from task files
-    while IFS='|' read -r _ task_id _ _ _ _ _ status _; do
-      task_id="$(echo "$task_id" | xargs)"
-      status="$(echo "$status" | xargs)"
-      [[ "$task_id" =~ ^T[0-9]+ ]] || continue
-      
-      # Get actual status from task file
-      TASK_FILE="$D/task/$task_id.md"
-      if [ -f "$TASK_FILE" ]; then
-        ACTUAL_STATUS="$(grep '^Status:' "$TASK_FILE" | sed 's/^Status: *//' | xargs || echo "$status")"
-        
-        # Update dashboard if different
-        if [ "$ACTUAL_STATUS" != "$status" ]; then
-          # Update README task table
-          awk -v tid="$task_id" -v new_status="$ACTUAL_STATUS" '
-            BEGIN { in_table=0 }
-            /^## Task( |s)/ { in_table=1; print; next }
-            /^## / { in_table=0 }
-            in_table && $0 ~ "\\|" tid "\\|" {
-              gsub(/\| *(todo|in-progress|done|accepted|verify-failed) *\|/, "| " new_status " |")
-            }
-            { print }
-          ' "$README" > "$README.tmp" && mv "$README.tmp" "$README"
-        fi
-      fi
-    done < <(awk '/^## Task( |s)/{p=1; next} p && /^\|/{print}' "$PLAN" | grep -vE '^\|[-: |(]*\|?$' || true)
-  fi
+  local WORK; WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' RETURN
   
-  # Sync MR table
-  for task_file in "$D/task"/T*.md; do
-    [ -f "$task_file" ] || continue
-    task_id="$(basename "$task_file" .md)"
-    
-    # Extract MR URL from task file
-    MR_URL=""
-    if grep -q '^## Result' "$task_file"; then
-      MR_URL="$(awk '/^## Result/{p=1; next} /^## /{p=0} p && /MR:/{print; exit}' "$task_file" | sed 's/.*MR: *//' | xargs || echo "")"
-    fi
-    
-    # Update dashboard MR table if needed
-    if [ -n "$MR_URL" ] && [ "$MR_URL" != "(none)" ]; then
-      if ! grep -q "$task_id" "$README" || ! grep -A5 "$task_id" "$README" | grep -q "$MR_URL"; then
-        # Add or update MR table row
-        if grep -q '^## Merge requests' "$README"; then
-          if ! grep -q "$task_id" "$README"; then
-            # Add new row
-            awk -v tid="$task_id" -v mr="$MR_URL" '
-              /^## Merge requests/ { print; print "| " tid " | " mr " | open |"; next }
-              { print }
-            ' "$README" > "$README.tmp" && mv "$README.tmp" "$README"
-          fi
-        fi
-      fi
-    fi
+  # ---- ground truth per task (from the task file; PLAN status is the tie-break) ----
+  local plan_st="$WORK/plan-status" TASKROWS="$WORK/task-rows" MRROWS="$WORK/mr-rows"
+  pw_plan_pairs "$PLAN" | tr '|' '\t' > "$plan_st"
+  : > "$TASKROWS"; : > "$MRROWS"
+  local tf id st repo branch base title line mr
+  for tf in "$D/task"/T*.md; do
+    [ -f "$tf" ] || continue
+    id="$(basename "$tf" .md)"; [[ "$id" =~ ^T[0-9]+ ]] || continue
+    st="$(pw_field "$tf" Status)"; [ -n "$st" ] || st="$(awk -F'\t' -v i="$id" '$1==i{print $2; exit}' "$plan_st")"; st="${st:-todo}"
+    repo="$(pw_field "$tf" Repo)"; repo="${repo//\`/}"
+    branch="$(pw_field "$tf" Branch)"; branch="${branch//\`/}"; branch="${branch%% *}"
+    base="$(pw_field "$tf" 'Base branch')"; base="${base//\`/}"; base="${base%% *}"; [ -n "$base" ] || base="—"
+    title="$(grep '^# ' "$tf" | head -1 | sed 's/^# //; s/^T[0-9]*[: ]*//' | pw_trim)"; [ -n "$title" ] || title="—"
+    mr="$(_pw_url_from_line "$(awk '/^## Result/{p=1; next} /^## /{p=0} p && /MR:/{print; exit}' "$tf")")"
+    [ "$mr" = "(none)" ] && mr="—"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$st" "$repo" "$branch" "$base" "$title" "$mr" >> "$TASKROWS"
   done
+  
+  # ---- table rebuilder: keeps the existing header+separator, regenerates data rows;
+  #      cells we can derive are taken from TASKROWS, everything else (Notes/State/Build/…)
+  #      is preserved per-task-id from the old rows; unknown-to-either cells get —.
+  _rebuild_table() {
+    local hre="$1" bounds hdrno dstart dend HDR CELLS n i name line id v
+    bounds="$(awk -v hre="$hre" '
+      BEGIN { want=0; state=0 }
+      /^## / { if (!want && $0 ~ hre) { want=1; sec=NR; next } else if (want && state>=1) { print sec, hdr, (dstartNR ? dstartNR : hdr+2), NR-1; exit } else if (want && state==0) { want=0 } }
+      want && state==0 && /^[ \t]*\|/ { hdr=NR; state=1; next }
+      want && state==1 { # separator expected on hdr+1; data after
+        if (NR <= hdr+1) { dstartNR = NR+1 }
+        if ($0 !~ /^[ \t]*\|/ && $0 !~ /^[ \t]*$/) { if (!dendFound) { print sec, hdr, dstartNR, NR-1; dendFound=1 } }
+      }
+      END { if (want && state==1 && !dendFound) print sec, hdr, (dstartNR ? dstartNR : hdr+2), NR }' "$README")"
+    [ -n "$bounds" ] || { echo "  (no table under /$hre/ — left untouched)"; return 0; }
+    set -- $bounds; hdrno="$2"; dstart="$3"; dend="$4"
+    HDR="$(sed -n "${hdrno}p" "$README")"
+    
+    # header cell names (lowercased, non-code stripped); positional fields after IFS split on |
+    CELLS="$(printf '%s' "$HDR" | awk -F'|' '{ for (i = 2; i < NF; i++) { v = $i; gsub(/[ \t`*]/, "", v); print tolower(v) } }')"
+    
+    # preserved values from existing data rows: "<id>\t<name>\t<value>"
+    local PRES="$WORK/pres.${hre//[^A-Za-z]/}"
+    : > "$PRES"
+    if [ "$dend" -ge "$dstart" ]; then
+      printf '%s\n' "$CELLS" > "$WORK/names"
+      sed -n "${dstart},${dend}p" "$README" | awk -F'|' -v namesf="$WORK/names" '
+        BEGIN { n = 0; while ((getline x < namesf) > 0) NAME[++n] = x }
+        { id = $2; gsub(/[ \t]/, "", id); if (id !~ /^T[0-9]+/) next
+          for (i = 0; i < n; i++) { v = $(i + 2); gsub(/^[ \t]+/, "", v); gsub(/[ \t|]+$/, "", v); print id "\t" NAME[i + 1] "\t" v } }' > "$PRES"
+    fi
+    
+    # emit new data rows
+    local OUT="$WORK/newrows.${hre//[^A-Za-z]/}"
+    : > "$OUT"
+    while IFS=$'\t' read -r id st repo branch base title mr; do
+      local row ln col val
+      row=""
+      while IFS= read -r col; do
+        case "$col" in
+          id|task) val="$id" ;;
+          status) val="$st" ;;
+          repo) val="$repo" ;;
+          branch) val="$branch" ;;
+          title) val="$title" ;;
+          mr) val="$mr" ;;
+          "target branch"|"target"|"base branch") val="$base" ;;
+          *) val="$(awk -F'\t' -v i="$id" -v c="$col" '$1==i && $2==c { found=1; print $3 } END { if (!found) print "" }' "$PRES")"
+             [ -n "$val" ] || val="—" ;;
+        esac
+        row="$row| $val "
+      done <<< "$CELLS"
+      echo "${row}|" >> "$OUT"
+    done < "$TASKROWS"
+    
+    # splice: [1..dstart-1] + newrows + [dend+1..]
+    local TMP="$WORK/README"
+    { sed -n "1,$((dstart-1))p" "$README"; cat "$OUT"; sed -n "$((dend+1)),\$p" "$README"; } > "$TMP"
+    mv "$TMP" "$README"
+  }
+  
+  _rebuild_table '^## Task( status|s| table)' 
+  
+  
+  # ---- MR table: append-only rows for tasks with a Result MR (preserves State/Build) ----
+  while IFS=$'\t' read -r id st repo branch base title mr; do
+    [ "$mr" != "—" ] && [ -n "$mr" ] || continue
+    if ! grep -qE "^\|[ \t]*$id[ \t]*\|" "$README"; then
+      local mline hdr_cells c col row val
+      mline=""
+      hdr_cells="$(awk -F'|' '/^## Merge requests/{p=1;next} p && /^## /{exit} p && /^[ \t]*\|/ && NF>2 { for (i=2;i<NF;i++){ v=$i; gsub(/[ \t`*]/,"",v); print tolower(v) } exit }' "$README")"
+      row=""
+      while IFS= read -r col; do
+        case "$col" in
+          task|id) val="$id" ;;
+          repo) val="$repo" ;;
+          mr) val="$mr" ;;
+          "target branch") val="$base" ;;
+          state) val="open" ;;
+          build) val="—" ;;
+          *) val="—" ;;
+        esac
+        row="$row| $val "
+      done <<< "$hdr_cells"
+      # insert after the separator row of the MR table
+      awk -v ins="${row}|" '/^## Merge requests/{p=1} p && /^[ \t]*\|[-: |]+\|$/ { print; print INS; p=0; next } { print }' INS="${row}|" "$README" > "$WORK/re" && mv "$WORK/re" "$README"
+    fi
+  done < "$TASKROWS"
+  
+  # refresh State for MR rows from PRESERVED old values is automatic; URL changes:
+  while IFS=$'\t' read -r id st repo branch base title mr; do
+    [ "$mr" != "—" ] && [ -n "$mr" ] || continue
+    grep -qE "^\|[ \t]*$id[ \t]*\|" "$README" || continue
+    case "$mr" in *://*) awk -v url="$mr" '
+        /^## Merge requests/{ p=1; print; next } p && /^## /{ p=0; print; next }
+        p && /^[ \t]*\|[ \t]*'"$id"'[ \t]*\|/ {
+          n = split($0, c, "|")
+          for (i = 2; i < n; i++) { h = c[i]; gsub(/[ \t`*]/, "", h); if (tolower(h) == "mr") c[i] = " " url " " }
+          out = ""; for (i = 1; i <= n; i++) out = out c[i] (i < n ? "|" : ""); print out; next
+        }
+        { print }' "$README" > "$WORK/re" && mv "$WORK/re" "$README" ;; esac
+  done < "$TASKROWS"
   
   echo "Dashboard sync complete"
 }
@@ -118,11 +184,11 @@ sync_plan() {
   [ -f "$PLAN" ] || { echo "PLAN.md not found, skipping"; return 0; }
   
   # Sync task count and SP totals
-  TASK_COUNT="$(ls -1 "$D/task"/T*.md 2>/dev/null | wc -l | xargs)"
+  TASK_COUNT="$(ls -1 "$D/task"/T*.md 2>/dev/null | wc -l | pw_trim)"
   TOTAL_SP=0
   for task_file in "$D/task"/T*.md; do
     [ -f "$task_file" ] || continue
-    SP="$(grep '^Story points:' "$task_file" | sed 's/^Story points: *//' | xargs || echo "0")"
+    SP="$(pw_field "$task_file" 'Story points')"; SP="${SP%% *}"
     [[ "$SP" =~ ^[0-9]+$ ]] && TOTAL_SP=$((TOTAL_SP + SP))
   done
   
@@ -144,9 +210,9 @@ sync_tasks() {
     [ -f "$task_file" ] || continue
     task_id="$(basename "$task_file" .md)"
     
-    REPO="$(grep '^Repo:' "$task_file" | sed 's/^Repo: *//' | xargs || echo "")"
-    BRANCH="$(grep '^Branch:' "$task_file" | sed 's/^Branch: *//' | xargs || echo "")"
-    BASE="$(grep '^Base branch:' "$task_file" | sed 's/^Base branch: *//' | xargs || echo "master")"
+    REPO="$(pw_field "$task_file" Repo)"
+    BRANCH="$(pw_field "$task_file" Branch)"; BRANCH="${BRANCH//\`/}"
+    BASE="$(pw_field "$task_file" 'Base branch')"; BASE="${BASE//\`/}"; BASE="${BASE%% *}"; BASE="${BASE:-master}"
     
     [ -n "$REPO" ] && [ -n "$BRANCH" ] || continue
     
@@ -156,7 +222,7 @@ sync_tasks() {
     # Check for commits
     COMMIT_COUNT=0
     if git -C "$REPO_DIR" rev-parse --verify "origin/$BRANCH" >/dev/null 2>&1; then
-      COMMIT_COUNT="$(git -C "$REPO_DIR" log --oneline "origin/$BASE..origin/$BRANCH" 2>/dev/null | wc -l | xargs || echo "0")"
+      COMMIT_COUNT="$(git -C "$REPO_DIR" log --oneline "origin/$BASE..origin/$BRANCH" 2>/dev/null | wc -l | pw_trim)"
     fi
     
     # Update Result section if needed

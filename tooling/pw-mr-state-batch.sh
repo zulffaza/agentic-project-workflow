@@ -31,14 +31,13 @@ TASK_IDS=("$@")
 D="$(proj_dir "$SLUG")"
 PLAN="$D/task/PLAN.md"
 
-[ -f "$PLAN" ] || die "PLAN.md not found"
+[ -f "$PLAN" ] || die "PLAN.md not found ($PLAN) — run /pw-breakdown <slug> to produce it"
 
 # If no task IDs specified, use all tasks from PLAN
 if [ ${#TASK_IDS[@]} -eq 0 ]; then
-  while IFS='|' read -r _ task_id _; do
-    task_id="$(echo "$task_id" | xargs)"
-    [[ "$task_id" =~ ^T[0-9]+ ]] && TASK_IDS+=("$task_id")
-  done < <(awk '/^## Task( |s)/{p=1; next} p && /^\|/{print}' "$PLAN" | grep -vE '^\|[-: |(]*\|?$' || true)
+  while IFS='|' read -r task_id _status; do
+    [ -n "$task_id" ] && TASK_IDS+=("$task_id")
+  done < <(pw_plan_pairs "$PLAN")
 fi
 
 # Check MR state for each task

@@ -82,7 +82,7 @@ COMMIT_COUNT=0
 FILES_CHANGED=0
 
 if git -C "$REPO_DIR" rev-parse --verify "origin/$BASE" >/dev/null 2>&1; then
-  COMMIT_COUNT="$(git -C "$REPO_DIR" log --oneline "origin/$BASE..$BRANCH" 2>/dev/null | wc -l | xargs || echo "0")"
+  COMMIT_COUNT="$(git -C "$REPO_DIR" log --oneline "origin/$BASE..$BRANCH" 2>/dev/null | wc -l | pw_trim)"
   FILES_CHANGED="$(git -C "$REPO_DIR" diff --stat "origin/$BASE...$BRANCH" 2>/dev/null | tail -1 | grep -o '[0-9]* file' | sed 's/ file//' || echo "0")"
 fi
 

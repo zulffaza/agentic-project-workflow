@@ -39,11 +39,11 @@ PLAN="$D/task/PLAN.md"
 [ -f "$PLAN" ] || die "PLAN.md not found"
 
 # Extract task info
-REPO="$(grep '^Repo:' "$TASK_FILE" | sed 's/^Repo: *//' | xargs)"
-BRANCH="$(grep '^Branch:' "$TASK_FILE" | sed 's/^Branch: *//' | xargs)"
-BASE="$(grep '^Base branch:' "$TASK_FILE" | sed 's/^Base branch: *//' | xargs)"
-TICKET="$(grep '^Ticket:' "$TASK_FILE" | sed 's/^Ticket: *//' | xargs || echo "")"
-TITLE="$(grep '^# ' "$TASK_FILE" | head -1 | sed 's/^# //' | xargs)"
+REPO="$(pw_field "$TASK_FILE" Repo)"
+BRANCH="$(pw_field "$TASK_FILE" Branch)"; BRANCH="${BRANCH//\`/}"; BRANCH="${BRANCH%% *}"
+BASE="$(pw_field "$TASK_FILE" 'Base branch')"; BASE="${BASE//\`/}"; BASE="${BASE%% *}"
+TICKET="$(grep '^Ticket:' "$TASK_FILE" | sed 's/^Ticket: *//' | pw_trim)"
+TITLE="$(grep '^# ' "$TASK_FILE" | head -1 | sed 's/^# //' | pw_trim)"
 
 [ -n "$REPO" ] || die "Repo not set in task file"
 [ -n "$BRANCH" ] || die "Branch not set in task file"
@@ -59,7 +59,7 @@ git -C "$REPO_DIR" push origin "$BRANCH" || die "push failed"
 # Check for existing MR
 MR_URL=""
 if grep -q '^## Result' "$TASK_FILE"; then
-  MR_URL="$(awk '/^## Result/{p=1; next} /^## /{p=0} p && /MR:/{print; exit}' "$TASK_FILE" | sed 's/.*MR: *//' | xargs || echo "")"
+  MR_URL="$(_pw_url_from_line "$(awk '/^## Result/{p=1; next} /^## /{p=0} p && /MR:/{print; exit}' "$TASK_FILE")")"
 fi
 
 # Determine forge CLI — by the repo's actual origin host (docs/forges.md resolution, simplified:
