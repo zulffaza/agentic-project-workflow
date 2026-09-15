@@ -6,32 +6,41 @@
      You comment via task/review/<T0n>.review.md (OPTIONAL — only if you want changes), not by
      editing this file. Legend: 🤖 · 🧑. -->
 
-- **Repo:** <repo>            **Base branch:** <branch>
+<!-- FIELD-BULLET RULE: one field per line, value only — never prose, examples, or notes in the
+     same bullet as the value (guidance belongs in comments like this one, below the bullet).
+     Tooling parses these as machine fields; anything after the value is parsed as the value. -->
+- **Repo:** <repo>
+- **Base branch:** <branch>
 - **Branch:** `agent/<project-slug>/<T0n>-<slug>`
 - **Worktree:** `worktree/<repo>/<T0n>-<slug>/`
-- **depends_on:** <T-ids or none>          **Parallel group:** <Gn>
-- **Landing unit:** <short-name or none — OPTIONAL. Only when this task's MR must merge as a set
-  with other tasks' MRs (one logical change split by repo, not independently shippable). Every task
-  in the set shares the same name; PLAN gets a `## Landing units` note; `/pw-ship` names the set in
-  each MR description. If it can be a single task/MR, it should be — a landing unit is the fallback
-  for cross-repo coupling, not a license to slice one change into many MRs.>
+- **depends_on:** <T-ids or none>
+- **Parallel group:** <Gn or none>
+<!-- Landing unit: OPTIONAL — only when this task's MR must merge as a set with other tasks'
+     MRs (one logical change split by repo, not independently shippable). Every task in the set
+     shares the same name; PLAN gets a `## Landing units` note; `/pw-ship` names the set in each
+     MR description. If it can be a single task/MR, it should be — a landing unit is the fallback
+     for cross-repo coupling, not a license to slice one change into many MRs. -->
+- **Landing unit:** <short-name or none>
 - **Status:** todo | in-progress | verify-failed | done | accepted
-- **Execute with:** <provider:model-or-agent> — e.g. `claude:sonnet`, `claude:claude-opus-4-8`
-  (pinned), `kilo:command_code/<model>`, `cursor:gpt-5.6-sol-high`; or the same-provider
-  `pw-executor` def. A plain
-  `provider:model` = that provider's default agent on this task file as its work order (portable
-  across providers); a named sub-agent only resolves when the orchestrator shares its provider.
-  Defaults to the same provider that ran the breakdown (`PLAN.md` → "Produced by") — route
-  elsewhere only when this task genuinely needs a stronger/cheaper/open-weight model, and say why
-  in `Why:`. Aliases (`opus`/`sonnet`/…) track the *latest* version — pin the full name when
-  reproducibility matters. Full detail: `{{PW_HOME}}/tooling/docs/providers.md`.
-- **Effort:** <low|medium|high|xhigh|max — optional> — reasoning effort. Maps to `--effort`
-  (claude) / `--variant` (kilo) / nearest catalog-id variant or `[effort=…]` bracket param (cursor).
-  Omit for the CLI default.
-- **Thinking:** <on|off — optional> — kilo `--thinking`; cursor via a `-thinking-` id variant.
-  Claude: omit (effort covers reasoning).
+<!-- Execute with: e.g. `claude:sonnet`, `claude:claude-opus-4-8` (pinned),
+     `kilo:command_code/<model>`, `cursor:gpt-5.6-sol-high`; or the same-provider `pw-executor`
+     def. A plain `provider:model` = that provider's default agent on this task file as its work
+     order (portable across providers); a named sub-agent only resolves when the orchestrator
+     shares its provider. Defaults to the same provider that ran the breakdown (`PLAN.md` →
+     "Produced by") — route elsewhere only when this task genuinely needs a stronger/cheaper/
+     open-weight model, and say why in `Why:`. Aliases (`opus`/`sonnet`/…) track the *latest*
+     version — pin the full name when reproducibility matters.
+     Full detail: `{{PW_HOME}}/tooling/docs/providers.md`. -->
+- **Execute with:** <provider:model-or-agent>
+<!-- Effort: reasoning effort. Maps to `--effort` (claude) / `--variant` (kilo) / nearest
+     catalog-id variant or `[effort=…]` bracket param (cursor). Omit the bullet for the CLI
+     default. Thinking: kilo `--thinking`; cursor via a `-thinking-` id variant; claude: omit
+     (effort covers reasoning). -->
+- **Effort:** <low|medium|high|xhigh|max>
+- **Thinking:** <on|off>
 - **Why:** <one line — why this model/agent/effort fits this task>
-- **Story points:** <n> — manual-effort estimate (2 SP = 1 person-day). [🤖 set at breakdown]
+<!-- Story points: manual-effort estimate, 2 SP = 1 person-day. [🤖 set at breakdown] -->
+- **Story points:** <n>
 - **Actually used:** <filled by the orchestrator at run time — e.g. `kilo:command_code/MiniMaxAI/MiniMax-M3 --variant high`>
 
 > You can override the model/agent for this task when you kick off execution

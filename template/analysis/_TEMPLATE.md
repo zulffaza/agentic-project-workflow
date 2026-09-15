@@ -28,9 +28,15 @@
      on rewrite, forcing a wasted re-read-and-retry cycle instead of a clean one-shot edit. -->
 
 - **Status:** draft | in-review | approved
-- **Author:** <agent/you>   **Provider:** <the agent/CLI this ran under, e.g. `kilo` / `claude` / `cursor`>
-  **Model:** <provider:model actually run; if drafted by a spawned `pw-analyst`, copy its
-  `Model used:` footer — unset row ⇒ provider default; this is what the §8.5 ledger compares to>
+<!-- FIELD-BULLET RULE: one field per line, value only — tooling parses these as machine
+     fields; anything after the value is parsed as the value. -->
+- **Author:** <agent/you>
+<!-- Provider: the agent/CLI this ran under (kilo / claude / cursor / …).
+     Model: provider:model actually run; if drafted by a spawned `pw-analyst`, copy its
+     `Model used:` footer — unset row ⇒ provider default; this is what the §8.5 ledger compares
+     to. -->
+- **Provider:** <provider id>
+- **Model:** <provider:model>
 - **Date:** <YYYY-MM-DD HH:MM>  <!-- timestamp ONLY — never a changelog; a round's summary is a
      Decisions-log line (§5.1), not a Date-field essay -->
 - **Context used:** <list the context/ files & INDEX rows this is based on — for any bare external
