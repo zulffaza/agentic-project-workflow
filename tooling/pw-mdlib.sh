@@ -23,8 +23,10 @@
 #                                        table under a heading matching the ERE (stops at the
 #                                        next "## " heading; 0 = no rows)
 #   md_insert_lines_after <file> <lineno> <lines-file>   splice lines-file in AFTER lineno
+#   md_insert_lines_before <file> <lineno> <lines-file>  splice lines-file in BEFORE lineno
 #   md_replace_line <file> <lineno> <lines-file>         replace exactly one line with the
 #                                        lines-file content
+#   md_replace_range <file> <start> <end> <lines-file>   replace an inclusive line range
 #
 # Rules: append-or-splice only — never rewrite content in place; callers keep the
 # doctrine (human text is never edited). bash 3.2 compatible (macOS default).
@@ -177,8 +179,21 @@ md_insert_lines_after() {
   { head -n "$n" "$f"; cat "$src"; tail -n "+$((n+1))" "$f"; } > "$f.tmp" && mv "$f.tmp" "$f"
 }
 
+# Splice the contents of <lines-file> into <file> BEFORE line <lineno> (original-file
+# numbering). Same head/tail splice reasoning as md_insert_lines_after.
+md_insert_lines_before() {
+  local f="$1" n="$2" src="$3"
+  { head -n "$((n-1))" "$f"; cat "$src"; tail -n "+${n}" "$f"; } > "$f.tmp" && mv "$f.tmp" "$f"
+}
+
 # Replace exactly line <lineno> of <file> with the contents of <lines-file>.
 md_replace_line() {
   local f="$1" n="$2" src="$3"
   { head -n "$((n-1))" "$f"; cat "$src"; tail -n "+$((n+1))" "$f"; } > "$f.tmp" && mv "$f.tmp" "$f"
+}
+
+# Replace the inclusive line range [<start>,<end>] of <file> with the contents of <lines-file>.
+md_replace_range() {
+  local f="$1" s="$2" e="$3" src="$4"
+  { head -n "$((s-1))" "$f"; cat "$src"; tail -n "+$((e+1))" "$f"; } > "$f.tmp" && mv "$f.tmp" "$f"
 }
