@@ -8,7 +8,10 @@ bundle-root [`../AGENTS.md`](../AGENTS.md) covers them.
 
 Start here, in order: the doctrine below, then the change protocol
 ([`docs/testing.md`](./docs/testing.md)), then a script's usage contract
-([`docs/scripts/README.md`](./docs/scripts/README.md)).
+([`docs/scripts/README.md`](./docs/scripts/README.md)). Adding a script, command, or operator?
+Read [`docs/conventions.md`](./docs/conventions.md) first — it answers "where does this go?"
+(S-rules: one script per entity, `pw-lib.sh` frozen; C-rules: one command per entity + operators;
+A-rules: free-text args).
 
 ## Doctrine: sources only (canary-tested)
 
@@ -22,7 +25,10 @@ State mutations inside any project go through `pw-lib.sh` (`status|oneliner|adop
 review lanes `note-init|auto-signoff|gate|reopen|has-open`, dashboard setters) — never hand-edits of
 load-bearing lines, and `pw_field`/`pw_plan_pairs`/`_pw_url_from_line`/`pw_trim` in `pw-common.sh`
 are the reader plumbing commands rely on. New shared logic: add to the helpers, don't re-implement
-in a caller (P2).
+in a caller (P2). `pw-lib.sh` itself is **frozen for new subcommands** (S2) — new capability goes
+to the entity's own script, shared document primitives to `pw-mdlib.sh` (source-only library:
+comment-blanking, review-item detection, sign-off reads, table splices) — see
+[`docs/conventions.md`](./docs/conventions.md).
 
 ## What lives where (implementation map)
 

@@ -4,10 +4,12 @@
 call, how to read the output, what to do when it fails. Script internals are in the scripts
 themselves; nobody needs them to use these.
 
-The 14 scripts in `tooling/` handle the deterministic parts of the pipeline — status reporting,
-gate checking, document validation/summaries, ship mechanics, URL fetching — so an agent doesn't
-spend tokens re-reading files it could just query. The rule they all serve: **script the
-mechanical, keep the agent for the creative.**
+The scripts in `tooling/` handle the deterministic parts of the pipeline — status reporting,
+gate checking, document validation/summaries, ship mechanics, URL fetching, review/context
+document editing — so an agent doesn't spend tokens re-reading files it could just query. The
+rule they all serve: **script the mechanical, keep the agent for the creative.** Adding a new
+script or operator? Placement rules (one script per entity, frozen `pw-lib.sh`, shared
+`pw-*lib.sh` libraries) live in [`../conventions.md`](../conventions.md).
 
 ## Index
 
