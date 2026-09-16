@@ -63,7 +63,8 @@
 #                                                     reopen. Used when a fix lands on an
 #                                                     already-approved doc (e.g. an RFC comment
 #                                                     folded back into the analysis) — see docs/RFC.md
-#   pw-lib.sh review has-open <slug> <review-rel-path>  print yes/no + exit 0/1 on whether the file
+#   pw-lib.sh review has-open <slug> <review-rel-path>  print yes/no + exit 0
+#   pw-lib.sh review count   <slug> <review-rel-path>  print "open=N resolved=M" (real headings only)/1 on whether the file
 #                                                     has any unresolved [OPEN] item or [PENDING]
 #                                                     question (missing file → "no", exit 1 —
 #                                                     not an error, just "nothing in flight"). A
@@ -848,11 +849,25 @@ _comment_blanked() {
   ' "$1"
 }
 
+# Real, FILLED item headings of one review file: blank-commented, `^### `, and with the
+# template's unfilled PLACEHOLDER copies (R1/Q1 shipped live-marked so copy-paste yields valid
+# syntax — see "Live headings below use the real syntax" in template/_REVIEW.template.md)
+# excluded by their literal `<YYYY-MM-DD HH:MM>` token, which no filled item heading can
+# contain. Without this filter a fresh or item-free review can never read as 0-open anywhere —
+# the display-phantom that made pw-status report approved gates as unresolved (C22). Excluding
+# it is correct for the gate consumers too: auto-signoff must not stay blocked forever on a
+# placeholder nobody was ever asked to fill.
+_review_item_headings() {
+  # stub signatures: the template's two unfilled heading tokens. The timestamp one alone is not
+  # enough — a half-cleaned stub can lose `(agent, <YYYY…>)` but still carry `<§section>`.
+  _comment_blanked "$1" | awk '/^###+ / && !/<YYYY-MM-DD/ && !/<§section/'
+}
+
 _review_has_open_marker() {
-  local f="$1" stripped
-  stripped="$(_comment_blanked "$f")"
-  printf '%s\n' "$stripped" | grep -qE '^### .*<!-- pw-item-status: open -->' && return 0
-  printf '%s\n' "$stripped" | grep -qE '^### .*(🔴 open|⏳ awaiting answer|\[OPEN\]|\[PENDING\])'
+  local f="$1" h
+  h="$(_review_item_headings "$f")"
+  printf '%s\n' "$h" | grep -qE '^### .*pw-item-status: open' && return 0
+  printf '%s\n' "$h" | grep -qE '^### .*(🔴 open|⏳ awaiting answer|\[OPEN\]|\[PENDING\])'
 }
 
 # True iff a Sign-off Decision cell reads as "approved" — accepts both the CURRENT plain form
@@ -1009,6 +1024,40 @@ cmd_review_has_open() {
   fi
   echo "no"
   return 1
+}
+
+# Machine-count of real item states in one review file — THE single source of truth for any
+# "how many open?" display (pw-review-scan, pw-status). Reuses the exact _comment_blanked +
+# heading-marker detector the gates trust, so a dashboard line can never again disagree with a
+# Sign-off decision: the template's guidance blockquote ("Add an item: … <!-- pw-item-status:
+# open -->") is prose on a '>' line, matches only `^###` headings, and can never inflate a count.
+# Text-tag fallbacks (pre-marker files: [OPEN]/[PENDING]/emoji) counted per heading line, only
+# when that heading carries no machine marker at all.
+#   review count <slug> <review-rel-path>   -> "open=N resolved=M items=K" (missing file -> all 0, exit 1)
+cmd_review_count() {
+  [ $# -eq 2 ] || die "usage: review count <slug> <review-rel-path>"
+  local slug="$1" rel="$2"
+  local d; d="$(proj_dir "$slug")"
+  local f="$d/$rel"
+  [ -f "$f" ] || { echo "open=0 resolved=0"; return 1; }
+  local h stripped open=0 fb res=0 fb2
+  stripped="$(_comment_blanked "$f")"
+  h="$(_review_item_headings "$f")"
+  open="$(printf '%s\n' "$h" | grep -cE '^###+ .*pw-item-status: open' || true)"; open="${open:-0}"
+  fb="$(printf '%s\n' "$h" | grep -E '^###+ .*(🔴 open|⏳ awaiting answer|\[OPEN\]|\[PENDING\])' | grep -v 'pw-item-status:' | grep -c . || true)"
+  res="$(printf '%s\n' "$h" | grep -cE '^###+ .*pw-item-status: resolved' || true)"; res="${res:-0}"
+  fb2="$(printf '%s\n' "$h" | grep -E '^###+ .*(\[RESOLVED\]|\[ANSWERED\])' | grep -v 'pw-item-status:' | grep -c . || true)"
+  # items: real item HEADINGS under "## Items" (section rule identical to the template) — lets
+  # consumers like pw-doc-lint's marker-vs-items check compare like with like in ONE pass,
+  # without re-reading the raw file (which would count headings living inside the worked-example
+  # comment block — exactly the un-blanked-read half of the C22 phantom).
+  local items
+  items="$(printf '%s\n' "$stripped" | awk '
+    /^## Items/ {p=1; next}
+    p && /^## / {p=0}
+    p && /^###+ / && !/<YYYY-MM-DD/ && !/<§section/ {n++}
+    END {print n+0}')"
+  echo "open=$((open + ${fb:-0})) resolved=$((res + ${fb2:-0})) items=${items:-0}"
 }
 
 # Extract "LINE<TAB>ID<TAB>anchor text<TAB>STATUS" for every REAL ### Rn/Qn heading in $1, in file
@@ -1199,9 +1248,10 @@ cmd_review() {
     gate)         shift; cmd_review_gate "$@" ;;
     reopen)       shift; cmd_review_reopen "$@" ;;
     has-open)     shift; cmd_review_has_open "$@" ;;
+    count)        shift; cmd_review_count "$@" ;;
     reindex)      shift; cmd_review_reindex "$@" ;;
     archive)      shift; cmd_review_archive "$@" ;;
-    *) die "usage: review <note-init|auto-signoff|gate|reopen|has-open|reindex|archive> ..." ;;
+    *) die "usage: review <note-init|auto-signoff|gate|reopen|has-open|count|reindex|archive> ..." ;;
   esac
 }
 
@@ -1764,10 +1814,10 @@ cmd_selftest() {
   grep -q '^## manual entry$' "$NOTES" || die "selftest FAIL: review note-init clobbered an existing file"
 
   # review auto-signoff: refuses when mode isn't auto (demo2/analysis is "advisory" above), refuses
-  # while the template's own live R1/Q1 stubs are still unresolved (review-init always copies them
-  # verbatim, so a just-created review file genuinely has one [OPEN] + one [PENDING] by default —
-  # this is realistic, not a contrived case), and succeeds — with a distinctly-tagged row placed
-  # INSIDE the Sign-off table — only once mode is auto AND both stubs are cleared.
+  # while a REAL filled item is open, but succeeds on a clean pass over a just-created file — the
+  # template's unfilled R1/Q1 stubs (literal `<YYYY-MM-DD` placeholder text) are heads-up copies,
+  # not items, and must never block (C22: the same phantoms made pw-status report approved gates
+  # as unresolved). Success places a distinctly-tagged row INSIDE the Sign-off table.
   PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review-init demo2 analysis/review/topic2.review.md analysis/topic2.md >/dev/null
   local RV2="$tmp/demo2/analysis/review/topic2.review.md"
   grep -q '\[OPEN\]' "$RV2" || die "selftest FAIL: fresh review-init unexpectedly has no [OPEN] stub (test assumption invalid)"
@@ -1775,19 +1825,27 @@ cmd_selftest() {
     die "selftest FAIL: auto-signoff succeeded although mode is 'advisory', not 'auto'"
   fi
   PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" ai-review demo2 analysis auto >/dev/null
+  # a genuinely filled open item must still refuse auto-signoff — realistic timestamp, real ask.
+  printf '### R9 · §1 Goal wording — [OPEN] (you, 2026-09-16 11:00) <!-- pw-item-status: open -->\nPlease reword §1.\n---\n' >> "$RV2"
   if PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review auto-signoff demo2 analysis/review/topic2.review.md analysis >/dev/null 2>&1; then
-    die "selftest FAIL: auto-signoff succeeded although the R1/Q1 stubs are still open"
+    die "selftest FAIL: auto-signoff succeeded although a real filled item is open"
   fi
-  # simulate pw-reviewer clearing both never-filled-in stubs on a genuinely clean pass (the
-  # template's own documented convention — "emptied back to 'No blocking …'" — not a flip, since
-  # there was never a real ask/question here to resolve, just a template placeholder).
-  sed -i '' -e '/^### R1 · <§section or anchor> — \[OPEN\]/,+1d' \
-            -e '/^### Q1 · <§section> — \[PENDING\]/,+1d' "$RV2"
-  _review_has_open_marker "$RV2" && die "selftest FAIL: clearing the stubs did not resolve _review_has_open_marker (still tripping on the permanent hint / worked example)"
+  sed -i '' -e '/^### R9 · §1 Goal wording/,+2d' "$RV2"
+  # only the unfilled stubs remain → invisible to the detector; a clean pass proceeds (next block).
+  _review_has_open_marker "$RV2" && die "selftest FAIL: unfilled R1/Q1 stubs still register as open (C22 — placeholders must be invisible to the detector)"
 
   # --- _review_has_open_marker: dedicated unit-level checks for the machine marker itself,
   # isolated from the full auto-signoff integration flow above ---
   local MKT="$tmp/marker-test.md"
+  # 0a. template stubs are invisible — both placeholder tokens, individually.
+  printf '### Q1 · <§section> — [PENDING] (agent, )\n<!-- pw-item-status: open -->\n' > "$MKT"
+  _review_has_open_marker "$MKT" && die "selftest FAIL: unfilled <§section> stub counted as open"
+  printf '### R1 · §x — [OPEN] (you, <YYYY-MM-DD HH:MM>) <!-- pw-item-status: open -->\n' > "$MKT"
+  _review_has_open_marker "$MKT" && die "selftest FAIL: unfilled <YYYY-MM-DD> stub counted as open"
+  # 0b. a half-stub that only mentions the placeholder in its ANCHOR is still a stub (pato T01
+  #     case), while a real heading with any other angle content stays visible.
+  printf '### R2 · <T01> repo wiring — [OPEN] (you, 2026-09-16 18:55) [marker: pw-item-status open]\n' > "$MKT"
+  _review_has_open_marker "$MKT" || die "selftest FAIL: <T01>-style real heading filtered as a stub"
   # 1. A real heading whose ONLY open signal is the new marker (no legacy emoji at all) must
   #    still be detected — proves the marker path works independently of the emoji fallback.
   printf '### R1 · §1 something — status pending <!-- pw-item-status: open -->\nbody\n' > "$MKT"

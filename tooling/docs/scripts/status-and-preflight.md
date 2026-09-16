@@ -40,6 +40,7 @@ from scripts that run frequently.
 Checks **all** gates for one command and fails fast — run it before invoking the phase agent.
 
 ```bash
+$PW_HOME/tooling/pw-preflight.sh analyze      <slug>   # phase context|analysis + context/INDEX.md exists with ≥1 filled input row
 $PW_HOME/tooling/pw-preflight.sh execute      <slug>   # PLAN approved, phase valid, scope/model resolvable
 $PW_HOME/tooling/pw-preflight.sh breakdown    <slug>   # analysis reviews approved, RFC open items resolved
 $PW_HOME/tooling/pw-preflight.sh ship         <slug>   # shippable tasks exist, verify passed
@@ -74,13 +75,18 @@ $PW_HOME/tooling/pw-review-scan.sh <slug> --phase analysis # or: plan | task-pla
 **Output** — one line per review file, fields present only when non-zero:
 
 ```
-analysis/topic.review.md: 2 open, 3 resolved, 1 pending question(s)
+analysis/topic.review.md: 2 open, 3 resolved (in-review)
+task/review/PLAN.review.md: 5 resolved (approved)
 task/review/PLAN.review.md: 5 resolved (approved)
 task/review/T03.review.md: 1 open (in-review)
 ```
 
 Trailing `(approved|in-review|changes-requested)` is the **last row of the file's Sign-off
 table**. `No review files found` + exit `0` is a valid empty state (project too early for reviews).
+
+Counts come from `pw-lib.sh review count <slug> <rel>` — the single heading-level detector the
+gates use: template guidance text, worked examples inside comments, and UNFILLED `<…>` placeholder
+stubs can never inflate them (2026-09-16 fix; see plan 15 §14).
 
 **Reading failures:** exit `2` = usage error or missing project (`pw-review-scan: …` on stderr).
 

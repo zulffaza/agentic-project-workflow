@@ -59,14 +59,13 @@ fi
 for f in "${REVIEW_FILES[@]}"; do
   REL="${f#$D/}"
   
-  # Count open items
-  OPEN="$(grep -c "pw-item-status: open" "$f" 2>/dev/null || true)"; OPEN="${OPEN:-0}"
-  
-  # Count resolved items
-  RESOLVED="$(grep -c "pw-item-status: resolved" "$f" 2>/dev/null || true)"; RESOLVED="${RESOLVED:-0}"
-  
-  # Count pending questions
-  PENDING="$(grep -c "pw-question-status: pending" "$f" 2>/dev/null || true)"; PENDING="${PENDING:-0}"
+  # Counts come from pw-lib's "review count" — THE same heading-level detector the approval
+  # gates use. A whole-file `grep -c "pw-item-status: open"` previously counted the template's
+  # permanent "> Add an item: … <!-- pw-item-status: open -->" guidance line in EVERY review
+  # file, so each one phantom-reported "(1 open)" forever, no matter what was approved.
+  COUNTS="$("$HERE/pw-lib.sh" review count "$SLUG" "$REL" 2>/dev/null || true)"
+  OPEN="$(printf '%s' "$COUNTS" | sed -n 's/open=\([0-9]*\).*/\1/p')"; OPEN="${OPEN:-0}"
+  RESOLVED="$(printf '%s' "$COUNTS" | sed -n 's/.*resolved=\([0-9]*\).*/\1/p')"; RESOLVED="${RESOLVED:-0}"
   
   # Check sign-off status
   SIGNOFF=""
@@ -89,17 +88,16 @@ for f in "${REVIEW_FILES[@]}"; do
     fi
   fi
   
-  # Build summary line
+  # Build summary line: "<rel>[: N open[, M resolved]] (<decision>)" — parts joined without a
+  # leading comma when open is zero (an approved 0-open review reads clean, not ", 1 resolved").
+  PARTS=""
+  _p() { [ -n "$PARTS" ] && PARTS="$PARTS, "; PARTS="$PARTS$1"; }
+  [ "$OPEN" -gt 0 ] && _p "$OPEN open"
+  [ "$RESOLVED" -gt 0 ] && _p "$RESOLVED resolved"
   SUMMARY="$REL:"
-  if [ "$OPEN" -gt 0 ]; then
-    SUMMARY="$SUMMARY $OPEN open"
-  fi
-  if [ "$RESOLVED" -gt 0 ]; then
-    SUMMARY="$SUMMARY, $RESOLVED resolved"
-  fi
-  if [ "$PENDING" -gt 0 ]; then
-    SUMMARY="$SUMMARY, $PENDING pending question(s)"
-  fi
+  [ -n "$PARTS" ] && SUMMARY="$SUMMARY $PARTS"
+  # (no separate "pending questions" counter: Q-items ride the same pw-item-status markers;
+  #  the old grep looked for a vocabulary the templates never emit — always dead, always 0.)
   if [ -n "$SIGNOFF" ]; then
     SUMMARY="$SUMMARY ($SIGNOFF)"
   fi

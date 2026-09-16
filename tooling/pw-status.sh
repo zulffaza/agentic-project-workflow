@@ -127,15 +127,20 @@ fi
 
 # Unresolved review items
 echo "## Unresolved review items"
-# Only real review files (*.review.md) — the project-root _REVIEW.template.md carries
-# example status markers and must never be reported as open items.
-OPEN_ITEMS="$(grep -rln "pw-item-status: open" "$D" 2>/dev/null | grep '\.review\.md$' || true)"
+# Real review files only, counted through pw-lib's heading-level detector (the same one the
+# gates use) — never raw greps: a whole-project grep for "pw-item-status: open" lands on the
+# template guidance line present in every review file and reports phantoms. Archive files
+# (.archive.md) are closed history and are skipped; _REVIEW.template.md is not a review.
+OPEN_ITEMS=""
+for rf in "$D"/analysis/review/*.review.md "$D"/task/review/*.review.md; do
+  [ -f "$rf" ] || continue
+  _c="$("$HERE/pw-lib.sh" review count "$SLUG" "${rf#$D/}" 2>/dev/null || true)"
+  _n="$(printf '%s' "$_c" | sed -n 's/open=\([0-9]*\).*/\1/p')"; _n="${_n:-0}"
+  [ "$_n" -gt 0 ] && OPEN_ITEMS="$OPEN_ITEMS${rf#$D/}|$_n
+"
+done
 if [ -n "$OPEN_ITEMS" ]; then
-  echo "$OPEN_ITEMS" | while read -r f; do
-    REL="${f#$D/}"
-    COUNT="$(grep -c "pw-item-status: open" "$f" || true)"; COUNT="${COUNT:-0}"
-    echo "  - $REL ($COUNT open)"
-  done
+  printf '%s' "$OPEN_ITEMS" | while IFS='|' read -r _rel _n; do [ -n "$_rel" ] && echo "  - $_rel ($_n open)"; done
 else
   echo "  (none)"
 fi

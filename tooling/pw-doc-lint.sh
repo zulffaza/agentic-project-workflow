@@ -171,14 +171,17 @@ lint_review() {
   grep -q '^## Open questions' "$f" || add_error "$f: missing '## Open questions' section" "review files start from $D/_REVIEW.template.md (created via /pw-review)"
   grep -q '^## Sign-off' "$f" || add_error "$f: missing '## Sign-off' section" "review files start from $D/_REVIEW.template.md (created via /pw-review)"
   
-  # Check items have pw-item-status markers
-  if grep -q '^## Items' "$f"; then
-    ITEMS="$(awk '/^## Items/{p=1; next} /^## /{p=0} p && /^### /{count++} END{print count+0}' "$f")"
-    if [ "$ITEMS" -gt 0 ]; then
-      MARKERS="$(grep -c 'pw-item-status:' "$f" || true)"; MARKERS="${MARKERS:-0}"
-      if [ "$MARKERS" -lt "$ITEMS" ]; then
-        add_error "$f: some items missing pw-item-status markers" "add '<!-- pw-item-status: open|closed|wontfix -->' under each '###' item in ## Items"
-      fi
+  # Check items carry machine status markers — via pw-lib's "review count", the ONE detector
+  # (comment-blanking, heading-level, unfilled-stub-exempt) every other consumer uses, instead
+  # of a fourth grep that could drift (C22). Unfilled template stubs count as neither item nor
+  # marker, so a fresh review can't false-fail; a real heading with NO status vocabulary can.
+  _st="$("$HERE/pw-lib.sh" review count "$SLUG" "$rel_path" 2>/dev/null || true)"
+  ITEMS="$(printf '%s' "$_st" | sed -n 's/.*items=\([0-9]*\).*/\1/p')"; ITEMS="${ITEMS:-0}"
+  if [ "$ITEMS" -gt 0 ]; then
+    _mo="$(printf '%s' "$_st" | sed -n 's/.*open=\([0-9]*\).*/\1/p')"; _mo="${_mo:-0}"
+    _mr="$(printf '%s' "$_st" | sed -n 's/.*resolved=\([0-9]*\).*/\1/p')"; _mr="${_mr:-0}"
+    if [ $(( _mo + _mr )) -lt "$ITEMS" ]; then
+      add_error "$f: $ITEMS item headings but only $((_mo + _mr)) carry a pw-item-status marker" "add '<!-- pw-item-status: open|resolved -->' on each real '###' item heading (vocabulary is open|resolved — see _REVIEW.template.md)"
     fi
   fi
 }

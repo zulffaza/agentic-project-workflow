@@ -241,7 +241,16 @@ yourself, if you want it run somewhere with zero shared context at all).
 always reads `pw-reviewer (auto)` in the "By" column, never blended with a human "you" row, and the
 underlying tool (`pw-lib.sh review auto-signoff`) refuses outright unless the project's mode for
 that phase is genuinely `auto` **and** the file has no real open item/question left — it doesn't
-take the reviewer's word for either.
+take the reviewer's word for either. ("Real" means a *filled* heading: the template's never-used
+R1/Q1 stubs — recognized by their live `<YYYY-MM-DD>`/`<§section>` placeholder text — are copies to
+fill, not items, so a clean pass over an untouched stub section auto-signs; a filled `[OPEN]`/
+`[PENDING]` heading or a stale `pw-item-status: open` marker does not.)
+
+**How open counts are computed.** Every display surface (`pw-status`'s unresolved section,
+`pw-review-scan`, `pw-doc-lint review`) reads the same machine predicate as the gates —
+`pw-lib.sh review count <slug> <rel>` → `open=N resolved=M items=K`. Never grep a review file
+raw for `pw-item-status`: the template's guidance line and worked examples contain the marker
+*text* as prose and will phantom-count (see KNOWN-ISSUES.md).
 
 **What stops an endless loop** — before filing anything, `pw-reviewer` checks the review file for
 an existing item on the same section it's about to flag. A 2nd item on that same section (after
