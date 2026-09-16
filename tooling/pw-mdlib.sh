@@ -19,9 +19,9 @@
 #   _review_items_tsv <file>             "LINE\tID\tanchor\tSTATUS" per real Rn/Qn heading
 #
 # Generic table/splice helpers (used by pw-context.sh / pw-review-edit.sh):
-#   md_table_last_row_line <file> <section-ERE>   line no. of the last "|" row of the first
-#                                        table under a heading matching the ERE (stops at the
-#                                        next "## " heading; 0 = no rows)
+#   md_table_last_row_line <file> <header-prefix>       line no. of the last "|" row of the
+#                                        first table whose header row starts with the literal
+#                                        prefix (stops at the next "## " heading; 0 = no rows)
 #   md_insert_lines_after <file> <lineno> <lines-file>   splice lines-file in AFTER lineno
 #   md_insert_lines_before <file> <lineno> <lines-file>  splice lines-file in BEFORE lineno
 #   md_replace_line <file> <lineno> <lines-file>         replace exactly one line with the
@@ -157,15 +157,16 @@ _review_items_tsv() {
 
 # --- generic markdown table/splice helpers (plan 17) -------------------------
 
-# Line number of the last "|" row of the first markdown table under a section heading
-# matching <section-ERE> — scans from the heading, stops at the next "## " heading.
-# Prints 0 when the section (or any table row) is absent. Comment-blanked first so
-# worked-example rows inside <!-- --> blocks are never picked (same reasoning as
-# _signoff_last_real_row_line, generalized to any section).
+# Line number of the last "|" row of the first markdown table under a header row whose
+# line STARTS WITH the literal string <header-prefix> — scans from there, stops at the
+# next "## " heading. Literal prefix (index()), not a regex: awk -v mangles backslash
+# escapes in regex values across implementations. Prints 0 when absent. Comment-blanked
+# first so worked-example rows inside <!-- --> blocks are never picked (same reasoning
+# as _signoff_last_real_row_line, generalized to any section).
 md_table_last_row_line() {
   local f="$1" sec="$2"
   _comment_blanked "$f" | awk -v sec="$sec" '
-    !s && $0 ~ sec {s=1; next}
+    !s && index($0, sec) == 1 {s=1; next}
     s && /^## / {exit}
     s && /^\|/ {n=NR}
     END {print n+0}
