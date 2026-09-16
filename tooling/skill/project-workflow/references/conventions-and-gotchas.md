@@ -40,7 +40,23 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   call this so `analysis/review/<topic>.review.md` / `task/review/PLAN.review.md` are already there
   — the human never has to copy the template themselves. Never hand-write a review file; this also
   guarantees the permanent `> **Add an item:**` / `> **Answer a question:**` format hints never get
-  silently dropped.
+  silently dropped. Batch catch-up for a whole project (analysis docs + PLAN + every T0n):
+  `pw-review-edit.sh init-all <slug>`.
+- `pw-review-edit.sh` — **the write side of review files** (human entry: `/pw-review <slug>
+  item|answer|signoff|init-all`): `add-item` (next Rn, timestamp + `pw-item-status` marker +
+  `---` + reindex, fills the template stub in place), `answer` (styled `↳ you:` line under a Qn —
+  never flips status), `add-question` / `resolve` (agent-side: Qn creation; in-place tag+marker
+  flip with the `↳ agent:` reply — `resolve` on a Qn refuses unless a `↳ you:` line exists),
+  `signoff` (**human-triggered only, C4 — never on agent initiative**; the agent-side gate path
+  stays `pw-lib.sh review auto-signoff`). Free text via `--text <rest-of-line>` or `--stdin`
+  heredoc, stored verbatim (A-rules, `tooling/docs/conventions.md`).
+- `pw-context.sh` — **deterministic context-doc writes** (human entry: `/pw-context <slug> …`):
+  `req-init` (REQUIREMENTS.md from template, idempotent), `add-input` (INDEX.md inputs row —
+  native A2 flag-segments, auto date, pipe escaping, placeholder-row replacement), `add-repo`
+  (Repos-in-scope row, rest-of-line why; never touches `pw-adopt-scope` marker rows).
+- `pw-lib.sh` is **frozen for new subcommands** (S2); new capability goes to the entity's script,
+  shared markdown primitives to `pw-mdlib.sh` — see `tooling/docs/conventions.md` (S/C/A-rules)
+  before adding any script/operator/command.
 - `pw-lib.sh log <slug> <actor> <msg>` — append one audit line to **`LOG.md`** as a Markdown bullet
   (`- **YYYY-MM-DD HH:MM** · \`actor\` — what`, not a bare pipe row — reads properly in a plain
   preview view). Log phase transitions, executor spawns, commits, pushes, MRs, review passes,

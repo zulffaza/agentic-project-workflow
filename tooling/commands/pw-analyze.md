@@ -149,7 +149,10 @@ decisions (options not converged, Q0 rules, the final doc) stay yours.
    ```
    No-ops if it's already there (never clobbers my items/history); otherwise creates it verbatim
    from the template (in-review, empty, with its permanent format hints intact) so I don't have to
-   copy it myself.
+   copy it myself. (Batch catch-up for every doc in a project — analysis, PLAN, all tasks — is
+   `{{PW_HOME}}/tooling/pw-review-edit.sh init-all <slug>`; my review items/answers/sign-off rows
+   are written deterministically via the `/pw-review <slug> item|answer|signoff` operators — never
+   hand-copied template blocks.)
 6. **MANDATORY final step — do NOT skip.** Set the dashboard one-liner + Status + audit log via the
    helper (never hand-edit these lines). Run all three, then confirm the dashboard now shows
    `Status: analysis`:

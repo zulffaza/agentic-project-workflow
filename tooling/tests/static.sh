@@ -2,8 +2,8 @@
 # static.sh — T0 (syntax/help/forbidden-idiom greps) and T4 (consistency & canaries).
 # Every forbidden pattern here encodes a bug that actually shipped once (plan 16 §5).
 
-# the 14 automation scripts (single list; T0/T1/T2/mutation reuse it)
-PWTEST_AUTOMATION="pw-status.sh pw-preflight.sh pw-review-scan.sh pw-doc-lint.sh pw-doc-summary.sh pw-doc-sync.sh pw-ship-resolve.sh pw-mr-state-batch.sh pw-rfc-comments.sh pw-context-fetch.sh pw-adopt-snapshot.sh pw-worktree-create.sh pw-ship-exec.sh pw-pipeline-monitor.sh"
+# the automation-script registry (single list; T0/T1/T2/mutation reuse it)
+PWTEST_AUTOMATION="pw-status.sh pw-preflight.sh pw-review-scan.sh pw-doc-lint.sh pw-doc-summary.sh pw-doc-sync.sh pw-ship-resolve.sh pw-mr-state-batch.sh pw-rfc-comments.sh pw-context-fetch.sh pw-adopt-snapshot.sh pw-worktree-create.sh pw-ship-exec.sh pw-pipeline-monitor.sh pw-review-edit.sh pw-context.sh"
 export PWTEST_AUTOMATION
 
 _pwtest_code_lines() { awk '!/^[[:space:]]*#/' "$@" 2>/dev/null | cat -n; }
@@ -66,7 +66,7 @@ static_t4() {
   local idx refs known allow
   idx="$(sed -n '/^## Index/,/^## /p' "$TOOL/docs/scripts/README.md" 2>/dev/null | grep -oE '`pw-[a-z0-9-]+\.sh`' | tr -d '`' | sort -u)"
   known="$(printf '%s\n' $PWTEST_AUTOMATION | sort -u)"
-  if [ "$idx" = "$known" ]; then pwtest_ok "T4 docs/scripts index == the 14" ; else pwtest_bad "T4 docs/scripts index" "diff: $(comm -3 <(printf '%s\n' "$known") <(printf '%s\n' "$idx") | tr '\n' ' ')"; fi
+  if [ "$idx" = "$known" ]; then pwtest_ok "T4 docs/scripts index == the automation registry" ; else pwtest_bad "T4 docs/scripts index == the automation registry" "diff: $(comm -3 <(printf '%s\n' "$known") <(printf '%s\n' "$idx") | tr '\n' ' ')"; fi
   refs="$(grep -rhoE 'pw-[a-z-]+\.sh' "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" | sort -u)"
   allow="$(awk -F'\t' '!/^#/ && $1 {print $1}' "$TOOL/tests/expectations/unwired.ok" 2>/dev/null | sort -u)"
   hits="$(comm -23 <(printf '%s\n' "$refs") <(printf '%s\n' "$known" "$allow" | sort -u) )"
@@ -76,7 +76,7 @@ static_t4() {
   [ -z "$unreferenced" ] && pwtest_ok "T4 every automation script wired to an entry path" \
     || pwtest_bad "T4 every automation script wired" "unreferenced: $(printf '%s' "$unreferenced" | tr '\n' ' ') $(printf '%s\n' "$unreferenced" | while read -r z; do grep -l "$z" "$TOOL"/commands/* >/dev/null 2>&1 && echo "(in commands)"; done)"
 
-  # 3) information boundary — only the 14 names; pw-env.sh remains the allowed human ref
+  # 3) information boundary — only registry names; pw-env.sh remains the allowed human ref
   hits=""
   for n in $PWTEST_AUTOMATION; do
     for f in "$TOOL/../README.md" "$TOOL/../AGENTS.md" "$TOOL/../CLAUDE.md" "$TOOL/../docs/"*.md; do
@@ -107,6 +107,25 @@ static_t4() {
     || pwtest_bad "T4 canary: FIELD-BULLET rule" "guidance-in-comments rule removed (C17)"
   grep -qF 'verify-failed' "$PWTEST_TEMPLATE_DIR/task/_TEMPLATE-task.md" && pwtest_ok "T4 canary: verify-failed token still documented in template" \
     || pwtest_bad "T4 canary: verify-failed token" "$(basename "$PWTEST_TEMPLATE_DIR") template lost it"
+  # plan-17 doc-authoring doctrine canaries:
+  # (a) the signoff operator's C4 human-only doctrine line lives in the command file…
+  grep -qF 'HUMAN-TRIGGERED ONLY' "$TOOL/commands/pw-review.md" \
+    && pwtest_ok "T4 canary: signoff C4 doctrine line in pw-review.md" \
+    || pwtest_bad "T4 canary: signoff C4 doctrine line" "pw-review.md lost the 'HUMAN-TRIGGERED ONLY' label on the signoff operator — the gate doctrine's only command-side guard"
+  # (b) …and NO agent file may ever invoke it (anti-idiom: agent-side path is auto-signoff only)
+  hits="$(grep -lE 'pw-review-edit\.sh signoff|review-edit\.sh.*signoff' "$TOOL"/agents/*.md 2>/dev/null | tr '\n' ' ')"
+  [ -z "$hits" ] && pwtest_ok "T4 canary: no agent file invokes signoff" \
+    || pwtest_bad "T4 canary: no agent file invokes signoff" "C4 violation in: $hits — only a human triggers a gate decision (agent path: pw-lib.sh review auto-signoff)"
+  # (c) capability-placement conventions doc exists, is linked from the maintainer entry, and freezes pw-lib
+  [ -f "$TOOL/docs/conventions.md" ] && grep -qF 'docs/conventions.md' "$TOOL/AGENTS.md" \
+    && grep -qE '^# FROZEN \(S2' "$TOOL/pw-lib.sh" \
+    && pwtest_ok "T4 canary: conventions.md exists + linked + pw-lib S2 freeze note" \
+    || pwtest_bad "T4 canary: conventions doc" "tooling/docs/conventions.md missing, or its tooling/AGENTS.md link died, or pw-lib.sh lost the S2 FROZEN header note"
+  # (d) the new entity scripts keep their group-doc section (usage reference completeness)
+  grep -qF 'pw-review-edit.sh' "$TOOL/docs/scripts/review-and-context-editing.md" \
+    && grep -qF 'pw-context.sh' "$TOOL/docs/scripts/review-and-context-editing.md" \
+    && pwtest_ok "T4 canary: review-and-context-editing group doc covers both scripts" \
+    || pwtest_bad "T4 canary: group doc coverage" "docs/scripts/review-and-context-editing.md lost a script section — no doc-less capability ships"
   # 5) shared plumbing used, not reinvented
   for f in $PWTEST_AUTOMATION; do
     grep -q 'pw-common\.sh' "$TOOL/$f" && pwtest_ok "T4: $f sources pw-common" || pwtest_bad "T4: $f sources pw-common" "P2 violation (readers re-implemented)"

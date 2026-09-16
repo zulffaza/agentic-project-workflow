@@ -19,6 +19,7 @@ script or operator? Placement rules (one script per entity, frozen `pw-lib.sh`, 
 | [Document automation](./document-automation.md) | `pw-doc-lint.sh` `pw-doc-summary.sh` `pw-doc-sync.sh` | Validating structure, extracting summaries, reconciling drifted docs |
 | [Ship and sync](./ship-and-sync.md) | `pw-ship-resolve.sh` `pw-ship-exec.sh` `pw-mr-state-batch.sh` `pw-pipeline-monitor.sh` | Running `/pw-ship`, waiting on CI, checking MR states in bulk |
 | [Workflow automation](./workflow-automation.md) | `pw-rfc-comments.sh` `pw-context-fetch.sh` `pw-adopt-snapshot.sh` `pw-worktree-create.sh` | RFC comment loops, analysis context fetch, adoption, worktree creation |
+| [Review and context editing](./review-and-context-editing.md) | `pw-review-edit.sh` `pw-context.sh` | Writing review items/answers/sign-off rows and context INDEX/REQUIREMENTS rows deterministically (never hand-copying template blocks) |
 
 ## Common invocation pattern
 

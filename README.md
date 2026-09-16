@@ -81,7 +81,7 @@ of `./bootstrap.sh` — see ONBOARDING.md's [Offboarding](./ONBOARDING.md#offboa
 
 | Stage | Produces | Command |
 |---|---|---|
-| Context | files in `context/` + `INDEX.md` row | `/pw-new` (or `/pw-adopt`) |
+| Context | files in `context/` + `INDEX.md` row | `/pw-new` (or `/pw-adopt`) · `/pw-context` (row/brief edits) |
 | Analyze → review → approve | `analysis/<topic>.md` | `/pw-analyze` · `/pw-review` |
 | Break down → review → approve **(the only hard gate)** | `task/PLAN.md` + `T0n.md` | `/pw-breakdown` · `/pw-review` |
 | Execute → (optional) review a result | commits in `worktree/*` (committed + verified) | `/pw-execute` |

@@ -73,8 +73,10 @@ artifact type at a time, and a failed run is resumable because state lives on di
 Every table/form in a project carries a `Filled by:` marker so it's unambiguous who owns it:
 - 🤖 **AI-maintained** — agents keep it current; don't hand-edit (analysis/plan/task docs, the
   dashboard `Status:` + task/MR tables, each task's `## Result`, `LOG.md`).
-- 🧑 **You fill** — `context/` + `INDEX.md`, review items, QnA answers, the Sign-off row, the
-  provider registry, and flipping a task to `accepted` / `verify-failed`.
+- 🧑 **You fill** — `context/` + `INDEX.md` (deterministically via `/pw-context … add-input /
+  add-repo / req-init`), review items + QnA answers + the Sign-off row (via `/pw-review … item /
+  answer / signoff`), the provider registry, and flipping a task to `accepted` / `verify-failed`.
+  Hand-editing all of it stays legal — the operators just guarantee the house shape.
 - 🤖🧑 **Both** — e.g. the decisions log, breakdown routing rules.
 
 ## Conventions (the contract every agent follows)
@@ -106,6 +108,13 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | `/pw-review <slug> [phase\|Tid(s)\|path]` | apply review comments (defaults to current phase's review; task ids can be a list — `T01 T03 T05 T06` — processed in one pass) |
 | `/pw-review <slug> ai [phase\|Tid(s)\|path]` | optional — delegate a fresh review pass to `pw-reviewer` (see [docs/REVIEW.md](./REVIEW.md#3-ai-assisted-review-optional-per-phase)) |
 | `/pw-review <slug> config [<phase> <mode> \| model <lane> <provider:model\|—>]` | optional — view (no args: AI Review modes **and** AI Model lanes) or change one: a phase's review mode, or a lane's model row (`—` = provider default). The human-facing surface; never run `pw-lib.sh ai-review`/`ai-model` by hand for this |
+| `/pw-review <slug> init-all` | create every missing review file in the project (each analysis doc, the PLAN, every task) — idempotent catch-up |
+| `/pw-review <slug> item <path> <§anchor> <ask…>` | add a review item deterministically (heading, timestamp, marker, rule, reindex — never hand-copy the template block) |
+| `/pw-review <slug> answer <path> <Qn> <text…>` | add your `↳ you:` answer under a question, in house style |
+| `/pw-review <slug> signoff <path> <approved\|changes-requested\|in-review>` | append your Sign-off row (date-time stamped, history preserved). **Yours alone** — the agent runs it only on your explicit instruction |
+| `/pw-context <slug> req-init` | create `context/REQUIREMENTS.md` from its template (idempotent) |
+| `/pw-context <slug> add-input --file <f> --what <prose…> --source <prose…> [--trust <prose…>]` | append one provenance row to `context/INDEX.md` (auto date, pipe-escaped, placeholder-aware) |
+| `/pw-context <slug> add-repo <repo> <base> <why…>` | append one row to INDEX.md's "Repos in scope" table (never touches `/pw-adopt`'s marker rows) |
 | `/pw-breakdown <slug>` | task breakdown |
 | `/pw-execute <slug> [task-ids \| "with <model/agent>"]` | execution (stops at committed + verified) |
 | `/pw-ship <slug> [task-ids] [comments] [--skip-build-check]` | push branches + open MRs (publish), titled `[<ticket>] <title>` when a ticket is found; `comments` = handle MR review threads (also refreshes the MR description each round); by default also monitors the MR's pipeline/checks to a terminal state — `--skip-build-check` opts out |

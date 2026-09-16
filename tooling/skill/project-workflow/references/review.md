@@ -22,9 +22,10 @@ Rules you MUST follow:
 - **Task review is OPTIONAL.** Only the PLAN sign-off gates execution; per-task `T0n.review.md`
   files exist whenever the human wants to send *any* feedback on a task — either **before**
   execution (critiquing the planned steps) or **after** (rejecting a result). If a task is flipped
-  to `verify-failed` but has **no** review file, create it from `_REVIEW.template.md` using the
-  human's chat feedback, then apply it — don't silently do nothing (a frequent confusion). If
-  there's no feedback anywhere, ask.
+  to `verify-failed` but has **no** review file, create it deterministically (`pw-lib.sh
+  review-init`, or `pw-review-edit.sh init-all <slug>` for every missing review file at once),
+  write the human's chat feedback as items via `pw-review-edit.sh add-item`, then apply it —
+  don't silently do nothing (a frequent confusion). If there's no feedback anywhere, ask.
 - Before editing any doc, read its `.review.md` first — but only the item's own block + the
   section(s) it names (via the file's own `## Contents` table, refreshed with `pw-lib.sh review
   reindex`, or a configured memory tool's location-only pinpoint — see `tooling/docs/memory.md`),
@@ -33,8 +34,11 @@ Rules you MUST follow:
 - If a single item names 3+ distinct concerns/sections, list every target heading first, apply all
   of that item's edits in one coherent pass, then run consistency checks once — one combined
   `grep -rnE 'pat1|pat2|pat3'` pass, not N serial single-pattern greps.
-- Apply each `[OPEN]` item, append a `↳ agent:` reply, flip it to `[RESOLVED]`. **Never edit or
-  delete the human's comment text** — it's the source of truth for what was asked.
+- Apply each `[OPEN]` item, append a `↳ agent:` reply, flip it to `[RESOLVED]` — deterministically
+  via `pw-review-edit.sh resolve <slug> <review-rel-path> <Rn> --reply <what changed>` (flips the
+  SAME heading's tag + marker together, appends the styled reply, reindexes; never a second
+  heading). **Never edit or delete the human's comment text** — it's the source of truth for what
+  was asked (resolve is append-or-flip only, mutation-tested).
 - **Fixing `analysis/<topic>.md` specifically:** rewrite its §1–4 prose cleanly in place — never
   append, never leave an `(Rn)`/`(Qn)` tag or "supersedes"/"the user asked" narration in §1–4. That
   history is exactly ONE terse line in §5.1's Decisions log, nowhere else — see
@@ -48,20 +52,28 @@ Rules you MUST follow:
 - After a review pass, **recap the resolved items back in chat** (one line each) so the human
   sees the changes without opening the file.
 - Refresh the `## Contents` table after resolving anything (`pw-lib.sh review reindex <slug>
-  <review-rel-path>`) — a heading's status just changed. Once 3+ items/questions are resolved
+  <review-rel-path>`) — a heading's status just changed. (`pw-review-edit.sh resolve/add-item/
+  add-question` reindex automatically — only hand-edits need the manual reindex.) Once 3+ items/questions are resolved
   since the last archive, or the file's past ~150 lines, run `pw-lib.sh review archive <slug>
   <review-rel-path>` to move them verbatim into `<topic>.archive.md` — never touches `[OPEN]`/
   `[PENDING]` or the Sign-off table (provably gate-safe, see `tooling/pw-lib.sh`'s own comment).
 - **Opportunistically seed a configured memory tool** (skip silently if `PW_MEMORY=none`) when a
   fix is durable/generalizable — reuse the item's own `↳ agent:` reply (or, for an analysis fix,
   the §5.1 Decisions-log line) verbatim as the payload, never new authoring.
-- **Never** write the Sign-off row — only the human clears a gate (`approved`, date-time to the minute).
+- **Never** write the Sign-off row — only the human clears a gate (`approved`, date-time to the
+  minute). The human's own deterministic path is `/pw-review <slug> signoff <path> <decision>`
+  (`pw-review-edit.sh signoff`) — **human-triggered only (C4): never invoke it on your own
+  initiative**, the agent-side path stays `pw-lib.sh review auto-signoff` (mode=auto only).
 - Rejected execution result → the human adds items to `task/review/T0n.review.md` and sets the task
   `Status: verify-failed`; re-run it in its worktree and re-verify.
 - **Open questions (QnA):** when you can't resolve something during analysis, don't guess — list
-  it in the doc (`Qn`) AND seed a `Qn` row in the review file's "## Open questions" section. The
-  human answers with `↳ you:`; the next `/pw-review` folds the answer into the doc and flips the
-  row to [ANSWERED]. Report unanswered `Qn` as blocking.
+  it in the doc (`Qn`) AND seed a `Qn` row in the review file's "## Open questions" section via
+  `pw-review-edit.sh add-question <slug> <review-rel-path> --section <§anchor> --text <question>`
+  (next Qn, timestamp, marker, reindex — never a hand-copied heading). The
+  human answers with `↳ you:` (deterministically: `/pw-review <slug> answer <path> Qn <text>`);
+  the next `/pw-review` folds the answer into the doc and flips the
+  row to [ANSWERED] (`pw-review-edit.sh resolve … Qn` — refuses unless the `↳ you:` line exists).
+  Report unanswered `Qn` as blocking.
 - **MR feedback:** review comments left on the *MR itself* are handled by `/pw-ship <slug> [task-ids]
   comments` (fetch via `glab`/`gh`, fix in the worktree, reply on the thread). **Task IDs are
   optional — with none it sweeps EVERY open MR** in the project in one run (serially). Always

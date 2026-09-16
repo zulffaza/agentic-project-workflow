@@ -1,10 +1,10 @@
 <!--
   OPTIONAL one-page brief. Use it to hand the agent a crisp statement of *what you want and why*
-  before it reads the raw context. To use: copy this file to REQUIREMENTS.md in this dir, fill it,
-  and add a row for it in INDEX.md. Skip it entirely if the tickets/docs in context/ already say
-  enough — the pipeline never requires this file.
-
-      cp _REQUIREMENTS.template.md REQUIREMENTS.md
+  before it reads the raw context. To use: run `/pw-context <slug> req-init` (deterministic copy
+  of this template to REQUIREMENTS.md, idempotent — or by hand: `cp _REQUIREMENTS.template.md
+  REQUIREMENTS.md`), fill it, and add a row for it in INDEX.md (`/pw-context <slug> add-input
+  --file REQUIREMENTS.md --what project brief --source …`). Skip it entirely if the tickets/docs
+  in context/ already say enough — the pipeline never requires this file.
 
   Keep it short (this whole doc should fit on one screen). It's a brief, not a spec — the analysis
   phase turns it into the detailed "what & why". Delete these comments when you fill it.

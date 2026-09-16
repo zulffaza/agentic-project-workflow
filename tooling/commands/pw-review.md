@@ -1,10 +1,37 @@
 ---
-description: Apply my review comments for the current phase (or a given review file) — or, with the "ai" sub-verb, delegate a fresh review pass to pw-reviewer — or, with "config", view/change this project's AI Review settings; --skip-build-check disables the task-fix build loop
-args: <project-slug> [ai | config] [phase | Tid(s) | path-to-.review.md | <phase> <mode>] [--skip-build-check]
+description: Apply my review comments for the current phase (or a given review file) — or, with the "ai" sub-verb, delegate a fresh review pass to pw-reviewer — or, with "config", view/change this project's AI Review settings — or, with the write operators (init-all/item/answer/signoff), deterministically create review files and record my items, answers, and gate decisions; --skip-build-check disables the task-fix build loop
+args: <project-slug> [ai | config | init-all | item | answer | signoff] [phase | Tid(s) | path-to-.review.md | <phase> <mode>] [--skip-build-check]
 ---
 Invoke the `project-workflow` skill (review rules). Arguments: {{ARGS}}.
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
+
+**If the 2nd argument is literally one of `init-all`, `item`, `answer`, `signoff`, this is a
+deterministic review-WRITE operation — mechanical mapping only (C3): parse the arguments per the
+A-rules below, run the script verbatim, show its output. No judgment, no doc reading, no
+"improving" or retyping my text — it is handed over VERBATIM via a `--stdin` heredoc (A3).**
+Everything else below (apply-comments / `ai` / `config`) does NOT run for these operators.
+
+- **`/pw-review <slug> init-all`** → `{{PW_HOME}}/tooling/pw-review-edit.sh init-all <slug>` —
+  creates every missing review file (each `analysis/<topic>.md`, `task/PLAN.md`, each
+  `task/T0n.md` → its sibling `review/<name>.review.md`). Idempotent; existing files untouched.
+- **`/pw-review <slug> item <review-rel-path> <§anchor> <ask…>`** — `<§anchor>` is the next
+  single token (e.g. `§4`); everything after it is the ask, unquoted, spaces included (A1
+  rest-of-line). Run:
+  `{{PW_HOME}}/tooling/pw-review-edit.sh add-item <slug> <review-rel-path> --section <§anchor> --stdin`
+  with the ask piped in as a heredoc. Need a multi-word anchor? Use the flag form instead:
+  `… item <path> --section <anchor words…> --text <ask words…>` (A2: each value runs until the
+  next `--flag`).
+- **`/pw-review <slug> answer <review-rel-path> <Qid> <text…>`** — `<Qid>` like `Q2`; rest of
+  line is your answer. Run: `{{PW_HOME}}/tooling/pw-review-edit.sh answer <slug> <path> <Qid>
+  --stdin` (heredoc). The script never flips the question's status — the fold-in + `[ANSWERED]`
+  flip happens on the next apply-comments pass, per docs/REVIEW.md.
+- **`/pw-review <slug> signoff <review-rel-path> <approved|changes-requested|in-review>`** →
+  `{{PW_HOME}}/tooling/pw-review-edit.sh signoff <slug> <path> <decision>`.
+  **HUMAN-TRIGGERED ONLY (C4): run this operator ONLY when my message explicitly asks to sign
+  off / record that gate decision — never on your own initiative, never as a "helpful" close of
+  a review round, never because all items look resolved.** The agent-side path stays
+  `pw-lib.sh review auto-signoff` (mode=auto + zero open items, its own refusals intact).
 
 **`--skip-build-check`** (last argument, either flow) skips the task-fix build loop below — apply
 task fixes and flip their items without re-running the task's `## Verify`, noting in the reply that

@@ -38,7 +38,7 @@ tooling/
 ├── pw.config.example.sh ← config schema (the live pw.config.sh lives at the bundle root)
 ├── scaffold.sh · gen-commands.sh · gen-agents.sh   ← generators (template → project; sources → providers)
 ├── pw-common.sh (shared plumbing) · pw-lib.sh (project-state helpers) · pw-doctor.sh (sync + --fix + --test)
-├── 14 automation scripts (pw-status … pw-pipeline-monitor)  ← usage: docs/scripts/ (index + 4 groups)
+├── automation scripts (pw-status … pw-context)  ← usage: docs/scripts/ (index + groups); registry: tests/static.sh
 ├── pw-teardown.sh       ← safe worktree removal at close-out (refuses CWD/dirty trees)
 ├── commands/ · agents/ · skill/           ← canonical sources (provider-neutral; tokens {{PW_HOME}} …)
 ├── docs/                                  ← registries/policy docs the AGENTS read
@@ -69,7 +69,8 @@ Changed behavior of a documented format/contract → add a coupling row to
 ## Information boundary (what users must never learn here)
 
 - User-facing docs live at the bundle root `docs/` + `../README.md` + `../AGENTS.md` — they describe
-  behavior, never mechanics: the 14 automation scripts must not be named there (T4 greps; the one
+  behavior, never mechanics: the automation scripts (tooling/tests/static.sh registry) must not be
+  named there (T4 greps; the one
   allowed human reference is the `pw-env.sh`/`pw-doctor.sh`-level convenience and `pw-lib.sh` for
   state edits where docs/REVIEW.md already names it).
 - Internal plan numbers / session history never appear in shipped files (T4 greps).

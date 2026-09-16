@@ -26,7 +26,15 @@ You need to bump Spring Boot 2 → 3 across three services: `payments-api`, `ord
 ```
 
 You copy the migration ticket and a link to Spring's own 2→3 migration guide into `context/`,
-then add one row per input to `context/INDEX.md`:
+then add one row per input to `context/INDEX.md` — deterministically, one command per row (no
+hand-editing the table):
+
+```
+/pw-context spring-boot-3-upgrade add-input --file JIRA-4821.md --what The migration ticket --source Jira JIRA-4821 --trust Approved, has target date
+/pw-context spring-boot-3-upgrade add-input --file spring-migration-guide.md --what Vendor migration notes --source spring.io --trust Official
+```
+
+which lands exactly these rows:
 
 | File / link | What it is | Source | Trust notes |
 |---|---|---|---|
@@ -130,6 +138,12 @@ You're missing that payments-api also has a custom javax.validation setup in
 ```
 
 When you're satisfied, **you** — never the agent — write the Sign-off row:
+
+```
+/pw-review spring-boot-3-upgrade signoff analysis/review/spring-boot-3.review.md approved
+```
+
+which appends (date-time stamped for you, any earlier rows preserved as history):
 
 ```
 | 2026-08-10 09:45 | you | approved |

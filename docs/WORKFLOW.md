@@ -12,7 +12,7 @@ state lives on disk, not in an agent's head.
 
 | # | Step | Who | Produces | Gate | Command |
 |---|------|-----|----------|------|---------|
-| 1 | Drop context | You | files in `context/` + a row in `context/INDEX.md` | — | `/pw-new` |
+| 1 | Drop context | You | files in `context/` + a row in `context/INDEX.md` | — | `/pw-new` · `/pw-context` (rows/brief) |
 | 2 | Analyze | any agent (optional lanes: `pw-researcher` Mode B grounds a thin/unverifiable context, `pw-analyst` drafts from its seed — either optional; the driver pre-flights/exit-checks, and owns the doc) | `analysis/<topic>.md` + dashboard one-liner | — | `/pw-analyze` |
 | 3 | Review analysis | You + agent | `analysis/review/<t>.review.md` + fixes | analysis approved | `/pw-review` |
 | 4 | Break down | any agent (lane: `pw-writer-task` drafts per-task docs from your decisions — independent docs batched under `- Max parallelism:`; DAG + every decision field stays yours) | `task/PLAN.md` + `task/T01…Tnn.md` | — | `/pw-breakdown` |
@@ -33,10 +33,14 @@ any time — see [rewind](#going-back-a-phase-rewind).
 ## Step 1 — Context
 Put anything the agent needs to reason well into `context/`: PRD/RFC excerpts, ticket text,
 relevant code paths, error logs, Slack/Lark threads. Record provenance in `context/INDEX.md` so
-later steps (and future-you) know what each file is and can trust it. Prefer links + short excerpts
-over dumping huge files. Optionally start a one-page brief — see
-[`context/_REQUIREMENTS.template.md`](../template/context/_REQUIREMENTS.template.md) (copy it to
-`REQUIREMENTS.md`); it's optional and sharpens the analysis phase.
+later steps (and future-you) know what each file is and can trust it — one
+`/pw-context <slug> add-input --file <f> --what <prose…> --source <prose…> [--trust <prose…>]`
+per input (deterministic row: auto date, pipe-escaped, placeholder-aware); repos you expect to
+touch go in the "Repos in scope" table via `/pw-context <slug> add-repo <repo> <base> <why…>`.
+Prefer links + short excerpts over dumping huge files. Optionally start a one-page brief —
+`/pw-context <slug> req-init` copies
+[`context/_REQUIREMENTS.template.md`](../template/context/_REQUIREMENTS.template.md) to
+`REQUIREMENTS.md` (idempotent); it's optional and sharpens the analysis phase.
 
 <a id="adopting-existing-in-progress-work"></a>
 ### Two ways to start: fresh vs. continuation
@@ -195,8 +199,9 @@ Phases aren't one-way. To reopen an earlier phase after you've moved on (e.g. br
 analysis was wrong), run **`/pw-status <slug> rewind <phase>`**. It walks you through the same three
 steps either way, but drives them through the command rather than you touching `tooling/` yourself:
 1. Add a fresh `[OPEN]` item to that phase's review file (`analysis/review/…` or `task/review/…`)
-   describing what needs to change, and add a new `in-review` Sign-off row (leave the old
-   `approved` row — it's history).
+   describing what needs to change (`/pw-review <slug> item <path> <§anchor> <what needs to
+   change>`), and add a new `in-review` Sign-off row (`/pw-review <slug> signoff <path>
+   in-review` — leaves the old `approved` row in place; it's history).
 2. Set the dashboard `Status:` back to that phase **with the rewind flag** (under the hood,
    `tooling/pw-lib.sh status <slug> <phase> --rewind` — a plain `status` refuses to move backward).
 3. Re-run the phase command (`/pw-analyze` / `/pw-breakdown`), then `/pw-review`, then re-approve.

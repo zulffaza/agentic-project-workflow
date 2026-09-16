@@ -37,11 +37,31 @@ in a **`review/` subdir** beside it, which is the durable record of what you ask
 `/pw-analyze` and `/pw-breakdown` auto-create `analysis/review/<topic>.review.md` and
 `task/review/PLAN.review.md` (idempotently, via `pw-lib.sh review-init`, from
 [`_REVIEW.template.md`](../template/_REVIEW.template.md)) as their last step, already in-review and
-empty. It ships with **worked examples**, a **decision-status legend**, and — permanently, even
-once items exist — a one-line **"how to add an item / answer a question" hint** right under each
-section heading, so the syntax is always there to copy from. Each item has an **ID + section
-anchor** (`R1 · §2`) and a status tag: `[OPEN]` / `[RESOLVED]` — plain bracket text, nothing to
-hunt down and copy-paste.
+empty. Missed one (a task doc whose review file was never created)? **`/pw-review <slug>
+init-all`** is the catch-up: it creates every missing review file in the project — each analysis
+doc, the PLAN, and every `T0n.md` — in one idempotent pass. The template ships with **worked
+examples**, a **decision-status legend**, and — permanently, even once items exist — a one-line
+**"how to add an item / answer a question" hint** right under each section heading, so the syntax
+is always there to copy from. Each item has an **ID + section anchor** (`R1 · §2`) and a status
+tag: `[OPEN]` / `[RESOLVED]` — plain bracket text, nothing to hunt down and copy-paste.
+
+**You don't hand-copy those blocks either.** The write side of a review file is deterministic —
+one `/pw-review` operator per kind of edit, each writing the exact house shape (heading, timestamp,
+machine marker, `---` rule, quoted `↳` line) and refreshing `## Contents` for you:
+
+```
+/pw-review <slug> init-all                                          create every missing review file
+/pw-review <slug> item <path> §4 <your ask, spaces and all>         add the next Rn item
+/pw-review <slug> answer <path> Q2 <your answer>                    add your ↳ you: line under Q2
+/pw-review <slug> signoff <path> approved                           append your Sign-off row
+                                    (or: changes-requested / in-review)
+```
+
+Free text is everything after the last fixed argument — no quoting needed. Hand-editing stays
+legal (the hints in the file teach the syntax), but the operators are the recommended path: they
+never forget the marker, the rule, or the reindex. **`signoff` is yours alone** — the agent runs
+it only when your message explicitly asks for that gate decision, never on its own initiative
+(the one guarded exception remains AI `auto` mode, below).
 
 **Two dials, don't confuse them:** the per-item tag (`[OPEN]`→`[RESOLVED]`) is flipped by the
 **agent** after it addresses your item — you never set it. The only status *you* decide is the

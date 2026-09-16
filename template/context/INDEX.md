@@ -5,7 +5,11 @@ logs, chat threads. **Purpose of this index:** record *what each input is* and *
 from*, so later phases (and future-you) know what to trust and can trace a claim back to its
 source. Fill one row per input. Prefer links + short excerpts over dumping huge files.
 
-**Filled by:** [🧑 you] — both tables below. Agents only READ what you write here. **Exception:**
+**Filled by:** [🧑 you] — both tables below. Agents only READ what you write here. **Easiest
+path:** the deterministic operators — `/pw-context <slug> add-input --file <f> --what <prose…>
+--source <prose…> [--trust <prose…>]` and `/pw-context <slug> add-repo <repo> <base> <why…>`
+(stamp the date, escape pipes, replace the empty placeholder row, never touch the `_e.g._` or
+adopt-marker rows). Hand-editing stays legal. **Exception:**
 on continuation projects, `/pw-adopt` deterministically maintains its own rows — a one-time generic
 `ADOPTED.md` provenance row above, and the adopted `(repo, base)` rows in the "Repos in scope" table
 (the `<!-- pw-adopt-scope:… -->` marker rows). Don't hand-edit those.

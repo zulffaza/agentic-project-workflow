@@ -47,7 +47,10 @@ phase runs. Don't skip a gate.
   instead of manual file-walking: `pw-status.sh`, `pw-review-scan.sh`, `pw-doc-summary.sh`.
   Mechanics: `pw-ship-resolve.sh`/`pw-ship-exec.sh`, `pw-mr-state-batch.sh`,
   `pw-pipeline-monitor.sh`, `pw-worktree-create.sh`, `pw-context-fetch.sh`, `pw-rfc-comments.sh`,
-  `pw-adopt-snapshot.sh`, `pw-doc-sync.sh`. The `/pw-*` commands already invoke their share; when
+  `pw-adopt-snapshot.sh`, `pw-doc-sync.sh`. Deterministic document writes (never hand-copy
+  template blocks): `pw-review-edit.sh` (`init-all|add-item|answer|add-question|resolve`;
+  `signoff` is human-triggered only — C4) and `pw-context.sh` (`req-init|add-input|add-repo`).
+  The `/pw-*` commands already invoke their share; when
   you reach a phase **without** the command (direct spawn, skill-only session), run the same calls
   yourself — identical behavior whichever path triggers the work is the point.
   Reference: [`tooling/docs/scripts/README.md`](../../docs/scripts/README.md).

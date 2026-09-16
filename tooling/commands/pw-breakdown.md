@@ -170,7 +170,9 @@ Then, **create the PLAN review file (idempotent)** — never hand-write it:
 {{PW_HOME}}/tooling/pw-lib.sh review-init <slug> task/review/PLAN.review.md task/PLAN.md
 ```
 No-ops if it already exists; otherwise creates it verbatim from the template so I don't have to
-copy it myself.
+copy it myself. (Task review files T0n.review.md are created the same way per task — or all at
+once via `{{PW_HOME}}/tooling/pw-review-edit.sh init-all <slug>`; my own items/answers/sign-off
+rows go through the `/pw-review <slug> item|answer|signoff` operators, never hand-copied blocks.)
 
 Then **MANDATORY final step — do NOT skip** — update status + log via the helper
 (never hand-edit the Status line), and confirm the dashboard now shows `Status: breakdown`:

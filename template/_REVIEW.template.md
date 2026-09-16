@@ -47,7 +47,8 @@ QUICK REFERENCE (full mechanics + rationale: docs/REVIEW.md):
   new item.
 - **Agents:** the `> **Add an item:**` / `> **Answer a question:**` hints are permanent — never
   remove them, even once a section reads "No blocking …". Create this file via `pw-lib.sh
-  review-init` (copies the template verbatim), never by hand. -->
+  review-init` (copies the template verbatim) — or `pw-review-edit.sh init-all <slug>` for every
+  missing review file in the project at once — never by hand. -->
 
 ## Decision status — what moves, and who moves it
 
@@ -61,7 +62,10 @@ You never set an item/question's own status — just leave items `[OPEN]` and ru
 
 ## Items
 
-> **Add an item:** start a new heading `### Rn · <§section or anchor> — [OPEN] (you, <YYYY-MM-DD
+> **Add an item:** easiest is the deterministic operator — `/pw-review <slug> item <this-file>
+> §4 <your ask, spaces and all>` (script: `pw-review-edit.sh add-item`; it writes the heading,
+> timestamp, marker, `---` rule, and reindexes `## Contents` for you). By hand instead: start a
+> new heading `### Rn · <§section or anchor> — [OPEN] (you, <YYYY-MM-DD
 > HH:MM>) <!-- pw-item-status: open -->`, then write your ask on the line(s) below it, followed by
 > a `---` rule before the next item. **Keep the trailing `<!-- pw-item-status: … -->` marker** —
 > that's what the auto-signoff gate check actually reads, the `[OPEN]`/`[RESOLVED]` tag is for
@@ -101,7 +105,9 @@ The agent seeds a `Qn` row here when it hits something it can't resolve (mirrors
 doc's §5). **You answer** with a `↳ you:` line; the agent then folds the answer into the doc and
 flips the row to `[ANSWERED]`. This is the QnA channel — don't answer inside the rewritten doc.
 
-> **Answer a question:** under the `Qn` heading, add a quoted line `> ↳ **you** (<YYYY-MM-DD
+> **Answer a question:** easiest is `/pw-review <slug> answer <this-file> Qn <your answer>`
+> (script: `pw-review-edit.sh answer` — writes the styled `↳ you:` line under the question).
+> By hand instead: under the `Qn` heading, add a quoted line `> ↳ **you** (<YYYY-MM-DD
 > HH:MM>): <your decision/answer>`. The agent folds it into the doc on the next pass, appends its
 > own `> ↳ **agent** (<timestamp>): …` line right after yours (same quoted block, one blank quoted
 > line between the two), adds a `---` rule, and flips this SAME heading to `[ANSWERED]` — never a
@@ -135,6 +141,9 @@ yours, and flips this exact heading to `[ANSWERED]` — never a second heading.
 
 This table is the **gate**. Add a row when you're satisfied this phase is complete — `approved`
 is what clears it for the next phase. Date-time **to the minute** (rounds often land same-day).
+Easiest: `/pw-review <slug> signoff <this-file> approved` (script: `pw-review-edit.sh signoff` —
+stamps the date-time and appends the row; human-triggered only, an agent never runs it on its own
+initiative). By hand: fill the row below.
 
 | Date-time (YYYY-MM-DD HH:MM) | By | Decision |
 |------------------------------|-----|----------|

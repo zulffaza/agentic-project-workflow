@@ -120,10 +120,15 @@ Read [README.md](./README.md) — the full guide. The loop, once onboarded:
 /pw-analyze <slug>    context → analysis         /pw-execute <slug>    orchestrate worktree runs (commit + verify)
 /pw-breakdown <slug>  analysis → PLAN + tasks     /pw-ship <slug>       push branches + open MRs (publish)
 /pw-status <slug>     where am I / what's next    /pw-sync <slug>       refresh open MRs against a moved base
-                                                  /pw-close <slug>      verify, tear down, learn
-                                                  /pw-doctor [--fix]    check/repair install sync
+/pw-context <slug>    edit context docs           /pw-close <slug>      verify, tear down, learn
+  (req-init · add-input · add-repo)               /pw-doctor [--fix]    check/repair install sync
                                                   /pw-rfc <slug>        optional — publish to an RFC doc
 ```
+
+`/pw-review` also takes write operators so you never hand-copy review-file blocks:
+`/pw-review <slug> init-all` (create every missing review file), `… item <path> §4 <ask>` (add an
+item), `… answer <path> Q2 <text>` (answer a question), `… signoff <path> approved` (your gate
+row) — see [docs/REVIEW.md](./docs/REVIEW.md).
 
 Each phase is **gated by your review** — an agent stops and you sign off before the next phase.
 Only the **PLAN** sign-off is a hard gate for execution; per-task reviews are optional. `/pw-execute`
