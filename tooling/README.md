@@ -1,5 +1,9 @@
 # tooling/ — command source of truth + generator
 
+**Maintainer entry points:** [`AGENTS.md`](./AGENTS.md) (agent-facing: doctrine + implementation map + change/test protocol —
+imported by `CLAUDE.md`), [`docs/testing.md`](./docs/testing.md) (the test flow), this README (human how-to).
+
+
 The `/pw-*` slash commands are duplicated across agent tools (Claude Code, kilo, …), but you
 **maintain them in one place** here. The per-provider files are generated build artifacts.
 
@@ -145,3 +149,12 @@ agent: <optional — a provider agent to run the command under, e.g. pw-orchestr
 > project's `- **AI Models:**` row (`pw-lib.sh ai-model`); spawns are ledgered with their session id
 > so later repairs resume the same session (`docs/EXECUTION.md` §Spawning phase work + §The
 > per-spawn ledger).
+
+
+## changing tooling — the test protocol (`tooling/tests/`)
+
+Anything under `tooling/` or `template/` changes the contract the **14 automation scripts**
+keep. The full agent-change protocol — tiers, which tier for which change type, the corpus
+gate — is [`docs/testing.md`](./docs/testing.md). One command summary:
+**`tooling/tests/pw-test.sh all` before every commit; `--mutation <new-fix>` after any fix**
+(its `expectations/mutations.tsv` reverts each documented fix and proves a test sees it).

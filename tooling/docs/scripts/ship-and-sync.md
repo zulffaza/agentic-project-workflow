@@ -43,7 +43,9 @@ MR created: https://gitlab.example.com/group/api-service/-/merge_requests/42
 Ship execution complete for T03
 ```
 
-If an MR already exists it prints `MR already exists: <url>` and stops (idempotent re-run). A
+If the task's `- **MR:**` field holds a **real http(s) URL** it prints `MR already exists: <url>` and
+stops (idempotent re-run); placeholder values (`-`, `—`, `(none)`, or no field) never count as an
+existing MR. A successful creation upserts the URL into that same bold field. A
 push failure dies with `pw-ship-exec: push failed` (exit 2). If the push succeeded but the forge
 CLI returned no MR URL, stderr carries the CLI's first error line + `MR creation failed (push
 itself succeeded — safe to re-run after fixing auth/context)` — report that state honestly
@@ -87,7 +89,7 @@ green ≠ merged; that column belongs to true merged-ness from `pw-mr-state-batc
 
 | Exit | Last line looks like | Meaning |
 |---|---|---|
-| `0` | `T03: pipeline SUCCESS (4m 12s)` | CI green; the task file records `- Build check: SUCCESS` |
+| `0` | `T03: pipeline SUCCESS (4m 12s)` | CI green; the task's `- **Build check:**` field is upserted to `SUCCESS` (a template placeholder never blocks the record) |
 | `1` | `T03: pipeline FAILED (2m 03s) — status: failed` | CI red/Cancelled; task file records `Build check: FAILED (…)` |
 | `2` | `T03: pipeline still running after 30m — not yet resolved` | **timeout, not failure** — re-run or raise `--timeout` |
 

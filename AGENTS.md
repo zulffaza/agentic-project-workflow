@@ -4,6 +4,9 @@ You (an AI coding agent) are in the reusable **project-workflow** bundle: a phas
 pipeline that takes a multi-repo change from **context → analysis → breakdown → worktree execution →
 review → close**, driven by `/pw-*` slash commands. Work happens in scaffolded projects under
 `$PW_PROJECTS/<slug>/`; this bundle (`$PW_HOME`) is the machinery, and it is itself a git repo.
+**Using** the pipeline is the whole of this file. **Maintaining** the machinery itself (editing
+`tooling/`/`template/`, the generators, the test harness) is a different job — its entry point is
+[`tooling/AGENTS.md`](./tooling/AGENTS.md); you don't need it to run projects.
 
 ## Start here (do this in order)
 
@@ -54,9 +57,9 @@ real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./do
   bits is what causes drift and clobbers — always go through the helper.
 - **Never hand-edit generated artifacts.** The per-provider command files (`~/.claude/commands`,
   `~/.config/kilo/command`, `~/.cursor/commands`) and seeded agents (`~/.claude/agents`,
-  `~/.config/kilo/agent`, `~/.cursor/agents`) are build
-  output. Change the **canonical source** in `tooling/commands/` or `tooling/agents/`, then run
-  `/pw-doctor --fix` to resync (it regenerates + relinks everything the generators would).
+  `~/.config/kilo/agent`, `~/.cursor/agents`) are build output. If one drifted, run `/pw-doctor`
+  to see it and `/pw-doctor --fix` to resync — the canonical sources live under `tooling/` and are
+  the maintainer's domain (see `tooling/AGENTS.md` before changing anything there).
 - **Provider independence (D9).** Each Agent Provider's install is self-contained in its **own**
   dirs (`~/.claude/*` for claude, `~/.cursor/*` for cursor, …) generated solely from the bundle's
   registry. Vendor CLIs sometimes *also* glob other vendors' dirs as compat fallback (Cursor reads
@@ -72,21 +75,23 @@ real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./do
 
 ## Layout (this bundle = `$PW_HOME`)
 
-- **`template/`** — what a scaffolded project is made of (copied into each new project).
-- **`docs/`** — the detailed human guides: [WALKTHROUGH](./docs/WALKTHROUGH.md) (a worked example) ·
-  [WORKFLOW](./docs/WORKFLOW.md) · [ADOPTION](./docs/ADOPTION.md) · [REVIEW](./docs/REVIEW.md) ·
-  [EXECUTION](./docs/EXECUTION.md) · [REFERENCE](./docs/REFERENCE.md) · [RFC](./docs/RFC.md) ·
-  [MEMORY](./docs/MEMORY.md).
-- **`tooling/`** — the machinery: `scaffold.sh`, `gen-commands.sh`, `gen-agents.sh`, `pw-lib.sh`
-  (deterministic helpers), `pw-doctor.sh`, `pw-common.sh`, `pw-teardown.sh` (safe worktree removal),
-  `commands/` (canonical `/pw-*` sources), `agents/` (seedable `pw-orchestrator` + `pw-executor` +
-  `pw-reviewer` — the last optional, only spawned by `/pw-review … ai`), `docs/` (the
-  registries/policy AGENTS read: `providers.md`, `memory.md`, `forges.md`,
-  `rfc.md`/`rfc-backends.md` — each has a human-facing peer under the bundle's own `docs/`),
-  `skill/` (`project-workflow` + the standalone, portable `pw-review` and `pw-rfc`).
-  A human shouldn't normally need to open this dir — `docs/` + the `/pw-*` commands are the
-  intended interface.
+- **`docs/`** — the detailed human guides, and the intended interface beside the commands:
+  [WALKTHROUGH](./docs/WALKTHROUGH.md) (a worked example) · [WORKFLOW](./docs/WORKFLOW.md) ·
+  [ADOPTION](./docs/ADOPTION.md) · [REVIEW](./docs/REVIEW.md) · [EXECUTION](./docs/EXECUTION.md) ·
+  [REFERENCE](./docs/REFERENCE.md) · [RFC](./docs/RFC.md) · [MEMORY](./docs/MEMORY.md).
 - **`pw.config.sh`** — YOUR config (CLIs, models, optional `PW_MEMORY`); the one file you edit.
+- **`template/` + `tooling/`** — what projects are scaffolded from, and the machinery underneath
+  the commands. You invoke them through `/pw-*` and the skill; you don't open these to *use* the
+  pipeline. If you've been asked to **maintain** this bundle, switch to
+  **[tooling/AGENTS.md](./tooling/AGENTS.md)** — that's the maintainer entry point with the
+  internal map and the change/test protocol.
 
 Human-facing overview: **[README.md](./README.md)**. Restated working rules on demand: the
 **`project-workflow` skill**.
+
+## Changing the tooling
+
+Maintaining the machinery (`tooling/`, `template/`, generators, harness) has its own rulebook —
+sources-only doctrine, the change test tiers, and the remediation/mutation protocol live in
+**[`tooling/AGENTS.md`](./tooling/AGENTS.md)** (+ `tooling/docs/testing.md`). If that's your task,
+switch there before editing. `pw-doctor.sh --test` (or `tooling/tests/pw_test.sh`) is the harness.

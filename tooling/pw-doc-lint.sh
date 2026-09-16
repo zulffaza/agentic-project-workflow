@@ -13,6 +13,8 @@
 # ============================================================================
 set -euo pipefail
 
+if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/.." && pwd)"
 . "$HERE/pw-common.sh"
@@ -21,8 +23,8 @@ case "${1:-}" in -h|--help) pw_usage ;; esac
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../.." && pwd)}"
 
-die() { echo "pw-doc-lint: $*" >&2; exit 1; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d)"; printf '%s' "$d"; }
+die() { echo "pw-doc-lint: $*" >&2; exit 2; }   # 2 = usage/missing project (lint *findings* exit 1 via add_error — docs exit table)
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scaffold.sh $1)"; printf '%s' "$d"; }
 
 [ $# -ge 2 ] || die "usage: pw-doc-lint.sh <type> <slug> [args...]"
 
@@ -152,7 +154,7 @@ lint_plan() {
   # Check task count matches actual task files
   if grep -qE '^## Task( |s)' "$f"; then
     PLAN_TASKS="$(awk '/^## Task( |s)/{p=1; next} p && /^\|.*T[0-9]/{count++} END{print count+0}' "$f")"
-    ACTUAL_TASKS="$(ls -1 "$D/task"/T*.md 2>/dev/null | wc -l | pw_trim)"
+    ACTUAL_TASKS="$(find "$D/task" -maxdepth 1 -name 'T*.md' ! -name '_TEMPLATE*' 2>/dev/null | wc -l | pw_trim)"
     if [ "$PLAN_TASKS" != "$ACTUAL_TASKS" ]; then
       add_error "$f: task count mismatch (PLAN has $PLAN_TASKS, found $ACTUAL_TASKS task files)" "align the task table with task/*.md — add missing rows or delete stale ones (then pw-doc-sync.sh <slug> --dashboard-only)"
     fi
@@ -188,7 +190,7 @@ lint_dashboard() {
   # Check task table rows match task files
   if grep -qE '^## Task( |s)' "$f"; then
     DASHBOARD_TASKS="$(awk '/^## Task( |s)/{p=1; next} /^## /{p=0} p && /^\|.*T[0-9]/{count++} END{print count+0}' "$f")"
-    ACTUAL_TASKS="$(ls -1 "$D/task"/T*.md 2>/dev/null | wc -l | pw_trim)"
+    ACTUAL_TASKS="$(find "$D/task" -maxdepth 1 -name 'T*.md' ! -name '_TEMPLATE*' 2>/dev/null | wc -l | pw_trim)"
     if [ "$DASHBOARD_TASKS" != "$ACTUAL_TASKS" ]; then
       add_error "$f: task table row count ($DASHBOARD_TASKS) doesn't match task files ($ACTUAL_TASKS)" "run: $HERE/pw-doc-sync.sh <slug> --dashboard-only (rebuilds the table from task-file truth)"
     fi

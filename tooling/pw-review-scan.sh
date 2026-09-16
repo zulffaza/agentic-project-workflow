@@ -10,6 +10,8 @@
 # ============================================================================
 set -euo pipefail
 
+if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/.." && pwd)"
 . "$HERE/pw-common.sh"
@@ -17,7 +19,7 @@ PW_HOME="$(cd "$HERE/.." && pwd)"
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../.." && pwd)}"
 
 die() { echo "pw-review-scan: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scaffold.sh $1)"; printf '%s' "$d"; }
 
 SLUG=""
 PHASE_FILTER=""
@@ -70,7 +72,14 @@ for f in "${REVIEW_FILES[@]}"; do
   SIGNOFF=""
   if grep -q '## Sign-off' "$f"; then
     # Get the last sign-off row
-    LAST_SIGNOFF="$(awk '/## Sign-off/{p=1; next} p && /^\|/{last=$0} END{print last}' "$f")"
+    # last REAL table row only — the template's example rows live in an HTML comment after
+    # the table; an unguarded `/^\|/` scan lands on them and inverts gate state.
+    LAST_SIGNOFF="$(awk '
+      /^## Sign-off/ {p=1; next}
+      p && /^[[:space:]]*<!--/ {exit}
+      p && /^\|/ {last=$0; next}
+      p && last != "" && /^[^|[:space:]]/ {exit}
+      END {print last}' "$f")"
     if echo "$LAST_SIGNOFF" | grep -q 'approved'; then
       SIGNOFF="approved"
     elif echo "$LAST_SIGNOFF" | grep -q 'in-review'; then
@@ -112,3 +121,7 @@ for f in "${REVIEW_FILES[@]}"; do
     echo "$SUMMARY"
   fi
 done
+
+# a filtered run must be a clean report, not the rc of the last test in the loop (docs:
+# only 0/2 exit shapes — 0 report/nothing, 2 usage/missing project).
+exit 0

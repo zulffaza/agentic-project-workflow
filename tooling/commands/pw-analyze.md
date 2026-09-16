@@ -8,7 +8,13 @@ anywhere after the slug).
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
-<!-- Pre-flight: fetch context URLs before agent reasoning -->
+<!-- Pre-flight: deterministic gate, then mechanical context fetch. -->
+```bash
+{{PW_HOME}}/tooling/pw-preflight.sh analyze <slug> || exit 1
+```
+**Reading the pre-flight:** `pw-preflight.sh analyze` checks a legal phase plus `context/INDEX.md`
+existing with at least one input row. Non-zero + `pw-preflight:` line = STOP and relay it (its
+`→ fix:` names the fill/research step). Then, before agent reasoning:
 ```bash
 {{PW_HOME}}/tooling/pw-context-fetch.sh <slug> [--ignore-errors]
 ```

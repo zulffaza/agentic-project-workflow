@@ -55,8 +55,8 @@ same work order** (`kilo run --auto -m <api>/<model> … --dir <path>`) — a ro
 in-process spawn says so in the ledger instead of lying (docs: §Spawning phase work below; provider
 table: [`tooling/docs/providers.md`](../tooling/docs/providers.md)). The `AI Models` lane set is
 `researcher analyst writer-task reviewer verifier` — no executor row by design. `verify`-lane work is
-plan 02's typed-verification surface: it *resolves* to the same binding question, so the row exists
-already so plan 02 never grows its second model-source.
+the pipeline's typed-verification surface: it *resolves* to the same binding question, so the row
+exists already and never grows a second model-source.
 
 ## Choosing a model / sub-agent per task
 

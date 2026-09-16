@@ -1,0 +1,28 @@
+# mutations.tsv — plan 16 §5 register C1–C23: id, file(rel tooling/), OLD, NEW, tier, only(—).
+# Reverting a documented fix MUST fail the harness. Keep OLD byte-exact; drift = row is stale.
+# Columns: id	file	OLD	NEW	tiers	only
+C1-pw-field-packed-cut	pw-common.sh	        q = index(v, "**"); if (q) v = substr(v, 1, q - 1)	        q = 0; if (q) v = substr(v, 1, q - 1)	T1	pw-common
+C2-plan-table-anchor	pw-common.sh	    /^## Task/ { p=1; next }	    /^## TASK/ { p=1; next }	T1	pw-mr-state-batch
+C3-plan-columns-positional	pw-common.sh	        if (V == "status") sti = i	        if (V == "status") sti = 5	T2	-
+C4-linked-cell-normalize	pw-common.sh	      if (match(id, /T[0-9]+/)) { id = substr(id, RSTART, RLENGTH) } else { id = "" }	      if (id !~ /^T[0-9]+$/) id = ""	T1	pw-mr-state-batch
+C5-plain-approved-legacy-only	pw-lib.sh	    "approved"|"approved ✅") return 0 ;;	    "approved ✅") return 0 ;;	T2	-
+C6-mr-url-sentinel-counts	pw-ship-exec.sh	case "$MR_URL" in http*) _MR_EXISTS=1;; *) _MR_EXISTS=0;; esac	case "$MR_URL" in *) _MR_EXISTS=1;; esac	T1	pw-ship-exec
+C7-dashboard-preserve-miskeys	pw-doc-sync.sh	          for (i = 0; i < n; i++) { v = $(i + 2); gsub(/^[ \t]+/, "", v); gsub(/[ \t|]+$/, "", v); print id "\t" NAME[i + 1] "\t" v } }	          for (i = 0; i < n; i++) { v = $(i + 2); gsub(/^[ \t]+/, "", v); gsub(/[ \t|]+$/, "", v); print id "\t" NAME[n] "\t" v } }	T1	pw-doc-sync
+C8-mr-state-exit1-abort	pw-mr-state-batch.sh	  STATE="$("$HERE/pw-lib.sh" mr-state "$SLUG" "$task_id" 2>/dev/null || true)"	  STATE="$("$HERE/pw-lib.sh" mr-state "$SLUG" "$task_id" 2>/dev/null)"	T2	-
+C9-index-registry-drop-entry	docs/scripts/README.md	`pw-rfc-comments.sh` `pw-context-fetch.sh` `pw-adopt-snapshot.sh` `pw-worktree-create.sh`	`pw-rfc-comments.sh` `pw-adopt-snapshot.sh` `pw-worktree-create.sh`	T4	-
+C10-repo-missing-lost-remedy	pw-worktree-create.sh	repo not found: $REPO_DIR → fix: pass the repo dir name (repos live under $REPOS_DIR — clone it there first)	repo not found: $REPO_DIR	T1	pw-worktree-create
+C11-bash4-idiom-injects	pw-review-scan.sh	if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi	if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi; declare -A _pwt_b4probe=()	T0	-
+C12-respawn-by-zero	pw-status.sh	if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi	if [ "${1:-}" = "--selftest" ]; then bash "$0" "$@"; fi	T0	-
+C13-user-doc-leaks-script	../docs/EXECUTION.md	execution, and the multi-repo worktree mechanics.	execution (via pw-ship-exec.sh), and the multi-repo worktree mechanics.	T4	-
+C14-xargs-trim-returns	pw-ship-resolve.sh	task_id="$(echo "$task_id" | pw_trim)"	task_id="$(echo "$task_id" | xargs)"	T0	-
+C15-command-canonical-drifts-install	commands/pw-execute.md	pw-worktree-create.sh <slug> <T0n> <repo> <base-branch>	pw-worktree-create.sh <slug> <repo> <T0n> <base-branch>	T4	-
+C16-projects-dir-hardwired	pw-status.sh	PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../.." && pwd)}"	PROJECTS_DIR="$(cd "$HERE/../.." && pwd)"	T1	pw-status
+C17-field-bullet-rule-gone	../template/task/_TEMPLATE-task.md	FIELD-BULLET RULE	field bullet rule	T4	-
+C18-wholefile-verify-token-grep	pw-preflight.sh	if [ -f "$TASK_FILE" ] && [ "$(pw_field "$TASK_FILE" Status)" = "verify-failed" ]; then	if grep -qF verify-failed "$TASK_FILE"; then	T0	-
+C19-phase-token-no-cut	pw-common.sh	pw_phase_token() { printf '%s\n' "${1%%[[:space:]—-]*}"; }	pw_phase_token() { printf '%s\n' "$1"; }	T1	pw-status
+C20-phase-line-contract-canary	../template/PROJECT.template.md	- **Status:** context	- **Status:** <phase>	T4	-
+C21-mr-scope-to-wholefile	pw-lib.sh	  sec="$(awk '/^## Result/{p=1; next} /^## /{p=0} p' "$1" 2>/dev/null)" || return 0	  sec="$(cat "$1" 2>/dev/null)" || return 0	T1	pw-mr-state-batch
+C22-forge-substring-default	pw-lib.sh	    github.com) forge="github" ;;	    *) forge="github" ;;	T1	pw-mr-state-batch
+C23-doctrine-phrase-reworded	AGENTS.md	single source of truth	one source of truth	T4	-
+C24-preflight-verb-enum	pw-preflight.sh	die "unknown command: $COMMAND (expected: analyze|execute|breakdown|ship|comments|close|review)"	die "unknown command: $COMMAND (expected: execute|breakdown|ship|comments|close|review)"	T1	pw-preflight
+C24b-preflight-example-rows-count	pw-preflight.sh	        if (index($0, "_e.g._")) next	        if (index($0, "_e_NOOP_")) next	T1	pw-preflight

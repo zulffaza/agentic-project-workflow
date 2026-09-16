@@ -57,15 +57,24 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
    task's `Actually used:`.
    - **Route each task by its `Branch:`** — this is per-task, so a **mixed** project (fresh tasks +
      adopted branches, see the WORKFLOW "mixed projects" note) is just tasks of both kinds side by side:
-     - **Fresh task** (`Branch:` is a new `agent/<slug>/<T0n>-<slug>`) → **fork a worktree from its
-       `Base branch:`**: `git worktree add … -b agent/<slug>/<T0n>-<slug> origin/<base>`, NOT from the repo's
-       current HEAD. Two tasks in the same repo may declare different bases (e.g. `master` and
-       `spring3`) — fine, separate branches + worktrees + MRs, parallel. The task's Step 1 spells out
-       the exact command; make sure it uses the task's base.
+     - **Fresh task** (`Branch:` is a new `agent/<slug>/<T0n>-<slug>`) → **create its worktree with
+       the script** — never hand-roll `git worktree add` (branch naming, path layout and attach
+       semantics live in one place: `tooling/docs/scripts/workflow-automation.md`):
+       `{{PW_HOME}}/tooling/pw-worktree-create.sh <slug> <T0n> <repo> <base-branch>` — it forks the
+       task's `Branch:` from `origin/<base-branch>` (NOT the repo's current HEAD) at
+       `worktree/<repo>/<task-id>-<slug>/` and prints the path on its last line; pass that path to
+       the spawn. Two tasks in one repo may declare different bases (e.g. `master` and `spring3`) —
+       fine: different `-b` args, separate branches + worktrees + MRs, parallel. If the branch
+       already exists the script attaches instead of dying; re-running is idempotent.
      - **Adopted task** (`Branch:` is an existing in-progress branch from `context/ADOPTED.md`) → do
-       NOT create an `agent/…` branch. Per **adopted branch**, make/keep **one shared worktree that
-       attaches the existing branch** — `git -C {{PW_REPOS}}/<repo> worktree add
-       {{PW_PROJECTS}}/<slug>/worktree/<repo>/<branch-slug> <existing-branch>` (no `-b`).
+       NOT create an `agent/…` branch: run the same script with the **adopted branch** as `<T0n>`'s
+       task id kept, and it attaches the existing branch at the convention path — but only after
+       you replace the task's `Branch:` check: the script builds `agent/<slug>/<T0n>-<slug>`, so for
+       adopted branches create/attach the worktree once manually with the adopted name per
+       **adopted branch**: `git -C {{PW_REPOS}}/<repo> worktree add
+       {{PW_PROJECTS}}/<slug>/worktree/<repo>/<branch-slug> <existing-branch>` (no `-b`) — that is
+       the single sanctioned exception to the script rule (one shared worktree per adopted branch;
+       its path goes in the task's `Worktree:` field).
        **Serialize tasks that share a branch** (one worktree), but **parallelize across different
        adopted branches and all fresh tasks**. If git refuses because a branch is checked out in the
        main repo, tell me to switch that main checkout to another branch first.

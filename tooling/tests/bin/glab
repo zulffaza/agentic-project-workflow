@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Fake `glab` for offline tests — see pw_test_lib.sh. Records invocations to $PWTEST_FORGE_LOG
+# so "which iid won" is assertable; state comes from $PWTEST_FORGE_STATE_FILE ("<iid> <state>"
+# lines, GitLab vocabulary opened/merged/closed). Unknown shapes exit 42 loudly (coupling
+# alarm). NEVER touches the network.
+set -u
+[ -n "${PWTEST_FORGE_LOG:-}" ] && printf '%s %s\n' "glab $*" >>"$PWTEST_FORGE_LOG"
+if [ -n "${PWTEST_FORGE_FAIL:-}" ]; then echo "glab-shim: forced query failure" >&2; exit 1; fi
+_state_json() {
+  local iid="$1" st="opened" tgt="${PWTEST_MR_TARGET:-master}"
+  if [ -n "${PWTEST_FORGE_STATE_FILE:-}" ] && [ -f "$PWTEST_FORGE_STATE_FILE" ]; then
+    st="$(awk -v k="$iid" '$1==k{print $2; exit}' "$PWTEST_FORGE_STATE_FILE")"; st="${st:-opened}"
+  fi
+  printf '{"iid":"%s","state":"%s","sha":"dead000f","target_branch":"%s","web_url":"https://gitlab.example.com/pwtest/api/-/merge_requests/%s"}\n' "$iid" "$st" "$tgt" "$iid"
+}
+case "${1:-}" in
+  mr)
+    case "${2:-}" in
+      view) _iid="$(printf %s "${3:-}" | awk -F/ "{print \$NF}" | tr -dc 0-9)"; _state_json "${_iid:-${3:-0}}" ;;
+      create) if [ -n "${PWTEST_FORGE_CREATE+set}" ] && [ -z "$PWTEST_FORGE_CREATE" ]; then
+                echo "glab-shim: creation returned no URL (forced)" >&2; exit 1; fi
+              n=$(( $(cat "${PWTEST_FORGE_STATE_FILE:-/dev/null}" 2>/dev/null | grep -cm 'merge_requests ' ) + 42 ))
+              _state_json "$n" ;;
+      *) printf 'glab-shim: unexpected mr sub: %s\n' "$2" >&2; exit 42 ;;
+    esac ;;
+  api)
+    case "${2:-}" in
+      *pipelines*) printf '%s\n' "${PWTEST_PIPELINE:-}"; exit 0 ;;
+      *merge_requests*) _state_json "${2##*/}" ;;
+      *) printf '{}\n' ;;
+    esac ;;
+  auth) exit 0 ;;
+  *) printf 'glab-shim: unexpected invocation: %s\n' "$*" >&2; exit 42 ;;
+esac

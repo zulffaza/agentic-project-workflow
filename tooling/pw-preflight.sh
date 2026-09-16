@@ -2,6 +2,7 @@
 # ============================================================================
 # pw-preflight.sh — gate validation before expensive agent invocations
 #
+#   pw-preflight.sh analyze   <slug>         phase legal + context/ inputs exist
 #   pw-preflight.sh execute   <slug>         check PLAN review gate, phase, scope
 #   pw-preflight.sh breakdown <slug>         check analysis review gates, RFC
 #   pw-preflight.sh ship      <slug>         check shippable tasks, verify
@@ -13,6 +14,8 @@
 # command is never a dead end. Exit 0 + silent on success; exit 1 + message else.
 # ============================================================================
 set -euo pipefail
+
+if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/.." && pwd)"
@@ -42,6 +45,7 @@ PHASE_RAW="$("$HERE/pw-lib.sh" phase "$SLUG" 2>/dev/null || true)"
 PHASE="$(pw_phase_token "${PHASE_RAW:-missing}")"
 PHASE_FIX=""
 case "$COMMAND" in
+  analyze) PHASE_FIX="if you are (re-)analyzing a project that moved on: pw-lib.sh status $SLUG analysis --rewind" ;;
   ship) PHASE_FIX="finish execution first (each task '- **Status:** done'), or if the project IS further along: pw-lib.sh status $SLUG <phase>" ;;
   execute) PHASE_FIX="set the phase with: pw-lib.sh status $SLUG executing (or run /pw-breakdown to create the PLAN)" ;;
   breakdown) PHASE_FIX="get to an analysis/breakdown phase first (/pw-analyze), or pw-lib.sh status $SLUG breakdown" ;;
@@ -55,6 +59,28 @@ fi
 phase_gate() { case " $1 " in *" $PHASE "*) return 0 ;; *) die_fix "cannot $COMMAND in phase '$PHASE' (must be: $1)" "${PHASE_FIX}";; esac; }
 
 case "$COMMAND" in
+  analyze)
+    phase_gate "context analysis"
+
+    # The analysis agent reasons ONLY from context/ — fail early if it's empty,
+    # with the concrete fill step, instead of a vague "insufficient context" mid-run.
+    [ -f "$D/context/INDEX.md" ] || die_fix "context/INDEX.md missing" "the 🧑 context index is the analysis input — create it (shape in context/README.md) or run /pw-research $SLUG to gather inputs first"
+    _inrows="$(awk '
+      /^\|/ {
+        if ($0 ~ /---/) next
+        if (index($0, "_e.g._")) next   # scaffold example row = not real input (legend-token class)
+        n = split($0, cells, "|")
+        first = cells[2]; gsub(/[ \t`*-]/, "", first)
+        if (first == "") next
+        low = tolower(first)
+        if (low ~ /^file.?link$/ || low ~ /^repo/) next
+        count++
+      } END { print count+0 }' "$D/context/INDEX.md")"
+    if [ "$_inrows" -lt 1 ]; then
+      die_fix "context/INDEX.md has no input rows yet" "fill 'File / link' rows (tickets, REQUIREMENTS.md, code refs — one per input) before analyzing, or run /pw-research $SLUG to gather them"
+    fi
+    ;;
+
   execute)
     phase_gate "breakdown executing review"
 
@@ -196,7 +222,7 @@ case "$COMMAND" in
     ;;
 
   *)
-    die "unknown command: $COMMAND (expected: execute|breakdown|ship|comments|close|review)"
+    die "unknown command: $COMMAND (expected: analyze|execute|breakdown|ship|comments|close|review)"
     ;;
 esac
 

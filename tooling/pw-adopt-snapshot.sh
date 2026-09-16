@@ -9,6 +9,8 @@
 # ============================================================================
 set -euo pipefail
 
+if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/.." && pwd)"
 . "$HERE/pw-common.sh"
@@ -16,10 +18,11 @@ PW_HOME="$(cd "$HERE/.." && pwd)"
 case "${1:-}" in -h|--help) pw_usage ;; esac
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../.." && pwd)}"
+
 REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
 
 die() { echo "pw-adopt-snapshot: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scaffold.sh $1)"; printf '%s' "$d"; }
 
 [ $# -ge 3 ] || die "usage: pw-adopt-snapshot.sh <slug> <repo> <branch> [mr-url]"
 
@@ -31,11 +34,11 @@ MR_URL="${4:-}"
 D="$(proj_dir "$SLUG")"
 REPO_DIR="$REPOS_DIR/$REPO"
 
-[ -d "$REPO_DIR" ] || die "repo not found: $REPO_DIR"
+[ -d "$REPO_DIR" ] || die "repo not found: $REPO_DIR → fix: pass the repo dir name (repos live under $REPOS_DIR — clone it there first)"
 
 # Validate branch exists
 if ! git -C "$REPO_DIR" rev-parse --verify "$BRANCH" >/dev/null 2>&1; then
-  die "branch not found: $BRANCH"
+  die "branch not found: $BRANCH → fix: fetch the branch first: git -C $REPO_DIR fetch origin"
 fi
 
 # Resolve base branch
@@ -43,20 +46,23 @@ BASE=""
 BASE_SOURCE=""
 
 if [ -n "$MR_URL" ]; then
-  # Extract base from MR target
-  if echo "$MR_URL" | grep -q 'gitlab'; then
-    if command -v glab >/dev/null 2>&1; then
-      MR_IID="$(echo "$MR_URL" | grep -o 'merge_requests/[0-9]*' | sed 's/merge_requests\///')"
-      if [ -n "$MR_IID" ]; then
-        BASE="$(glab api "projects/:id/merge_requests/$MR_IID" 2>/dev/null | grep -o '"target_branch":"[^"]*"' | sed 's/"target_branch":"//;s/"//' || echo "")"
-        [ -n "$BASE" ] && BASE_SOURCE="from MR target"
-      fi
-    fi
-  elif echo "$MR_URL" | grep -q 'github'; then
+  # Extract base from MR target. Host-based forge resolution (like pw-lib mr-state) — the old
+  # "url contains gitlab|github" substring test is dead on self-hosted forges (source.golabs.io):
+  # it skipped the target lookup and silently shipped an "unconfirmed" inferred base.
+  mr_host="$(printf '%s' "$MR_URL" | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||')"
+  if [ "$mr_host" = "github.com" ]; then
     if command -v gh >/dev/null 2>&1; then
       MR_NUM="$(echo "$MR_URL" | grep -o 'pull/[0-9]*' | sed 's/pull\///')"
       if [ -n "$MR_NUM" ]; then
         BASE="$(gh pr view "$MR_NUM" --json baseRefName 2>/dev/null | grep -o '"baseRefName":"[^"]*"' | sed 's/"baseRefName":"//;s/"//' || echo "")"
+        [ -n "$BASE" ] && BASE_SOURCE="from MR target"
+      fi
+    fi
+  elif [ -n "$mr_host" ]; then
+    if command -v glab >/dev/null 2>&1; then
+      MR_IID="$(echo "$MR_URL" | grep -o 'merge_requests/[0-9]*' | sed 's/merge_requests\///')"
+      if [ -n "$MR_IID" ]; then
+        BASE="$(GITLAB_HOST="$mr_host" glab api "projects/:id/merge_requests/$MR_IID" 2>/dev/null | grep -o '"target_branch":"[^"]*"' | sed 's/"target_branch":"//;s/"//' || echo "")"
         [ -n "$BASE" ] && BASE_SOURCE="from MR target"
       fi
     fi

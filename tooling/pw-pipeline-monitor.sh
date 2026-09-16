@@ -9,14 +9,33 @@
 # ============================================================================
 set -euo pipefail
 
+if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/.." && pwd)"
 . "$HERE/pw-common.sh"
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../.." && pwd)}"
 
+# _record_build_check <taskfile> <text> — upsert the Result "Build check:" record. A bare
+# "already contains 'Build check:'" guard once made this a silent no-op on template-derived
+# files (the UNFILLED placeholder bullet matches too — the record never landed). Plan 16 harness,
+# found by the T1 monitor case.
+_record_build_check() {
+  local tf="$1" rec="$2"
+  if grep -qE '^[*+-] (\*\*)?Build check' "$tf"; then
+    awk -v r="$rec" '
+      !d && /^[*+-] \*\*Build check:\*\*/ { print "- **Build check:** " r; d=1; next }
+      !d && /^[*+-] Build check:/           { print "- Build check: " r;      d=1; next }
+      {print}' "$tf" > "$tf.tmp" && mv "$tf.tmp" "$tf"
+  elif grep -q '^## Result' "$tf"; then
+    awk -v r="$rec" '/^## Result/{p=1; print; print "- Build check: " r; next} p && /^## /{p=0} {print}' \
+      "$tf" > "$tf.tmp" && mv "$tf.tmp" "$tf"
+  fi
+}
+
 die() { echo "pw-pipeline-monitor: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scaffold.sh $1)"; printf '%s' "$d"; }
 
 TIMEOUT_MIN="${PW_PIPELINE_TIMEOUT:-15}"
 INTERVAL_SEC="${PW_PIPELINE_INTERVAL:-30}"
@@ -140,13 +159,8 @@ while true; do
     success|SUCCESS|passing|passed)
       echo "$TASK_ID: pipeline SUCCESS (${ELAPSED_MIN}m ${ELAPSED_SEC}s)"
       
-      # Update task file
-      if grep -q '^## Result' "$TASK_FILE"; then
-        if ! grep -q 'Build check:' "$TASK_FILE"; then
-          awk '/^## Result/{p=1; print; print "- Build check: SUCCESS"; next} p && /^## /{p=0} {print}' \
-            "$TASK_FILE" > "$TASK_FILE.tmp" && mv "$TASK_FILE.tmp" "$TASK_FILE"
-        fi
-      fi
+      # Update task file (upsert: placeholder or stale record both overwritten)
+      _record_build_check "$TASK_FILE" "SUCCESS"
       
       # The dashboard is NOT touched here: CI green ≠ merged. The State column belongs to
       # actual merged-ness (pw-lib.sh mr-state via /pw-ship or /pw-sync); the Build result is
@@ -157,13 +171,7 @@ while true; do
     failed|FAILURE|failed|canceled|skipped|CANCELLED|SKIPPED|failing)
       echo "$TASK_ID: pipeline FAILED (${ELAPSED_MIN}m ${ELAPSED_SEC}s) — status: $STATUS"
       
-      # Update task file
-      if grep -q '^## Result' "$TASK_FILE"; then
-        if ! grep -q 'Build check:' "$TASK_FILE"; then
-          awk -v status="$STATUS" '/^## Result/{p=1; print; print "- Build check: FAILED (" status ")"; next} p && /^## /{p=0} {print}' \
-            "$TASK_FILE" > "$TASK_FILE.tmp" && mv "$TASK_FILE.tmp" "$TASK_FILE"
-        fi
-      fi
+      _record_build_check "$TASK_FILE" "FAILED ($STATUS)"
       
       exit 1
       ;;

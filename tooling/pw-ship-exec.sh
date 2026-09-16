@@ -12,6 +12,8 @@
 # ============================================================================
 set -euo pipefail
 
+if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/.." && pwd)"
 . "$HERE/pw-common.sh"
@@ -19,10 +21,11 @@ PW_HOME="$(cd "$HERE/.." && pwd)"
 case "${1:-}" in -h|--help) pw_usage ;; esac
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../.." && pwd)}"
+
 REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
 
 die() { echo "pw-ship-exec: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scaffold.sh $1)"; printf '%s' "$d"; }
 
 [ $# -eq 3 ] || die "usage: pw-ship-exec.sh <slug> <task-id> <description-file>"
 
@@ -42,7 +45,7 @@ PLAN="$D/task/PLAN.md"
 REPO="$(pw_field "$TASK_FILE" Repo)"
 BRANCH="$(pw_field "$TASK_FILE" Branch)"; BRANCH="${BRANCH//\`/}"; BRANCH="${BRANCH%% *}"
 BASE="$(pw_field "$TASK_FILE" 'Base branch')"; BASE="${BASE//\`/}"; BASE="${BASE%% *}"
-TICKET="$(grep '^Ticket:' "$TASK_FILE" | sed 's/^Ticket: *//' | pw_trim)"
+TICKET="$(pw_field "$TASK_FILE" Ticket)"   # bold field OR legacy line-start; pw_field awk never trips set -e
 TITLE="$(grep '^# ' "$TASK_FILE" | head -1 | sed 's/^# //' | pw_trim)"
 
 [ -n "$REPO" ] || die "Repo not set in task file"
@@ -77,8 +80,11 @@ if [ -z "$FORGE_CLI" ]; then
   fi
 fi
 
-# Create or update MR
-if [ -n "$MR_URL" ] && [ "$MR_URL" != "(none)" ]; then
+# Create or update MR — only a REAL URL means an MR already exists. The old bare -n test
+# counted placeholder sentinels ("-", "—") as existing MRs and silently skipped creation
+# (found by the plan 16 T1 ship-exec case).
+case "$MR_URL" in http*) _MR_EXISTS=1;; *) _MR_EXISTS=0;; esac
+if [ "$_MR_EXISTS" = 1 ]; then
   echo "MR already exists: $MR_URL"
 else
   echo "Creating MR..."
@@ -115,8 +121,13 @@ else
   if [ -n "$MR_URL" ]; then
     echo "MR created: $MR_URL"
     
-    # Update task file with MR URL
-    if grep -q '^## Result' "$TASK_FILE"; then
+    # Record the MR URL in the task file's Result. Upsert the BOLD field line when present
+    # (v2 templates carry a "- **MR:** <placeholder>" bullet — appending a second plain line
+    # left the resolver reading the placeholder and re-creating the MR every run):
+    if grep -qE '^- \*\*MR:\*\*' "$TASK_FILE"; then
+      awk -v mr="$MR_URL" '!d && /^- \*\*MR:\*\*/ { print "- **MR:** " mr; d=1; next } {print}' \
+        "$TASK_FILE" > "$TASK_FILE.tmp" && mv "$TASK_FILE.tmp" "$TASK_FILE"
+    elif grep -q '^## Result' "$TASK_FILE"; then
       # Append MR line to Result section
       awk -v mr="$MR_URL" '/^## Result/{p=1; print; print "- MR: " mr; next} p && /^## /{p=0} {print}' \
         "$TASK_FILE" > "$TASK_FILE.tmp" && mv "$TASK_FILE.tmp" "$TASK_FILE"

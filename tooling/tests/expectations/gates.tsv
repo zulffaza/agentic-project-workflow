@@ -1,0 +1,24 @@
+gate analyze pwt-f1-scaffold	pw-preflight.sh	analyze pwt-f1-scaffold	1	-
+gate execute pwt-f1-scaffold	pw-preflight.sh	execute pwt-f1-scaffold	1	-
+gate breakdown pwt-f1-scaffold	pw-preflight.sh	breakdown pwt-f1-scaffold	1	-
+gate ship pwt-f1-scaffold	pw-preflight.sh	ship pwt-f1-scaffold	1	-
+gate comments pwt-f1-scaffold	pw-preflight.sh	comments pwt-f1-scaffold	1	-
+gate close pwt-f1-scaffold	pw-preflight.sh	close pwt-f1-scaffold	1	-
+gate review-plan pwt-f1-scaffold	pw-preflight.sh	review pwt-f1-scaffold plan	1	-
+gate review-task pwt-f1-scaffold	pw-preflight.sh	review pwt-f1-scaffold task-exec	1	-
+gate analyze pwt-f2-mid	pw-preflight.sh	analyze pwt-f2-mid	1	-
+gate execute pwt-f2-mid	pw-preflight.sh	execute pwt-f2-mid	0	-
+gate breakdown pwt-f2-mid	pw-preflight.sh	breakdown pwt-f2-mid	1	-
+gate ship pwt-f2-mid	pw-preflight.sh	ship pwt-f2-mid	0	-
+gate comments pwt-f2-mid	pw-preflight.sh	comments pwt-f2-mid	0	-
+gate close pwt-f2-mid	pw-preflight.sh	close pwt-f2-mid	1	-
+gate review-plan pwt-f2-mid	pw-preflight.sh	review pwt-f2-mid plan	0	-
+gate review-task pwt-f2-mid	pw-preflight.sh	review pwt-f2-mid task-exec	0	-
+gate analyze pwt-f3-hostile	pw-preflight.sh	analyze pwt-f3-hostile	1	-
+gate execute pwt-f3-hostile	pw-preflight.sh	execute pwt-f3-hostile	1	-
+gate breakdown pwt-f3-hostile	pw-preflight.sh	breakdown pwt-f3-hostile	1	-
+gate ship pwt-f3-hostile	pw-preflight.sh	ship pwt-f3-hostile	1	-
+gate comments pwt-f3-hostile	pw-preflight.sh	comments pwt-f3-hostile	1	-
+gate close pwt-f3-hostile	pw-preflight.sh	close pwt-f3-hostile	1	-
+gate review-plan pwt-f3-hostile	pw-preflight.sh	review pwt-f3-hostile plan	1	-
+gate review-task pwt-f3-hostile	pw-preflight.sh	review pwt-f3-hostile task-exec	1	-

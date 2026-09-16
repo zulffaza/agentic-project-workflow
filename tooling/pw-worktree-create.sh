@@ -9,6 +9,8 @@
 # ============================================================================
 set -euo pipefail
 
+if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/.." && pwd)"
 . "$HERE/pw-common.sh"
@@ -16,10 +18,11 @@ PW_HOME="$(cd "$HERE/.." && pwd)"
 case "${1:-}" in -h|--help) pw_usage ;; esac
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../.." && pwd)}"
+
 REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
 
 die() { echo "pw-worktree-create: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scaffold.sh $1)"; printf '%s' "$d"; }
 
 [ $# -eq 4 ] || die "usage: pw-worktree-create.sh <slug> <task-id> <repo> <base-branch>"
 
@@ -31,7 +34,7 @@ BASE_BRANCH="$4"
 D="$(proj_dir "$SLUG")"
 REPO_DIR="$REPOS_DIR/$REPO"
 
-[ -d "$REPO_DIR" ] || die "repo not found: $REPO_DIR"
+[ -d "$REPO_DIR" ] || die "repo not found: $REPO_DIR → fix: pass the repo dir name (repos live under $REPOS_DIR — clone it there first)"
 
 # Construct branch name
 BRANCH_NAME="agent/$SLUG/$TASK_ID-$SLUG"

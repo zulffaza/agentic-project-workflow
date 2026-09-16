@@ -47,7 +47,7 @@ Each run:
    `gh pr view --json baseRefName`). No MR → best-effort infer + **flag it unconfirmed** for you to
    verify.
 2. **Snapshots** what that branch already did (commits + diff vs its base) into `context/ADOPTED.md`.
-3. **Records the unit deterministically** (`pw-lib.sh adopt`) — appends a new unit, or updates an
+3. **Records the unit deterministically** (the `/pw-adopt` recording step) — appends a new unit, or updates an
    existing `repo@branch` in place. It also maintains the `context/INDEX.md` rows (a one-time generic
    `ADOPTED.md` provenance row + one `(repo, base)` "Repos in scope" row per unit). **Adopting the
    Nth branch never clobbers the earlier ones** — that determinism is the whole point; don't

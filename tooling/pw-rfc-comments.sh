@@ -9,6 +9,8 @@
 # ============================================================================
 set -euo pipefail
 
+if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/.." && pwd)"
 . "$HERE/pw-common.sh"
@@ -16,15 +18,16 @@ PW_HOME="$(cd "$HERE/.." && pwd)"
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../.." && pwd)}"
 
 die() { echo "pw-rfc-comments: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scaffold.sh $1)"; printf '%s' "$d"; }
 
 SLUG=""
 BACKEND="${PW_RFC_BACKEND:-markdown}"
+BACKEND_FROM_META=1
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --backend) shift; BACKEND="${1:-$BACKEND}"; shift ;;
-    --backend=*) BACKEND="${1#--backend=}"; shift ;;
+    --backend) shift; BACKEND="${1:-$BACKEND}"; BACKEND_FROM_META=0; shift ;;
+    --backend=*) BACKEND="${1#--backend=}"; BACKEND_FROM_META=0; shift ;;
     -h|--help) pw_usage ;;
     -*) die "unknown option: $1" ;;
     *) SLUG="$1"; shift ;;
@@ -37,16 +40,22 @@ D="$(proj_dir "$SLUG")"
 META="$D/rfc/META.md"
 REVIEW_FILE="$D/analysis/review/RFC.review.md"
 
+[ -f "$META" ] || die "rfc/META.md not found — run the /pw-rfc publish step first"
+
+# The project's rfc/META.md records its own backend (bold field, per pw-lib rfc state);
+# it wins over the global PW_RFC_BACKEND default unless --backend is given explicitly.
+if [ "$BACKEND_FROM_META" = 1 ] && mw="$(pw_field "$META" Backend)" && [ -n "$mw" ]; then
+  BACKEND="$mw"
+fi
+
 # If backend is markdown, no external comments to fetch
 if [ "$BACKEND" = "markdown" ]; then
   echo "RFC comments: no external comments to fetch (backend=markdown)"
   exit 0
 fi
 
-[ -f "$META" ] || die "rfc/META.md not found"
-
 # Resolve backend target
-TARGET="$(grep '^Target:' "$META" | sed 's/^Target: *//' | pw_trim)"
+TARGET="$(pw_field "$META" Target)"
 [ -n "$TARGET" ] || die "no Target: in rfc/META.md"
 
 # Fetch comments from backend (platform-specific)

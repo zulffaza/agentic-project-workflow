@@ -31,8 +31,9 @@ $PW_HOME/tooling/<script>.sh <args> [options]      # shell
 - The project slug resolves under `$PW_PROJECTS_DIR` (default: the bundle's parent-of-parent);
   a missing project is always an error, never an empty success. Scripts that touch repos resolve
   them under `PW_REPOS` the same way.
-- Selftests exist on `pw-status.sh --selftest` (and the suite's spine, `pw-lib.sh selftest`);
-  run those after editing tooling.
+- Every automation script accepts `--selftest` (delegates to the harness). After **any** tooling
+  change run the full protocol: `tooling/tests/pw-test.sh all` — tiers, corpus mode and the
+  change-type matrix are in [`../testing.md`](../testing.md).
 
 ## Exit codes — read this before "handling" a failure
 

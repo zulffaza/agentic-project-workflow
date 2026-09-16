@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Fake `gh` for offline tests — see bin/glab header. GH vocabulary: OPEN/MERGED/CLOSED.
+set -u
+[ -n "${PWTEST_FORGE_LOG:-}" ] && printf '%s\n' "gh $*" >>"$PWTEST_FORGE_LOG"
+if [ -n "${PWTEST_FORGE_FAIL:-}" ]; then echo "gh-shim: forced query failure" >&2; exit 1; fi
+_json() {
+  local iid="$1" st="OPEN" tgt="${PWTEST_MR_TARGET:-main}"
+  if [ -n "${PWTEST_FORGE_STATE_FILE:-}" ] && [ -f "$PWTEST_FORGE_STATE_FILE" ]; then
+    st="$(awk -v k="$iid" '$1==k{print $2; exit}' "$PWTEST_FORGE_STATE_FILE")"
+    case "$st" in merged|MERGED) st=MERGED;; closed|CLOSED) st=CLOSED;; ""|*) st=OPEN;; esac
+  fi
+  printf '{"number":%s,"state":"%s","baseRefName":"%s","headRefName":"%s","url":"https://github.com/pwtest/api/pull/%s"}\n' \
+    "$iid" "$st" "$tgt" "agent/x" "$iid"
+}
+case "${1:-}" in
+  pr)
+    case "${2:-}" in
+      view)
+        j="$(_json "${2##*/}")"
+        case " $* " in
+          *-q*--json*state*|*"--json state"*) : ;;
+        esac
+        case " $* " in
+          *'.state'*)   printf '%s\n' "$(printf '%s' "$j" | sed -n 's/.*"state":"\([A-Z]*\)".*/\1/p')" ;;
+          *statusCheckRollup*|*baseRefName*) printf '%s\n' "$j" ;;
+          *) printf '%s\n' "$j" ;;
+        esac ;;
+      create) if [ -n "${PWTEST_FORGE_CREATE+set}" ] && [ -z "$PWTEST_FORGE_CREATE" ]; then
+                echo "gh-shim: creation returned no URL (forced)" >&2; exit 1; fi
+              printf 'https://github.com/pwtest/api/pull/77\n' ;;
+      checks) printf 'ci\tpass\t0s\n' ;;
+      *) printf 'gh-shim: unexpected pr sub: %s\n' "$2" >&2; exit 42 ;;
+    esac ;;
+  issue) printf '{"title":"fake","body":"fake issue content"}\n' ;;
+  auth) exit 0 ;;
+  api) printf '%s\n' "${PWTEST_API_JSON:-{\}}" ;;
+  *) printf 'gh-shim: unexpected invocation: %s\n' "$*" >&2; exit 42 ;;
+esac

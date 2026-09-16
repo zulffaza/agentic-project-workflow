@@ -104,6 +104,11 @@ command's prompt or an agent, edit the canonical file and re-run the generator �
 per-provider copies.
 
 ## Conventions (the contract)
+
+- **Tooling edits follow the test protocol**: work only in the bundle's canonical sources
+  (`tooling/`, `template/`, never installed provider copies) and run
+  `tooling/tests/pw_test.sh all` before considering the change done — change-type → required
+  tiers in `tooling/docs/testing.md` (`pw-doctor.sh --test` is the same harness).
 - **Task IDs:** `T01`, `T02`… referenced by `depends_on`.
 - **Branch:** `agent/<project-slug>/<task-id>-<slug>`
 - **Worktree:** `worktree/<repo>/<task-id>-<slug>/`, created by `git worktree add` off the real
