@@ -192,21 +192,28 @@ For each `[OPEN]` item in the resolved files:
   (sub-)bullet, short table cells, fold into an existing `### 4.N` subsection before adding a new
   one — a fold-in is exactly the moment §4 tends to sprawl one subsection at a time; don't let this
   round be the one that does it,
-- edit that SAME `### Rn · …` heading in place — flip `[OPEN]` → `[RESOLVED]` and its trailing
-  `pw-item-status` marker together; **never add a second heading for the same item** (that's what
-  makes consecutive items in the file visually run together — one heading per item, always),
-- append a concrete reply as a quoted line directly below the item's ask, one blank line between
-  them: `> ↳ **agent** (<YYYY-MM-DD HH:MM>): <section(s) + exactly what changed>` — never a bare
-  "fixed"/"done", and **never restate my ask** (R-items never get a `↳ you:` line; my ask is
-  already sitting right there as the item's own body text),
-- add a `---` rule after the reply, before the next item.
+- then flip the item + reply **deterministically** — never hand-edit the heading/reply block:
+  ```bash
+  {{PW_HOME}}/tooling/pw-review-edit.sh resolve <slug> <review-rel-path> <Rn> --stdin <<'EOF'
+  <section(s) + exactly what changed — concrete, never a bare "fixed"/"done", never a restatement of my ask>
+  EOF
+  ```
+  It edits that SAME `### Rn · …` heading in place — flips `[OPEN]` → `[RESOLVED]` and its trailing
+  `pw-item-status` marker together (**never a second heading** for the same item — that's what
+  makes consecutive items in the file visually run together), appends the quoted
+  `> ↳ **agent** (<YYYY-MM-DD HH:MM>): …` reply directly below my ask (one blank line between),
+  keeps the `---` rule, and reindexes `## Contents`. **R-items never get a `↳ you:` line** — my ask
+  is already sitting right there as the item's own body text. (Hand-syntax fallback if the script
+  is unavailable: the template's "Add an item" hint block documents the exact shape.)
 
 **Also process the "## Open questions" section (QnA):** for each `Qn` whose `> ↳ **you**:` line has
-an answer, fold that answer into the reviewed doc, edit that SAME `### Qn · …` heading in place
-(flip `[PENDING]` → `[ANSWERED]` + marker — never a second heading), append
-`> ↳ **agent** (<timestamp>): …` right after my `↳ you:` line inside the same quoted block (one
-blank quoted line between the two), and add a `---` rule before the next question. Leave unanswered
-`Qn` rows untouched and report them as still blocking.
+an answer, fold that answer into the reviewed doc, then flip + reply deterministically:
+`{{PW_HOME}}/tooling/pw-review-edit.sh resolve <slug> <review-rel-path> <Qn> --stdin` (heredoc =
+your `↳ agent:` reply: what was folded in, where). It edits that SAME `### Qn · …` heading in
+place (`[PENDING]` → `[ANSWERED]` + marker — never a second heading), appends the reply right
+after my `↳ you:` line inside the same quoted block (blank quoted `>` line between), keeps the
+`---` rule, and reindexes. It **refuses** if my `↳ you:` line is missing — unanswered `Qn` rows
+stay untouched; report them as still blocking.
 
 **Task-level fixes get a build loop (on by default — `--skip-build-check` to opt out).** For any
 item that fixes a TASK's code (`task/review/T0n.review.md` items, or a `verify-failed` task), the
@@ -225,11 +232,13 @@ task's `## Verify` block IS its build check. After applying the fix in that task
 only.)
 
 Never edit or delete my comment text (items OR my `↳ you:` answers). Never write the Sign-off row
-— only I clear the gate. Log the pass (this is the ONLY dashboard-adjacent write you make) — **one
+— only I clear the gate (and never run `pw-review-edit.sh signoff` on your own initiative — C4).
+Log the pass (this is the ONLY dashboard-adjacent write you make) — **one
 line per processed file**: `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> review "<n> items resolved in
-<file>"`. Then refresh **each processed file's** `## Contents` table:
-`…/{{PW_HOME}}/tooling/pw-lib.sh review reindex <slug> <review-rel-path>` — a heading just changed
-status, so the table would otherwise go stale.
+<file>"`. The `## Contents` table needs no manual refresh when you flipped headings via
+`pw-review-edit.sh resolve` (it reindexes itself) — only run
+`…/{{PW_HOME}}/tooling/pw-lib.sh review reindex <slug> <review-rel-path>` if you hand-edited a
+heading as a fallback.
 
 **Archive once several items have piled up resolved** — a concrete trigger, not a vibe: once 3+
 items/questions in this file are `[RESOLVED]`/`[ANSWERED]` since the last archive, or the file

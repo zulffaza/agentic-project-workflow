@@ -56,8 +56,17 @@ Hard rules:
   `<topic>.archive.md` unless you're specifically checking whether something already came up.
 - **File items exactly like a human would**, under `## Items`, but tagged `(pw-reviewer,
   <YYYY-MM-DD HH:MM>)` — never `(you, …)`, so your items are always visually distinct in the
-  file's history. One concrete ask per item. Seed `## Open questions` rows the same way a producer
-  agent would if something is genuinely ambiguous, not just to hedge.
+  file's history. One concrete ask per item. **Write them deterministically, never hand-copied
+  heading blocks:**
+  ```bash
+  {{PW_HOME}}/tooling/pw-review-edit.sh add-item <slug> <review-rel-path> \
+    --section '<§anchor>' --actor pw-reviewer --stdin   # the ask via heredoc — verbatim, quote-safe
+  ```
+  (next Rn, timestamp, `pw-item-status` marker, `---` rule, and the `## Contents` reindex are all
+  handled; `--actor pw-reviewer` is the tag above). Seed `## Open questions` rows the same way a
+  producer agent would if something is genuinely ambiguous, not just to hedge — via
+  `pw-review-edit.sh add-question <slug> <path> --section '<§anchor>' --stdin` (default actor is
+  `agent`; pass `--actor pw-reviewer` to keep your tag).
 - **Before filing anything, check the review file for an existing item on the SAME `§section or
   anchor` you're about to use — this is what stops a never-ending loop:**
   - An item on that anchor is already [OPEN] (yours or a human's)? Don't file a duplicate — it's

@@ -32,16 +32,41 @@ fresh is that it doesn't.
 
 ## The review-file schema (recap — full template: `template/_REVIEW.template.md`)
 
-- `## Items`: add a heading `### Rn · <§section or anchor> — [OPEN] (pw-reviewer, <YYYY-MM-DD
-  HH:MM>)` followed by your ask on the next line. **Use `(pw-reviewer, …)`, never `(you, …)`** — a
-  human's items and yours must stay visually distinguishable in the file's history. One concrete
-  ask per item.
-- `## Open questions`: seed a `### Qn · <§section> — [PENDING] (pw-reviewer, <timestamp>)`
-  row only for something genuinely ambiguous that blocks judgment — not to hedge on a real finding.
-- `## Sign-off`: **never write this by hand.** See "The gate" below.
+**With bundle access, write items/questions deterministically — never hand-copy heading blocks**
+(`pw-review-edit.sh` writes the heading, timestamp, `pw-item-status` marker, `---` rule, and
+reindexes `## Contents` for you; ids stay monotonic even across archives):
+
+```sh
+# one concrete ask per item; --actor pw-reviewer is what keeps your items visually distinct
+tooling/pw-review-edit.sh add-item <slug> <review-rel-path> \
+  --section '<§section or anchor>' --actor pw-reviewer --stdin <<'EOF'
+<your ask — verbatim, quote-safe, multi-line ok>
+EOF
+
+# a genuinely ambiguous, judgment-blocking question (not a hedge on a real finding):
+tooling/pw-review-edit.sh add-question <slug> <review-rel-path> \
+  --section '<§section>' --actor pw-reviewer --stdin <<'EOF'
+<the question>
+EOF
+```
+
+- `## Items`: each item is `### Rn · <§anchor> — [OPEN] (pw-reviewer, <YYYY-MM-DD HH:MM>)` + the
+  ask. **Use `--actor pw-reviewer`, never the default `you`** — a human's items and yours must
+  stay visually distinguishable in the file's history.
+- `## Sign-off`: **never write this by hand, and never via `pw-review-edit.sh signoff`** — that
+  operator is human-triggered only (C4). Your one path is the guarded `auto-signoff` call below.
 - Never edit or delete existing item/question text (human- or agent-authored) — you only ever
   *add* new items/questions, or (if you're the one applying fixes elsewhere in the pipeline —
-  that's a different role, `/pw-review`'s apply flow, not this skill) reply and flip status.
+  that's a different role, `/pw-review`'s apply flow, not this skill) reply and flip status via
+  `pw-review-edit.sh resolve <slug> <path> <Rn|Qn> --stdin` (flips the SAME heading's tag +
+  marker together, appends the styled `↳ agent:` reply, reindexes; on a `Qn` it refuses unless
+  the human's `↳ you:` line already exists).
+
+**Fallback — a foreign agent with no bundle checkout** files items by hand, matching the exact
+template syntax: heading `### Rn · <§anchor> — [OPEN] (pw-reviewer, <YYYY-MM-DD HH:MM>)
+<!-- pw-item-status: open -->`, ask on the next line(s), blank line, `---` rule; next free Rn/Qn
+by scanning existing headings (including the `## Archived items` pointer rows). Keep the trailing
+marker — tooling keys off it, not the tag text.
 
 ## Read only what you need — never the whole file to find one section
 
