@@ -42,11 +42,11 @@ only when the selected tiers consume them, so a filtered run is genuinely fast.
 For the **meta-test**, scope to what you touched: `--mutation '<id-filter>'` runs only matching
 register rows — during development use it per changed file (e.g. `--mutation 'C2[5-9]'`), and the
 **full sweep belongs at the ship gate only** (or when a shared library — `pw-common.sh`,
-`pw-mdlib.sh` — or the register itself changes). A full sweep is ~3–5 min for all 33 rows.
+`pw-mdlib.sh` — or the register itself changes). A full sweep is **~1 min** (parallel, warm cache).
 
 ## The meta-test (`--mutation`)
 
-`expectations/mutations.tsv` reverts one **documented fix** per coupling-register row (C1–C42;
+`expectations/mutations.tsv` reverts one **documented fix** per coupling-register row (C1–C44;
 plan 16 §5, extended by plans 17/19) in the working tree and asserts the harness catches it: a
 mutation that passes = a vacuous test — the exact failure mode that produced this protocol. Each
 row: `id \t file(rel tooling/) \t OLD \t NEW \t tier \t only`; a drift-flagged row means the
@@ -60,9 +60,15 @@ the runtime scripts) and each child copies from it instead of rebuilding; cache 
 `$TMPDIR/pwtest-fixture-cache` (override `PWTEST_MUT_CACHE`, disable `PWTEST_FIXTURE_CACHE=`).
 **Convention this creates: a mutation catcher must never depend on the mutation changing fixture
 BYTES** — catchers test runtime readers on template-derived data. Every child runs under a
-watchdog (`PWTEST_MUT_TIMEOUT`, default 300 s): a timeout is reported as `HUNG`, the mutated file
-is restored, the sweep **continues**, and the final exit lists the hung rows. Progress prints one
+watchdog (`PWTEST_MUT_TIMEOUT`, default 300 s): a timeout is reported as `HUNG`, the sweep
+**continues**, and the final exit lists the hung rows. Progress prints one
 `MUT n/N <id> rc=<rc> <elapsed>s` line per row.
+
+The sweep is **parallel by default** (`PWTEST_MUT_JOBS`, auto = min(ncpu, 8)): one worker per
+row, each mutating a disposable rsync copy of the bundle (excluding `.git`) — the live tree is
+never mutated, so workers cannot see each other's reverts (the false-"caught" hazard of
+parallel-on-live) and same-file rows need no serialization. A full sweep is **~70 s for 35
+rows**; `PWTEST_MUT_JOBS=1` keeps the original serial live-tree path.
 
 ## The agent protocol (change type → minimum tiers)
 
