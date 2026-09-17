@@ -368,6 +368,10 @@ _pwtest_cache_store() { # all three built fresh → publish atomically (tmp dir 
 }
 _pwtest_materialize() { # restore cached fixtures, build what is still missing, store if all built fresh
   local built="" hit="" _cd=""
+  # A long-lived parent exports F1..F3/PWTEST_F2; a fresh child must never mistake an
+  # inherited path for a fixture materialized in ITS OWN root (the lazy-build guard reads
+  # these vars) — clear first, then restore-or-build per NEED_F*.
+  F1=""; F2=""; F3=""; PWTEST_F2=""
   [ -n "${PWTEST_FIXTURE_CACHE:-}" ] && _cd="$(_pwtest_cache_dir)"
   if [ -n "$_cd" ] && [ "$NEED_F1" = 1 ] && [ -f "$_cd/.done-$S1" ]; then
     cp -a "$_cd/projects/$S1" "$PW_PROJECTS_DIR/" && { F1="$PW_PROJECTS_DIR/$S1"; export F1; hit="$hit F1"; }
