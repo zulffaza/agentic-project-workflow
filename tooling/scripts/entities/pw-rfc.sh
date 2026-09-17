@@ -199,7 +199,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -n "$SLUG" ] || die "usage: pw-rfc-comments.sh <slug> [--backend <backend>]"
+[ -n "$SLUG" ] || die "usage: pw-rfc.sh comments <slug> [--backend <backend>]"
 
 D="$(proj_dir "$SLUG")"
 META="$D/rfc/META.md"
@@ -207,7 +207,7 @@ REVIEW_FILE="$D/analysis/review/RFC.review.md"
 
 [ -f "$META" ] || die "rfc/META.md not found — run the /pw-rfc publish step first"
 
-# The project's rfc/META.md records its own backend (bold field, per pw-lib rfc state);
+# The project's rfc/META.md records its own backend (bold field, per the rfc state block);
 # it wins over the global PW_RFC_BACKEND default unless --backend is given explicitly.
 if [ "$BACKEND_FROM_META" = 1 ] && mw="$(pw_field "$META" Backend)" && [ -n "$mw" ]; then
   BACKEND="$mw"

@@ -15,7 +15,7 @@ pwtest_rc 2 "unknown project" "$(pwtest_script pw-doc.sh)" lint all nope-xyz
 pwtest_fix "unknown project actionable"
 pwtest_rc 2 "bogus mode" "$(pwtest_script pw-doc.sh)" lint bogus "$S2"
 
-# C22 (2026-09-16): review marker lint reads pw-lib's detector — unfilled stubs must not false-fail,
+# C22 (2026-09-16): review marker lint reads the shared detector — unfilled stubs must not false-fail,
 # a filled real item with no status marker must.
 RVF="$PWTEST_F2/task/review/T04.review.md"
 pwtest_rc 0 "lint review on template-shape file (stubs exempt)" "$(pwtest_script pw-doc.sh)" lint review "$S2" "task/review/T04.review.md"

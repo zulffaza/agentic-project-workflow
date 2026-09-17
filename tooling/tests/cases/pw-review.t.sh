@@ -4,7 +4,6 @@
 # add-item, answer, add-question, resolve. Works on a private clone of F2 (never the shared
 # fixture — C22-style pollution is a known trap) plus a fresh-template review file.
 E="$(pwtest_script pw-review.sh)"
-L="$(pwtest_script pw-lib.sh)"
 RE=reviewedit; rm -rf "$PW_PROJECTS_DIR/$RE"; cp -a "$F2" "$PW_PROJECTS_DIR/$RE"
 P="$PW_PROJECTS_DIR/$RE"
 RV="task/review/T04.review.md"   # fresh template shape (stubs unfilled, placeholder sign-off row)
@@ -152,7 +151,7 @@ rv_selftest() {
   SH="$(pwtest_script pw-review.sh)"
   LIBP="$(pwtest_script pw-config.sh)"
   # demo2 starts advisory for the auto-signoff refusal checks (the original relied on the
-  # ai-review section that runs earlier in pw-lib's selftest):
+  # ai-review section that runs earlier in the selftest):
   PW_PROJECTS_DIR="$tmp" "$LIBP" ai-review demo2 analysis advisory >/dev/null 2>&1 || true
   # review-init: creates a review file verbatim from the template (header + Reviewing: link
   # stamped, format hints intact), and is idempotent — a 2nd call never clobbers your items.

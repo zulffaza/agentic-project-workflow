@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # ============================================================================
-# pw-doctor.sh — verify the installed skill + generated /pw-* commands are in
-# sync with THIS bundle, per enabled provider. Reports drift; --fix repairs it.
+# pw-doctor.sh — verify the installed skills, generated /pw-* commands, and agent
+# definitions are in sync with THIS bundle, per enabled provider — in BOTH directions:
+# what the bundle ships must match what's installed, and nothing bundle-named may
+# linger installed-but-unshipped (orphans) or sit stale in foreign agent-read roots
+# (~/.agents/skills, ~/.kilo/skills). Reports drift; --fix repairs it.
 #
 #   tooling/scripts/toolchain/pw-doctor.sh          check only (exit 1 if anything is out of sync)
 #   tooling/scripts/toolchain/pw-doctor.sh --fix    repair drift (re-install skill, regenerate commands)
@@ -211,6 +214,20 @@ for p in "${PW_PROVIDERS[@]}"; do
     fi
   done
 
+  # orphan skills: installed entries named like bundle skills that the bundle no longer ships
+  # (the loop above only checks names the bundle DOES ship — dropped/renamed skills linger).
+  sorph=""
+  for inst in "$skilldir"/project-workflow "$skilldir"/pw-*; do
+    { [ -e "$inst" ] || [ -L "$inst" ]; } || continue
+    [ -d "$SKILL_DIR/$(basename "$inst")" ] || sorph="$sorph $(basename "$inst")"
+  done
+  if [ -n "$sorph" ]; then
+    echo "    ✗ orphan skill(s) — installed but no longer shipped:$sorph"; issues=$((issues+1))
+    if [ "$FIX" -eq 1 ]; then for n in $sorph; do rm -rf "$skilldir/$n"; done; echo "      fixed: removed orphan skills"; fi
+  else
+    echo "    ✓ no orphan skills"
+  fi
+
   # commands: generate to temp, diff against what's installed
   odir="$("${p}_commanddir")"
   "$HERE/gen-commands.sh" --outdir "$tmp" "$p" >/dev/null
@@ -227,6 +244,19 @@ for p in "${PW_PROVIDERS[@]}"; do
     if [ "$FIX" -eq 1 ]; then
       "$HERE/gen-commands.sh" "$p" >/dev/null && echo "      fixed: regenerated commands"
     fi
+  fi
+
+  # orphan commands: installed pw-*.md the bundle NO LONGER generates (renamed/dropped commands
+  # would otherwise linger forever — the sync check only diffs names that still exist).
+  corph=""; for inst in "$odir"/pw-*.md; do
+    [ -e "$inst" ] || continue
+    [ -f "$tmp/$p/$(basename "$inst")" ] || corph="$corph $(basename "$inst")"
+  done
+  if [ -n "$corph" ]; then
+    echo "    ✗ orphan command file(s) — installed but no longer generated:$corph"; issues=$((issues+1))
+    if [ "$FIX" -eq 1 ]; then for n in $corph; do rm -f "$odir/$n"; done; echo "      fixed: removed orphan commands"; fi
+  else
+    echo "    ✓ no orphan commands"
   fi
 
   # {{ARGS}} conformance: a render_<prov>_command hook that forgets to substitute the {{ARGS}}
@@ -265,6 +295,16 @@ for p in "${PW_PROVIDERS[@]}"; do
         "$HERE/gen-agents.sh" "$p" >/dev/null && echo "      fixed: regenerated agents"
       fi
     fi
+    aorph=""; for inst in "$adir"/pw-*.md; do
+      [ -e "$inst" ] || continue
+      [ -f "$tmp/agents/$p/$(basename "$inst")" ] || aorph="$aorph $(basename "$inst")"
+    done
+    if [ -n "$aorph" ]; then
+      echo "    ✗ orphan agent file(s) — installed but no longer generated:$aorph"; issues=$((issues+1))
+      if [ "$FIX" -eq 1 ]; then for n in $aorph; do rm -f "$adir/$n"; done; echo "      fixed: removed orphan agents"; fi
+    else
+      echo "    ✓ no orphan agents"
+    fi
   fi
 
   # --- model availability (INFORMATIONAL ONLY — never touches $issues or the exit code; a ⚠
@@ -300,6 +340,28 @@ for p in "${PW_PROVIDERS[@]}"; do
     fi
   fi
   echo
+done
+
+# --- foreign skill roots --------------------------------------------------------------------
+# Other agent-read paths (e.g. ~/.agents/skills, which kilo loads via skills.paths) can hold
+# copies of bundle skills OUTSIDE the provider install surface the loop above checks — a stale
+# real-dir copy there shadows the fresh symlink (this bit us after the plan-20 layout move).
+# If a bundle skill name exists at such a root, it must match the bundle source; --fix replaces
+# the copy with a symlink to the source of truth.
+for _root in "$HOME/.agents/skills" "$HOME/.kilo/skills"; do
+  [ -d "$_root" ] || continue
+  for skill_src in "$SKILL_DIR"/*/; do
+    [ -f "${skill_src}SKILL.md" ] || continue
+    skill_src="${skill_src%/}"; skill_name="$(basename "$skill_src")"
+    t="$_root/$skill_name"
+    { [ -e "$t" ] || [ -L "$t" ]; } || continue
+    if [ -e "$t" ] && diff -rq "$t" "$skill_src" >/dev/null 2>&1; then continue; fi
+    echo "  ✗ foreign skill copy STALE: $t (a copy outside the provider install surface)"
+    issues=$((issues+1))
+    if [ "$FIX" -eq 1 ]; then
+      rm -rf "$t"; ln -sfn "$skill_src" "$t" && echo "      fixed: $t → bundle symlink"
+    fi
+  done
 done
 
 # --- provider-independence (D9) bleed check -------------------------------------------------

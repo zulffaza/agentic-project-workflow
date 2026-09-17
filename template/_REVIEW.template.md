@@ -46,8 +46,8 @@ QUICK REFERENCE (full mechanics + rationale: docs/REVIEW.md):
   review file from forcing every new round to re-read the whole resolved history just to apply one
   new item.
 - **Agents:** the `> **Add an item:**` / `> **Answer a question:**` hints are permanent — never
-  remove them, even once a section reads "No blocking …". Create this file via `pw-lib.sh
-  review-init` (copies the template verbatim) — or `pw-review.sh init-all <slug>` for every
+  remove them, even once a section reads "No blocking …". Create this file via `pw-review.sh
+  init` (copies the template verbatim) — or `pw-review.sh init-all <slug>` for every
   missing review file in the project at once — never by hand. -->
 
 ## Decision status — what moves, and who moves it

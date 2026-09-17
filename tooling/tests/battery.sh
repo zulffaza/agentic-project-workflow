@@ -96,7 +96,7 @@ battery_t2() {
       pwtest_bad "$label" "SCRIPT CRASH (was silent once): $(head -c140 "$B_ERR"|tr '\n' ' ')"
     elif [ "$B_RC" != "$rc" ]; then
       pwtest_bad "$label" "rc=$B_RC want=$rc; err: $(head -c140 "$B_ERR"|tr '\n' ' ')"
-    elif [ "$B_RC" != 0 ] && ! grep -qE 'fix|run |/pw-|pw-lib|scaffold|--help|usage|expected' "$ROOT/b.both"; then
+    elif [ "$B_RC" != 0 ] && ! grep -qE 'fix|run |/pw-|scaffold|--help|usage|expected' "$ROOT/b.both"; then
       pwtest_bad "$label (→ fix: contract)" "rc=$B_RC bare stderr"
     else
       pwtest_ok "$label"

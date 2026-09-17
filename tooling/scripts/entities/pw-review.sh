@@ -840,7 +840,7 @@ cmd_scan() {
   for f in "${REVIEW_FILES[@]}"; do
     REL="${f#$D/}"
   
-    # Counts come from pw-lib's "review count" — THE same heading-level detector the approval
+    # Counts come from the shared heading-level detector — THE same one the approval
     # gates use. A whole-file `grep -c "pw-item-status: open"` previously counted the template's
     # permanent "> Add an item: … <!-- pw-item-status: open -->" guidance line in EVERY review
     # file, so each one phantom-reported "(1 open)" forever, no matter what was approved.

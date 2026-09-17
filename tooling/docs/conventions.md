@@ -76,7 +76,12 @@ is normative.
 - **L5 — reference form.** `$PW_HOME/tooling/scripts/entities/<name>.sh` (shell) /
   `{{PW_HOME}}/tooling/scripts/entities/<name>.sh` (prompt files); toolchain refs
   `$PW_HOME/tooling/scripts/toolchain/<name>.sh`; intra-bundle sourcing uses
-  `$HERE/../lib/<name>.sh`. The old flat form `tooling/<name>.sh` fails a T0 canary.
+  `$HERE/../lib/<name>.sh`. The old flat form `tooling/<name>.sh` fails a T4 canary.
+- **L5b — no dead names in runtime hints.** `usage:`/`die_fix`/`add_error` lines may only name
+  scripts that exist: every `<name>.sh` token on those lines must resolve under
+  `scripts/{entities,lib,toolchain}/` or the bundle root. Bare dead names slip past L5's
+  `tooling/`-prefixed scan — after plan 20's merges, users were still told to run
+  `pw-doc-lint.sh`. A T4 canary enforces it.
 
 ## C-rules — how slash commands are shaped
 

@@ -315,7 +315,7 @@ cmd_adopt_snapshot() {
   BASE_SOURCE=""
 
   if [ -n "$MR_URL" ]; then
-    # Extract base from MR target. Host-based forge resolution (like pw-lib mr-state) — the old
+    # Extract base from MR target. Host-based forge resolution (like the mr-state block) — the old
     # "url contains gitlab|github" substring test is dead on self-hosted forges (source.golabs.io):
     # it skipped the target lookup and silently shipped an "unconfirmed" inferred base.
     mr_host="$(printf '%s' "$MR_URL" | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||')"

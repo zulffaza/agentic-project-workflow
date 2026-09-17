@@ -31,7 +31,7 @@ proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1
 
 
 cmd_lint() {
-[ $# -ge 2 ] || die "usage: pw-doc-lint.sh <type> <slug> [args...]"
+[ $# -ge 2 ] || die "usage: pw-doc.sh lint <type> <slug> [args...]"
 
 TYPE="$1"
 SLUG="$2"
@@ -161,7 +161,7 @@ lint_plan() {
     PLAN_TASKS="$(awk '/^## Task( |s)/{p=1; next} p && /^\|.*T[0-9]/{count++} END{print count+0}' "$f")"
     ACTUAL_TASKS="$(find "$D/task" -maxdepth 1 -name 'T*.md' ! -name '_TEMPLATE*' 2>/dev/null | wc -l | pw_trim)"
     if [ "$PLAN_TASKS" != "$ACTUAL_TASKS" ]; then
-      add_error "$f: task count mismatch (PLAN has $PLAN_TASKS, found $ACTUAL_TASKS task files)" "align the task table with task/*.md — add missing rows or delete stale ones (then pw-doc-sync.sh <slug> --dashboard-only)"
+      add_error "$f: task count mismatch (PLAN has $PLAN_TASKS, found $ACTUAL_TASKS task files)" "align the task table with task/*.md — add missing rows or delete stale ones (then pw-doc.sh sync <slug> --dashboard-only)"
     fi
   fi
 }
@@ -176,7 +176,7 @@ lint_review() {
   grep -q '^## Open questions' "$f" || add_error "$f: missing '## Open questions' section" "review files start from $D/_REVIEW.template.md (created via /pw-review)"
   grep -q '^## Sign-off' "$f" || add_error "$f: missing '## Sign-off' section" "review files start from $D/_REVIEW.template.md (created via /pw-review)"
   
-  # Check items carry machine status markers — via pw-lib's "review count", the ONE detector
+  # Check items carry machine status markers — via the shared heading-level detector, the ONE
   # (comment-blanking, heading-level, unfilled-stub-exempt) every other consumer uses, instead
   # of a fourth grep that could drift (C22). Unfilled template stubs count as neither item nor
   # marker, so a fresh review can't false-fail; a real heading with NO status vocabulary can.
@@ -200,7 +200,7 @@ lint_dashboard() {
     DASHBOARD_TASKS="$(awk '/^## Task( |s)/{p=1; next} /^## /{p=0} p && /^\|.*T[0-9]/{count++} END{print count+0}' "$f")"
     ACTUAL_TASKS="$(find "$D/task" -maxdepth 1 -name 'T*.md' ! -name '_TEMPLATE*' 2>/dev/null | wc -l | pw_trim)"
     if [ "$DASHBOARD_TASKS" != "$ACTUAL_TASKS" ]; then
-      add_error "$f: task table row count ($DASHBOARD_TASKS) doesn't match task files ($ACTUAL_TASKS)" "run: $HERE/pw-doc-sync.sh <slug> --dashboard-only (rebuilds the table from task-file truth)"
+      add_error "$f: task table row count ($DASHBOARD_TASKS) doesn't match task files ($ACTUAL_TASKS)" "run: $HERE/pw-doc.sh sync <slug> --dashboard-only (rebuilds the table from task-file truth)"
     fi
   fi
 }
@@ -208,7 +208,7 @@ lint_dashboard() {
 case "$TYPE" in
   readme|project) die "user-friendly alias — use 'dashboard' for the README task table or 'all' for the full sweep" ;;
   analysis)
-    [ $# -ge 1 ] || die "usage: pw-doc-lint.sh analysis <slug> <topic|--all>"
+    [ $# -ge 1 ] || die "usage: pw-doc.sh lint analysis <slug> <topic|--all>"
     if [ "$1" = "--all" ]; then
       found=0
       for topic_file in "$D/analysis"/*.md; do
@@ -223,7 +223,7 @@ case "$TYPE" in
     fi
     ;;
   task)
-    [ $# -ge 1 ] || die "usage: pw-doc-lint.sh task <slug> <task-id|--all>"
+    [ $# -ge 1 ] || die "usage: pw-doc.sh lint task <slug> <task-id|--all>"
     if [ "$1" = "--all" ]; then
       found=0
       for task_file in "$D/task"/T*.md; do
@@ -240,7 +240,7 @@ case "$TYPE" in
     lint_plan
     ;;
   review)
-    [ $# -ge 1 ] || die "usage: pw-doc-lint.sh review <slug> <path>"
+    [ $# -ge 1 ] || die "usage: pw-doc.sh lint review <slug> <path>"
     lint_review "$1"
     ;;
   dashboard)
@@ -297,7 +297,7 @@ exit 0
 }
 
 cmd_summary() {
-[ $# -ge 2 ] || die "usage: pw-doc-summary.sh <type> <slug> [args...]"
+[ $# -ge 2 ] || die "usage: pw-doc.sh summary <type> <slug> [args...]"
 
 TYPE="$1"
 SLUG="$2"
@@ -307,7 +307,7 @@ D="$(proj_dir "$SLUG")"
 
 case "$TYPE" in
   analysis)
-    [ $# -ge 1 ] || die "usage: pw-doc-summary.sh analysis <slug> <topic>"
+    [ $# -ge 1 ] || die "usage: pw-doc.sh summary analysis <slug> <topic>"
     TOPIC="$1"
     f="$D/analysis/$TOPIC.md"
     [ -f "$f" ] || die "analysis doc not found: $f — /pw-analyze produces analysis docs (ls $D/analysis)"
@@ -329,7 +329,7 @@ case "$TYPE" in
     ;;
     
   task)
-    [ $# -ge 1 ] || die "usage: pw-doc-summary.sh task <slug> <task-id>"
+    [ $# -ge 1 ] || die "usage: pw-doc.sh summary task <slug> <task-id>"
     TASK_ID="$1"
     f="$D/task/$TASK_ID.md"
     [ -f "$f" ] || die "task file not found: $f — check the task id against $D/task/T*.md"
@@ -422,7 +422,7 @@ for arg in "$@"; do
   break
 done
 
-[ -n "$SLUG" ] || die "usage: pw-doc-sync.sh <slug> [--dashboard-only | --plan-only | --tasks-only]"
+[ -n "$SLUG" ] || die "usage: pw-doc.sh sync <slug> [--dashboard-only | --plan-only | --tasks-only]"
 
 D="$(proj_dir "$SLUG")"
 README="$D/README.md"

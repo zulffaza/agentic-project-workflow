@@ -22,7 +22,7 @@ pwtest_err "analysis --rewind|must be: context analysis" "phase refusal carries 
 # ship gate: unshipped shippable exists (T01) → ready
 pwtest_rc 0 "ship gate F2 finds shippable" "$(pwtest_script pw-preflight.sh)" ship "$E"
 # close gate on F2 (nothing accepted): refuse, must name the offenders (close semantics):
-"$(pwtest_script pw-lib.sh)" status "$E" review >/dev/null 2>&1 || true
+"$(pwtest_script pw-status.sh)" status "$E" review >/dev/null 2>&1
 pwtest_rc 1 "close gate refuses with offenders named" "$(pwtest_script pw-preflight.sh)" close "$E"
 grep -qE "T01[ ,]|T02[ ,]|T03[ ,]|T04[ ,]|task" "$PWTEST_BOTH" && pwtest_ok "names offending task ids" || pwtest_bad "close offenders" "no task list in stderr: $(head -c 120 "$PWTEST_ERR"|tr '
 ' ' ')"

@@ -31,7 +31,7 @@ die() { echo "pw-worktree: $*" >&2; exit 2; }
 proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scripts/toolchain/scaffold.sh $1)"; printf '%s' "$d"; }
 
 cmd_create() {
-[ $# -eq 4 ] || die "usage: pw-worktree-create.sh <slug> <task-id> <repo> <base-branch>"
+[ $# -eq 4 ] || die "usage: pw-worktree.sh create <slug> <task-id> <repo> <base-branch>"
 
 SLUG="$1"
 TASK_ID="$2"

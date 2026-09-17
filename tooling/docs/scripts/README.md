@@ -8,7 +8,7 @@ The scripts in `tooling/scripts/entities/` handle the deterministic parts of the
 gate checking, document validation/summaries, ship mechanics, URL fetching, review/context
 document editing — so an agent doesn't spend tokens re-reading files it could just query. The
 rule they all serve: **script the mechanical, keep the agent for the creative.** Adding a new
-script or operator? Placement rules (one script per entity, frozen `pw-lib.sh`, shared
+script or operator? Placement rules (one script per entity, no second catch-all core, shared
 `pw-*lib.sh` libraries) live in [`../conventions.md`](../conventions.md).
 
 ## Index

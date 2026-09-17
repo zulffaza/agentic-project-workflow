@@ -8,8 +8,8 @@ scripts/operators: [`../conventions.md`](../conventions.md).
 
 ## pw-review.sh
 
-The review-doc entity's write side (read side stays `pw-review.sh scan` / `pw-lib.sh review
-gate|count|has-open`). Human entry point: `/pw-review <slug> <operator> …`.
+The review-doc entity: write side, `scan`, and the lifecycle/gate reads (`gate|count|has-open`)
+ — all operators of `pw-review.sh`.
 
 ```bash
 $PW_HOME/tooling/scripts/entities/pw-review.sh init-all <slug>

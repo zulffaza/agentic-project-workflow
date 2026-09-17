@@ -21,7 +21,7 @@ if [ -d "$WTBASE/T02-thing" ]; then
   w2=$(cat "$PWTEST_ROOT/wr2.rc")
   [ "$w2" != 0 ] && pwtest_ok "worktree-remove refuses dirty tree" || pwtest_bad "worktree-remove dirty guard" "removed dirty worktree!"
 fi
-# ALWAYS leave the fixture as found (alphabetical order: pw-lib runs before pw-ship!):
+# ALWAYS leave the fixture as found (cases run in alphabetical order):
 mkdir -p "$WTBASE" 2>/dev/null || true
 git -C "$PW_REPOS/api" worktree list | grep -q "T02-thing" \
   || git -C "$PW_REPOS/api" worktree add "$WTBASE/T02-thing" "agent/$S2/T02-thing" >/dev/null 2>&1 || true

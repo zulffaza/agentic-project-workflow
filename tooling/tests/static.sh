@@ -167,4 +167,15 @@ static_t4() {
   [ -z "$(comm -23 <(printf '%s\n' "$hits2") <(printf '%s\n' "$known"))" ] \
     && pwtest_ok "T4: toolchain refs ⊆ allowlist (L3)" \
     || pwtest_bad "T4: toolchain refs ⊆ allowlist" "$(comm -23 <(printf '%s\n' "$hits2") <(printf '%s\n' "$known") | tr '\n' ' ') — L3: workflow entry paths may invoke toolchain scripts only per expectations/toolchain.ok"
+  # (e) runtime hint strings must never name a script that doesn't exist (plan 20 fallout: the
+  # merged pw-doc.sh carried dead `pw-doc-lint.sh` usage strings — users were told to run files
+  # that are gone; L5 only scans tooling/-prefixed paths, so bare names in hints slipped).
+  local bad="" tok
+  for f2 in "$TOOL"/scripts/entities/*.sh "$TOOL"/scripts/toolchain/*.sh; do
+    while IFS= read -r tok; do
+      { [ -f "$TOOL/scripts/entities/$tok" ] || [ -f "$TOOL/scripts/lib/$tok" ] || [ -f "$TOOL/scripts/toolchain/$tok" ] || [ -f "$TOOL/../$tok" ]; } || bad="$bad $(basename "$f2")→$tok"
+    done < <(grep -E 'usage:|die_fix|add_error' "$f2" | grep -oE '[a-z][a-z0-9.-]*\.sh' | sort -u)
+  done
+  [ -z "$bad" ] && pwtest_ok "T4: usage/fix strings name only live scripts (L5b)" \
+    || pwtest_bad "T4: usage/fix strings name only live scripts" "dead script names in runtime hints:$bad — L5b: point hints at the entity script + operator"
 }

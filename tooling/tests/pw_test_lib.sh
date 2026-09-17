@@ -55,7 +55,7 @@ pwtest_rc() {
 pwtest_re()  { grep -qE -- "$1" "$PWTEST_OUT" && pwtest_ok "$2" || pwtest_bad "$2" "stdout lacks /$1/: $(head -c 150 "$PWTEST_OUT" | tr '\n' ' ')"; }
 pwtest_err() { grep -qE -- "$1" "$PWTEST_ERR" && pwtest_ok "$2" || pwtest_bad "$2" "stderr lacks /$1/: $(head -c 150 "$PWTEST_ERR" | tr '\n' ' ')"; }
 pwtest_fix() {
-  grep -qE '→ fix:|fix:|fixes|run |/pw-|pw-lib|scaffold|try --help|[Uu]sage|expected:|check the slug|create it with|check |glab auth|is it authenticated|authenticat|repair with' "$PWTEST_ERR" \
+  grep -qE '→ fix:|fix:|fixes|run |/pw-|scaffold|try --help|[Uu]sage|expected:|check the slug|create it with|check |glab auth|is it authenticated|authenticat|repair with' "$PWTEST_ERR" \
     && pwtest_ok "$1 (→ fix:)" || pwtest_bad "$1 (→ fix:)" "non-zero with bare stderr: $(head -c 140 "$PWTEST_ERR"|tr '\n' ' ')"
 }
 pwtest_eq() { [ "$2" = "$3" ] && pwtest_ok "$1" || pwtest_bad "$1" "want [$2] got [$3]"; }
@@ -209,10 +209,10 @@ pwtest_build_f2() {
   cp "$p/_REVIEW.template.md" "$p/task/review/T04.review.md"
   pwtest_approve_review "$p" analysis/review/fixture.review.md
   pwtest_approve_review "$p" task/review/PLAN.review.md
-  "$(pwtest_script pw-lib.sh)" status "$slug" executing >/dev/null 2>&1 \
+  "$(pwtest_script pw-status.sh)" status "$slug" executing >/dev/null 2>&1 \
     || sed -i '' 's/^- \*\*Status:\*\* context/- **Status:** executing/' "$p/README.md"
-  "$(pwtest_script pw-lib.sh)" log "$slug" test "fixture materialized" >/dev/null 2>&1 || true
-  # mount the worktrees each task declares (mr-state/pw-lib resolve the repo via the task's
+  "$(pwtest_script pw-status.sh)" log "$slug" test "fixture materialized" >/dev/null 2>&1 || true
+  # mount the worktrees each task declares (mr-state/pw-status resolve the repo via the task's
   # Worktree:/Branch: fields, so those must point at actually-mounted worktrees).
   local tt
   for tt in T01 T02 T03 T04; do

@@ -48,3 +48,5 @@ C45-harness-internals-doc-dies	docs/testing.md	## Inside the harness (read this 
 C36-deadpath-canary-fails-open	commands/pw-status.md	Arguments: {{ARGS}} (project slug). Project dir:	Arguments: {{ARGS}} (project slug). Project dir: `tooling/pw-doc-lint.sh`	T4	-
 C37-lib-invisible-canary	commands/pw-sync.md	Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task	Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task `tooling/scripts/lib/pw-mdlib.sh`	T4	-
 C38-toolchain-allowlist-canary	commands/pw-ship.md	Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task	Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task `tooling/scripts/toolchain/gen-commands.sh`	T4	-
+C39-usage-string-dead-script	pw-doc.sh	usage: pw-doc.sh lint <type> <slug> [args...]	usage: pw-doc-lint.sh <type> <slug> [args...]	T4	-
+C40-doctor-orphan-check-disabled	pw-doctor.sh	corph="$corph $(basename "$inst")"	corph=""	T1	pw-doctor
