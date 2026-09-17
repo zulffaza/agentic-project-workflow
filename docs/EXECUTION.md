@@ -41,7 +41,7 @@ pending. Full semantics: [`tooling/commands/pw-execute.md`](../tooling/commands/
 **The executor's model** is per-task and lives in the PLAN's task table (`Execute with:`) — it is
 *never* overridden by the dashboard (below), because a task file is the executor's contract.
 **The spawn lanes'** models are per-project and live on the dashboard's `- **AI Models:**` row
-(`pw-lib.sh ai-model <slug> <lane> <provider:model|—>`, also shown/set by `/pw-review <slug> config`)
+(shown/set by `/pw-review <slug> config`)
 — because a lane is spawned by a phase, not by a task file. Four rungs, highest wins; what a run
 actually used is *recorded*, so a pin silently failing becomes visible drift, not folklore:
 **(1)** run-time override this call → **(2)** the project's `AI Models:` row for that lane →
@@ -254,7 +254,7 @@ verifier / `dep-impact` items share that queue) get ONE batched fix spawn, per-i
 per unit (above). A *lane* spawns on the provider default unless the project's
 `- **AI Models:** researcher=… analyst=… writer-task=… verifier=… reviewer=…` row binds it
 (`/pw-review <slug> config model <lane> <provider:model|—>`; unset = provider/session default;
-`pw-lib.sh ai-model` — same anchored-line config idiom as `AI Review`). Per-provider honesty: **claude**
+the `AI Models:` dashboard line — same anchored-line config idiom as `AI Review`). Per-provider honesty: **claude**
 can start a session per model and per-spawn override is real; **kilo**'s Task-tool has no model arg
 — its levers are a map-block pin (user's own config) or running the lane **headless**:
 `kilo run --auto -m <provider/model> [--dir <repo/path>]` with the task file/work order + skill
@@ -268,7 +268,7 @@ elsewhere: run the row/role as a headless session — Flow B/C in
 ## The per-spawn ledger (why it exists: resume > re-derive)
 
 Every delegated spawn writes one line where the pipeline already logs, so later fixes resume the
-**warm** session instead of re-deriving from a cold start (`LOG.md` line, via `pw-lib.sh log`,
+**warm** session instead of re-deriving from a cold start (`LOG.md` line, via the flow's log step,
 carries `· session=<id> · seed=<ref> · out=<artifact> · <outcome>`; the task's `## Result →
 Session:` records its run's id, and the executor writes `session <id>` as the first line of
 `worktree/<T0n>.log` when the provider exposes one — `-` if not). A Row-8 rejection, an MR-comment
@@ -336,7 +336,8 @@ Tear it down after the task is merged/abandoned — at close-out prefer the safe
 remove the worktree you're currently in (that's what once made an editor reload/close) or one with
 uncommitted changes:
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-teardown.sh $PW_PROJECTS/spring-boot-3-upgrade   # all of a project's worktrees, safely
+# run /pw-close (it tears down all of a project's worktrees safely), or see
+# tooling/docs/scripts/ for the teardown helper when working from the bundle
 # or one, manually:
 git -C $PW_REPOS/$REPO worktree remove "$PROJ/worktree/$REPO/T03-bump-parent-pom"
 ```

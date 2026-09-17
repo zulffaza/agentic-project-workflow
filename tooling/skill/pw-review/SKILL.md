@@ -111,8 +111,8 @@ repeating.
 This project's AI Review mode for your phase controls what you're allowed to do:
 
 ```sh
-tooling/pw-lib.sh ai-review <slug>                    # prints all 5 phases' current modes
-tooling/pw-lib.sh ai-review <slug> <phase> <mode>      # off | advisory | auto
+tooling/scripts/entities/pw-config.sh ai-review <slug>                    # prints all 5 phases' current modes
+tooling/scripts/entities/pw-config.sh ai-review <slug> <phase> <mode>      # off | advisory | auto
 ```
 
 - **`off`**: you shouldn't be running at all — if you find yourself invoked anyway, say so and stop.

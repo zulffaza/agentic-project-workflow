@@ -15,8 +15,8 @@ anything, run the pre-flight — exit code is the gate:
 
 ```bash
 {{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh execute <slug> || exit 1
-{{PW_HOME}}/tooling/scripts/entities/pw-doc-lint.sh plan <slug> || exit 1
-{{PW_HOME}}/tooling/scripts/entities/pw-doc-lint.sh task <slug> --all || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint plan <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint task <slug> --all || exit 1
 ```
 
 If any exits non-zero, STOP and relay its stderr line verbatim — it names the unmet gate and the
@@ -35,7 +35,7 @@ Given a project under `{{PW_PROJECTS}}/<slug>/`:
   bind — record what actually ran); the executor's lane ignores it (task file binds).
 - **Spawn one executor per task; every other delegated step is seeded + logged** (the skill's
   `references/execution-and-routing.md` §Spawn lanes + §Spawn ledger): a spawn line in `LOG.md`
-  (`pw-lib.sh log … "spawned … · session=<id> · seed=… · out=…"`), a `Session:` line in the task's
+  (`pw-status.sh log … "spawned … · session=<id> · seed=… · out=…"`), a `Session:` line in the task's
   `## Result`. A fix later (a review batch, a §3.6 recheck) **resumes the recorded session id**
   where live instead of cold-re-deriving; the recorded seed is the cold fallback.
 - Walk the dependency DAG. Spawn ONE executor per task, only once its `depends_on` are all done.  Parallelize independent tasks up to the plan's max parallelism. **You are a driver, not an
@@ -46,7 +46,7 @@ Given a project under `{{PW_PROJECTS}}/<slug>/`:
   server-side (kilo spawn has no model arg) run headless on that row's model (see
   `docs/EXECUTION.md` Phase-lane spawns).
 - **Keep the ledger** — every spawn logs `· session=<id>` (+ `seed=`/`out=`) with
-  `pw-lib.sh log`; re-repair and §3.6 recheck passes **resume** those ids first (kilo
+  `pw-status.sh log`; re-repair and §3.6 recheck passes **resume** those ids first (kilo
   `kilo run -s <id>`, claude `--resume <id>`/`/resume`), cold-spawn only from the seed when the id
   is dead. A landed fix on a task whose dependents already ran fans **one** capped §3.6 pass: each
   dependent re-merges + re-runs its own `## Verify` (conflict = *their* `verify-failed`, statuses
@@ -77,7 +77,7 @@ Given a project under `{{PW_PROJECTS}}/<slug>/`:
   acceptance mode) stop for human review before marking anything `accepted`. If this project opted
   into clean execution (`- Results acceptance: auto` in PLAN), at run end flip only tasks that are
   `done` with green `## Verify` and **zero open review items** to `accepted` — via
-  `pw-lib.sh task-accept` — and list any leftovers (self-repair exhausted, open human items) for
+  `pw-status.sh task-accept` — and list any leftovers (self-repair exhausted, open human items) for
   the human. A fix that lands after dependents already ran fans one capped §3.6 pass before you
   call the plan shipped-clean. `/pw-execute --then-ship` continues straight into ship (still your
   one-time push confirmation); a landed ship-comment fix resumes each task's own executor session

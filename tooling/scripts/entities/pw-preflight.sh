@@ -41,15 +41,15 @@ SLUG="$2"
 shift 2
 
 D="$(proj_dir "$SLUG")"
-PHASE_RAW="$("$HERE/../../pw-lib.sh" phase "$SLUG" 2>/dev/null || true)"
+PHASE_RAW="$("$HERE/pw-status.sh" phase "$SLUG" 2>/dev/null || true)"
 PHASE="$(pw_phase_token "${PHASE_RAW:-missing}")"
 PHASE_FIX=""
 case "$COMMAND" in
-  analyze) PHASE_FIX="if you are (re-)analyzing a project that moved on: pw-lib.sh status $SLUG analysis --rewind" ;;
-  ship) PHASE_FIX="finish execution first (each task '- **Status:** done'), or if the project IS further along: pw-lib.sh status $SLUG <phase>" ;;
-  execute) PHASE_FIX="set the phase with: pw-lib.sh status $SLUG executing (or run /pw-breakdown to create the PLAN)" ;;
-  breakdown) PHASE_FIX="get to an analysis/breakdown phase first (/pw-analyze), or pw-lib.sh status $SLUG breakdown" ;;
-  close) PHASE_FIX="close runs after acceptance (/pw-ship handles MRs; accepted tasks then pw-lib.sh status $SLUG done)" ;;
+  analyze) PHASE_FIX="if you are (re-)analyzing a project that moved on: pw-status.sh status $SLUG analysis --rewind" ;;
+  ship) PHASE_FIX="finish execution first (each task '- **Status:** done'), or if the project IS further along: pw-status.sh status $SLUG <phase>" ;;
+  execute) PHASE_FIX="set the phase with: pw-status.sh status $SLUG executing (or run /pw-breakdown to create the PLAN)" ;;
+  breakdown) PHASE_FIX="get to an analysis/breakdown phase first (/pw-analyze), or pw-status.sh status $SLUG breakdown" ;;
+  close) PHASE_FIX="close runs after acceptance (/pw-ship handles MRs; accepted tasks then pw-status.sh status $SLUG done)" ;;
   comments) PHASE_FIX="comments push to MRs, which exist only after a ship — run /pw-ship $SLUG (push mode) first" ;;
 esac
 if ! pw_phase_valid "$PHASE"; then
@@ -105,7 +105,7 @@ case "$COMMAND" in
       if [ -n "$EXEC_WITH" ] && [ "$EXEC_WITH" != "—" ]; then
         PROVIDER="${EXEC_WITH%%:*}"
         MODEL="${EXEC_WITH#*:}"
-        if ! "$HERE/../../pw-lib.sh" model-check "$PROVIDER" "$MODEL" >/dev/null 2>&1; then
+        if ! "$HERE/pw-config.sh" model-check "$PROVIDER" "$MODEL" >/dev/null 2>&1; then
           die_fix "model check failed for '$EXEC_WITH' (not in allowlist)" "allow it via PW_$(printf '%s' "$PROVIDER" | tr a-z A-Z)_MODELS in pw.config.sh, or change the PLAN 'Execute with' cell"
         fi
       fi
@@ -127,7 +127,7 @@ case "$COMMAND" in
 
     # Check RFC open items (if RFC exists)
     if [ -f "$D/rfc/META.md" ]; then
-      if "$HERE/../../pw-lib.sh" review has-open "$SLUG" "analysis/review/RFC.review.md" 2>/dev/null; then
+      if "$HERE/pw-review.sh" has-open "$SLUG" "analysis/review/RFC.review.md" 2>/dev/null; then
         die_fix "RFC has open items" "resolve/close them in analysis/review/RFC.review.md (pw-item-status markers) before breakdown"
       fi
     fi

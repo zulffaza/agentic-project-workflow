@@ -46,7 +46,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/../../.." && pwd)"
 . "$HERE/../lib/pw-common.sh"
 . "$HERE/../lib/pw-mdlib.sh"
-LIB="$HERE/../../pw-lib.sh"
+ST="$HERE/pw-status.sh"
 # -h/--help before positional parsing: without this, "-h" would be taken as a slug/arg.
 case "${1:-}" in -h|--help) pw_usage ;; esac
 
@@ -683,7 +683,7 @@ cmd_comment_seen() {
     ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
     grep -Fq "$marker" "$f" || printf '%s\n' "$row" >> "$f"
   fi
-  "$LIB" log "$slug" ship "comment-seen $task/$thread ($kind): replied=$replied"
+  "$ST" log "$slug" ship "comment-seen $task/$thread ($kind): replied=$replied"
   echo "$slug: ship comment-seen $task/$thread ($kind) -> replied=$replied"
 }
 
@@ -698,7 +698,7 @@ cmd_dashboard_mr_state() {
 
   _dashboard_update "$readme" 'Task' 'State' "$task" "$state" \
     || die "dashboard-mr-state: could not update $task in the Merge requests table (see above)"
-  "$LIB" log "$slug" sync "dashboard: $task MR state -> $state"
+  "$ST" log "$slug" sync "dashboard: $task MR state -> $state"
 }
 
 case "${1:-}" in

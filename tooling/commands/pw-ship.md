@@ -42,7 +42,7 @@ task; here we push branches and open MRs.
 
 ## Ship mode (default)
 1. **Task-format gate, then candidates.** First
-   `{{PW_HOME}}/tooling/scripts/entities/pw-doc-lint.sh task <slug> --all || exit 1` — push mechanics read exactly
+   `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint task <slug> --all || exit 1` — push mechanics read exactly
    the fields lint checks (`Repo`/`Branch`/`## Verify`/`## Result`), so a malformed task file must
    stop the push (relay stderr; the named task needs its fields completed — usually by re-running
    `/pw-breakdown` or a small edit + `/pw-review`). Then determine which tasks are shippable —
@@ -85,7 +85,7 @@ task; here we push branches and open MRs.
       mistake an interdependent MR for an independent one.
    - Record the MR in the task's `## Result → MR:` field **and** the dashboard **Merge requests**
      table (Task · Repo · MR url · Target branch · State=open · Build), then log it:
-     `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> ship "T0n pushed <branch>; MR <url>"`.
+     `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log <slug> ship "T0n pushed <branch>; MR <url>"`.
     - **Unless `--skip-build-check` was passed:** once the MR is open, monitor its pipeline/checks to
       a terminal state with `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh monitor <slug> <task-id>`
       (exit 0 green / 1 red / 2 still-running — it records the task file's `## Result → Build
@@ -152,10 +152,10 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
    Read each line's state per the bullets below (a single-task `state` recheck mid-flow can still
    use `pw-ship.sh mr-state <slug> <task-id>`).
    - **If `merged`**: The MR was already merged downstream. Handle it:
-     1. Update task status: `{{PW_HOME}}/tooling/pw-lib.sh task-accept <slug> <task-id>`
-     2. Update dashboard task table: `{{PW_HOME}}/tooling/pw-lib.sh dashboard-task-status <slug> <task-id> "accepted (MR merged)"`
+     1. Update task status: `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh task-accept <slug> <task-id>`
+     2. Update dashboard task table: `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh dashboard-task-status <slug> <task-id> "accepted (MR merged)"`
      3. Update dashboard MR table: `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh dashboard-mr-state <slug> <task-id> merged`
-     4. Remove worktree: `{{PW_HOME}}/tooling/pw-lib.sh worktree-remove <slug> <task-id>`
+     4. Remove worktree: `{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh remove <slug> <task-id>`
      5. **Skip this task** — do NOT attempt to fetch/process comments.
    - **If `closed`**: The MR was closed without merging. Note it in the recap and skip.
    - **If `open`**: Proceed with comment processing (steps 1–3).

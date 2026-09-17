@@ -53,7 +53,7 @@ Asked to analyze `context/`:
      genuinely durable, generalizable finding (not this project's own bookkeeping) gets seeded
      using its own §5.1 Decisions-log one-liner as the payload — never a separate authoring pass.
 4. **Last step, mandatory:** set the dashboard one-liner + Status via
-   `pw-lib.sh oneliner <slug> "…"` then `pw-lib.sh status <slug> analysis` (see
+   `pw-status.sh oneliner <slug> "…"` then `pw-status.sh status <slug> analysis` (see
    `references/conventions-and-gotchas.md` for the full helper contract).
 5. Iterate with the human until approved — see `references/review.md` for how the review loop
    works (local `.review.md` file, QnA, the Sign-off gate).

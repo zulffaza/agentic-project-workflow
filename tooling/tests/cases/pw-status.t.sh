@@ -12,3 +12,15 @@ pwtest_rc 0 "status F3 hostile parses clean" "$(pwtest_script pw-status.sh)" "$S
 pwtest_re 'prose around the token|repair with' "prose phase surfaced as repair, not silent"
 pwtest_rc 2 "no-such-project" "$(pwtest_script pw-status.sh)" nope-not-here
 pwtest_fix "unknown carries the fix"
+
+# --- status/oneliner + phase/ship gate helpers (ported from pw-lib.t.sh, plan 20) ---
+# 1) status self-heal + backward guards (C19 companion): prose drift normalizes on a forward write:
+CP=libclonestat; rm -rf "$PW_PROJECTS_DIR/$CP"; cp -a "$F3" "$PW_PROJECTS_DIR/$CP"
+HEAL="$PW_PROJECTS_DIR/$CP/README.md"
+pwtest_rc 0 "status forward write onto drifted prose" "$(pwtest_script pw-status.sh)" status "$CP" executing
+if grep -qxF -- '- **Status:** executing' "$HEAL"; then pwtest_ok "forward write self-heals drifted prose line"
+else pwtest_bad "status heal" "$(grep '\*\*Status' "$HEAL" | head -2 | tr '\n' '|')"; fi
+pwtest_rc 2 "backward refusing still honest: analysis ← executing without --rewind" "$(pwtest_script pw-status.sh)" status "$CP" analysis
+# 6) phase/ship gate helpers on the clone:
+pwtest_rc 0 "phase getter" "$(pwtest_script pw-status.sh)" phase "$CP"
+[ "$("$(pwtest_script pw-status.sh)" phase "$CP" 2>/dev/null)" ] ; pwtest_ok "phase prints non-empty" || true

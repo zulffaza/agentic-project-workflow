@@ -84,7 +84,7 @@ Hard rules:
       `auto-signoff` blocked by the tool's own check, not by your promise to skip it; don't rely on
       remembering not to call it.
 - **Never write the Sign-off row by hand.** Check this project's AI Review mode for your phase
-  (`pw-lib.sh ai-review <slug>`). In `advisory` mode, stop after filing items — a human decides. In
+  (`pw-config.sh ai-review <slug>`). In `advisory` mode, stop after filing items — a human decides. In
   `auto` mode, if (and only if) your pass leaves nothing [OPEN] or [PENDING], you may call
   `pw-review.sh auto-signoff <slug> <review-rel-path> <phase>` — it independently re-checks both
   conditions and refuses if either is false, so don't try to argue around a refusal; it means one

@@ -3,7 +3,7 @@
 # Every forbidden pattern here encodes a bug that actually shipped once (plan 16 §5).
 
 # the automation-script registry (single list; T0/T1/T2/mutation reuse it)
-PWTEST_AUTOMATION="pw-status.sh pw-preflight.sh pw-doc-lint.sh pw-doc-summary.sh pw-doc-sync.sh pw-ship.sh pw-review.sh pw-rfc-comments.sh pw-worktree-create.sh pw-context.sh"
+PWTEST_AUTOMATION="pw-status.sh pw-preflight.sh pw-ship.sh pw-review.sh pw-rfc.sh pw-worktree.sh pw-doc.sh pw-context.sh pw-config.sh"
 export PWTEST_AUTOMATION
 
 _pwtest_code_lines() { awk '!/^[[:space:]]*#/' "$@" 2>/dev/null | cat -n; }
@@ -115,7 +115,7 @@ static_t4() {
   # (b) …and NO agent file may ever invoke it (anti-idiom: agent-side path is auto-signoff only)
   hits="$(grep -lE 'pw-review\.sh signoff|pw-review-edit\.sh' "$TOOL"/agents/*.md 2>/dev/null | tr '\n' ' ')"
   [ -z "$hits" ] && pwtest_ok "T4 canary: no agent file invokes signoff" \
-    || pwtest_bad "T4 canary: no agent file invokes signoff" "C4 violation in: $hits — only a human triggers a gate decision (agent path: pw-lib.sh review auto-signoff)"
+    || pwtest_bad "T4 canary: no agent file invokes signoff" "C4 violation in: $hits — only a human triggers a gate decision (agent path: pw-review.sh auto-signoff)"
   # (c) capability-placement conventions doc exists, is linked from the maintainer entry, and freezes pw-lib
   [ -f "$TOOL/docs/conventions.md" ] && grep -qF 'docs/conventions.md' "$TOOL/AGENTS.md" \
     && grep -qE '^# FROZEN \(S2' "$(pwtest_script pw-lib.sh)" \

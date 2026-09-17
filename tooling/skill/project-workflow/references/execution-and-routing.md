@@ -3,11 +3,11 @@
 ## Execution phase
 
 **Pre-flight before anything else:**
-`{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh execute <slug>` + `pw-doc-lint.sh plan <slug>` +
-`pw-doc-lint.sh task <slug> --all` (each `|| exit 1`). `/pw-execute` runs these itself — when you
+`{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh execute <slug>` + `pw-doc.sh lint plan <slug>` +
+`pw-doc.sh lint task <slug> --all` (each `|| exit 1`). `/pw-execute` runs these itself — when you
 reach execution WITHOUT the command (direct orchestrator spawn, skill-only session), run the same
 three; a nonzero exit is a hard stop: relay its stderr line, don't reason onward. (These, plus
-`pw-worktree-create.sh` / `pw-review.sh scan` / `pw-status.sh` below, are what keep the
+`pw-worktree.sh create` / `pw-review.sh scan` / `pw-status.sh` below, are what keep the
 scriptless legacy path from diverging — `tooling/docs/scripts/README.md`.)
 
 **Before routing, skim `REVIEWER-NOTES.md` if it exists** (project root) — anything a past
@@ -32,8 +32,8 @@ that task's own dependents — every other independent task still proceeds. An e
 re-run (`/pw-execute <slug> T0n`, after the human rejects one task — see `references/review.md`)
 is the one case that *does* stop after just that task.
 
-**Last step, mandatory:** log each spawn/commit via `pw-lib.sh log`; when every task in scope is
-`done` (or blocked only by a `verify-failed` dependency), `pw-lib.sh status <slug> review`. See
+**Last step, mandatory:** log each spawn/commit via `pw-status.sh log`; when every task in scope is
+`done` (or blocked only by a `verify-failed` dependency), `pw-status.sh status <slug> review`. See
 `references/conventions-and-gotchas.md` for the helper contract.
 
 ## Model / agent per task + provider routing
@@ -76,7 +76,7 @@ each provider's list).
   unless the human configured one. Before finalizing a task's `Execute with:` during breakdown,
   AND again right before invoking it during execution, run:
   ```bash
-  pw-lib.sh model-check <provider> <model-id>
+  pw-config.sh model-check <provider> <model-id>
   ```
   Empty/unset allowlist → always passes (the default — every model allowed). A configured
   allowlist that refuses your choice means pick a different allowed model — never override it or
@@ -141,7 +141,7 @@ or comes back shallow (a re-spawn, new cost); the contract makes both structural
 
 ## The spawn ledger (session ids, and the fix/cascade rules they drive)
 
-Every delegated spawn logs one line via `pw-lib.sh log` — for executors at minimum:
+Every delegated spawn logs one line via `pw-status.sh log` — for executors at minimum:
 `spawned T0n (<provider>:<model>) · session=<id> · seed=task/T0n.md · out=worktree/<T0n>.log · <outcome>`
 (and the task's `## Result → Session:` + the log's first line carry the same id). It's how a later
 **fix** resumes rather than re-derives:
@@ -188,7 +188,7 @@ idempotent re-attach built in; the worktree path is its LAST output line (captur
 executor handoff):
 
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-worktree-create.sh <project-slug> <task-id> <repo> <base-branch>
+{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh create <project-slug> <task-id> <repo> <base-branch>
 ```
 
 The raw equivalent (what the script does — manual use only if the script is unavailable):

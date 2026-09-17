@@ -12,8 +12,8 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 <!-- Pre-flight: deterministic checks before agent reasoning -->
 ```bash
 {{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh execute <slug> || exit 1
-{{PW_HOME}}/tooling/scripts/entities/pw-doc-lint.sh plan <slug> || exit 1
-{{PW_HOME}}/tooling/scripts/entities/pw-doc-lint.sh task <slug> --all || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint plan <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint task <slug> --all || exit 1
 ```
 **Reading the pre-flight:** `pw-preflight.sh execute` checks the PLAN `approved` sign-off, a
 phase execution is legal in, and every `Execute with:` model resolving; the two `pw-doc-lint`
@@ -29,7 +29,7 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
    PLAN reopened after approval (e.g. by `/pw-review`'s auto-reopen, when a fix lands post-approval)
    must re-block execution here even mid-run, not just on the very first call. (Per-task review
    files are **optional** — their absence never blocks execution; they only matter when a task is
-   being sent back.) Then: `…/{{PW_HOME}}/tooling/pw-lib.sh status <slug> executing`.
+   being sent back.) Then: `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh status <slug> executing`.
 2. **Resolve scope — this decides resume behavior, get it right:**
    - **Arguments name specific task IDs** → scope = exactly those tasks (plus an optional `"with
      <model/agent>"` override). This is the deliberate "re-verify just this one" path — run only
@@ -60,7 +60,7 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
      - **Fresh task** (`Branch:` is a new `agent/<slug>/<T0n>-<slug>`) → **create its worktree with
        the script** — never hand-roll `git worktree add` (branch naming, path layout and attach
        semantics live in one place: `tooling/docs/scripts/workflow-automation.md`):
-       `{{PW_HOME}}/tooling/scripts/entities/pw-worktree-create.sh <slug> <T0n> <repo> <base-branch>` — it forks the
+       `{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh create <slug> <T0n> <repo> <base-branch>` — it forks the
        task's `Branch:` from `origin/<base-branch>` (NOT the repo's current HEAD) at
        `worktree/<repo>/<task-id>-<slug>/` and prints the path on its last line; pass that path to
        the spawn. Two tasks in one repo may declare different bases (e.g. `master` and `spring3`) —
@@ -84,7 +84,7 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
    the allowlist (empty/unset = every model is allowed, the default) — catches a task file that
    was hand-edited after breakdown already checked it:
    ```bash
-   {{PW_HOME}}/tooling/pw-lib.sh model-check <provider> <model-id>
+   {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-check <provider> <model-id>
    ```
    If it refuses, STOP that task and tell me — don't substitute a different model yourself or run
    it anyway. **The task file binds the model:** the resolved `Execute with:` (or the plan's
@@ -118,7 +118,7 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
      them. Route to a capable model (tiny models stop mid-task). Capture the final text for the
      report, but **confirm the real git artifacts** (branch/commit/Verify), not the CLI's
      self-report.
-      - **Ledger it every time.** One `pw-lib.sh log` line per executor spawn —        `spawned T0n (provider:model) · session=<id> · seed=task/T0n.md · out=worktree/<T0n>.log ·
+      - **Ledger it every time.** One `pw-status.sh log` line per executor spawn —        `spawned T0n (provider:model) · session=<id> · seed=task/T0n.md · out=worktree/<T0n>.log ·
         <outcome>` — plus the same session id into the task's `## Result → Session:` (executor also
         writes it as the first line of that log when the run is theirs). A later **re-repair, Row-8
         batch, or §3.6 dependent recheck resumes that id** (`kilo run -s <id>`/`--fork`,
@@ -127,7 +127,7 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
         the durable recovery).
       - **Either way, tee the run to a log** so I can watch it: append the executor's combined output        to `{{PW_PROJECTS}}/<slug>/worktree/<T0n>.log` — the FIRST line of that log is
         `session <id>` — and log the spawn so it's resumable:
-        `pw-lib.sh log <slug> execute "spawned T0n (provider:model) · session=<id> · seed=task/T0n.md ·
+        `pw-status.sh log <slug> execute "spawned T0n (provider:model) · session=<id> · seed=task/T0n.md ·
         out=worktree/<T0n>.log · <outcome>"` + in the task's `## Result → Session: <provider>:<id>`.
         (kilo prints a session id on headless runs; where none is observable, write `session —` and
         cold-resume from the task file. Ids stay machine-local — never in MR text.)
@@ -161,7 +161,7 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
 6. **Optional clean-mode finish (`- Results acceptance: auto` in PLAN, or `--acceptance auto`   for this run only — default `manual` = stop at verified, exactly like before).** When the
    whole resolved scope is `done`/`accepted`: flip every task that is `done`, green on its own
    `## Verify` (self-repair rounds included), and with **zero open review/`dep-impact` items** to
-   `accepted` via `pw-lib.sh task-accept`, then report the clean list as an explicit result
+   `accepted` via `pw-status.sh task-accept`, then report the clean list as an explicit result
    ("auto-accepted N; leftovers: …"). Anything not cleanly closed — exhausted self-repair, an
    open human item — stays visible/`verify-failed` as today. The PLAN gate is still checked on
    every invocation, and no `--push`/outward action happens here either way.
@@ -177,9 +177,9 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
    <slug> [task-ids]` step, so nothing goes outward until I ask. Set each task's `## Result → MR: —`
    (not shipped yet). Keep the dashboard task-status table current and log each action via the
    helper:
-   `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> execute "spawned T0n (provider:model); committed <sha>"`.
+   `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log <slug> execute "spawned T0n (provider:model); committed <sha>"`.
    **The dashboard `Status: review` transition is keyed to the WHOLE PLAN, not the resolved
-   scope** — set it via `…/{{PW_HOME}}/tooling/pw-lib.sh status <slug> review` only when *every*
+   scope** — set it via `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh status <slug> review` only when *every*
    task in the *entire* `PLAN.md` table is `done`/`accepted` (or blocked only by a `verify-failed`
    dependency), regardless of whether this particular invocation was a `--wave`, a task-id-scoped
    re-run, or a full resume. A `--wave` call that finishes its wave but leaves later tasks still

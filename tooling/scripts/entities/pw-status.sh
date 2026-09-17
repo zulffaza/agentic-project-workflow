@@ -6,6 +6,11 @@
 #   pw-status.sh <slug> --skip-cli-check skip CLI auth status check
 #   pw-status.sh --selftest              run isolated self-test
 #
+#   Project-state setters (the dashboard/LOG.md entity; merged from pw-lib, plan 20):
+#   log <slug> <actor> <msg...> · status <slug> <phase> [--rewind] · oneliner <slug> <text...>
+#   adopted <slug> <text...> · phase <slug> · dashboard-task-status <slug> <task-id> <status>
+#   task-accept <slug> <task-id>
+#
 # Produces the same output as /pw-status today, with zero agent invocation.
 # Reads README.md, PLAN.md, greps for open items, shows LOG.md lines, reports
 # blockers, and checks CLI auth status (informational, non-blocking).
@@ -17,11 +22,180 @@ if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/../../.." && pwd)"
 . "$HERE/../lib/pw-common.sh"
+. "$HERE/../lib/pw-mdlib.sh"
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 
 die() { echo "pw-status: $*" >&2; exit 2; }
 proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scripts/toolchain/scaffold.sh $1)"; printf '%s' "$d"; }
+
+
+# --- project-state entity (merged from pw-lib, plan 20 Phase 4) ---------------
+# Phase rank for the monotonic guard. executing and review share a rank on purpose:
+# re-running a task flips executing→review→executing repeatedly — normal, not a rewind.
+phase_rank() {
+  case "$1" in
+    context)   echo 0 ;; analysis) echo 1 ;; breakdown) echo 2 ;;
+    executing) echo 3 ;; review)   echo 3 ;; done)      echo 4 ;;
+    *) echo -1 ;;
+  esac
+}
+
+# Operator words are reserved: setters are invoked as `pw-status.sh <operator> <slug> …`;
+# a leading arg that is not an operator keeps the report behavior (C1).
+# Append one LOG.md entry as a Markdown bullet — `- **<date>** · \`<actor>\` — <message>` — instead
+# of a bare pipe-delimited line. A pipe row with no table header just renders as one long,
+# hard-to-scan paragraph in a plain markdown preview; a bullet list wraps sanely per entry, bolds
+# the timestamp, and tags the actor as inline code, so a growing LOG.md stays skimmable.
+#
+# Duplicate-guard: a real project's LOG.md was observed with the identical actor+message logged
+# twice (once even three times) back-to-back within minutes — a caller re-running its own trailing
+# log step, not a deliberate second entry. Dedup key: exact actor+message match against LOG.md's
+# LAST line only (not a scan of history — a repeat several entries back is a different, real
+# event, not this bug), within PW_LOG_DEDUP_WINDOW_MIN minutes (default 5) of that line's own
+# timestamp. On a match: warn to stderr and return 0 WITHOUT appending — never `die`, since
+# cmd_log runs as a trailing step inside many other commands and must not abort the caller's real
+# work over an audit-trail nicety. A parse failure on the last line (unexpected format, clock
+# skew) fails OPEN — always logs — rather than risk silently dropping a genuinely new entry.
+cmd_log() {
+  [ $# -ge 3 ] || die "usage: log <slug> <actor> <msg...>"
+  local slug="$1" actor="$2"; shift 2
+  local msg="$*"
+  local d; d="$(proj_dir "$slug")"
+  local f="$d/LOG.md"
+  local window="${PW_LOG_DEDUP_WINDOW_MIN:-5}"
+  if [ -f "$f" ] && [ -s "$f" ]; then
+    local last; last="$(tail -n 1 "$f")"
+    local ltag; ltag="$(printf '%s' "$last" | sed -n 's/^- \*\*\([^*]*\)\*\* · .*/\1/p')"
+    local ltail; ltail="$(printf '%s' "$last" | sed 's/^- \*\*[^*]*\*\* · //')"
+    local newtail; newtail="$(printf -- '`%s` — %s' "$actor" "$msg")"
+    if [ -n "$ltag" ] && [ "$ltail" = "$newtail" ]; then
+      local now_epoch last_epoch
+      now_epoch="$(date '+%s')"
+      last_epoch="$(date -j -f '%Y-%m-%d %H:%M' "$ltag" '+%s' 2>/dev/null || date -d "$ltag" '+%s' 2>/dev/null || echo '')"
+      if [ -n "$last_epoch" ]; then
+        local diff_min=$(( (now_epoch - last_epoch) / 60 ))
+        if [ "$diff_min" -ge 0 ] && [ "$diff_min" -lt "$window" ]; then
+          echo "pw-status: skipped duplicate log entry for $slug (same actor+message ${diff_min}m ago, within ${window}m window)" >&2
+          return 0
+        fi
+      fi
+    fi
+  fi
+  printf -- '- **%s** · `%s` — %s\n' "$(date '+%F %H:%M')" "$actor" "$msg" >> "$f"
+}
+
+cmd_status() {
+  local rewind=0 args=()
+  for a in "$@"; do case "$a" in --rewind) rewind=1 ;; *) args+=("$a") ;; esac; done
+  set -- "${args[@]}"
+  [ $# -eq 2 ] || die "usage: status <slug> <phase> [--rewind]   (phase: $PW_VALID_PHASES)"
+  local slug="$1" phase="$2"
+  case " $PW_VALID_PHASES " in *" $phase "*) ;; *) die "invalid phase '$phase' (allowed: $PW_VALID_PHASES)";; esac
+  local f; f="$(proj_dir "$slug")/README.md"
+  [ -f "$f" ] || die "no README.md in project $slug"
+  grep -q '^- \*\*Status:\*\*' "$f" || die "no '- **Status:**' line in $f"
+  # Monotonic guard: refuse an accidental backward move (e.g. a stray reset to 'context' after
+  # analysis) unless the caller explicitly rewinds. This is the deterministic fix for phases
+  # silently sliding backward when a command mis-fires.
+  local cur; cur="$(cmd_phase "$slug")"
+  local cr tr; cr="$(phase_rank "$cur")"; tr="$(phase_rank "$phase")"
+  if [ "$rewind" -eq 0 ] && [ "$tr" -ge 0 ] && [ "$cr" -ge 0 ] && [ "$tr" -lt "$cr" ]; then
+    die "refusing to move Status backward: $cur → $phase. If you really mean to rewind a phase, pass --rewind."
+  fi
+  awk -v p="$phase" '!d && /^- \*\*Status:\*\*/ {print "- **Status:** " p; d=1; next} {print}' \
+    "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  cmd_log "$slug" status "Status -> $phase$([ "$rewind" -eq 1 ] && echo ' (rewind)')"
+  echo "$slug: Status -> $phase"
+}
+
+cmd_oneliner() {
+  [ $# -ge 2 ] || die "usage: oneliner <slug> <text...>"
+  local slug="$1"; shift; local text="$*"
+  local f; f="$(proj_dir "$slug")/README.md"
+  [ -f "$f" ] || die "no README.md in project $slug"
+  grep -q '^- \*\*One-liner:\*\*' "$f" || die "no '- **One-liner:**' line in $f"
+  awk -v t="$text" '!d && /^- \*\*One-liner:\*\*/ {print "- **One-liner:** " t; d=1; next} {print}' \
+    "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  cmd_log "$slug" analyze "One-liner set"
+  echo "$slug: One-liner set"
+}
+
+# Set/insert the dashboard "Adopted:" pointer. Adoption is optional, so a fresh project has no
+# Adopted line — insert one right after the One-liner if absent, else replace its text. Idempotent,
+# so /pw-adopt can call it after adding each unit (the caller passes the current count/pointer text).
+cmd_adopted() {
+  [ $# -ge 2 ] || die "usage: adopted <slug> <text...>"
+  local slug="$1"; shift; local text="$*"
+  local f; f="$(proj_dir "$slug")/README.md"
+  [ -f "$f" ] || die "no README.md in project $slug"
+  if grep -q '^- \*\*Adopted:\*\*' "$f"; then
+    awk -v t="$text" '!d && /^- \*\*Adopted:\*\*/ {print "- **Adopted:** " t; d=1; next} {print}' \
+      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  else
+    grep -q '^- \*\*One-liner:\*\*' "$f" || die "no '- **One-liner:**' line to anchor Adopted: after in $f"
+    awk -v t="$text" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **Adopted:** " t; d=1}' \
+      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  fi
+  cmd_log "$slug" adopt "Adopted pointer set: $text"
+  echo "$slug: Adopted -> $text"
+}
+
+cmd_phase() {
+  [ $# -eq 1 ] || die "usage: phase <slug>"
+  local f; f="$(proj_dir "$1")/README.md"
+  [ -f "$f" ] || die "no README.md in project $1"
+  grep -m1 '^- \*\*Status:\*\*' "$f" | sed 's/^- \*\*Status:\*\*[[:space:]]*//'
+}
+
+
+# Update a task's Status field to "accepted" (used when MR is already merged).
+#   task-accept <slug> <task-id>
+cmd_task_accept() {
+  [ $# -eq 2 ] || die "usage: task-accept <slug> <task-id>"
+  local slug="$1" task="$2"
+  local d; d="$(proj_dir "$slug")"
+  local taskfile="$d/task/$task.md"
+  [ -f "$taskfile" ] || die "no task file: task/$task.md"
+  
+  # Update Status: line in task file
+  if grep -q '^- \*\*Status:\*\*' "$taskfile"; then
+    sed -i '' -E 's/^- \*\*Status:\*\*.*$/- **Status:** accepted/' "$taskfile"
+  else
+    # Insert after first line if no Status line exists
+    sed -i '' '1a\
+- **Status:** accepted
+' "$taskfile"
+  fi
+  
+  cmd_log "$slug" sync "$task: MR already merged, marked as accepted"
+  echo "$slug: $task marked as accepted (MR already merged)"
+}
+
+# Update a task's status in the dashboard README.md task status table.
+#   dashboard-task-status <slug> <task-id> <status>
+cmd_dashboard_task_status() {
+  [ $# -eq 3 ] || die "usage: dashboard-task-status <slug> <task-id> <status>"
+  local slug="$1" task="$2" status="$3"
+  local d; d="$(proj_dir "$slug")"
+  local readme="$d/README.md"
+  [ -f "$readme" ] || die "no README.md in project $slug"
+
+  _dashboard_update "$readme" 'ID' 'Status' "$task" "$status" \
+    || die "dashboard-task-status: could not update $task in the Task status table (see above)"
+  cmd_log "$slug" sync "dashboard: $task status -> $status"
+}
+
+
+case "${1:-}" in
+  log)                   shift; cmd_log "$@"; exit $? ;;
+  status)                shift; cmd_status "$@"; exit $? ;;
+  oneliner)              shift; cmd_oneliner "$@"; exit $? ;;
+  adopted)               shift; cmd_adopted "$@"; exit $? ;;
+  phase)                 shift; cmd_phase "$@"; exit $? ;;
+  dashboard-task-status) shift; cmd_dashboard_task_status "$@"; exit $? ;;
+  task-accept)           shift; cmd_task_accept "$@"; exit $? ;;
+esac
 
 SKIP_CLI_CHECK=0
 SELFTEST=0
@@ -97,11 +271,11 @@ LOG="$D/LOG.md"
 
 # Current phase — canonical token only (C19): a drifted README `- **Status:**` line must
 # never print as prose as if it were a phase name here.
-PHASE_RAW="$("$HERE/../../pw-lib.sh" phase "$SLUG")"
+PHASE_RAW="$(cmd_phase "$SLUG")"
 PHASE="$(pw_phase_token "${PHASE_RAW:-missing}")"
 echo "## Phase: $PHASE"
 if [ "${PHASE_RAW:-}" != "$PHASE" ] && [ -n "${PHASE_RAW:-}" ]; then
-  printf '  ⚠ README phase line has prose around the token:\n    %s — repair with: pw-lib.sh status <slug> %s\n' "$PHASE_RAW" "$PHASE"
+  printf '  ⚠ README phase line has prose around the token:\n    %s — repair with: pw-status.sh status <slug> %s\n' "$PHASE_RAW" "$PHASE"
 fi
 echo
 
@@ -127,7 +301,7 @@ fi
 
 # Unresolved review items
 echo "## Unresolved review items"
-# Real review files only, counted through pw-lib's heading-level detector (the same one the
+# Real review files only, counted through the shared heading-level detector (the same one the
 # gates use) — never raw greps: a whole-project grep for "pw-item-status: open" lands on the
 # template guidance line present in every review file and reports phantoms. Archive files
 # (.archive.md) are closed history and are skipped; _REVIEW.template.md is not a review.
@@ -148,7 +322,7 @@ echo
 
 # AI Review modes
 echo "## AI Review modes"
-"$HERE/../../pw-lib.sh" ai-review "$SLUG"
+"$HERE/pw-config.sh" ai-review "$SLUG"
 echo
 
 # Last N LOG.md lines

@@ -39,7 +39,7 @@ tooling/
 ├── scaffold.sh · gen-commands.sh · gen-agents.sh   ← generators (template → project; sources → providers)
 ├── pw-common.sh (shared plumbing) · pw-lib.sh (project-state helpers) · pw-doctor.sh (sync + --fix + --test)
 ├── automation scripts (pw-status … pw-context)  ← usage: docs/scripts/ (index + groups); registry: tests/static.sh
-├── pw-teardown.sh       ← safe worktree removal at close-out (refuses CWD/dirty trees)
+├── pw-worktree.sh teardown       ← safe worktree removal at close-out (refuses CWD/dirty trees)
 ├── commands/ · agents/ · skill/           ← canonical sources (provider-neutral; tokens {{PW_HOME}} …)
 ├── docs/                                  ← registries/policy docs the AGENTS read
 │   ├── scripts/                           ← script usage contracts (exit codes, → fix: lines)

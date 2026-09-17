@@ -50,11 +50,11 @@ PW_HOME="$(cd "$HERE/../../.." && pwd)"
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
-LIB="$HERE/../../pw-lib.sh"
+ST="$HERE/pw-status.sh"
 
 die() { echo "pw-context: $*" >&2; exit 2; }
 proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scripts/toolchain/scaffold.sh $1)"; printf '%s' "$d"; }
-_log() { PW_PROJECTS_DIR="$PROJECTS_DIR" "$LIB" log "$1" "$2" "$3" >/dev/null; }
+_log() { PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" log "$1" "$2" "$3" >/dev/null; }
 
 # Pipe-escape a table cell value.
 _esc() { printf '%s' "$1" | sed 's/|/\\|/g'; }
@@ -417,7 +417,7 @@ cmd_adopt() {
   _index_provenance_ensure "$cdir/INDEX.md"
   _scope_upsert "$cdir/INDEX.md" "$repo" "$branch" "$base" "$mr"
   local count; count="$(grep -cE '^## A[0-9]+ · ' "$f" 2>/dev/null || true)"; : "${count:=0}"
-  "$LIB" adopted "$slug" "$count unit(s) — continuation; see context/ADOPTED.md" >/dev/null
+  "$ST" adopted "$slug" "$count unit(s) — continuation; see context/ADOPTED.md" >/dev/null
   _log "$slug" adopt "unit $uid: $repo@$branch (base $base, MR $mr)"
   echo "$slug: adopted $uid ($key) — base $base, MR $mr  [$count unit(s)]"
 }

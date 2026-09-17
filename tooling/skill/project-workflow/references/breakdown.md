@@ -2,7 +2,7 @@
 
 **Pre-flight first (scripts, not reasoning):**
 `{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh breakdown <slug> || exit 1` and
-`{{PW_HOME}}/tooling/scripts/entities/pw-doc-lint.sh analysis <slug> --all || exit 1`. `/pw-breakdown` runs these
+`{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint analysis <slug> --all || exit 1`. `/pw-breakdown` runs these
 already; when reached without it, run them yourself — a nonzero exit means STOP and relay stderr
 (it names the unapproved gate or broken doc), don't reason onward to a PLAN nobody approved.
 
@@ -43,7 +43,7 @@ one logical change becomes several interdependent MRs nobody can review alone. A
 set gets one shared `Landing unit: <name>` across its task files + a `## Landing units` note in
 PLAN; ship records it in each MR description so the set is reviewed as one unit.
 
-**Last step, mandatory:** `pw-lib.sh status <slug> breakdown` + a `pw-lib.sh log` line (see
+**Last step, mandatory:** `pw-status.sh status <slug> breakdown` + a `pw-status.sh log` line (see
 `references/conventions-and-gotchas.md`). Remind the human that **only the PLAN sign-off gates
 execution** — per-task reviews (`task/review/T0n.review.md`) are optional, created on demand.
 

@@ -166,7 +166,7 @@ reviewer leaves a comment on MR !123 (thread on file X, line N — OR a general/
                  • task/review/T03.review.md  (create it if missing — a [RESOLVED] item per thread,
                    PLUS a row in its `## MR comment tracking` table —
                    the flow records each thread's kind + replied-state there)
-                 • LOG.md line via pw-lib.sh log
+                 • LOG.md line via the flow's log step
 ```
 
 **The description goes stale otherwise.** A reviewer (or you, later) reads the MR description

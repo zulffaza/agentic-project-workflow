@@ -94,7 +94,7 @@ pwtest_grep_file '^### R3 · §6 — \[OPEN\]' "next id skipped archived R1 (got
 
 # 7) lint + count agree with the edited file (post-archive live state: R2 open, Q2 pending,
 #    R3 open; R1/Q1 moved to the archive sibling)
-pwtest_rc 0 "lint passes on the edited review file" "$(pwtest_script pw-doc-lint.sh)" review "$RE" "$RV"
+pwtest_rc 0 "lint passes on the edited review file" "$(pwtest_script pw-doc.sh)" lint review "$RE" "$RV"
 pwtest_rc 0 "count on edited file" "$(pwtest_script pw-review.sh)" count "$RE" "$RV"
 pwtest_re 'open=3 resolved=0 items=2' "count sees the live post-archive state (open=3 resolved=0 items=2)"
 
@@ -127,6 +127,15 @@ printf '### R9b · §3 — [RESOLVED] (you, 2026-09-16 00:00) <!-- pw-item-statu
 pwtest_rc 0 "scan F2 real resolved heading" "$(pwtest_script pw-review.sh)" scan "$S2"
 pwtest_re 'PLAN.review.md: 1 resolved' "resolved heading counted under its file (C22c)"
 
+# --- init idempotency (ported from pw-lib.t.sh §2, plan 20) ---
+# 2) review-init idempotent (P8):
+RI=libtestri; rm -rf "$PW_PROJECTS_DIR/$RI"; cp -a "$F2" "$PW_PROJECTS_DIR/$RI"
+pwtest_rc 0 "review-init new file ok" "$(pwtest_script pw-review.sh)" init "$RI" task/review/T99.review.md task/T99.md || true
+printf '\nspecial content kept\n' >> "$PW_PROJECTS_DIR/$RI/task/review/T99.review.md"
+pwtest_rc 0 "review-init rerun" "$(pwtest_script pw-review.sh)" init "$RI" task/review/T99.review.md task/T99.md
+grep -q 'special content kept' "$PW_PROJECTS_DIR/$RI/task/review/T99.review.md" \
+  && pwtest_ok "review-init preserves existing" || pwtest_bad "review-init clobber" "existing content lost"
+
 # --- gate-doctrine corpus ported from pw-lib's inline selftest (plan 20 Phase 3) ---
 # These run against synthetic minimal projects (not the shared fixtures) exactly as the
 # original selftest did; a local die() records failures instead of aborting the suite.
@@ -141,7 +150,7 @@ rv_selftest() {
   printf '# Analysis: demo2\n' > "$tmp/demo2/analysis/topic2.md"
   die() { pwtest_bad "rv-selftest: $*" "ported gate-doctrine assert failed"; }
   SH="$(pwtest_script pw-review.sh)"
-  LIBP="$(pwtest_script pw-lib.sh)"
+  LIBP="$(pwtest_script pw-config.sh)"
   # demo2 starts advisory for the auto-signoff refusal checks (the original relied on the
   # ai-review section that runs earlier in pw-lib's selftest):
   PW_PROJECTS_DIR="$tmp" "$LIBP" ai-review demo2 analysis advisory >/dev/null 2>&1 || true

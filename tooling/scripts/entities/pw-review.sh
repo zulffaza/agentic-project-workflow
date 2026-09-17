@@ -68,7 +68,8 @@ PW_HOME="$(cd "$HERE/../../.." && pwd)"
 . "$HERE/../lib/pw-mdlib.sh"
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
-LIB="$HERE/../../pw-lib.sh"
+ST="$HERE/pw-status.sh"
+CFG="$HERE/pw-config.sh"
 # Mirror of the ai-review config phases (config entity owns the list; pw-lib until Phase 4).
 AI_REVIEW_PHASES="analysis plan task-plan task-exec ship"
 
@@ -149,7 +150,7 @@ cmd_signoff() {
     local tmp; tmp="$(mktemp)"; printf '%s\n' "$row" > "$tmp"
     md_insert_lines_after "$f" "$lastrow" "$tmp"; rm -f "$tmp"
   fi
-  PW_PROJECTS_DIR="$PROJECTS_DIR" "$LIB" log "$slug" "$by" "signed off $rel: $decision (via pw-review.sh)" >/dev/null
+  PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" log "$slug" "$by" "signed off $rel: $decision (via pw-review.sh)" >/dev/null
   echo "$slug: $rel → Sign-off row appended: $decision (by $by, $ts)"
 }
 
@@ -224,7 +225,7 @@ _stub_range() {
 }
 
 _reindex() { cmd_reindex "$1" "$2" >/dev/null; }
-_log() { PW_PROJECTS_DIR="$PROJECTS_DIR" "$LIB" log "$1" "$2" "$3" >/dev/null; }
+_log() { PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" log "$1" "$2" "$3" >/dev/null; }
 
 # ---------------------------------------------------------------- add-item
 cmd_add_item() {
@@ -436,7 +437,7 @@ cmd_init() {
 # cmd_ai_review ensures the line first). Used by cmd_review_auto_signoff's gate check.
 _ai_review_mode_of() {
   local slug="$1" phase="$2" modes kv
-  modes="$("$LIB" ai-review "$slug")"   # config read — pw-lib subprocess until pw-config.sh owns it (Phase 4)
+  modes="$("$CFG" ai-review "$slug")"   # config read — pw-lib subprocess until pw-config.sh owns it (Phase 4)
   for kv in $modes; do
     [ "${kv%%=*}" = "$phase" ] && { echo "${kv#*=}"; return 0; }
   done

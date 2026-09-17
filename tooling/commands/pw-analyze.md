@@ -87,7 +87,7 @@ decisions (options not converged, Q0 rules, the final doc) stay yours.
 2. **Draft via `pw-analyst` when a sub-agent is available** (same provider) — hand it the seed +   the doc path; it returns a draft following the rules below; **you review, edit, and own the
    final doc** (decisions: options laid out without convergence, the pick stays yours, §4 rules).
    Record lane model resolution per dashboard `AI Models: analyst=…` (unset = provider default) and
-   log the spawn (`pw-lib.sh log … analyst "drafted analysis/<topic>.md · session=<id> …"`).
+   log the spawn (`pw-status.sh log … analyst "drafted analysis/<topic>.md · session=<id> …"`).
    Otherwise (or on a thin project where drafting inline is cheaper), write it yourself under the
    same rules. Either way the shape is enforced by this file:
    Write an analysis to `<project>/analysis/` using `{{PW_HOME}}/template/analysis/_TEMPLATE.md`:
@@ -157,9 +157,9 @@ decisions (options not converged, Q0 rules, the final doc) stay yours.
    helper (never hand-edit these lines). Run all three, then confirm the dashboard now shows
    `Status: analysis`:
    ```bash
-   {{PW_HOME}}/tooling/pw-lib.sh oneliner <slug> "<one-sentence description of this project>"
-   {{PW_HOME}}/tooling/pw-lib.sh status  <slug> analysis
-   {{PW_HOME}}/tooling/pw-lib.sh log     <slug> analyze "wrote analysis/<topic>.md (N open questions)"
+   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh oneliner <slug> "<one-sentence description of this project>"
+   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh status  <slug> analysis
+   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh log     <slug> analyze "wrote analysis/<topic>.md (N open questions)"
    ```
 
 Stop after writing and summarize it for review. Explain the QnA flow: I answer each `Qn` in the

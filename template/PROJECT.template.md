@@ -18,7 +18,7 @@
        a row — its pin is the task file's `Execute with:`/the PLAN's produced-by. Where a spawn
        can't bind the row (Kilo's Task-tool has no model arg), the driver runs the row as a headless
        session of that model over the same work order and the result says which actually ran.
-       See docs/EXECUTION.md §Spawning phase work + `pw-lib.sh ai-model`. -->
+       See docs/EXECUTION.md §Spawning phase work + `pw-config.sh ai-model`. -->
 
 
 ## Where things are

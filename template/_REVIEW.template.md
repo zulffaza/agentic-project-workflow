@@ -158,7 +158,7 @@ Two distinctly-tagged tool-written rows can also appear (full rationale: docs/RE
 
 - Not ready yet? Leave `in-review`, or add `changes-requested` and run /pw-review again.
 - Reopening BY HAND (your own decision, not the auto-reopen above)? Add a new "in-review" row
-  (keep the old approval), `pw-lib.sh status <slug> <phase> --rewind`, re-run the phase — see
+  (keep the old approval), `pw-status.sh status <slug> <phase> --rewind`, re-run the phase — see
   README "Going back a phase".
 - A review file written before this bundle's keyboard-typable-symbols migration may still show the
   legacy `approved ✅` (with a checkmark) — that's read exactly the same as `approved` by every

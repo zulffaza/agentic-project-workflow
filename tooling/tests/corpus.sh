@@ -13,15 +13,15 @@
 #
 # NOTHING here writes into the corpus: only read-only scripts run.
 
-PWTEST_CORPUS_RO="pw-status.sh pw-review.sh pw-doc-lint.sh pw-doc-summary.sh pw-ship.sh"
+PWTEST_CORPUS_RO="pw-status.sh pw-review.sh pw-doc.sh pw-ship.sh"
 # per-project read-only invocations (modes with no side effects only):
 pwtest_corpus_rows() {
   printf 'status\tpw-status.sh\t%s --skip-cli-check\n' "$1"
-  printf 'review-scan\tpw-review.sh\t%s\n' "$1"
-  printf 'lint-all\tpw-doc-lint.sh\tall %s\n' "$1"
-  printf 'lint-plan\tpw-doc-lint.sh\tplan %s\n' "$1"
-  printf 'lint-dashboard\tpw-doc-lint.sh\tdashboard %s\n' "$1"
-  printf 'review-scan-plan\tpw-review.sh\t%s --phase plan\n' "$1"
+  printf 'review-scan\tpw-review.sh\tscan %s\n' "$1"
+  printf 'lint-all\tpw-doc.sh\tlint all %s\n' "$1"
+  printf 'lint-plan\tpw-doc.sh\tlint plan %s\n' "$1"
+  printf 'lint-dashboard\tpw-doc.sh\tlint dashboard %s\n' "$1"
+  printf 'review-scan-plan\tpw-review.sh\tscan %s --phase plan\n' "$1"
 }
 corpus_t3() {
   echo "== T3 real corpus (read-only) ==" >&2

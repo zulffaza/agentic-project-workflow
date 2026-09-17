@@ -1,16 +1,16 @@
 # Workflow automation scripts
 
-Side-loop helpers: RFC comments (`pw-rfc-comments.sh`), analysis context (`pw-context.sh fetch`),
-adoption snapshots (`pw-context.sh adopt-snapshot`), worktree creation (`pw-worktree-create.sh`).
+Side-loop helpers: RFC comments (`pw-rfc.sh comments`), analysis context (`pw-context.sh fetch`),
+adoption snapshots (`pw-context.sh adopt-snapshot`), worktree creation (`pw-worktree.sh create`).
 
-## pw-rfc-comments.sh
+## pw-rfc.sh comments
 
 Powers `/pw-rfc <slug> comments`: pulls reader comments from the configured RFC backend, tracks
 them against `rfc/META.md`, and appends new items to `analysis/review/RFC.review.md`. Purely
 mechanical — the agent's job starts at *triaging* what landed there.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-rfc-comments.sh <slug> [--backend <backend>]   # default: PW_RFC_BACKEND
+$PW_HOME/tooling/scripts/entities/pw-rfc.sh comments <slug> [--backend <backend>]   # default: PW_RFC_BACKEND
 ```
 
 **Output:** one summary line —
@@ -27,14 +27,14 @@ found` / `no Target:` → run the publish step first; `lark-cli not found` → t
 dependency is missing (see `../rfc-backends.md`). After it runs, recap the new items to the user
 and remind them to work the items via `/pw-review`.
 
-## pw-worktree-create.sh
+## pw-worktree.sh create
 
 Creates the execution worktree with the naming convention baked in — branch
 `agent/<slug>/<task-id>-<suffix>`, path under the project's `worktree/` — so no agent hand-rolls
 `git worktree add` and drifts from the layout `/pw-status`/`pw-teardown` expect.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-worktree-create.sh <slug> <task-id> <repo> <base-branch>
+$PW_HOME/tooling/scripts/entities/pw-worktree.sh create <slug> <task-id> <repo> <base-branch>
 ```
 
 **Output:** status line(s), then **the worktree path on the final line** — capture that:

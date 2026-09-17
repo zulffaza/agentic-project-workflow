@@ -9,7 +9,7 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 <!-- Pre-flight: deterministic checks before agent reasoning -->
 ```bash
 {{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh breakdown <slug> || exit 1
-{{PW_HOME}}/tooling/scripts/entities/pw-doc-lint.sh analysis <slug> --all || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint analysis <slug> --all || exit 1
 ```
 **Reading the pre-flight:** `pw-preflight.sh breakdown` checks every analysis review file is
 `approved` (and RFC open items are clear if the side-loop runs); `pw-doc-lint analysis --all`
@@ -23,7 +23,7 @@ unapproved analysis. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
 independent ones batched in parallel (they write different files, so batching is capped by `- Max parallelism:`
 n at a time), each getting the task's decisions as a compact seed + the template. It cannot change
 what the step does; a spawn that goes beyond its decisions gets stopped (exit-check like every
-lane result). Read the lane models from `- **AI Models:**` (`pw-lib.sh ai-model` — no row =
+lane result). Read the lane models from `- **AI Models:**` (`pw-config.sh ai-model` — no row =
 provider default) and log each spawn with its `session=<id>` for later repair/§review-batch
 resumption.
 
@@ -85,7 +85,7 @@ Then produce, from `{{PW_HOME}}/template/task/`:
    repo may declare different bases, e.g. `master` vs `spring3`), a runnable `## Verify` block, an
    `Execute with: <provider>:<model-or-agent>` + `Why:`, a **`Story points:`** estimate, optional
    **`Effort:`**/**`Thinking:`**, and an empty `## Result` block.
-      - **Per-lane model default on top of "Produced by":** the dashboard's `- **AI Models:**` line is        what the *next* run's lane spawns will use (`pw-lib.sh ai-model <slug> [role <provider:model>]`
+      - **Per-lane model default on top of "Produced by":** the dashboard's `- **AI Models:**` line is        what the *next* run's lane spawns will use (`pw-config.sh ai-model <slug> [role <provider:model>]`
         reads/sets it — researcher/analyst/writer-task/reviewer/verifier; the **executor is never a
         row**, a task's `Execute with:` is its only pin). Surface the current rows in your summary so I
         can change one before I sign off (e.g. "writer-task=— → say the word to pin it cheap").
@@ -109,7 +109,7 @@ Then produce, from `{{PW_HOME}}/template/task/`:
      project's model allowlist (empty/unset = every model is allowed, the default — see
      `pw.config.sh`):
      ```bash
-     {{PW_HOME}}/tooling/pw-lib.sh model-check <provider> <model-id>
+     {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-check <provider> <model-id>
      ```
      If it refuses, pick a different allowed model for that task rather than writing one the
      allowlist excludes — don't silently override it.
@@ -177,8 +177,8 @@ rows go through the `/pw-review <slug> item|answer|signoff` operators, never han
 Then **MANDATORY final step — do NOT skip** — update status + log via the helper
 (never hand-edit the Status line), and confirm the dashboard now shows `Status: breakdown`:
 ```bash
-{{PW_HOME}}/tooling/pw-lib.sh status <slug> breakdown
-{{PW_HOME}}/tooling/pw-lib.sh log <slug> breakdown "wrote PLAN.md + N task files (ΣSP=<n>)"
+{{PW_HOME}}/tooling/scripts/entities/pw-status.sh status <slug> breakdown
+{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log <slug> breakdown "wrote PLAN.md + N task files (ΣSP=<n>)"
 ```
 
 Stop and summarize the plan + task list (chosen provider:model per task, SP, and the total manual

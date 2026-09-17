@@ -43,11 +43,11 @@ phase runs. Don't skip a gate.
   `Status:` line, `LOG.md`, or a review file's structure. Exact subcommands + what each does:
   [`references/conventions-and-gotchas.md`](references/conventions-and-gotchas.md).
 - **Script the mechanical — call the automation scripts, don't re-implement them.** Pre-phase:
-  `pw-preflight.sh <cmd> <slug>` + `pw-doc-lint.sh …` (nonzero → STOP, relay stderr). Cheap reads
-  instead of manual file-walking: `pw-status.sh`, `pw-review.sh scan`, `pw-doc-summary.sh`.
+  `pw-preflight.sh <cmd> <slug>` + `pw-doc.sh lint …` (nonzero → STOP, relay stderr). Cheap reads
+  instead of manual file-walking: `pw-status.sh`, `pw-review.sh scan`, `pw-doc.sh summary`.
   Mechanics: `pw-ship.sh resolve`/`pw-ship.sh exec`, `pw-ship.sh mr-state-batch`,
-  `pw-ship.sh monitor`, `pw-worktree-create.sh`, `pw-context.sh fetch`, `pw-rfc-comments.sh`,
-  `pw-context.sh adopt-snapshot`, `pw-doc-sync.sh`. Deterministic document writes (never hand-copy
+  `pw-ship.sh monitor`, `pw-worktree.sh create`, `pw-context.sh fetch`, `pw-rfc.sh comments`,
+  `pw-context.sh adopt-snapshot`, `pw-doc.sh sync`. Deterministic document writes (never hand-copy
   template blocks): `pw-review.sh` (`init-all|add-item|answer|add-question|resolve`;
   `signoff` is human-triggered only — C4) and `pw-context.sh` (`req-init|add-input|add-repo`).
   The `/pw-*` commands already invoke their share; when
@@ -68,11 +68,11 @@ phase runs. Don't skip a gate.
   `{{PW_HOME}}`/`{{PW_PROJECTS}}`/`{{PW_REPOS}}` — never hardcode an absolute path.
 - **Seeded delegation, batched fixes.** When a phase delegates (researcher / analyst / writer-task  on top of executor & reviewer), the handoff is a **seed** (dense summary + pointer list, pre-flighted
   against the brief before the spawn; pointers are a menu to read *lazily*), later fixes **resume the
-  producing session by its recorded id** (`pw-lib.sh log`'s `session=` line, the task's `## Result →
+  producing session by its recorded id** (`pw-status.sh log`'s `session=` line, the task's `## Result →
   Session:`) with a seed patch rather than cold re-spawning, and every review item on one artifact is
   drained as **one batched fixer pass** (per-item replies unchanged) with a dependency's late fix
   fanning one capped re-verify/de-impact pass onto what already ran against the old state. Lanes
-  bind their model from the dashboard's `- **AI Models:**` line (`pw-lib.sh ai-model`); the executor
+  bind their model from the dashboard's `- **AI Models:**` line (`pw-config.sh ai-model`); the executor
   is bound by the task's `Execute with:`. Full rules: docs/EXECUTION.md +
   `references/execution-and-routing.md`.
 - **Report faithfully.** "Done" only after the task's `## Verify` block actually ran and you pasted

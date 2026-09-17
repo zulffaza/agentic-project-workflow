@@ -50,7 +50,7 @@ like the apply-comments flow does):
    `analysis`, `plan`, `task-plan`, `task-exec`, `ship`. A list of task ids means one reviewer
    pass PER named task (each task is its own artifact + review file) — never one pass across
    several tasks.
-2. Check this project's mode for that phase: `…/{{PW_HOME}}/tooling/pw-lib.sh ai-review <slug>` (an
+2. Check this project's mode for that phase: `…/{{PW_HOME}}/tooling/scripts/entities/pw-config.sh ai-review <slug>` (an
    internal check — I never type this myself). If `off`, tell me AI review isn't enabled for this
    phase and stop — point me at `/pw-review <slug> config <phase> <mode>` rather than guessing I
    want it turned on, and never at the underlying script.
@@ -75,12 +75,12 @@ settings — skip everything below and follow this instead.** This command is th
 that; regardless of what else I ask for, never tell me to run `pw-lib.sh` myself for this — that's
 the internal mechanism this sub-verb wraps, not something I should need to know exists.
 
-1. **No further arguments** → run `…/{{PW_HOME}}/tooling/pw-lib.sh ai-review <slug>` and show me
+1. **No further arguments** → run `…/{{PW_HOME}}/tooling/scripts/entities/pw-config.sh ai-review <slug>` and show me
    the five phases (`analysis`/`plan`/`task-plan`/`task-exec`/`ship`) and their current mode
    (`off`/`advisory`/`auto`) as a small table, in plain language — not the raw
    `analysis=off plan=off …` line verbatim. One line reminding me what each mode means: `off` = no
    AI reviewer, `advisory` = it files items but I still sign off, `auto` = it may sign off itself
-      on a genuinely clean pass. Tell me how to change one: `/pw-review <slug> config <phase> <mode>`.   1b. **Also run** `…/{{PW_HOME}}/tooling/pw-lib.sh ai-model <slug>` and show the five lane rows
+      on a genuinely clean pass. Tell me how to change one: `/pw-review <slug> config <phase> <mode>`.   1b. **Also run** `…/{{PW_HOME}}/tooling/scripts/entities/pw-config.sh ai-model <slug>` and show the five lane rows
        (`researcher`/`analyst`/`writer-task`/`reviewer`/`verifier`; `—` = provider default, executor not a
        row). Same one-line explanation: this is *which model* the next lane spawn runs on (row → else
        provider/session default); changing one is
@@ -88,7 +88,7 @@ the internal mechanism this sub-verb wraps, not something I should need to know 
        work). This is a **view**, not a re-approval — never flip anything from here without my words.
 2. **`<phase> <mode>` given** → validate `<phase>` is one of the five above and `<mode>` is one of
    `off`/`advisory`/`auto` yourself (a friendlier error than the tool's if not), then run
-   `…/{{PW_HOME}}/tooling/pw-lib.sh ai-review <slug> <phase> <mode>` (or `ai-model <slug> <lane>
+   `…/{{PW_HOME}}/tooling/scripts/entities/pw-config.sh ai-review <slug> <phase> <mode>` (or `ai-model <slug> <lane>
    <provider:model|—>` for a model lane — never an executor lane: a lane that can't take a per-spawn
    model records the provider default it actually ran with, §docs/EXECUTION.md The per-spawn ledger)
    and confirm back in plain
@@ -122,7 +122,7 @@ open from that instead of reading them blind. Mapping rules below still decide t
   deterministically (rule below); a named task with no review file that ISN'T `verify-failed` is
   skipped and noted in the recap — never create an empty review file just because a task was named.
 - If it's a **phase word** (`analysis` or `task`/`plan`), process that phase's `review/` dir only.
-- Otherwise, infer from the current phase (`…/{{PW_HOME}}/tooling/pw-lib.sh phase <slug>`):
+- Otherwise, infer from the current phase (`…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh phase <slug>`):
   - `analysis` → `analysis/review/*.review.md`
   - `breakdown` → `task/review/*.review.md` (PLAN + any T0n)
   - `executing` / `review` → every task currently `verify-failed` (read the PLAN task table + task
@@ -162,7 +162,7 @@ Sign-off, so there's nothing to reopen.
    `approved`, there's nothing to reopen — just apply the fix as normal.
 3. If it IS currently `approved`: compare that doc's phase (`analysis`→`analysis`,
    `task/PLAN.md`→`breakdown`) against the project's actual current phase
-   (`…/{{PW_HOME}}/tooling/pw-lib.sh phase <slug>`), using the fixed order `context < analysis <
+   (`…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh phase <slug>`), using the fixed order `context < analysis <
    breakdown < executing < review < done`:
    - **Same phase** (the common case — nothing has advanced past this doc yet, e.g. mid-RFC
      negotiation where `Status:` is still `analysis`) → reopen it automatically:
@@ -234,7 +234,7 @@ only.)
 Never edit or delete my comment text (items OR my `↳ you:` answers). Never write the Sign-off row
 — only I clear the gate (and never run `pw-review.sh signoff` on your own initiative — C4).
 Log the pass (this is the ONLY dashboard-adjacent write you make) — **one
-line per processed file**: `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> review "<n> items resolved in
+line per processed file**: `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log <slug> review "<n> items resolved in
 <file>"`. The `## Contents` table needs no manual refresh when you flipped headings via
 `pw-review.sh resolve` (it reindexes itself) — only run
 `…/{{PW_HOME}}/tooling/scripts/entities/pw-review.sh reindex <slug> <review-rel-path>` if you hand-edited a

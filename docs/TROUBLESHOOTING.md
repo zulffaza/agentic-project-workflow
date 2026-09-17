@@ -45,7 +45,7 @@ happens in that same worktree (nothing is thrown away silently) — check `git -
 
 ## "`/pw-teardown` (or `/pw-close`) skipped a worktree"
 
-**Symptom:** `tooling/scripts/entities/pw-teardown.sh` reports `⚠ SKIP` for a worktree instead of removing it.
+**Symptom:** the worktree teardown step reports `⚠ SKIP` for a worktree instead of removing it.
 
 **Cause:** it's a deliberate safety refusal, not a failure — the helper never removes (a) the
 worktree you're currently sitting in (removing your own cwd out from under you is what once caused

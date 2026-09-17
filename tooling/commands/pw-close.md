@@ -9,7 +9,7 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 <!-- Pre-flight: deterministic checks before agent reasoning -->
 ```bash
 {{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh close <slug> || exit 1
-{{PW_HOME}}/tooling/scripts/entities/pw-doc-lint.sh all <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint all <slug> || exit 1
 ```
 **Reading the pre-flight:** `pw-preflight.sh close` checks every task is `accepted` in a legal
 phase; `pw-doc-lint all` checks every doc kind (analysis §1–5, PLAN, tasks, reviews, dashboard
@@ -25,7 +25,7 @@ moment to skip a lint. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
 2. **Tear down worktrees — use the safe helper** (it refuses to remove the worktree you're
    currently in or one with uncommitted changes, which is what unexpectedly closed an editor once):
    ```bash
-   {{PW_HOME}}/tooling/scripts/entities/pw-teardown.sh {{PW_PROJECTS}}/<slug>
+   {{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh teardown {{PW_PROJECTS}}/<slug>
    ```
    Run it from the bundle/project root — **NOT from inside a worktree**, and close any worktree
    folder still open in your editor first. It reports removed / skipped (current dir) / skipped
@@ -40,8 +40,8 @@ moment to skip a lint. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
    (`{{PW_HOME}}/template/` for project scaffolding, `{{PW_HOME}}/tooling/` for machinery).
 5. Close out via the helper, then summarize:
    ```bash
-   {{PW_HOME}}/tooling/pw-lib.sh log <slug> close "closed — N MRs open, worktrees removed, memories seeded"
-   {{PW_HOME}}/tooling/pw-lib.sh status <slug> done
+   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh log <slug> close "closed — N MRs open, worktrees removed, memories seeded"
+   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh status <slug> done
    ```
    Summarize: MRs opened / merged, worktrees removed, memories seeded, and any leftover follow-ups.
 

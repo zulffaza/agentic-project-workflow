@@ -87,7 +87,7 @@ mapping is data, not a hardcoded assumption that every platform's template reads
   Milestone + Conclusion from the approved PLAN.
 - Neither wave sets the dashboard `Status:` or otherwise advances the pipeline — RFC publishing is
   purely a side-effect of a gate-passing artifact (Wave 1: a chosen approach; Wave 2: an approved
-  PLAN), recorded via `pw-lib.sh rfc state/dashboard` + `pw-lib.sh log` (same audit-trail
+  PLAN), recorded via `pw-rfc.sh state/dashboard` + `pw-status.sh log` (same audit-trail
   convention as every other mutator).
 - Before touching any external backend, `/pw-rfc` **always shows the local diff of `rfc/RFC.md`
   and confirms with you first** — same discipline as `/pw-ship` confirming the push list.
@@ -128,7 +128,7 @@ noting once (an informational append to its existing item, never a new one); an 
 either becomes a new item or, if already tracked, has just its *new* replies appended.
 
 **Per-thread tracking, not a single "latest" pointer.** State lives in `rfc/META.md`'s "Comment
-tracking" table (thread ID → reply count seen → solved), upserted via `pw-lib.sh rfc comment-seen`
+tracking" table (thread ID → reply count seen → solved), upserted via `pw-rfc.sh comment-seen`
 (same marker-keyed upsert shape as `context/INDEX.md`'s adoption rows — never duplicated, always
 updated in place). An earlier design used a single scalar "last thread ID seen," which broke a
 concrete case caught by a live walkthrough: comment A arrives, comment B arrives later (cursor
@@ -161,8 +161,8 @@ diagram must never be a single point of failure for the whole RFC push.
 
 ## `rfc/` project-subdir contents
 - **`rfc/RFC.md`** — the generated canonical doc (see schema above). Created idempotently by
-  `pw-lib.sh rfc init <slug> <backend>` (mirrors `review-init`'s create-if-missing/else-no-op).
-- **`rfc/META.md`** — 🤖-owned via `pw-lib.sh rfc init|target|state|comment-seen` (never hand-edit):
+  `pw-rfc.sh init <slug> <backend>` (mirrors `review-init`'s create-if-missing/else-no-op).
+- **`rfc/META.md`** — 🤖-owned via `pw-rfc.sh init|target|state|comment-seen` (never hand-edit):
   backend, target ref, last revision pushed, wave1/wave2-published flags, and a **"Comment
   tracking" table** — one row per thread (ID → reply count seen → solved), not a single scalar,
   so per-thread state (new vs. updated vs. already-resolved) is actually representable. `rfc init`
@@ -180,7 +180,7 @@ PW_RFC_LARK_SPACE=""        # optional global default target — usually left bl
 PW_RFC_NOTES=""             # freeform notes, same spirit as PW_MEMORY_NOTES
 ```
 **Target resolution order** (which external doc a publish goes to): `/pw-rfc --target <ref>` flag →
-`rfc/META.md`'s persisted `Target:` (set by an earlier `--target` or `pw-lib.sh rfc target`) →
+`rfc/META.md`'s persisted `Target:` (set by an earlier `--target` or `pw-rfc.sh target`) →
 `PW_RFC_<BACKEND>_SPACE`-style config default. Once a project has a target, subsequent runs reuse
 it without repeating the flag. **If none of these resolve and the backend needs one, the agent
 stops and asks — it never falls back to an unreviewed default location.**

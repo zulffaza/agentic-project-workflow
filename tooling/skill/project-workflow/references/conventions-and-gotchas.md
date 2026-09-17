@@ -9,20 +9,20 @@ states. Agent-owned: analysis/plan/task docs, the dashboard `Status:`/tables, `#
 ## Going back a phase (rewind)
 To reopen an earlier phase, the human adds a fresh `[OPEN]` item + a new `in-review` Sign-off row
 (old `approved` stays as history) and bumps the dashboard `Status:` back **with the explicit
-rewind flag** (`pw-lib.sh status <slug> <phase> --rewind` — a plain `status` refuses to move
+rewind flag** (`pw-status.sh status <slug> <phase> --rewind` — a plain `status` refuses to move
 backward, which is what stops accidental resets); then re-run that phase's command and re-approve.
 Downstream artifacts stay on disk and get regenerated once the upstream phase is re-approved.
 
 ## Status field + audit log (commands own these — via `pw-lib.sh`)
 Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-workflow/tooling/pw-lib.sh`
 (deterministic, phase-validated, portable across Claude Code + shelled-out kilo executors):
-- `pw-lib.sh status <slug> <phase>` — set the dashboard `Status:` (`context→analysis→breakdown→
+- `pw-status.sh status <slug> <phase>` — set the dashboard `Status:` (`context→analysis→breakdown→
   executing→review→done`) and auto-log the change. Each `/pw-*` command runs this as its
   **mandatory last step** (analyze/breakdown/execute say "do NOT skip"); never leave Status stale or
   hand-maintained. It **refuses a backward move** (guards against accidental resets like the phase
   sliding back to `context`); pass `--rewind` to intentionally go back. `executing`↔`review` is not
   backward (re-running a task is normal).
-- `pw-lib.sh oneliner <slug> "<text>"` — set the dashboard **One-liner** (the agent does this during
+- `pw-status.sh oneliner <slug> "<text>"` — set the dashboard **One-liner** (the agent does this during
   `/pw-analyze`, distilled from context/).
 - `pw-context.sh adopted <slug> "<pointer>"` — set/insert the dashboard **Adopted:** pointer (the agent
   does this during `/pw-adopt`; inserts the line only for continuation projects).
@@ -57,17 +57,17 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
 - `pw-lib.sh` is **frozen for new subcommands** (S2); new capability goes to the entity's script,
   shared markdown primitives to `pw-mdlib.sh` — see `tooling/docs/conventions.md` (S/C/A-rules)
   before adding any script/operator/command.
-- `pw-lib.sh log <slug> <actor> <msg>` — append one audit line to **`LOG.md`** as a Markdown bullet
+- `pw-status.sh log <slug> <actor> <msg>` — append one audit line to **`LOG.md`** as a Markdown bullet
   (`- **YYYY-MM-DD HH:MM** · \`actor\` — what`, not a bare pipe row — reads properly in a plain
   preview view). Log phase transitions, executor spawns, commits, pushes, MRs, review passes,
   close-out.
-- `pw-lib.sh phase <slug>` — read the current phase (used by `/pw-review` scoping + `/pw-status`).
-- `pw-lib.sh ai-review <slug> [<phase> <mode>]` / `pw-lib.sh ai-model <slug> [<lane> <provider:model|—>]` —
+- `pw-status.sh phase <slug>` — read the current phase (used by `/pw-review` scoping + `/pw-status`).
+- `pw-config.sh ai-review <slug> [<phase> <mode>]` / `pw-config.sh ai-model <slug> [<lane> <provider:model|—>]` —
   the two dashboard config lines (see `docs/EXECUTION.md` for what they bind). `ai-model` lanes =
   researcher / analyst / writer-task / reviewer / verifier (NOT executor — that pin is the task file).
   A bare model name or an executor lane is refused.
 - **Spawn bookkeeping (the §8.5 ledger):** every delegated spawn logs one line through
-  `pw-lib.sh log`, carrying `· session=<id> · seed=<ref> · out=<artifact>` so a later
+  `pw-status.sh log`, carrying `· session=<id> · seed=<ref> · out=<artifact>` so a later
   repair/cascade/recheck can **resume that session** instead of re-deriving it (machine-local
   pointer only — never in MR text; PLAN/dashboard/on-disk state is the durable cross-machine truth).
 - `pw-ship.sh mr-state <slug> <task-id>` — query the forge (GitLab/GitHub) for an MR's current state.
@@ -75,13 +75,13 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   URL/worktree/origin, or the forge query failed or returned null — with exit 1). Used by `/pw-sync`
   and `/pw-ship comments` to detect MRs that were already merged downstream before attempting to
   sync or process comments.
-- `pw-lib.sh task-accept <slug> <task-id>` — update a task's `Status:` field to `accepted` (used
+- `pw-status.sh task-accept <slug> <task-id>` — update a task's `Status:` field to `accepted` (used
   when an MR is already merged).
-- `pw-lib.sh dashboard-task-status <slug> <task-id> <status>` — update a task's status in the
+- `pw-status.sh dashboard-task-status <slug> <task-id> <status>` — update a task's status in the
   dashboard README.md task status table.
 - `pw-ship.sh dashboard-mr-state <slug> <task-id> <state>` — update an MR's state in the dashboard
   README.md MR table (e.g., `merged`).
-- `pw-lib.sh worktree-remove <slug> <task-id>` — safely remove a task's worktree (refuses if the
+- `pw-worktree.sh remove <slug> <task-id>` — safely remove a task's worktree (refuses if the
   worktree has uncommitted changes or is the current directory). Used when an MR is already merged
   to clean up the worktree.
 - Per-task **timing + commit/MR outcome** go in the task file's `## Result` block and the PLAN
@@ -149,7 +149,7 @@ one). The reusable **bundle itself IS a git repo** (so it's shareable + reset-re
 
 ## LOG.md spawn lines (the resume spine)
 
-Every **delegated** spawn gets one line via `pw-lib.sh log <slug> <actor> "<msg>"` — free text by
+Every **delegated** spawn gets one line via `pw-status.sh log <slug> <actor> "<msg>"` — free text by
 design, with one fixed spine so a resume can find it later:
 `spawned <lane-or-T0n> (<provider>:<model>) · session=<id> · seed=<seed ref> · out=<artifact> · <outcome>`.
 A resume/repair/cascade appends its **own** line and updates the prior line's outcome — the trail

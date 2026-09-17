@@ -98,7 +98,7 @@ the task file as the work order (a *sub-agent* name never crosses a provider bou
 executor **tees its output to `worktree/<T0n>.log`** so you can `tail -f` a run in your own window.
 Each executor works in its **own worktree**, runs the task's `Verify` block (a same-changeregression may self-repair inside the run, bounded by `- AI execution limit:` /
 `PW_MAX_SELF_REPAIR`, before declaring `verify-failed`), reports the actual output, and fills the
-task file's `## Result`. **Every spawn is ledgered** — `pw-lib.sh log` records `session=<id>` +
+task file's `## Result`. **Every spawn is ledgered** — the LOG.md record carries `session=<id>` +
 seed/outcome, and the task's `## Result → Session:` carries it — so a later Row 8 repair *resumes*
 the executor's own session instead of re-deriving the context, and MR-comment fixes arrive to the
 executor as **one batched pass per artifact** (per-item replies preserved). When a landed fix
@@ -165,7 +165,7 @@ local `.review.md` files above — see the [MR review flow](./REVIEW.md#2-the-mr
 
 ## Step 9 — Learn + close (`/pw-close`)
 After the run, `/pw-close` verifies every task is `accepted`, **tears down the worktrees with the
-safe helper** ([`pw-teardown.sh`](../tooling/scripts/entities/pw-teardown.sh) — refuses to remove the worktree you're
+safe helper** (its safe teardown step — refuses to remove the worktree you're
 in or a dirty one), captures what changed about the *workflow itself* (not the code — the repos
 record that) into the project's "Decisions & learnings" section — and into your memory tool too, if
 `PW_MEMORY` names one — sets the dashboard Status → `done`, and summarizes MRs/leftovers.
@@ -175,7 +175,7 @@ project dir.
 ---
 
 ## Who owns the dashboard `Status:` field?
-The `/pw-*` commands do — each runs `tooling/pw-lib.sh status <slug> <phase>` as its **mandatory
+The `/pw-*` commands do — each runs the dashboard `Status:` write as its **mandatory
 last step** (analyze→`analysis`, breakdown→`breakdown`, execute→`executing`/`review`, close→`done`).
 It is not something you maintain by hand (that's the "why is it still `planned`?" trap), and the
 helper validates the phase, **refuses accidental backward moves** (`--rewind` to intend one), and
@@ -190,7 +190,7 @@ table header doesn't render as a table — it's just one long unwrapped line):
 ```
 - **YYYY-MM-DD HH:MM** · `<phase/actor>` — <what happened>
 ```
-The `/pw-*` commands append to it via `tooling/pw-lib.sh log …` (deterministic format); you can add
+The `/pw-*` commands append to it via a deterministic log step; you can add
 manual notes the same way. It answers "what did the agents actually do, and when?" without
 reconstructing it from chat.
 
@@ -203,7 +203,7 @@ steps either way, but drives them through the command rather than you touching `
    change>`), and add a new `in-review` Sign-off row (`/pw-review <slug> signoff <path>
    in-review` — leaves the old `approved` row in place; it's history).
 2. Set the dashboard `Status:` back to that phase **with the rewind flag** (under the hood,
-   `tooling/pw-lib.sh status <slug> <phase> --rewind` — a plain `status` refuses to move backward).
+   the `status` write with `--rewind` — a plain status change refuses to move backward).
 3. Re-run the phase command (`/pw-analyze` / `/pw-breakdown`), then `/pw-review`, then re-approve.
 Downstream artifacts already produced stay on disk; regenerate them once the upstream phase is
 re-approved.

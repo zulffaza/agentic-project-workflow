@@ -17,12 +17,12 @@ tooling/
 │                         review-init / log / phase / ai-review / review note-init|auto-signoff|
 │                         gate|reopen
 ├── pw-doctor.sh        ← checks installed skills + commands + agents match this bundle (--fix repairs)
-├── pw-teardown.sh      ← safe worktree removal at close-out (won't nuke your CWD / dirty trees)
+├── pw-worktree.sh teardown      ← safe worktree removal at close-out (won't nuke your CWD / dirty trees)
 ├── pw-status.sh        ┐
 ├── pw-preflight.sh     │
-├── pw-doc-lint.sh      │ 14 automation scripts — deterministic status/gates/doc/ship/workflow
+├── pw-doc.sh lint      │ 14 automation scripts — deterministic status/gates/doc/ship/workflow
 ├── … (11 more pw-*.sh) │ work that runs without an agent; usage: docs/scripts/README.md
-├── pw-worktree-create.sh┘
+├── pw-worktree.sh create┘
 ├── commands/           ← THE source of truth for /pw-* (provider-neutral)
 │   ├── pw-new.md        frontmatter: description, args, [agent]; body uses {{ARGS}} + {{PW_*}}
 │   ├── pw-analyze.md
@@ -67,10 +67,10 @@ refuses accidental backward phase moves (`--rewind` to intend one); `review-init
 calling it on every `/pw-analyze`/`/pw-breakdown` run never clobbers a review already in progress.
 Run `pw-lib.sh selftest` after changing it.
 
-The **14 automation scripts** (`pw-status.sh`, `pw-preflight.sh`, `pw-doc-lint.sh`,
-`pw-doc-summary.sh`, `pw-doc-sync.sh`, `pw-review.sh scan`, `pw-ship.sh resolve`,
-`pw-ship.sh exec`, `pw-ship.sh mr-state-batch`, `pw-ship.sh monitor`, `pw-rfc-comments.sh`,
-`pw-context.sh fetch`, `pw-context.sh adopt-snapshot`, `pw-worktree-create.sh`) push that idea further:
+The **14 automation scripts** (`pw-status.sh`, `pw-preflight.sh`, `pw-doc.sh lint`,
+`pw-doc.sh summary`, `pw-doc.sh sync`, `pw-review.sh scan`, `pw-ship.sh resolve`,
+`pw-ship.sh exec`, `pw-ship.sh mr-state-batch`, `pw-ship.sh monitor`, `pw-rfc.sh comments`,
+`pw-context.sh fetch`, `pw-context.sh adopt-snapshot`, `pw-worktree.sh create`) push that idea further:
 whole deterministic steps — gates, doc validation, status reports, ship mechanics, URL fetching —
 run as zero-token scripts instead of agent reasoning. **Commands call them as pre-flight; agents
 and skills call the same ones** so behavior is identical whichever path triggers the work (see
@@ -146,7 +146,7 @@ agent: <optional — a provider agent to run the command under, e.g. pw-orchestr
 > still reuse a registered agent (e.g. `pw-executor`) by naming it in a task's `Execute with:` —
 > or, the portable Option-A form, route a `provider:model` and let the task file be the work order
 > (Option A: one executor concept, no second implementer def). Lane spawns take their model from the
-> project's `- **AI Models:**` row (`pw-lib.sh ai-model`); spawns are ledgered with their session id
+> project's `- **AI Models:**` row (`pw-config.sh ai-model`); spawns are ledgered with their session id
 > so later repairs resume the same session (`docs/EXECUTION.md` §Spawning phase work + §The
 > per-spawn ledger).
 

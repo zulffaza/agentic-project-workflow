@@ -11,25 +11,25 @@ battery_rows() {
   for s in "$S1" "$S2" "$S3"; do
     printf 'status %s\tpw-status.sh\t%s --skip-cli-check\n'        "$s" "$s"
     printf 'review-scan %s\tpw-review.sh\tscan %s\n'               "$s" "$s"
-    printf 'lint-all %s\tpw-doc-lint.sh\tall %s\n'                 "$s" "$s"
-    printf 'lint-plan %s\tpw-doc-lint.sh\tplan %s\n'               "$s" "$s"
-    printf 'lint-dashboard %s\tpw-doc-lint.sh\tdashboard %s\n'     "$s" "$s"
-    printf 'lint-analysis %s\tpw-doc-lint.sh\tanalysis %s\n'       "$s" "$s"
-    printf 'lint-review %s\tpw-doc-lint.sh\treview %s task/review/PLAN.review.md\n' "$s" "$s"
-    printf 'lint-task-t01 %s\tpw-doc-lint.sh\ttask %s T01\n'       "$s" "$s"
-    printf 'summary-plan %s\tpw-doc-summary.sh\tplan %s\n'         "$s" "$s"
-    printf 'summary-project %s\tpw-doc-summary.sh\tproject %s\n'   "$s" "$s"
-    printf 'summary-task %s\tpw-doc-summary.sh\ttask %s T01\n'     "$s" "$s"
-    printf 'summary-analysis %s\tpw-doc-summary.sh\tanalysis %s\n' "$s" "$s"
+    printf 'lint-all %s\tpw-doc.sh\tlint all %s\n'                 "$s" "$s"
+    printf 'lint-plan %s\tpw-doc.sh\tlint plan %s\n'               "$s" "$s"
+    printf 'lint-dashboard %s\tpw-doc.sh\tlint dashboard %s\n'     "$s" "$s"
+    printf 'lint-analysis %s\tpw-doc.sh\tlint analysis %s\n'       "$s" "$s"
+    printf 'lint-review %s\tpw-doc.sh\tlint review %s task/review/PLAN.review.md\n' "$s" "$s"
+    printf 'lint-task-t01 %s\tpw-doc.sh\tlint task %s T01\n'       "$s" "$s"
+    printf 'summary-plan %s\tpw-doc.sh\tsummary plan %s\n'         "$s" "$s"
+    printf 'summary-project %s\tpw-doc.sh\tsummary project %s\n'   "$s" "$s"
+    printf 'summary-task %s\tpw-doc.sh\tsummary task %s T01\n'     "$s" "$s"
+    printf 'summary-analysis %s\tpw-doc.sh\tsummary analysis %s\n' "$s" "$s"
     printf 'resolve %s\tpw-ship.sh\tresolve %s\n'               "$s" "$s"
     printf 'batch %s\tpw-ship.sh\tmr-state-batch %s\n'        "$s" "$s"
-    printf 'rfc %s\tpw-rfc-comments.sh\t%s\n'                      "$s" "$s"
+    printf 'rfc %s\tpw-rfc.sh\tcomments %s\n'                      "$s" "$s"
     printf 'adopt %s\tpw-context.sh\tadopt-snapshot %s api agent/%s/T01-thing\n' "$s" "$s" "$s"
   done
-  printf 'lint-task-crlf %s\tpw-doc-lint.sh\ttask %s\n' "$S3" "$S3"          # T06 (CRLF, sentinels)
+  printf 'lint-task-crlf %s\tpw-doc.sh\tlint task %s\n' "$S3" "$S3"          # T06 (CRLF, sentinels)
   printf 'batch-list F3\tpw-ship.sh\tmr-state-batch %s T02 T05\n' "$S3"
   printf 'unknown-project\tpw-status.sh\tnope-not-here\n'
-  printf 'unknown-arg\tpw-doc-lint.sh\tbogus-mode %s\n' "$S2"
+  printf 'unknown-arg\tpw-doc.sh\tlint bogus-mode %s\n' "$S2"
 }
 
 gate_combos() {   # label only; the runner composes cmd from it: mode|phase|fixture
@@ -50,8 +50,8 @@ _gate_cmd() {     # "<mode> <fixture>" → echo preflight args (review-plan → 
   esac
 }
 
-PWTEST_MODES="pw-doc-lint|analysis task plan review dashboard all
-pw-doc-summary|task analysis plan project
+PWTEST_MODES="pw-doc|lint summary sync
+pw-doc|analysis task plan review dashboard all
 pw-preflight|analyze execute breakdown ship review comments close"
 
 pwtest_is_crash() {  # file → 0 if output looks like a *script* defect (not a clean failure)

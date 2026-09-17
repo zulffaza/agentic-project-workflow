@@ -25,8 +25,7 @@ agentic-project-workflow/        ← this bundle ($PW_HOME)
     │                              the intended interface. It's here for whoever wants to see how
     │                              the machinery actually works.)
     ├── scaffold.sh · gen-commands.sh · gen-agents.sh · pw-lib.sh · pw-doctor.sh
-    ├── pw-common.sh · pw-teardown.sh
-    ├── commands/                ← canonical /pw-* sources (generated per provider; 13 commands incl. `pw-research`/`pw-verify`)
+        ├── commands/                ← canonical /pw-* sources (generated per provider; 13 commands incl. `pw-research`/`pw-verify`)
         ├── agents/                  ← canonical sub-agents (seeded per provider): pw-orchestrator,        │                              pw-executor, pw-reviewer (optional — see REVIEW.md),
         │                              pw-researcher, pw-analyst, pw-writer-task (phase lanes)
     ├── docs/                    ← registries/policy docs the AGENTS read (their docs/ human peer
@@ -107,7 +106,7 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | `/pw-analyze <slug> [focus]` | analysis |
 | `/pw-review <slug> [phase\|Tid(s)\|path]` | apply review comments (defaults to current phase's review; task ids can be a list — `T01 T03 T05 T06` — processed in one pass) |
 | `/pw-review <slug> ai [phase\|Tid(s)\|path]` | optional — delegate a fresh review pass to `pw-reviewer` (see [docs/REVIEW.md](./REVIEW.md#3-ai-assisted-review-optional-per-phase)) |
-| `/pw-review <slug> config [<phase> <mode> \| model <lane> <provider:model\|—>]` | optional — view (no args: AI Review modes **and** AI Model lanes) or change one: a phase's review mode, or a lane's model row (`—` = provider default). The human-facing surface; never run `pw-lib.sh ai-review`/`ai-model` by hand for this |
+| `/pw-review <slug> config [<phase> <mode> \| model <lane> <provider:model\|—>]` | optional — view (no args: AI Review modes **and** AI Model lanes) or change one: a phase's review mode, or a lane's model row (`—` = provider default). The human-facing surface; don't poke the dashboard config lines by hand |
 | `/pw-review <slug> init-all` | create every missing review file in the project (each analysis doc, the PLAN, every task) — idempotent catch-up |
 | `/pw-review <slug> item <path> <§anchor> <ask…>` | add a review item deterministically (heading, timestamp, marker, rule, reindex — never hand-copy the template block) |
 | `/pw-review <slug> answer <path> <Qn> <text…>` | add your `↳ you:` answer under a question, in house style |
@@ -120,7 +119,7 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | `/pw-ship <slug> [task-ids] [comments] [--skip-build-check]` | push branches + open MRs (publish), titled `[<ticket>] <title>` when a ticket is found; `comments` = handle MR review threads (also refreshes the MR description each round); by default also monitors the MR's pipeline/checks to a terminal state — `--skip-build-check` opts out |
 | `/pw-sync <slug> [task-ids]` | update open MR branches — merge base in, re-verify, push |
 | `/pw-status <slug>` | status |
-| `/pw-status <slug> rewind <phase>` | move the dashboard `Status:` back to an earlier phase — the human-facing surface for this, never `pw-lib.sh status … --rewind` directly (see [Going back a phase](./WORKFLOW.md#going-back-a-phase-rewind)) |
+| `/pw-status <slug> rewind <phase>` | move the dashboard `Status:` back to an earlier phase — the human-facing surface for this, never the raw status write with `--rewind` directly (see [Going back a phase](./WORKFLOW.md#going-back-a-phase-rewind)) |
 | `/pw-close <slug>` | learn + close-out |
 | `/pw-research <question>` | ad-hoc `pw-researcher` Mode B answer pass (seed rules from the skill; no project needed) |
 | `/pw-verify <target-of-verification>` | independent fresh-context `pw-verifier` stand-alone check (§3.4 — not part of the default executor flow; lands findings as review items, never edits) |

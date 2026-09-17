@@ -43,7 +43,7 @@ meaningful at two moments, chosen by *why* you're adopting — never to sit in a
   `/pw-sync`), not to add tasks. Lands the project straight at **`review`**, skipping
   analyze/breakdown. **An MR is required** — refuse and ask for it if the `mr-url` is missing.
 
-**Phase guard (check `{{PW_HOME}}/tooling/pw-lib.sh phase <slug>` first):**
+**Phase guard (check `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh phase <slug>` first):**
 - Project is `done` (closed) → **refuse**; tell me to reopen deliberately (a closed project has been
   torn down). Only proceed if I explicitly say to reopen.
 - Default (continue-dev) adopt onto a project **already past `context`** (analysis/breakdown/
@@ -76,7 +76,7 @@ earlier units are untouched. The result is a **mixed project** where adoption is
    on `:` into `(repo, branch, mr-url?)` groups. If the last argument is the literal `review`, this
    is a **review-only** adopt for the whole batch (strip it from the args; each group's `mr-url` is
    then required) — otherwise it's a default **continue-dev** adopt. Read the current phase
-   (`{{PW_HOME}}/tooling/pw-lib.sh phase <slug>`, if the project already exists) and apply the phase
+   (`{{PW_HOME}}/tooling/scripts/entities/pw-status.sh phase <slug>`, if the project already exists) and apply the phase
    guard above ONCE, for the whole call: refuse on `done` (unless I say reopen); for a continue-dev
    adopt past `context`, plan to warn (not rewind) once at the end, not per group. **Validate each
    group**: confirm `{{PW_REPOS}}/<repo>` is a git repo and `<existing-branch>` exists (`git -C
@@ -115,7 +115,7 @@ earlier units are untouched. The result is a **mixed project** where adoption is
      re-churn that provenance line (the reported bugs).
 5. **Set the phase for this intent, ONCE for the whole call** (per the phase guard above) — repeat
    steps 2–4 per group first, then do this exactly once:
-   - **Review-only adopt** → `{{PW_HOME}}/tooling/pw-lib.sh status <slug> review`. Mark each
+   - **Review-only adopt** → `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh status <slug> review`. Mark each
      adopted unit's `### Remaining work` as `none — review-only (servicing MR comments)`.
    - **Continue-dev adopt on a fresh/context project** → leave `Status` at `context` (don't touch it).
    - **Continue-dev adopt on a project already past `context`** → do NOT change `Status`; you'll warn

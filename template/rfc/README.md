@@ -7,7 +7,7 @@ don't write RFCs for this project.
   `analysis/` for Wave 1, from an approved `task/PLAN.md` for Wave 2 — `/pw-rfc <slug> milestone`),
   regardless of whether you publish anywhere external. This file is the source of truth; publishing
   to a real doc platform is an *additional*, optional step layered on top.
-- **`META.md`** — 🤖-owned via `pw-lib.sh rfc target|state` — never hand-edit. Tracks the publish
+- **`META.md`** — 🤖-owned via `pw-rfc.sh target|state` — never hand-edit. Tracks the publish
   backend, the external doc's target ref, last revision pushed, which wave(s) are published, and
   the comment-sync cursor.
 

@@ -247,7 +247,7 @@ PLANEOF
   sed -i '' "s@^- \*\*One-liner:\*\*.*@- **One-liner:** fixture project for the harness@" "$p/README.md" && rm -f "$p/README.md.bak"
     sed -i '' "s@\*\*Chosen approach:\*\* .*@**Chosen approach:** Option A — fixture choice@" "$p/analysis/fixture.md"
   # seed the dashboard from task truth — the SAME script does it, so "stale on arrival" can't bias tests:
-  "$(pwtest_script pw-doc-sync.sh)" "$slug" --dashboard-only >/dev/null 2>&1 || true
+  "$(pwtest_script pw-doc.sh)" sync "$slug" --dashboard-only >/dev/null 2>&1 || true
   printf '%s' "$p"
 }
 

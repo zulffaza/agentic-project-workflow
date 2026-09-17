@@ -16,7 +16,7 @@ everything below and follow this instead** (3rd argument is the phase to rewind 
    and a new `in-review` Sign-off row (never delete the old `approved` row — it's history). If
    neither exists yet, tell me to add them first rather than rewinding into a phase with no record
    of *why*.
-3. Run `…/{{PW_HOME}}/tooling/pw-lib.sh status <slug> <phase> --rewind` — this is the only place
+3. Run `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh status <slug> <phase> --rewind` — this is the only place
    that flag is ever passed; a plain `status` call always refuses to move backward, by design.
 4. Report the new phase and point me at the phase command to re-run (`/pw-analyze` / `/pw-breakdown`
    / …), then `/pw-review` to re-approve.

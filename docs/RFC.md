@@ -173,7 +173,7 @@ you/a teammate comments on the RFC doc (thread on some section)
                  • analysis/review/RFC.review.md  (one [OPEN] item per thread: quote, author,
                    link, which section)
                  • rfc/META.md's "Comment tracking" table  (one row per thread — reply count seen +
-                   solved — via `pw-lib.sh rfc comment-seen`, so a re-run tells a brand-new thread
+                   solved — recorded per thread, so a re-run tells a brand-new thread
                    from one that just got a new reply from one that's already fully mirrored)
 ```
 

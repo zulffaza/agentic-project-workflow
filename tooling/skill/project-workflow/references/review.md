@@ -110,7 +110,7 @@ Rules you MUST follow:
     `pw-ship.sh comment-seen <slug> <T0n> <thread-id> <resolvable|unresolvable> yes` — this
     upserts a row in `task/review/T0n.review.md`'s `## MR comment tracking` table, which the next
     `/pw-ship … comments` run checks before treating a thread as new. Same pattern as
-    `pw-lib.sh rfc comment-seen` for RFC-platform comments.
+    `pw-rfc.sh comment-seen` for RFC-platform comments.
   - **⚠️ Use `/notes` as the primary source for GitLab, NOT `/discussions`.**
     The `/discussions` endpoint has persistent indexing lag — notes can be visible in the GitLab
     web UI and `/notes` API **20+ minutes** before appearing in `/discussions`. Verified 2026-08-26:
@@ -128,7 +128,7 @@ Rules you MUST follow:
 ## AI-assisted review (optional, per-phase opt-in)
 Every review point above defaults to human-only. A project's dashboard `AI Review:` line
 (`off`/`advisory`/`auto`, per phase) controls this — **the human-facing surface for viewing/setting
-it is `/pw-review <slug> config [<phase> <mode>]`, never `pw-lib.sh ai-review` directly** (that's
+it is `/pw-review <slug> config [<phase> <mode>]`, never `pw-config.sh ai-review` directly** (that's
 the internal mechanism this sub-verb wraps; if I ever ask you how to change this, point me at the
 command, not the script). Delegate a phase's review to the `pw-reviewer` sub-agent via `/pw-review
 <slug> ai [phase|Tid(s)|path]` (a list of task ids = one reviewer pass per task):
