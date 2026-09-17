@@ -3,7 +3,7 @@
 # Every forbidden pattern here encodes a bug that actually shipped once (plan 16 §5).
 
 # the automation-script registry (single list; T0/T1/T2/mutation reuse it)
-PWTEST_AUTOMATION="pw-status.sh pw-preflight.sh pw-review-scan.sh pw-doc-lint.sh pw-doc-summary.sh pw-doc-sync.sh pw-ship-resolve.sh pw-mr-state-batch.sh pw-rfc-comments.sh pw-context-fetch.sh pw-adopt-snapshot.sh pw-worktree-create.sh pw-ship-exec.sh pw-pipeline-monitor.sh pw-review-edit.sh pw-context.sh"
+PWTEST_AUTOMATION="pw-status.sh pw-preflight.sh pw-review-scan.sh pw-doc-lint.sh pw-doc-summary.sh pw-doc-sync.sh pw-ship.sh pw-rfc-comments.sh pw-context-fetch.sh pw-adopt-snapshot.sh pw-worktree-create.sh pw-review-edit.sh pw-context.sh"
 export PWTEST_AUTOMATION
 
 _pwtest_code_lines() { awk '!/^[[:space:]]*#/' "$@" 2>/dev/null | cat -n; }

@@ -198,3 +198,63 @@ md_replace_range() {
   local f="$1" s="$2" e="$3" src="$4"
   { head -n "$((s-1))" "$f"; cat "$src"; tail -n "+$((e+1))" "$f"; } > "$f.tmp" && mv "$f.tmp" "$f"
 }
+
+# Update one cell of a markdown table in a file: find the table whose header's FIRST cell equals
+# <id-col-name> ("ID" for the Task status table, "Task" for the Merge requests table), resolve the
+# <id-col-name> and <target-col-name> columns FROM THE HEADER (never by fixed position — the MR
+# table's State is column 5, not 4), and rewrite the cell of the row whose id column equals
+# <row-id>. Leaves the file untouched and prints an error (exit 1) if the table, a column, or the
+# row isn't found — never a silent no-op. Deliberately regex-free on pipes (BSD awk rejects `\|`
+# in a -v variable used as a regex) — header/separator detection is by cell comparison instead.
+#   _dashboard_update <file> <id-col-name> <target-col-name> <row-id> <new-value>
+_dashboard_update() {
+  [ $# -eq 5 ] || { echo "_dashboard_update: expected 5 args, got $#" >&2; return 2; }
+  local file="$1" idname="$2" tgtname="$3" rowid="$4" newval="$5"
+  local errfile="${file}.dash-err"
+  if ! awk -v idname="$idname" -v tgtname="$tgtname" -v rowid="$rowid" -v newval="$newval" '
+    function trim(s){ sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+    BEGIN{ idcol=0; tgtcol=0; intable=0; found=0; matched=0 }
+    {
+      if (!intable && /^[ \t]*\|/) {
+        n = split($0, c, "|")
+        if (n >= 3 && trim(c[2]) == idname) {
+          intable = 1; found = 1
+          for (i = 2; i < n; i++) { t = trim(c[i]); if (t == idname) idcol = i; if (t == tgtname) tgtcol = i }
+        }
+      }
+      if (intable) {
+        if (/^[ \t]*$/) { intable = 0 }
+        else if ($0 !~ /^[ \t]*\|/) { intable = 0 }
+        else {
+          tmp = $0; gsub(/[ \t|:-]/, "", tmp)
+          if (tmp == "") { print; next }          # separator row (dashes/pipes/colons only)
+        }
+      }
+      if (intable && idcol > 0 && tgtcol > 0) {
+        n = split($0, c, "|")
+        if (n > tgtcol && trim(c[idcol]) == rowid) {
+          c[tgtcol] = " " newval " "
+          line = ""
+          for (i = 1; i <= n; i++) line = line c[i] (i < n ? "|" : "")
+          print line
+          matched = 1
+          next
+        }
+      }
+      print
+    }
+    END {
+      if (!found) print "ERR: no table whose first column is \"" idname "\" in " FILENAME > "/dev/stderr"
+      else if (tgtcol == 0) print "ERR: no \"" tgtname "\" column in the matched table" > "/dev/stderr"
+      else if (idcol == 0) print "ERR: no \"" idname "\" column in the matched table" > "/dev/stderr"
+      else if (!matched) print "ERR: no row with " idname "=\"" rowid "\" in the matched table" > "/dev/stderr"
+    }
+  ' "$file" > "$file.tmp" 2> "$errfile"; then
+    rm -f "$file.tmp"; cat "$errfile" >&2; rm -f "$errfile"; return 1
+  fi
+  if [ -s "$errfile" ]; then
+    rm -f "$file.tmp"; cat "$errfile" >&2; rm -f "$errfile"; return 1
+  fi
+  rm -f "$errfile"
+  mv "$file.tmp" "$file"
+}

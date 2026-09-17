@@ -90,7 +90,7 @@ Rules you MUST follow:
     then it stops and surfaces the failure). Pass `--skip-build-check` to opt out of the whole
     check + fix loop for a given run. Mechanics + per-forge invocation: `tooling/docs/forges.md`;
     the loop contract: `tooling/commands/pw-ship.md` "Build-check fix loop".
-  - **MR state is checked first** (`pw-lib.sh mr-state <slug> <T0n>`): `merged` → accept the task,
+  - **MR state is checked first** (`pw-ship.sh mr-state <slug> <T0n>`): `merged` → accept the task,
     update the dashboard, remove the worktree, and skip; `closed`/`unknown` → note and skip; only
     `open` MRs are actually processed.
   - **⚠️ Never filter by diff-position to decide what's actionable.** GitHub needs two endpoints
@@ -107,7 +107,7 @@ Rules you MUST follow:
     open forever even after being fixed.
   - **Idempotency for `resolvable: false` comments is local, not the forge's** — those can never
     report `resolved: true` no matter what. After replying to *any* thread, call
-    `pw-lib.sh ship comment-seen <slug> <T0n> <thread-id> <resolvable|unresolvable> yes` — this
+    `pw-ship.sh comment-seen <slug> <T0n> <thread-id> <resolvable|unresolvable> yes` — this
     upserts a row in `task/review/T0n.review.md`'s `## MR comment tracking` table, which the next
     `/pw-ship … comments` run checks before treating a thread as new. Same pattern as
     `pw-lib.sh rfc comment-seen` for RFC-platform comments.

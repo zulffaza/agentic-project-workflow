@@ -70,7 +70,7 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   `pw-lib.sh log`, carrying `· session=<id> · seed=<ref> · out=<artifact>` so a later
   repair/cascade/recheck can **resume that session** instead of re-deriving it (machine-local
   pointer only — never in MR text; PLAN/dashboard/on-disk state is the durable cross-machine truth).
-- `pw-lib.sh mr-state <slug> <task-id>` — query the forge (GitLab/GitHub) for an MR's current state.
+- `pw-ship.sh mr-state <slug> <task-id>` — query the forge (GitLab/GitHub) for an MR's current state.
   Prints `open`, `merged`, `closed`, or `unknown` (the last on any lookup/query failure — no MR
   URL/worktree/origin, or the forge query failed or returned null — with exit 1). Used by `/pw-sync`
   and `/pw-ship comments` to detect MRs that were already merged downstream before attempting to
@@ -79,7 +79,7 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   when an MR is already merged).
 - `pw-lib.sh dashboard-task-status <slug> <task-id> <status>` — update a task's status in the
   dashboard README.md task status table.
-- `pw-lib.sh dashboard-mr-state <slug> <task-id> <state>` — update an MR's state in the dashboard
+- `pw-ship.sh dashboard-mr-state <slug> <task-id> <state>` — update an MR's state in the dashboard
   README.md MR table (e.g., `merged`).
 - `pw-lib.sh worktree-remove <slug> <task-id>` — safely remove a task's worktree (refuses if the
   worktree has uncommitted changes or is the current directory). Used when an MR is already merged

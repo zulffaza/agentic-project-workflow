@@ -130,7 +130,7 @@ them means going back into the task's worktree and pushing, which is ship-side w
 so you don't have to invoke it per task. It processes them serially (each is a real
 edit → verify → push) and recaps a per-task table at the end.
 
-**MR state is checked first, per task** (`$PW_HOME/tooling/pw-lib.sh mr-state <slug> <T0n>`):
+**MR state is checked first, per task** (the ship flow queries the forge directly):
 `merged` → the MR was already merged downstream — accept the task, update the dashboard, remove the
 worktree, and skip it (never process comments on a merged MR); `closed` → note it and skip; `unknown`
 (the forge query failed or couldn't resolve the MR) → note it as `mr-state-unknown` and skip. Only
@@ -144,7 +144,7 @@ reviewer leaves a comment on MR !123 (thread on file X, line N — OR a general/
         ▼
 /pw-ship <slug> T03 comments
         │
-        ├─ 0. CHECK MR state   pw-lib.sh mr-state <slug> T03 — merged/closed/unknown ⇒
+        ├─ 0. CHECK MR state   per-task forge query — merged/closed/unknown ⇒
         │                      accept/update dashboard/remove worktree + skip; only open MRs proceed
         │
         ├─ 1. FETCH open threads   GitHub: gh pr view --comments + gh api …/pulls/<n>/comments (BOTH
@@ -164,8 +164,8 @@ reviewer leaves a comment on MR !123 (thread on file X, line N — OR a general/
         └─ 5. MIRROR into the project dir  ← the important bit
                  • task/T03.md  ## Result   (what changed + verify output + build-check result)
                  • task/review/T03.review.md  (create it if missing — a [RESOLVED] item per thread,
-                   PLUS a row in its `## MR comment tracking` table via
-                   `pw-lib.sh ship comment-seen <slug> T03 <thread-id> <resolvable|unresolvable> yes`)
+                   PLUS a row in its `## MR comment tracking` table —
+                   the flow records each thread's kind + replied-state there)
                  • LOG.md line via pw-lib.sh log
 ```
 
@@ -190,7 +190,7 @@ A reviewer can "Start a thread" from an MR's Overview tab, not just from a diff 
 general comment can be just as actionable as one anchored to a line, so the fetch step never
 filters by diff-position. And some comment types can never be marked "resolved" by the forge no
 matter what — for those, `/pw-ship … comments` checks the **local** `## MR comment tracking` table
-in `task/review/T0n.review.md` (written by `pw-lib.sh ship comment-seen`) instead of waiting on a
+in `task/review/T0n.review.md` (written by the comments flow) instead of waiting on a
 forge-side flag that will never flip (the same pattern `/pw-rfc comments` uses for RFC-platform
 comments). The exact API fields this relies on, and why, are in
 [`tooling/docs/forges.md`](../tooling/docs/forges.md#standalone-vs-diff-anchored-comments-both-forges--read-before-writing-a-fetch-comments-step)

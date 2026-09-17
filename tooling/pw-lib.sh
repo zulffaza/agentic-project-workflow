@@ -22,15 +22,6 @@
 #   pw-lib.sh rfc comment-seen <slug> <thread-id> <reply-count> <solved:yes|no>
 #                                                     upsert one comment-thread's tracked state
 #                                                     (per-thread, not a single scalar cursor)
-#   pw-lib.sh ship comment-seen <slug> <task-id> <thread-id> <kind:resolvable|unresolvable>
-#                                <replied:yes|no> [note...]
-#                                                     upsert one MR-comment thread's tracked state
-#                                                     into task/review/T0n.review.md (inserted
-#                                                     before ## Sign-off, never after) — the LOCAL
-#                                                     authority for "already replied", since an
-#                                                     unresolvable thread (a plain one-off comment,
-#                                                     diff-anchored or general — see tooling/docs/forges.md)
-#                                                     can never report resolved=true on the forge
 #   pw-lib.sh ai-review    <slug> [<phase> <mode>]   get (no extra args) or set one phase's AI-review
 #                                                     mode on the dashboard (phase: analysis|plan|
 #                                                     task-plan|task-exec|ship; mode: off|advisory|auto)
@@ -90,21 +81,11 @@
 #                                                     — empty/unset = ALL models allowed (the
 #                                                     default). Called by /pw-breakdown and
 #                                                     /pw-execute; not meant to be run by hand.
-#   pw-lib.sh mr-state      <slug> <task-id>         query the forge (GitLab/GitHub) for an MR's
-#                                                     current state. Prints "open"/"merged"/
-#                                                     "closed"/"unknown" (unknown + exit 1 on any
-#                                                     lookup/query failure). Used by /pw-sync and
-#                                                     /pw-ship comments to detect MRs that were
-#                                                     already merged downstream before attempting
-#                                                     to sync or process comments.
 #   pw-lib.sh task-accept   <slug> <task-id>         update a task's Status: field to "accepted"
 #                                                     (used when an MR is already merged).
 #   pw-lib.sh dashboard-task-status <slug> <task-id> <status>
 #                                                     update a task's status in the dashboard
 #                                                     README.md task status table.
-#   pw-lib.sh dashboard-mr-state <slug> <task-id> <state>
-#                                                     update an MR's state in the dashboard
-#                                                     README.md MR table (e.g., "merged").
 #   pw-lib.sh worktree-remove <slug> <task-id>       safely remove a task's worktree (refuses if
 #                                                     the worktree has uncommitted changes or is
 #                                                     the current directory). Used when an MR is
@@ -552,93 +533,6 @@ cmd_rfc() {
     dashboard)    shift; cmd_rfc_dashboard "$@" ;;
     comment-seen) shift; cmd_rfc_comment_seen "$@" ;;
     *) die "usage: rfc <init|target|state|dashboard|comment-seen> ..." ;;
-  esac
-}
-
-# Ensure task/review/T0n.review.md has a "## MR comment tracking" table (create the header +
-# explainer if missing) — lazily added only once a thread is actually seen. Private helper for
-# cmd_ship_comment_seen.
-#
-# Unlike rfc/META.md (pure machine metadata, nothing ever follows the Comment-tracking section),
-# a review file's LAST section is "## Sign-off" — human-owned, and meant to read as the closing
-# gate. A blind end-of-file append lands this section AFTER Sign-off, visually orphaned below the
-# gate a human just signed. So: insert it right BEFORE "## Sign-off" if that heading exists yet
-# (review-init always creates one, so in practice it always does); fall back to a plain append only
-# if some non-standard file genuinely lacks one.
-_ship_comment_section_ensure() {
-  local f="$1"
-  grep -q '^## MR comment tracking' "$f" 2>/dev/null && return 0
-  # Written to a temp file with plain printf, then spliced in with head/tail/cat — NOT awk -v and
-  # NOT a heredoc. Two real, confirmed-here portability traps ruled those out: (1) a heredoc body
-  # with an odd count of literal apostrophes confuses bash's own parser once nested inside a
-  # $(...) substitution; (2) macOS's /usr/bin/awk (the BWK "one true awk", not gawk) rejects a
-  # `-v var=…` assignment whose value contains embedded newlines ("awk: newline in string").
-  # head/tail/cat sidestep both — no shell-quote gymnastics, no awk variable involved at all.
-  local sectionfile; sectionfile="$(mktemp)"
-  {
-    printf '\n## MR comment tracking   [🤖-owned — never hand-edit; see `pw-lib.sh ship comment-seen`]\n\n'
-    printf "A discussion's \`resolvable\` flag (NOT whether it's diff-anchored vs general — see\n"
-    printf "tooling/docs/forges.md) decides whether the forge can ever report it resolved. A \`resolvable: false\`\n"
-    printf 'thread (a plain one-off comment) can never report resolved=true via the forge API, no matter how\n'
-    printf "many replies it gets — so the forge can never tell a later \`/pw-ship … comments\` run \"this one's\n"
-    printf '%s\n' 'already handled". This table is the LOCAL authority for that instead, keyed by thread/comment ID'
-    printf "(shown truncated below; the full ID lives in each row's hidden marker, which is what matching\n"
-    printf "actually keys on — don't reformat/shorten a row by hand, add a \`note\` argument instead).\n"
-    printf '\n| Thread | Kind | Replied | Notes |\n|--------|------|---------|-------|\n'
-  } > "$sectionfile"
-  if grep -q '^## Sign-off' "$f"; then
-    local signline; signline="$(grep -n '^## Sign-off' "$f" | head -1 | cut -d: -f1)"
-    { head -n "$((signline - 1))" "$f"; cat "$sectionfile"; printf '\n'; tail -n "+${signline}" "$f"; } \
-      > "$f.tmp" && mv "$f.tmp" "$f"
-  else
-    cat "$sectionfile" >> "$f"
-  fi
-  rm -f "$sectionfile"
-}
-
-# Deterministically upsert ONE row per MR-comment thread — same keyed-marker upsert shape as
-# cmd_rfc_comment_seen (append-or-rewrite-in-place), applied to /pw-ship … comments instead of
-# /pw-rfc comments. This is what makes a rerun able to tell "already replied to this unresolvable
-# comment" from "new one, never seen" — without it, an unresolvable thread either gets silently
-# skipped forever (looks perpetually "not resolved" on the forge, so a naive resolved-filter treats
-# it as not-actionable) or gets re-processed/re-replied-to every single run (no forge-side flag
-# ever flips to stop it recurring).
-#   ship comment-seen <slug> <task-id> <thread-id> <kind:resolvable|unresolvable> <replied:yes|no> [note...]
-cmd_ship_comment_seen() {
-  [ $# -ge 5 ] || die "usage: ship comment-seen <slug> <task-id> <thread-id> <kind:resolvable|unresolvable> <replied:yes|no> [note...]"
-  local slug="$1" task="$2" thread="$3" kind="$4" replied="$5"; shift 5; local note="$*"
-  case "$kind" in resolvable|unresolvable) ;; *) die "kind must be 'resolvable' or 'unresolvable' (got '$kind')" ;; esac
-  case "$replied" in yes|no) ;; *) die "replied must be 'yes' or 'no' (got '$replied')" ;; esac
-  local d; d="$(proj_dir "$slug")"
-  local f="$d/task/review/$task.review.md"
-  [ -f "$f" ] || die "no review file: task/review/$task.review.md (run 'pw-lib.sh review-init $slug task/review/$task.review.md task/$task.md' first)"
-  _ship_comment_section_ensure "$f"
-  local marker="<!-- pw-mr-comment:$thread -->"
-  local shortid="${thread:0:8}"
-  local row="| \`$shortid\` | $kind | $replied | $note $marker |"
-  if grep -Fq "$marker" "$f"; then
-    awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-  else
-    # Insert right after this section's table separator, so a brand-new row lands INSIDE the
-    # table (immediately below the header) instead of at the true end of the file — where it
-    # would land after ## Sign-off and read as an orphaned, disconnected block. Falls back to a
-    # plain append only if the separator can't be found (defensive; should not normally happen).
-    awk -v row="$row" '
-      /^## MR comment tracking/ { insec=1 }
-      { print }
-      insec && !done && /^\|[-| ]+\|[ ]*$/ { print row; done=1 }
-    ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-    grep -Fq "$marker" "$f" || printf '%s\n' "$row" >> "$f"
-  fi
-  cmd_log "$slug" ship "comment-seen $task/$thread ($kind): replied=$replied"
-  echo "$slug: ship comment-seen $task/$thread ($kind) -> replied=$replied"
-}
-
-cmd_ship() {
-  case "${1:-}" in
-    comment-seen) shift; cmd_ship_comment_seen "$@" ;;
-    *) die "usage: ship comment-seen <slug> <task-id> <thread-id> <kind:resolvable|unresolvable> <replied:yes|no> [note...]" ;;
   esac
 }
 
@@ -1180,150 +1074,6 @@ cmd_model_check() {
   die "model-check: $prov:$model — refused. Not in PW_MODEL_ALLOWLIST_${upper} (\"$allow\"). Add a matching pattern to pw.config.sh, or choose an allowed model."
 }
 
-# --- MR state detection (for /pw-sync and /pw-ship comments) -----------------
-# Check an MR's current state via the forge CLI. Prints one of "open", "merged", "closed", or
-# "unknown" to stdout; exit 0 for the three definitive states, exit 1 + "unknown" for anything it
-# can't determine (no MR URL/worktree/origin, or the forge query failed or returned null). Callers
-# treat stdout "unknown" as mr-state-unknown and skip — this helper never die()s on a runtime
-# lookup failure, only on a usage error. Resolves the forge per repo (same as /pw-ship does) —
-# never hardcodes a host.
-#   mr-state <slug> <task-id>
-# MR URL is taken from the task's "## Result → MR:" line if present, else from the dashboard
-# Merge-requests table (Task · MR · Target rows). Requires an existing worktree for the task so
-# the forge CLI can be run from inside the repo (glab needs repo context to resolve :id).
-# Emit an mr-state lookup failure: diagnostic to stderr, "unknown" to stdout, exit 1. set -e-safe:
-# always invoke as `_mr_unknown "…" || return 1` so the failing call sits in an OR-list.
-# Resolve the task file's MR URL scoped to `## Result`: the `- **MR:**` / `- MR:` field line first
-# (its URL — else its trimmed sentinel value like `(none)`), then the first bare http(s) URL in
-# the Result block, else empty (caller falls back to the dashboard table). Section-scoping is the
-# point: a whole-file `grep 'https://' | head -1` lets decoy literal URLs in ## Steps beat the real
-# field — seen 2026-09, where a stencil placeholder URL left mr-state "found-but-unparseable" and
-# the task unknown forever despite a correct `- **MR:**` line. Mirror of pw_task_mr_url in
-# pw-common.sh (pw-lib is standalone and cannot source it) — update both together.
-_resolve_task_mr_url() {
-  local sec line val url
-  [ -f "$1" ] || return 0
-  sec="$(awk '/^## Result/{p=1; next} /^## /{p=0} p' "$1" 2>/dev/null)" || return 0
-  [ -n "$sec" ] || return 0
-  line="$(printf '%s\n' "$sec" | grep -m1 -E '^[[:space:]]*([-*][[:space:]]*)?\*{0,2}MR\*{0,2}[[:space:]]*:' || true)"
-  if [ -n "$line" ]; then
-    val="$(printf '%s' "$line" | sed -E \
-      -e 's/^[[:space:]]*([-*][[:space:]]*)?\*{0,2}MR\*{0,2}[[:space:]]*:[[:space:]]*//' \
-      -e 's/^[*_[:space:]]+//' -e 's/[[:space:]]+\*\*.*$//' -e 's/[[:space:]]+$//')"
-    if [ -n "$val" ]; then
-      url="$(printf '%s' "$val" | grep -oE "https?://[^ )>|\"\`]+" | head -1 || true)"
-      [ -n "$url" ] && { printf '%s' "$url"; return 0; }
-      printf '%s' "$val"; return 0
-    fi
-  fi
-  printf '%s\n' "$sec" | grep -oE "https?://[^ )>|\"\`]+" | head -1 || true
-}
-
-_mr_unknown() {
-  echo "mr-state: $*" >&2
-  echo "unknown"
-  return 1
-}
-
-cmd_mr_state() {
-  [ $# -eq 2 ] || die "usage: mr-state <slug> <task-id>"
-  local slug="$1" task="$2"
-  local d; d="$(proj_dir "$slug")"
-  local taskfile="$d/task/$task.md"
-
-  # MR URL: task file "## Result" block first (field "MR:" or a bare URL), else dashboard table row.
-  # Result-scoping — see _resolve_task_mr_url. The dashboard pattern takes the URL from ANY column of
-  # the row (`| T02 | repo | [MR 18](url) |` markdown-link cell included); the old one demanded the
-  # URL immediately after the task cell and silently never matched real rows.
-  local mr_url=""
-  mr_url="$(_resolve_task_mr_url "$taskfile")"
-  if [ -z "$mr_url" ]; then
-    mr_url="$(grep -E "^\|[[:space:]]*\**$task\**[[:space:]]*\|" "$d/README.md" 2>/dev/null \
-              | grep -oE "https?://[^ )>|\"\`]+" | head -1 || true)"
-  fi
-  [ -n "$mr_url" ] || _mr_unknown "no MR URL found for $task (task file or dashboard table)" || return 1
-
-  # Extract MR IID/number from URL (GitLab /-/merge_requests/<n> or GitHub /pull/<n>)
-  local mr_iid
-  mr_iid="$(printf '%s' "$mr_url" | grep -oE '/-/merge_requests/[0-9]+' | grep -oE '[0-9]+$' || true)"
-  [ -z "$mr_iid" ] && mr_iid="$(printf '%s' "$mr_url" | grep -oE '/pull/[0-9]+' | grep -oE '[0-9]+$' || true)"
-  [ -n "$mr_iid" ] || _mr_unknown "could not extract MR IID from URL: $mr_url" || return 1
-
-  # Locate the task's worktree — the task file's own "Branch:" / "Worktree:" fields are
-  # authoritative (never pattern-match project-specific branch shapes like PAYMXMP-123/… — a task
-  # can live on any branch, and the shape is the project's business, not this tool's). Fall back to
-  # scanning worktree/ ONLY when the branch is known, matching the checked-out branch (a worktree's
-  # .git is a FILE, not a dir, so find by the checkout marker, never by -type d). With no branch
-  # and no Worktree: field, fail loudly with the candidates instead of guessing the first worktree
-  # in a multi-repo project.
-  local repo_dir="" branch
-  if [ -f "$taskfile" ]; then
-    branch="$(grep -m1 -E '^- \*\*Branch:\*\*' "$taskfile" | sed -E 's/^- \*\*Branch:\*\* *`?([^`]*)`?$/\1/; s/[[:space:]]*$//' || true)"
-    local wt_rel
-    wt_rel="$(grep -m1 -E '^- \*\*Worktree:\*\*' "$taskfile" | sed -E 's/^- \*\*Worktree:\*\* *`?([^`]*)`?$/\1/; s/[[:space:]]*$//' || true)"
-    [ -n "$wt_rel" ] && [ -d "$d/$wt_rel" ] && repo_dir="$d/$wt_rel"
-  fi
-  if [ -z "$repo_dir" ] && [ -n "$branch" ]; then
-    local g
-    for g in $(find "$d/worktree" -maxdepth 4 -name .git 2>/dev/null); do
-      local cand; cand="$(dirname "$g")"
-      local cb; cb="$(git -C "$cand" branch --show-current 2>/dev/null || true)"
-      if [ "$cb" = "$branch" ]; then repo_dir="$cand"; break; fi
-    done
-  fi
-  if [ -z "$repo_dir" ] || [ ! -d "$repo_dir" ]; then
-    if [ -z "$branch" ]; then
-      find "$d/worktree" -maxdepth 4 -name .git 2>/dev/null | while read -r g; do
-        echo "  candidate: $(dirname "$g")" >&2
-      done || true
-    fi
-    _mr_unknown "no worktree found for $task (Branch: ${branch:-unset}, Worktree: field missing or not under $d/worktree)" || return 1
-  fi
-
-  local origin_url
-  origin_url="$(git -C "$repo_dir" remote get-url origin 2>/dev/null || true)"
-  [ -n "$origin_url" ] || _mr_unknown "no origin remote in $repo_dir" || return 1
-
-  # Host extraction handles ssh (git@host:...) and https (https://host/...) forms.
-  local host
-  host="$(printf '%s' "$origin_url" | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||')"
-  [ -n "$host" ] || _mr_unknown "could not resolve host from origin: $origin_url" || return 1
-
-  # Resolve forge: PW_FORGE_HOSTS override, else auto-detect (github.com → github, else gitlab).
-  local forge="gitlab"
-  case "$host" in
-    github.com) forge="github" ;;
-  esac
-  if [ -n "${PW_FORGE_HOSTS:-}" ]; then
-    for entry in "${PW_FORGE_HOSTS[@]}"; do
-      local h="${entry%%=*}" f="${entry#*=}"
-      [ "$h" = "$host" ] && { forge="$f"; break; }
-    done
-  fi
-
-  # Query MR state from INSIDE the repo dir (glab resolves the project from cwd; gh from origin).
-  local state=""
-  case "$forge" in
-    github)
-      state="$(cd "$repo_dir" && gh pr view "$mr_iid" --json state -q .state 2>/dev/null || true)"
-      ;;
-    gitlab)
-      state="$(cd "$repo_dir" && GITLAB_HOST="$host" glab mr view "$mr_iid" --output json 2>/dev/null | jq -r .state 2>/dev/null || true)"
-      ;;
-    *) die "unknown forge: $forge" ;;
-  esac
-  [ -n "$state" ] && [ "$state" != "null" ] \
-    || _mr_unknown "failed to query MR $mr_iid state via $forge CLI on $host (is it authenticated?)" || return 1
-
-  # Normalize state
-  case "$state" in
-    MERGED|merged) echo "merged" ;;
-    OPEN|opened) echo "open" ;;
-    CLOSED|closed) echo "closed" ;;
-    *) _mr_unknown "unexpected MR state: $state (from $forge on $host)" || return 1 ;;
-  esac
-}
-
 # Update a task's Status field to "accepted" (used when MR is already merged).
 #   task-accept <slug> <task-id>
 cmd_task_accept() {
@@ -1347,66 +1097,6 @@ cmd_task_accept() {
   echo "$slug: $task marked as accepted (MR already merged)"
 }
 
-# Update one cell of a markdown table in a file: find the table whose header's FIRST cell equals
-# <id-col-name> ("ID" for the Task status table, "Task" for the Merge requests table), resolve the
-# <id-col-name> and <target-col-name> columns FROM THE HEADER (never by fixed position — the MR
-# table's State is column 5, not 4), and rewrite the cell of the row whose id column equals
-# <row-id>. Leaves the file untouched and prints an error (exit 1) if the table, a column, or the
-# row isn't found — never a silent no-op. Deliberately regex-free on pipes (BSD awk rejects `\|`
-# in a -v variable used as a regex) — header/separator detection is by cell comparison instead.
-#   _dashboard_update <file> <id-col-name> <target-col-name> <row-id> <new-value>
-_dashboard_update() {
-  [ $# -eq 5 ] || { echo "_dashboard_update: expected 5 args, got $#" >&2; return 2; }
-  local file="$1" idname="$2" tgtname="$3" rowid="$4" newval="$5"
-  local errfile="${file}.dash-err"
-  if ! awk -v idname="$idname" -v tgtname="$tgtname" -v rowid="$rowid" -v newval="$newval" '
-    function trim(s){ sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
-    BEGIN{ idcol=0; tgtcol=0; intable=0; found=0; matched=0 }
-    {
-      if (!intable && /^[ \t]*\|/) {
-        n = split($0, c, "|")
-        if (n >= 3 && trim(c[2]) == idname) {
-          intable = 1; found = 1
-          for (i = 2; i < n; i++) { t = trim(c[i]); if (t == idname) idcol = i; if (t == tgtname) tgtcol = i }
-        }
-      }
-      if (intable) {
-        if (/^[ \t]*$/) { intable = 0 }
-        else if ($0 !~ /^[ \t]*\|/) { intable = 0 }
-        else {
-          tmp = $0; gsub(/[ \t|:-]/, "", tmp)
-          if (tmp == "") { print; next }          # separator row (dashes/pipes/colons only)
-        }
-      }
-      if (intable && idcol > 0 && tgtcol > 0) {
-        n = split($0, c, "|")
-        if (n > tgtcol && trim(c[idcol]) == rowid) {
-          c[tgtcol] = " " newval " "
-          line = ""
-          for (i = 1; i <= n; i++) line = line c[i] (i < n ? "|" : "")
-          print line
-          matched = 1
-          next
-        }
-      }
-      print
-    }
-    END {
-      if (!found) print "ERR: no table whose first column is \"" idname "\" in " FILENAME > "/dev/stderr"
-      else if (tgtcol == 0) print "ERR: no \"" tgtname "\" column in the matched table" > "/dev/stderr"
-      else if (idcol == 0) print "ERR: no \"" idname "\" column in the matched table" > "/dev/stderr"
-      else if (!matched) print "ERR: no row with " idname "=\"" rowid "\" in the matched table" > "/dev/stderr"
-    }
-  ' "$file" > "$file.tmp" 2> "$errfile"; then
-    rm -f "$file.tmp"; cat "$errfile" >&2; rm -f "$errfile"; return 1
-  fi
-  if [ -s "$errfile" ]; then
-    rm -f "$file.tmp"; cat "$errfile" >&2; rm -f "$errfile"; return 1
-  fi
-  rm -f "$errfile"
-  mv "$file.tmp" "$file"
-}
-
 # Update a task's status in the dashboard README.md task status table.
 #   dashboard-task-status <slug> <task-id> <status>
 cmd_dashboard_task_status() {
@@ -1419,20 +1109,6 @@ cmd_dashboard_task_status() {
   _dashboard_update "$readme" 'ID' 'Status' "$task" "$status" \
     || die "dashboard-task-status: could not update $task in the Task status table (see above)"
   cmd_log "$slug" sync "dashboard: $task status -> $status"
-}
-
-# Update an MR's state in the dashboard README.md MR table.
-#   dashboard-mr-state <slug> <task-id> <state>
-cmd_dashboard_mr_state() {
-  [ $# -eq 3 ] || die "usage: dashboard-mr-state <slug> <task-id> <state>"
-  local slug="$1" task="$2" state="$3"
-  local d; d="$(proj_dir "$slug")"
-  local readme="$d/README.md"
-  [ -f "$readme" ] || die "no README.md in project $slug"
-
-  _dashboard_update "$readme" 'Task' 'State' "$task" "$state" \
-    || die "dashboard-mr-state: could not update $task in the Merge requests table (see above)"
-  cmd_log "$slug" sync "dashboard: $task MR state -> $state"
 }
 
 # Safely remove a task's worktree (used when MR is already merged).
@@ -1621,44 +1297,7 @@ cmd_selftest() {
   fi
   [ "$(grep -c 'pw-rfc-comment:' "$META")" = "2" ] || die "selftest FAIL: rejected comment-seen calls still mutated the tracking table"
 
-  # ship comment-seen: same per-thread upsert shape as rfc comment-seen, but for /pw-ship …
-  # comments — this is what makes an unresolvable MR comment (a plain one-off comment the forge
-  # itself can never mark "resolved", diff-anchored or general — see tooling/docs/forges.md) idempotent
-  # across reruns. Thread IDs below deliberately differ in their first 8 chars (the truncated
-  # display prefix) so the two rows are visually distinguishable in the assertions.
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review-init demo task/review/T01.review.md task/T01.md >/dev/null
-  local TREV="$tmp/demo/task/review/T01.review.md"
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" ship comment-seen demo T01 aaaaaaaa1111 resolvable yes >/dev/null
-  grep -q '^## MR comment tracking' "$TREV" || die "selftest FAIL: ship comment-seen did not create the tracking section"
-  # placement: the tracking section must land BEFORE ## Sign-off, never after (a blind end-of-file
-  # append was the actual bug this fixes — a real project's review files ended up with duplicate,
-  # orphaned rows sitting below the human-owned Sign-off gate).
-  local sec_line sign_line
-  sec_line="$(grep -n '^## MR comment tracking' "$TREV" | head -1 | cut -d: -f1)"
-  sign_line="$(grep -n '^## Sign-off' "$TREV" | head -1 | cut -d: -f1)"
-  [ "$sec_line" -lt "$sign_line" ] || die "selftest FAIL: MR comment tracking landed at/after ## Sign-off (line $sec_line vs $sign_line)"
-  grep -qF '<!-- pw-mr-comment:aaaaaaaa1111 -->' "$TREV" || die "selftest FAIL: aaaaaaaa1111 row not created"
-  grep 'pw-mr-comment:aaaaaaaa1111' "$TREV" | grep -q '| `aaaaaaaa` | resolvable | yes ' || die "selftest FAIL: aaaaaaaa1111 row has wrong kind/replied"
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" ship comment-seen demo T01 bbbbbbbb2222 unresolvable yes "reviewer asked for X" >/dev/null
-  [ "$(grep -c 'pw-mr-comment:' "$TREV")" = "2" ] || die "selftest FAIL: expected 2 tracked MR-comment threads after bbbbbbbb2222"
-  grep 'pw-mr-comment:bbbbbbbb2222' "$TREV" | grep -q '| `bbbbbbbb` | unresolvable | yes | reviewer asked for X ' || die "selftest FAIL: optional note text not recorded"
-  # both new-row inserts must land INSIDE the table (right after its header/separator), not at the
-  # true end of the file — assert both marker lines still sit before ## Sign-off.
-  local last_marker_line; last_marker_line="$(grep -n 'pw-mr-comment:' "$TREV" | tail -1 | cut -d: -f1)"
-  sign_line="$(grep -n '^## Sign-off' "$TREV" | head -1 | cut -d: -f1)"
-  [ "$last_marker_line" -lt "$sign_line" ] || die "selftest FAIL: a tracked row landed at/after ## Sign-off"
-  # re-seeing aaaaaaaa1111 updates in place, never duplicates — and leaves bbbbbbbb2222 untouched
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" ship comment-seen demo T01 aaaaaaaa1111 resolvable no >/dev/null
-  [ "$(grep -c 'pw-mr-comment:' "$TREV")" = "2" ] || die "selftest FAIL: re-seeing aaaaaaaa1111 duplicated a row instead of updating in place"
-  grep 'pw-mr-comment:aaaaaaaa1111' "$TREV" | grep -q '| `aaaaaaaa` | resolvable | no ' || die "selftest FAIL: aaaaaaaa1111 replied flag not updated"
-  grep 'pw-mr-comment:bbbbbbbb2222' "$TREV" | grep -q '| `bbbbbbbb` | unresolvable | yes | reviewer asked for X ' || die "selftest FAIL: bbbbbbbb2222 wrongly changed by aaaaaaaa1111's update"
-  if PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" ship comment-seen demo T01 cccccccc3333 bogus-kind yes >/dev/null 2>&1; then
-    die "selftest FAIL: comment-seen accepted an invalid kind"
-  fi
-  if PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" ship comment-seen demo T01 cccccccc3333 unresolvable maybe >/dev/null 2>&1; then
-    die "selftest FAIL: comment-seen accepted a non yes/no replied value"
-  fi
-  [ "$(grep -c 'pw-mr-comment:' "$TREV")" = "2" ] || die "selftest FAIL: rejected ship comment-seen calls still mutated the tracking table"
+# (ship comment-seen asserts moved to scripts/entities/pw-ship.sh + tests/cases/pw-ship.t.sh — plan 20)
 
   # rfc dashboard: inserted after Adopted: when one exists (demo already has one from the adopt
   # tests above); inserted after One-liner when no Adopted: line exists (a fresh project); a 2nd
@@ -2009,11 +1648,7 @@ cmd_selftest() {
   grep -q '^| T01 | repo-a | http://forge/x/-/merge_requests/12 | main | open | green |$' "$tmp/demo/README.md" \
     || die "selftest FAIL: dashboard-task-status leaked into the MR table"
 
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" dashboard-mr-state demo T01 merged >/dev/null
-  grep -q '^| T01 | repo-a | http://forge/x/-/merge_requests/12 | main | merged | green |$' "$tmp/demo/README.md" \
-    || die "selftest FAIL: dashboard-mr-state did not update the State column (or clobbered the MR URL)"
-  [ "$(grep -c 'merge_requests/12' "$tmp/demo/README.md")" = "1" ] \
-    || die "selftest FAIL: dashboard-mr-state duplicated/lost the MR URL row"
+  # (dashboard-mr-state asserts moved to scripts/entities/pw-ship.sh — plan 20)
 
   # failure path: a task with no row must fail loudly and leave the file untouched.
   local readme_before; readme_before="$(cat "$tmp/demo/README.md")"
@@ -2023,24 +1658,7 @@ cmd_selftest() {
   [ "$(cat "$tmp/demo/README.md")" = "$readme_before" ] \
     || die "selftest FAIL: failed dashboard-task-status still mutated the file"
 
-  # _resolve_task_mr_url — the 2026-09 regression family: a decoy literal URL earlier in the task
-  # file (## Steps quoting placeholder URLs) must NOT beat the real `- **MR:**` field, the sentinel
-  # must survive, the bare-URL-in-Result fallback must work, and no-Result-yet must return empty.
-  printf '# T90\n## Steps\n1. Point the converter at `https://decoy.example.com/v1/schemas/<x>/versions/<y>`\n\n## Result\n- **Commit(s):** 1234567\n- **MR:** https://forge.example.com/g/p/-/merge_requests/18\n' > "$tmp/demo/T90.md"
-  got="$( _resolve_task_mr_url "$tmp/demo/T90.md")"
-  [ "$got" = "https://forge.example.com/g/p/-/merge_requests/18" ] \
-    || die "selftest FAIL: _resolve_task_mr_url picked a ## Steps decoy URL over the MR field (got: $got)"
-  printf '# T91\n## Result\n- **MR:** (none)\n' > "$tmp/demo/T91.md"
-  got="$(_resolve_task_mr_url "$tmp/demo/T91.md")"
-  [ "$got" = "(none)" ] \
-    || die "selftest FAIL: _resolve_task_mr_url lost the (none) sentinel (got: $got)"
-  printf '# T92\n## Result\n- See the MR at https://forge.example.com/g/p/-/merge_requests/9\n' > "$tmp/demo/T92.md"
-  got="$(_resolve_task_mr_url "$tmp/demo/T92.md")"
-  [ "$got" = "https://forge.example.com/g/p/-/merge_requests/9" ] \
-    || die "selftest FAIL: _resolve_task_mr_url lost the bare-URL fallback (got: $got)"
-  got="$(_resolve_task_mr_url "$tmp/demo/nope.md")"
-  [ -z "$got" ] \
-    || die "selftest FAIL: _resolve_task_mr_url invented a URL for a missing file (got: $got)"
+  # (_resolve_task_mr_url regression family moved to scripts/entities/pw-ship.sh + tests/cases/pw-ship.t.sh — plan 20)
 
   # ai-model: the lane row exists, defaults to all-—, updates one lane only, clears back, refuses
   # the executor lane and a bare model name. Regression guard behind the row: a model line that
@@ -2079,15 +1697,12 @@ case "${1:-}" in
   log)         shift; cmd_log "$@" ;;
   phase)       shift; cmd_phase "$@" ;;
   rfc)         shift; cmd_rfc "$@" ;;
-  ship)        shift; cmd_ship "$@" ;;
   ai-review)   shift; cmd_ai_review "$@" ;;
   ai-model)    shift; cmd_ai_model "$@" ;;
   review)      shift; cmd_review "$@" ;;
   model-check) shift; cmd_model_check "$@" ;;
-  mr-state)    shift; cmd_mr_state "$@" ;;
   task-accept) shift; cmd_task_accept "$@" ;;
   dashboard-task-status) shift; cmd_dashboard_task_status "$@" ;;
-  dashboard-mr-state)    shift; cmd_dashboard_mr_state "$@" ;;
   worktree-remove)       shift; cmd_worktree_remove "$@" ;;
   selftest)    cmd_selftest ;;
   -h|--help|"") awk 'NR>1{ if ($0 ~ /^#/) { sub(/^# ?/, "", $0); print } else exit }' "$0" ;;

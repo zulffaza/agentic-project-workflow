@@ -66,7 +66,7 @@ misses every inline review comment.
 resolved/open state to decide whether it still needs handling — it will look "open" forever.
 `/pw-ship … comments` handles this by tracking every thread it has already replied to — resolvable
 or not — in a **local** table (`task/review/T0n.review.md`'s `## MR comment tracking`, via
-`pw-lib.sh ship comment-seen`) instead of relying solely on the forge's resolved bit — see
+`pw-ship.sh comment-seen`) instead of relying solely on the forge's resolved bit — see
 [`docs/REVIEW.md`](../../docs/REVIEW.md#2-the-mr-review-flow-post-ship).
 
 **Optional sanity check (if `jq` is available)** — run this after fetching `/notes`, to mechanically

@@ -32,8 +32,8 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 least one task with a linked MR (nothing to comment on before the first push). Non-zero +
 `pw-…:` stderr = STOP and relay it — never push against an unmet gate. Once confirmed, the
 mechanical halves are scripted:
-`pw-ship-resolve.sh` (candidate list), `pw-ship-exec.sh` (push + MR), `pw-mr-state-batch.sh` /
-`pw-pipeline-monitor.sh` (state + CI waits) — how to read each:
+`pw-ship.sh resolve` (candidate list), `pw-ship.sh exec` (push + MR), `pw-ship.sh mr-state-batch` /
+`pw-ship.sh monitor` (state + CI waits) — how to read each:
 `{{PW_HOME}}/tooling/docs/scripts/ship-and-sync.md`.
 
 Publishing is **outward-facing** — this is the explicit "make it public" step, kept separate from
@@ -48,7 +48,7 @@ task; here we push branches and open MRs.
    `/pw-breakdown` or a small edit + `/pw-review`). Then determine which tasks are shippable —
    **run the resolver, don't re-derive it by hand**:
    ```bash
-   {{PW_HOME}}/tooling/scripts/entities/pw-ship-resolve.sh <slug>
+   {{PW_HOME}}/tooling/scripts/entities/pw-ship.sh resolve <slug>
    ```
    One line per `done`-status task: `task-id|repo|branch|base|ticket|title|has-commits|has-mr`
    (`—`/`none` where absent). Treat the flags exactly as the criteria you'd check: a `no`
@@ -87,7 +87,7 @@ task; here we push branches and open MRs.
      table (Task · Repo · MR url · Target branch · State=open · Build), then log it:
      `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> ship "T0n pushed <branch>; MR <url>"`.
     - **Unless `--skip-build-check` was passed:** once the MR is open, monitor its pipeline/checks to
-      a terminal state with `{{PW_HOME}}/tooling/scripts/entities/pw-pipeline-monitor.sh <slug> <task-id>`
+      a terminal state with `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh monitor <slug> <task-id>`
       (exit 0 green / 1 red / 2 still-running — it records the task file's `## Result → Build
       check:` line itself; you fill the dashboard row's `Build` column from that outcome) before
       moving to the next task. A **red**
@@ -143,18 +143,18 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
 `/pw-ship <slug> comments` clears review comments across all of the project's MRs in one run.
 
 0. **Resolve the set** of tasks to process (the given IDs, or all tasks with an MR). **Check MR
-   state for the whole set in one call** before proceeding — `pw-mr-state-batch.sh` (no task-ids =
+   state for the whole set in one call** before proceeding — `pw-ship.sh mr-state-batch` (no task-ids =
    every PLAN task; prints `task-id|state` per line, plain-text pipe-delimited; per-line semantics
    identical to the helper it wraps):
    ```bash
-   {{PW_HOME}}/tooling/scripts/entities/pw-mr-state-batch.sh <slug> [given task-ids…]
+   {{PW_HOME}}/tooling/scripts/entities/pw-ship.sh mr-state-batch <slug> [given task-ids…]
    ```
    Read each line's state per the bullets below (a single-task `state` recheck mid-flow can still
-   use `pw-lib.sh mr-state <slug> <task-id>`).
+   use `pw-ship.sh mr-state <slug> <task-id>`).
    - **If `merged`**: The MR was already merged downstream. Handle it:
      1. Update task status: `{{PW_HOME}}/tooling/pw-lib.sh task-accept <slug> <task-id>`
      2. Update dashboard task table: `{{PW_HOME}}/tooling/pw-lib.sh dashboard-task-status <slug> <task-id> "accepted (MR merged)"`
-     3. Update dashboard MR table: `{{PW_HOME}}/tooling/pw-lib.sh dashboard-mr-state <slug> <task-id> merged`
+     3. Update dashboard MR table: `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh dashboard-mr-state <slug> <task-id> merged`
      4. Remove worktree: `{{PW_HOME}}/tooling/pw-lib.sh worktree-remove <slug> <task-id>`
      5. **Skip this task** — do NOT attempt to fetch/process comments.
    - **If `closed`**: The MR was closed without merging. Note it in the recap and skip.
@@ -221,7 +221,7 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      file/landing-unit overlap is real, one `dep-impact` reviewer pass files items into the
      dependent's queue — no edit-backward into the fixed task, new DAG task if it needs one.
     - **Unless `--skip-build-check` was passed:** monitor the pipeline/checks to a terminal state
-      right after this push via `{{PW_HOME}}/tooling/scripts/entities/pw-pipeline-monitor.sh <slug> <task-id>`
+      right after this push via `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh monitor <slug> <task-id>`
       (same contract as ship mode — see "Build check" below), before moving on to step 3 — so a failed
       build shows up in the recap and can be mentioned in the thread reply, not discovered later.
       A **red** build → the task is **not done**: enter the build-check fix loop below (fix in the
@@ -237,7 +237,7 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      or clearly references the original so the connection is legible to the reviewer.
    - **Record it via the helper — this is what makes resolvable-general and unresolvable comments
      idempotent across reruns:**
-     `…/{{PW_HOME}}/tooling/pw-lib.sh ship comment-seen <slug> <T0n> <thread-id> <resolvable|unresolvable> yes`
+     `…/{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh comment-seen <slug> <T0n> <thread-id> <resolvable|unresolvable> yes`
      Do this for **every** thread you replied to — it upserts a row into
      `task/review/T0n.review.md`'s `## MR comment tracking` table keyed by thread ID, which step 1
      reads back on the next run. Without this call, an unresolvable comment (which the forge can

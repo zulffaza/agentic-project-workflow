@@ -21,13 +21,13 @@ battery_rows() {
     printf 'summary-project %s\tpw-doc-summary.sh\tproject %s\n'   "$s" "$s"
     printf 'summary-task %s\tpw-doc-summary.sh\ttask %s T01\n'     "$s" "$s"
     printf 'summary-analysis %s\tpw-doc-summary.sh\tanalysis %s\n' "$s" "$s"
-    printf 'resolve %s\tpw-ship-resolve.sh\t%s\n'                  "$s" "$s"
-    printf 'batch %s\tpw-mr-state-batch.sh\t%s\n'                  "$s" "$s"
+    printf 'resolve %s\tpw-ship.sh\tresolve %s\n'               "$s" "$s"
+    printf 'batch %s\tpw-ship.sh\tmr-state-batch %s\n'        "$s" "$s"
     printf 'rfc %s\tpw-rfc-comments.sh\t%s\n'                      "$s" "$s"
     printf 'adopt %s\tpw-adopt-snapshot.sh\t%s api agent/%s/T01-thing\n' "$s" "$s" "$s"
   done
   printf 'lint-task-crlf %s\tpw-doc-lint.sh\ttask %s\n' "$S3" "$S3"          # T06 (CRLF, sentinels)
-  printf 'batch-list F3\tpw-mr-state-batch.sh\t%s T02 T05\n' "$S3"
+  printf 'batch-list F3\tpw-ship.sh\tmr-state-batch %s T02 T05\n' "$S3"
   printf 'unknown-project\tpw-status.sh\tnope-not-here\n'
   printf 'unknown-arg\tpw-doc-lint.sh\tbogus-mode %s\n' "$S2"
 }

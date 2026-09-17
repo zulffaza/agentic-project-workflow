@@ -30,7 +30,7 @@ Hard rules:
   reasons (a secret or service the worktree never has — unset API key, no reachable DB), run it
   anyway and record the *actual* blocker output in `## Result`; report `done` + blocker caveat
   honestly — never invent green output, never claim `verify-failed` for something your change
-  didn't break. Once the branch is pushed, CI is the authoritative check (`pw-pipeline-monitor.sh`).
+  didn't break. Once the branch is pushed, CI is the authoritative check (`pw-ship.sh monitor`).
 - **Self-repair only where the brief grants it.** When the run carries clean execution
   (`- Results acceptance: auto` / `- AI execution limit: N`, floor `PW_MAX_SELF_REPAIR` = 3) and
   `## Verify` fails **because of your own change** (classify per the skill: not pre-existing/env),

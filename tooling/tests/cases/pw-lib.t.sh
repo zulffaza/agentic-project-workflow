@@ -17,18 +17,8 @@ pwtest_rc 0 "review-init rerun" "$L" review-init "$RI" task/review/T99.review.md
 grep -q 'special content kept' "$PW_PROJECTS_DIR/$RI/task/review/T99.review.md" \
   && pwtest_ok "review-init preserves existing" || pwtest_bad "review-init clobber" "existing content lost"
 
-# 3) ship comment-seen: one row, idempotent rerun, placement before ## Sign-off
-pwtest_rc 0 "comment-seen new" "$L" ship comment-seen "$RI" T99 thread-555 resolvable yes
-pwtest_rc 0 "comment-seen rerun" "$L" ship comment-seen "$RI" T99 thread-555 resolvable yes
-if [ "$(grep -c 'thread-555' "$PW_PROJECTS_DIR/$RI/task/review/T99.review.md")" = 1 ]; then pwtest_ok "thread row once (idempotent)"
-else pwtest_bad "comment-seen dup" "$(grep -n thread-555 "$PW_PROJECTS_DIR/$RI/task/review/T99.review.md" | head -2 | tr '\n' ';')"; fi
-python3 - "$PW_PROJECTS_DIR/$RI/task/review/T99.review.md" <<'ZPY'
-import sys
-i=open(sys.argv[1]).read().find("thread-555"); j=open(sys.argv[1]).read().find("## Sign-off")
-sys.exit(0 if 0 <= i < j else 1)
-ZPY
-[ $? = 0 ] && pwtest_ok "thread row sits before ## Sign-off" || { grep -q 'thread-555' "$PW_PROJECTS_DIR/$RI/task/review/T99.review.md" && pwtest_bad "thread placement" "after Sign-off" || pwtest_bad "thread row" "not written at all"; }
-grep -q 'thread-555' "$PW_PROJECTS_DIR/$RI/LOG.md" && pwtest_ok "comment-seen logged" || pwtest_bad "comment-seen LOG" "nothing recorded"
+# 3) ship comment-seen — moved to cases/pw-ship.t.sh (plan 20 Phase 2)
+
 
 # 4) rfc meta upserts + comment-seen
 "$L" rfc init "$RI" markdown >/dev/null 2>&1 || true
@@ -54,7 +44,7 @@ if [ -d "$WTBASE/T02-thing" ]; then
   w2=$(cat "$PWTEST_ROOT/wr2.rc")
   [ "$w2" != 0 ] && pwtest_ok "worktree-remove refuses dirty tree" || pwtest_bad "worktree-remove dirty guard" "removed dirty worktree!"
 fi
-# ALWAYS leave the fixture as found (alphabetical order: pw-lib runs before pw-mr-state-batch!):
+# ALWAYS leave the fixture as found (alphabetical order: pw-lib runs before pw-ship!):
 mkdir -p "$WTBASE" 2>/dev/null || true
 git -C "$PW_REPOS/api" worktree list | grep -q "T02-thing" \
   || git -C "$PW_REPOS/api" worktree add "$WTBASE/T02-thing" "agent/$S2/T02-thing" >/dev/null 2>&1 || true

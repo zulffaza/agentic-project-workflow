@@ -45,8 +45,8 @@ phase runs. Don't skip a gate.
 - **Script the mechanical — call the automation scripts, don't re-implement them.** Pre-phase:
   `pw-preflight.sh <cmd> <slug>` + `pw-doc-lint.sh …` (nonzero → STOP, relay stderr). Cheap reads
   instead of manual file-walking: `pw-status.sh`, `pw-review-scan.sh`, `pw-doc-summary.sh`.
-  Mechanics: `pw-ship-resolve.sh`/`pw-ship-exec.sh`, `pw-mr-state-batch.sh`,
-  `pw-pipeline-monitor.sh`, `pw-worktree-create.sh`, `pw-context-fetch.sh`, `pw-rfc-comments.sh`,
+  Mechanics: `pw-ship.sh resolve`/`pw-ship.sh exec`, `pw-ship.sh mr-state-batch`,
+  `pw-ship.sh monitor`, `pw-worktree-create.sh`, `pw-context-fetch.sh`, `pw-rfc-comments.sh`,
   `pw-adopt-snapshot.sh`, `pw-doc-sync.sh`. Deterministic document writes (never hand-copy
   template blocks): `pw-review-edit.sh` (`init-all|add-item|answer|add-question|resolve`;
   `signoff` is human-triggered only — C4) and `pw-context.sh` (`req-init|add-input|add-repo`).

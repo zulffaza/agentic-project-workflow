@@ -13,7 +13,7 @@
 #
 # NOTHING here writes into the corpus: only read-only scripts run.
 
-PWTEST_CORPUS_RO="pw-status.sh pw-review-scan.sh pw-doc-lint.sh pw-doc-summary.sh pw-ship-resolve.sh"
+PWTEST_CORPUS_RO="pw-status.sh pw-review-scan.sh pw-doc-lint.sh pw-doc-summary.sh pw-ship.sh"
 # per-project read-only invocations (modes with no side effects only):
 pwtest_corpus_rows() {
   printf 'status\tpw-status.sh\t%s --skip-cli-check\n' "$1"
