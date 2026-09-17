@@ -5,7 +5,7 @@ C1-pw-field-packed-cut	pw-common.sh	        q = index(v, "**"); if (q) v = subst
 C2-plan-table-anchor	pw-common.sh	    /^## Task/ { p=1; next }	    /^## TASK/ { p=1; next }	T1	pw-mr-state-batch
 C3-plan-columns-positional	pw-common.sh	        if (V == "status") sti = i	        if (V == "status") sti = 5	T2	-
 C4-linked-cell-normalize	pw-common.sh	      if (match(id, /T[0-9]+/)) { id = substr(id, RSTART, RLENGTH) } else { id = "" }	      if (id !~ /^T[0-9]+$/) id = ""	T1	pw-mr-state-batch
-C5-plain-approved-legacy-only	pw-lib.sh	    "approved"|"approved ✅") return 0 ;;	    "approved ✅") return 0 ;;	T2	-
+C5-plain-approved-legacy-only	pw-mdlib.sh	    "approved"|"approved ✅") return 0 ;;	    "approved ✅") return 0 ;;	T2	-
 C6-mr-url-sentinel-counts	pw-ship-exec.sh	case "$MR_URL" in http*) _MR_EXISTS=1;; *) _MR_EXISTS=0;; esac	case "$MR_URL" in *) _MR_EXISTS=1;; esac	T1	pw-ship-exec
 C7-dashboard-preserve-miskeys	pw-doc-sync.sh	          for (i = 0; i < n; i++) { v = $(i + 2); gsub(/^[ \t]+/, "", v); gsub(/[ \t|]+$/, "", v); print id "\t" NAME[i + 1] "\t" v } }	          for (i = 0; i < n; i++) { v = $(i + 2); gsub(/^[ \t]+/, "", v); gsub(/[ \t|]+$/, "", v); print id "\t" NAME[n] "\t" v } }	T1	pw-doc-sync
 C8-mr-state-exit1-abort	pw-mr-state-batch.sh	  STATE="$("$HERE/pw-lib.sh" mr-state "$SLUG" "$task_id" 2>/dev/null || true)"	  STATE="$("$HERE/pw-lib.sh" mr-state "$SLUG" "$task_id" 2>/dev/null)"	T2	-
