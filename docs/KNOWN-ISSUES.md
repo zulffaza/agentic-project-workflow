@@ -127,7 +127,7 @@ buried in `tooling/`.
 
 ### Status-marker TEXT in guidance prose = permanent phantom counts for every raw grep
 - **Symptom:** (`pw-status` "Unresolved review items", 2026-09-16) every review file reported
-  "(1 open)" forever — even ones fully reviewed and resolved — and `pw-review-scan` carried a
+  "(1 open)" forever — even ones fully reviewed and resolved — and the review scan carried a
   dead `pending` counter on top.
 - **Root cause:** three display paths counted with raw `grep -c "pw-item-status: open"`, which
   also matches the template's permanent `> **Add an item:** … <!-- pw-item-status: open -->`
@@ -135,10 +135,10 @@ buried in `tooling/`.
   headings (which carry a REAL live marker by design, per the nesting entry above, so
   copy-paste yields valid syntax). The gates used pw-lib's heading-level detector and stayed
   correct — the display was just a fourth, un-blessed parser.
-- **Mitigation (built in):** one detector serves everything: `pw-lib.sh review count` prints
+- **Mitigation (built in):** one detector serves everything: the review count read prints
   `open=N resolved=M items=K` off `_review_item_headings` (comment-blanked, `^###`-anchored,
   stubs filtered by their live `<YYYY-MM-DD`/`<§section>` placeholder tokens — BOTH tokens needed:
-  live usage produced a half-cleaned stub that dropped only its timestamp). pw-review-scan,
+  live usage produced a half-cleaned stub that dropped only its timestamp). The review scan,
   pw-status and pw-doc-lint consume it; raw marker greps are banned; `auto-signoff` inherits the
   stub exemption (a clean pass must succeed). Coverage: C22 cases in `tests/cases/`, unit checks
   in `pw-lib.sh selftest`.

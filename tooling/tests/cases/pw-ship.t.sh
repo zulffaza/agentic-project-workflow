@@ -83,7 +83,7 @@ pwtest_eq "C21 lib: missing file returns empty" "$(_pwt_lib_resolve "$ROOT/nope-
 # --- comment-seen (WRITE facet) — per-thread upsert, placement, refusals.
 # Thread IDs deliberately differ in their first 8 chars (the truncated display prefix).
 RI=shipcs; rm -rf "$PW_PROJECTS_DIR/$RI"; cp -a "$F2" "$PW_PROJECTS_DIR/$RI"
-"$(pwtest_script pw-lib.sh)" review-init "$RI" task/review/T99.review.md task/T99.md >/dev/null
+"$(pwtest_script pw-review.sh)" init "$RI" task/review/T99.review.md task/T99.md >/dev/null
 TREV="$PW_PROJECTS_DIR/$RI/task/review/T99.review.md"
 pwtest_rc 0 "comment-seen new" "$(pwtest_script $SH)" comment-seen "$RI" T99 aaaaaaaa1111 resolvable yes
 grep -q '^## MR comment tracking' "$TREV" && pwtest_ok "tracking section created" || pwtest_bad "tracking section" "not created"

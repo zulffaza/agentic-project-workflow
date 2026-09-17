@@ -30,7 +30,7 @@ genuine cross-team negotiation. Wave 2 (`milestone`) is different: it summarizes
 milestone" to negotiate over.
 
 **The other direction of the same coin: `/pw-breakdown` hard-refuses while a pulled RFC comment sits
-unresolved**, even if analysis is `approved` on its own merits — `pw-lib.sh review has-open <slug>
+unresolved**, even if analysis is `approved` on its own merits — `pw-review.sh has-open <slug>
 analysis/review/RFC.review.md` checks this independently of the Sign-off read, because a comment
 that's been pulled (`/pw-rfc <slug> comments`) but never folded into the analysis leaves no trace on
 the analysis's own Sign-off table at all; only an actual fold-in reopens that gate. Without this

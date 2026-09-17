@@ -7,10 +7,6 @@
 #                                                     backward move) + auto-log the change
 #   pw-lib.sh oneliner    <slug> <text...>            set the dashboard One-liner (agent, at analysis)
 #   pw-lib.sh adopted     <slug> <text...>            set/insert the dashboard Adopted: pointer (/pw-adopt)
-#   pw-lib.sh adopt       <slug> <repo> <branch> <base> [mr]   append/upsert one adoption unit (no clobber)
-#   pw-lib.sh review-init <slug> <review-rel-path> <doc-rel-path>   create a review file from the
-#                                                     template if missing (idempotent — never
-#                                                     overwrites an existing one with your items)
 #   pw-lib.sh log         <slug> <actor> <msg...>     append a timestamped LOG.md line (a Markdown
 #                                                     bullet — readable in a plain preview view)
 #   pw-lib.sh phase       <slug>                       print the current Status value (for scoping/status)
@@ -31,51 +27,6 @@
 #                                                     writer-task|reviewer|verifier — never the
 #                                                     executor, whose pin lives in its task file's
 #                                                     `Execute with:`; — = no row = provider default)
-#   pw-lib.sh review note-init    <slug>              create REVIEWER-NOTES.md if missing (idempotent)
-#   pw-lib.sh review auto-signoff <slug> <review-rel-path> <phase>
-#                                                     write a Sign-off row WITHOUT a human — refuses
-#                                                     unless this project's AI Review mode for <phase>
-#                                                     is genuinely "auto" AND zero [OPEN]/[PENDING] remain;
-#                                                     the ONE tool-enforced exception to "only a human
-#                                                     clears a gate" — see docs/REVIEW.md
-#   pw-lib.sh review gate   <slug> <review-rel-path>  print + exit-0/1 on the Sign-off table's
-#                                                     CURRENT (latest) row only — never "was this
-#                                                     ever approved" (a stale historical row must
-#                                                     not keep satisfying a hard gate after a later
-#                                                     `in-review` row supersedes it)
-#   pw-lib.sh review reopen <slug> <review-rel-path>  append a fresh `in-review` Sign-off row —
-#                                                     ONLY if the current row reads `approved` (also
-#                                                     accepts the legacy `approved ✅` form for a
-#                                                     real project file written before the
-#                                                     keyboard-typable-symbols migration — see
-#                                                     _decision_is_approved) (idempotent no-op
-#                                                     otherwise); never deletes the old approval,
-#                                                     same append-only history rule as a human's own
-#                                                     reopen. Used when a fix lands on an
-#                                                     already-approved doc (e.g. an RFC comment
-#                                                     folded back into the analysis) — see docs/RFC.md
-#   pw-lib.sh review has-open <slug> <review-rel-path>  print yes/no + exit 0
-#   pw-lib.sh review count   <slug> <review-rel-path>  print "open=N resolved=M" (real headings only)/1 on whether the file
-#                                                     has any unresolved [OPEN] item or [PENDING]
-#                                                     question (missing file → "no", exit 1 —
-#                                                     not an error, just "nothing in flight"). A
-#                                                     generic open-item check, unlike `review gate`
-#                                                     which reads a Sign-off decision — used by
-#                                                     /pw-breakdown's RFC-negotiation hard block on
-#                                                     analysis/review/RFC.review.md, which has no
-#                                                     Sign-off table of its own — see docs/RFC.md
-#   pw-lib.sh review reindex <slug> <review-rel-path>  (re)build the heading-text-anchored
-#                                                     "## Contents" table (ID/anchor/status per
-#                                                     real item/question) — jump straight to a
-#                                                     section instead of reading the whole file
-#   pw-lib.sh review archive <slug> <review-rel-path>  move every fully [RESOLVED]/[ANSWERED]
-#                                                     item/question out of the live review file,
-#                                                     verbatim, into a sibling <topic>.archive.md
-#                                                     — keeps a long-lived review file from forcing
-#                                                     every new round to re-read the whole resolved
-#                                                     history; never touches [OPEN]/[PENDING] or
-#                                                     ## Sign-off (provably gate-safe — see the
-#                                                     function's own comment)
 #   pw-lib.sh model-check   <provider> <model-id>    pass/refuse a model against
 #                                                     PW_MODEL_ALLOWLIST_<PROVIDER> in pw.config.sh
 #                                                     — empty/unset = ALL models allowed (the
@@ -109,7 +60,7 @@ if ! declare -p PW_FORGE_HOSTS >/dev/null 2>&1; then PW_FORGE_HOSTS=(); fi
 
 # S5 (tooling/docs/conventions.md): pure markdown-document primitives live in pw-mdlib.sh —
 # sourced, never executed. pw-lib.sh is FROZEN for new subcommands (S2): new capability goes
-# to a per-entity script (pw-review-edit.sh, pw-context.sh, …), shared code to pw-*lib.sh.
+# to a per-entity script (pw-review.sh, pw-context.sh, …), shared code to pw-*lib.sh.
 . "$HERE/scripts/lib/pw-mdlib.sh"
 
 die() { echo "pw-lib: $*" >&2; exit 2; }
@@ -221,150 +172,6 @@ cmd_adopted() {
   fi
   cmd_log "$slug" adopt "Adopted pointer set: $text"
   echo "$slug: Adopted -> $text"
-}
-
-# Ensure the context/INDEX.md provenance table has EXACTLY ONE, generic `ADOPTED.md` row —
-# inserted once on first adopt, then left alone. This replaces the old free-form agent edit that
-# re-enumerated every unit into that row's description and thus rewrote it on every /pw-adopt
-# (the "one-liner replaced each attempt" bug). The row stays generic ("see the file"); per-unit
-# detail lives in ADOPTED.md, so it never needs churning. No-ops if INDEX.md is missing.
-_index_provenance_ensure() {
-  local f="$1"
-  [ -f "$f" ] || return 0
-  grep -qE '^\|[^|]*ADOPTED\.md' "$f" && return 0     # a row already references ADOPTED.md → leave it
-  local today; today="$(date +%F)"
-  local row="| \`ADOPTED.md\` | Adoption record — all continuation units (one section per unit; see the file) | git state snapshot, gathered by /pw-adopt | $today | authoritative — live repo state |"
-  # Insert right after the FIRST table's separator (the provenance table, above "## Repos in
-  # scope"); drop that table's single empty placeholder row if present.
-  awk -v row="$row" '
-    /^## Repos in scope/ { stop=1 }
-    {
-      if (!stop && !ins && $0 ~ /^\|[-: |]+\|[[:space:]]*$/) { print; print row; ins=1; next }
-      if (!stop && ins && !dropped && $0 ~ /^\|[[:space:]]*(\|[[:space:]]*)+$/) { dropped=1; next }
-      print
-    }' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-}
-
-# Deterministically append/upsert ONE row per adoption unit into the context/INDEX.md
-# "Repos in scope" table, keyed by a hidden `<!-- pw-adopt-scope:<repo>@<branch> -->` marker.
-# Append-only per unit (new rows go at the end of that table; re-adopting the same repo@branch
-# rewrites its OWN row in place) — so adopting the Nth branch can NEVER clobber the earlier rows
-# (the bug free-form editing caused in INDEX.md, same class as the ADOPTED.md clobber). No-ops
-# safely if INDEX.md or the section is missing — adoption never hard-fails on a weird index.
-_scope_upsert() {
-  local f="$1" repo="$2" branch="$3" base="$4" mr="$5"
-  [ -f "$f" ] || return 0
-  local key="$repo@$branch" mrtxt
-  case "$mr" in
-    http*://*)               mrtxt="[MR]($mr)" ;;
-    ""|none|"none yet")      mrtxt="no MR yet — ⚠️ base unconfirmed" ;;
-    *)                       mrtxt="MR $mr" ;;
-  esac
-  local marker="<!-- pw-adopt-scope:$key -->"
-  local row="| \`$repo\` | \`origin/$base\` | continuation — adopted branch \`$branch\`, $mrtxt $marker |"
-  if grep -Fq "$marker" "$f"; then                     # unit already has a row → rewrite it in place
-    awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-  else                                                 # new unit → append at the end of the table
-    awk -v row="$row" '
-      {
-        if ($0 ~ /^## Repos in scope/) insec=1
-        else if ($0 ~ /^## /) { if (insec && sep && !ins) { print row; ins=1 } insec=0 }
-        if (insec && !sep && $0 ~ /^\|[-: |]+\|[[:space:]]*$/) { print; sep=1; next }
-        if (insec && sep && !ins) {
-          if ($0 ~ /^\|/) { t=$0; gsub(/[ |]/,"",t); if (t=="") next; print; next }  # drop empty placeholder
-          print row; ins=1; print; next                                             # insert before first non-row line
-        }
-        print
-      }
-      END { if (insec && sep && !ins) print row }' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-  fi
-}
-
-# Deterministically append/upsert ONE adoption unit into context/ADOPTED.md, keyed by repo@branch.
-# Append-only per unit (new units go at EOF; re-adopting the same repo@branch updates that unit's
-# Base/MR in place) — so adopting a 2nd branch can NEVER clobber the 1st (the bug free-form editing
-# caused). The agent fills each unit's prose after; the structure/IDs/count are owned here.
-#   adopt <slug> <repo> <branch> <base> [mr]
-cmd_adopt() {
-  [ $# -ge 4 ] || die "usage: adopt <slug> <repo> <branch> <base> [mr-url]"
-  local slug="$1" repo="$2" branch="$3" base="$4" mr="${5:-none yet}"
-  local d; d="$(proj_dir "$slug")"; local cdir="$d/context"; local f="$cdir/ADOPTED.md"
-  mkdir -p "$cdir"
-  local key="$repo @ $branch"
-  if [ ! -f "$f" ]; then
-    {
-      printf '# Adopted work — %s   (CONTINUATION workflow)\n\n' "$slug"
-      printf 'Builds on existing in-progress branches. Serialization is PER-BRANCH: tasks on the same\n'
-      printf 'branch run serially in its shared worktree; tasks on different branches run in parallel.\n'
-      printf 'Unit headings/IDs + the Base/MR lines are managed by `pw-lib.sh adopt` — do NOT hand-edit\n'
-      printf 'them or the dashboard; fill the prose under each unit. [🤖🧑 both]\n'
-    } > "$f"
-  fi
-  # Existing unit for this exact repo@branch? (heading form: "## A<k> · <repo> @ <branch>").
-  # Suffix-match on the ASCII "<repo> @ <branch>" key — avoids byte-offset math around the
-  # multibyte "·" separator (that was the clobber-adjacent bug).
-  local uid; uid="$(awk -v key="$key" '
-    /^## A[0-9]+ · / {
-      h=$0; sub(/^## /,"",h);          # "A1 · <repo> @ <branch>"
-      u=h; sub(/ .*/,"",u);            # first token = unit id
-      if (length(h) >= length(key) && substr(h, length(h)-length(key)+1) == key) { print u; exit }
-    }' "$f")"
-  if [ -n "$uid" ]; then
-    # update this unit's Base/MR lines in place, leave prose untouched
-    awk -v u="$uid" -v base="$base" -v mr="$mr" '
-      $0 ~ ("^## " u " · ") { inU=1; print; next }
-      inU && /^## A[0-9]+ · / { inU=0 }
-      inU && /^- Base: / { print "- Base: " base; next }
-      inU && /^- MR: /   { print "- MR: " mr;   next }
-      { print }' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-  else
-    # new unit → next id, append a fresh section at EOF (collision-free)
-    local n; n="$(grep -cE '^## A[0-9]+ · ' "$f" 2>/dev/null || true)"; : "${n:=0}"
-    uid="A$((n+1))"
-    {
-      printf '\n## %s · %s @ %s\n' "$uid" "$repo" "$branch"
-      printf -- '- Base: %s\n' "$base"
-      printf -- '- MR: %s\n' "$mr"
-      printf '### Already done\n<!-- pw-adopt %s already-done: replace with the commit list + diffstat summary -->\n' "$uid"
-      printf '### Remaining work\n🧑 <!-- pw-adopt %s remaining: fill with what to change on top of this branch -->\n' "$uid"
-    } >> "$f"
-  fi
-  # Keep context/INDEX.md in lockstep (deterministic, no clobber): a one-time generic ADOPTED.md
-  # provenance row + one "Repos in scope" row per unit.
-  _index_provenance_ensure "$cdir/INDEX.md"
-  _scope_upsert "$cdir/INDEX.md" "$repo" "$branch" "$base" "$mr"
-  local count; count="$(grep -cE '^## A[0-9]+ · ' "$f" 2>/dev/null || true)"; : "${count:=0}"
-  cmd_adopted "$slug" "$count unit(s) — continuation; see context/ADOPTED.md" >/dev/null
-  cmd_log "$slug" adopt "unit $uid: $repo@$branch (base $base, MR $mr)"
-  echo "$slug: adopted $uid ($key) — base $base, MR $mr  [$count unit(s)]"
-}
-
-# Create a review file from the canonical template if (and only if) it doesn't exist yet —
-# idempotent, so calling this on every /pw-analyze or /pw-breakdown run never clobbers a review
-# already in progress (your items, replies, Sign-off history). This is the deterministic fix for
-# "I had to manually copy the review template myself" and for review files silently missing the
-# permanent format hints under ## Items / ## Open questions (this always copies the template
-# byte-for-byte, so those hints and the worked examples are never dropped).
-#   review-init <slug> <review-rel-path> <doc-rel-path>
-#   e.g. review-init myproj analysis/review/topic.review.md analysis/topic.md
-cmd_review_init() {
-  [ $# -eq 3 ] || die "usage: review-init <slug> <review-rel-path> <doc-rel-path>"
-  local slug="$1" rel="$2" docrel="$3"
-  local d; d="$(proj_dir "$slug")"
-  local f="$d/$rel"
-  if [ -f "$f" ]; then
-    echo "$slug: review already exists: $rel (left untouched)"
-    return 0
-  fi
-  local tmpl="$HERE/../template/_REVIEW.template.md"
-  [ -f "$tmpl" ] || die "template not found: $tmpl"
-  local docname; docname="$(basename "$docrel")"
-  mkdir -p "$(dirname "$f")"
-  sed "s|<doc\\.md>|$docname|g" "$tmpl" > "$f"
-  cmd_log "$slug" review "created $rel (in-review, awaiting your items)"
-  echo "$slug: review-init created $rel (reviewing ../$docname)"
 }
 
 cmd_phase() {
@@ -652,393 +459,7 @@ cmd_ai_review() {
   echo "$slug: AI Review $phase -> $mode"
 }
 
-# Private: this project's mode for one phase (always "off"/"advisory"/"auto" — never empty, since
-# cmd_ai_review ensures the line first). Used by cmd_review_auto_signoff's gate check.
-_ai_review_mode_of() {
-  local slug="$1" phase="$2" modes kv
-  modes="$(cmd_ai_review "$slug")"
-  for kv in $modes; do
-    [ "${kv%%=*}" = "$phase" ] && { echo "${kv#*=}"; return 0; }
-  done
-  echo "off"
-}
 
-# Create REVIEWER-NOTES.md with its header if (and only if) it doesn't exist yet — idempotent,
-# same shape as cmd_review_init/cmd_rfc_init. pw-reviewer appends its own dated section directly
-# after this (free-form reasoning prose doesn't fit a CLI-args shape — same precedent as a task's
-# ## Result section, which executors already fill by hand rather than through a wrapper).
-#   review note-init <slug>
-cmd_review_note_init() {
-  [ $# -eq 1 ] || die "usage: review note-init <slug>"
-  local slug="$1" d; d="$(proj_dir "$slug")"
-  local f="$d/REVIEWER-NOTES.md"
-  if [ -f "$f" ]; then
-    echo "$slug: REVIEWER-NOTES.md already exists (left untouched)"
-    return 0
-  fi
-  {
-    printf '# Reviewer notes — %s\n\n' "$slug"
-    printf 'Append-only journal from `pw-reviewer` AI-review passes (see `docs/REVIEW.md` and the\n'
-    printf "\`pw-review\` skill) — NOT the gate itself (that stays in each \`.review.md\`'s Items/\n"
-    printf 'Sign-off). This is the *why*: what the reviewer checked, what it decided, and any\n'
-    printf 'generalizable takeaway under a `**Lessons:**` line (optional — only when something is\n'
-    printf 'genuinely worth carrying forward, not on every pass). A human, a later reviewer pass, the\n'
-    printf "orchestrator, and (if configured) /pw-close's memory-seeding step all read this — never\n"
-    printf 'hand-edit a past entry; append a new dated section per pass.\n\n'
-    printf 'Per-entry shape — keep %s and %s short bullets, never a paragraph, so a scan of this\n' \
-      '**Reasoning**' 'each field'
-    printf 'file stays fast even after many passes; end every entry with a `---` rule:\n\n'
-    printf '## <YYYY-MM-DD HH:MM> · <phase> · <artifact-rel-path> · mode=<advisory|auto>\n'
-    printf -- '- **Verdict:** <n items filed | clean pass — auto-approved | clean pass — awaiting\n'
-    printf '  human | ESCALATED — §<anchor> recurred twice, needs a human>\n'
-    printf -- '- **Reasoning:** 2-4 short bullets, not a paragraph — one line per distinct point\n'
-    printf '  - <what you checked>\n'
-    printf '  - <what stood out, and why that verdict>\n'
-    printf -- '- **Lessons:** <optional — 1-3 bullets, ONLY when genuinely generalizable; omit this\n'
-    printf '  field entirely most passes>\n\n'
-    printf -- '---\n'
-  } > "$f"
-  cmd_log "$slug" review "created REVIEWER-NOTES.md"
-  echo "$slug: review note-init created REVIEWER-NOTES.md"
-}
-
-# Review-file detection primitives (_comment_blanked, _review_item_headings,
-# _review_has_open_marker, _decision_is_approved, _signoff_last_real_row_line,
-# _signoff_latest_decision) moved VERBATIM to pw-mdlib.sh (S5 shared library,
-# plan 17) — sourced below; full rationale comments live there now.
-
-# Deterministic, unambiguous replacement for prose like "look for an approved row anywhere in this
-# file" — the ambiguity that let a stale historical approval keep satisfying a hard gate after a
-# later `in-review`/`changes-requested` row superseded it (exactly what /pw-breakdown's analysis
-# gate and /pw-execute's PLAN gate must NOT do once a doc is reopened post-approval — see
-# docs/RFC.md). Prints the current decision text VERBATIM (so an old file's literal "approved ✅"
-# still prints that, not a rewritten "approved") — the exit code is what accepts both forms, via
-# _decision_is_approved.
-#   review gate <slug> <review-rel-path>
-cmd_review_gate() {
-  [ $# -eq 2 ] || die "usage: review gate <slug> <review-rel-path>"
-  local slug="$1" rel="$2"
-  local d; d="$(proj_dir "$slug")"
-  local f="$d/$rel"
-  [ -f "$f" ] || die "no such review file: $rel"
-  local decision; decision="$(_signoff_latest_decision "$f")" \
-    || die "no Sign-off table rows found in $rel — not a valid review file"
-  echo "$decision"
-  _decision_is_approved "$decision"
-}
-
-# The other half of the analysis/RFC parity fix (docs/RFC.md): a fix applied to a doc AFTER its
-# review file was already approved (e.g. an RFC comment folded back into the analysis post-
-# approval) must invalidate that stale approval, or `review gate` above would still wrongly pass.
-# Appends a fresh `in-review` row — NEVER deletes the old approval, same append-only-history rule
-# as a human's own manual reopen (template's Sign-off section: "Add a new 'in-review' row, don't
-# delete the old approval"). Idempotent no-op if the file isn't currently approved (accepts either
-# form via _decision_is_approved — nothing stale to invalidate otherwise) — safe for a caller to
-# call unconditionally before applying a fix, no extra branching needed. Tagged
-# "pw-review (auto-reopen)" so it's never mistaken for a human's own `changes-requested` decision on
-# a skim of the file or its git history.
-#   review reopen <slug> <review-rel-path>
-cmd_review_reopen() {
-  [ $# -eq 2 ] || die "usage: review reopen <slug> <review-rel-path>"
-  local slug="$1" rel="$2"
-  local d; d="$(proj_dir "$slug")"
-  local f="$d/$rel"
-  [ -f "$f" ] || die "no such review file: $rel"
-  local decision; decision="$(_signoff_latest_decision "$f")" \
-    || die "no Sign-off table rows found in $rel — not a valid review file"
-  if ! _decision_is_approved "$decision"; then
-    echo "$slug: $rel already open (current: $decision) — nothing to reopen"
-    return 0
-  fi
-  local lastrow; lastrow="$(_signoff_last_real_row_line "$f")"
-  local ts row; ts="$(date '+%F %H:%M')"; row="| $ts | pw-review (auto-reopen) | in-review |"
-  { head -n "$lastrow" "$f"; printf '%s\n' "$row"; tail -n "+$((lastrow+1))" "$f"; } \
-    > "$f.tmp" && mv "$f.tmp" "$f"
-  cmd_log "$slug" pw-review "AUTO-REOPENED $rel — a fix was applied after it was already approved (new row: in-review); re-approve once settled"
-  echo "$slug: $rel reopened (was $decision, now in-review)"
-}
-
-# Write the Sign-off row on a review file WITHOUT a human — the ONE tool-enforced exception to
-# "only a human clears a gate" (template/_REVIEW.template.md's own rule). Refuses unless BOTH:
-# (1) this project's AI Review mode for <phase> is genuinely "auto" (checked here, never taken on
-# the caller's word), and (2) the file has no real remaining open item/question per
-# _review_has_open_marker above. The row is tagged "pw-reviewer (auto)", never blended with a
-# human "you" row, so it's never mistaken for a human decision on a skim of the file or its git
-# history.
-#   review auto-signoff <slug> <review-rel-path> <phase>
-cmd_review_auto_signoff() {
-  [ $# -eq 3 ] || die "usage: review auto-signoff <slug> <review-rel-path> <phase>   (phase: $AI_REVIEW_PHASES)"
-  local slug="$1" rel="$2" phase="$3"
-  case " $AI_REVIEW_PHASES " in *" $phase "*) ;; *) die "invalid phase '$phase' (allowed: $AI_REVIEW_PHASES)" ;; esac
-  local d; d="$(proj_dir "$slug")"
-  local f="$d/$rel"
-  [ -f "$f" ] || die "no such review file: $rel"
-  local mode; mode="$(_ai_review_mode_of "$slug" "$phase")"
-  [ "$mode" = "auto" ] || die "refusing auto-signoff: this project's AI Review mode for '$phase' is '$mode', not 'auto' (pw-lib.sh ai-review $slug $phase auto to enable)"
-  _review_has_open_marker "$f" && die "refusing auto-signoff: $rel still has an unresolved [OPEN] item or [PENDING] question"
-  local signline; signline="$(grep -n '^## Sign-off' "$f" | head -1 | cut -d: -f1)"
-  [ -n "$signline" ] || die "no '## Sign-off' section in $rel — not a valid review file"
-  local ts row; ts="$(date '+%F %H:%M')"; row="| $ts | pw-reviewer (auto) | approved |"
-  if grep -q '^| | | in-review |$' "$f"; then
-    # first sign-off on this file → replace the template's lone placeholder row
-    awk -v row="$row" '{ if ($0 == "| | | in-review |") { print row; next } print }' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-  else
-    # a re-review cycle already replaced/added rows → append ours as the table's new last row
-    # (head/tail splice, not awk -v — same portability reasoning as _ship_comment_section_ensure:
-    # no shell-quote gymnastics, no awk variable involved). Uses the comment-stripped scanner, not
-    # a raw "last | line from ## Sign-off to EOF" — the raw version picks the template's own
-    # WORKED-EXAMPLE Sign-off rows (inside a trailing <!-- --> block) since they're the last such
-    # lines in the whole file, corrupting a SECOND-or-later signoff. See _signoff_last_real_row_line.
-    local lastrow; lastrow="$(_signoff_last_real_row_line "$f")"
-    [ "$lastrow" -gt 0 ] || die "no Sign-off table rows found in $rel"
-    { head -n "$lastrow" "$f"; printf '%s\n' "$row"; tail -n "+$((lastrow+1))" "$f"; } \
-      > "$f.tmp" && mv "$f.tmp" "$f"
-  fi
-  cmd_log "$slug" pw-reviewer "AUTO-APPROVED $rel (phase=$phase, AI Review mode=auto, zero open items) — no human sign-off"
-  echo "$slug: $rel auto-signed-off by pw-reviewer (phase=$phase)"
-}
-
-# Generic open-item check — reuses _review_has_open_marker (the same detector `auto-signoff` relies
-# on) but exposed standalone, since not every open-item check hangs off a Sign-off gate.
-# `analysis/review/RFC.review.md` has no Sign-off table of its own (pulled comments there are
-# informational staging, never individually approved as a unit) — so `review gate` doesn't apply to
-# it, but /pw-breakdown still needs to know whether any pulled comment is sitting unresolved before
-# letting the analysis's own approval unblock breakdown. Missing file → "no" + exit 1 (no RFC
-# negotiation in flight, not an error) rather than dying — plenty of projects never touch the RFC
-# side-loop at all, and that must never be treated as a failure.
-#   review has-open <slug> <review-rel-path>
-cmd_review_has_open() {
-  [ $# -eq 2 ] || die "usage: review has-open <slug> <review-rel-path>"
-  local slug="$1" rel="$2"
-  local d; d="$(proj_dir "$slug")"
-  local f="$d/$rel"
-  if [ ! -f "$f" ]; then
-    echo "no"
-    return 1
-  fi
-  if _review_has_open_marker "$f"; then
-    echo "yes"
-    return 0
-  fi
-  echo "no"
-  return 1
-}
-
-# Machine-count of real item states in one review file — THE single source of truth for any
-# "how many open?" display (pw-review-scan, pw-status). Reuses the exact _comment_blanked +
-# heading-marker detector the gates trust, so a dashboard line can never again disagree with a
-# Sign-off decision: the template's guidance blockquote ("Add an item: … <!-- pw-item-status:
-# open -->") is prose on a '>' line, matches only `^###` headings, and can never inflate a count.
-# Text-tag fallbacks (pre-marker files: [OPEN]/[PENDING]/emoji) counted per heading line, only
-# when that heading carries no machine marker at all.
-#   review count <slug> <review-rel-path>   -> "open=N resolved=M items=K" (missing file -> all 0, exit 1)
-cmd_review_count() {
-  [ $# -eq 2 ] || die "usage: review count <slug> <review-rel-path>"
-  local slug="$1" rel="$2"
-  local d; d="$(proj_dir "$slug")"
-  local f="$d/$rel"
-  [ -f "$f" ] || { echo "open=0 resolved=0"; return 1; }
-  local h stripped open=0 fb res=0 fb2
-  stripped="$(_comment_blanked "$f")"
-  h="$(_review_item_headings "$f")"
-  open="$(printf '%s\n' "$h" | grep -cE '^###+ .*pw-item-status: open' || true)"; open="${open:-0}"
-  fb="$(printf '%s\n' "$h" | grep -E '^###+ .*(🔴 open|⏳ awaiting answer|\[OPEN\]|\[PENDING\])' | grep -v 'pw-item-status:' | grep -c . || true)"
-  res="$(printf '%s\n' "$h" | grep -cE '^###+ .*pw-item-status: resolved' || true)"; res="${res:-0}"
-  fb2="$(printf '%s\n' "$h" | grep -E '^###+ .*(\[RESOLVED\]|\[ANSWERED\])' | grep -v 'pw-item-status:' | grep -c . || true)"
-  # items: real item HEADINGS under "## Items" (section rule identical to the template) — lets
-  # consumers like pw-doc-lint's marker-vs-items check compare like with like in ONE pass,
-  # without re-reading the raw file (which would count headings living inside the worked-example
-  # comment block — exactly the un-blanked-read half of the C22 phantom).
-  local items
-  items="$(printf '%s\n' "$stripped" | awk '
-    /^## Items/ {p=1; next}
-    p && /^## / {p=0}
-    p && /^###+ / && !/<YYYY-MM-DD/ && !/<§section/ {n++}
-    END {print n+0}')"
-  echo "open=$((open + ${fb:-0})) resolved=$((res + ${fb2:-0})) items=${items:-0}"
-}
-
-# _review_items_tsv moved VERBATIM to pw-mdlib.sh (S5 shared library, plan 17) — sourced below.
-
-# Idempotently (re)build the heading-text-anchored "## Contents" table — ID / section-anchor /
-# status for every real item/question, in file order — so applying ONE review item only requires
-# jumping to the section it names instead of reading the whole file to find it. Anchored by
-# HEADING TEXT, never a line number (a rewrite shifts lines; heading text doesn't), so re-running
-# this after any edit is always safe — never goes stale the way a line-number index would.
-#   review reindex <slug> <review-rel-path>
-cmd_review_reindex() {
-  [ $# -eq 2 ] || die "usage: review reindex <slug> <review-rel-path>"
-  local slug="$1" rel="$2"
-  local d; d="$(proj_dir "$slug")"
-  local f="$d/$rel"
-  [ -f "$f" ] || die "no such review file: $rel"
-  local rows; rows="$(_review_items_tsv "$f" | cut -f2-)"
-  local block; block="$(mktemp)"
-  {
-    printf '<!-- pw-contents:begin -->\n'
-    printf '## Contents   [🤖-owned — regenerated by `pw-lib.sh review reindex`; never hand-edit]\n\n'
-    printf '| ID | Section / anchor | Status |\n|----|-------------------|--------|\n'
-    if [ -n "$rows" ]; then
-      printf '%s\n' "$rows" | awk -F'\t' '{printf "| %s | %s | [%s] |\n", $1, $2, $3}'
-    else
-      printf '| _(none yet)_ | | |\n'
-    fi
-    printf '<!-- pw-contents:end -->\n'
-  } > "$block"
-  if grep -q '<!-- pw-contents:begin -->' "$f"; then
-    local b e
-    b="$(grep -n '<!-- pw-contents:begin -->' "$f" | head -1 | cut -d: -f1)"
-    e="$(grep -n '<!-- pw-contents:end -->' "$f" | head -1 | cut -d: -f1)"
-    { head -n "$((b-1))" "$f"; cat "$block"; tail -n "+$((e+1))" "$f"; } > "$f.tmp" && mv "$f.tmp" "$f"
-  else
-    local anchor; anchor="$(grep -n '^Gate:' "$f" | head -1 | cut -d: -f1)"
-    if [ -n "$anchor" ]; then
-      { head -n "$anchor" "$f"; printf '\n'; cat "$block"; tail -n "+$((anchor+1))" "$f"; } > "$f.tmp" && mv "$f.tmp" "$f"
-    else
-      { cat "$block"; printf '\n'; cat "$f"; } > "$f.tmp" && mv "$f.tmp" "$f"
-    fi
-  fi
-  rm -f "$block"
-  local n; n="$(printf '%s\n' "$rows" | grep -c . || true)"; : "${n:=0}"
-  cmd_log "$slug" review "reindexed $rel ($n live item(s)/question(s))"
-  echo "$slug: reindexed $rel ($n item(s)/question(s))"
-}
-
-# Move every fully-resolved ([RESOLVED] item / [ANSWERED] question) heading block out of the live
-# review file, VERBATIM, into a sibling "<topic>.archive.md" — replacing it with one pointer row
-# in a "## Archived items" table. This is what keeps a long-lived, many-round review file from
-# forcing every future round to re-read the whole resolved history just to apply one new item.
-#
-# Gate-safety (why this can never break a hard gate): cmd_review_gate/cmd_review_reopen/
-# cmd_review_auto_signoff only ever read the "## Sign-off" table's latest row
-# (_signoff_latest_decision) and the open-marker check (_review_has_open_marker). This function
-# NEVER touches [OPEN]/[PENDING] headings and never writes to "## Sign-off" — it only ever moves
-# headings whose marker already reads resolved/answered — so both gate mechanisms are provably
-# unaffected by any archive run. Never edits or deletes the human's original ask/answer text —
-# moved byte-for-byte verbatim.
-#   review archive <slug> <review-rel-path>
-cmd_review_archive() {
-  [ $# -eq 2 ] || die "usage: review archive <slug> <review-rel-path>"
-  local slug="$1" rel="$2"
-  local d; d="$(proj_dir "$slug")"
-  local f="$d/$rel"
-  [ -f "$f" ] || die "no such review file: $rel"
-  local archrel="${rel%.review.md}.archive.md"
-  local af="$d/$archrel"
-
-  # Ensure the section exists FIRST (idempotent, positioned right before ## Sign-off — same splice
-  # pattern _ship_comment_section_ensure uses). This always lands strictly AFTER every item/
-  # question heading, so it can never shift the line ranges computed below.
-  if ! grep -q '^## Archived items' "$f"; then
-    local secfile; secfile="$(mktemp)"
-    {
-      printf '\n## Archived items   [🤖-owned — see `pw-lib.sh review archive`; never hand-edit]\n\n'
-      printf 'Full text preserved verbatim in `%s`.\n\n' "$(basename "$archrel")"
-      printf '| ID | Summary | Archived |\n|----|---------|----------|\n'
-    } > "$secfile"
-    if grep -q '^## Sign-off' "$f"; then
-      local signline; signline="$(grep -n '^## Sign-off' "$f" | head -1 | cut -d: -f1)"
-      { head -n "$((signline - 1))" "$f"; cat "$secfile"; printf '\n'; tail -n "+${signline}" "$f"; } \
-        > "$f.tmp" && mv "$f.tmp" "$f"
-    else
-      cat "$secfile" >> "$f"
-    fi
-    rm -f "$secfile"
-  fi
-  if [ ! -f "$af" ]; then
-    {
-      printf '# Archived review items — %s\n\n' "$(basename "${rel%.review.md}")"
-      printf 'Items/questions moved out of `%s` once fully [RESOLVED]/[ANSWERED], by `pw-lib.sh review\n' "$rel"
-      printf 'archive` — text preserved verbatim, never edited. See that file'"'"'s "## Archived items"\n'
-      printf 'table for one pointer row per entry moved here.\n'
-    } > "$af"
-  fi
-
-  # Compute (start,end,id) for every RESOLVED/ANSWERED heading against the file's CURRENT state —
-  # the section-ensure above only ever adds content at/after ## Sign-off (strictly after every
-  # item/question), so it can never shift any of these ranges.
-  local blanked; blanked="$(mktemp)"; _comment_blanked "$f" > "$blanked"
-  local total; total="$(wc -l < "$blanked" | tr -d ' ')"
-  local -a all_heads=()
-  while IFS= read -r h; do all_heads+=("$h"); done < <(grep -nE '^(## |### )' "$blanked" | cut -d: -f1)
-
-  local -a rstarts=() rends=() rids=()
-  while IFS=$'\t' read -r ln id anchor tag; do
-    [ "$tag" = "RESOLVED" ] || [ "$tag" = "ANSWERED" ] || continue
-    local end="$total" hh
-    for hh in "${all_heads[@]}"; do
-      if [ "$hh" -gt "$ln" ]; then end=$((hh-1)); break; fi
-    done
-    rstarts+=("$ln"); rends+=("$end"); rids+=("$id")
-  done < <(_review_items_tsv "$f")
-  rm -f "$blanked"
-
-  if [ "${#rstarts[@]}" -eq 0 ]; then
-    echo "$slug: $rel — nothing to archive (no [RESOLVED]/[ANSWERED] items)"
-    return 0
-  fi
-
-  # Append every moved block's text (verbatim) + a pointer row, in file order. Row-insertion
-  # rescans the CURRENT file each time for "## Archived items", so it self-corrects regardless of
-  # how many rows already landed there — it never relies on a stale line number.
-  local i today; today="$(date +%F)"
-  for i in "${!rstarts[@]}"; do
-    local s="${rstarts[$i]}" e="${rends[$i]}" id="${rids[$i]}"
-    local blocktxt; blocktxt="$(sed -n "${s},${e}p" "$f")"
-    local summary
-    summary="$(printf '%s\n' "$blocktxt" | tail -n +2 | grep -vE '^[[:space:]]*$' | head -1)"
-    if [ ${#summary} -gt 80 ]; then summary="${summary:0:80}…"; fi
-    summary="$(printf '%s' "$summary" | sed 's/|/\\|/g')"
-    [ -n "$summary" ] || summary="(no summary line)"
-    { printf '\n---\n\n'; printf '%s\n' "$blocktxt"; } >> "$af"
-    local marker="<!-- pw-archived:$id -->"
-    local row="| $id | $summary | $today $marker |"
-    if grep -Fq "$marker" "$f"; then
-      awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
-        "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-    else
-      awk -v row="$row" '
-        /^## Archived items/ { insec=1 }
-        { print }
-        insec && !done && /^\|[-| ]+\|[ ]*$/ { print row; done=1 }
-      ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-      grep -Fq "$marker" "$f" || printf '%s\n' "$row" >> "$f"
-    fi
-  done
-
-  # NOW remove the moved ranges from the live file, HIGHEST start-line first, so removing an
-  # already-processed (higher-numbered) block never shifts the line numbers of a not-yet-processed
-  # (lower-numbered) one still waiting to be removed.
-  local order; order="$(for i in "${!rstarts[@]}"; do printf '%s\t%s\n' "${rstarts[$i]}" "$i"; done | sort -rn -k1,1)"
-  while IFS=$'\t' read -r _ i; do
-    local s="${rstarts[$i]}" e="${rends[$i]}"
-    local flen; flen="$(wc -l < "$f" | tr -d ' ')"
-    {
-      [ "$s" -gt 1 ] && sed -n "1,$((s-1))p" "$f"
-      [ "$e" -lt "$flen" ] && sed -n "$((e+1)),\$p" "$f"
-      true
-    } > "$f.tmp" && mv "$f.tmp" "$f"
-  done <<< "$order"
-
-  cmd_review_reindex "$slug" "$rel" >/dev/null
-  cmd_log "$slug" review "archived ${#rstarts[@]} resolved item(s)/question(s) from $rel to $archrel"
-  echo "$slug: archived ${#rstarts[@]} item(s)/question(s) from $rel to $archrel"
-}
-
-cmd_review() {
-  case "${1:-}" in
-    note-init)    shift; cmd_review_note_init "$@" ;;
-    auto-signoff) shift; cmd_review_auto_signoff "$@" ;;
-    gate)         shift; cmd_review_gate "$@" ;;
-    reopen)       shift; cmd_review_reopen "$@" ;;
-    has-open)     shift; cmd_review_has_open "$@" ;;
-    count)        shift; cmd_review_count "$@" ;;
-    reindex)      shift; cmd_review_reindex "$@" ;;
-    archive)      shift; cmd_review_archive "$@" ;;
-    *) die "usage: review <note-init|auto-signoff|gate|reopen|has-open|count|reindex|archive> ..." ;;
-  esac
-}
 
 # Guard against an agent picking an unexpectedly expensive model. Reads PW_MODEL_ALLOWLIST_<PROVIDER>
 # (uppercased) from pw.config.sh — a comma-separated list of glob patterns matched against the
@@ -1176,15 +597,15 @@ cmd_selftest() {
   printf '# Context index\n\n| File / link | What it is | Source | Date added | Trust notes |\n|---|---|---|---|---|\n| | | | | |\n\n## Repos in scope\n| Repo | Base branch | Why |\n|------|-------------|-----|\n| | | |\n' \
     > "$tmp/demo/context/INDEX.md"
   local IX="$tmp/demo/context/INDEX.md"
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" adopt demo repoX feat-a master "http://mr/1" >/dev/null
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" adopt demo repoX feat-b spring3 "http://mr/2" >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$HERE/scripts/entities/pw-context.sh" adopt demo repoX feat-a master "http://mr/1" >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$HERE/scripts/entities/pw-context.sh" adopt demo repoX feat-b spring3 "http://mr/2" >/dev/null
   local A; A="$tmp/demo/context/ADOPTED.md"
   grep -q '^## A1 · repoX @ feat-a' "$A" || die "selftest FAIL: unit A1 clobbered by 2nd adopt"
   grep -q '^## A2 · repoX @ feat-b' "$A" || die "selftest FAIL: unit A2 not appended"
   [ "$(grep -c '^## A[0-9]* · ' "$A")" = "2" ] || die "selftest FAIL: expected 2 adoption units"
   grep -q '^- \*\*Adopted:\*\* 2 unit(s)' "$tmp/demo/README.md" || die "selftest FAIL: unit count not 2"
   # re-adopt A1 with a corrected base/MR → updates in place, still 2 units, prose untouched
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" adopt demo repoX feat-a develop "http://mr/1b" >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$HERE/scripts/entities/pw-context.sh" adopt demo repoX feat-a develop "http://mr/1b" >/dev/null
   [ "$(grep -c '^## A[0-9]* · ' "$A")" = "2" ] || die "selftest FAIL: re-adopt duplicated a unit"
   awk '/^## A1 · /{u=1} u&&/^- Base: /{print;exit}' "$A" | grep -q 'develop' || die "selftest FAIL: A1 base not updated in place"
   awk '/^## A2 · /{u=1} u&&/^- Base: /{print;exit}' "$A" | grep -q 'spring3' || die "selftest FAIL: A2 base wrongly changed"
@@ -1202,20 +623,6 @@ cmd_selftest() {
   [ "$(grep -cE '^\|[^|]*ADOPTED\.md' "$IX")" = "1" ] || die "selftest FAIL: expected exactly one ADOPTED.md provenance row"
   grep -qE '^\|[^|]*ADOPTED\.md.*all continuation units' "$IX" || die "selftest FAIL: provenance row not generic"
   grep -qE '^\|[^|]*ADOPTED\.md.*feat-a' "$IX" && die "selftest FAIL: provenance row enumerated a unit (should stay generic)"
-  # review-init: creates a review file verbatim from the template (header + Reviewing: link
-  # stamped, format hints intact), and is idempotent — a 2nd call never clobbers your items.
-  mkdir -p "$tmp/demo/analysis"
-  printf '# Analysis: demo\n' > "$tmp/demo/analysis/topic.md"
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review-init demo analysis/review/topic.review.md analysis/topic.md >/dev/null
-  local RV="$tmp/demo/analysis/review/topic.review.md"
-  [ -f "$RV" ] || die "selftest FAIL: review-init did not create the file"
-  grep -q '^# Review: topic.md$' "$RV" || die "selftest FAIL: review header not stamped"
-  grep -qF 'Reviewing: [topic.md](../topic.md)' "$RV" || die "selftest FAIL: Reviewing link not stamped"
-  grep -q '^> \*\*Add an item:\*\*' "$RV" || die "selftest FAIL: permanent Items format hint missing"
-  grep -q '^> \*\*Answer a question:\*\*' "$RV" || die "selftest FAIL: permanent Open-questions format hint missing"
-  printf '\n### R1 · your item\n' >> "$RV"                    # simulate the human adding an item
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review-init demo analysis/review/topic.review.md analysis/topic.md >/dev/null
-  grep -q '^### R1 · your item$' "$RV" || die "selftest FAIL: review-init clobbered an existing review file"
 
   # --- rfc side-loop -----------------------------------------------------
   # rfc init: creates rfc/RFC.md verbatim from the template (placeholder stamped), idempotent —
@@ -1335,188 +742,6 @@ cmd_selftest() {
   fi
   [ "$(PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" ai-review demo2)" = "analysis=advisory plan=auto task-plan=off task-exec=off ship=off" ] || die "selftest FAIL: rejected ai-review calls still mutated the line"
 
-  # review note-init: idempotent, same shape as review-init/rfc init.
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review note-init demo2 >/dev/null
-  local NOTES="$tmp/demo2/REVIEWER-NOTES.md"
-  [ -f "$NOTES" ] || die "selftest FAIL: review note-init did not create REVIEWER-NOTES.md"
-  printf '\n## manual entry\n' >> "$NOTES"
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review note-init demo2 >/dev/null
-  grep -q '^## manual entry$' "$NOTES" || die "selftest FAIL: review note-init clobbered an existing file"
-
-  # review auto-signoff: refuses when mode isn't auto (demo2/analysis is "advisory" above), refuses
-  # while a REAL filled item is open, but succeeds on a clean pass over a just-created file — the
-  # template's unfilled R1/Q1 stubs (literal `<YYYY-MM-DD` placeholder text) are heads-up copies,
-  # not items, and must never block (C22: the same phantoms made pw-status report approved gates
-  # as unresolved). Success places a distinctly-tagged row INSIDE the Sign-off table.
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review-init demo2 analysis/review/topic2.review.md analysis/topic2.md >/dev/null
-  local RV2="$tmp/demo2/analysis/review/topic2.review.md"
-  grep -q '\[OPEN\]' "$RV2" || die "selftest FAIL: fresh review-init unexpectedly has no [OPEN] stub (test assumption invalid)"
-  if PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review auto-signoff demo2 analysis/review/topic2.review.md analysis >/dev/null 2>&1; then
-    die "selftest FAIL: auto-signoff succeeded although mode is 'advisory', not 'auto'"
-  fi
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" ai-review demo2 analysis auto >/dev/null
-  # a genuinely filled open item must still refuse auto-signoff — realistic timestamp, real ask.
-  printf '### R9 · §1 Goal wording — [OPEN] (you, 2026-09-16 11:00) <!-- pw-item-status: open -->\nPlease reword §1.\n---\n' >> "$RV2"
-  if PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review auto-signoff demo2 analysis/review/topic2.review.md analysis >/dev/null 2>&1; then
-    die "selftest FAIL: auto-signoff succeeded although a real filled item is open"
-  fi
-  sed -i '' -e '/^### R9 · §1 Goal wording/,+2d' "$RV2"
-  # only the unfilled stubs remain → invisible to the detector; a clean pass proceeds (next block).
-  _review_has_open_marker "$RV2" && die "selftest FAIL: unfilled R1/Q1 stubs still register as open (C22 — placeholders must be invisible to the detector)"
-
-  # --- _review_has_open_marker: dedicated unit-level checks for the machine marker itself,
-  # isolated from the full auto-signoff integration flow above ---
-  local MKT="$tmp/marker-test.md"
-  # 0a. template stubs are invisible — both placeholder tokens, individually.
-  printf '### Q1 · <§section> — [PENDING] (agent, )\n<!-- pw-item-status: open -->\n' > "$MKT"
-  _review_has_open_marker "$MKT" && die "selftest FAIL: unfilled <§section> stub counted as open"
-  printf '### R1 · §x — [OPEN] (you, <YYYY-MM-DD HH:MM>) <!-- pw-item-status: open -->\n' > "$MKT"
-  _review_has_open_marker "$MKT" && die "selftest FAIL: unfilled <YYYY-MM-DD> stub counted as open"
-  # 0b. a half-stub that only mentions the placeholder in its ANCHOR is still a stub (pato T01
-  #     case), while a real heading with any other angle content stays visible.
-  printf '### R2 · <T01> repo wiring — [OPEN] (you, 2026-09-16 18:55) [marker: pw-item-status open]\n' > "$MKT"
-  _review_has_open_marker "$MKT" || die "selftest FAIL: <T01>-style real heading filtered as a stub"
-  # 1. A real heading whose ONLY open signal is the new marker (no legacy emoji at all) must
-  #    still be detected — proves the marker path works independently of the emoji fallback.
-  printf '### R1 · §1 something — status pending <!-- pw-item-status: open -->\nbody\n' > "$MKT"
-  _review_has_open_marker "$MKT" || die "selftest FAIL: marker-only open heading (no emoji) not detected as open"
-  # 2. A resolved marker must NOT be treated as open even when unrelated prose elsewhere on the
-  #    SAME line mentions the legacy "open" words — proves the marker, not stray text, decides.
-  printf '### R1 · §1 something resolved, previously open <!-- pw-item-status: resolved -->\nbody\n' > "$MKT"
-  _review_has_open_marker "$MKT" && die "selftest FAIL: a resolved-marker heading was treated as open because of unrelated 'open' text on the same line"
-  # 3. A same-line marker on a real heading must never be swallowed by, or itself swallow, a
-  #    separate genuinely-multi-line comment elsewhere in the file (the sed-range gotcha this
-  #    mechanism was rewritten to avoid) — content after the multi-line block must survive.
-  printf '### R1 real — open <!-- pw-item-status: open -->\n<!-- multiline wrapper\nswallowed middle line\nend of wrapper -->\n### R2 real — resolved <!-- pw-item-status: resolved -->\n' > "$MKT"
-  _review_has_open_marker "$MKT" || die "selftest FAIL: real open marker lost across an unrelated multi-line comment block"
-  grep -q "swallowed middle line" <(awk '
-    BEGIN { in_comment = 0 }
-    { line = $0
-      if (in_comment) { if (line ~ /-->/) { in_comment = 0 }; next }
-      if (line ~ /<!--/ && line ~ /-->/) { print line; next }
-      if (line ~ /<!--/) { in_comment = 1; next }
-      print line }
-  ' "$MKT") && die "selftest FAIL: multi-line comment content was not actually stripped"
-
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review auto-signoff demo2 analysis/review/topic2.review.md analysis >/dev/null
-  grep -q '| pw-reviewer (auto) | approved |$' "$RV2" || die "selftest FAIL: auto-signoff row not written/tagged correctly"
-  grep -q '| pw-reviewer (auto) | approved ✅ |$' "$RV2" && die "selftest FAIL: auto-signoff wrote the legacy emoji form — new rows must be plain 'approved'"
-  grep -q '^| | | in-review |$' "$RV2" && die "selftest FAIL: auto-signoff left the placeholder row instead of replacing it"
-  # anchor to an actual table ROW (starts with "| ", not prose mentioning the tag elsewhere in the
-  # file's explanatory text, e.g. the template's own HOW-THIS-WORKS comment).
-  local as_line as_sign; as_line="$(grep -nE '^\|.*pw-reviewer \(auto\).*approved \|$' "$RV2" | head -1 | cut -d: -f1)"
-  as_sign="$(grep -n '^## Sign-off' "$RV2" | head -1 | cut -d: -f1)"
-  [ -n "$as_line" ] || die "selftest FAIL: no auto-signoff table row found"
-  [ "$as_line" -gt "$as_sign" ] || die "selftest FAIL: auto-signoff row landed before ## Sign-off"
-
-  # --- backward compat: a file with the LEGACY "approved ✅" string (an already-approved real
-  # project written before this migration) must still gate correctly, read-only, forever. ---
-  local LEGACY="$tmp/legacy.review.md"
-  printf '## Sign-off\n| Date | Who | Decision |\n|---|---|---|\n| 2026-01-01 00:00 | you | approved ✅ |\n' > "$LEGACY"
-  local lgd; lgd="$(_signoff_latest_decision "$LEGACY")"
-  [ "$lgd" = "approved ✅" ] || die "selftest FAIL: legacy decision text mangled, got '$lgd'"
-  _decision_is_approved "$lgd" || die "selftest FAIL: _decision_is_approved rejected the legacy 'approved ✅' form — backward compat broken"
-  _decision_is_approved "approved" || die "selftest FAIL: _decision_is_approved rejected the current 'approved' form"
-  _decision_is_approved "in-review" && die "selftest FAIL: _decision_is_approved accepted a non-approved decision"
-
-  # --- review gate / review reopen: the analysis/RFC-parity mechanism (docs/RFC.md) ---
-  # RV2 is currently approved (the auto-signoff row just above) — and, being a verbatim
-  # review-init copy, STILL carries the template's own trailing Sign-off WORKED-EXAMPLE comment
-  # block, containing two lines that look exactly like real approved-row table rows. This is
-  # exactly the fixture that would trip the naive "last | line from ## Sign-off to EOF" bug.
-  local gd
-  gd="$(PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review gate demo2 analysis/review/topic2.review.md)" \
-    || die "selftest FAIL: review gate exited non-zero on a genuinely approved file"
-  [ "$gd" = "approved" ] || die "selftest FAIL: review gate printed '$gd', expected 'approved'"
-
-  # reopen: must succeed, append (never delete) an in-review row, and gate must now report open.
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review reopen demo2 analysis/review/topic2.review.md >/dev/null
-  grep -q '| pw-reviewer (auto) | approved |$' "$RV2" \
-    || die "selftest FAIL: review reopen deleted the prior approval instead of appending after it"
-  grep -q '| pw-review (auto-reopen) | in-review |$' "$RV2" \
-    || die "selftest FAIL: review reopen did not append the expected in-review row"
-  if gd="$(PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review gate demo2 analysis/review/topic2.review.md)"; then
-    die "selftest FAIL: review gate exited 0 right after reopen (should read in-review now)"
-  fi
-  [ "$gd" = "in-review" ] || die "selftest FAIL: review gate printed '$gd' after reopen, expected 'in-review'"
-
-  # From here on, count/locate rows against a COMMENT-STRIPPED view of RV2 — the template's own
-  # trailing WORKED-EXAMPLE block (still present, since review-init copies it verbatim and nothing
-  # in this flow ever deletes it) contains a decorative "pw-reviewer (auto) | approved |" line
-  # of its own, which would otherwise inflate a naive grep -c on the raw file. Blank (never delete)
-  # commented lines so real line numbers still line up — same technique as
-  # _signoff_last_real_row_line, duplicated here since it's a private helper.
-  strip_rv2() { _comment_blanked "$RV2"; }
-
-  # reopen again while already open: idempotent no-op, must NOT append a second in-review row.
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review reopen demo2 analysis/review/topic2.review.md >/dev/null
-  [ "$(strip_rv2 | grep -c '| pw-review (auto-reopen) | in-review |$')" -eq 1 ] \
-    || die "selftest FAIL: review reopen was not idempotent — appended a second in-review row"
-
-  # re-approve (a SECOND auto-signoff on this file) must land as the table's new LAST row, not
-  # inside/after the template's trailing WORKED-EXAMPLE comment block — the exact regression this
-  # round's _signoff_last_real_row_line fix targets (a raw scan previously picked the example's
-  # own "approved" lines, since they're the last such lines in the whole file).
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" ai-review demo2 analysis auto >/dev/null   # already auto from above; explicit for clarity
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review auto-signoff demo2 analysis/review/topic2.review.md analysis >/dev/null
-  [ "$(strip_rv2 | grep -c '| pw-reviewer (auto) | approved |$')" -eq 2 ] \
-    || die "selftest FAIL: second auto-signoff didn't produce a second distinct real approved row"
-  gd="$(PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review gate demo2 analysis/review/topic2.review.md)" \
-    || die "selftest FAIL: review gate exited non-zero after the second (re-)approval"
-  [ "$gd" = "approved" ] || die "selftest FAIL: review gate printed '$gd' after re-approval, expected 'approved'"
-  # and the row order must still be [1st approved, in-review, 2nd approved] top-to-bottom in the
-  # file — proof the second approval landed AFTER the reopen row, not before/inside the example
-  # block (line numbers, not just gate's reported decision, so this doesn't just re-check the same
-  # function under test — it checks the row actually got spliced into the right physical spot).
-  local ln_row1 ln_reopen ln_row2
-  ln_row1="$(strip_rv2 | grep -n '| pw-reviewer (auto) | approved |$' | sed -n '1p' | cut -d: -f1)"
-  ln_reopen="$(strip_rv2 | grep -n '| pw-review (auto-reopen) | in-review |$' | cut -d: -f1)"
-  ln_row2="$(strip_rv2 | grep -n '| pw-reviewer (auto) | approved |$' | sed -n '2p' | cut -d: -f1)"
-  [ -n "$ln_row1" ] && [ -n "$ln_reopen" ] && [ -n "$ln_row2" ] \
-    || die "selftest FAIL: couldn't locate all 3 expected real Sign-off rows in $RV2"
-  [ "$ln_row1" -lt "$ln_reopen" ] && [ "$ln_reopen" -lt "$ln_row2" ] \
-    || die "selftest FAIL: Sign-off rows out of order (1st-approved=$ln_row1 reopen=$ln_reopen 2nd-approved=$ln_row2) — the second approval didn't land after the reopen row"
-
-  # reopen must refuse silently (no-op, exit 0) when the file is NOT currently approved.
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review reopen demo2 analysis/review/topic2.review.md >/dev/null
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review reopen demo2 analysis/review/topic2.review.md >/dev/null || \
-    die "selftest FAIL: reopen on an already-open file exited non-zero (should be a harmless no-op)"
-
-  # --- review has-open: the generic open-item check /pw-breakdown's RFC hard block relies on ---
-  # a project with no RFC.review.md at all (never touched the side-loop) must report "no"/exit 1,
-  # never an error.
-  local RFCRV="$tmp/demo2/analysis/review/RFC.review.md" hn
-  if hn="$(PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review has-open demo2 analysis/review/RFC.review.md)"; then
-    die "selftest FAIL: review has-open exited 0 for a nonexistent RFC.review.md (should be 'no'/exit 1)"
-  fi
-  [ "$hn" = "no" ] || die "selftest FAIL: review has-open printed '$hn' for a missing file, expected 'no'"
-
-  # a real pulled-comment item, still open — must report "yes"/exit 0.
-  mkdir -p "$(dirname "$RFCRV")"
-  printf '# RFC comments\n\n### R1 — a pulled comment <!-- pw-item-status: open -->\n\n> quoted comment text\n' \
-    > "$RFCRV"
-  if ! PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review has-open demo2 analysis/review/RFC.review.md >/dev/null; then
-    die "selftest FAIL: review has-open exited non-zero on a file with a real open item"
-  fi
-  hn="$(PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review has-open demo2 analysis/review/RFC.review.md)"
-  [ "$hn" = "yes" ] || die "selftest FAIL: review has-open printed '$hn' with an open item present, expected 'yes'"
-
-  # resolve it in place — has-open must now report clean ("no"/exit 1), same file, no other rows.
-  # Capture the printed value INSIDE the if-guard (not a separate call) — the expected exit here is
-  # 1, and an ungated `hn="$(...)"` on a nonzero-exit command would trip `set -e` and abort the
-  # whole selftest silently, same reasoning as the existing `review gate` checks above.
-  sed -i '' -e 's/<!-- pw-item-status: open -->/<!-- pw-item-status: resolved -->/' "$RFCRV"
-  if hn="$(PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review has-open demo2 analysis/review/RFC.review.md)"; then
-    die "selftest FAIL: review has-open exited 0 after the only open item was resolved"
-  fi
-  [ "$hn" = "no" ] || die "selftest FAIL: review has-open printed '$hn' after resolving, expected 'no'"
-
-  # review gate on a review file with no Sign-off rows fabricated at all → dies, doesn't crash.
-  local NOSIGN="$tmp/demo2/no-signoff.review.md"
-  printf '# not a real review file\nno Sign-off section here\n' > "$NOSIGN"
-  if PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review gate demo2 no-signoff.review.md >/dev/null 2>&1; then
-    die "selftest FAIL: review gate succeeded on a file with no ## Sign-off section at all"
-  fi
 
   # --- model-check: empty/unset allowlist = all models allowed (the default rule) ---
   local mc
@@ -1569,7 +794,7 @@ cmd_selftest() {
   printf -- '- **Status:** context\n- **One-liner:** <x>\n' > "$tmp/reviewtest/README.md"
   : > "$tmp/reviewtest/LOG.md"
   printf '# Analysis: rt\n' > "$tmp/reviewtest/analysis/rt.md"
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review-init reviewtest analysis/review/rt.review.md analysis/rt.md >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$HERE/scripts/entities/pw-review.sh" init reviewtest analysis/review/rt.review.md analysis/rt.md >/dev/null
   local RTV="$tmp/reviewtest/analysis/review/rt.review.md"
   # Add a 2nd OPEN item and a RESOLVED item into ## Items, BEFORE ## Open questions — realistic
   # placement (never a blind end-of-file append, which would land after ## Sign-off and prove
@@ -1597,14 +822,14 @@ cmd_selftest() {
   # reindex: builds a Contents table with exactly R2 (open) and R3 (resolved) — ignoring the
   # template's own commented-out worked-example headings (R1/Q1, still present verbatim above the
   # live section) — and is idempotent (a 2nd run replaces the block in place, never duplicates it).
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review reindex reviewtest analysis/review/rt.review.md >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$HERE/scripts/entities/pw-review.sh" reindex reviewtest analysis/review/rt.review.md >/dev/null
   grep -q '<!-- pw-contents:begin -->' "$RTV" || die "selftest FAIL: review reindex did not insert a Contents block"
   local CT1; CT1="$(sed -n '/pw-contents:begin/,/pw-contents:end/p' "$RTV")"
   printf '%s\n' "$CT1" | grep -qF '| R2 | §3 second item | [OPEN] |' || die "selftest FAIL: reindex Contents missing/wrong R2 row"
   printf '%s\n' "$CT1" | grep -qF '| R3 | §4 third item | [RESOLVED] |' || die "selftest FAIL: reindex Contents missing/wrong R3 row"
   printf '%s\n' "$CT1" | grep -q '| R1 |' && die "selftest FAIL: reindex Contents picked up a commented-out worked-example heading"
   [ "$(grep -c '<!-- pw-contents:begin -->' "$RTV")" = "1" ] || die "selftest FAIL: reindex duplicated the Contents begin-marker"
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review reindex reviewtest analysis/review/rt.review.md >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$HERE/scripts/entities/pw-review.sh" reindex reviewtest analysis/review/rt.review.md >/dev/null
   [ "$(grep -c '<!-- pw-contents:begin -->' "$RTV")" = "1" ] || die "selftest FAIL: re-running reindex duplicated the Contents block instead of replacing it in place"
   [ "$(grep -c '^## Contents' "$RTV")" = "1" ] || die "selftest FAIL: re-running reindex duplicated the Contents heading"
 
@@ -1614,11 +839,11 @@ cmd_selftest() {
   # with the right marker landed in a new "## Archived items" section.
   local before_signoff before_hasopen
   before_signoff="$(sed -n '/^## Sign-off/,$p' "$RTV")"
-  before_hasopen="$(PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review has-open reviewtest analysis/review/rt.review.md)"
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review archive reviewtest analysis/review/rt.review.md >/dev/null
+  before_hasopen="$(PW_PROJECTS_DIR="$tmp" "$HERE/scripts/entities/pw-review.sh" has-open reviewtest analysis/review/rt.review.md)"
+  PW_PROJECTS_DIR="$tmp" "$HERE/scripts/entities/pw-review.sh" archive reviewtest analysis/review/rt.review.md >/dev/null
   local after_signoff after_hasopen
   after_signoff="$(sed -n '/^## Sign-off/,$p' "$RTV")"
-  after_hasopen="$(PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review has-open reviewtest analysis/review/rt.review.md)"
+  after_hasopen="$(PW_PROJECTS_DIR="$tmp" "$HERE/scripts/entities/pw-review.sh" has-open reviewtest analysis/review/rt.review.md)"
   [ "$before_signoff" = "$after_signoff" ] || die "selftest FAIL: review archive changed the Sign-off table/section — gate-safety broken"
   [ "$before_hasopen" = "$after_hasopen" ] || die "selftest FAIL: review archive changed has-open's verdict ($before_hasopen -> $after_hasopen)"
   [ "$after_hasopen" = "yes" ] || die "selftest FAIL: R2 should still be open after archiving R3 (test assumption invalid)"
@@ -1633,7 +858,7 @@ cmd_selftest() {
 
   # a 2nd archive run with nothing newly resolved must be a harmless no-op (no duplicate rows).
   local archived_rows_before; archived_rows_before="$(grep -c 'pw-archived:' "$RTV")"
-  PW_PROJECTS_DIR="$tmp" "$HERE/pw-lib.sh" review archive reviewtest analysis/review/rt.review.md >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$HERE/scripts/entities/pw-review.sh" archive reviewtest analysis/review/rt.review.md >/dev/null
   [ "$(grep -c 'pw-archived:' "$RTV")" = "$archived_rows_before" ] \
     || die "selftest FAIL: re-running archive with nothing newly resolved was not a no-op"
 
@@ -1692,14 +917,11 @@ case "${1:-}" in
   status)      shift; cmd_status "$@" ;;
   oneliner)    shift; cmd_oneliner "$@" ;;
   adopted)     shift; cmd_adopted "$@" ;;
-  adopt)       shift; cmd_adopt "$@" ;;
-  review-init) shift; cmd_review_init "$@" ;;
   log)         shift; cmd_log "$@" ;;
   phase)       shift; cmd_phase "$@" ;;
   rfc)         shift; cmd_rfc "$@" ;;
   ai-review)   shift; cmd_ai_review "$@" ;;
   ai-model)    shift; cmd_ai_model "$@" ;;
-  review)      shift; cmd_review "$@" ;;
   model-check) shift; cmd_model_check "$@" ;;
   task-accept) shift; cmd_task_accept "$@" ;;
   dashboard-task-status) shift; cmd_dashboard_task_status "$@" ;;

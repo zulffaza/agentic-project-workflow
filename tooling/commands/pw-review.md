@@ -12,26 +12,26 @@ A-rules below, run the script verbatim, show its output. No judgment, no doc rea
 "improving" or retyping my text — it is handed over VERBATIM via a `--stdin` heredoc (A3).**
 Everything else below (apply-comments / `ai` / `config`) does NOT run for these operators.
 
-- **`/pw-review <slug> init-all`** → `{{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh init-all <slug>` —
+- **`/pw-review <slug> init-all`** → `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init-all <slug>` —
   creates every missing review file (each `analysis/<topic>.md`, `task/PLAN.md`, each
   `task/T0n.md` → its sibling `review/<name>.review.md`). Idempotent; existing files untouched.
 - **`/pw-review <slug> item <review-rel-path> <§anchor> <ask…>`** — `<§anchor>` is the next
   single token (e.g. `§4`); everything after it is the ask, unquoted, spaces included (A1
   rest-of-line). Run:
-  `{{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh add-item <slug> <review-rel-path> --section <§anchor> --stdin`
+  `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh add-item <slug> <review-rel-path> --section <§anchor> --stdin`
   with the ask piped in as a heredoc. Need a multi-word anchor? Use the flag form instead:
   `… item <path> --section <anchor words…> --text <ask words…>` (A2: each value runs until the
   next `--flag`).
 - **`/pw-review <slug> answer <review-rel-path> <Qid> <text…>`** — `<Qid>` like `Q2`; rest of
-  line is your answer. Run: `{{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh answer <slug> <path> <Qid>
+  line is your answer. Run: `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh answer <slug> <path> <Qid>
   --stdin` (heredoc). The script never flips the question's status — the fold-in + `[ANSWERED]`
   flip happens on the next apply-comments pass, per docs/REVIEW.md.
 - **`/pw-review <slug> signoff <review-rel-path> <approved|changes-requested|in-review>`** →
-  `{{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh signoff <slug> <path> <decision>`.
+  `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh signoff <slug> <path> <decision>`.
   **HUMAN-TRIGGERED ONLY (C4): run this operator ONLY when my message explicitly asks to sign
   off / record that gate decision — never on your own initiative, never as a "helpful" close of
   a review round, never because all items look resolved.** The agent-side path stays
-  `pw-lib.sh review auto-signoff` (mode=auto + zero open items, its own refusals intact).
+  `pw-review.sh auto-signoff` (mode=auto + zero open items, its own refusals intact).
 
 **`--skip-build-check`** (last argument, either flow) skips the task-fix build loop below — apply
 task fixes and flip their items without re-running the task's `## Verify`, noting in the reply that
@@ -65,7 +65,7 @@ like the apply-comments flow does):
    on its own — you don't do this part. It checks for an existing item on the same section anchor
    before filing anything (loop prevention — a 3rd item on the same anchor becomes a [OPEN]
    escalation instead of a normal finding, never resolved by it). In `auto` mode with a genuinely
-   clean pass, it may also call `pw-lib.sh review auto-signoff` itself; you never write that row.
+   clean pass, it may also call `pw-review.sh auto-signoff` itself; you never write that row.
 5. Recap what it did (items filed, whether it signed off, any escalation) exactly like the
    apply-comments recap below. `advisory` mode: remind me a human still needs to review its items
    and sign off. An escalation means this needs my attention now, not another `ai` re-run.
@@ -111,7 +111,7 @@ step silently — do not block.**
 
 **Start mechanical:** `{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh review <slug> [phase-word]` confirms
 the phase's review files exist (exit 1 + `pw-preflight:` line = report and stop — nothing to
-apply), then `{{PW_HOME}}/tooling/scripts/entities/pw-review-scan.sh <slug> [--phase <phase>]` prints
+apply), then `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh scan <slug> [--phase <phase>]` prints
 `<file>: N open[, N resolved][, N pending] (sign-off)` per review file — pick which files to
 open from that instead of reading them blind. Mapping rules below still decide the scope set.
 - If the 2nd arg is a **path** to a `.review.md`, use exactly that file.
@@ -130,7 +130,7 @@ open from that instead of reading them blind. Mapping rules below still decide t
 
 **Scoped reads — applying one item only needs that item's own block, never the whole file.** Use
 the file's own `## Contents` table (heading-text-anchored, 🤖-owned — refresh it with
-`…/{{PW_HOME}}/tooling/pw-lib.sh review reindex <slug> <review-rel-path>` if it looks stale) or
+`…/{{PW_HOME}}/tooling/scripts/entities/pw-review.sh reindex <slug> <review-rel-path>` if it looks stale) or
 Step 0's pinpoint result to jump straight to the item's own heading + the doc section(s) its
 anchor names. Never read `<file>.archive.md` (moved-out `[RESOLVED]`/`[ANSWERED]` history) unless
 the item's own ask specifically asks about past rationale.
@@ -139,7 +139,7 @@ the item's own ask specifically asks about past rationale.
 For each task I've flipped to `Status: verify-failed`:
 - If `task/review/T0n.review.md` **exists**, process it (below).
 - If it **does NOT exist**, don't stop silently. Create it deterministically —
-  `{{PW_HOME}}/tooling/pw-lib.sh review-init <slug> task/review/T0n.review.md task/T0n.md`
+  `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init <slug> task/review/T0n.review.md task/T0n.md`
   (never hand-write it; this guarantees the permanent format hints survive) — then write whatever
   feedback I gave you in chat as the `[OPEN]` item(s), and process it. If I flipped the task to
   verify-failed but gave you **no** feedback anywhere, tell me exactly that and ask what's wrong —
@@ -148,7 +148,7 @@ For each task I've flipped to `Status: verify-failed`:
 **Before applying a fix — if the doc being edited is `analysis/<topic>.md` or `task/PLAN.md`,
 check whether this fix needs to reopen that doc's own gate first** (analysis and PLAN are the two
 docs with a real hard-gate Sign-off table — `/pw-breakdown` and `/pw-execute` read them via
-`pw-lib.sh review gate`, the current/latest row only, never "was it ever approved"). This matters
+`pw-review.sh gate`, the current/latest row only, never "was it ever approved"). This matters
 even when the file you're processing ISN'T that doc's own review file — e.g. an RFC comment lives
 in `analysis/review/RFC.review.md`, but the doc it fixes is `analysis/<topic>.md`, whose OWN gate
 lives in the *separate* `analysis/review/<topic>.review.md` (derived from the doc's path per the
@@ -158,7 +158,7 @@ Sign-off, so there's nothing to reopen.
 1. Derive the doc's own canonical review file: `analysis/<topic>.md` → `analysis/review/
    <topic>.review.md`; `task/PLAN.md` → `task/review/PLAN.review.md`. (Usually this IS the file
    already being processed — the derivation only diverges for RFC.review.md's case above.)
-2. `…/{{PW_HOME}}/tooling/pw-lib.sh review gate <slug> <canonical-review>`. If it's not currently
+2. `…/{{PW_HOME}}/tooling/scripts/entities/pw-review.sh gate <slug> <canonical-review>`. If it's not currently
    `approved`, there's nothing to reopen — just apply the fix as normal.
 3. If it IS currently `approved`: compare that doc's phase (`analysis`→`analysis`,
    `task/PLAN.md`→`breakdown`) against the project's actual current phase
@@ -166,7 +166,7 @@ Sign-off, so there's nothing to reopen.
    breakdown < executing < review < done`:
    - **Same phase** (the common case — nothing has advanced past this doc yet, e.g. mid-RFC
      negotiation where `Status:` is still `analysis`) → reopen it automatically:
-     `…/{{PW_HOME}}/tooling/pw-lib.sh review reopen <slug> <canonical-review>`, then apply the fix.
+     `…/{{PW_HOME}}/tooling/scripts/entities/pw-review.sh reopen <slug> <canonical-review>`, then apply the fix.
      This is the ordinary case and needs no confirmation — a bare `/pw-review <slug>` used for its
      everyday purpose will only ever hit this branch, never the one below.
    - **Doc's phase is EARLIER than the current phase** (only reachable by explicitly naming an
@@ -194,7 +194,7 @@ For each `[OPEN]` item in the resolved files:
   round be the one that does it,
 - then flip the item + reply **deterministically** — never hand-edit the heading/reply block:
   ```bash
-  {{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh resolve <slug> <review-rel-path> <Rn> --stdin <<'EOF'
+  {{PW_HOME}}/tooling/scripts/entities/pw-review.sh resolve <slug> <review-rel-path> <Rn> --stdin <<'EOF'
   <section(s) + exactly what changed — concrete, never a bare "fixed"/"done", never a restatement of my ask>
   EOF
   ```
@@ -208,7 +208,7 @@ For each `[OPEN]` item in the resolved files:
 
 **Also process the "## Open questions" section (QnA):** for each `Qn` whose `> ↳ **you**:` line has
 an answer, fold that answer into the reviewed doc, then flip + reply deterministically:
-`{{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh resolve <slug> <review-rel-path> <Qn> --stdin` (heredoc =
+`{{PW_HOME}}/tooling/scripts/entities/pw-review.sh resolve <slug> <review-rel-path> <Qn> --stdin` (heredoc =
 your `↳ agent:` reply: what was folded in, where). It edits that SAME `### Qn · …` heading in
 place (`[PENDING]` → `[ANSWERED]` + marker — never a second heading), appends the reply right
 after my `↳ you:` line inside the same quoted block (blank quoted `>` line between), keeps the
@@ -232,17 +232,17 @@ task's `## Verify` block IS its build check. After applying the fix in that task
 only.)
 
 Never edit or delete my comment text (items OR my `↳ you:` answers). Never write the Sign-off row
-— only I clear the gate (and never run `pw-review-edit.sh signoff` on your own initiative — C4).
+— only I clear the gate (and never run `pw-review.sh signoff` on your own initiative — C4).
 Log the pass (this is the ONLY dashboard-adjacent write you make) — **one
 line per processed file**: `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> review "<n> items resolved in
 <file>"`. The `## Contents` table needs no manual refresh when you flipped headings via
-`pw-review-edit.sh resolve` (it reindexes itself) — only run
-`…/{{PW_HOME}}/tooling/pw-lib.sh review reindex <slug> <review-rel-path>` if you hand-edited a
+`pw-review.sh resolve` (it reindexes itself) — only run
+`…/{{PW_HOME}}/tooling/scripts/entities/pw-review.sh reindex <slug> <review-rel-path>` if you hand-edited a
 heading as a fallback.
 
 **Archive once several items have piled up resolved** — a concrete trigger, not a vibe: once 3+
 items/questions in this file are `[RESOLVED]`/`[ANSWERED]` since the last archive, or the file
-itself has passed ~150 lines, run `…/{{PW_HOME}}/tooling/pw-lib.sh review archive <slug>
+itself has passed ~150 lines, run `…/{{PW_HOME}}/tooling/scripts/entities/pw-review.sh archive <slug>
 <review-rel-path>`. This moves them verbatim into a sibling `<topic>.archive.md`, never touches
 `[OPEN]`/`[PENDING]` headings or the Sign-off table (see `docs/REVIEW.md`), and is what keeps a
 long-lived review file from forcing every future round to re-read its whole resolved history.
@@ -256,7 +256,7 @@ whatever `PW_MEMORY_NOTES` already documents for this tool's buckets.
 
 When done, recap each resolved item (one line, grouped by its task/file), and tell me how many
 `[OPEN]` items remain **in the resolved scope** (and, as a footnote, across the whole project:
-a final `{{PW_HOME}}/tooling/scripts/entities/pw-review-scan.sh <slug>` run — its per-file `N open` counts, not a
+a final `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh scan <slug>` run — its per-file `N open` counts, not a
 raw grep, which would also count the root `_REVIEW.template.md`'s example markers). For a task review: task fixes are
 re-verified in the worktree by the build loop above — only point me at `/pw-execute <slug> T0n`
 if a fix was left unverified (`--skip-build-check`) or hit the 3-round cap. **If a gate got auto-reopened**

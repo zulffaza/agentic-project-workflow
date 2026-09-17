@@ -1,7 +1,7 @@
 # Workflow automation scripts
 
-Side-loop helpers: RFC comments (`pw-rfc-comments.sh`), analysis context (`pw-context-fetch.sh`),
-adoption snapshots (`pw-adopt-snapshot.sh`), worktree creation (`pw-worktree-create.sh`).
+Side-loop helpers: RFC comments (`pw-rfc-comments.sh`), analysis context (`pw-context.sh fetch`),
+adoption snapshots (`pw-context.sh adopt-snapshot`), worktree creation (`pw-worktree-create.sh`).
 
 ## pw-rfc-comments.sh
 
@@ -26,61 +26,6 @@ With the `markdown` backend (nothing external to fetch):
 found` / `no Target:` → run the publish step first; `lark-cli not found` → that backend's
 dependency is missing (see `../rfc-backends.md`). After it runs, recap the new items to the user
 and remind them to work the items via `/pw-review`.
-
-## pw-context-fetch.sh
-
-First pass over the provenance table in `context/INDEX.md`: for every row, reads column 1
-("File / link" — a bare URL, a ticket key like `PAYMXMP-5702`, a filename, or a markdown link)
-and fetches the **CLI-handleable** ones — Jira (`jira issue view`), GitHub issues/PRs (`gh`),
-GitLab issues/MRs (`glab`). Local filenames and "Repos in scope" rows are skipped; rows no CLI
-can take are printed for the agent, never as errors:
-
-- Lark URLs → `Lark URL — agent handles via platform skill`
-- web URLs / unfetched non-URLs without a CLI → `(no CLI fetched this — agent handles via WebFetch
-  / platform skill)`
-
-```bash
-$PW_HOME/tooling/scripts/entities/pw-context-fetch.sh <slug> [--ignore-errors]   # --ignore-errors mirrors
-                                                               # /pw-analyze's --ignore-fetch-errors
-```
-
-**Output:** per-row block — `Fetching: <cell> (<url>)` + the fetched content — then a final
-`Context fetch complete`. Content already in the output must not be re-fetched; the agent still
-handles every "agent handles" row (the Lark + WebFetch tail of the analysis fetch rules).
-
-**Reading failures:** exit `1` is reserved for a bare ticket key with no `jira` CLI — printed as
-`pw-context-fetch: N error(s):` with a per-row list; in `/pw-analyze` that's a STOP-and-ask.
-`--ignore-errors` downgrades it to `NOT fetched … treat with reduced confidence`. Missing
-`context/INDEX.md` is exit 2 (wrong slug / not scaffolded).
-
-**When to use:** step zero of analysis, before any agent reads `context/`.
-
-## pw-adopt-snapshot.sh
-
-For `/pw-adopt` on a repo that already has in-flight branches: snapshots the git state and
-resolves the base branch (explicit MR target → forge lookup via `gh`/`glab` → repo default).
-
-```bash
-$PW_HOME/tooling/scripts/entities/pw-adopt-snapshot.sh <slug> <repo> <branch> [mr-url]
-```
-
-**Output** — flat `key: value`:
-
-```
-repo: api-service
-branch: feat/retry-queue
-base: main (mr-target)
-mr-url: https://gitlab.example.com/group/api-service/-/merge_requests/42
-commits: 7
-files-changed: 12
-```
-
-`base:` parenthesizes **how** it was resolved (`mr-target` / `default`) — pass the `mr-url`
-whenever you have one, so the base is the real MR target, not guesswork. Zero-commit / zero-file
-snapshots are legitimate (branch just created); it's data for the adopt agent, not a green light.
-
-**Reading failures:** exit 2 + `repo not found` / `branch not found` / `cannot determine base
-branch` — fix the argument (repo dir name, branch name), or fetch, or pass the MR URL.
 
 ## pw-worktree-create.sh
 

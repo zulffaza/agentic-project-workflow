@@ -6,7 +6,7 @@ Human feedback on any doc lives in a review file under a **`review/` subdir** be
 `task/T0n.md`→`task/review/T0n.review.md` (from `agentic-project-workflow/template/_REVIEW.template.md`).
 Rules you MUST follow:
 
-- **Orient with the scan script first:** `{{PW_HOME}}/tooling/scripts/entities/pw-review-scan.sh <slug>
+- **Orient with the scan script first:** `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh scan <slug>
   [--phase <phase>]` prints one line per review file — open/resolved/pending counts + last
   sign-off state — so you go straight to the files with live `[OPEN]` items instead of
   grep-walking `review/` (same scan `/pw-review` pre-flight and `pw-status.sh` use).
@@ -23,8 +23,8 @@ Rules you MUST follow:
   files exist whenever the human wants to send *any* feedback on a task — either **before**
   execution (critiquing the planned steps) or **after** (rejecting a result). If a task is flipped
   to `verify-failed` but has **no** review file, create it deterministically (`pw-lib.sh
-  review-init`, or `pw-review-edit.sh init-all <slug>` for every missing review file at once),
-  write the human's chat feedback as items via `pw-review-edit.sh add-item`, then apply it —
+  review-init`, or `pw-review.sh init-all <slug>` for every missing review file at once),
+  write the human's chat feedback as items via `pw-review.sh add-item`, then apply it —
   don't silently do nothing (a frequent confusion). If there's no feedback anywhere, ask.
 - Before editing any doc, read its `.review.md` first — but only the item's own block + the
   section(s) it names (via the file's own `## Contents` table, refreshed with `pw-lib.sh review
@@ -35,7 +35,7 @@ Rules you MUST follow:
   of that item's edits in one coherent pass, then run consistency checks once — one combined
   `grep -rnE 'pat1|pat2|pat3'` pass, not N serial single-pattern greps.
 - Apply each `[OPEN]` item, append a `↳ agent:` reply, flip it to `[RESOLVED]` — deterministically
-  via `pw-review-edit.sh resolve <slug> <review-rel-path> <Rn> --reply <what changed>` (flips the
+  via `pw-review.sh resolve <slug> <review-rel-path> <Rn> --reply <what changed>` (flips the
   SAME heading's tag + marker together, appends the styled reply, reindexes; never a second
   heading). **Never edit or delete the human's comment text** — it's the source of truth for what
   was asked (resolve is append-or-flip only, mutation-tested).
@@ -51,10 +51,10 @@ Rules you MUST follow:
   the section + what changed), never a bare "fixed"/"done". No diff expected; the summary is it.
 - After a review pass, **recap the resolved items back in chat** (one line each) so the human
   sees the changes without opening the file.
-- Refresh the `## Contents` table after resolving anything (`pw-lib.sh review reindex <slug>
-  <review-rel-path>`) — a heading's status just changed. (`pw-review-edit.sh resolve/add-item/
+- Refresh the `## Contents` table after resolving anything (`pw-review.sh reindex <slug>
+  <review-rel-path>`) — a heading's status just changed. (`pw-review.sh resolve/add-item/
   add-question` reindex automatically — only hand-edits need the manual reindex.) Once 3+ items/questions are resolved
-  since the last archive, or the file's past ~150 lines, run `pw-lib.sh review archive <slug>
+  since the last archive, or the file's past ~150 lines, run `pw-review.sh archive <slug>
   <review-rel-path>` to move them verbatim into `<topic>.archive.md` — never touches `[OPEN]`/
   `[PENDING]` or the Sign-off table (provably gate-safe, see `tooling/pw-lib.sh`'s own comment).
 - **Opportunistically seed a configured memory tool** (skip silently if `PW_MEMORY=none`) when a
@@ -62,17 +62,17 @@ Rules you MUST follow:
   the §5.1 Decisions-log line) verbatim as the payload, never new authoring.
 - **Never** write the Sign-off row — only the human clears a gate (`approved`, date-time to the
   minute). The human's own deterministic path is `/pw-review <slug> signoff <path> <decision>`
-  (`pw-review-edit.sh signoff`) — **human-triggered only (C4): never invoke it on your own
-  initiative**, the agent-side path stays `pw-lib.sh review auto-signoff` (mode=auto only).
+  (`pw-review.sh signoff`) — **human-triggered only (C4): never invoke it on your own
+  initiative**, the agent-side path stays `pw-review.sh auto-signoff` (mode=auto only).
 - Rejected execution result → the human adds items to `task/review/T0n.review.md` and sets the task
   `Status: verify-failed`; re-run it in its worktree and re-verify.
 - **Open questions (QnA):** when you can't resolve something during analysis, don't guess — list
   it in the doc (`Qn`) AND seed a `Qn` row in the review file's "## Open questions" section via
-  `pw-review-edit.sh add-question <slug> <review-rel-path> --section <§anchor> --text <question>`
+  `pw-review.sh add-question <slug> <review-rel-path> --section <§anchor> --text <question>`
   (next Qn, timestamp, marker, reindex — never a hand-copied heading). The
   human answers with `↳ you:` (deterministically: `/pw-review <slug> answer <path> Qn <text>`);
   the next `/pw-review` folds the answer into the doc and flips the
-  row to [ANSWERED] (`pw-review-edit.sh resolve … Qn` — refuses unless the `↳ you:` line exists).
+  row to [ANSWERED] (`pw-review.sh resolve … Qn` — refuses unless the `↳ you:` line exists).
   Report unanswered `Qn` as blocking.
 - **MR feedback:** review comments left on the *MR itself* are handled by `/pw-ship <slug> [task-ids]
   comments` (fetch via `glab`/`gh`, fix in the worktree, reply on the thread). **Task IDs are
@@ -136,7 +136,7 @@ command, not the script). Delegate a phase's review to the `pw-reviewer` sub-age
   <timestamp>)` instead of `(you, …)`. A human still writes the Sign-off row; process its items via
   the normal apply-comments flow above, no different from a human's.
 - `auto` — same filing, but if the pass leaves nothing `[OPEN]`/`[PENDING]`, `pw-reviewer` may call
-  `pw-lib.sh review auto-signoff <slug> <review-rel-path> <phase>` itself — the ONE tool-enforced
+  `pw-review.sh auto-signoff <slug> <review-rel-path> <phase>` itself — the ONE tool-enforced
   exception to "only a human clears a gate", re-checked by the tool, not taken on trust.
 `pw-reviewer` is spawned **fresh** (no shared context with whoever produced the artifact) and gets
 handed only the artifact + review file + phase + `REVIEWER-NOTES.md` — never this session's own

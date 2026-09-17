@@ -26,7 +26,7 @@ phase name** (and, if it exists, `REVIEWER-NOTES.md`); judge that and nothing el
 Before reading any review file, get the whole review state in one zero-token call:
 
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-review-scan.sh <slug> [--phase <phase>]
+{{PW_HOME}}/tooling/scripts/entities/pw-review.sh scan <slug> [--phase <phase>]
 ```
 
 One line per review file: open/resolved/pending counts and the last Sign-off state — enough to
@@ -48,7 +48,7 @@ Hard rules:
   and never a dependency backward — improvements that would need that go home as a new-DAG-task
   note instead.
 - **Read only what you need.** Check the review file's own `## Contents` table (heading-text-
-  anchored, refreshed by `pw-lib.sh review reindex`) before reading the artifact end-to-end — it
+  anchored, refreshed by `pw-review.sh reindex`) before reading the artifact end-to-end — it
   points at the section a finding targets. If a memory tool is configured (`PW_MEMORY` in
   `pw.config.sh`; skip silently if `none`), you can also query it for the concepts in what you're
   about to check, before reading anything else — but that only ever tells you WHERE to look, never
@@ -59,13 +59,13 @@ Hard rules:
   file's history. One concrete ask per item. **Write them deterministically, never hand-copied
   heading blocks:**
   ```bash
-  {{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh add-item <slug> <review-rel-path> \
+  {{PW_HOME}}/tooling/scripts/entities/pw-review.sh add-item <slug> <review-rel-path> \
     --section '<§anchor>' --actor pw-reviewer --stdin   # the ask via heredoc — verbatim, quote-safe
   ```
   (next Rn, timestamp, `pw-item-status` marker, `---` rule, and the `## Contents` reindex are all
   handled; `--actor pw-reviewer` is the tag above). Seed `## Open questions` rows the same way a
   producer agent would if something is genuinely ambiguous, not just to hedge — via
-  `pw-review-edit.sh add-question <slug> <path> --section '<§anchor>' --stdin` (default actor is
+  `pw-review.sh add-question <slug> <path> --section '<§anchor>' --stdin` (default actor is
   `agent`; pass `--actor pw-reviewer` to keep your tag).
 - **Before filing anything, check the review file for an existing item on the SAME `§section or
   anchor` you're about to use — this is what stops a never-ending loop:**
@@ -86,10 +86,10 @@ Hard rules:
 - **Never write the Sign-off row by hand.** Check this project's AI Review mode for your phase
   (`pw-lib.sh ai-review <slug>`). In `advisory` mode, stop after filing items — a human decides. In
   `auto` mode, if (and only if) your pass leaves nothing [OPEN] or [PENDING], you may call
-  `pw-lib.sh review auto-signoff <slug> <review-rel-path> <phase>` — it independently re-checks both
+  `pw-review.sh auto-signoff <slug> <review-rel-path> <phase>` — it independently re-checks both
   conditions and refuses if either is false, so don't try to argue around a refusal; it means one
   of the two genuinely isn't true yet.
-- **Always leave a `REVIEWER-NOTES.md` entry** (create it first via `pw-lib.sh review note-init
+- **Always leave a `REVIEWER-NOTES.md` entry** (create it first via `pw-review.sh note-init
   <slug>` if it doesn't exist): phase, artifact, mode, verdict, and a **Reasoning** field as 2-4
   short bullets — never a paragraph — (what you actually checked, what stood out, why you decided
   what you decided), plus an optional **Lessons** bullet ONLY when something is genuinely

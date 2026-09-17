@@ -33,18 +33,18 @@ fresh is that it doesn't.
 ## The review-file schema (recap — full template: `template/_REVIEW.template.md`)
 
 **With bundle access, write items/questions deterministically — never hand-copy heading blocks**
-(`pw-review-edit.sh` writes the heading, timestamp, `pw-item-status` marker, `---` rule, and
+(`pw-review.sh` writes the heading, timestamp, `pw-item-status` marker, `---` rule, and
 reindexes `## Contents` for you; ids stay monotonic even across archives):
 
 ```sh
 # one concrete ask per item; --actor pw-reviewer is what keeps your items visually distinct
-tooling/scripts/entities/pw-review-edit.sh add-item <slug> <review-rel-path> \
+tooling/scripts/entities/pw-review.sh add-item <slug> <review-rel-path> \
   --section '<§section or anchor>' --actor pw-reviewer --stdin <<'EOF'
 <your ask — verbatim, quote-safe, multi-line ok>
 EOF
 
 # a genuinely ambiguous, judgment-blocking question (not a hedge on a real finding):
-tooling/scripts/entities/pw-review-edit.sh add-question <slug> <review-rel-path> \
+tooling/scripts/entities/pw-review.sh add-question <slug> <review-rel-path> \
   --section '<§section>' --actor pw-reviewer --stdin <<'EOF'
 <the question>
 EOF
@@ -53,12 +53,12 @@ EOF
 - `## Items`: each item is `### Rn · <§anchor> — [OPEN] (pw-reviewer, <YYYY-MM-DD HH:MM>)` + the
   ask. **Use `--actor pw-reviewer`, never the default `you`** — a human's items and yours must
   stay visually distinguishable in the file's history.
-- `## Sign-off`: **never write this by hand, and never via `pw-review-edit.sh signoff`** — that
+- `## Sign-off`: **never write this by hand, and never via `pw-review.sh signoff`** — that
   operator is human-triggered only (C4). Your one path is the guarded `auto-signoff` call below.
 - Never edit or delete existing item/question text (human- or agent-authored) — you only ever
   *add* new items/questions, or (if you're the one applying fixes elsewhere in the pipeline —
   that's a different role, `/pw-review`'s apply flow, not this skill) reply and flip status via
-  `pw-review-edit.sh resolve <slug> <path> <Rn|Qn> --stdin` (flips the SAME heading's tag +
+  `pw-review.sh resolve <slug> <path> <Rn|Qn> --stdin` (flips the SAME heading's tag +
   marker together, appends the styled `↳ agent:` reply, reindexes; on a `Qn` it refuses unless
   the human's `↳ you:` line already exists).
 
@@ -70,12 +70,12 @@ marker — tooling keys off it, not the tag text.
 
 ## Read only what you need — never the whole file to find one section
 
-With bundle access, orient first via the script — `tooling/scripts/entities/pw-review-scan.sh <slug>
+With bundle access, orient first via the script — `tooling/scripts/entities/pw-review.sh scan <slug>
 [--phase <phase>]` prints open/resolved/pending counts + last sign-off state per review file, so
 you target the files worth reading at all (a standalone agent without the bundle greps
 `[OPEN]`/`[PENDING]` instead). Then, before reading the artifact end-to-end, check the review
 file's own `## Contents` table
-(heading-text-anchored, 🤖-owned, refreshed by `pw-lib.sh review reindex`) for the section your
+(heading-text-anchored, 🤖-owned, refreshed by `pw-review.sh reindex`) for the section your
 finding targets. **IF a memory tool is configured** (`PW_MEMORY` in `pw.config.sh` — skip this
 silently if `none`), you can also query it for the concepts in what you're about to flag, BEFORE
 reading anything else — but treat any result strictly as a location pointer, never as content;
@@ -122,7 +122,7 @@ tooling/pw-lib.sh ai-review <slug> <phase> <mode>      # off | advisory | auto
 - **`auto`**: same filing step, but if — and only if — your pass leaves **zero** [OPEN] items and
   **zero** [PENDING] questions, you may call:
   ```sh
-  tooling/pw-lib.sh review auto-signoff <slug> <review-rel-path> <phase>
+  tooling/scripts/entities/pw-review.sh auto-signoff <slug> <review-rel-path> <phase>
   ```
   This is the ONLY way a gate advances without a human touching it, and the tool independently
   re-checks both conditions (genuinely `auto` mode + genuinely nothing open) — it isn't taking your
@@ -141,7 +141,7 @@ The `.review.md` is the actionable record (items, gate). `REVIEWER-NOTES.md` (pr
 narrative one — what you checked and why you decided what you decided. Always leave an entry:
 
 ```sh
-tooling/pw-lib.sh review note-init <slug>   # idempotent — creates the file with its header if missing
+tooling/scripts/entities/pw-review.sh note-init <slug>   # idempotent — creates the file with its header if missing
 ```
 
 Then append your own dated section directly (free-form prose doesn't fit a CLI-args shape). Keep

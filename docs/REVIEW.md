@@ -35,7 +35,7 @@ in a **`review/` subdir** beside it, which is the durable record of what you ask
 (The `review/` subdir keeps reviews from cluttering the result docs — `task/` can hold a dozen
 `T0n.md` files, so their reviews live under `task/review/`.) **You don't create these yourself** —
 `/pw-analyze` and `/pw-breakdown` auto-create `analysis/review/<topic>.review.md` and
-`task/review/PLAN.review.md` (idempotently, via `pw-lib.sh review-init`, from
+`task/review/PLAN.review.md` (idempotently, from
 [`_REVIEW.template.md`](../template/_REVIEW.template.md)) as their last step, already in-review and
 empty. Missed one (a task doc whose review file was never created)? **`/pw-review <slug>
 init-all`** is the catch-up: it creates every missing review file in the project — each analysis
@@ -91,7 +91,7 @@ does **not** require you to set any status; you just leave it `[OPEN]` and run `
 - **Task review is optional, and created on demand.** Only the PLAN sign-off gates execution. To
   reject an **execution** result, flip that task's `Status: verify-failed` and either add items to
   `task/review/T0n.review.md` **or** just tell the agent what's wrong — `/pw-review <slug> T0n`
-  creates the review file (via `pw-lib.sh review-init`, same as above) if it doesn't exist, applies
+  creates the review file (same as above) if it doesn't exist, applies
   the fix, then `/pw-execute <slug> T0n` re-runs just that task and re-verifies.
 
 List everything still needing work across a project:
@@ -105,14 +105,14 @@ rationale) — review files are the transient back-and-forth that empties out as
 **A review file doesn't grow forever.** Two tools keep a long-lived one (many rounds, dozens of
 items) cheap to work with instead of turning every future round into "re-read the whole resolved
 history to apply one new item":
-- `pw-lib.sh review reindex <slug> <review-rel-path>` (re)builds the `## Contents` table at the
+- **reindex** (re)builds the `## Contents` table at the
   top — ID, section/anchor, status — for every real item/question, so applying one means jumping
   straight to it instead of scanning start-to-finish. Anchored by heading TEXT, never a line
   number, so it never goes stale on a rewrite; safe to re-run any time.
-- `pw-lib.sh review archive <slug> <review-rel-path>` moves every fully `[RESOLVED]`/`[ANSWERED]`
+- **archive** moves every fully `[RESOLVED]`/`[ANSWERED]`
   heading, verbatim, into a sibling `<topic>.archive.md` — leaving a one-line pointer row in a
   `## Archived items` table. It **never** touches `[OPEN]`/`[PENDING]` headings or the `##
-  Sign-off` table, since the gate logic (`review gate`/`review reopen`/`review auto-signoff`) only
+  Sign-off` table, since the gate logic (gate read / reopen / auto-signoff) only
   ever reads those two things — archiving is provably gate-safe. Run it once several items have
   piled up resolved (a few, or the file getting long) rather than waiting for it to feel unwieldy.
 
@@ -259,7 +259,7 @@ yourself, if you want it run somewhere with zero shared context at all).
 **On `auto`'s self-approval** — this is the one place this feature changes an existing invariant
 ("only a human clears a gate"), so it's deliberately the most auditable part: the Sign-off row
 always reads `pw-reviewer (auto)` in the "By" column, never blended with a human "you" row, and the
-underlying tool (`pw-lib.sh review auto-signoff`) refuses outright unless the project's mode for
+underlying tool (the auto-signoff step) refuses outright unless the project's mode for
 that phase is genuinely `auto` **and** the file has no real open item/question left — it doesn't
 take the reviewer's word for either. ("Real" means a *filled* heading: the template's never-used
 R1/Q1 stubs — recognized by their live `<YYYY-MM-DD>`/`<§section>` placeholder text — are copies to
@@ -267,8 +267,8 @@ fill, not items, so a clean pass over an untouched stub section auto-signs; a fi
 `[PENDING]` heading or a stale `pw-item-status: open` marker does not.)
 
 **How open counts are computed.** Every display surface (`pw-status`'s unresolved section,
-`pw-review-scan`, `pw-doc-lint review`) reads the same machine predicate as the gates —
-`pw-lib.sh review count <slug> <rel>` → `open=N resolved=M items=K`. Never grep a review file
+the review scan, the review lint) reads the same machine predicate as the gates —
+the count read → `open=N resolved=M items=K`. Never grep a review file
 raw for `pw-item-status`: the template's guidance line and worked examples contain the marker
 *text* as prose and will phantom-count (see KNOWN-ISSUES.md).
 

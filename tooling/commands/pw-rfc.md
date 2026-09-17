@@ -154,10 +154,10 @@ target question it doesn't need yet.
    - **Resolved on the platform, already tracked as resolved** — nothing to do, already noted.
    - **Unresolved, not tracked yet** — a genuinely new thread: create
      `analysis/review/RFC.review.md` if it doesn't exist yet
-     (`{{PW_HOME}}/tooling/pw-lib.sh review-init <slug> analysis/review/RFC.review.md
+     (`{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init <slug> analysis/review/RFC.review.md
      analysis/<topic>.md`), then append a **new** item — quote the comment, name the author, link
      the thread, note the canonical section it's anchored to. Write the item deterministically
-     via `{{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh add-item <slug> analysis/review/RFC.review.md
+     via `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh add-item <slug> analysis/review/RFC.review.md
      --section <anchor> --actor pw-reviewer --stdin` (heredoc = the quoted comment + author +
      thread link) — never a hand-copied heading block.
    - **Unresolved, tracked, and its current reply count is HIGHER than what's recorded** — new

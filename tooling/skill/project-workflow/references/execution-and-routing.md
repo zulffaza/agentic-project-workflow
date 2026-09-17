@@ -7,7 +7,7 @@
 `pw-doc-lint.sh task <slug> --all` (each `|| exit 1`). `/pw-execute` runs these itself — when you
 reach execution WITHOUT the command (direct orchestrator spawn, skill-only session), run the same
 three; a nonzero exit is a hard stop: relay its stderr line, don't reason onward. (These, plus
-`pw-worktree-create.sh` / `pw-review-scan.sh` / `pw-status.sh` below, are what keep the
+`pw-worktree-create.sh` / `pw-review.sh scan` / `pw-status.sh` below, are what keep the
 scriptless legacy path from diverging — `tooling/docs/scripts/README.md`.)
 
 **Before routing, skim `REVIEWER-NOTES.md` if it exists** (project root) — anything a past

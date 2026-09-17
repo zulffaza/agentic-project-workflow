@@ -72,7 +72,7 @@ is normative.
   (`tooling/tests/expectations/toolchain.ok`).
 - **L4 — naming.** Entity entry point = `pw-<entity>.sh` (or `pw-<entity>-<facet>.sh` per S1b),
   noun-of-the-entity; library = `pw-<name>lib.sh`; verb-only or micro-purpose names
-  (`pw-adopt-snapshot.sh` ✗) are invalid. Toolchain keeps its historical names.
+  (`pw-context.sh adopt-snapshot` ✗) are invalid. Toolchain keeps its historical names.
 - **L5 — reference form.** `$PW_HOME/tooling/scripts/entities/<name>.sh` (shell) /
   `{{PW_HOME}}/tooling/scripts/entities/<name>.sh` (prompt files); toolchain refs
   `$PW_HOME/tooling/scripts/toolchain/<name>.sh`; intra-bundle sourcing uses

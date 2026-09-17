@@ -134,7 +134,7 @@ echo "## Unresolved review items"
 OPEN_ITEMS=""
 for rf in "$D"/analysis/review/*.review.md "$D"/task/review/*.review.md; do
   [ -f "$rf" ] || continue
-  _c="$("$HERE/../../pw-lib.sh" review count "$SLUG" "${rf#$D/}" 2>/dev/null || true)"
+  _c="$("$HERE/pw-review.sh" count "$SLUG" "${rf#$D/}" 2>/dev/null || true)"
   _n="$(printf '%s' "$_c" | sed -n 's/open=\([0-9]*\).*/\1/p')"; _n="${_n:-0}"
   [ "$_n" -gt 0 ] && OPEN_ITEMS="$OPEN_ITEMS${rf#$D/}|$_n
 "

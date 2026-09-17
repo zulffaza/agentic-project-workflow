@@ -4,7 +4,7 @@
 # (plan 17, S5 of tooling/docs/conventions.md). No CLI, no dispatch, no project
 # resolution — every function takes explicit file paths and is safe to source
 # from any pw-* script. Extracted VERBATIM from pw-lib.sh (behavior-identical,
-# harness-proven) so pw-review-edit.sh / pw-context.sh reuse the exact detectors
+# harness-proven) so pw-review.sh / pw-context.sh reuse the exact detectors
 # the gates trust instead of forking near-copies.
 #
 # Functions (review-file detectors — the ONE source of truth, see docs/REVIEW.md):
@@ -18,7 +18,7 @@
 #   _signoff_latest_decision <file>      current (latest-row) Decision cell text; exit 1 if none
 #   _review_items_tsv <file>             "LINE\tID\tanchor\tSTATUS" per real Rn/Qn heading
 #
-# Generic table/splice helpers (used by pw-context.sh / pw-review-edit.sh):
+# Generic table/splice helpers (used by pw-context.sh / pw-review.sh):
 #   md_table_last_row_line <file> <header-prefix>       line no. of the last "|" row of the
 #                                        first table whose header row starts with the literal
 #                                        prefix (stops at the next "## " heading; 0 = no rows)
@@ -257,4 +257,63 @@ _dashboard_update() {
   fi
   rm -f "$errfile"
   mv "$file.tmp" "$file"
+}
+
+# Ensure the context/INDEX.md provenance table has EXACTLY ONE, generic `ADOPTED.md` row —
+# inserted once on first adopt, then left alone. This replaces the old free-form agent edit that
+# re-enumerated every unit into that row's description and thus rewrote it on every /pw-adopt
+# (the "one-liner replaced each attempt" bug). The row stays generic ("see the file"); per-unit
+# detail lives in ADOPTED.md, so it never needs churning. No-ops if INDEX.md is missing.
+_index_provenance_ensure() {
+  local f="$1"
+  [ -f "$f" ] || return 0
+  grep -qE '^\|[^|]*ADOPTED\.md' "$f" && return 0     # a row already references ADOPTED.md → leave it
+  local today; today="$(date +%F)"
+  local row="| \`ADOPTED.md\` | Adoption record — all continuation units (one section per unit; see the file) | git state snapshot, gathered by /pw-adopt | $today | authoritative — live repo state |"
+  # Insert right after the FIRST table's separator (the provenance table, above "## Repos in
+  # scope"); drop that table's single empty placeholder row if present.
+  awk -v row="$row" '
+    /^## Repos in scope/ { stop=1 }
+    {
+      if (!stop && !ins && $0 ~ /^\|[-: |]+\|[[:space:]]*$/) { print; print row; ins=1; next }
+      if (!stop && ins && !dropped && $0 ~ /^\|[[:space:]]*(\|[[:space:]]*)+$/) { dropped=1; next }
+      print
+    }' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+}
+
+# Deterministically append/upsert ONE row per adoption unit into the context/INDEX.md
+# "Repos in scope" table, keyed by a hidden `<!-- pw-adopt-scope:<repo>@<branch> -->` marker.
+# Append-only per unit (new rows go at the end of that table; re-adopting the same repo@branch
+# rewrites its OWN row in place) — so adopting the Nth branch can NEVER clobber the earlier rows
+# (the bug free-form editing caused in INDEX.md, same class as the ADOPTED.md clobber). No-ops
+# safely if INDEX.md or the section is missing — adoption never hard-fails on a weird index.
+_scope_upsert() {
+  local f="$1" repo="$2" branch="$3" base="$4" mr="$5"
+  [ -f "$f" ] || return 0
+  local key="$repo@$branch" mrtxt
+  case "$mr" in
+    http*://*)               mrtxt="[MR]($mr)" ;;
+    ""|none|"none yet")      mrtxt="no MR yet — ⚠️ base unconfirmed" ;;
+    *)                       mrtxt="MR $mr" ;;
+  esac
+  local marker="<!-- pw-adopt-scope:$key -->"
+  local row="| \`$repo\` | \`origin/$base\` | continuation — adopted branch \`$branch\`, $mrtxt $marker |"
+  if grep -Fq "$marker" "$f"; then                     # unit already has a row → rewrite it in place
+    awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
+      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  else                                                 # new unit → append at the end of the table
+    awk -v row="$row" '
+      {
+        if ($0 ~ /^## Repos in scope/) insec=1
+        else if ($0 ~ /^## /) { if (insec && sep && !ins) { print row; ins=1 } insec=0 }
+        if (insec && !sep && $0 ~ /^\|[-: |]+\|[[:space:]]*$/) { print; sep=1; next }
+        if (insec && sep && !ins) {
+          if ($0 ~ /^\|/) { t=$0; gsub(/[ |]/,"",t); if (t=="") next; print; next }  # drop empty placeholder
+          print row; ins=1; print; next                                             # insert before first non-row line
+        }
+        print
+      }
+      END { if (insec && sep && !ins) print row }' \
+      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+  fi
 }

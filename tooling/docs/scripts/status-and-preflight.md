@@ -1,7 +1,7 @@
 # Status and pre-flight scripts
 
 The three scripts you call **before** anything expensive: get a picture (`pw-status.sh`), check
-the gates (`pw-preflight.sh`), and see where reviews stand (`pw-review-scan.sh`). All three are
+the gates (`pw-preflight.sh`), and see where reviews stand (`pw-review.sh scan`). All three are
 read-only — they never modify a project.
 
 ## pw-status.sh
@@ -62,33 +62,3 @@ Unknown command argument → usage line, also exit 1.
 
 **When to use:** first step of `/pw-execute`, `/pw-breakdown`, `/pw-ship`, `/pw-close`,
 `/pw-review`. Any agent invoked *without* a command re-runs the same pre-flight itself.
-
-## pw-review-scan.sh
-
-Structured summary of every review file's item counts and sign-off state.
-
-```bash
-$PW_HOME/tooling/scripts/entities/pw-review-scan.sh <slug>                  # all review files
-$PW_HOME/tooling/scripts/entities/pw-review-scan.sh <slug> --phase analysis # or: plan | task-plan | task-exec
-```
-
-**Output** — one line per review file, fields present only when non-zero:
-
-```
-analysis/topic.review.md: 2 open, 3 resolved (in-review)
-task/review/PLAN.review.md: 5 resolved (approved)
-task/review/PLAN.review.md: 5 resolved (approved)
-task/review/T03.review.md: 1 open (in-review)
-```
-
-Trailing `(approved|in-review|changes-requested)` is the **last row of the file's Sign-off
-table**. `No review files found` + exit `0` is a valid empty state (project too early for reviews).
-
-Counts come from `pw-lib.sh review count <slug> <rel>` — the single heading-level detector the
-gates use: template guidance text, worked examples inside comments, and UNFILLED `<…>` placeholder
-stubs can never inflate them (2026-09-16 fix; see plan 15 §14).
-
-**Reading failures:** exit `2` = usage error or missing project (`pw-review-scan: …` on stderr).
-
-**When to use:** instead of grepping `review/` yourself — `pw-status.sh` and `/pw-review`,
-`/pw-close` pre-flights all call it. Filter with `--phase` when you only care about one lane.

@@ -11,9 +11,9 @@ else pwtest_bad "status heal" "$(grep '\*\*Status' "$HEAL" | head -2 | tr '\n' '
 pwtest_rc 2 "backward refusing still honest: analysis ← executing without --rewind" "$L" status "$CP" analysis
 # 2) review-init idempotent (P8):
 RI=libtestri; rm -rf "$PW_PROJECTS_DIR/$RI"; cp -a "$F2" "$PW_PROJECTS_DIR/$RI"
-pwtest_rc 0 "review-init new file ok" "$L" review-init "$RI" task/review/T99.review.md task/T99.md || true
+pwtest_rc 0 "review-init new file ok" "$(pwtest_script pw-review.sh)" init "$RI" task/review/T99.review.md task/T99.md || true
 printf '\nspecial content kept\n' >> "$PW_PROJECTS_DIR/$RI/task/review/T99.review.md"
-pwtest_rc 0 "review-init rerun" "$L" review-init "$RI" task/review/T99.review.md task/T99.md
+pwtest_rc 0 "review-init rerun" "$(pwtest_script pw-review.sh)" init "$RI" task/review/T99.review.md task/T99.md
 grep -q 'special content kept' "$PW_PROJECTS_DIR/$RI/task/review/T99.review.md" \
   && pwtest_ok "review-init preserves existing" || pwtest_bad "review-init clobber" "existing content lost"
 

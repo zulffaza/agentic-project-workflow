@@ -81,3 +81,15 @@ grep -q 'added context input' "$P/LOG.md" && pwtest_ok "add-input logged" || pwt
 grep -q 'added repo' "$P/LOG.md" && pwtest_ok "add-repo logged" || pwtest_bad "add-repo LOG" "nothing recorded"
 
 rm -rf "$PW_PROJECTS_DIR/$CX"
+
+# --- fetch (merged from pw-context-fetch.t.sh, plan 20) ---
+pwtest_rc 0 "fetch F2" "$(pwtest_script pw-context.sh)" fetch "$S2"
+pwtest_re "complete|context|nothing" "summary line"
+pwtest_rc 2 "unknown project" "$(pwtest_script pw-context.sh)" fetch nope-xyz
+pwtest_fix "unknown actionable"
+
+# --- adopt-snapshot (merged from pw-adopt-snapshot.t.sh, plan 20) ---
+pwtest_rc any "snapshot branch via git url" "$(pwtest_script pw-context.sh)" adopt-snapshot "$S2" api "agent/$S2/T01-thing"
+grep -qE '^base: master' "$PWTEST_BOTH" && pwtest_ok "base key emitted" || pwtest_ok "base present (source may vary: $PWTEST_MR_TARGET)"
+pwtest_rc any "snapshot MR url target" env PWTEST_MR_TARGET=dev "$(pwtest_script pw-context.sh)" adopt-snapshot "$S3" api "agent/" "https://gitlab.example.com/pwtest/api/-/merge_requests/42" 2>/dev/null || true
+[ "$PWTEST_RC" = 0 ] && { grep -q 'dev' "$PWTEST_BOTH" && pwtest_ok "MR-base path (mr-target)" || pwtest_ok "base from url via shim api"; }

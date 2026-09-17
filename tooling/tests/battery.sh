@@ -10,7 +10,7 @@ battery_rows() {
   local s
   for s in "$S1" "$S2" "$S3"; do
     printf 'status %s\tpw-status.sh\t%s --skip-cli-check\n'        "$s" "$s"
-    printf 'review-scan %s\tpw-review-scan.sh\t%s\n'               "$s" "$s"
+    printf 'review-scan %s\tpw-review.sh\tscan %s\n'               "$s" "$s"
     printf 'lint-all %s\tpw-doc-lint.sh\tall %s\n'                 "$s" "$s"
     printf 'lint-plan %s\tpw-doc-lint.sh\tplan %s\n'               "$s" "$s"
     printf 'lint-dashboard %s\tpw-doc-lint.sh\tdashboard %s\n'     "$s" "$s"
@@ -24,7 +24,7 @@ battery_rows() {
     printf 'resolve %s\tpw-ship.sh\tresolve %s\n'               "$s" "$s"
     printf 'batch %s\tpw-ship.sh\tmr-state-batch %s\n'        "$s" "$s"
     printf 'rfc %s\tpw-rfc-comments.sh\t%s\n'                      "$s" "$s"
-    printf 'adopt %s\tpw-adopt-snapshot.sh\t%s api agent/%s/T01-thing\n' "$s" "$s" "$s"
+    printf 'adopt %s\tpw-context.sh\tadopt-snapshot %s api agent/%s/T01-thing\n' "$s" "$s" "$s"
   done
   printf 'lint-task-crlf %s\tpw-doc-lint.sh\ttask %s\n' "$S3" "$S3"          # T06 (CRLF, sentinels)
   printf 'batch-list F3\tpw-ship.sh\tmr-state-batch %s T02 T05\n' "$S3"

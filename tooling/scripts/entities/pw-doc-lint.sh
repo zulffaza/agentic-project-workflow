@@ -175,7 +175,7 @@ lint_review() {
   # (comment-blanking, heading-level, unfilled-stub-exempt) every other consumer uses, instead
   # of a fourth grep that could drift (C22). Unfilled template stubs count as neither item nor
   # marker, so a fresh review can't false-fail; a real heading with NO status vocabulary can.
-  _st="$("$HERE/../../pw-lib.sh" review count "$SLUG" "$rel_path" 2>/dev/null || true)"
+  _st="$("$HERE/pw-review.sh" count "$SLUG" "$rel_path" 2>/dev/null || true)"
   ITEMS="$(printf '%s' "$_st" | sed -n 's/.*items=\([0-9]*\).*/\1/p')"; ITEMS="${ITEMS:-0}"
   if [ "$ITEMS" -gt 0 ]; then
     _mo="$(printf '%s' "$_st" | sed -n 's/.*open=\([0-9]*\).*/\1/p')"; _mo="${_mo:-0}"

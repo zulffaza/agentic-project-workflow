@@ -22,7 +22,7 @@ one `pw-…:` stderr line + exit 1 — **STOP, relay it verbatim** (it names the
 fix; e.g. run `/pw-review` for approval). Never reason past a failed pre-flight. Output
 semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
 
-1. Read `<project>/task/PLAN.md` fully. **Gate:** `…/{{PW_HOME}}/tooling/pw-lib.sh review gate
+1. Read `<project>/task/PLAN.md` fully. **Gate:** `…/{{PW_HOME}}/tooling/scripts/entities/pw-review.sh gate
    <slug> task/review/PLAN.review.md` — this is the file's CURRENT Sign-off decision only, never
    "was it ever approved"; if it exits non-zero (missing file, `in-review`, or `changes-requested`),
    STOP and ask, quoting what it printed. Checked on **every** invocation, including a resume — a

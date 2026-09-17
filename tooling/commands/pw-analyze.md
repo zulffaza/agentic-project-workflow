@@ -16,7 +16,7 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 existing with at least one input row. Non-zero + `pw-preflight:` line = STOP and relay it (its
 `→ fix:` names the fill/research step). Then, before agent reasoning:
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-context-fetch.sh <slug> [--ignore-errors]
+{{PW_HOME}}/tooling/scripts/entities/pw-context.sh fetch <slug> [--ignore-errors]
 ```
 **Reading the fetch script:** each `Fetching:` block is already-fetched content — cite it, never
 re-fetch. Rows it can't CLI-fetch print as agent-handled (`Lark URL — agent handles via platform
@@ -145,12 +145,12 @@ decisions (options not converged, Q0 rules, the final doc) stay yours.
    breakdown can default execution to the same agent (no mid-workflow switching).
 5. **Create the review file (idempotent — do this even if you think one may already exist).**
    ```bash
-   {{PW_HOME}}/tooling/pw-lib.sh review-init <slug> analysis/review/<topic>.review.md analysis/<topic>.md
+   {{PW_HOME}}/tooling/scripts/entities/pw-review.sh init <slug> analysis/review/<topic>.review.md analysis/<topic>.md
    ```
    No-ops if it's already there (never clobbers my items/history); otherwise creates it verbatim
    from the template (in-review, empty, with its permanent format hints intact) so I don't have to
    copy it myself. (Batch catch-up for every doc in a project — analysis, PLAN, all tasks — is
-   `{{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh init-all <slug>`; my review items/answers/sign-off rows
+   `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init-all <slug>`; my review items/answers/sign-off rows
    are written deterministically via the `/pw-review <slug> item|answer|signoff` operators — never
    hand-copied template blocks.)
 6. **MANDATORY final step — do NOT skip.** Set the dashboard one-liner + Status + audit log via the

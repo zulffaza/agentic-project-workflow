@@ -663,7 +663,7 @@ cmd_comment_seen() {
   case "$replied" in yes|no) ;; *) die "replied must be 'yes' or 'no' (got '$replied')" ;; esac
   local d; d="$(proj_dir "$slug")"
   local f="$d/task/review/$task.review.md"
-  [ -f "$f" ] || die "no review file: task/review/$task.review.md (run 'pw-lib.sh review-init $slug task/review/$task.review.md task/$task.md' first)"
+  [ -f "$f" ] || die "no review file: task/review/$task.review.md (run 'pw-review.sh init $slug task/review/$task.review.md task/$task.md' first)"
   _ship_comment_section_ensure "$f"
   local marker="<!-- pw-mr-comment:$thread -->"
   local shortid="${thread:0:8}"

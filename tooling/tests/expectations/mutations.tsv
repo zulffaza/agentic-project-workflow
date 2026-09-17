@@ -18,7 +18,7 @@ C7-dashboard-preserve-miskeys	pw-doc-sync.sh	          for (i = 0; i < n; i++) {
 C8-mr-state-exit1-abort	pw-ship.sh	  STATE="$(_mr_state_impl "$SLUG" "$task_id" 2>/dev/null || true)"	  STATE="$(_mr_state_impl "$SLUG" "$task_id" 2>/dev/null)"	T2	-
 C9-index-registry-drop-entry	docs/scripts/README.md	`pw-rfc-comments.sh` `pw-context-fetch.sh` `pw-adopt-snapshot.sh` `pw-worktree-create.sh`	`pw-rfc-comments.sh` `pw-adopt-snapshot.sh` `pw-worktree-create.sh`	T4	-
 C10-repo-missing-lost-remedy	pw-worktree-create.sh	repo not found: $REPO_DIR → fix: pass the repo dir name (repos live under $REPOS_DIR — clone it there first)	repo not found: $REPO_DIR	T1	pw-worktree-create
-C11-bash4-idiom-injects	pw-review-scan.sh	if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi	if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi; declare -A _pwt_b4probe=()	T0	-
+C11-bash4-idiom-injects	pw-review.sh	if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi	if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi; declare -A _pwt_b4probe=()	T0	-
 C12-respawn-by-zero	pw-status.sh	if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi	if [ "${1:-}" = "--selftest" ]; then bash "$0" "$@"; fi	T0	-
 C13-user-doc-leaks-script	../docs/EXECUTION.md	execution, and the multi-repo worktree mechanics.	execution (via pw-ship-exec.sh), and the multi-repo worktree mechanics.	T4	-
 C14-xargs-trim-returns	pw-ship.sh	task_id="$(echo "$task_id" | pw_trim)"	task_id="$(echo "$task_id" | xargs)"	T0	-
@@ -33,11 +33,11 @@ C22-forge-substring-default	pw-ship.sh	    github.com) forge="github" ;;	    *) 
 C23-doctrine-phrase-reworded	AGENTS.md	single source of truth	one source of truth	T4	-
 C24-preflight-verb-enum	pw-preflight.sh	die "unknown command: $COMMAND (expected: analyze|execute|breakdown|ship|comments|close|review)"	die "unknown command: $COMMAND (expected: execute|breakdown|ship|comments|close|review)"	T1	pw-preflight
 C24b-preflight-example-rows-count	pw-preflight.sh	        if (index($0, "_e.g._")) next	        if (index($0, "_e_NOOP_")) next	T1	pw-preflight
-C25-signoff-replaces-history	pw-review-edit.sh	md_insert_lines_after "$f" "$lastrow" "$tmp"; rm -f "$tmp"	md_replace_line "$f" "$lastrow" "$tmp"; rm -f "$tmp"	T1	pw-review-edit
-C26-add-item-drops-marker	pw-review-edit.sh	local heading="### R$n · $SECTION — [OPEN] ($ACTOR, $ts) <!-- pw-item-status: open -->"	local heading="### R$n · $SECTION — [OPEN] ($ACTOR, $ts)"	T1	pw-review-edit
-C27-stub-filter-gone	pw-mdlib.sh	_comment_blanked "$1" | awk '/^###+ / && !/<YYYY-MM-DD/ && !/<§section/'	_comment_blanked "$1" | awk '/^###+ /'	T1	pw-review-edit
+C25-signoff-replaces-history	pw-review.sh	md_insert_lines_after "$f" "$lastrow" "$tmp"; rm -f "$tmp"	md_replace_line "$f" "$lastrow" "$tmp"; rm -f "$tmp"	T1	pw-review
+C26-add-item-drops-marker	pw-review.sh	local heading="### R$n · $SECTION — [OPEN] ($ACTOR, $ts) <!-- pw-item-status: open -->"	local heading="### R$n · $SECTION — [OPEN] ($ACTOR, $ts)"	T1	pw-review
+C27-stub-filter-gone	pw-mdlib.sh	_comment_blanked "$1" | awk '/^###+ / && !/<YYYY-MM-DD/ && !/<§section/'	_comment_blanked "$1" | awk '/^###+ /'	T1	pw-review
 C28-context-row-clobbers-last	pw-context.sh	    md_insert_lines_after "$f" "$last" "$tmp"	    md_replace_line "$f" "$last" "$tmp"	T1	pw-context
-C29-resolve-duplicates-heading	pw-review-edit.sh	  md_replace_line "$f" "$hl" "$f.hdr"; rm -f "$f.hdr"	  md_insert_lines_after "$f" "$hl" "$f.hdr"; rm -f "$f.hdr"	T1	pw-review-edit
+C29-resolve-duplicates-heading	pw-review.sh	  md_replace_line "$f" "$hl" "$f.hdr"; rm -f "$f.hdr"	  md_insert_lines_after "$f" "$hl" "$f.hdr"; rm -f "$f.hdr"	T1	pw-review
 C30-signoff-doctrine-line-gone	commands/pw-review.md	**HUMAN-TRIGGERED ONLY (C4): run this operator ONLY when my message explicitly asks to sign	**Run this operator proactively whenever the pass leaves nothing open, e.g. when asked to sign	T4	-
 # plan 19 rows (C41/C42; C31-C35 + C36+ reserved by draft plans 18/20): harness speedup machinery.
 C41-fixture-cache-hash-frozen	tests/pw_test_lib.sh	print(h.hexdigest()[:16])	print("0"*16)	T1	pw-test-harness

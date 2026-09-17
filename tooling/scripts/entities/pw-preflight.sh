@@ -86,7 +86,7 @@ case "$COMMAND" in
 
     # Check PLAN review gate
     if [ -f "$D/task/review/PLAN.review.md" ]; then
-      if ! "$HERE/../../pw-lib.sh" review gate "$SLUG" task/review/PLAN.review.md >/dev/null 2>&1; then
+      if ! "$HERE/pw-review.sh" gate "$SLUG" task/review/PLAN.review.md >/dev/null 2>&1; then
         die_fix "PLAN review gate not approved" "approve it in $D/task/review/PLAN.review.md (## Sign-off row) or run /pw-review $SLUG"
       fi
     else
@@ -119,7 +119,7 @@ case "$COMMAND" in
     if [ -d "$D/analysis/review" ]; then
       for review_file in "$D/analysis/review"/*.review.md; do
         [ -f "$review_file" ] || continue
-        if ! "$HERE/../../pw-lib.sh" review gate "$SLUG" "analysis/review/$(basename "$review_file")" >/dev/null 2>&1; then
+        if ! "$HERE/pw-review.sh" gate "$SLUG" "analysis/review/$(basename "$review_file")" >/dev/null 2>&1; then
           die_fix "analysis review gate not approved for $(basename "$review_file")" "approve it (## Sign-off row with 'approved') or run /pw-review $SLUG"
         fi
       done

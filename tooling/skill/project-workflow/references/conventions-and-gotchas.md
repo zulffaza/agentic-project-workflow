@@ -24,9 +24,9 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   backward (re-running a task is normal).
 - `pw-lib.sh oneliner <slug> "<text>"` — set the dashboard **One-liner** (the agent does this during
   `/pw-analyze`, distilled from context/).
-- `pw-lib.sh adopted <slug> "<pointer>"` — set/insert the dashboard **Adopted:** pointer (the agent
+- `pw-context.sh adopted <slug> "<pointer>"` — set/insert the dashboard **Adopted:** pointer (the agent
   does this during `/pw-adopt`; inserts the line only for continuation projects).
-- `pw-lib.sh adopt <slug> <repo> <branch> <base> [mr]` — **deterministically append/upsert one
+- `pw-context.sh adopt <slug> <repo> <branch> <base> [mr]` — **deterministically append/upsert one
   adoption unit** into `context/ADOPTED.md` (keyed by `repo@branch`; new units append at EOF,
   re-adopting the same one updates it in place). In `context/INDEX.md` it also **ensures a one-time
   generic `ADOPTED.md` provenance row** (never re-enumerated per unit) **and upserts one matching
@@ -35,20 +35,20 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   hand-edit `context/INDEX.md`'s adoption rows (free-form editing is what clobbered a 2nd/3rd
   adopted branch and re-churned the provenance line each attempt). It also bumps the `Adopted:`
   count. Resolve `<base>` from the **MR's target branch** when there's an MR.
-- `pw-lib.sh review-init <slug> <review-rel-path> <doc-rel-path>` — **idempotently create a review
+- `pw-review.sh init <slug> <review-rel-path> <doc-rel-path>` — **idempotently create a review
   file from the template** if (and only if) it doesn't exist yet. `/pw-analyze` and `/pw-breakdown`
   call this so `analysis/review/<topic>.review.md` / `task/review/PLAN.review.md` are already there
   — the human never has to copy the template themselves. Never hand-write a review file; this also
   guarantees the permanent `> **Add an item:**` / `> **Answer a question:**` format hints never get
   silently dropped. Batch catch-up for a whole project (analysis docs + PLAN + every T0n):
-  `pw-review-edit.sh init-all <slug>`.
-- `pw-review-edit.sh` — **the write side of review files** (human entry: `/pw-review <slug>
+  `pw-review.sh init-all <slug>`.
+- `pw-review.sh` — **the write side of review files** (human entry: `/pw-review <slug>
   item|answer|signoff|init-all`): `add-item` (next Rn, timestamp + `pw-item-status` marker +
   `---` + reindex, fills the template stub in place), `answer` (styled `↳ you:` line under a Qn —
   never flips status), `add-question` / `resolve` (agent-side: Qn creation; in-place tag+marker
   flip with the `↳ agent:` reply — `resolve` on a Qn refuses unless a `↳ you:` line exists),
   `signoff` (**human-triggered only, C4 — never on agent initiative**; the agent-side gate path
-  stays `pw-lib.sh review auto-signoff`). Free text via `--text <rest-of-line>` or `--stdin`
+  stays `pw-review.sh auto-signoff`). Free text via `--text <rest-of-line>` or `--stdin`
   heredoc, stored verbatim (A-rules, `tooling/docs/conventions.md`).
 - `pw-context.sh` — **deterministic context-doc writes** (human entry: `/pw-context <slug> …`):
   `req-init` (REQUIREMENTS.md from template, idempotent), `add-input` (INDEX.md inputs row —

@@ -23,7 +23,7 @@ If any exits non-zero, STOP and relay its stderr line verbatim — it names the 
 fix. Never reason around a failed pre-flight. The PLAN `approved` check below still applies even
 after these pass (preflight checks it too; belt and braces). Also useful instead of manual file
 reads: `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh <slug> --skip-cli-check` for a snapshot and
-`{{PW_HOME}}/tooling/scripts/entities/pw-review-scan.sh <slug>` for review state. Usage:
+`{{PW_HOME}}/tooling/scripts/entities/pw-review.sh scan <slug>` for review state. Usage:
 `{{PW_HOME}}/tooling/docs/scripts/README.md`.
 
 Given a project under `{{PW_PROJECTS}}/<slug>/`:

@@ -68,9 +68,9 @@ calling it on every `/pw-analyze`/`/pw-breakdown` run never clobbers a review al
 Run `pw-lib.sh selftest` after changing it.
 
 The **14 automation scripts** (`pw-status.sh`, `pw-preflight.sh`, `pw-doc-lint.sh`,
-`pw-doc-summary.sh`, `pw-doc-sync.sh`, `pw-review-scan.sh`, `pw-ship.sh resolve`,
+`pw-doc-summary.sh`, `pw-doc-sync.sh`, `pw-review.sh scan`, `pw-ship.sh resolve`,
 `pw-ship.sh exec`, `pw-ship.sh mr-state-batch`, `pw-ship.sh monitor`, `pw-rfc-comments.sh`,
-`pw-context-fetch.sh`, `pw-adopt-snapshot.sh`, `pw-worktree-create.sh`) push that idea further:
+`pw-context.sh fetch`, `pw-context.sh adopt-snapshot`, `pw-worktree-create.sh`) push that idea further:
 whole deterministic steps — gates, doc validation, status reports, ship mechanics, URL fetching —
 run as zero-token scripts instead of agent reasoning. **Commands call them as pre-flight; agents
 and skills call the same ones** so behavior is identical whichever path triggers the work (see

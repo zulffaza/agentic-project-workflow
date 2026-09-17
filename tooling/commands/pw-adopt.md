@@ -11,7 +11,7 @@ start (`/pw-new`), you build on work that's **already underway on real branches*
 an MR).
 
 **Batch form mechanics** — same rules as single-unit, just looped: run steps 1–4 below **once per
-`repo:branch[:mr-url]` group, in order** (each is its own independent `pw-lib.sh adopt` call —
+`repo:branch[:mr-url]` group, in order** (each is its own independent `pw-context.sh adopt` call —
 already safe to call repeatedly, per "Appending a unit is deterministic" below, so one group
 failing validation doesn't corrupt units already recorded before it; STOP and report which groups
 succeeded vs. the one that failed rather than rolling anything back). A trailing `review` keyword
@@ -23,7 +23,7 @@ Project dir: `{{PW_PROJECTS}}/<slug>`. Repo: `{{PW_REPOS}}/<repo>`.
 
 <!-- Pre-flight: snapshot git state before adoption -->
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-adopt-snapshot.sh <slug> <repo> <branch> [mr-url]
+{{PW_HOME}}/tooling/scripts/entities/pw-context.sh adopt-snapshot <slug> <repo> <branch> [mr-url]
 ```
 **Reading the snapshot:** flat `key: value` fields — `base:` shows *how* the base branch was
 resolved (`(mr-target)` / `(default)`; pass `[mr-url]` whenever you have one so the base is the
@@ -55,7 +55,7 @@ meaningful at two moments, chosen by *why* you're adopting — never to sit in a
 ## Adoption unit + the two rules
 An **adoption unit** is a tuple `(repo, in-progress-branch, [mr])`. A project can adopt **one or
 many** — run this command **once per in-progress branch** (multi-repo work in progress = several
-units). **Appending a unit is deterministic** (`pw-lib.sh adopt`, below), so adopting a 2nd branch
+units). **Appending a unit is deterministic** (`pw-context.sh adopt`, below), so adopting a 2nd branch
 **never clobbers the 1st** — re-adopting the same `repo@branch` just updates that unit in place.
 Two rules follow from adopting real branches:
 - **Continue-on-the-same-branch** — a task that extends an adopted unit commits onto the existing
@@ -98,7 +98,7 @@ earlier units are untouched. The result is a **mixed project** where adoption is
    `git diff --stat <base>...<existing-branch>` (files) — plus the MR state from step 2.
 4. **Record the unit deterministically — do NOT hand-write `ADOPTED.md`.** Call:
    ```bash
-   {{PW_HOME}}/tooling/pw-lib.sh adopt <slug> <repo> <existing-branch> <base> "<mr-url|none yet>"
+   {{PW_HOME}}/tooling/scripts/entities/pw-context.sh adopt <slug> <repo> <existing-branch> <base> "<mr-url|none yet>"
    ```
    This appends a new `## A<k> · <repo> @ <existing-branch>` section (or updates it in place if that
    repo@branch was already adopted), records its `Base`/`MR`, updates the dashboard `Adopted:`

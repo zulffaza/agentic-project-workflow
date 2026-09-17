@@ -1,7 +1,7 @@
 selftest: pw-lib.sh selftest	pw-lib.sh	selftest	0	-
 selftest: pw-status.sh --selftest	pw-status.sh	--selftest	0	-
 status pwt-f1-scaffold	pw-status.sh	pwt-f1-scaffold --skip-cli-check	0	-
-review-scan pwt-f1-scaffold	pw-review-scan.sh	pwt-f1-scaffold	0	-
+review-scan pwt-f1-scaffold	pw-review.sh	scan pwt-f1-scaffold	0	-
 lint-all pwt-f1-scaffold	pw-doc-lint.sh	all pwt-f1-scaffold	0	-
 lint-plan pwt-f1-scaffold	pw-doc-lint.sh	plan pwt-f1-scaffold	2	-
 lint-dashboard pwt-f1-scaffold	pw-doc-lint.sh	dashboard pwt-f1-scaffold	0	-
@@ -15,9 +15,9 @@ summary-analysis pwt-f1-scaffold	pw-doc-summary.sh	analysis pwt-f1-scaffold	2	-
 resolve pwt-f1-scaffold	pw-ship.sh	resolve pwt-f1-scaffold	2	-
 batch pwt-f1-scaffold	pw-ship.sh	mr-state-batch pwt-f1-scaffold	2	-
 rfc pwt-f1-scaffold	pw-rfc-comments.sh	pwt-f1-scaffold	2	-
-adopt pwt-f1-scaffold	pw-adopt-snapshot.sh	pwt-f1-scaffold api agent/pwt-f1-scaffold/T01-thing	2	-
+adopt pwt-f1-scaffold	pw-context.sh	adopt-snapshot pwt-f1-scaffold api agent/pwt-f1-scaffold/T01-thing	2	-
 status pwt-f2-mid	pw-status.sh	pwt-f2-mid --skip-cli-check	0	-
-review-scan pwt-f2-mid	pw-review-scan.sh	pwt-f2-mid	0	-
+review-scan pwt-f2-mid	pw-review.sh	scan pwt-f2-mid	0	-
 lint-all pwt-f2-mid	pw-doc-lint.sh	all pwt-f2-mid	0	-
 lint-plan pwt-f2-mid	pw-doc-lint.sh	plan pwt-f2-mid	0	-
 lint-dashboard pwt-f2-mid	pw-doc-lint.sh	dashboard pwt-f2-mid	0	-
@@ -31,9 +31,9 @@ summary-analysis pwt-f2-mid	pw-doc-summary.sh	analysis pwt-f2-mid	2	-
 resolve pwt-f2-mid	pw-ship.sh	resolve pwt-f2-mid	0	-
 batch pwt-f2-mid	pw-ship.sh	mr-state-batch pwt-f2-mid	0	-
 rfc pwt-f2-mid	pw-rfc-comments.sh	pwt-f2-mid	2	-
-adopt pwt-f2-mid	pw-adopt-snapshot.sh	pwt-f2-mid api agent/pwt-f2-mid/T01-thing	0	-
+adopt pwt-f2-mid	pw-context.sh	adopt-snapshot pwt-f2-mid api agent/pwt-f2-mid/T01-thing	0	-
 status pwt-f3-hostile	pw-status.sh	pwt-f3-hostile --skip-cli-check	0	-
-review-scan pwt-f3-hostile	pw-review-scan.sh	pwt-f3-hostile	0	-
+review-scan pwt-f3-hostile	pw-review.sh	scan pwt-f3-hostile	0	-
 lint-all pwt-f3-hostile	pw-doc-lint.sh	all pwt-f3-hostile	1	-
 lint-plan pwt-f3-hostile	pw-doc-lint.sh	plan pwt-f3-hostile	0	-
 lint-dashboard pwt-f3-hostile	pw-doc-lint.sh	dashboard pwt-f3-hostile	1	-
@@ -47,7 +47,7 @@ summary-analysis pwt-f3-hostile	pw-doc-summary.sh	analysis pwt-f3-hostile	2	-
 resolve pwt-f3-hostile	pw-ship.sh	resolve pwt-f3-hostile	0	-
 batch pwt-f3-hostile	pw-ship.sh	mr-state-batch pwt-f3-hostile	0	-
 rfc pwt-f3-hostile	pw-rfc-comments.sh	pwt-f3-hostile	2	-
-adopt pwt-f3-hostile	pw-adopt-snapshot.sh	pwt-f3-hostile api agent/pwt-f3-hostile/T01-thing	0	-
+adopt pwt-f3-hostile	pw-context.sh	adopt-snapshot pwt-f3-hostile api agent/pwt-f3-hostile/T01-thing	0	-
 lint-task-crlf pwt-f3-hostile	pw-doc-lint.sh	task pwt-f3-hostile	2	-
 batch-list F3	pw-ship.sh	mr-state-batch pwt-f3-hostile T02 T05	0	-
 unknown-project	pw-status.sh	nope-not-here	2	-
@@ -55,7 +55,7 @@ unknown-arg	pw-doc-lint.sh	bogus-mode pwt-f2-mid	2	-
 selftest: pw-lib.sh selftest	pw-lib.sh	selftest	0	-
 selftest: pw-status.sh --selftest	pw-status.sh	--selftest	0	-
 status pwt-f1-scaffold	pw-status.sh	pwt-f1-scaffold --skip-cli-check	0	-
-review-scan pwt-f1-scaffold	pw-review-scan.sh	pwt-f1-scaffold	0	-
+review-scan pwt-f1-scaffold	pw-review.sh	scan pwt-f1-scaffold	0	-
 lint-all pwt-f1-scaffold	pw-doc-lint.sh	all pwt-f1-scaffold	0	-
 lint-plan pwt-f1-scaffold	pw-doc-lint.sh	plan pwt-f1-scaffold	2	-
 lint-dashboard pwt-f1-scaffold	pw-doc-lint.sh	dashboard pwt-f1-scaffold	0	-
@@ -69,9 +69,9 @@ summary-analysis pwt-f1-scaffold	pw-doc-summary.sh	analysis pwt-f1-scaffold	2	-
 resolve pwt-f1-scaffold	pw-ship.sh	resolve pwt-f1-scaffold	2	-
 batch pwt-f1-scaffold	pw-ship.sh	mr-state-batch pwt-f1-scaffold	2	-
 rfc pwt-f1-scaffold	pw-rfc-comments.sh	pwt-f1-scaffold	2	-
-adopt pwt-f1-scaffold	pw-adopt-snapshot.sh	pwt-f1-scaffold api agent/pwt-f1-scaffold/T01-thing	2	-
+adopt pwt-f1-scaffold	pw-context.sh	adopt-snapshot pwt-f1-scaffold api agent/pwt-f1-scaffold/T01-thing	2	-
 status pwt-f2-mid	pw-status.sh	pwt-f2-mid --skip-cli-check	0	-
-review-scan pwt-f2-mid	pw-review-scan.sh	pwt-f2-mid	0	-
+review-scan pwt-f2-mid	pw-review.sh	scan pwt-f2-mid	0	-
 lint-all pwt-f2-mid	pw-doc-lint.sh	all pwt-f2-mid	0	-
 lint-plan pwt-f2-mid	pw-doc-lint.sh	plan pwt-f2-mid	0	-
 lint-dashboard pwt-f2-mid	pw-doc-lint.sh	dashboard pwt-f2-mid	0	-
@@ -85,9 +85,9 @@ summary-analysis pwt-f2-mid	pw-doc-summary.sh	analysis pwt-f2-mid	2	-
 resolve pwt-f2-mid	pw-ship.sh	resolve pwt-f2-mid	0	-
 batch pwt-f2-mid	pw-ship.sh	mr-state-batch pwt-f2-mid	0	-
 rfc pwt-f2-mid	pw-rfc-comments.sh	pwt-f2-mid	2	-
-adopt pwt-f2-mid	pw-adopt-snapshot.sh	pwt-f2-mid api agent/pwt-f2-mid/T01-thing	0	-
+adopt pwt-f2-mid	pw-context.sh	adopt-snapshot pwt-f2-mid api agent/pwt-f2-mid/T01-thing	0	-
 status pwt-f3-hostile	pw-status.sh	pwt-f3-hostile --skip-cli-check	0	-
-review-scan pwt-f3-hostile	pw-review-scan.sh	pwt-f3-hostile	0	-
+review-scan pwt-f3-hostile	pw-review.sh	scan pwt-f3-hostile	0	-
 lint-all pwt-f3-hostile	pw-doc-lint.sh	all pwt-f3-hostile	1	-
 lint-plan pwt-f3-hostile	pw-doc-lint.sh	plan pwt-f3-hostile	0	-
 lint-dashboard pwt-f3-hostile	pw-doc-lint.sh	dashboard pwt-f3-hostile	1	-
@@ -101,8 +101,9 @@ summary-analysis pwt-f3-hostile	pw-doc-summary.sh	analysis pwt-f3-hostile	2	-
 resolve pwt-f3-hostile	pw-ship.sh	resolve pwt-f3-hostile	0	-
 batch pwt-f3-hostile	pw-ship.sh	mr-state-batch pwt-f3-hostile	0	-
 rfc pwt-f3-hostile	pw-rfc-comments.sh	pwt-f3-hostile	2	-
-adopt pwt-f3-hostile	pw-adopt-snapshot.sh	pwt-f3-hostile api agent/pwt-f3-hostile/T01-thing	0	-
+adopt pwt-f3-hostile	pw-context.sh	adopt-snapshot pwt-f3-hostile api agent/pwt-f3-hostile/T01-thing	0	-
 lint-task-crlf pwt-f3-hostile	pw-doc-lint.sh	task pwt-f3-hostile	2	-
 batch-list F3	pw-ship.sh	mr-state-batch pwt-f3-hostile T02 T05	0	-
 unknown-project	pw-status.sh	nope-not-here	2	-
 unknown-arg	pw-doc-lint.sh	bogus-mode pwt-f2-mid	2	-
+

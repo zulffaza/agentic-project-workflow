@@ -115,7 +115,7 @@ one's big enough that another team's lead wants visibility before you break it i
    `/pw-breakdown` keeps correctly refusing throughout — it never quietly becomes runnable
    mid-negotiation. **This holds even in the window before you've folded a fresh comment in at
    all**: the moment step 4 pulls it, it sits as a [OPEN] item in `RFC.review.md`, and
-   `/pw-breakdown` checks that file directly (`pw-lib.sh review has-open`) — so it refuses outright
+   `/pw-breakdown` checks that file directly (its open-items check) — so it refuses outright
    even if the analysis Sign-off hasn't been touched yet (e.g. it was approved *before* this comment
    ever arrived). You must fold the comment in (step 5) or resolve it in the review file yourself
    before breakdown will run.
@@ -146,7 +146,7 @@ clear:
 - **The Sign-off's current row must read `approved`** — step 5's auto-reopen keeps this honest
   for anything that's already been *folded in*: a fix landing after an earlier approval flips this
   row back to `in-review` automatically.
-- **`analysis/review/RFC.review.md` must have zero open items** (`pw-lib.sh review has-open`) — this
+- **`analysis/review/RFC.review.md` must have zero open items** (checked by `/pw-breakdown`'s gate) — this
   catches the *other* half: a comment that's been pulled (step 4) but not yet folded in at all
   (still sitting between steps 4 and 5) leaves the Sign-off table completely untouched, so the
   auto-reopen alone can't see it. Without this second check, an analysis approved *before* a late

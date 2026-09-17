@@ -3,7 +3,7 @@
 # Every forbidden pattern here encodes a bug that actually shipped once (plan 16 §5).
 
 # the automation-script registry (single list; T0/T1/T2/mutation reuse it)
-PWTEST_AUTOMATION="pw-status.sh pw-preflight.sh pw-review-scan.sh pw-doc-lint.sh pw-doc-summary.sh pw-doc-sync.sh pw-ship.sh pw-rfc-comments.sh pw-context-fetch.sh pw-adopt-snapshot.sh pw-worktree-create.sh pw-review-edit.sh pw-context.sh"
+PWTEST_AUTOMATION="pw-status.sh pw-preflight.sh pw-doc-lint.sh pw-doc-summary.sh pw-doc-sync.sh pw-ship.sh pw-review.sh pw-rfc-comments.sh pw-worktree-create.sh pw-context.sh"
 export PWTEST_AUTOMATION
 
 _pwtest_code_lines() { awk '!/^[[:space:]]*#/' "$@" 2>/dev/null | cat -n; }
@@ -113,7 +113,7 @@ static_t4() {
     && pwtest_ok "T4 canary: signoff C4 doctrine line in pw-review.md" \
     || pwtest_bad "T4 canary: signoff C4 doctrine line" "pw-review.md lost the 'HUMAN-TRIGGERED ONLY' label on the signoff operator — the gate doctrine's only command-side guard"
   # (b) …and NO agent file may ever invoke it (anti-idiom: agent-side path is auto-signoff only)
-  hits="$(grep -lE 'pw-review-edit\.sh signoff|review-edit\.sh.*signoff' "$TOOL"/agents/*.md 2>/dev/null | tr '\n' ' ')"
+  hits="$(grep -lE 'pw-review\.sh signoff|pw-review-edit\.sh' "$TOOL"/agents/*.md 2>/dev/null | tr '\n' ' ')"
   [ -z "$hits" ] && pwtest_ok "T4 canary: no agent file invokes signoff" \
     || pwtest_bad "T4 canary: no agent file invokes signoff" "C4 violation in: $hits — only a human triggers a gate decision (agent path: pw-lib.sh review auto-signoff)"
   # (c) capability-placement conventions doc exists, is linked from the maintainer entry, and freezes pw-lib
@@ -122,7 +122,7 @@ static_t4() {
     && pwtest_ok "T4 canary: conventions.md exists + linked + pw-lib S2 freeze note" \
     || pwtest_bad "T4 canary: conventions doc" "tooling/docs/conventions.md missing, or its tooling/AGENTS.md link died, or pw-lib.sh lost the S2 FROZEN header note"
   # (d) the new entity scripts keep their group-doc section (usage reference completeness)
-  grep -qF 'pw-review-edit.sh' "$TOOL/docs/scripts/review-and-context-editing.md" \
+  grep -qF 'pw-review.sh' "$TOOL/docs/scripts/review-and-context-editing.md" \
     && grep -qF 'pw-context.sh' "$TOOL/docs/scripts/review-and-context-editing.md" \
     && pwtest_ok "T4 canary: review-and-context-editing group doc covers both scripts" \
     || pwtest_bad "T4 canary: group doc coverage" "docs/scripts/review-and-context-editing.md lost a script section — no doc-less capability ships"
