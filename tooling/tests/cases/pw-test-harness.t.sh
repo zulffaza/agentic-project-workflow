@@ -60,3 +60,22 @@ if [ -d "$PW_PROJECTS_DIR/pwt-f1-scaffold" ] && [ -d "$PW_PROJECTS_DIR/pwt-f2-mi
 else
   pwtest_skip "cache store/restore" "this run built no fixtures (lazy) — covered by the full harness"
 fi
+
+# f) parallel sweep (F5): two file-groups on two workers, run on disposable copies — both
+#    rows caught, live tree never mutated. Gated on a warm cache (else the nested warm
+#    build would cost ~48 s in every standalone run) and depth-1 (no recursion).
+if [ -n "${PWTEST_FIXTURE_CACHE:-}" ] && [ -z "${PWTEST_MUT_NESTED:-}" ]; then
+  _np="$PWTEST_ROOT/mut-nested"; mkdir -p "$_np"
+  PWTEST_MUT_NESTED=1 PWTEST_MUT_JOBS=2 bash "$PWTEST_TESTSDIR/pw_test.sh" --mutation 'C10-|C12-' </dev/null >"$_np/out.log" 2>&1
+  _nrc=$?
+  [ "$_nrc" = 0 ] && grep -q '2 mutations, 2 caught, 0 hung' "$_np/out.log" \
+    && pwtest_ok "parallel mini-sweep (2 workers) catches both rows" \
+    || pwtest_bad "parallel mini-sweep (2 workers) catches both rows" "rc=$_nrc: $(grep -E 'mutate:|FAIL' "$_np/out.log" | head -1)"
+  if [ -d "$PW_HOME/.git" ]; then
+    git -C "$PW_HOME" diff --quiet -- tooling/pw-worktree-create.sh tooling/pw-status.sh \
+      && pwtest_ok "live tree untouched by parallel workers" \
+      || pwtest_bad "live tree untouched by parallel workers" "worker mutated the live tree"
+  else
+    pwtest_skip "live tree untouched" "running from a bundle copy (no .git) — copies are disposable by construction"
+  fi
+fi
