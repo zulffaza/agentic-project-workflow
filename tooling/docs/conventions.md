@@ -1,35 +1,82 @@
-# Capability-placement conventions (scripts, commands, arguments)
+# Capability-placement conventions (scripts, layout, commands, arguments)
 
 **Audience:** maintainers (human or agent) adding capability to this bundle. Read this BEFORE
-creating a script, a slash command, or an operator — it answers "where does this go?" so
-`pw-lib.sh` (2204 lines at the time of writing) never happens again and the tooling dir never
-floods with single-purpose micro-scripts.
+creating a script, a slash command, or an operator — it answers "where does this go?" twice over:
+which **script** (S-rules), which **directory** (L-rules), which **command** (C-rules), and how
+arguments are **shaped** (A-rules). The lesson it encodes: `pw-lib.sh` grew to 2095 lines because
+placement was never defined; it is now dissolved (see S2) and the layout under `tooling/scripts/`
+is normative.
 
 ## S-rules — where script capability lives
 
 - **S1 — one script per entity.** The entity is the noun the operations act on: review-doc
-  (`pw-review-edit.sh`), context-doc (`pw-context.sh`), ship (`pw-ship-*.sh`), status
-  (`pw-status.sh`), doc validation (`pw-doc-*.sh`)… All operators on an entity live in that
-  entity's script.
-- **S2 — `pw-lib.sh` is FROZEN.** No new subcommands. It remains the legacy core
-  (dashboard/status/log/phase/gate reads, rfc/ship state) until a dedicated migration plan splits
-  the remainder per S1. New scripts reuse its logic only via shared libraries (S5).
+  (`pw-review.sh`), context-doc (`pw-context.sh`), ship/MR (`pw-ship.sh`), worktree
+  (`pw-worktree.sh`), rfc-doc (`pw-rfc.sh`), docs (`pw-doc.sh`), project-state (`pw-status.sh`),
+  config (`pw-config.sh`). All operators on an entity live in that entity's script.
+- **S1a — entity granularity.** An entity is the **artifact family an operator acts on**, not the
+  verb and not the read/write split. `scan` belongs to review-doc; lint/summary/sync belong to
+  docs; two scripts touching the same artifact family = an S1 violation.
+- **S1b — facets: the second-level split.** Operators inside an entity script are grouped into
+  **facets** — `write` / `read` / `lifecycle` (or verb-families like lint/summary/sync for docs) —
+  declared as labeled sections of the usage header (S6). The entity↔command mapping stays 1:1
+  (C1); entity↔script may become 1:≤2. When an entity script hits the S3 trigger (~1000 lines):
+  **(1)** push shared primitives down to `scripts/lib/` (S5) — usually sufficient; **(2)** if
+  still over, mint a facet script `pw-<entity>-<facet>.sh` — allowed only when the facet carries
+  ≥5 operators with a coherent audience (e.g. the read-only facet other scripts/commands consume);
+  **(3)** the entity's command file routes operators across the two scripts mechanically (C3),
+  the registry lists both, and the docs/scripts index symmetry check is unchanged.
+  Never split mid-facet by verb family; never split below the trigger.
+- **S2 — there is no second `pw-lib.sh`.** The legacy catch-all was FROZEN (no new subcommands)
+  and then fully dissolved into entity scripts + `scripts/lib/` primitives; its `# FROZEN (S2`
+  header and the T0 dead-path canary keep the history honest. Anything that does not belong to
+  one entity belongs in a source-only library (S5) — never in a shared mutable core.
 - **S3 — split trigger.** A script grows operators for a *second* entity, or passes ~1000 lines
-  → split by entity. Don't wait for 2000.
-- **S4 — anti-flood trigger.** Never mint a new top-level script for fewer than 3 operators on an
+  → split by entity (S1) or facet (S1b). Don't wait for 2000.
+- **S4 — anti-flood trigger.** Never mint a new script for fewer than 3 operators on an
   *existing* entity — add the operator to that entity's script. Single-purpose micro-scripts are
   forbidden; shared logic goes to a source-only library (S5), not a new entry point.
-- **S5 — shared code = source-only `pw-*lib.sh` libraries.**
+- **S5 — shared code = source-only `pw-*lib.sh` libraries in `tooling/scripts/lib/`.**
   - `pw-common.sh` — env/provider/forge plumbing; every entry-point script sources it.
   - `pw-mdlib.sh` — pure markdown-document primitives (comment-blanking, review-item detection,
     sign-off row reads, table splice helpers). Takes explicit file paths, knows nothing about
     slugs or projects. If two scripts need the same document primitive, it belongs here.
+  - `pw-projectlib.sh` — project-state primitives (slug→project resolution, dashboard reads).
   - Libraries never dispatch, never `exit`, and are never executable entry points.
 - **S6 — house style** (all entry-point scripts): `set -euo pipefail`; `case "${1:-}"` dispatch;
-  usage header comment block (one paragraph per operator — this is the operator's primary doc);
-  `-h`/`--help` exits 0; `die`-style errors to stderr prefixed with the script name, always
-  carrying a `→ fix:` style remediation hint; `<slug>` first arg; project-relative paths;
-  bash 3.2 compatible; `--selftest` delegating to the harness.
+  usage header comment block (one paragraph per operator, grouped under its facet label — this is
+  the operator's primary doc); `-h`/`--help` exits 0; `die`-style errors to stderr prefixed with
+  the script name, always carrying a `→ fix:` style remediation hint; `<slug>` first arg;
+  project-relative paths; bash 3.2 compatible; `--selftest` delegating to the harness.
+- **S7 — migration policy.** Moving/renaming/dissolving a script updates **every** reference in
+  the same commit: commands, agents, skills, tests (registry, case files, canaries, fixture
+  builders, cache-recipe paths), docs, templates, `bootstrap.sh`/`offboard.sh` — **and
+  mutation-register rows** whose anchors move with the code (re-pin and re-verify in the same
+  commit; see `testing.md` §Writing a mutation row). After the commit, a T0 dead-path canary must
+  find zero references to the old path/name. No silent shims: either every reference moves, or an
+  explicit deprecation forwarding is documented and time-boxed here — the default is a hard cut.
+
+## L-rules — directory layout (all scripts live under `tooling/scripts/`)
+
+- **L1 — `tooling/scripts/entities/`** = per-entity automation entry points (the
+  `PWTEST_AUTOMATION` registry). These are what commands/agents/skills invoke.
+- **L2 — `tooling/scripts/lib/`** = source-only libraries (S5). A T0 canary asserts no entry path
+  (commands/agents/skill) mentions a `lib/` file — libraries are invisible to callers.
+- **L3 — `tooling/scripts/toolchain/`** = bundle-maintenance scripts (`scaffold.sh`,
+  `gen-commands.sh`, `gen-agents.sh`, `pw-doctor.sh`). **The toolchain test:** a script is
+  toolchain iff its operand is **the bundle itself** — it creates, generates, installs, or
+  validates tooling/template/provider state — never the artifact state of an existing project.
+  Litmus: delete every project under `$PW_PROJECTS_DIR` and the script still has work to do.
+  Consequences: never in the automation registry; referenced only by maintainer surfaces
+  (`bootstrap.sh`, `offboard.sh`, root/tooling docs) plus exactly one allowlisted workflow
+  surface — `/pw-doctor` → `toolchain/pw-doctor.sh`. A T0 canary enforces the allowlist
+  (`tooling/tests/expectations/toolchain.ok`).
+- **L4 — naming.** Entity entry point = `pw-<entity>.sh` (or `pw-<entity>-<facet>.sh` per S1b),
+  noun-of-the-entity; library = `pw-<name>lib.sh`; verb-only or micro-purpose names
+  (`pw-adopt-snapshot.sh` ✗) are invalid. Toolchain keeps its historical names.
+- **L5 — reference form.** `$PW_HOME/tooling/scripts/entities/<name>.sh` (shell) /
+  `{{PW_HOME}}/tooling/scripts/entities/<name>.sh` (prompt files); toolchain refs
+  `$PW_HOME/tooling/scripts/toolchain/<name>.sh`; intra-bundle sourcing uses
+  `$HERE/../lib/<name>.sh`. The old flat form `tooling/<name>.sh` fails a T0 canary.
 
 ## C-rules — how slash commands are shaped
 
@@ -77,9 +124,11 @@ and the script only ever receives already-separated values — it never splits s
 
 ## Checklist for adding capability
 
-1. Which entity? → its script (S1). No script yet and ≥3 operators? → create one (S4).
-2. Shared document primitive? → `pw-mdlib.sh` (S5). Env/forge? → `pw-common.sh`.
-3. Tempted to add a `pw-lib.sh` subcommand? → don't (S2).
+1. Which entity? → its script in `tooling/scripts/entities/` (S1/S1a). No script yet and ≥3
+   operators? → create one (S4). Script past ~1000 lines? → lib extraction, then S1b facet split.
+2. Shared document primitive? → `scripts/lib/pw-mdlib.sh` (S5). Project-state primitive? →
+   `scripts/lib/pw-projectlib.sh`. Env/forge? → `scripts/lib/pw-common.sh`.
+3. Tempted to add a catch-all core? → don't (S2). Operating on the bundle itself? → toolchain (L3).
 4. Command surface: operator on the entity's existing command (C1/C2); mechanical mapping (C3);
    human-only? → C4 label + static test.
 5. Prose argument? → A1 rest-of-line; two prose fields → A2 flag segments; handoff via A3.
@@ -89,3 +138,5 @@ and the script only ever receives already-separated values — it never splits s
    [`testing.md`](./testing.md). Register rows: OLD byte-exact **and unique**, catcher must not
    depend on the mutation changing fixture BYTES (recipe-hash cache rule), check next-free ID
    against draft reservations — checklist in [`testing.md`](./testing.md) §Writing a mutation row.
+8. Moving or renaming a script? → S7: every reference (including register anchors) updates in the
+   same commit; the dead-path canary must go green with the commit, not after it.
