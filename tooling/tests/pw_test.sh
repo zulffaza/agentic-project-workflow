@@ -67,7 +67,10 @@ if [ -n "$MUTATION" ]; then
   pwtest_run_mutations "$MUTATION" "$HERE/pw_test.sh"; exit $?
 fi
 
-# fixtures: build only what the selected tiers/case files consume (plan 19 F1)
+# fixtures: build only what the selected tiers/case files consume (plan 19 F1).
+# PWTEST_FORCE_FIXTURES=1 builds all three regardless (cache warm); PWTEST_WARM=1 exits
+# right after materialization (used by the mutation parent to seed the shared cache).
+[ "${PWTEST_FORCE_FIXTURES:-}" = 1 ] && { NEED_F1=1; NEED_F2=1; NEED_F3=1; }
 for _pwt_t in "${_tlist[@]:-}"; do
   case "$_pwt_t" in
     T0|T4) _pwtest_scan "$HERE/static.sh" ;;
@@ -80,6 +83,7 @@ for _pwt_t in "${_tlist[@]:-}"; do
 done
 _pwtest_materialize
 _pwtest_mark fixtures
+[ "${PWTEST_WARM:-}" = 1 ] && { pwtest_summary; exit $?; }
 
 for _pwt_t in "${_tlist[@]:-}"; do
   # note: case files are sourced and may clobber short vars (t/cf) — the runner uses _pwt_* only

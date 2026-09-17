@@ -47,6 +47,23 @@ pwtest_run_mutations() {
   total="$(awk -F'\t' -v f="$filter" '!/^#/ && $1 { if (f=="" || f=="all" || $1 ~ f) c++ } END{print c+0}' "$TOOL/tests/expectations/mutations.tsv")"
   local tmo="${PWTEST_MUT_TIMEOUT:-300}"
   command -v python3 >/dev/null 2>&1 || { echo "mutate: python3 required" >&2; return 2; }
+  # plan 19 F2: one warm build into a shared pristine cache; children then copy (~1-2 s)
+  # instead of paying the ~46 s fixture build each. Cache lives OUTSIDE PWTEST_ROOT (the
+  # parent's EXIT trap wipes that). Override dir: PWTEST_MUT_CACHE; disable: PWTEST_FIXTURE_CACHE="".
+  local cache="${PWTEST_MUT_CACHE:-${TMPDIR:-/tmp}/pwtest-fixture-cache}"
+  mkdir -p "$cache" 2>/dev/null || true
+  export PWTEST_FIXTURE_CACHE="$cache"
+  local _h="" _wt
+  _h="$(_pwtest_recipe_hash 2>/dev/null)" || _h=""
+  if [ -n "$_h" ] && [ -f "$cache/$_h/.done-$S2" ]; then
+    pwtest_note "MUT warm cache present ($_h)"
+  else
+    _wt=$SECONDS
+    PWTEST_WARM=1 PWTEST_FORCE_FIXTURES=1 bash "$runner" --tier T0 </dev/null >"$_bak/warm.log" 2>&1 \
+      || pwtest_note "MUT warm FAILED — children fall back to per-run builds (see $_bak/warm.log)"
+    pwtest_note "MUT warm cache $((SECONDS-_wt))s"
+  fi
+  ( cd "$cache" 2>/dev/null && ls -1t 2>/dev/null | tail -n +6 | while read -r d; do [ -d "$d" ] && rm -rf "$d"; done ) 2>/dev/null || true
   while IFS=$'\t' read -r id file old new tiers only; do
     case "$id" in ''|'#'*) continue ;; esac
     if [ -n "$filter" ] && [ "$filter" != all ]; then

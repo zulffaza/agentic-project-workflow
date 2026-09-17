@@ -312,11 +312,80 @@ _pwtest_scan() { # <file>… — mark fixtures whose F/S vars the files referenc
   [ "$NEED_F3" = 1 ] && NEED_F2=1     # F3 is derived from F2 (pwtest_build_f3 needs PWTEST_F2)
   return 0
 }
-_pwtest_materialize() { # build what NEED_F* flags selected; prints the built set
-  local built=""
-  [ "$NEED_F1" = 1 ] && { F1="$(pwtest_build_f1 "$S1")" || { echo "pwtest: F1 build failed" >&2; exit 2; }; export F1; built="$built F1"; }
-  [ "$NEED_F2" = 1 ] && { F2="$(pwtest_build_f2 "$S2")" || { echo "pwtest: F2 build failed" >&2; exit 2; }; export F2 PWTEST_F2="$F2"; built="$built F2"; }
-  [ "$NEED_F3" = 1 ] && { F3="$(pwtest_build_f3 "$S3")" || { echo "pwtest: F3 build failed" >&2; exit 2; }; export F3; built="$built F3"; }
+# --- pristine fixture cache (plan 19 F2): when PWTEST_FIXTURE_CACHE is set, children copy
+# cached fixtures instead of building. Cache key = the fixture RECIPE (template/ tree +
+# scaffold.sh + pw-env.sh + pw_test_lib.sh) — NOT the runtime scripts. Convention this
+# encodes: a mutation catcher must never depend on the mutation changing fixture BYTES
+# (catchers test runtime readers on template-derived data; see docs/testing.md).
+# Stored only by a run that built all three (warm/full); partial runs only read.
+_pwtest_recipe_hash() {
+  python3 - "$PW_HOME" <<'PY'
+import hashlib, os, sys
+root = sys.argv[1]; h = hashlib.sha256()
+for base in ("template",):
+    for dp, _, fns in sorted(os.walk(os.path.join(root, base))):
+        for fn in sorted(fns):
+            p = os.path.join(dp, fn)
+            h.update(os.path.relpath(p, root).encode()); h.update(open(p, "rb").read())
+for f in ("tooling/scaffold.sh", "tooling/pw-env.sh", "tooling/tests/pw_test_lib.sh"):
+    p = os.path.join(root, f)
+    if os.path.exists(p): h.update(f.encode()); h.update(open(p, "rb").read())
+print(h.hexdigest()[:16])
+PY
+}
+_pwtest_cache_dir() { # echoes $CACHE/<hash> when the cache is enabled; rc 1 otherwise
+  [ -n "${PWTEST_FIXTURE_CACHE:-}" ] || return 1
+  printf '%s/%s' "$PWTEST_FIXTURE_CACHE" "$(_pwtest_recipe_hash)"
+}
+_pwtest_cache_restore_root() { # repos+seeds once per run; rc 0 when root now present
+  local cd="$1"
+  [ -e "$PW_REPOS/api" ] && return 0
+  [ -d "$cd/repos" ] || return 1
+  mkdir -p "$PW_REPOS" "$PWTEST_ROOT/seeds"
+  cp -a "$cd/repos/." "$PW_REPOS/" && cp -a "$cd/seeds/." "$PWTEST_ROOT/seeds/"
+}
+_pwtest_cache_repair() { # re-point F2's worktrees + clone push-URLs at THIS root (paths are absolute inside git metadata)
+  local r wt
+  for r in "$PW_REPOS"/*; do
+    [ -d "$r/.git" ] || continue
+    git -C "$r" remote set-url --push origin "$PWTEST_ROOT/seeds/$(basename "$r").git" >/dev/null 2>&1 || true
+    for wt in "$PW_PROJECTS_DIR/$S2/worktree/$(basename "$r")/"*; do
+      [ -d "$wt" ] || continue
+      git -C "$r" worktree repair "$wt" >/dev/null 2>&1 || true
+    done
+  done
+}
+_pwtest_cache_store() { # all three built fresh → publish atomically (tmp dir + mv)
+  local cd tmp s
+  cd="$(_pwtest_cache_dir)" || return 0
+  [ -e "$cd" ] && return 0
+  for s in "$S1" "$S2" "$S3"; do [ -d "$PW_PROJECTS_DIR/$s" ] || return 0; done
+  tmp="$cd.tmp.$$"; mkdir -p "$tmp/projects" "$tmp/repos" "$tmp/seeds"
+  for s in "$S1" "$S2" "$S3"; do cp -a "$PW_PROJECTS_DIR/$s" "$tmp/projects/" && : > "$tmp/.done-$s" || { rm -rf "$tmp"; return 0; }; done
+  cp -a "$PW_REPOS/." "$tmp/repos/" && cp -a "$PWTEST_ROOT/seeds/." "$tmp/seeds/" || { rm -rf "$tmp"; return 0; }
+  mv "$tmp" "$cd" 2>/dev/null || rm -rf "$tmp"
+  return 0
+}
+_pwtest_materialize() { # restore cached fixtures, build what is still missing, store if all built fresh
+  local built="" hit="" _cd=""
+  [ -n "${PWTEST_FIXTURE_CACHE:-}" ] && _cd="$(_pwtest_cache_dir)"
+  if [ -n "$_cd" ] && [ "$NEED_F1" = 1 ] && [ -f "$_cd/.done-$S1" ]; then
+    cp -a "$_cd/projects/$S1" "$PW_PROJECTS_DIR/" && { F1="$PW_PROJECTS_DIR/$S1"; export F1; hit="$hit F1"; }
+  fi
+  if [ -n "$_cd" ] && [ "$NEED_F2" = 1 ] && [ -f "$_cd/.done-$S2" ] && _pwtest_cache_restore_root "$_cd"; then
+    cp -a "$_cd/projects/$S2" "$PW_PROJECTS_DIR/" && { _pwtest_cache_repair; F2="$PW_PROJECTS_DIR/$S2"; export F2 PWTEST_F2="$F2"; hit="$hit F2"; }
+  fi
+  if [ -n "$_cd" ] && [ "$NEED_F3" = 1 ] && [ -f "$_cd/.done-$S3" ] && _pwtest_cache_restore_root "$_cd"; then
+    cp -a "$_cd/projects/$S3" "$PW_PROJECTS_DIR/" && { F3="$PW_PROJECTS_DIR/$S3"; export F3; hit="$hit F3"; }
+  fi
+  if { [ "$NEED_F1" = 1 ] && [ -z "${F1:-}" ]; } || { [ "$NEED_F2" = 1 ] && [ -z "${F2:-}" ]; } || { [ "$NEED_F3" = 1 ] && [ -z "${F3:-}" ]; }; then
+    echo "TEST materializing fixtures from template/ …" >&2
+    if [ "$NEED_F1" = 1 ] && [ -z "${F1:-}" ]; then F1="$(pwtest_build_f1 "$S1")" || { echo "pwtest: F1 build failed" >&2; exit 2; }; export F1; built="$built F1"; fi
+    if [ "$NEED_F2" = 1 ] && [ -z "${F2:-}" ]; then F2="$(pwtest_build_f2 "$S2")" || { echo "pwtest: F2 build failed" >&2; exit 2; }; export F2 PWTEST_F2="$F2"; built="$built F2"; fi
+    if [ "$NEED_F3" = 1 ] && [ -z "${F3:-}" ]; then F3="$(pwtest_build_f3 "$S3")" || { echo "pwtest: F3 build failed" >&2; exit 2; }; export F3; built="$built F3"; fi
+    _pwtest_cache_store
+  fi
   printf 'TEST fixtures built:%s\n' "${built:- none}" >&2
+  [ -n "$hit" ] && printf 'TEST fixtures cache-hit:%s\n' "$hit" >&2
   return 0
 }
