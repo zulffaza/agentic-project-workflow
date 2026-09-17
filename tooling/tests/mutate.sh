@@ -2,11 +2,50 @@
 # mutate.sh — meta-test (plan 16 §3): revert a documented fix, the harness MUST fail.
 # expectations/mutations.tsv columns (TAB): id \t file(tooling/…) \t OLD \t NEW \t tiers \t only
 # Applied via python3 exact-string replace in the working tree; always restored (trap).
+#
+# Plan 19 hardening:
+#   • every child runs under a watchdog (PWTEST_MUT_TIMEOUT, default 300 s). A timeout is
+#     recorded as HUNG — the file is restored, the sweep CONTINUES, and the run exits non-zero
+#     listing the hung rows. A stuck child can no longer stall the whole sweep forever.
+#   • one progress line per row: "MUT n/N <id> rc=<rc> <elapsed>s".
+#   • non-blocking warning if the whole sweep exceeds 600 s.
+
+# _pwtest_timeout <secs> <cmd…> — run cmd under a timeout; sets PWTEST_TMO_HIT=1 on timeout
+# and returns 124. Prefers coreutils timeout/gtimeout; falls back to a 1 s-granularity poll
+# shim that kills the command's process subtree (cmd is expected to `exec` into the real work).
+_pwtest_timeout() {
+  local secs="$1"; shift
+  PWTEST_TMO_HIT=0
+  local rc=0
+  if command -v timeout >/dev/null 2>&1 || command -v gtimeout >/dev/null 2>&1; then
+    local tmo=timeout; command -v timeout >/dev/null 2>&1 || tmo=gtimeout
+    "$tmo" "$secs" "$@"; rc=$?
+    [ "$rc" = 124 ] && PWTEST_TMO_HIT=1
+    return $rc
+  fi
+  local flag="${PWTEST_ROOT:-/tmp}/.tmo.$$.flag" pid
+  rm -f "$flag"
+  "$@" & pid=$!
+  ( local w=0
+    while [ "$w" -lt "$secs" ]; do kill -0 "$pid" 2>/dev/null || exit 0; sleep 1; w=$((w+1)); done
+    kill -0 "$pid" 2>/dev/null || exit 0
+    : > "$flag"
+    pkill -P "$pid" 2>/dev/null
+    kill "$pid" 2>/dev/null ) &
+  wait "$pid"; rc=$?
+  if [ -f "$flag" ]; then rm -f "$flag"; PWTEST_TMO_HIT=1; return 124; fi
+  return $rc
+}
 
 pwtest_run_mutations() {
   local filter="$1" runner="$2"
-  local id file old new tiers only rc n=0 caught=0 _orig
+  local id file old new tiers only rc n=0 caught=0 hung=0 _orig _rowel
+  local hung_ids=""
   local _bak="${PWTEST_KEEP_DIR:-$PWTEST_ROOT/mut}"; mkdir -p "$_bak"
+  local _sw0=$SECONDS
+  local total
+  total="$(awk -F'\t' -v f="$filter" '!/^#/ && $1 { if (f=="" || f=="all" || $1 ~ f) c++ } END{print c+0}' "$TOOL/tests/expectations/mutations.tsv")"
+  local tmo="${PWTEST_MUT_TIMEOUT:-300}"
   command -v python3 >/dev/null 2>&1 || { echo "mutate: python3 required" >&2; return 2; }
   while IFS=$'\t' read -r id file old new tiers only; do
     case "$id" in ''|'#'*) continue ;; esac
@@ -14,7 +53,7 @@ pwtest_run_mutations() {
       printf '%s' "$id" | grep -qE -- "$filter" || continue
     fi
     [ -n "$tiers" ] || tiers=T0
-    n=$((n+1)); id="${id%%|*}"
+    n=$((n+1)); id="${id%%|*}"; _rowel=$SECONDS
     pwtest_note "MUTATE $id"
     python3 -c "import sys; sys.exit(0 if sys.argv[1] in open(sys.argv[2], encoding='utf-8').read() else 1)" "$old" "$TOOL/$file" \
       || { pwtest_bad "$id drift" "old pattern not in $file — update mutations.tsv"; continue; }
@@ -26,17 +65,24 @@ s=open(fn,encoding='utf-8').read(); assert old in s, 'anchor vanished'
 open(fn,'w',encoding='utf-8').write(s.replace(old,new))" "$old" "$new" "$file" ) \
       || { pwtest_bad "$id" "apply failed"; cp "$_orig" "$TOOL/$file"; continue; }
     local sub_rc=0
-    ( cd "$TOOL/tests" && PWTEST_INNER=1 bash "$runner" --tier "$tiers" ${only:+--only "$only"} </dev/null >"$_bak/$id.child.log" 2>&1 ) || sub_rc=$?
+    _pwtest_timeout "$tmo" bash -c "cd '$TOOL/tests' && PWTEST_INNER=1 exec bash '$runner' --tier '$tiers' ${only:+--only '$only'} </dev/null >'$_bak/$id.child.log' 2>&1" || sub_rc=$?
     cp "$_orig" "$TOOL/$file"; rm -f "$_orig"
     _pwt_mutable_pop "$TOOL/$file|$_orig"
-    if [ "$sub_rc" -gt 0 ] && [ "$sub_rc" -le 1 ]; then
+    if [ "$PWTEST_TMO_HIT" = 1 ]; then
+      hung=$((hung+1)); hung_ids="$hung_ids $id"
+      pwtest_bad "$id" "HUNG — child exceeded ${tmo}s (killed; tree restored) — see child log: $_bak/$id.child.log"
+    elif [ "$sub_rc" -gt 0 ] && [ "$sub_rc" -le 1 ]; then
       caught=$((caught+1)); pwtest_ok "mutation caught: $id"
     elif [ "$sub_rc" = 2 ]; then
       pwtest_bad "$id" "child runner died (fixture/setup issue, rc=2) — see child log in kept dir"; cp "$_bak/$id.child.log" "$PWTEST_ROOT/mut-$id.child.log"
     else
       pwtest_bad "$id" "VACUOUS: reverted $file on --tier $tiers and everything stayed green"
     fi
+    printf 'MUT %s/%s %s rc=%s %ss\n' "$n" "$total" "$id" "$sub_rc" "$((SECONDS-_rowel))" >&2
   done < "$TOOL/tests/expectations/mutations.tsv"
-  printf '\nmutate: %d mutations, %d caught, %d vacuous/drift\n' "$n" "$caught" "$((n-caught))" >&2
+  local _el=$((SECONDS-_sw0))
+  printf '\nmutate: %d mutations, %d caught, %d hung, %d vacuous/drift — %ss total\n' "$n" "$caught" "$hung" "$((n-caught-hung))" "$_el" >&2
+  [ -n "$hung_ids" ] && printf 'mutate: HUNG rows:%s\n' "$hung_ids" >&2
+  [ "$_el" -gt 600 ] && printf 'mutate: WARN sweep took %ss (>600) — see tooling/docs/testing.md (timing canary, non-blocking)\n' "$_el" >&2
   [ "$n" -gt 0 ] && [ "$caught" -eq "$n" ]
 }
