@@ -623,7 +623,7 @@ cmd_count() {
   res="$(printf '%s\n' "$h" | grep -cE '^###+ .*pw-item-status: resolved' || true)"; res="${res:-0}"
   fb2="$(printf '%s\n' "$h" | grep -E '^###+ .*(\[RESOLVED\]|\[ANSWERED\])' | grep -v 'pw-item-status:' | grep -c . || true)"
   # items: real item HEADINGS under "## Items" (section rule identical to the template) — lets
-  # consumers like pw-doc-lint's marker-vs-items check compare like with like in ONE pass,
+  # consumers like pw-doc.sh lint's marker-vs-items check compare like with like in ONE pass,
   # without re-reading the raw file (which would count headings living inside the worked-example
   # comment block — exactly the un-blanked-read half of the C22 phantom).
   local items

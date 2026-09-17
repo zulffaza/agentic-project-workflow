@@ -283,7 +283,7 @@ case "$TYPE" in
 esac
 
 if [ ${#ERRORS[@]} -gt 0 ]; then
-  echo "pw-doc-lint: found ${#ERRORS[@]} error(s):" >&2
+  echo "pw-doc lint: found ${#ERRORS[@]} error(s):" >&2
   for err in "${ERRORS[@]}"; do
     _msg="${err%%	*}"; _fix="${err#*	}"
     echo "  - $_msg" >&2

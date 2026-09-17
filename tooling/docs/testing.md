@@ -132,8 +132,9 @@ same commit (S7).
 3. The catcher must fail **iff** the mutation is applied — and must not depend on the mutation
    changing fixture BYTES (recipe-hash convention above).
 4. IDs: take the next free number **and** check the register plus the draft-plan reservations
-   (C31–C35 reserved by the `/pw-help` plan; C36–C40 taken by the tooling-layout plan —
-L-canary catchers C36–C38, dead-usage-string catcher C39, doctor-orphan catcher C40) before minting.
+   (C31–C35 reserved by the `/pw-help` plan; C36–C41 taken by the tooling-layout plan —
+L-canary catchers C36–C38, dead-usage-string catcher C39, doctor-orphan catcher C40,
+operator-attribution catcher C46) before minting.
 5. Verify with `--mutation <your-id>` (single row → serial; ~5–60 s depending on tier) before
    committing.
 

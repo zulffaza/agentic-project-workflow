@@ -170,7 +170,7 @@ static_t4() {
   # (e) runtime hint strings must never name a script that doesn't exist (plan 20 fallout: the
   # merged pw-doc.sh carried dead `pw-doc-lint.sh` usage strings — users were told to run files
   # that are gone; L5 only scans tooling/-prefixed paths, so bare names in hints slipped).
-  local bad="" tok
+  local bad="" tok xref
   for f2 in "$TOOL"/scripts/entities/*.sh "$TOOL"/scripts/toolchain/*.sh; do
     while IFS= read -r tok; do
       { [ -f "$TOOL/scripts/entities/$tok" ] || [ -f "$TOOL/scripts/lib/$tok" ] || [ -f "$TOOL/scripts/toolchain/$tok" ] || [ -f "$TOOL/../$tok" ]; } || bad="$bad $(basename "$f2")→$tok"
@@ -178,4 +178,30 @@ static_t4() {
   done
   [ -z "$bad" ] && pwtest_ok "T4: usage/fix strings name only live scripts (L5b)" \
     || pwtest_bad "T4: usage/fix strings name only live scripts" "dead script names in runtime hints:$bad — L5b: point hints at the entity script + operator"
+  # (f) operator cross-attribution: `pw-<entity>.sh <tok>` where <tok> is an operator of a
+  # DIFFERENT entity is a stale pointer (plan 20 fallout: the skill kept saying
+  # `pw-context.sh adopted` after adopted moved to pw-status). Tokens that are no entity's
+  # operator are prose and exempt; per-file op sets are deliberately over-inclusive.
+  xref="$(python3 - "$TOOL" <<'PY'
+import re, sys, glob, os
+tool = sys.argv[1]; root = os.path.dirname(tool)
+ents = {}
+for f in glob.glob(tool + "/scripts/entities/pw-*.sh"):
+    ents[os.path.basename(f)] = set(re.findall(r'^ {2,4}([a-z][a-z0-9-]*)\)', open(f).read(), re.M))
+globops = set().union(*ents.values())
+hits = set()
+for r in [tool+"/commands", tool+"/agents", tool+"/skill", tool+"/docs", root+"/docs", root+"/template"]:
+    for dp, _, fs in os.walk(r):
+        for fn in fs:
+            if not fn.endswith(".md"): continue
+            p = os.path.join(dp, fn)
+            for m in re.finditer(r'(pw-[a-z-]+\.sh) ([a-z][a-z0-9-]*)', open(p, errors="ignore").read()):
+                s, tok = m.group(1), m.group(2)
+                if s in ents and tok in globops and tok not in ents[s]:
+                    hits.add(f"{os.path.relpath(p, root)}: {s} {tok}")
+print(" ".join(sorted(hits)))
+PY
+)"
+  [ -z "$xref" ] && pwtest_ok "T4: entity refs use that entity's own operators (L5c)" \
+    || pwtest_bad "T4: entity refs vs operator sets" "misattributed operators: $xref — L5c: the entity owning the artifact owns the operator"
 }

@@ -82,6 +82,10 @@ is normative.
   `scripts/{entities,lib,toolchain}/` or the bundle root. Bare dead names slip past L5's
   `tooling/`-prefixed scan — after plan 20's merges, users were still told to run
   `pw-doc-lint.sh`. A T4 canary enforces it.
+- **L5c — the entity owns its operators.** A `pw-<entity>.sh <tok>` reference where `<tok>` is
+  another entity's operator is a stale pointer (post-consolidation, `adopted` moved to
+  `pw-status.sh` while the skill still routed it through `pw-context.sh`). A T4 canary cross-checks
+  every such reference in commands/agents/skill/docs/template against the dispatch sets.
 
 ## C-rules — how slash commands are shaped
 

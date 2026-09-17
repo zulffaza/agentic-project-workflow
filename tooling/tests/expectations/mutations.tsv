@@ -50,3 +50,4 @@ C37-lib-invisible-canary	commands/pw-sync.md	Follow the `project-workflow` skill
 C38-toolchain-allowlist-canary	commands/pw-ship.md	Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task	Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task `tooling/scripts/toolchain/gen-commands.sh`	T4	-
 C39-usage-string-dead-script	pw-doc.sh	usage: pw-doc.sh lint <type> <slug> [args...]	usage: pw-doc-lint.sh <type> <slug> [args...]	T4	-
 C40-doctor-orphan-check-disabled	pw-doctor.sh	corph="$corph $(basename "$inst")"	corph=""	T1	pw-doctor
+C46-operator-cross-attribution	skill/project-workflow/references/conventions-and-gotchas.md	`pw-status.sh adopted <slug> "<pointer>"`	`pw-context.sh adopted <slug> "<pointer>"`	T4	-

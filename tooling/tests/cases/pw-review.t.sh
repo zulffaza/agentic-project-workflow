@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 . "$TOOL/scripts/lib/pw-mdlib.sh"
-# cases/pw-review-edit.t.sh — review-doc entity operators (plan 17): init-all, signoff,
+# cases/pw-review.t.sh — review-doc entity operators (plan 17, consolidated plan 20): init-all, signoff,
 # add-item, answer, add-question, resolve. Works on a private clone of F2 (never the shared
 # fixture — C22-style pollution is a known trap) plus a fresh-template review file.
 E="$(pwtest_script pw-review.sh)"

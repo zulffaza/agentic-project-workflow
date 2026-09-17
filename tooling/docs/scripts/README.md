@@ -30,7 +30,7 @@ $PW_HOME/tooling/scripts/entities/<script>.sh <args> [options]      # shell
 
 - `-h` / `--help` prints the script's own usage header and exits 0 — on every script.
 - Human-readable errors go to **stderr**, prefixed with the script name (`pw-preflight: …`,
-  `pw-doc-lint: …`). On success most scripts are silent or print a short report to stdout.
+  `pw-doc lint: …`). On success most scripts are silent or print a short report to stdout.
 - The project slug resolves under `$PW_PROJECTS_DIR` (default: the bundle's parent-of-parent);
   a missing project is always an error, never an empty success. Scripts that touch repos resolve
   them under `PW_REPOS` the same way.

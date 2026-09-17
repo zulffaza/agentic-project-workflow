@@ -24,7 +24,7 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   backward (re-running a task is normal).
 - `pw-status.sh oneliner <slug> "<text>"` — set the dashboard **One-liner** (the agent does this during
   `/pw-analyze`, distilled from context/).
-- `pw-context.sh adopted <slug> "<pointer>"` — set/insert the dashboard **Adopted:** pointer (the agent
+- `pw-status.sh adopted <slug> "<pointer>"` — set/insert the dashboard **Adopted:** pointer (the agent
   does this during `/pw-adopt`; inserts the line only for continuation projects).
 - `pw-context.sh adopt <slug> <repo> <branch> <base> [mr]` — **deterministically append/upsert one
   adoption unit** into `context/ADOPTED.md` (keyed by `repo@branch`; new units append at EOF,

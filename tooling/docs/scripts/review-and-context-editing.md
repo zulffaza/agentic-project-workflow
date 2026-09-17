@@ -146,7 +146,7 @@ $PW_HOME/tooling/scripts/entities/pw-context.sh fetch <slug> [--ignore-errors]  
 handles every "agent handles" row (the Lark + WebFetch tail of the analysis fetch rules).
 
 **Reading failures:** exit `1` is reserved for a bare ticket key with no `jira` CLI — printed as
-`pw-context-fetch: N error(s):` with a per-row list; in `/pw-analyze` that's a STOP-and-ask.
+`pw-context fetch: N error(s):` with a per-row list; in `/pw-analyze` that's a STOP-and-ask.
 `--ignore-errors` downgrades it to `NOT fetched … treat with reduced confidence`. Missing
 `context/INDEX.md` is exit 2 (wrong slug / not scaffolded).
 
@@ -181,7 +181,7 @@ branch` — fix the argument (repo dir name, branch name), or fetch, or pass the
 
 ## pw-mdlib.sh (source-only — not a command)
 
-The shared markdown primitives both scripts (and `pw-lib.sh`) source: comment-blanked scanning
+The shared markdown primitives the entity scripts source: comment-blanked scanning
 (the detector every review gate trusts), sign-off row reads, item-heading scans, and table
 splice helpers. Never executed directly; if two scripts need the same document primitive, it
 belongs here (S5).

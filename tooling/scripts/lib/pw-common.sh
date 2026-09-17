@@ -358,7 +358,7 @@ pw_task_mr_url() {  # $1 = task file -> MR URL (or sentinel text like `(none)`) 
   # The section-scoping is the whole point: a file-wide `grep 'https://' | head -1` lets a decoy
   # literal URL earlier in the task (## Steps quoting placeholder URLs) beat the real field — seen
   # 2026-09: one such Steps URL made pw-lib's mr-state resolve-but-fail ("unknown" forever) on a
-  # task whose `- **MR:**` line sat correctly in its own ## Result. pw-lib.sh cannot source this
+  # task whose `- **MR:**` line sat correctly in its own ## Result. the old pw-lib.sh could not source this
   # file (standalone doctrine) and carries the mirror _resolve_task_mr_url — update both together.
   local sec line val url
   [ -f "$1" ] || return 0

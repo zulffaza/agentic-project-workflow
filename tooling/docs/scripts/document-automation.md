@@ -31,7 +31,7 @@ $PW_HOME/tooling/scripts/entities/pw-doc.sh lint all      <slug>                
 **Output:** silent, exit `0` on pass. On fail, exit `1` with a complete list:
 
 ```
-pw-doc-lint: found 2 error(s):
+pw-doc lint: found 2 error(s):
   - …/task/T01-foo.md: missing 'Repo' field (as '- **Repo:**' bullet or '^Repo:' line)
       → fix: add '- **Repo:** <value>' in the header bullets — value must agree with the task's PLAN row
   - …/task/T01-foo.md: missing '## Verify' section
@@ -42,7 +42,7 @@ It collects **all** errors before exiting — fix everything in one pass, re-run
 Most errors carry a `→ fix:` remediation line naming the concrete next action (a template to
 copy from, the command to run); relay it verbatim rather than guessing at a repair.
 
-**Reading failures:** a `not found` error (missing doc file) is exit 1 + `pw-doc-lint: …` too —
+**Reading failures:** a `not found` error (missing doc file) is exit 1 + `pw-doc lint: …` too —
 that means the artifact doesn't exist yet, i.e. the phase hasn't produced it. A missing `analysis`
 doc while linting `--all` only happens if the dir was empty (reported as "`--all matched none`").
 
