@@ -47,6 +47,10 @@ ROOT="$(mktemp -d "${TMPDIR:-/tmp}/pwtest.XXXXXX")"
 trap '_pwtest_cleanup' EXIT
 pwtest_env_init "$ROOT"
 
+# per-section wall-clock timing (plan 19 Phase 0): TIME <section> <n>s on stderr.
+_PWT_LAST=0
+_pwtest_mark() { printf 'TIME %s %ss\n' "$1" $(( SECONDS - ${_PWT_LAST:-0} )) >&2; _PWT_LAST=$SECONDS; }
+
 # fixtures (once; T1/T2/T3-independent):
 echo "TEST materializing fixtures from template/ …"
 F1="$(pwtest_build_f1 pwt-f1-scaffold)" || { echo "pwtest: F1 build failed" >&2; exit 2; }
@@ -55,6 +59,7 @@ export PWTEST_F2="$F2"
 F3="$(pwtest_build_f3 pwt-f3-hostile)" || { echo "pwtest: F3 build failed" >&2; exit 2; }
 export TOOL
 S1=pwt-f1-scaffold; S2=pwt-f2-mid; S3=pwt-f3-hostile; export S1 S2 S3 F1 F2 F3
+_pwtest_mark fixtures
 
 if [ -n "$CAPTURE" ]; then
   mkdir -p "$HERE/expectations"; touch "$HERE/expectations/battery.tsv" "$HERE/expectations/gates.tsv" "$HERE/expectations/unwired.ok" "$HERE/expectations/mutations.tsv"
@@ -80,5 +85,6 @@ for t in "${_tlist[@]:-}"; do
     T4) static_t4 ;;
     *) echo "pw_test: unknown tier '$t'" >&2; exit 2 ;;
   esac
+  _pwtest_mark "$t"
 done
 pwtest_summary
