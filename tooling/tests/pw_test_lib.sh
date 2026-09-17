@@ -8,6 +8,9 @@
 #   • fixture builders: F1 scaffold / F2 mid-lifecycle / F3 hostile — GENERATED
 #     from the CURRENT template/ at run time (P1). Superseded layouts are data
 #     handled by the read-only corpus tier (P9), never fixtures.
+#   • lazy materialization (plan 19 F1): _pwtest_scan marks NEED_F* from what the
+#     selected scripts reference; _pwtest_materialize restores-from-cache-or-builds
+#     each (plan 19 F2; recipe-hash-keyed pristine cache). Mechanics: testing.md.
 #   • fake gh/glab on PATH (tests/bin) — nothing here talks to a real forge
 # Globals the assert layer needs: PWTEST_ROOT (and PWTEST_TESTSDIR=tests dir).
 # ============================================================================

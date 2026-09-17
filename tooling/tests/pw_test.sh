@@ -9,9 +9,15 @@
 #   tooling/tests/pw_test.sh --capture T2|gates|both    record current behavior as expectations (REVIEW the diff!)
 #   tooling/tests/pw_test.sh --mutation [filter]    meta-test: revert documented fixes, expect failures
 #   tooling/tests/pw_test.sh -v                     per-check lines
+#   env PWTEST_MUT_JOBS=N                           sweep parallelism (auto min(ncpu,8); 1 = serial live-tree)
+#   env PWTEST_MUT_TIMEOUT=N                        per-child watchdog seconds (default 300; timeout = HUNG, sweep continues)
+#   env PWTEST_MUT_CACHE=DIR                        sweep fixture-cache dir (default $TMPDIR/pwtest-fixture-cache)
+#   env PWTEST_FIXTURE_CACHE=DIR                    standalone fixture cache (set by the sweep for its children; empty = off)
 #
 # Exit 0 = everything selected passed. Cumulative reporting (all failures listed).
-# Fixtures are GENERATED from template/ each run; only the CORPUS (T3) is read-only.
+# Fixtures are GENERATED from template/ but only when the selected tiers/cases consume them
+# (T0/T4 build none); sweep children copy from a pristine recipe-hash-keyed cache. Only the
+# CORPUS (T3) is read-only. Mechanics + authoring rules: docs/testing.md §Inside the harness.
 # ============================================================================
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"          # tooling/tests

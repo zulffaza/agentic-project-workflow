@@ -70,6 +70,79 @@ never mutated, so workers cannot see each other's reverts (the false-"caught" ha
 parallel-on-live) and same-file rows need no serialization. A full sweep is **~70 s for 35
 rows**; `PWTEST_MUT_JOBS=1` keeps the original serial live-tree path.
 
+## Inside the harness (read this before editing tests/ or writing mutation rows)
+
+**Fixture lifecycle.** `pw_test.sh` and `selftest_entry.sh` (the per-script `--selftest` path)
+materialize fixtures through exactly two functions in `pw_test_lib.sh`:
+
+1. `_pwtest_scan <file>…` — sets `NEED_F1/2/3` when a scanned file references `$F1..$F3`,
+   `$S1..$S3`, or `PWTEST_F2`. The runner scans the scripts the selected tiers actually run
+   (T1: only the `--only`-matched case files). Overbuild is safe (slower); underbuild fails
+   loudly (cases error on missing dirs), so the scan errs toward matching, comments included.
+   `$F3` forces `$F2` — F3 is derived from F2.
+2. `_pwtest_materialize` — first **clears inherited `F1..F3`/`PWTEST_F2`** (a fresh child must
+   never trust a parent's exported fixture paths: they point at the *parent's* temp root — this
+   exact bug shipped once and the parity gate caught it), then per `NEED_F*` either restores from
+   `$PWTEST_FIXTURE_CACHE/<hash>/` or builds via `pwtest_build_f1/f2/f3`. A run that built all
+   three publishes them into the cache atomically (tmp dir + `mv`).
+
+**Cache layout** — `$TMPDIR/pwtest-fixture-cache/<hash>/` holds `projects/<slug>` per fixture,
+plus `repos/` + `seeds/`, plus `.done-<slug>` markers. `<hash>` = digest of the fixture *recipe*:
+`template/` tree + `scaffold.sh` + `pw-env.sh` + `pw_test_lib.sh`. Runtime scripts
+(`pw-lib.sh`, `pw-common.sh`, …) are deliberately **excluded** — fixture bytes must not depend on
+them (see the catcher convention above; a mutation to a runtime file must therefore not change the
+cache key, which is what lets every sweep child share one warm cache). Restored `repos/` carry
+absolute paths in git metadata, so `_pwtest_cache_repair` re-points F2's worktrees
+(`git worktree repair`) and the clones' push-URLs (at the child's own `seeds/`). F3's worktree
+copies are stale by design — identical to what a fresh build produces; don't "fix" them.
+
+**Sweep paths.** `pwtest_run_mutations` (mutate.sh) warms the cache once (a
+`PWTEST_WARM=1 PWTEST_FORCE_FIXTURES=1` child that exits right after materialization), then:
+
+- **parallel (default, >1 row):** one `_pwtest_mut_worker` per row behind a FIFO token semaphore
+  (`PWTEST_MUT_JOBS`, auto = min(ncpu, 8)). Each worker `rsync`s a **disposable copy of the
+  bundle** (excluding `.git`, ~1.3 MB) and mutates only there — the live tree is never touched,
+  so workers can't cross-see reverts and same-file rows need no serialization. Rows write
+  `<id>\t<status>\t<elapsed>` to `results.tsv`; the parent aggregates in original row order.
+- **serial (`PWTEST_MUT_JOBS=1`, or a single-row filter):** `_pwtest_run_row` against the live
+  tree, wrapped in the `_pwt_mutable_push/pop` crash-safety stack so the EXIT trap can replay a
+  restore if the sweep is killed mid-row. ⚠ `_pwt_mutable_pop` must rebuild into a **fresh**
+  accumulator — appending to the live stack while iterating doubles its size per pop (O(2ⁿ)
+  churn); that bug was the plan-17 "parent-side hang" (clean tree, child done, CPU spin).
+
+`_pwtest_run_row` (shared by both paths) classifies each row: `caught` (harness rc 1), `hung`
+(watchdog `PWTEST_MUT_TIMEOUT`, default 300 s — file restored, sweep continues), `died` (rc 2 =
+child setup problem), `vacuous` (rc 0 = the catcher is toothless), `drift` (OLD anchor gone —
+re-pin it against the current code, don't delete the row), `applyfail`. Child logs land in
+`<keep>/<id>.child.log` (`PWTEST_KEEP_DIR` to preserve them past cleanup).
+
+**Fixture etiquette for case authors.** Never mutate the shared `$F1..$F3` — `cp -a "$F2"
+"$PW_PROJECTS_DIR/<private>"` first (the C22 pollution bug: one case editing shared F2 broke the
+T2 battery later in the same run). Read-only invocations against `$S1..$S3` are fine. If a case
+truly must touch a shared fixture, restore it exactly.
+
+**Env knobs:** `PWTEST_MUT_JOBS` (parallelism; `1` = serial live-tree), `PWTEST_MUT_TIMEOUT`
+(watchdog seconds), `PWTEST_MUT_CACHE` (cache dir), `PWTEST_FIXTURE_CACHE=` (disable cache),
+`PWTEST_KEEP_DIR` (child-log dir), `PWTEST_VERBOSE=1`. Internal (don't set by hand):
+`PWTEST_WARM`/`PWTEST_FORCE_FIXTURES` (warm pass), `PWTEST_INNER` (sweep children),
+`PWTEST_MUT_NESTED` (recursion guard in `cases/pw-test-harness.t.sh`).
+
+## Writing a mutation row
+
+`expectations/mutations.tsv` columns: `id \t file(rel tooling/) \t OLD \t NEW \t tier \t only`.
+
+1. `OLD` must be **byte-exact and unique** in the file — the apply step replaces *every*
+   occurrence, and drift only detects absence. Check: `grep -cF '<OLD>' <file>` → `1`.
+2. Pick the cheapest `tier` + `only` whose checks actually exercise the reverted fix
+   (`T1` + the script's case name is the usual shape; `-` in `only` matches all T1 case names —
+   every name contains a hyphen, so it is effectively "no filter").
+3. The catcher must fail **iff** the mutation is applied — and must not depend on the mutation
+   changing fixture BYTES (recipe-hash convention above).
+4. IDs: take the next free number **and** check the register plus the draft-plan reservations
+   (C31–C35 reserved by the `/pw-help` plan, C36+ by the tooling-layout plan) before minting.
+5. Verify with `--mutation <your-id>` (single row → serial; ~5–60 s depending on tier) before
+   committing.
+
 ## The agent protocol (change type → minimum tiers)
 
 | Change | Must run | Must also |

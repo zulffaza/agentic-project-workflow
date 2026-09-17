@@ -65,7 +65,11 @@ Changed behavior of a documented format/contract → add a coupling row to
 `tooling/tests/expectations/mutations.tsv` (revert of the fix) and prove it bites:
 `pw_test.sh --mutation <id>` (~5 s/row with a warm cache). During development sweep only the
 rows for files you touched (`--mutation 'C2[5-9]'`); the full `--mutation all` belongs at the
-ship gate. Change type → minimum tiers: the table in
+ship gate (~1 min, parallel — each row mutates a disposable bundle copy, never your tree).
+Before editing anything under `tests/` or authoring a register row, read
+[`docs/testing.md`](./docs/testing.md) §Inside the harness (fixture scan/materialize flow, cache
+recipe rule, watchdog, fixture-pollution etiquette: clone `$F2`, never mutate it) and
+§Writing a mutation row. Change type → minimum tiers: the table in
 [`docs/testing.md`](./docs/testing.md). Re-run `pw-doctor.sh` (expect **All synced**) after any
 `commands/`/`agents/`/`skill/`/`template/` edit — it compares generated-vs-installed.
 

@@ -1,5 +1,12 @@
-# mutations.tsv — plan 16 §5 register C1–C23: id, file(rel tooling/), OLD, NEW, tier, only(—).
-# Reverting a documented fix MUST fail the harness. Keep OLD byte-exact; drift = row is stale.
+# mutations.tsv — coupling register (plan 16 §5; extended by plans 17/19): currently C1–C45.
+# Reverting a documented fix MUST fail the harness. Keep OLD byte-exact AND unique (apply
+# replaces every occurrence; drift only detects absence — verify grep -cF = 1). A drift-flagged
+# row means the anchor moved with the code: re-pin it, never delete it. Catchers must not depend
+# on the mutation changing fixture BYTES (the sweep fixture cache is keyed by the recipe:
+# template/ + scaffold.sh + pw-env.sh + pw_test_lib.sh — runtime scripts excluded).
+# IDs: take the next free number and check draft-plan reservations (C31–C35 /pw-help plan;
+# C36+ tooling-layout plan — plan 19 took C41–C44 inside that space; re-check at execution).
+# Authoring checklist: tooling/docs/testing.md §Writing a mutation row.
 # Columns: id	file	OLD	NEW	tiers	only
 C1-pw-field-packed-cut	pw-common.sh	        q = index(v, "**"); if (q) v = substr(v, 1, q - 1)	        q = 0; if (q) v = substr(v, 1, q - 1)	T1	pw-common
 C2-plan-table-anchor	pw-common.sh	    /^## Task/ { p=1; next }	    /^## TASK/ { p=1; next }	T1	pw-mr-state-batch
@@ -37,3 +44,4 @@ C41-fixture-cache-hash-frozen	tests/pw_test_lib.sh	print(h.hexdigest()[:16])	pri
 C42-lazy-scan-always-builds	tests/pw_test_lib.sh	NEED_F1=0; NEED_F2=0; NEED_F3=0	NEED_F1=1; NEED_F2=1; NEED_F3=1	T1	pw-test-harness
 C43-mutable-stack-exponential-pop	tests/pw_test_lib.sh	local e _new=""	local e _new="$PWTEST_MUT_STACK"	T1	pw-test-harness
 C44-worker-copy-skipped	tests/mutate.sh	  if ! rsync -a --exclude .git "$src/" "$wt/"; then	  if ! false; then	T1	pw-test-harness
+C45-harness-internals-doc-dies	docs/testing.md	## Inside the harness (read this before editing tests/ or writing mutation rows)	## Internals (read this before editing tests/ or writing mutation rows)	T4	-

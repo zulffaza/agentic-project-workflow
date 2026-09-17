@@ -126,6 +126,13 @@ static_t4() {
     && grep -qF 'pw-context.sh' "$TOOL/docs/scripts/review-and-context-editing.md" \
     && pwtest_ok "T4 canary: review-and-context-editing group doc covers both scripts" \
     || pwtest_bad "T4 canary: group doc coverage" "docs/scripts/review-and-context-editing.md lost a script section — no doc-less capability ships"
+  # (e) plan-19 harness mechanics documented — no speedup ships undocumented:
+  grep -qF '## Inside the harness' "$TOOL/docs/testing.md" \
+    && grep -qF '## Writing a mutation row' "$TOOL/docs/testing.md" \
+    && grep -qF 'PWTEST_MUT_JOBS' "$TOOL/docs/testing.md" \
+    && grep -qF 'PWTEST_MUT_TIMEOUT' "$TOOL/docs/testing.md" \
+    && pwtest_ok "T4 canary: harness internals + env knobs + row-authoring documented" \
+    || pwtest_bad "T4 canary: harness docs" "testing.md lost §Inside the harness / §Writing a mutation row or the PWTEST_MUT_* knob names"
   # 5) shared plumbing used, not reinvented
   for f in $PWTEST_AUTOMATION; do
     grep -q 'pw-common\.sh' "$TOOL/$f" && pwtest_ok "T4: $f sources pw-common" || pwtest_bad "T4: $f sources pw-common" "P2 violation (readers re-implemented)"

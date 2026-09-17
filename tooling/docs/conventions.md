@@ -86,4 +86,6 @@ and the script only ever receives already-separated values — it never splits s
 6. Docs before ship: usage header (S6) + a section in `docs/scripts/` + command file + affected
    skills/agents/templates. **No doc-less capability ships.**
 7. Tests before ship: T1 selftest cases + battery rows + mutation-register catchers — see
-   [`testing.md`](./testing.md).
+   [`testing.md`](./testing.md). Register rows: OLD byte-exact **and unique**, catcher must not
+   depend on the mutation changing fixture BYTES (recipe-hash cache rule), check next-free ID
+   against draft reservations — checklist in [`testing.md`](./testing.md) §Writing a mutation row.
