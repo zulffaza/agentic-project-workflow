@@ -13,8 +13,8 @@ ROOT="$(mktemp -d)"; trap 'rm -rf "$ROOT"' EXIT
   . "$here/tests/pw_test_lib.sh"
   pwtest_env_init "$ROOT"
   S1=pwt-f1-scaffold S2=pwt-f2-mid S3=pwt-f3-hostile; export S1 S2 S3
-  F1="$(pwtest_build_f1 "$S1")"; F2="$(pwtest_build_f2 "$S2")"; PWTEST_F2="$F2"; export PWTEST_F2 F1 F2
-  F3="$(pwtest_build_f3 "$S3")"; export F3
+  _pwtest_scan "$here/tests/cases/$name.t.sh"    # build only the fixtures this case consumes
+  _pwtest_materialize
   . "$here/tests/cases/$name.t.sh"
   pwtest_summary
 ) ; exit $?

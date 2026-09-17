@@ -295,3 +295,28 @@ open(f,"w").write(t)
 PY
   printf '%s' "$dst"
 }
+
+# --- lazy materialization (plan 19 F1): build only the fixtures the SELECTED scripts consume.
+# static.sh (T0/T4) and corpus.sh (T3) never reference fixtures; a T1 `--only` child that runs
+# one case clones only that case's fixture. Overbuild is safe (slower); underbuild fails loudly
+# (cases error on missing dirs) — the scan errs toward matching, incl. comments.
+NEED_F1=0; NEED_F2=0; NEED_F3=0
+_pwtest_scan() { # <file>… — mark fixtures whose F/S vars the files reference
+  local f
+  for f in "$@"; do
+    [ -f "$f" ] || continue
+    grep -qE '\$\{?[FS]1\}?|PWTEST_F1' "$f" && NEED_F1=1
+    grep -qE '\$\{?[FS]2\}?|PWTEST_F2' "$f" && NEED_F2=1
+    grep -qE '\$\{?[FS]3\}?|PWTEST_F3' "$f" && NEED_F3=1
+  done
+  [ "$NEED_F3" = 1 ] && NEED_F2=1     # F3 is derived from F2 (pwtest_build_f3 needs PWTEST_F2)
+  return 0
+}
+_pwtest_materialize() { # build what NEED_F* flags selected; prints the built set
+  local built=""
+  [ "$NEED_F1" = 1 ] && { F1="$(pwtest_build_f1 "$S1")" || { echo "pwtest: F1 build failed" >&2; exit 2; }; export F1; built="$built F1"; }
+  [ "$NEED_F2" = 1 ] && { F2="$(pwtest_build_f2 "$S2")" || { echo "pwtest: F2 build failed" >&2; exit 2; }; export F2 PWTEST_F2="$F2"; built="$built F2"; }
+  [ "$NEED_F3" = 1 ] && { F3="$(pwtest_build_f3 "$S3")" || { echo "pwtest: F3 build failed" >&2; exit 2; }; export F3; built="$built F3"; }
+  printf 'TEST fixtures built:%s\n' "${built:- none}" >&2
+  return 0
+}
