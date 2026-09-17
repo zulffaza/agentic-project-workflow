@@ -108,7 +108,7 @@ while i < len(s):
         i = j
     i += 1
 body = s[start+1:i]
-key = '"' + sys.argv[2] + '":\s*\{'
+key = '"' + sys.argv[2] + r'":\s*\{'
 km = re.search(key, body)
 if not km:
     print("absent"); sys.exit()
