@@ -105,9 +105,9 @@ buried in `tooling/`.
 - **Root cause:** `template/_REVIEW.template.md`'s permanent format-hint blockquote and its
   deletable worked-example block both contain the literal string `[OPEN]` as a syntax
   demonstration, by design — a naive whole-file grep can't tell that apart from a real item.
-- **Mitigation (built in):** `_review_has_open_marker()` (`tooling/pw-lib.sh`) strips HTML
+- **Mitigation (built in):** `_review_has_open_marker()` (`tooling/scripts/lib/pw-mdlib.sh`) strips HTML
   comments first, then anchors only to real `### ` headings (not `> ` blockquote lines) — this is
-  what the auto-signoff gate actually checks, and it's covered by `pw-lib.sh selftest`.
+  what the auto-signoff gate actually checks, and it's covered by the harness.
 - Discovered during the AI-review feature's own testing, 2026-08-10.
 
 ### HTML comments cannot nest — a worked example living inside one needs bracket notation instead
@@ -141,4 +141,4 @@ buried in `tooling/`.
   live usage produced a half-cleaned stub that dropped only its timestamp). The review scan,
   pw-status and pw-doc-lint consume it; raw marker greps are banned; `auto-signoff` inherits the
   stub exemption (a clean pass must succeed). Coverage: C22 cases in `tests/cases/`, unit checks
-  in `pw-lib.sh selftest`.
+  in the harness.

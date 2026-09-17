@@ -144,7 +144,7 @@ echo "  wrote $ENV_FILE"
 echo
 
 # --- verify + next steps -----------------------------------------------------
-echo "  self-test: $("$PW_HOME/tooling/pw-lib.sh" selftest 2>&1 | tail -1)"
+echo "  self-test: $("$PW_HOME/tooling/tests/pw_test.sh" --tier T0 2>&1 | tail -1)"
 echo
 echo "Done. To make the path vars available in your shell now:"
 echo "    source \"$ENV_FILE\""

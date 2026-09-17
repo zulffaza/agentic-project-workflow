@@ -216,7 +216,7 @@ if [ "$SELFTEST" -eq 1 ]; then
   TMPDIR="$(mktemp -d)"
   trap 'rm -rf "$TMPDIR"' EXIT
   PROJECTS_DIR="$TMPDIR"
-  export PW_PROJECTS_DIR="$TMPDIR"   # child pw-lib.sh calls resolve projects from the env
+  export PW_PROJECTS_DIR="$TMPDIR"   # child calls resolve projects from the env
   SLUG="test-project"
   mkdir -p "$TMPDIR/$SLUG/context" "$TMPDIR/$SLUG/analysis/review" "$TMPDIR/$SLUG/task/review"
   cat > "$TMPDIR/$SLUG/README.md" <<'EOF'

@@ -356,3 +356,83 @@ rv_selftest() {
 }
 rv_selftest
 rm -rf "$ROOT/rv"
+
+# --- ported from pw-lib's inline selftest (plan 20 Phase 5) ---
+pl_review_selftest() {
+  local tmp="$ROOT/pl-review"; rm -rf "$tmp"
+  die() { pwtest_bad "pw-lib-port[review]: $*" "ported selftest assert failed"; }
+  # --- review reindex / review archive -------------------------------------------------
+  mkdir -p "$tmp/reviewtest/analysis"
+  printf -- '- **Status:** context\n- **One-liner:** <x>\n' > "$tmp/reviewtest/README.md"
+  : > "$tmp/reviewtest/LOG.md"
+  printf '# Analysis: rt\n' > "$tmp/reviewtest/analysis/rt.md"
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" init reviewtest analysis/review/rt.review.md analysis/rt.md >/dev/null
+  local RTV="$tmp/reviewtest/analysis/review/rt.review.md"
+  # Add a 2nd OPEN item and a RESOLVED item into ## Items, BEFORE ## Open questions — realistic
+  # placement (never a blind end-of-file append, which would land after ## Sign-off and prove
+  # nothing). Written to a temp file with plain printf, then head/tail/cat-spliced in — NOT
+  # `awk -v` with this multi-line block: macOS's stock awk rejects a `-v` value containing embedded
+  # newlines ("awk: newline in string") — the exact portability trap _ship_comment_section_ensure's
+  # own comment already documents; sidestep it here the same way that function does.
+  local newitems; newitems="$(mktemp)"
+  {
+    printf '### R2 · §3 second item — [OPEN] (you, 2026-08-19 10:00) <!-- pw-item-status: open -->\n'
+    printf 'Second ask, still open.\n\n---\n\n'
+    printf '### R3 · §4 third item — [RESOLVED] (you, 2026-08-19 09:00) <!-- pw-item-status: resolved -->\n'
+    printf 'Third ask, already fixed.\n\n'
+    printf '> ↳ **agent** (2026-08-19 09:30): §4 — fixed as asked.\n\n---\n\n'
+  } > "$newitems"
+  local oqline; oqline="$(grep -n '^## Open questions' "$RTV" | head -1 | cut -d: -f1)"
+  { head -n "$((oqline-1))" "$RTV"; cat "$newitems"; tail -n "+${oqline}" "$RTV"; } > "$RTV.tmp" && mv "$RTV.tmp" "$RTV"
+  rm -f "$newitems"
+  # Clear the template's own live R1/Q1 stubs (same convention as the auto-signoff test above —
+  # never a real "fix", just clearing a never-filled-in placeholder) so this test is isolated to
+  # R2/R3.
+  sed -i '' -e '/^### R1 · <§section or anchor> — \[OPEN\]/,+1d' \
+            -e '/^### Q1 · <§section> — \[PENDING\]/,+1d' "$RTV"
+
+  # reindex: builds a Contents table with exactly R2 (open) and R3 (resolved) — ignoring the
+  # template's own commented-out worked-example headings (R1/Q1, still present verbatim above the
+  # live section) — and is idempotent (a 2nd run replaces the block in place, never duplicates it).
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" reindex reviewtest analysis/review/rt.review.md >/dev/null
+  grep -q '<!-- pw-contents:begin -->' "$RTV" || die "selftest FAIL: review reindex did not insert a Contents block"
+  local CT1; CT1="$(sed -n '/pw-contents:begin/,/pw-contents:end/p' "$RTV")"
+  printf '%s\n' "$CT1" | grep -qF '| R2 | §3 second item | [OPEN] |' || die "selftest FAIL: reindex Contents missing/wrong R2 row"
+  printf '%s\n' "$CT1" | grep -qF '| R3 | §4 third item | [RESOLVED] |' || die "selftest FAIL: reindex Contents missing/wrong R3 row"
+  printf '%s\n' "$CT1" | grep -q '| R1 |' && die "selftest FAIL: reindex Contents picked up a commented-out worked-example heading"
+  [ "$(grep -c '<!-- pw-contents:begin -->' "$RTV")" = "1" ] || die "selftest FAIL: reindex duplicated the Contents begin-marker"
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" reindex reviewtest analysis/review/rt.review.md >/dev/null
+  [ "$(grep -c '<!-- pw-contents:begin -->' "$RTV")" = "1" ] || die "selftest FAIL: re-running reindex duplicated the Contents block instead of replacing it in place"
+  [ "$(grep -c '^## Contents' "$RTV")" = "1" ] || die "selftest FAIL: re-running reindex duplicated the Contents heading"
+
+  # archive: gate-safety proof — capture the Sign-off section + has-open verdict BEFORE, run
+  # archive, assert both are UNCHANGED after, R3's heading is gone from the live file, R2's is
+  # untouched, the archive file has R3's text verbatim (including its reply), and a pointer row
+  # with the right marker landed in a new "## Archived items" section.
+  local before_signoff before_hasopen
+  before_signoff="$(sed -n '/^## Sign-off/,$p' "$RTV")"
+  before_hasopen="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" has-open reviewtest analysis/review/rt.review.md)"
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" archive reviewtest analysis/review/rt.review.md >/dev/null
+  local after_signoff after_hasopen
+  after_signoff="$(sed -n '/^## Sign-off/,$p' "$RTV")"
+  after_hasopen="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" has-open reviewtest analysis/review/rt.review.md)"
+  [ "$before_signoff" = "$after_signoff" ] || die "selftest FAIL: review archive changed the Sign-off table/section — gate-safety broken"
+  [ "$before_hasopen" = "$after_hasopen" ] || die "selftest FAIL: review archive changed has-open's verdict ($before_hasopen -> $after_hasopen)"
+  [ "$after_hasopen" = "yes" ] || die "selftest FAIL: R2 should still be open after archiving R3 (test assumption invalid)"
+  grep -q '^### R3 · §4 third item' "$RTV" && die "selftest FAIL: R3's heading is still in the live file after archiving"
+  grep -q '^### R2 · §3 second item' "$RTV" || die "selftest FAIL: R2's heading was removed by archive (should be untouched — still [OPEN])"
+  local RTA="$tmp/reviewtest/analysis/review/rt.archive.md"
+  [ -f "$RTA" ] || die "selftest FAIL: review archive did not create rt.archive.md"
+  grep -q '^### R3 · §4 third item — \[RESOLVED\]' "$RTA" || die "selftest FAIL: R3's heading not moved verbatim into the archive file"
+  grep -qF '> ↳ **agent** (2026-08-19 09:30): §4 — fixed as asked.' "$RTA" || die "selftest FAIL: R3's reply text not preserved verbatim in the archive file"
+  grep -q '^## Archived items' "$RTV" || die "selftest FAIL: review archive did not add an Archived items section"
+  grep -qF '<!-- pw-archived:R3 -->' "$RTV" || die "selftest FAIL: no pointer row/marker for R3 in Archived items"
+
+  # a 2nd archive run with nothing newly resolved must be a harmless no-op (no duplicate rows).
+  local archived_rows_before; archived_rows_before="$(grep -c 'pw-archived:' "$RTV")"
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" archive reviewtest analysis/review/rt.review.md >/dev/null
+  [ "$(grep -c 'pw-archived:' "$RTV")" = "$archived_rows_before" ] \
+    || die "selftest FAIL: re-running archive with nothing newly resolved was not a no-op"
+  rm -rf "$tmp"
+}
+pl_review

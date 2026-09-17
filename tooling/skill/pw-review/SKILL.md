@@ -129,7 +129,7 @@ tooling/scripts/entities/pw-config.sh ai-review <slug> <phase> <mode>      # off
   word for it. A refusal means one of those two isn't actually true; don't retry the same call
   expecting a different answer, fix the actual condition or leave it for a human.
 
-If you're a foreign agent without access to this bundle's `tooling/pw-lib.sh` (handed just the
+If you're a foreign agent without access to this bundle's `tooling/scripts/` (handed just the
 artifact + this skill, no checkout), you can still do the `advisory` half by hand — file items
 directly into the `.review.md`. You cannot safely do the `auto` half without the tool, since the
 whole point is that the check is enforced by code, not by your own say-so; leave Sign-off alone in

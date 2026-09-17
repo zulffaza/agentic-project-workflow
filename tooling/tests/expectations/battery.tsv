@@ -1,4 +1,3 @@
-selftest: pw-lib.sh selftest	pw-lib.sh	selftest	0	-
 selftest: pw-status.sh --selftest	pw-status.sh	--selftest	0	-
 status pwt-f1-scaffold	pw-status.sh	pwt-f1-scaffold --skip-cli-check	0	-
 review-scan pwt-f1-scaffold	pw-review.sh	scan pwt-f1-scaffold	0	-
@@ -55,7 +54,6 @@ lint-task-crlf pwt-f3-hostile	pw-doc.sh	lint task pwt-f3-hostile	2	-
 batch-list F3	pw-ship.sh	mr-state-batch pwt-f3-hostile T02 T05	0	-
 unknown-project	pw-status.sh	nope-not-here	2	-
 unknown-arg	pw-doc.sh	lint bogus-mode pwt-f2-mid	2	-
-selftest: pw-lib.sh selftest	pw-lib.sh	selftest	0	-
 selftest: pw-status.sh --selftest	pw-status.sh	--selftest	0	-
 status pwt-f1-scaffold	pw-status.sh	pwt-f1-scaffold --skip-cli-check	0	-
 review-scan pwt-f1-scaffold	pw-review.sh	scan pwt-f1-scaffold	0	-

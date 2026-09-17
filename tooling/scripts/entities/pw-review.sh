@@ -70,7 +70,7 @@ PW_HOME="$(cd "$HERE/../../.." && pwd)"
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 ST="$HERE/pw-status.sh"
 CFG="$HERE/pw-config.sh"
-# Mirror of the ai-review config phases (config entity owns the list; pw-lib until Phase 4).
+# Mirror of the ai-review config phases (owned by pw-config.sh).
 AI_REVIEW_PHASES="analysis plan task-plan task-exec ship"
 
 die() { echo "pw-review: $*" >&2; exit 2; }
@@ -437,7 +437,7 @@ cmd_init() {
 # cmd_ai_review ensures the line first). Used by cmd_review_auto_signoff's gate check.
 _ai_review_mode_of() {
   local slug="$1" phase="$2" modes kv
-  modes="$("$CFG" ai-review "$slug")"   # config read — pw-lib subprocess until pw-config.sh owns it (Phase 4)
+  modes="$("$CFG" ai-review "$slug")"   # the config entity owns the modes
   for kv in $modes; do
     [ "${kv%%=*}" = "$phase" ] && { echo "${kv#*=}"; return 0; }
   done
@@ -550,7 +550,7 @@ cmd_auto_signoff() {
   local f="$d/$rel"
   [ -f "$f" ] || die "no such review file: $rel"
   local mode; mode="$(_ai_review_mode_of "$slug" "$phase")"
-  [ "$mode" = "auto" ] || die "refusing auto-signoff: this project's AI Review mode for '$phase' is '$mode', not 'auto' (pw-lib.sh ai-review $slug $phase auto to enable)"
+  [ "$mode" = "auto" ] || die "refusing auto-signoff: this project's AI Review mode for '$phase' is '$mode', not 'auto' (pw-config.sh ai-review $slug $phase auto to enable)"
   _review_has_open_marker "$f" && die "refusing auto-signoff: $rel still has an unresolved [OPEN] item or [PENDING] question"
   local signline; signline="$(grep -n '^## Sign-off' "$f" | head -1 | cut -d: -f1)"
   [ -n "$signline" ] || die "no '## Sign-off' section in $rel — not a valid review file"

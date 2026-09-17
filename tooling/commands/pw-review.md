@@ -72,7 +72,7 @@ like the apply-comments flow does):
 
 **If the 2nd argument is literally `config`, this is how I view/change this project's AI Review
 settings — skip everything below and follow this instead.** This command is the interface for
-that; regardless of what else I ask for, never tell me to run `pw-lib.sh` myself for this — that's
+that; regardless of what else I ask for, never tell me to run the raw config script myself for this — that's
 the internal mechanism this sub-verb wraps, not something I should need to know exists.
 
 1. **No further arguments** → run `…/{{PW_HOME}}/tooling/scripts/entities/pw-config.sh ai-review <slug>` and show me

@@ -32,13 +32,13 @@ phase runs. Don't skip a gate.
 | apply review comments (local `.review.md` or MR/PR feedback) | [`references/review.md`](references/review.md) |
 | close out a finished project | [`references/close.md`](references/close.md) |
 | call an automation script (gates, lint, status, ship, fetch — the 14 `pw-*.sh` helpers) | [`tooling/docs/scripts/README.md`](../../docs/scripts/README.md) |
-| anything else — `pw-lib.sh` helper subcommands, the slash-command list, branch/worktree naming, the rewind flow | [`references/conventions-and-gotchas.md`](references/conventions-and-gotchas.md) |
+| anything else — the `pw-*.sh` entity-script operators, the slash-command list, branch/worktree naming, the rewind flow | [`references/conventions-and-gotchas.md`](references/conventions-and-gotchas.md) |
 
 ## Golden rules (every phase — no reference file needed for these)
 
 - **Respect the gates.** A phase writes, a human reviews, the next phase starts. Only the **PLAN
   sign-off is a hard gate** for execution; per-task reviews are optional, created on demand.
-- **Mutate dashboard/log state only through `pw-lib.sh`**
+- **Mutate dashboard/log state only through `pw-status.sh`**
   (`status|oneliner|adopted|adopt|review-init|log|phase`) — never hand-edit the dashboard
   `Status:` line, `LOG.md`, or a review file's structure. Exact subcommands + what each does:
   [`references/conventions-and-gotchas.md`](references/conventions-and-gotchas.md).

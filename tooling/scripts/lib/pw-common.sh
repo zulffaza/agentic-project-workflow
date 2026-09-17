@@ -280,7 +280,7 @@ pw_has_field() { [ -n "$(pw_field "$1" "$2")" ]; }
 PW_VALID_PHASES="context analysis breakdown executing review done"
 pw_phase_token() { printf '%s\n' "${1%%[[:space:]—-]*}"; }
 pw_phase_valid() { case " $PW_VALID_PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
-pw_phase_hint() { printf 'fix the Status line: it must start with one of %s (free prose may follow the token) — repair with: pw-lib.sh status <slug> <phase> [--rewind]' "$PW_VALID_PHASES"; }
+pw_phase_hint() { printf 'fix the Status line: it must start with one of %s (free prose may follow the token) — repair with: pw-status.sh status <slug> <phase> [--rewind]' "$PW_VALID_PHASES"; }
 
 # pw_trim strips surrounding whitespace from stdin. NEVER use `| xargs` for this:
 # xargs parses quotes, so a title/path containing an unbalanced apostrophe

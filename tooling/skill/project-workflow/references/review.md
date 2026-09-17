@@ -22,12 +22,11 @@ Rules you MUST follow:
 - **Task review is OPTIONAL.** Only the PLAN sign-off gates execution; per-task `T0n.review.md`
   files exist whenever the human wants to send *any* feedback on a task — either **before**
   execution (critiquing the planned steps) or **after** (rejecting a result). If a task is flipped
-  to `verify-failed` but has **no** review file, create it deterministically (`pw-lib.sh
-  review-init`, or `pw-review.sh init-all <slug>` for every missing review file at once),
+  to `verify-failed` but has **no** review file, create it deterministically (`pw-review.sh init`, or `pw-review.sh init-all <slug>` for every missing review file at once),
   write the human's chat feedback as items via `pw-review.sh add-item`, then apply it —
   don't silently do nothing (a frequent confusion). If there's no feedback anywhere, ask.
 - Before editing any doc, read its `.review.md` first — but only the item's own block + the
-  section(s) it names (via the file's own `## Contents` table, refreshed with `pw-lib.sh review
+  section(s) it names (via the file's own `## Contents` table, refreshed with `pw-review.sh
   reindex`, or a configured memory tool's location-only pinpoint — see `tooling/docs/memory.md`),
   never the whole file. Never read a `<topic>.archive.md` (moved-out resolved history) unless the
   item itself asks about past rationale.
@@ -56,7 +55,7 @@ Rules you MUST follow:
   add-question` reindex automatically — only hand-edits need the manual reindex.) Once 3+ items/questions are resolved
   since the last archive, or the file's past ~150 lines, run `pw-review.sh archive <slug>
   <review-rel-path>` to move them verbatim into `<topic>.archive.md` — never touches `[OPEN]`/
-  `[PENDING]` or the Sign-off table (provably gate-safe, see `tooling/pw-lib.sh`'s own comment).
+  `[PENDING]` or the Sign-off table (provably gate-safe, see `pw-review.sh`'s archive comment).
 - **Opportunistically seed a configured memory tool** (skip silently if `PW_MEMORY=none`) when a
   fix is durable/generalizable — reuse the item's own `↳ agent:` reply (or, for an analysis fix,
   the §5.1 Decisions-log line) verbatim as the payload, never new authoring.

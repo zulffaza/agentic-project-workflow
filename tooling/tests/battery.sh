@@ -74,7 +74,7 @@ battery_t2() {
 
   # spine selftests, run from a foreign cwd (C12)
   local cmd rc
-  for cmd in "pw-lib.sh selftest" "pw-status.sh --selftest"; do
+  for cmd in "pw-status.sh --selftest"; do
     (cd /tmp && b_s="${cmd%% *}" && "$(pwtest_script "$b_s")" ${cmd#* } >/dev/null 2>&1); rc=$?
     label="selftest: $cmd"
     if [ "$cap" = 1 ]; then printf '%s\t%s\t%s\t%s\t%s\n' "$label" "${cmd%% *}" "${cmd#* }" "$rc" "-" >> "$TOOL/tests/expectations/battery.tsv"

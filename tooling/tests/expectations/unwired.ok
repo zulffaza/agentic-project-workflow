@@ -1,4 +1,3 @@
 pw-common.sh	infrastructure dot-sourced by every script; referenced as a name, never a command
 pw-doctor.sh	user-facing maintenance command referenced by name in commands
-pw-lib.sh	core library, *the* documented repair-command interface used in remediation lines everywhere
 pw-mdlib.sh	source-only markdown primitives library (S5); dot-sourced by pw-lib.sh/pw-review-edit.sh/pw-context.sh, never a command

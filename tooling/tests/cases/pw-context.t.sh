@@ -93,3 +93,46 @@ pwtest_rc any "snapshot branch via git url" "$(pwtest_script pw-context.sh)" ado
 grep -qE '^base: master' "$PWTEST_BOTH" && pwtest_ok "base key emitted" || pwtest_ok "base present (source may vary: $PWTEST_MR_TARGET)"
 pwtest_rc any "snapshot MR url target" env PWTEST_MR_TARGET=dev "$(pwtest_script pw-context.sh)" adopt-snapshot "$S3" api "agent/" "https://gitlab.example.com/pwtest/api/-/merge_requests/42" 2>/dev/null || true
 [ "$PWTEST_RC" = 0 ] && { grep -q 'dev' "$PWTEST_BOTH" && pwtest_ok "MR-base path (mr-target)" || pwtest_ok "base from url via shim api"; }
+
+# --- ported from pw-lib's inline selftest (plan 20 Phase 5) ---
+pl_adopt_selftest() {
+  local tmp="$ROOT/pl-adopt"; rm -rf "$tmp"; mkdir -p "$tmp/demo"
+  printf -- '- **Status:** context\n- **One-liner:** <what this project is>\n' > "$tmp/demo/README.md"
+  : > "$tmp/demo/LOG.md"
+  die() { pwtest_bad "pw-lib-port[adopt]: $*" "ported selftest assert failed"; }
+  # adopt: multi-unit append MUST NOT clobber (the reported bug). Two branches, same repo.
+  mkdir -p "$tmp/demo/context"
+  # An INDEX.md with a provenance table (empty placeholder) AND a "Repos in scope" table (empty
+  # placeholder) so we can assert both the one-time provenance row and the no-clobber scope rows.
+  printf '# Context index\n\n| File / link | What it is | Source | Date added | Trust notes |\n|---|---|---|---|---|\n| | | | | |\n\n## Repos in scope\n| Repo | Base branch | Why |\n|------|-------------|-----|\n| | | |\n' \
+    > "$tmp/demo/context/INDEX.md"
+  local IX="$tmp/demo/context/INDEX.md"
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-context.sh)" adopt demo repoX feat-a master "http://mr/1" >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-context.sh)" adopt demo repoX feat-b spring3 "http://mr/2" >/dev/null
+  local A; A="$tmp/demo/context/ADOPTED.md"
+  grep -q '^## A1 · repoX @ feat-a' "$A" || die "selftest FAIL: unit A1 clobbered by 2nd adopt"
+  grep -q '^## A2 · repoX @ feat-b' "$A" || die "selftest FAIL: unit A2 not appended"
+  [ "$(grep -c '^## A[0-9]* · ' "$A")" = "2" ] || die "selftest FAIL: expected 2 adoption units"
+  grep -q '^- \*\*Adopted:\*\* 2 unit(s)' "$tmp/demo/README.md" || die "selftest FAIL: unit count not 2"
+  # re-adopt A1 with a corrected base/MR → updates in place, still 2 units, prose untouched
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-context.sh)" adopt demo repoX feat-a develop "http://mr/1b" >/dev/null
+  [ "$(grep -c '^## A[0-9]* · ' "$A")" = "2" ] || die "selftest FAIL: re-adopt duplicated a unit"
+  awk '/^## A1 · /{u=1} u&&/^- Base: /{print;exit}' "$A" | grep -q 'develop' || die "selftest FAIL: A1 base not updated in place"
+  awk '/^## A2 · /{u=1} u&&/^- Base: /{print;exit}' "$A" | grep -q 'spring3' || die "selftest FAIL: A2 base wrongly changed"
+  # scope table (INDEX.md): both units got a row, empty placeholder dropped, no clobber…
+  grep -q 'pw-adopt-scope:repoX@feat-a' "$IX" || die "selftest FAIL: scope row for feat-a missing"
+  grep -q 'pw-adopt-scope:repoX@feat-b' "$IX" || die "selftest FAIL: scope row for feat-b clobbered/missing"
+  [ "$(grep -c 'pw-adopt-scope:' "$IX")" = "2" ] || die "selftest FAIL: expected 2 scope rows"
+  grep -qE '^\| +\| +\|' "$IX" && die "selftest FAIL: empty placeholder scope row not dropped"
+  # …and the re-adopt of A1 (base develop, above) rewrote ONLY feat-a's scope row in place.
+  grep 'pw-adopt-scope:repoX@feat-a' "$IX" | grep -q 'origin/develop' || die "selftest FAIL: feat-a scope row base not updated"
+  grep 'pw-adopt-scope:repoX@feat-b' "$IX" | grep -q 'origin/spring3'  || die "selftest FAIL: feat-b scope row wrongly changed"
+  [ "$(grep -c 'pw-adopt-scope:' "$IX")" = "2" ] || die "selftest FAIL: re-adopt duplicated a scope row"
+  # provenance row: inserted exactly once, generic (not per-unit enumerated), never rewritten/duped
+  # across the multiple adopts above.
+  [ "$(grep -cE '^\|[^|]*ADOPTED\.md' "$IX")" = "1" ] || die "selftest FAIL: expected exactly one ADOPTED.md provenance row"
+  grep -qE '^\|[^|]*ADOPTED\.md.*all continuation units' "$IX" || die "selftest FAIL: provenance row not generic"
+  grep -qE '^\|[^|]*ADOPTED\.md.*feat-a' "$IX" && die "selftest FAIL: provenance row enumerated a unit (should stay generic)"
+  rm -rf "$tmp"
+}
+pl_adopt

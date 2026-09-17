@@ -29,7 +29,7 @@ static_t0() {
 
   # 3) forbidden idioms (code lines only; comments may *warn* about them).
   # TAB-delimited columns: re, excl, label (patterns contain literal "|").
-  code="$(_pwtest_code_lines "$TOOL"/pw-lib.sh "$TOOL"/scripts/*/*.sh)"
+  code="$(_pwtest_code_lines "$TOOL"/scripts/*/*.sh)"
   while IFS=$'	' read -r re excl label; do
     [ -z "$re" ] && continue
     hits="$(printf '%s\n' "$code" | grep -E -- "$re" || true)"
@@ -116,11 +116,12 @@ static_t4() {
   hits="$(grep -lE 'pw-review\.sh signoff|pw-review-edit\.sh' "$TOOL"/agents/*.md 2>/dev/null | tr '\n' ' ')"
   [ -z "$hits" ] && pwtest_ok "T4 canary: no agent file invokes signoff" \
     || pwtest_bad "T4 canary: no agent file invokes signoff" "C4 violation in: $hits — only a human triggers a gate decision (agent path: pw-review.sh auto-signoff)"
-  # (c) capability-placement conventions doc exists, is linked from the maintainer entry, and freezes pw-lib
+  # (c) capability-placement conventions doc exists, is linked from the maintainer entry,
+  # and the pw-lib legacy core is fully dissolved (S2 endgame, plan 20)
   [ -f "$TOOL/docs/conventions.md" ] && grep -qF 'docs/conventions.md' "$TOOL/AGENTS.md" \
-    && grep -qE '^# FROZEN \(S2' "$(pwtest_script pw-lib.sh)" \
-    && pwtest_ok "T4 canary: conventions.md exists + linked + pw-lib S2 freeze note" \
-    || pwtest_bad "T4 canary: conventions doc" "tooling/docs/conventions.md missing, or its tooling/AGENTS.md link died, or pw-lib.sh lost the S2 FROZEN header note"
+    && [ ! -e "$TOOL/pw-lib.sh" ] \
+    && pwtest_ok "T4 canary: conventions.md exists + linked; pw-lib.sh dissolved" \
+    || pwtest_bad "T4 canary: conventions doc + pw-lib dissolution" "tooling/docs/conventions.md missing, or its tooling/AGENTS.md link died, or pw-lib.sh survived the dissolution"
   # (d) the new entity scripts keep their group-doc section (usage reference completeness)
   grep -qF 'pw-review.sh' "$TOOL/docs/scripts/review-and-context-editing.md" \
     && grep -qF 'pw-context.sh' "$TOOL/docs/scripts/review-and-context-editing.md" \
@@ -140,11 +141,9 @@ static_t4() {
 
   # 6) L-rules layout canaries (tooling/docs/conventions.md): no file ships outside its kind-dir,
   # no caller references a layout path it must not know, and the registry mirrors the tree.
-  # (a) dead-path: zero flat tooling/<entry>.sh refs anywhere (pw-lib exempt until its dissolution)
+  # (a) dead-path: zero flat tooling/<entry>.sh refs anywhere (pw-lib dissolved — no exemption)
   hits="$(grep -rlE 'tooling/(pw-[a-z0-9-]+|scaffold|gen-[a-z-]+)\.sh' "$TOOL/.." --include='*.sh' --include='*.md' 2>/dev/null \
-    | grep -v '/pw-lib\.sh$' | while read -r f; do
-        if grep -qE 'tooling/pw-lib\.sh' "$f"; then grep -qE 'tooling/(pw-[a-z0-9-]+|scaffold|gen-[a-z-]+)\.sh' <(sed 's#tooling/pw-lib\.sh#pwlib#g' "$f") && printf '%s ' "$f"; else printf '%s ' "$f"; fi
-      done)"
+    | grep -v 'tests/static\.sh$' | tr '\n' ' ')"
   [ -z "$hits" ] && pwtest_ok "T4: no flat tooling/<script>.sh references (L5)" \
     || pwtest_bad "T4: no flat tooling/<script>.sh references (L5)" "stale refs in: $hits"
   # (b) registry == tree (non-registry entry points exempt per unwired.ok rationale)

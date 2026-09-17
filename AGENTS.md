@@ -55,7 +55,7 @@ real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./do
   is the only hard gate**; per-task reviews are optional. `/pw-execute` stops at *committed +
   verified* — **nothing goes outward** (push/MR) until you're explicitly asked to `/pw-ship`.
 - **Mutate state through the helpers, never by hand.** The dashboard `Status:`, `LOG.md`,
-  `ADOPTED.md`, and the `INDEX.md` adoption rows are owned by `tooling/pw-lib.sh`
+  `ADOPTED.md`, and the `INDEX.md` adoption rows are owned by the `/pw-adopt` flow's tooling
   (`status|oneliner|adopted|adopt|log|phase`). Hand-editing these load-bearing, format-sensitive
   bits is what causes drift and clobbers — always go through the helper.
 - **Never hand-edit generated artifacts.** The per-provider command files (`~/.claude/commands`,

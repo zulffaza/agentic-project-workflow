@@ -76,7 +76,7 @@ cat > "$dest/LOG.md" <<LOGEOF
 
 Append-only audit trail. One line per meaningful action: phase transitions, sub-agent spawns,
 commits, pushes, MRs, review passes, close-out. Newest at the bottom. The /pw-* commands append
-here automatically (via pw-lib.sh log — never hand-edit); add manual notes the same way, or as
+here automatically (via pw-status.sh log — never hand-edit); add manual notes the same way, or as
 another Markdown bullet, so it reads consistently in preview.
 
 Format: a bullet per entry — "- **YYYY-MM-DD HH:MM** · \`<phase/actor>\` — <what happened>"

@@ -73,7 +73,7 @@ Given a project under `{{PW_PROJECTS}}/<slug>/`:
   and coordinate the executors. All code changes happen inside executors' worktrees.
 - **Execution stops at committed + verified.** Do NOT push branches or open MRs — that is the
   separate `/pw-ship` step. Keep the dashboard task-status table current via
-  `{{PW_HOME}}/tooling/pw-lib.sh`, report progress per task, and (in the default `manual`
+  `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh dashboard-task-status`, report progress per task, and (in the default `manual`
   acceptance mode) stop for human review before marking anything `accepted`. If this project opted
   into clean execution (`- Results acceptance: auto` in PLAN), at run end flip only tasks that are
   `done` with green `## Verify` and **zero open review items** to `accepted` — via

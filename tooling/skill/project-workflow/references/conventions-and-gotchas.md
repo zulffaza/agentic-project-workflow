@@ -13,8 +13,8 @@ rewind flag** (`pw-status.sh status <slug> <phase> --rewind` — a plain `status
 backward, which is what stops accidental resets); then re-run that phase's command and re-approve.
 Downstream artifacts stay on disk and get regenerated once the upstream phase is re-approved.
 
-## Status field + audit log (commands own these — via `pw-lib.sh`)
-Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-workflow/tooling/pw-lib.sh`
+## Status field + audit log (commands own these — via `pw-status.sh`)
+Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-workflow/tooling/scripts/entities/pw-status.sh`
 (deterministic, phase-validated, portable across Claude Code + shelled-out kilo executors):
 - `pw-status.sh status <slug> <phase>` — set the dashboard `Status:` (`context→analysis→breakdown→
   executing→review→done`) and auto-log the change. Each `/pw-*` command runs this as its
@@ -54,7 +54,7 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   `req-init` (REQUIREMENTS.md from template, idempotent), `add-input` (INDEX.md inputs row —
   native A2 flag-segments, auto date, pipe escaping, placeholder-row replacement), `add-repo`
   (Repos-in-scope row, rest-of-line why; never touches `pw-adopt-scope` marker rows).
-- `pw-lib.sh` is **frozen for new subcommands** (S2); new capability goes to the entity's script,
+- The old frozen legacy catch-all script was fully dissolved; there is no second catch-all (S2),
   shared markdown primitives to `pw-mdlib.sh` — see `tooling/docs/conventions.md` (S/C/A-rules)
   before adding any script/operator/command.
 - `pw-status.sh log <slug> <actor> <msg>` — append one audit line to **`LOG.md`** as a Markdown bullet
