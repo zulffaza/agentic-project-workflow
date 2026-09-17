@@ -8,7 +8,7 @@ The `/pw-ship` path: decide what ships (`pw-ship-resolve.sh`), push + open MRs
 Pre-computes the shippable set so `/pw-ship`'s agent reasons over a resolved list, not raw files.
 
 ```bash
-$PW_HOME/tooling/pw-ship-resolve.sh <slug>
+$PW_HOME/tooling/scripts/entities/pw-ship-resolve.sh <slug>
 ```
 
 **Output** — one `|`-delimited line per task whose status is `done`:
@@ -29,7 +29,7 @@ The mechanical half of shipping **one task**, after the agent has confirmed the 
 written the MR description: `git push`, then create the MR (`glab`/`gh`, per the forge registry).
 
 ```bash
-$PW_HOME/tooling/pw-ship-exec.sh <slug> <task-id> <description-file>
+$PW_HOME/tooling/scripts/entities/pw-ship-exec.sh <slug> <task-id> <description-file>
 ```
 
 The description file's contents become the MR description — generating it stays an agent job;
@@ -60,8 +60,8 @@ locally — exit 2 messages name which is missing.
 One call instead of N `pw-lib.sh mr-state` queries.
 
 ```bash
-$PW_HOME/tooling/pw-mr-state-batch.sh <slug>            # every PLAN task, inferred
-$PW_HOME/tooling/pw-mr-state-batch.sh <slug> T03 T05    # just these
+$PW_HOME/tooling/scripts/entities/pw-mr-state-batch.sh <slug>            # every PLAN task, inferred
+$PW_HOME/tooling/scripts/entities/pw-mr-state-batch.sh <slug> T03 T05    # just these
 ```
 
 **Output** — one line per task: `T03|merged`, `T05|opened`, `T07|unknown`… `unknown` means the
@@ -73,7 +73,7 @@ query couldn't resolve state (no MR yet, forge CLI missing, task not in PLAN) �
 Polls a task's MR pipeline to a terminal state after push — replaces agent-polling loops.
 
 ```bash
-$PW_HOME/tooling/pw-pipeline-monitor.sh <slug> <task-id> [--timeout <minutes>] [--interval <seconds>]
+$PW_HOME/tooling/scripts/entities/pw-pipeline-monitor.sh <slug> <task-id> [--timeout <minutes>] [--interval <seconds>]
 ```
 
 Machine-reads the MR URL **from the task file's `## Result` only** (the bold `- **MR:**` field, with a

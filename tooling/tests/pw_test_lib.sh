@@ -16,6 +16,17 @@
 # ============================================================================
 
 TOOL_DIR="${TOOL:-$PWTEST_TOOLING_DIR}"
+# pwtest_script <name>.sh — resolve an entry-point script name to its path under the
+# layout (tooling/scripts/{entities,lib,toolchain}/ + tooling/ root). Registers, battery
+# expectations, and case files reference scripts by BASENAME; layout lives only here (L-rules).
+pwtest_script() {
+  local n="$1" d
+  for d in "$TOOL/scripts/entities" "$TOOL/scripts/lib" "$TOOL/scripts/toolchain" "$TOOL"; do
+    [ -f "$d/$n" ] && { printf '%s/%s' "$d" "$n"; return 0; }
+  done
+  echo "pwtest_script: no such script: $n" >&2; return 1
+}
+
 PWTEST_PASS=0; PWTEST_FAIL=0; PWTEST_SKIP=0
 # In-place sed on both BSD (`sed -i ''`) and GNU (`sed -i`) — BSD detected.
 sedi() {
@@ -129,7 +140,7 @@ pwtest_repo() {   # <name> [branch:<br>]… — create-once seed, clone, idempot
 pwtest_build_f1() {
   local slug="$1"
   PW_PROJECTS="$PW_PROJECTS_DIR" PW_REPOS="$PW_REPOS" \
-    "$PWTEST_TOOLING_DIR/scaffold.sh" "$slug" >/dev/null 2>&1
+    "$(pwtest_script scaffold.sh)" "$slug" >/dev/null 2>&1
   printf '%s/%s' "$PW_PROJECTS_DIR" "$slug"
 }
 
@@ -174,7 +185,7 @@ pwtest_approve_review() {
 # --- F2: mid-lifecycle, current baseline ----------------------------------------
 pwtest_scaffold_into() {
   PW_PROJECTS="$PW_PROJECTS_DIR" PW_REPOS="$PW_REPOS" \
-    "$PWTEST_TOOLING_DIR/scaffold.sh" "$1" >/dev/null 2>&1
+    "$(pwtest_script scaffold.sh)" "$1" >/dev/null 2>&1
 }
 
 pwtest_build_f2() {
@@ -198,9 +209,9 @@ pwtest_build_f2() {
   cp "$p/_REVIEW.template.md" "$p/task/review/T04.review.md"
   pwtest_approve_review "$p" analysis/review/fixture.review.md
   pwtest_approve_review "$p" task/review/PLAN.review.md
-  "$PWTEST_TOOLING_DIR/pw-lib.sh" status "$slug" executing >/dev/null 2>&1 \
+  "$(pwtest_script pw-lib.sh)" status "$slug" executing >/dev/null 2>&1 \
     || sed -i '' 's/^- \*\*Status:\*\* context/- **Status:** executing/' "$p/README.md"
-  "$PWTEST_TOOLING_DIR/pw-lib.sh" log "$slug" test "fixture materialized" >/dev/null 2>&1 || true
+  "$(pwtest_script pw-lib.sh)" log "$slug" test "fixture materialized" >/dev/null 2>&1 || true
   # mount the worktrees each task declares (mr-state/pw-lib resolve the repo via the task's
   # Worktree:/Branch: fields, so those must point at actually-mounted worktrees).
   local tt
@@ -236,8 +247,7 @@ PLANEOF
   sed -i '' "s@^- \*\*One-liner:\*\*.*@- **One-liner:** fixture project for the harness@" "$p/README.md" && rm -f "$p/README.md.bak"
     sed -i '' "s@\*\*Chosen approach:\*\* .*@**Chosen approach:** Option A — fixture choice@" "$p/analysis/fixture.md"
   # seed the dashboard from task truth — the SAME script does it, so "stale on arrival" can't bias tests:
-  "$TOOL_DIR/pw-doc-sync.sh" "$slug" --dashboard-only >/dev/null 2>&1 \
-    || python3 "$PWTEST_TOOLING_DIR/pw-doc-sync.py" --tooling "$PWTEST_TOOLING_DIR" "$slug" --dashboard-only >/dev/null 2>&1 || true
+  "$(pwtest_script pw-doc-sync.sh)" "$slug" --dashboard-only >/dev/null 2>&1 || true
   printf '%s' "$p"
 }
 
@@ -334,7 +344,7 @@ for base in ("template",):
         for fn in sorted(fns):
             p = os.path.join(dp, fn)
             h.update(os.path.relpath(p, root).encode()); h.update(open(p, "rb").read())
-for f in ("tooling/scaffold.sh", "tooling/pw-env.sh", "tooling/tests/pw_test_lib.sh"):
+for f in ("tooling/scripts/toolchain/scaffold.sh", "pw-env.sh", "tooling/tests/pw_test_lib.sh"):
     p = os.path.join(root, f)
     if os.path.exists(p): h.update(f.encode()); h.update(open(p, "rb").read())
 print(h.hexdigest()[:16])

@@ -23,9 +23,9 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
      lint belongs ONLY to Ship mode step 1. -->
 ```bash
 # Ship (push) mode:
-{{PW_HOME}}/tooling/pw-preflight.sh ship <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh ship <slug> || exit 1
 # Comments / sync mode (instead of the line above):
-{{PW_HOME}}/tooling/pw-preflight.sh comments <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh comments <slug> || exit 1
 ```
 **Reading the pre-flight:** `pw-preflight.sh ship` checks at least one task is actually shippable
 (`done`, verified) in a legal phase; `pw-preflight.sh comments` just requires a legal phase plus at
@@ -42,13 +42,13 @@ task; here we push branches and open MRs.
 
 ## Ship mode (default)
 1. **Task-format gate, then candidates.** First
-   `{{PW_HOME}}/tooling/pw-doc-lint.sh task <slug> --all || exit 1` — push mechanics read exactly
+   `{{PW_HOME}}/tooling/scripts/entities/pw-doc-lint.sh task <slug> --all || exit 1` — push mechanics read exactly
    the fields lint checks (`Repo`/`Branch`/`## Verify`/`## Result`), so a malformed task file must
    stop the push (relay stderr; the named task needs its fields completed — usually by re-running
    `/pw-breakdown` or a small edit + `/pw-review`). Then determine which tasks are shippable —
    **run the resolver, don't re-derive it by hand**:
    ```bash
-   {{PW_HOME}}/tooling/pw-ship-resolve.sh <slug>
+   {{PW_HOME}}/tooling/scripts/entities/pw-ship-resolve.sh <slug>
    ```
    One line per `done`-status task: `task-id|repo|branch|base|ticket|title|has-commits|has-mr`
    (`—`/`none` where absent). Treat the flags exactly as the criteria you'd check: a `no`
@@ -87,7 +87,7 @@ task; here we push branches and open MRs.
      table (Task · Repo · MR url · Target branch · State=open · Build), then log it:
      `…/{{PW_HOME}}/tooling/pw-lib.sh log <slug> ship "T0n pushed <branch>; MR <url>"`.
     - **Unless `--skip-build-check` was passed:** once the MR is open, monitor its pipeline/checks to
-      a terminal state with `{{PW_HOME}}/tooling/pw-pipeline-monitor.sh <slug> <task-id>`
+      a terminal state with `{{PW_HOME}}/tooling/scripts/entities/pw-pipeline-monitor.sh <slug> <task-id>`
       (exit 0 green / 1 red / 2 still-running — it records the task file's `## Result → Build
       check:` line itself; you fill the dashboard row's `Build` column from that outcome) before
       moving to the next task. A **red**
@@ -147,7 +147,7 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
    every PLAN task; prints `task-id|state` per line, plain-text pipe-delimited; per-line semantics
    identical to the helper it wraps):
    ```bash
-   {{PW_HOME}}/tooling/pw-mr-state-batch.sh <slug> [given task-ids…]
+   {{PW_HOME}}/tooling/scripts/entities/pw-mr-state-batch.sh <slug> [given task-ids…]
    ```
    Read each line's state per the bullets below (a single-task `state` recheck mid-flow can still
    use `pw-lib.sh mr-state <slug> <task-id>`).
@@ -221,7 +221,7 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      file/landing-unit overlap is real, one `dep-impact` reviewer pass files items into the
      dependent's queue — no edit-backward into the fixed task, new DAG task if it needs one.
     - **Unless `--skip-build-check` was passed:** monitor the pipeline/checks to a terminal state
-      right after this push via `{{PW_HOME}}/tooling/pw-pipeline-monitor.sh <slug> <task-id>`
+      right after this push via `{{PW_HOME}}/tooling/scripts/entities/pw-pipeline-monitor.sh <slug> <task-id>`
       (same contract as ship mode — see "Build check" below), before moving on to step 3 — so a failed
       build shows up in the recap and can be mentioned in the thread reply, not discovered later.
       A **red** build → the task is **not done**: enter the build-check fix loop below (fix in the

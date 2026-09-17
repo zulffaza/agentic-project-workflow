@@ -6,7 +6,7 @@ Human feedback on any doc lives in a review file under a **`review/` subdir** be
 `task/T0n.md`→`task/review/T0n.review.md` (from `agentic-project-workflow/template/_REVIEW.template.md`).
 Rules you MUST follow:
 
-- **Orient with the scan script first:** `{{PW_HOME}}/tooling/pw-review-scan.sh <slug>
+- **Orient with the scan script first:** `{{PW_HOME}}/tooling/scripts/entities/pw-review-scan.sh <slug>
   [--phase <phase>]` prints one line per review file — open/resolved/pending counts + last
   sign-off state — so you go straight to the files with live `[OPEN]` items instead of
   grep-walking `review/` (same scan `/pw-review` pre-flight and `pw-status.sh` use).

@@ -336,7 +336,7 @@ Tear it down after the task is merged/abandoned — at close-out prefer the safe
 remove the worktree you're currently in (that's what once made an editor reload/close) or one with
 uncommitted changes:
 ```bash
-$PW_HOME/tooling/pw-teardown.sh $PW_PROJECTS/spring-boot-3-upgrade   # all of a project's worktrees, safely
+$PW_HOME/tooling/scripts/entities/pw-teardown.sh $PW_PROJECTS/spring-boot-3-upgrade   # all of a project's worktrees, safely
 # or one, manually:
 git -C $PW_REPOS/$REPO worktree remove "$PROJ/worktree/$REPO/T03-bump-parent-pom"
 ```

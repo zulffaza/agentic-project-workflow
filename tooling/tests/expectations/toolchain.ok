@@ -1,0 +1,6 @@
+# toolchain.ok — L3 allowlist (tooling/docs/conventions.md): the only entry-path files
+# (commands/agents/skill) permitted to reference a scripts/toolchain/<script>.sh path.
+# Everything else keeps the toolchain invisible. Columns: ref-file<TAB>toolchain-path.
+commands/pw-new.md	scripts/toolchain/scaffold.sh
+commands/pw-adopt.md	scripts/toolchain/scaffold.sh
+commands/pw-doctor.md	scripts/toolchain/pw-doctor.sh

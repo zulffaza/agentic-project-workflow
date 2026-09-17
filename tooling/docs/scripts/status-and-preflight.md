@@ -9,9 +9,9 @@ read-only — they never modify a project.
 One deterministic project-status report, in place of an agent reading five files by hand.
 
 ```bash
-$PW_HOME/tooling/pw-status.sh <slug>                  # full report
-$PW_HOME/tooling/pw-status.sh <slug> --skip-cli-check # omit the forge/CLI auth section
-$PW_HOME/tooling/pw-status.sh --selftest              # isolated temp-project smoke test
+$PW_HOME/tooling/scripts/entities/pw-status.sh <slug>                  # full report
+$PW_HOME/tooling/scripts/entities/pw-status.sh <slug> --skip-cli-check # omit the forge/CLI auth section
+$PW_HOME/tooling/scripts/entities/pw-status.sh --selftest              # isolated temp-project smoke test
 ```
 
 **Output** — markdown sections, in this fixed order; feed it to the user as-is:
@@ -40,13 +40,13 @@ from scripts that run frequently.
 Checks **all** gates for one command and fails fast — run it before invoking the phase agent.
 
 ```bash
-$PW_HOME/tooling/pw-preflight.sh analyze      <slug>   # phase context|analysis + context/INDEX.md exists with ≥1 filled input row
-$PW_HOME/tooling/pw-preflight.sh execute      <slug>   # PLAN approved, phase valid, scope/model resolvable
-$PW_HOME/tooling/pw-preflight.sh breakdown    <slug>   # analysis reviews approved, RFC open items resolved
-$PW_HOME/tooling/pw-preflight.sh ship         <slug>   # shippable tasks exist, verify passed
-$PW_HOME/tooling/pw-preflight.sh comments     <slug>   # ≥1 task has a linked MR (for /pw-ship <slug> comments — no 'done' requirement)
-$PW_HOME/tooling/pw-preflight.sh close        <slug>   # all tasks accepted
-$PW_HOME/tooling/pw-preflight.sh review <slug> [phase] # review files exist for phase: analysis|plan|task-plan|task-exec
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh analyze      <slug>   # phase context|analysis + context/INDEX.md exists with ≥1 filled input row
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh execute      <slug>   # PLAN approved, phase valid, scope/model resolvable
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh breakdown    <slug>   # analysis reviews approved, RFC open items resolved
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh ship         <slug>   # shippable tasks exist, verify passed
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh comments     <slug>   # ≥1 task has a linked MR (for /pw-ship <slug> comments — no 'done' requirement)
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh close        <slug>   # all tasks accepted
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh review <slug> [phase] # review files exist for phase: analysis|plan|task-plan|task-exec
 ```
 
 **Output:** silent on success (exit `0`). On failure, exit `1` with one `pw-preflight: …` line —
@@ -68,8 +68,8 @@ Unknown command argument → usage line, also exit 1.
 Structured summary of every review file's item counts and sign-off state.
 
 ```bash
-$PW_HOME/tooling/pw-review-scan.sh <slug>                  # all review files
-$PW_HOME/tooling/pw-review-scan.sh <slug> --phase analysis # or: plan | task-plan | task-exec
+$PW_HOME/tooling/scripts/entities/pw-review-scan.sh <slug>                  # all review files
+$PW_HOME/tooling/scripts/entities/pw-review-scan.sh <slug> --phase analysis # or: plan | task-plan | task-exec
 ```
 
 **Output** — one line per review file, fields present only when non-zero:

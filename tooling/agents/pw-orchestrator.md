@@ -14,16 +14,16 @@ ran nothing). Both paths must behave the same, so before reading `task/PLAN.md` 
 anything, run the pre-flight — exit code is the gate:
 
 ```bash
-{{PW_HOME}}/tooling/pw-preflight.sh execute <slug> || exit 1
-{{PW_HOME}}/tooling/pw-doc-lint.sh plan <slug> || exit 1
-{{PW_HOME}}/tooling/pw-doc-lint.sh task <slug> --all || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh execute <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc-lint.sh plan <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc-lint.sh task <slug> --all || exit 1
 ```
 
 If any exits non-zero, STOP and relay its stderr line verbatim — it names the unmet gate and the
 fix. Never reason around a failed pre-flight. The PLAN `approved` check below still applies even
 after these pass (preflight checks it too; belt and braces). Also useful instead of manual file
-reads: `{{PW_HOME}}/tooling/pw-status.sh <slug> --skip-cli-check` for a snapshot and
-`{{PW_HOME}}/tooling/pw-review-scan.sh <slug>` for review state. Usage:
+reads: `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh <slug> --skip-cli-check` for a snapshot and
+`{{PW_HOME}}/tooling/scripts/entities/pw-review-scan.sh <slug>` for review state. Usage:
 `{{PW_HOME}}/tooling/docs/scripts/README.md`.
 
 Given a project under `{{PW_PROJECTS}}/<slug>/`:

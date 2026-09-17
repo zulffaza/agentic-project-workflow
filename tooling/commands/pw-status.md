@@ -25,7 +25,7 @@ everything below and follow this instead** (3rd argument is the phase to rewind 
 
 <!-- Pre-flight: deterministic status report (no agent needed) -->
 ```bash
-{{PW_HOME}}/tooling/pw-status.sh <slug>
+{{PW_HOME}}/tooling/scripts/entities/pw-status.sh <slug>
 ```
 
 The script produces the full status report (phase, task table, review items, AI Review modes,

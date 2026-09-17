@@ -47,9 +47,20 @@ _pwtest_timeout() {
 # revert inside <root>, run one harness child, restore. Sets MUT_STATUS
 # (caught|hung|vacuous|died|drift|applyfail), MUT_RC, MUT_ELAPSED. No stack bookkeeping here —
 # the serial live-tree caller wraps it with _pwt_mutable_push/pop; workers use disposable copies.
+# _pwt_resolve <bundle-root> <script-basename> — layout resolver (scripts/{entities,lib,toolchain}/
+# + root); the register's file column stays a basename so layout moves never touch anchors.
+_pwt_resolve() {
+  local r="$1" n="$2" d
+  for d in "scripts/entities/" "scripts/lib/" "scripts/toolchain/" ""; do
+    [ -f "$r/tooling/$d$n" ] && { printf '%s/tooling/%s%s' "$r" "$d" "$n"; return 0; }
+  done
+  return 1
+}
 _pwtest_run_row() {
   local root="$1" id="$2" file="$3" old="$4" new="$5" tiers="$6" only="$7" logdir="$8" runner="$9"
-  local target="$root/tooling/$file" t0=$SECONDS rc=0
+  local target rel t0=$SECONDS rc=0
+  target="$(_pwt_resolve "$root" "$file")" || { MUT_STATUS=drift; return 0; }
+  rel="${target#"$root/tooling/"}"
   MUT_RC=0; MUT_ELAPSED=0
   python3 -c "import sys; sys.exit(0 if sys.argv[1] in open(sys.argv[2], encoding='utf-8').read() else 1)" "$old" "$target" \
     || { MUT_STATUS=drift; return 0; }
@@ -57,7 +68,7 @@ _pwtest_run_row() {
   ( cd "$root/tooling" && python3 -c "import sys
 old,new,fn=sys.argv[1],sys.argv[2],sys.argv[3]
 s=open(fn,encoding='utf-8').read(); assert old in s, 'anchor vanished'
-open(fn,'w',encoding='utf-8').write(s.replace(old,new))" "$old" "$new" "$file" ) \
+open(fn,'w',encoding='utf-8').write(s.replace(old,new))" "$old" "$new" "$rel" ) \
     || { cp "$bak" "$target"; rm -f "$bak"; MUT_STATUS=applyfail; return 0; }
   _pwtest_timeout "${PWTEST_MUT_TIMEOUT:-300}" bash -c "cd '$root/tooling/tests' && PWTEST_INNER=1 exec bash '$runner' --tier '$tiers' ${only:+--only '$only'} </dev/null >'$logdir/$id.child.log' 2>&1" || rc=$?
   cp "$bak" "$target"; rm -f "$bak"
@@ -144,9 +155,9 @@ pwtest_run_mutations() {
       pwtest_note "MUTATE $id"
       # crash-safety: _pwtest_run_row backs up to $_bak/$id.orig and restores it; the stack
       # entry lets the EXIT trap replay the restore if the sweep is killed mid-row.
-      _pwt_mutable_push "$TOOL/$file|$_bak/$id.orig"
+      _pwt_mutable_push "$(pwtest_script "$file")|$_bak/$id.orig"
       _pwtest_run_row "$PW_HOME" "$id" "$file" "$old" "$new" "$tiers" "$only" "$_bak" "$runner"
-      _pwt_mutable_pop "$TOOL/$file|$_bak/$id.orig"
+      _pwt_mutable_pop "$(pwtest_script "$file")|$_bak/$id.orig"
       case "$MUT_STATUS" in
         caught)   caught=$((caught+1)); pwtest_ok "mutation caught: $id" ;;
         hung)     hung=$((hung+1)); hung_ids="$hung_ids $id"

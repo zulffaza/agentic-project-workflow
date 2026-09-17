@@ -47,7 +47,7 @@ corpus_t3() {
       TMO=""; command -v timeout >/dev/null && TMO="timeout 30"
       PDIR="${dir%/}"
       if (cd /tmp && $TMO env PW_PROJECTS="$PDIR" PW_PROJECTS_DIR="$PDIR" ${PW_CORPUS_REPOS:+PW_REPOS="$PW_CORPUS_REPOS"} \
-          "$TOOL/$script" $args >"$ROOT/c.out" 2>"$ROOT/c.err"); then rc=0; else rc=$?; fi
+          "$(pwtest_script "$script")" $args >"$ROOT/c.out" 2>"$ROOT/c.err"); then rc=0; else rc=$?; fi
       cat "$ROOT/c.out" "$ROOT/c.err" >"$ROOT/c.both"
       waiver=""
       [ -f "$wf" ] && waiver="$(awk -F'\t' -v s="$slug" -v l="$label" '$1==s && $2==l{print; exit}' "$wf")"

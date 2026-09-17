@@ -107,7 +107,7 @@ output: `✓` = in sync, `✗` = drift (it says exactly what — missing, stale,
 - you changed `pw.config.sh` (enabled/disabled a provider) and want to confirm the change landed.
 
 `/pw-doctor` is the human-facing surface for this — it's the same underlying script
-(`tooling/pw-doctor.sh`), but drive it through the command rather than calling the script directly.
+(`tooling/scripts/toolchain/pw-doctor.sh`), but drive it through the command rather than calling the script directly.
 `bootstrap.sh` and `offboard.sh` remain genuine exceptions — they run *before* any `/pw-*` command
 is installed or *after* it's removed, so there's nothing else to invoke them through.
 
@@ -163,7 +163,7 @@ including *why* you'd want one: **[docs/MEMORY.md](./docs/MEMORY.md)**.
   generated files, and runtime behavior must survive another provider's install or removal entirely.
   
 **Is your CLI already `claude`, `kilo`, `opencode`, or `cursor`?** Those four are **built into**
-`tooling/pw-common.sh` — you don't need anything below. Just add the name to `PW_PROVIDERS=(…)`
+`tooling/scripts/lib/pw-common.sh` — you don't need anything below. Just add the name to `PW_PROVIDERS=(…)`
 in `pw.config.sh` and re-run `./bootstrap.sh`. **Built-in is not the same as enabled** — a
 built-in provider still does nothing until you list it in `PW_PROVIDERS` yourself; skip this
 step and it's simply not wired up, whether or not the CLI is installed on your machine.
@@ -188,7 +188,7 @@ bootstrap; gitignored, so it stays yours):
      your CLI's own argument-placeholder syntax). Your function's only job is to `printf` the
      complete frontmatter + body to stdout — `gen-commands.sh` redirects that into the real
      file; the function itself never opens a file, and it never runs or invokes anything.
-     Minimal shape (mirrors `render_claude_command` in `tooling/pw-common.sh`):
+     Minimal shape (mirrors `render_claude_command` in `tooling/scripts/lib/pw-common.sh`):
      ```sh
      render_myprov_command() {
        printf -- '---\ndescription: %s\n---\n%s' "$desc" "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
@@ -198,13 +198,13 @@ bootstrap; gitignored, so it stays yours):
    (`pw-orchestrator`, `pw-executor`, `pw-reviewer`) for it. Same idea as `render_<name>_command`,
    but `gen-agents.sh` sets a different variable set beforehand: `$agentname` (the file's
    basename), `$desc`, `$displayName`, `$role`, `$claude_tools`, `$model`, `$bodytext` — see
-   `render_claude_agent`/`render_kilo_agent`/`render_cursor_agent` in `tooling/pw-common.sh`.
+   `render_claude_agent`/`render_kilo_agent`/`render_cursor_agent` in `tooling/scripts/lib/pw-common.sh`.
    Providers without these two hooks just skip agent-seeding — the `/pw-*` commands still work.
 4. *(Optional)* `<name>_headless()` — prints the exact non-interactive invocation template for
    this CLI (e.g. an auto-approve flag, how the model/prompt gets passed), so an orchestrator
    running under a *different* provider can shell out to this one for cross-provider execution.
    See `claude_headless`/`kilo_headless`/`opencode_headless`/`cursor_headless` in
-   `tooling/pw-common.sh` for real
+   `tooling/scripts/lib/pw-common.sh` for real
    examples. Without it, this provider is still fully usable same-provider — it just can't be a
    cross-provider execution **target**. Full mechanics: `tooling/docs/providers.md` (a
    maintainer-owned reference doc — you never edit it directly; this hook is the only thing you

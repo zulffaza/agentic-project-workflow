@@ -3,8 +3,8 @@
 # pw-doctor.sh — verify the installed skill + generated /pw-* commands are in
 # sync with THIS bundle, per enabled provider. Reports drift; --fix repairs it.
 #
-#   tooling/pw-doctor.sh          check only (exit 1 if anything is out of sync)
-#   tooling/pw-doctor.sh --fix    repair drift (re-install skill, regenerate commands)
+#   tooling/scripts/toolchain/pw-doctor.sh          check only (exit 1 if anything is out of sync)
+#   tooling/scripts/toolchain/pw-doctor.sh --fix    repair drift (re-install skill, regenerate commands)
 #
 # "In sync" = what bootstrap/gen-commands WOULD produce now equals what's installed.
 # It generates commands to a temp dir and diffs them, so it catches a moved bundle,
@@ -13,8 +13,8 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # tooling/
-PW_HOME="$(cd "$HERE/.." && pwd)"
-. "$HERE/pw-common.sh"
+PW_HOME="$(cd "$HERE/../../.." && pwd)"
+. "$HERE/../lib/pw-common.sh"
 SKILL_DIR="$PW_HOME/tooling/skill"   # every subdir with a SKILL.md here is a shippable skill
 CANON_AGENTS="$PW_HOME/tooling/agents"
 KJCF="$HOME/.config/kilo/kilo.jsonc"
@@ -22,7 +22,7 @@ KJCF="$HOME/.config/kilo/kilo.jsonc"
 FIX=0
 case "${1:-}" in
   --fix) FIX=1 ;;
-  --test) shift; exec "$HERE/tests/pw_test.sh" --tier "${PWTEST_TEST_TIERS:-T0,T1,T2,T4}" "$@" ;;
+  --test) shift; exec "$HERE/../../tests/pw_test.sh" --tier "${PWTEST_TEST_TIERS:-T0,T1,T2,T4}" "$@" ;;
   "" ) ;;
   -h|--help) grep '^#' "$0" | sed 's/^# \?//'; exit 0 ;;
   *) echo "unknown arg: $1 (try --help)" >&2; exit 1 ;;

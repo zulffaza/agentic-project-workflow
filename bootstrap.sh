@@ -45,7 +45,7 @@ if [ ! -f "$CONFIG" ] && [ "$MODE" != "check" ]; then
   echo "created $CONFIG from the example — edit it to set your providers."
 fi
 # shared plumbing: sources pw.config.sh + defines the built-in provider hooks
-. "$PW_HOME/tooling/pw-common.sh"
+. "$PW_HOME/tooling/scripts/lib/pw-common.sh"
 
 echo "project-workflow bootstrap"
 echo "  PW_HOME     = $PW_HOME"
@@ -77,7 +77,7 @@ echo
 if [ "${#DETECTED[@]}" -eq 0 ]; then
   echo "No enabled provider CLI is installed. Set PW_PROVIDERS in $CONFIG,"
   echo "install a supported CLI, or add your provider (see ONBOARDING.md)."
-  echo "Scaffolding still works: \$PW_HOME/tooling/scaffold.sh <slug>."
+  echo "Scaffolding still works: \$PW_HOME/tooling/scripts/toolchain/scaffold.sh <slug>."
 fi
 
 if [ "$MODE" = "check" ]; then
@@ -122,12 +122,12 @@ echo
 if [ "${#DETECTED[@]}" -gt 0 ]; then
   echo "  generating /pw-* commands:"
   PW_PROJECTS="$PW_PROJECTS" PW_REPOS="$PW_REPOS" \
-    "$PW_HOME/tooling/gen-commands.sh" "${DETECTED[@]}" | sed 's/^/    /'
+    "$PW_HOME/tooling/scripts/toolchain/gen-commands.sh" "${DETECTED[@]}" | sed 's/^/    /'
   echo
 
   echo "  seeding sub-agents (pw-orchestrator, pw-executor, pw-reviewer):"
   PW_PROJECTS="$PW_PROJECTS" PW_REPOS="$PW_REPOS" \
-    "$PW_HOME/tooling/gen-agents.sh" "${DETECTED[@]}" | sed 's/^/    /'
+    "$PW_HOME/tooling/scripts/toolchain/gen-agents.sh" "${DETECTED[@]}" | sed 's/^/    /'
   echo
 fi
 

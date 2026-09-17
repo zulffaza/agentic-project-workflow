@@ -12,14 +12,14 @@ static_t0() {
   echo "== T0 static ==" >&2
   local f code hits re label excl
 
-  # 1) syntax — every shell file in tooling/ and the suite itself
-  for f in "$TOOL"/*.sh "$TOOL"/tests/pw_test*.sh "$TOOL"/tests/static.sh "$TOOL"/tests/battery.sh "$TOOL"/tests/corpus.sh "$TOOL"/tests/mutate.sh "$TOOL"/tests/bin/gh; do
+  # 1) syntax — every shell file in tooling/ (incl. the scripts/ layout) and the suite itself
+  for f in "$TOOL"/*.sh "$TOOL"/scripts/*/*.sh "$TOOL"/tests/pw_test*.sh "$TOOL"/tests/static.sh "$TOOL"/tests/battery.sh "$TOOL"/tests/corpus.sh "$TOOL"/tests/mutate.sh "$TOOL"/tests/bin/gh; do
     [ -f "$f" ] && { bash -n "$f" && pwtest_ok "bash -n ${f#$TOOL/}" || pwtest_bad "bash -n ${f#$TOOL/}" "syntax error"; }
   done
 
   # 2) every automation script takes --help (or is listed in known-nohelp.allow)
   for f in $PWTEST_AUTOMATION; do
-    if PW_PROJECTS_DIR="$PWTEST_ROOT/projects" "$TOOL/$f" --help >"$ROOT/h.out" 2>&1; then
+    if PW_PROJECTS_DIR="$PWTEST_ROOT/projects" "$(pwtest_script "$f")" --help >"$ROOT/h.out" 2>&1; then
       grep -qiE 'usage|how to|options|[A-Za-z-]+ +<' "$ROOT/h.out" && pwtest_ok "$f --help prints usage" \
         || pwtest_bad "$f --help prints usage" "exit 0 but no usage text"
     else
@@ -29,7 +29,7 @@ static_t0() {
 
   # 3) forbidden idioms (code lines only; comments may *warn* about them).
   # TAB-delimited columns: re, excl, label (patterns contain literal "|").
-  code="$(_pwtest_code_lines "$TOOL"/pw-*.sh "$TOOL"/scaffold.sh "$TOOL"/pw-doctor.sh)"
+  code="$(_pwtest_code_lines "$TOOL"/pw-lib.sh "$TOOL"/scripts/*/*.sh)"
   while IFS=$'	' read -r re excl label; do
     [ -z "$re" ] && continue
     hits="$(printf '%s\n' "$code" | grep -E -- "$re" || true)"
@@ -48,7 +48,7 @@ IDIOMS
 
       # 4) every script resolves projects from PW_PROJECTS_DIR (C16)
   for f in $PWTEST_AUTOMATION; do
-    grep -q 'PW_PROJECTS_DIR' "$TOOL/$f" && pwtest_ok "T0: $f honors PW_PROJECTS_DIR" || pwtest_bad "T0: $f honors PW_PROJECTS_DIR" "hard-wired project root"
+    grep -q 'PW_PROJECTS_DIR' "$(pwtest_script "$f")" && pwtest_ok "T0: $f honors PW_PROJECTS_DIR" || pwtest_bad "T0: $f honors PW_PROJECTS_DIR" "hard-wired project root"
   done
 }
 
@@ -59,7 +59,7 @@ static_t4() {
   # 1) providers in sync (doctor compares generated vs installed; run before any regen)
   # real PATH during the real-install check: the forge shims change `command -v` answers and
   # would make gen render differently than the installed copy.
-  if env -u PWTEST_FORGE_STATE_FILE -u PW_PROJECTS_DIR -u PW_REPOS -u PW_PROJECTS PATH="$PWTEST_ORIG_PATH" "$TOOL/pw-doctor.sh" >"$ROOT/doctor.out" 2>&1; then pwtest_ok "T4 pw-doctor reports in sync"
+  if env -u PWTEST_FORGE_STATE_FILE -u PW_PROJECTS_DIR -u PW_REPOS -u PW_PROJECTS PATH="$PWTEST_ORIG_PATH" "$(pwtest_script pw-doctor.sh)" >"$ROOT/doctor.out" 2>&1; then pwtest_ok "T4 pw-doctor reports in sync"
   else pwtest_bad "T4 pw-doctor reports in sync" "fix: $TOOL/pw-doctor.sh --fix — $(grep -i 'out of sync\|drift\|missing' "$ROOT/doctor.out" | head -1)"; fi
 
   # 2) registry symmetry: index file == automation set; refs ⊆ known; every file wired
@@ -118,7 +118,7 @@ static_t4() {
     || pwtest_bad "T4 canary: no agent file invokes signoff" "C4 violation in: $hits — only a human triggers a gate decision (agent path: pw-lib.sh review auto-signoff)"
   # (c) capability-placement conventions doc exists, is linked from the maintainer entry, and freezes pw-lib
   [ -f "$TOOL/docs/conventions.md" ] && grep -qF 'docs/conventions.md' "$TOOL/AGENTS.md" \
-    && grep -qE '^# FROZEN \(S2' "$TOOL/pw-lib.sh" \
+    && grep -qE '^# FROZEN \(S2' "$(pwtest_script pw-lib.sh)" \
     && pwtest_ok "T4 canary: conventions.md exists + linked + pw-lib S2 freeze note" \
     || pwtest_bad "T4 canary: conventions doc" "tooling/docs/conventions.md missing, or its tooling/AGENTS.md link died, or pw-lib.sh lost the S2 FROZEN header note"
   # (d) the new entity scripts keep their group-doc section (usage reference completeness)
@@ -135,6 +135,37 @@ static_t4() {
     || pwtest_bad "T4 canary: harness docs" "testing.md lost §Inside the harness / §Writing a mutation row or the PWTEST_MUT_* knob names"
   # 5) shared plumbing used, not reinvented
   for f in $PWTEST_AUTOMATION; do
-    grep -q 'pw-common\.sh' "$TOOL/$f" && pwtest_ok "T4: $f sources pw-common" || pwtest_bad "T4: $f sources pw-common" "P2 violation (readers re-implemented)"
+    grep -q 'pw-common\.sh' "$(pwtest_script "$f")" && pwtest_ok "T4: $f sources pw-common" || pwtest_bad "T4: $f sources pw-common" "P2 violation (readers re-implemented)"
   done
+
+  # 6) L-rules layout canaries (tooling/docs/conventions.md): no file ships outside its kind-dir,
+  # no caller references a layout path it must not know, and the registry mirrors the tree.
+  # (a) dead-path: zero flat tooling/<entry>.sh refs anywhere (pw-lib exempt until its dissolution)
+  hits="$(grep -rlE 'tooling/(pw-[a-z0-9-]+|scaffold|gen-[a-z-]+)\.sh' "$TOOL/.." --include='*.sh' --include='*.md' 2>/dev/null \
+    | grep -v '/pw-lib\.sh$' | while read -r f; do
+        if grep -qE 'tooling/pw-lib\.sh' "$f"; then grep -qE 'tooling/(pw-[a-z0-9-]+|scaffold|gen-[a-z-]+)\.sh' <(sed 's#tooling/pw-lib\.sh#pwlib#g' "$f") && printf '%s ' "$f"; else printf '%s ' "$f"; fi
+      done)"
+  [ -z "$hits" ] && pwtest_ok "T4: no flat tooling/<script>.sh references (L5)" \
+    || pwtest_bad "T4: no flat tooling/<script>.sh references (L5)" "stale refs in: $hits"
+  # (b) registry == tree (non-registry entry points exempt per unwired.ok rationale)
+  local ents
+  ents="$(cd "$TOOL/scripts/entities" && ls | sort -u)"
+  ents="$(awk 'NR==FNR{ex[$1];next} !($1 in ex)' "$TOOL/tests/expectations/unwired.ok" <(printf '%s\n' "$ents"))"
+  known="$(printf '%s\n' $PWTEST_AUTOMATION | sort -u)"
+  [ "$ents" = "$known" ] && pwtest_ok "T4: scripts/entities/ == the registry (L1)" \
+    || pwtest_bad "T4: scripts/entities/ == registry" "$(comm -3 <(printf '%s\n' "$known") <(printf '%s\n' "$ents") | tr '\n' ' ')"
+  # (c) libraries invisible to callers (L2)
+  hits="$(grep -rl 'scripts/lib/' "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" 2>/dev/null | tr '\n' ' ')"
+  [ -z "$hits" ] && pwtest_ok "T4: no entry path references scripts/lib/ (L2)" \
+    || pwtest_bad "T4: no entry path references scripts/lib/" "$hits"
+  # (d) toolchain allowlist (L3): entry paths may name scripts/toolchain/ only per toolchain.ok
+  local ok f2 pair hits2=""
+  ok="$TOOL/tests/expectations/toolchain.ok"
+  hits2="$(grep -rlE 'scripts/toolchain/[a-z-]+\.sh' "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" 2>/dev/null | while read -r f2; do
+      grep -ohE 'scripts/toolchain/[a-z-]+\.sh' "$f2" | sed "s|^|${f2#$TOOL/}\t|"
+    done | sort -u)"
+  known="$(grep -v '^#' "$ok" 2>/dev/null | sort -u)"
+  [ -z "$(comm -23 <(printf '%s\n' "$hits2") <(printf '%s\n' "$known"))" ] \
+    && pwtest_ok "T4: toolchain refs ⊆ allowlist (L3)" \
+    || pwtest_bad "T4: toolchain refs ⊆ allowlist" "$(comm -23 <(printf '%s\n' "$hits2") <(printf '%s\n' "$known") | tr '\n' ' ') — L3: workflow entry paths may invoke toolchain scripts only per expectations/toolchain.ok"
 }

@@ -12,22 +12,22 @@ A-rules below, run the script verbatim, show its output. No judgment, no doc rea
 "improving" or retyping my text — it is handed over VERBATIM via a `--stdin` heredoc (A3).**
 Everything else below (apply-comments / `ai` / `config`) does NOT run for these operators.
 
-- **`/pw-review <slug> init-all`** → `{{PW_HOME}}/tooling/pw-review-edit.sh init-all <slug>` —
+- **`/pw-review <slug> init-all`** → `{{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh init-all <slug>` —
   creates every missing review file (each `analysis/<topic>.md`, `task/PLAN.md`, each
   `task/T0n.md` → its sibling `review/<name>.review.md`). Idempotent; existing files untouched.
 - **`/pw-review <slug> item <review-rel-path> <§anchor> <ask…>`** — `<§anchor>` is the next
   single token (e.g. `§4`); everything after it is the ask, unquoted, spaces included (A1
   rest-of-line). Run:
-  `{{PW_HOME}}/tooling/pw-review-edit.sh add-item <slug> <review-rel-path> --section <§anchor> --stdin`
+  `{{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh add-item <slug> <review-rel-path> --section <§anchor> --stdin`
   with the ask piped in as a heredoc. Need a multi-word anchor? Use the flag form instead:
   `… item <path> --section <anchor words…> --text <ask words…>` (A2: each value runs until the
   next `--flag`).
 - **`/pw-review <slug> answer <review-rel-path> <Qid> <text…>`** — `<Qid>` like `Q2`; rest of
-  line is your answer. Run: `{{PW_HOME}}/tooling/pw-review-edit.sh answer <slug> <path> <Qid>
+  line is your answer. Run: `{{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh answer <slug> <path> <Qid>
   --stdin` (heredoc). The script never flips the question's status — the fold-in + `[ANSWERED]`
   flip happens on the next apply-comments pass, per docs/REVIEW.md.
 - **`/pw-review <slug> signoff <review-rel-path> <approved|changes-requested|in-review>`** →
-  `{{PW_HOME}}/tooling/pw-review-edit.sh signoff <slug> <path> <decision>`.
+  `{{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh signoff <slug> <path> <decision>`.
   **HUMAN-TRIGGERED ONLY (C4): run this operator ONLY when my message explicitly asks to sign
   off / record that gate decision — never on your own initiative, never as a "helpful" close of
   a review round, never because all items look resolved.** The agent-side path stays
@@ -109,9 +109,9 @@ step silently — do not block.**
 
 **Resolve WHICH review files to process (apply-comments flow — do NOT scan the whole project):**
 
-**Start mechanical:** `{{PW_HOME}}/tooling/pw-preflight.sh review <slug> [phase-word]` confirms
+**Start mechanical:** `{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh review <slug> [phase-word]` confirms
 the phase's review files exist (exit 1 + `pw-preflight:` line = report and stop — nothing to
-apply), then `{{PW_HOME}}/tooling/pw-review-scan.sh <slug> [--phase <phase>]` prints
+apply), then `{{PW_HOME}}/tooling/scripts/entities/pw-review-scan.sh <slug> [--phase <phase>]` prints
 `<file>: N open[, N resolved][, N pending] (sign-off)` per review file — pick which files to
 open from that instead of reading them blind. Mapping rules below still decide the scope set.
 - If the 2nd arg is a **path** to a `.review.md`, use exactly that file.
@@ -194,7 +194,7 @@ For each `[OPEN]` item in the resolved files:
   round be the one that does it,
 - then flip the item + reply **deterministically** — never hand-edit the heading/reply block:
   ```bash
-  {{PW_HOME}}/tooling/pw-review-edit.sh resolve <slug> <review-rel-path> <Rn> --stdin <<'EOF'
+  {{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh resolve <slug> <review-rel-path> <Rn> --stdin <<'EOF'
   <section(s) + exactly what changed — concrete, never a bare "fixed"/"done", never a restatement of my ask>
   EOF
   ```
@@ -208,7 +208,7 @@ For each `[OPEN]` item in the resolved files:
 
 **Also process the "## Open questions" section (QnA):** for each `Qn` whose `> ↳ **you**:` line has
 an answer, fold that answer into the reviewed doc, then flip + reply deterministically:
-`{{PW_HOME}}/tooling/pw-review-edit.sh resolve <slug> <review-rel-path> <Qn> --stdin` (heredoc =
+`{{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh resolve <slug> <review-rel-path> <Qn> --stdin` (heredoc =
 your `↳ agent:` reply: what was folded in, where). It edits that SAME `### Qn · …` heading in
 place (`[PENDING]` → `[ANSWERED]` + marker — never a second heading), appends the reply right
 after my `↳ you:` line inside the same quoted block (blank quoted `>` line between), keeps the
@@ -256,7 +256,7 @@ whatever `PW_MEMORY_NOTES` already documents for this tool's buckets.
 
 When done, recap each resolved item (one line, grouped by its task/file), and tell me how many
 `[OPEN]` items remain **in the resolved scope** (and, as a footnote, across the whole project:
-a final `{{PW_HOME}}/tooling/pw-review-scan.sh <slug>` run — its per-file `N open` counts, not a
+a final `{{PW_HOME}}/tooling/scripts/entities/pw-review-scan.sh <slug>` run — its per-file `N open` counts, not a
 raw grep, which would also count the root `_REVIEW.template.md`'s example markers). For a task review: task fixes are
 re-verified in the worktree by the build loop above — only point me at `/pw-execute <slug> T0n`
 if a fix was left unverified (`--skip-build-check`) or hit the 3-round cap. **If a gate got auto-reopened**

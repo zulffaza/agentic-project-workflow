@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # cases/pw-context.t.sh — context-doc entity operators (plan 17): req-init, add-input,
 # add-repo. Private clone of F2 (never mutate the shared fixture).
-C="$TOOL/pw-context.sh"
+C="$(pwtest_script pw-context.sh)"
 CX=ctxedit; rm -rf "$PW_PROJECTS_DIR/$CX"; cp -a "$F2" "$PW_PROJECTS_DIR/$CX"
 P="$PW_PROJECTS_DIR/$CX"
 IDX="$P/context/INDEX.md"

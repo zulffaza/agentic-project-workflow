@@ -6,7 +6,7 @@ Asked to analyze `context/`:
    `tooling/docs/memory.md`) — fold in and cite what's relevant; skip silently if none configured.
 2. Read everything in `context/` — **including fetching any bare external URL** in
    `context/INDEX.md`. **Run the fetch script first for the CLI-handleable rows:**
-   `{{PW_HOME}}/tooling/pw-context-fetch.sh <slug>` (`[--ignore-errors]` mirrors the command's
+   `{{PW_HOME}}/tooling/scripts/entities/pw-context-fetch.sh <slug>` (`[--ignore-errors]` mirrors the command's
    `--ignore-fetch-errors`) — it covers Jira (`jira issue view`) → GitHub (`gh issue/pr view`) →
    GitLab (`glab issue/mr view`) in exactly the precedence below, and its `Fetching:` blocks are
    already-fetched content: **cite what they actually said, never re-fetch them.** The script

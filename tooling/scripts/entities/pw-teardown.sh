@@ -2,7 +2,7 @@
 # ============================================================================
 # pw-teardown.sh — safely remove a project's git worktrees at close-out.
 #
-#   tooling/pw-teardown.sh <project-dir> [--yes] [worktree-path]
+#   tooling/scripts/entities/pw-teardown.sh <project-dir> [--yes] [worktree-path]
 #
 # With no [worktree-path], removes every worktree under <project-dir>/worktree.
 # With a [worktree-path], removes ONLY that one worktree (it must live under the

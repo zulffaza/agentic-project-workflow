@@ -26,7 +26,7 @@ phase name** (and, if it exists, `REVIEWER-NOTES.md`); judge that and nothing el
 Before reading any review file, get the whole review state in one zero-token call:
 
 ```bash
-{{PW_HOME}}/tooling/pw-review-scan.sh <slug> [--phase <phase>]
+{{PW_HOME}}/tooling/scripts/entities/pw-review-scan.sh <slug> [--phase <phase>]
 ```
 
 One line per review file: open/resolved/pending counts and the last Sign-off state — enough to
@@ -59,7 +59,7 @@ Hard rules:
   file's history. One concrete ask per item. **Write them deterministically, never hand-copied
   heading blocks:**
   ```bash
-  {{PW_HOME}}/tooling/pw-review-edit.sh add-item <slug> <review-rel-path> \
+  {{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh add-item <slug> <review-rel-path> \
     --section '<§anchor>' --actor pw-reviewer --stdin   # the ask via heredoc — verbatim, quote-safe
   ```
   (next Rn, timestamp, `pw-item-status` marker, `---` rule, and the `## Contents` reindex are all

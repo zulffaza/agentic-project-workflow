@@ -38,13 +38,13 @@ reindexes `## Contents` for you; ids stay monotonic even across archives):
 
 ```sh
 # one concrete ask per item; --actor pw-reviewer is what keeps your items visually distinct
-tooling/pw-review-edit.sh add-item <slug> <review-rel-path> \
+tooling/scripts/entities/pw-review-edit.sh add-item <slug> <review-rel-path> \
   --section '<§section or anchor>' --actor pw-reviewer --stdin <<'EOF'
 <your ask — verbatim, quote-safe, multi-line ok>
 EOF
 
 # a genuinely ambiguous, judgment-blocking question (not a hedge on a real finding):
-tooling/pw-review-edit.sh add-question <slug> <review-rel-path> \
+tooling/scripts/entities/pw-review-edit.sh add-question <slug> <review-rel-path> \
   --section '<§section>' --actor pw-reviewer --stdin <<'EOF'
 <the question>
 EOF
@@ -70,7 +70,7 @@ marker — tooling keys off it, not the tag text.
 
 ## Read only what you need — never the whole file to find one section
 
-With bundle access, orient first via the script — `tooling/pw-review-scan.sh <slug>
+With bundle access, orient first via the script — `tooling/scripts/entities/pw-review-scan.sh <slug>
 [--phase <phase>]` prints open/resolved/pending counts + last sign-off state per review file, so
 you target the files worth reading at all (a standalone agent without the bundle greps
 `[OPEN]`/`[PENDING]` instead). Then, before reading the artifact end-to-end, check the review

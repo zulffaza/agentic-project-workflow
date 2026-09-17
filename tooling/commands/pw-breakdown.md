@@ -8,8 +8,8 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 
 <!-- Pre-flight: deterministic checks before agent reasoning -->
 ```bash
-{{PW_HOME}}/tooling/pw-preflight.sh breakdown <slug> || exit 1
-{{PW_HOME}}/tooling/pw-doc-lint.sh analysis <slug> --all || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh breakdown <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc-lint.sh analysis <slug> --all || exit 1
 ```
 **Reading the pre-flight:** `pw-preflight.sh breakdown` checks every analysis review file is
 `approved` (and RFC open items are clear if the side-loop runs); `pw-doc-lint analysis --all`
@@ -171,7 +171,7 @@ Then, **create the PLAN review file (idempotent)** — never hand-write it:
 ```
 No-ops if it already exists; otherwise creates it verbatim from the template so I don't have to
 copy it myself. (Task review files T0n.review.md are created the same way per task — or all at
-once via `{{PW_HOME}}/tooling/pw-review-edit.sh init-all <slug>`; my own items/answers/sign-off
+once via `{{PW_HOME}}/tooling/scripts/entities/pw-review-edit.sh init-all <slug>`; my own items/answers/sign-off
 rows go through the `/pw-review <slug> item|answer|signoff` operators, never hand-copied blocks.)
 
 Then **MANDATORY final step — do NOT skip** — update status + log via the helper

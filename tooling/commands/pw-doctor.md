@@ -6,7 +6,7 @@ Arguments: {{ARGS}}.
 
 Run the project-workflow sync check and show its output:
 ```bash
-{{PW_HOME}}/tooling/pw-doctor.sh {{ARGS}}
+{{PW_HOME}}/tooling/scripts/toolchain/pw-doctor.sh {{ARGS}}
 ```
 It verifies, per enabled provider (from `pw.config.sh`), that the installed `project-workflow`
 skill and the generated `/pw-*` command files match what this bundle would produce now — catching a

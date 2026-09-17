@@ -9,12 +9,12 @@ Checks the format conventions the pipeline depends on — run before breakdown/e
 so convention violations surface as cheap errors, not as agent confusion later.
 
 ```bash
-$PW_HOME/tooling/pw-doc-lint.sh analysis  <slug> <topic|--all>  # analysis/<topic>.md
-$PW_HOME/tooling/pw-doc-lint.sh task     <slug> <task-id|--all> # task/T0n.md
-$PW_HOME/tooling/pw-doc-lint.sh plan     <slug>                 # task/PLAN.md
-$PW_HOME/tooling/pw-doc-lint.sh review   <slug> <path>          # a .review.md file
-$PW_HOME/tooling/pw-doc-lint.sh dashboard <slug>                # README.md tables
-$PW_HOME/tooling/pw-doc-lint.sh all      <slug>                 # everything the project has
+$PW_HOME/tooling/scripts/entities/pw-doc-lint.sh analysis  <slug> <topic|--all>  # analysis/<topic>.md
+$PW_HOME/tooling/scripts/entities/pw-doc-lint.sh task     <slug> <task-id|--all> # task/T0n.md
+$PW_HOME/tooling/scripts/entities/pw-doc-lint.sh plan     <slug>                 # task/PLAN.md
+$PW_HOME/tooling/scripts/entities/pw-doc-lint.sh review   <slug> <path>          # a .review.md file
+$PW_HOME/tooling/scripts/entities/pw-doc-lint.sh dashboard <slug>                # README.md tables
+$PW_HOME/tooling/scripts/entities/pw-doc-lint.sh all      <slug>                 # everything the project has
 ```
 
 **What each mode checks (so you know what "lint failed" implies):**
@@ -51,10 +51,10 @@ doc while linting `--all` only happens if the dir was empty (reported as "`--all
 Cheap digests instead of full-file reads when an agent only needs the headlines.
 
 ```bash
-$PW_HOME/tooling/pw-doc-summary.sh analysis <slug> <topic>  # §1 problem + chosen approach + repos
-$PW_HOME/tooling/pw-doc-summary.sh task    <slug> <task-id> # Repo + Branch + goal one-liner
-$PW_HOME/tooling/pw-doc-summary.sh plan    <slug>           # task count, ΣSP, repos, produced-by
-$PW_HOME/tooling/pw-doc-summary.sh project <slug>           # one-liner, phase, task status counts
+$PW_HOME/tooling/scripts/entities/pw-doc-summary.sh analysis <slug> <topic>  # §1 problem + chosen approach + repos
+$PW_HOME/tooling/scripts/entities/pw-doc-summary.sh task    <slug> <task-id> # Repo + Branch + goal one-liner
+$PW_HOME/tooling/scripts/entities/pw-doc-summary.sh plan    <slug>           # task count, ΣSP, repos, produced-by
+$PW_HOME/tooling/scripts/entities/pw-doc-summary.sh project <slug>           # one-liner, phase, task status counts
 ```
 
 **Output** — `Key: value` lines, e.g.:
@@ -79,8 +79,8 @@ Re-derives every derived document from on-disk truth (task files + PLAN) — the
 `pw-doc-lint.sh dashboard` or `pw-doctor.sh` reports drift.
 
 ```bash
-$PW_HOME/tooling/pw-doc-sync.sh <slug>                 # dashboard + PLAN + task docs
-$PW_HOME/tooling/pw-doc-sync.sh <slug> --dashboard-only # or: --plan-only | --tasks-only
+$PW_HOME/tooling/scripts/entities/pw-doc-sync.sh <slug>                 # dashboard + PLAN + task docs
+$PW_HOME/tooling/scripts/entities/pw-doc-sync.sh <slug> --dashboard-only # or: --plan-only | --tasks-only
 ```
 
 **Output:** progress lines only:

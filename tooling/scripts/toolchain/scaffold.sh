@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Scaffold a new agentic-workflow project from template/.
-# Usage: tooling/scaffold.sh <project-slug>
+# Usage: tooling/scripts/toolchain/scaffold.sh <project-slug>
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # tooling/
-PW_HOME="$(cd "$HERE/.." && pwd)"                       # repo root (the bundle)
+PW_HOME="$(cd "$HERE/../../.." && pwd)"                       # repo root (the bundle)
 TEMPLATE_DIR="$PW_HOME/template"                        # what a project is made of
 
 # Three roots for stamping {{PW_*}} tokens into copied templates (see gen-commands.sh).
@@ -14,7 +14,7 @@ PW_REPOS="${PW_REPOS:-$(cd "$PW_PROJECTS/.." && pwd)}"
 # Shared plumbing — this is the single place that loads pw.config.sh (fallback: the example), so
 # PW_AI_REVIEW_DEFAULT below always reflects the same config bootstrap.sh/gen-commands.sh/
 # pw-doctor.sh see, never a second, drifting copy of that fallback logic.
-. "$HERE/pw-common.sh"
+. "$HERE/../lib/pw-common.sh"
 AI_REVIEW_PHASES="analysis plan task-plan task-exec ship"
 ai_review_default_line=""
 for p in $AI_REVIEW_PHASES; do ai_review_default_line="$ai_review_default_line $p=${PW_AI_REVIEW_DEFAULT:-off}"; done

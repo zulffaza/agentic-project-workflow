@@ -23,7 +23,7 @@ Project dir: `{{PW_PROJECTS}}/<slug>`. Repo: `{{PW_REPOS}}/<repo>`.
 
 <!-- Pre-flight: snapshot git state before adoption -->
 ```bash
-{{PW_HOME}}/tooling/pw-adopt-snapshot.sh <slug> <repo> <branch> [mr-url]
+{{PW_HOME}}/tooling/scripts/entities/pw-adopt-snapshot.sh <slug> <repo> <branch> [mr-url]
 ```
 **Reading the snapshot:** flat `key: value` fields — `base:` shows *how* the base branch was
 resolved (`(mr-target)` / `(default)`; pass `[mr-url]` whenever you have one so the base is the
@@ -82,7 +82,7 @@ earlier units are untouched. The result is a **mixed project** where adoption is
    group**: confirm `{{PW_REPOS}}/<repo>` is a git repo and `<existing-branch>` exists (`git -C
    {{PW_REPOS}}/<repo> rev-parse --verify <existing-branch>`, else `origin/<existing-branch>`) —
    if the slug's project dir doesn't exist yet, scaffold it first (once, before the first group):
-   `{{PW_HOME}}/tooling/scaffold.sh <slug>`.
+   `{{PW_HOME}}/tooling/scripts/toolchain/scaffold.sh <slug>`.
 2. **Resolve the base branch — from the MR target first.** The authoritative base for an adopted
    branch is **its MR's target branch**, not a guess:
    - **MR url given** → fetch the MR's target branch and use it as the base. GitLab:

@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # cases/pw-lib.t.sh — load-bearing helper round-trips (plan 06 §1) + status/phase semantics.
-L="$TOOL/pw-lib.sh"
+L="$(pwtest_script pw-lib.sh)"
 
 # 1) status self-heal + backward guards (C19 companion): prose drift normalizes on a forward write:
 CP=libclonestat; rm -rf "$PW_PROJECTS_DIR/$CP"; cp -a "$F3" "$PW_PROJECTS_DIR/$CP"

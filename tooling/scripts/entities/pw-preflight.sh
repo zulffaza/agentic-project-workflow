@@ -15,15 +15,15 @@
 # ============================================================================
 set -euo pipefail
 
-if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi
+if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PW_HOME="$(cd "$HERE/.." && pwd)"
-. "$HERE/pw-common.sh"
+PW_HOME="$(cd "$HERE/../../.." && pwd)"
+. "$HERE/../lib/pw-common.sh"
 # -h/--help before positional parsing: without this, "-h" would be taken as a slug/arg.
 case "${1:-}" in -h|--help) pw_usage ;; esac
 
-PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../.." && pwd)}"
+PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 
 die() { echo "pw-preflight: $*" >&2; exit 1; }
 # die_fix <problem> <fix> — one error line plus the concrete recovery action.
@@ -41,7 +41,7 @@ SLUG="$2"
 shift 2
 
 D="$(proj_dir "$SLUG")"
-PHASE_RAW="$("$HERE/pw-lib.sh" phase "$SLUG" 2>/dev/null || true)"
+PHASE_RAW="$("$HERE/../../pw-lib.sh" phase "$SLUG" 2>/dev/null || true)"
 PHASE="$(pw_phase_token "${PHASE_RAW:-missing}")"
 PHASE_FIX=""
 case "$COMMAND" in
@@ -86,7 +86,7 @@ case "$COMMAND" in
 
     # Check PLAN review gate
     if [ -f "$D/task/review/PLAN.review.md" ]; then
-      if ! "$HERE/pw-lib.sh" review gate "$SLUG" task/review/PLAN.review.md >/dev/null 2>&1; then
+      if ! "$HERE/../../pw-lib.sh" review gate "$SLUG" task/review/PLAN.review.md >/dev/null 2>&1; then
         die_fix "PLAN review gate not approved" "approve it in $D/task/review/PLAN.review.md (## Sign-off row) or run /pw-review $SLUG"
       fi
     else
@@ -105,7 +105,7 @@ case "$COMMAND" in
       if [ -n "$EXEC_WITH" ] && [ "$EXEC_WITH" != "—" ]; then
         PROVIDER="${EXEC_WITH%%:*}"
         MODEL="${EXEC_WITH#*:}"
-        if ! "$HERE/pw-lib.sh" model-check "$PROVIDER" "$MODEL" >/dev/null 2>&1; then
+        if ! "$HERE/../../pw-lib.sh" model-check "$PROVIDER" "$MODEL" >/dev/null 2>&1; then
           die_fix "model check failed for '$EXEC_WITH' (not in allowlist)" "allow it via PW_$(printf '%s' "$PROVIDER" | tr a-z A-Z)_MODELS in pw.config.sh, or change the PLAN 'Execute with' cell"
         fi
       fi
@@ -119,7 +119,7 @@ case "$COMMAND" in
     if [ -d "$D/analysis/review" ]; then
       for review_file in "$D/analysis/review"/*.review.md; do
         [ -f "$review_file" ] || continue
-        if ! "$HERE/pw-lib.sh" review gate "$SLUG" "analysis/review/$(basename "$review_file")" >/dev/null 2>&1; then
+        if ! "$HERE/../../pw-lib.sh" review gate "$SLUG" "analysis/review/$(basename "$review_file")" >/dev/null 2>&1; then
           die_fix "analysis review gate not approved for $(basename "$review_file")" "approve it (## Sign-off row with 'approved') or run /pw-review $SLUG"
         fi
       done
@@ -127,7 +127,7 @@ case "$COMMAND" in
 
     # Check RFC open items (if RFC exists)
     if [ -f "$D/rfc/META.md" ]; then
-      if "$HERE/pw-lib.sh" review has-open "$SLUG" "analysis/review/RFC.review.md" 2>/dev/null; then
+      if "$HERE/../../pw-lib.sh" review has-open "$SLUG" "analysis/review/RFC.review.md" 2>/dev/null; then
         die_fix "RFC has open items" "resolve/close them in analysis/review/RFC.review.md (pw-item-status markers) before breakdown"
       fi
     fi

@@ -129,7 +129,7 @@ if ! declare -p PW_FORGE_HOSTS >/dev/null 2>&1; then PW_FORGE_HOSTS=(); fi
 # S5 (tooling/docs/conventions.md): pure markdown-document primitives live in pw-mdlib.sh —
 # sourced, never executed. pw-lib.sh is FROZEN for new subcommands (S2): new capability goes
 # to a per-entity script (pw-review-edit.sh, pw-context.sh, …), shared code to pw-*lib.sh.
-. "$HERE/pw-mdlib.sh"
+. "$HERE/scripts/lib/pw-mdlib.sh"
 
 die() { echo "pw-lib: $*" >&2; exit 2; }
 proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d)"; printf '%s' "$d"; }
@@ -1452,7 +1452,7 @@ cmd_worktree_remove() {
   # you're standing in, refuses one with uncommitted changes). Never passes --yes: a dirty worktree
   # must be committed/stashed first, exactly as /pw-close requires. Exit 1 from teardown means it
   # skipped the worktree (reason already printed) — don't log "removed".
-  "$HERE/pw-teardown.sh" "$d" "" "$task_wt" || return 1
+  "$HERE/scripts/entities/pw-teardown.sh" "$d" "" "$task_wt" || return 1
   cmd_log "$slug" sync "$task: worktree removed (MR already merged)"
   echo "$slug: $task worktree removed"
 }

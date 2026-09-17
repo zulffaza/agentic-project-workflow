@@ -10,7 +10,7 @@ them against `rfc/META.md`, and appends new items to `analysis/review/RFC.review
 mechanical — the agent's job starts at *triaging* what landed there.
 
 ```bash
-$PW_HOME/tooling/pw-rfc-comments.sh <slug> [--backend <backend>]   # default: PW_RFC_BACKEND
+$PW_HOME/tooling/scripts/entities/pw-rfc-comments.sh <slug> [--backend <backend>]   # default: PW_RFC_BACKEND
 ```
 
 **Output:** one summary line —
@@ -40,7 +40,7 @@ can take are printed for the agent, never as errors:
   / platform skill)`
 
 ```bash
-$PW_HOME/tooling/pw-context-fetch.sh <slug> [--ignore-errors]   # --ignore-errors mirrors
+$PW_HOME/tooling/scripts/entities/pw-context-fetch.sh <slug> [--ignore-errors]   # --ignore-errors mirrors
                                                                # /pw-analyze's --ignore-fetch-errors
 ```
 
@@ -61,7 +61,7 @@ For `/pw-adopt` on a repo that already has in-flight branches: snapshots the git
 resolves the base branch (explicit MR target → forge lookup via `gh`/`glab` → repo default).
 
 ```bash
-$PW_HOME/tooling/pw-adopt-snapshot.sh <slug> <repo> <branch> [mr-url]
+$PW_HOME/tooling/scripts/entities/pw-adopt-snapshot.sh <slug> <repo> <branch> [mr-url]
 ```
 
 **Output** — flat `key: value`:
@@ -89,7 +89,7 @@ Creates the execution worktree with the naming convention baked in — branch
 `git worktree add` and drifts from the layout `/pw-status`/`pw-teardown` expect.
 
 ```bash
-$PW_HOME/tooling/pw-worktree-create.sh <slug> <task-id> <repo> <base-branch>
+$PW_HOME/tooling/scripts/entities/pw-worktree-create.sh <slug> <task-id> <repo> <base-branch>
 ```
 
 **Output:** status line(s), then **the worktree path on the final line** — capture that:

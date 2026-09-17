@@ -131,9 +131,9 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 
 These exist for multiple agent tools (Claude Code, kilo, …) but are **not** maintained per tool. The
 single source is [`tooling/commands/*.md`](../tooling/) (provider-neutral, `{{ARGS}}` placeholder).
-Under the hood, [`tooling/gen-commands.sh`](../tooling/gen-commands.sh) stamps them into each
+Under the hood, [`tooling/scripts/toolchain/gen-commands.sh`](../tooling/scripts/toolchain/gen-commands.sh) stamps them into each
 provider's format and location (`~/.claude/commands/`, `~/.config/kilo/command/`,
-`~/.cursor/commands/`), and [`tooling/gen-agents.sh`](../tooling/gen-agents.sh) does the same for the
+`~/.cursor/commands/`), and [`tooling/scripts/toolchain/gen-agents.sh`](../tooling/scripts/toolchain/gen-agents.sh) does the same for the
 sub-agents (`~/.claude/agents/`, `~/.config/kilo/agent/`, `~/.cursor/agents/`) — you don't run either script yourself; `/pw-doctor
 --fix` (see the table above) drives both.
 

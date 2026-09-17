@@ -100,7 +100,7 @@ publishing to a real platform is the opt-in part).
 ## Regenerate after any change
 Edit a file in `commands/`, then (`$PW_HOME` = the bundle dir; `bootstrap.sh` exports it):
 ```bash
-$PW_HOME/tooling/gen-commands.sh
+$PW_HOME/tooling/scripts/toolchain/gen-commands.sh
 ```
 Outputs (overwritten each run):
 - **Claude Code** → `~/.claude/commands/*.md` (frontmatter `description` + `argument-hint`)

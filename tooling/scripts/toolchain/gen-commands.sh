@@ -12,9 +12,9 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # tooling/
-CANON_DIR="$HERE/commands"
-PW_HOME="$(cd "$HERE/.." && pwd)"                       # repo root (the bundle)
-. "$HERE/pw-common.sh"                                  # roots + config + provider hooks
+CANON_DIR="$HERE/../../commands"
+PW_HOME="$(cd "$HERE/../../.." && pwd)"                       # repo root (the bundle)
+. "$HERE/../lib/pw-common.sh"                                  # roots + config + provider hooks
 
 # --- args: --outdir DIR and/or an explicit provider list ---------------------
 OUTDIR_OVERRIDE=""

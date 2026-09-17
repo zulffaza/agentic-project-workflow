@@ -10,16 +10,16 @@
 # ============================================================================
 set -euo pipefail
 
-if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi
+if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PW_HOME="$(cd "$HERE/.." && pwd)"
-. "$HERE/pw-common.sh"
+PW_HOME="$(cd "$HERE/../../.." && pwd)"
+. "$HERE/../lib/pw-common.sh"
 
-PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../.." && pwd)}"
+PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 
 die() { echo "pw-review-scan: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scaffold.sh $1)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scripts/toolchain/scaffold.sh $1)"; printf '%s' "$d"; }
 
 SLUG=""
 PHASE_FILTER=""
@@ -63,7 +63,7 @@ for f in "${REVIEW_FILES[@]}"; do
   # gates use. A whole-file `grep -c "pw-item-status: open"` previously counted the template's
   # permanent "> Add an item: … <!-- pw-item-status: open -->" guidance line in EVERY review
   # file, so each one phantom-reported "(1 open)" forever, no matter what was approved.
-  COUNTS="$("$HERE/pw-lib.sh" review count "$SLUG" "$REL" 2>/dev/null || true)"
+  COUNTS="$("$HERE/../../pw-lib.sh" review count "$SLUG" "$REL" 2>/dev/null || true)"
   OPEN="$(printf '%s' "$COUNTS" | sed -n 's/open=\([0-9]*\).*/\1/p')"; OPEN="${OPEN:-0}"
   RESOLVED="$(printf '%s' "$COUNTS" | sed -n 's/.*resolved=\([0-9]*\).*/\1/p')"; RESOLVED="${RESOLVED:-0}"
   

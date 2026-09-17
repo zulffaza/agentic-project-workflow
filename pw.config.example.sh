@@ -2,7 +2,7 @@
 # ============================================================================
 # pw.config — your LOCAL configuration for the project-workflow pipeline.
 #
-# This is the one file you edit. `bootstrap.sh` and `tooling/gen-commands.sh`
+# This is the one file you edit. `bootstrap.sh` and `tooling/scripts/toolchain/gen-commands.sh`
 # SOURCE it — you never edit those scripts to change which providers you use.
 #
 # On first run, bootstrap.sh copies this to `pw.config.sh` (gitignored), so your
@@ -15,7 +15,7 @@
 # narrower concept: which model BACKEND a given Agent Provider talks to underneath.
 #
 # Built-in (claude, kilo, opencode, cursor) means the hooks already exist in
-# tooling/pw-common.sh — you
+# tooling/scripts/lib/pw-common.sh — you
 # never write bin/skilldir/commanddir/render_* functions for these. But "built-in" is NOT the
 # same as "enabled": you still list a provider's name here yourself for it to become active.
 # List ONLY the CLIs you actually use; others are ignored even if installed.
@@ -72,7 +72,7 @@ PW_KILO_API_PROVIDERS=(kilo)
 #  EXECUTOR is never a row — its pin is a task's `Execute with:`.)
 
 # Back-compat: the old names PW_KILO_PROVIDERS (array) and PW_KILO_PROVIDER (singular) still
-# work and are folded into PW_KILO_API_PROVIDERS automatically (see tooling/pw-common.sh).
+# work and are folded into PW_KILO_API_PROVIDERS automatically (see tooling/scripts/lib/pw-common.sh).
 # Prefer PW_KILO_API_PROVIDERS going forward.
 
 # --- Memory (OPTIONAL — the workflow never depends on it) -------------------
@@ -138,7 +138,7 @@ PW_RFC_NOTES=""
 
 # --- Onboard a brand-new Agent Provider without touching the scripts --------
 # First check: is your CLI already claude, kilo, opencode, or cursor? Those are built into
-# tooling/pw-common.sh — just add the name to PW_PROVIDERS above, nothing else. Everything
+# tooling/scripts/lib/pw-common.sh — just add the name to PW_PROVIDERS above, nothing else. Everything
 # below is ONLY for a CLI that ISN'T on that list — don't redefine a built-in provider's hooks
 # here, since a function you define in this file always wins over the built-in default, and a
 # well-meaning but incomplete redefinition would silently replace one that already works.
@@ -155,7 +155,7 @@ PW_RFC_NOTES=""
 # provider-agent name, may be empty) $bodytext (the prompt body, with {{PW_*}} tokens already
 # stamped to real paths). Your function's ONLY job is to `printf`/`echo` the complete file
 # content — frontmatter + body — to stdout; gen-commands.sh redirects that into the real file.
-# A minimal example, mirroring render_claude_command in tooling/pw-common.sh:
+# A minimal example, mirroring render_claude_command in tooling/scripts/lib/pw-common.sh:
 #   render_myprov_command() {
 #     printf -- '---\ndescription: %s\n---\n%s' "$desc" "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
 #   }
@@ -178,5 +178,5 @@ PW_RFC_NOTES=""
 #   }
 # Without this hook, the provider is still fully usable same-provider (spawning an in-process
 # sub-agent) — it just can't be a cross-provider execution TARGET. See
-# claude_headless/kilo_headless/opencode_headless/cursor_headless in tooling/pw-common.sh for
+# claude_headless/kilo_headless/opencode_headless/cursor_headless in tooling/scripts/lib/pw-common.sh for
 # real examples.

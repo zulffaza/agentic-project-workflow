@@ -9,14 +9,14 @@ for tsk in T01; do
   sed -i '' "s|agent/$S2/$tsk-thing|agent/$E/$tsk-thing|" "$PW_PROJECTS_DIR/$E/task/$tsk.md"
 done
 : > "$PWTEST_FORGE_LOG"
-pwtest_rc 0 "exec pushes + files MR" "$TOOL/pw-ship-exec.sh" "$E" T01 "$ROOT/desc.md"
+pwtest_rc 0 "exec pushes + files MR" "$(pwtest_script pw-ship-exec.sh)" "$E" T01 "$ROOT/desc.md"
 pwtest_re "MR created|created|MR exists|already" "creation/report line"
 # rerun: Result now holds a real URL → already-exists path, no double-create.
-pwtest_rc 0 "exec rerun sees existing MR (no double create)" "$TOOL/pw-ship-exec.sh" "$E" T01 "$ROOT/desc.md"
+pwtest_rc 0 "exec rerun sees existing MR (no double create)" "$(pwtest_script pw-ship-exec.sh)" "$E" T01 "$ROOT/desc.md"
 grep -q 'already exists' "$PWTEST_BOTH" && pwtest_ok "rerun skipped create" || { grep -c 'MR created' "$PWTEST_BOTH" >/dev/null; }
 n_created=$(grep -c 'MR created' "$PWTEST_BOTH") || n_created=0
-pwtest_rc any "creation-failure is loud → honest non-zero (push ok, no MR)" env PWTEST_FORGE_CREATE="" "$TOOL/pw-ship-exec.sh" "$E" T04 "$ROOT/desc.md"
+pwtest_rc any "creation-failure is loud → honest non-zero (push ok, no MR)" env PWTEST_FORGE_CREATE="" "$(pwtest_script pw-ship-exec.sh)" "$E" T04 "$ROOT/desc.md"
 if [ "$PWTEST_RC" = 0 ]; then pwtest_bad "creation honesty" "exit 0 although no URL came back (regression!)"; else pwtest_ok "failed creation exits non-zero (rc $PWTEST_RC)"; fi
 grep -qiE 'creation|no url|no MR|MR' "$PWTEST_ERR" || grep -qiE 'creation|no url' "$PWTEST_OUT" || true
-pwtest_rc 2 "exec missing desc file" "$TOOL/pw-ship-exec.sh" "$E" T02 "$ROOT/nope-desc.md"
-pwtest_rc 2 "exec fake task" "$TOOL/pw-ship-exec.sh" "$E" T99 "$ROOT/desc.md"
+pwtest_rc 2 "exec missing desc file" "$(pwtest_script pw-ship-exec.sh)" "$E" T02 "$ROOT/nope-desc.md"
+pwtest_rc 2 "exec fake task" "$(pwtest_script pw-ship-exec.sh)" "$E" T99 "$ROOT/desc.md"

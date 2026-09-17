@@ -72,7 +72,7 @@ if [ -n "${PWTEST_FIXTURE_CACHE:-}" ] && [ -z "${PWTEST_MUT_NESTED:-}" ]; then
     && pwtest_ok "parallel mini-sweep (2 workers) catches both rows" \
     || pwtest_bad "parallel mini-sweep (2 workers) catches both rows" "rc=$_nrc: $(grep -E 'mutate:|FAIL' "$_np/out.log" | head -1)"
   if [ -d "$PW_HOME/.git" ]; then
-    git -C "$PW_HOME" diff --quiet -- tooling/pw-worktree-create.sh tooling/pw-status.sh \
+    git -C "$PW_HOME" diff --quiet -- tooling/scripts/entities/pw-worktree-create.sh tooling/scripts/entities/pw-status.sh \
       && pwtest_ok "live tree untouched by parallel workers" \
       || pwtest_bad "live tree untouched by parallel workers" "worker mutated the live tree"
   else

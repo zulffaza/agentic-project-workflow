@@ -1,8 +1,8 @@
 # Breakdown phase (`/pw-breakdown`)
 
 **Pre-flight first (scripts, not reasoning):**
-`{{PW_HOME}}/tooling/pw-preflight.sh breakdown <slug> || exit 1` and
-`{{PW_HOME}}/tooling/pw-doc-lint.sh analysis <slug> --all || exit 1`. `/pw-breakdown` runs these
+`{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh breakdown <slug> || exit 1` and
+`{{PW_HOME}}/tooling/scripts/entities/pw-doc-lint.sh analysis <slug> --all || exit 1`. `/pw-breakdown` runs these
 already; when reached without it, run them yourself — a nonzero exit means STOP and relay stderr
 (it names the unapproved gate or broken doc), don't reason onward to a PLAN nobody approved.
 

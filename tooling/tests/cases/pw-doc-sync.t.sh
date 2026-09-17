@@ -16,14 +16,14 @@ for L in open(f):
     out.append(s+"\n")
 open(f,"w").write("".join(out))
 PY
-pwtest_rc 1 "drifted dashboard lints red" "$TOOL/pw-doc-lint.sh" dashboard "$S"
+pwtest_rc 1 "drifted dashboard lints red" "$(pwtest_script pw-doc-lint.sh)" dashboard "$S"
 pwtest_fix "drift points at pw-doc-sync"
-pwtest_rc 0 "sync --dashboard-only repairs" "$TOOL/pw-doc-sync.sh" "$S" --dashboard-only
-pwtest_rc 0 "post-repair lint green" "$TOOL/pw-doc-lint.sh" dashboard "$S"
+pwtest_rc 0 "sync --dashboard-only repairs" "$(pwtest_script pw-doc-sync.sh)" "$S" --dashboard-only
+pwtest_rc 0 "post-repair lint green" "$(pwtest_script pw-doc-lint.sh)" dashboard "$S"
 grep -q 'handnote' "$D" && pwtest_ok "C7 hand-written Notes preserved through rebuild" || pwtest_bad "C7 Notes preservation" "Notes wiped by rebuild (must never happen)"
 grep -q '^| T02 | api' "$D" && pwtest_bad "C7 TXX stale row dropped" "renamed row survived rebuild" || pwtest_ok "C7 stale row dropped by rebuild"
 cp "$D" "$ROOT/sync.pass1"
-pwtest_rc 0 "sync second run" "$TOOL/pw-doc-sync.sh" "$S" --dashboard-only
+pwtest_rc 0 "sync second run" "$(pwtest_script pw-doc-sync.sh)" "$S" --dashboard-only
 cmp -s "$ROOT/sync.pass1" "$D" && pwtest_ok "sync idempotent (second run no-op)" || pwtest_bad "sync idempotent" "README changed on a no-op run"
-pwtest_rc 2 "sync unknown project rc2+fix" "$TOOL/pw-doc-sync.sh" nope; pwtest_fix "sync unknown fix"
+pwtest_rc 2 "sync unknown project rc2+fix" "$(pwtest_script pw-doc-sync.sh)" nope; pwtest_fix "sync unknown fix"
 rm -rf "$PW_PROJECTS_DIR/$S"

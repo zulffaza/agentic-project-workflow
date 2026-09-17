@@ -113,7 +113,7 @@ publish step; by default also monitors the MR's pipeline to a terminal state bef
 analysis/plan content to an RFC doc, any configured backend or none; see `tooling/docs/rfc.md`).
 The command files are **generated build artifacts** — the single source is
 `agentic-project-workflow/tooling/commands/*.md`, emitted per provider by
-`agentic-project-workflow/tooling/gen-commands.sh` (Claude → `~/.claude/commands/`, kilo →
+`gen-commands.sh` (in `tooling/scripts/toolchain/`; Claude → `~/.claude/commands/`, kilo →
 `~/.config/kilo/command/`, cursor → `~/.cursor/commands/`); the sub-agents (`pw-orchestrator`,
 `pw-executor`) are seeded the same way from `tooling/agents/` by `gen-agents.sh`. To change a
 command's prompt or an agent, edit the canonical file and re-run the generator — never hand-edit the

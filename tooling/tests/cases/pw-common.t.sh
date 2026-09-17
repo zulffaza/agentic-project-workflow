@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # cases/pw-common.t.sh — the shared readers are THE contract (P2).
-export PW_HOME="${PW_HOME:-$(cd "$TOOL/.." && pwd)}"; . "$TOOL/pw-common.sh"
+export PW_HOME="${PW_HOME:-$(cd "$TOOL/.." && pwd)}"; . "$(pwtest_script pw-common.sh)"
 
 got="$(printf "  a's \"b\" c  " | pw_trim)"
 expected=$(printf "a's \"b\" c")

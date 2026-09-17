@@ -4,7 +4,7 @@
 call, how to read the output, what to do when it fails. Script internals are in the scripts
 themselves; nobody needs them to use these.
 
-The scripts in `tooling/` handle the deterministic parts of the pipeline — status reporting,
+The scripts in `tooling/scripts/entities/` handle the deterministic parts of the pipeline — status reporting,
 gate checking, document validation/summaries, ship mechanics, URL fetching, review/context
 document editing — so an agent doesn't spend tokens re-reading files it could just query. The
 rule they all serve: **script the mechanical, keep the agent for the creative.** Adding a new
@@ -24,8 +24,8 @@ script or operator? Placement rules (one script per entity, frozen `pw-lib.sh`, 
 ## Common invocation pattern
 
 ```bash
-$PW_HOME/tooling/<script>.sh <args> [options]      # shell
-{{PW_HOME}}/tooling/<script>.sh <args> [options]   # inside command/agent/skill prompt files
+$PW_HOME/tooling/scripts/entities/<script>.sh <args> [options]      # shell
+{{PW_HOME}}/tooling/scripts/entities/<script>.sh <args> [options]   # inside command/agent/skill prompt files
 ```
 
 - `-h` / `--help` prints the script's own usage header and exits 0 — on every script.

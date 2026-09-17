@@ -38,14 +38,14 @@ there won't be one again — see "Choosing a model" below for why); write it exp
 ## How headless invocation actually works
 
 Each Agent Provider has an **optional** `<name>_headless()` hook — built-in for claude/kilo/
-opencode/cursor in `tooling/pw-common.sh`, overridable (or added fresh, for a provider that isn't
+opencode/cursor in `tooling/scripts/lib/pw-common.sh`, overridable (or added fresh, for a provider that isn't
 built-in) in `pw.config.sh` — that prints the exact non-interactive invocation template plus
 operational gotchas for that CLI. The orchestrator reads **that hook's output**, not a markdown
 table, when routing a task to a *different* provider than its own. A provider without this hook
 is still fully usable same-provider; it just can't be a cross-provider **target** (same optional
 treatment as `agentdir`/`render_*_agent` for sub-agent seeding).
 
-**What the built-in hooks currently return** (source of truth is `tooling/pw-common.sh`'s
+**What the built-in hooks currently return** (source of truth is `tooling/scripts/lib/pw-common.sh`'s
 `claude_headless`/`kilo_headless`/`opencode_headless`/`cursor_headless` — the lines below are
 illustrative, kept in
 sync by whoever maintains the bundle, not something you edit here to change behavior):

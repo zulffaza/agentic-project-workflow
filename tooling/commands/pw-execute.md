@@ -11,9 +11,9 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 
 <!-- Pre-flight: deterministic checks before agent reasoning -->
 ```bash
-{{PW_HOME}}/tooling/pw-preflight.sh execute <slug> || exit 1
-{{PW_HOME}}/tooling/pw-doc-lint.sh plan <slug> || exit 1
-{{PW_HOME}}/tooling/pw-doc-lint.sh task <slug> --all || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh execute <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc-lint.sh plan <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc-lint.sh task <slug> --all || exit 1
 ```
 **Reading the pre-flight:** `pw-preflight.sh execute` checks the PLAN `approved` sign-off, a
 phase execution is legal in, and every `Execute with:` model resolving; the two `pw-doc-lint`
@@ -60,7 +60,7 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
      - **Fresh task** (`Branch:` is a new `agent/<slug>/<T0n>-<slug>`) → **create its worktree with
        the script** — never hand-roll `git worktree add` (branch naming, path layout and attach
        semantics live in one place: `tooling/docs/scripts/workflow-automation.md`):
-       `{{PW_HOME}}/tooling/pw-worktree-create.sh <slug> <T0n> <repo> <base-branch>` — it forks the
+       `{{PW_HOME}}/tooling/scripts/entities/pw-worktree-create.sh <slug> <T0n> <repo> <base-branch>` — it forks the
        task's `Branch:` from `origin/<base-branch>` (NOT the repo's current HEAD) at
        `worktree/<repo>/<task-id>-<slug>/` and prints the path on its last line; pass that path to
        the spawn. Two tasks in one repo may declare different bases (e.g. `master` and `spring3`) —

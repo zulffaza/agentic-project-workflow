@@ -7,7 +7,7 @@ the project slug).
 
 Run:
 ```bash
-{{PW_HOME}}/tooling/scaffold.sh {{ARGS}}
+{{PW_HOME}}/tooling/scripts/toolchain/scaffold.sh {{ARGS}}
 ```
 
 Then confirm the structure was created and give me a **full onboarding orientation** so I can use

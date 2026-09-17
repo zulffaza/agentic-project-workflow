@@ -2,8 +2,8 @@
 # cases/pw-review-edit.t.sh — review-doc entity operators (plan 17): init-all, signoff,
 # add-item, answer, add-question, resolve. Works on a private clone of F2 (never the shared
 # fixture — C22-style pollution is a known trap) plus a fresh-template review file.
-E="$TOOL/pw-review-edit.sh"
-L="$TOOL/pw-lib.sh"
+E="$(pwtest_script pw-review-edit.sh)"
+L="$(pwtest_script pw-lib.sh)"
 RE=reviewedit; rm -rf "$PW_PROJECTS_DIR/$RE"; cp -a "$F2" "$PW_PROJECTS_DIR/$RE"
 P="$PW_PROJECTS_DIR/$RE"
 RV="task/review/T04.review.md"   # fresh template shape (stubs unfilled, placeholder sign-off row)
@@ -93,7 +93,7 @@ pwtest_grep_file '^### R3 · §6 — \[OPEN\]' "next id skipped archived R1 (got
 
 # 7) lint + count agree with the edited file (post-archive live state: R2 open, Q2 pending,
 #    R3 open; R1/Q1 moved to the archive sibling)
-pwtest_rc 0 "lint passes on the edited review file" "$TOOL/pw-doc-lint.sh" review "$RE" "$RV"
+pwtest_rc 0 "lint passes on the edited review file" "$(pwtest_script pw-doc-lint.sh)" review "$RE" "$RV"
 pwtest_rc 0 "count on edited file" "$L" review count "$RE" "$RV"
 pwtest_re 'open=3 resolved=0 items=2' "count sees the live post-archive state (open=3 resolved=0 items=2)"
 

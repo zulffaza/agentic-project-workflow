@@ -33,7 +33,7 @@ buried in `tooling/`.
 - **Root cause:** `kilo run` defaults to rejecting all permissions when there's no interactive
   session to approve them — the opposite of what you'd want for automation.
 - **Mitigation (built in):** `--auto` is treated as mandatory in every kilo headless invocation
-  this bundle generates (`kilo_headless()` in `tooling/pw-common.sh`).
+  this bundle generates (`kilo_headless()` in `tooling/scripts/lib/pw-common.sh`).
 - Verified end-to-end 2026-08-04. Same spirit for claude: `--dangerously-skip-permissions` is
   mandatory headless too — without it, a permission prompt has no TTY to answer and the process
   hangs producing zero output. Full detail:

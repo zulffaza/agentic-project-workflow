@@ -165,7 +165,7 @@ local `.review.md` files above — see the [MR review flow](./REVIEW.md#2-the-mr
 
 ## Step 9 — Learn + close (`/pw-close`)
 After the run, `/pw-close` verifies every task is `accepted`, **tears down the worktrees with the
-safe helper** ([`pw-teardown.sh`](../tooling/pw-teardown.sh) — refuses to remove the worktree you're
+safe helper** ([`pw-teardown.sh`](../tooling/scripts/entities/pw-teardown.sh) — refuses to remove the worktree you're
 in or a dirty one), captures what changed about the *workflow itself* (not the code — the repos
 record that) into the project's "Decisions & learnings" section — and into your memory tool too, if
 `PW_MEMORY` names one — sets the dashboard Status → `done`, and summarizes MRs/leftovers.

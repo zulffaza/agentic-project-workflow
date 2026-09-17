@@ -3,7 +3,7 @@
 ## Execution phase
 
 **Pre-flight before anything else:**
-`{{PW_HOME}}/tooling/pw-preflight.sh execute <slug>` + `pw-doc-lint.sh plan <slug>` +
+`{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh execute <slug>` + `pw-doc-lint.sh plan <slug>` +
 `pw-doc-lint.sh task <slug> --all` (each `|| exit 1`). `/pw-execute` runs these itself — when you
 reach execution WITHOUT the command (direct orchestrator spawn, skill-only session), run the same
 three; a nonzero exit is a hard stop: relay its stderr line, don't reason onward. (These, plus
@@ -188,7 +188,7 @@ idempotent re-attach built in; the worktree path is its LAST output line (captur
 executor handoff):
 
 ```bash
-{{PW_HOME}}/tooling/pw-worktree-create.sh <project-slug> <task-id> <repo> <base-branch>
+{{PW_HOME}}/tooling/scripts/entities/pw-worktree-create.sh <project-slug> <task-id> <repo> <base-branch>
 ```
 
 The raw equivalent (what the script does — manual use only if the script is unavailable):

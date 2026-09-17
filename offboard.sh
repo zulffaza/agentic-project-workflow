@@ -56,7 +56,7 @@ export PW_PROJECTS PW_REPOS
 
 # shared plumbing: sources pw.config.sh (if present; falls back to the example) + provider hooks.
 # Never creates pw.config.sh — offboarding must never write new files.
-. "$PW_HOME/tooling/pw-common.sh"
+. "$PW_HOME/tooling/scripts/lib/pw-common.sh"
 
 # --- known built-ins (always have hooks, regardless of PW_PROVIDERS membership) ---
 # (opencode + cursor added 2026-09: this list had drifted since each went live. Sweep
@@ -132,7 +132,7 @@ plan_provider() {
   # --- commands: regenerate to a temp dir, only remove exact matches ---
   local odir rm_c=0 skip_c=0 absent_c=0
   odir="$("${p}_commanddir")"
-  "$PW_HOME/tooling/gen-commands.sh" --outdir "$tmp/cmd" "$p" >/dev/null 2>&1 || true
+  "$PW_HOME/tooling/scripts/toolchain/gen-commands.sh" --outdir "$tmp/cmd" "$p" >/dev/null 2>&1 || true
   if [ -d "$tmp/cmd/$p" ]; then
     for exp in "$tmp/cmd/$p"/*.md; do
       n="$(basename "$exp")"
@@ -153,7 +153,7 @@ plan_provider() {
   if pw_provider_has_agent_hooks "$p"; then
     local adir rm_a=0 skip_a=0 absent_a=0
     adir="$("${p}_agentdir")"
-    "$PW_HOME/tooling/gen-agents.sh" --outdir "$tmp/agents" "$p" >/dev/null 2>&1 || true
+    "$PW_HOME/tooling/scripts/toolchain/gen-agents.sh" --outdir "$tmp/agents" "$p" >/dev/null 2>&1 || true
     if [ -d "$tmp/agents/$p" ]; then
       for exp in "$tmp/agents/$p"/*.md; do
         n="$(basename "$exp")"

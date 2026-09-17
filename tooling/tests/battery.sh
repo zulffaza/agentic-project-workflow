@@ -61,7 +61,7 @@ pwtest_is_crash() {  # file → 0 if output looks like a *script* defect (not a 
 battery_run() { # script args → sets B_RC, B_OUT, B_ERR (out+err joined)
   local script="$1"; shift
   B_OUT="$ROOT/b.out"; B_ERR="$ROOT/b.err"
-  ( cd /tmp && "$TOOL/$script" "$@" >"$B_OUT" 2>"$B_ERR" ); B_RC=$?
+  ( cd /tmp && "$(pwtest_script "$script")" "$@" >"$B_OUT" 2>"$B_ERR" ); B_RC=$?
   cat "$B_OUT" "$B_ERR" > "$ROOT/b.both"
 }
 
@@ -75,7 +75,7 @@ battery_t2() {
   # spine selftests, run from a foreign cwd (C12)
   local cmd rc
   for cmd in "pw-lib.sh selftest" "pw-status.sh --selftest"; do
-    (cd /tmp && $TOOL/$cmd) >/dev/null 2>&1; rc=$?
+    (cd /tmp && b_s="${cmd%% *}" && "$(pwtest_script "$b_s")" ${cmd#* } >/dev/null 2>&1); rc=$?
     label="selftest: $cmd"
     if [ "$cap" = 1 ]; then printf '%s\t%s\t%s\t%s\t%s\n' "$label" "${cmd%% *}" "${cmd#* }" "$rc" "-" >> "$TOOL/tests/expectations/battery.tsv"
     else tok="$(awk -F'\t' -v l="$label" '$1==l{print $4; exit}' "$TOOL/tests/expectations/battery.tsv" 2>/dev/null)"

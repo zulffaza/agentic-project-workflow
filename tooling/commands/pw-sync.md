@@ -22,7 +22,7 @@ history rewrite). Pushing is **outward-facing**, so confirm before anything goes
 2. **Check MR state for every task in the set — one batch call, not a per-task loop.** Before
    syncing, verify each MR is still open:
    ```bash
-   {{PW_HOME}}/tooling/pw-mr-state-batch.sh <slug> [task-ids…]   # no ids = every PLAN task
+   {{PW_HOME}}/tooling/scripts/entities/pw-mr-state-batch.sh <slug> [task-ids…]   # no ids = every PLAN task
    ```
    This queries the forge (GitLab/GitHub) once per task and prints `task-id|state` lines, with
    `state` one of `open`, `merged`, `closed`, or `unknown` (per-task handling below is unchanged;
@@ -56,7 +56,7 @@ history rewrite). Pushing is **outward-facing**, so confirm before anything goes
    - On a successful push, log it: `{{PW_HOME}}/tooling/pw-lib.sh log <slug> sync "T0n merged
      origin/<base>; verify green; pushed"`, and add a one-line note to the task's `## Result`
      (`Synced with <base> @ <short-sha> on <date>`). The MR updates itself — no new MR is opened.
-   - Then settle the CI the push triggered: `{{PW_HOME}}/tooling/pw-pipeline-monitor.sh <slug> T0n`
+   - Then settle the CI the push triggered: `{{PW_HOME}}/tooling/scripts/entities/pw-pipeline-monitor.sh <slug> T0n`
      (exit 0 green / 1 red / 2 still running; it records the task's `## Result → Build check:` line).
      Red → report it prominently in the recap; don't undo the sync. Still running → say so, don't
      claim green.
