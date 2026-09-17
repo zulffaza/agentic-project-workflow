@@ -54,21 +54,10 @@ anchor moved with the code — re-pin it, don't delete it. After adding any nont
 row for its coupling and verify the one anchor: `--mutation <id>` (~5 s/row with a warm cache) or
 a slice like `--mutation 'C2[5-9]'`.
 
-Sweep mechanics (plan 19): the parent warms a **pristine fixture cache** (keyed by a hash of the
-fixture *recipe*: `template/` + `scaffold.sh` + `pw-env.sh` + `pw_test_lib.sh` — deliberately NOT
-the runtime scripts) and each child copies from it instead of rebuilding; cache dir
-`$TMPDIR/pwtest-fixture-cache` (override `PWTEST_MUT_CACHE`, disable `PWTEST_FIXTURE_CACHE=`).
-**Convention this creates: a mutation catcher must never depend on the mutation changing fixture
-BYTES** — catchers test runtime readers on template-derived data. Every child runs under a
-watchdog (`PWTEST_MUT_TIMEOUT`, default 300 s): a timeout is reported as `HUNG`, the sweep
-**continues**, and the final exit lists the hung rows. Progress prints one
-`MUT n/N <id> rc=<rc> <elapsed>s` line per row.
-
-The sweep is **parallel by default** (`PWTEST_MUT_JOBS`, auto = min(ncpu, 8)): one worker per
-row, each mutating a disposable rsync copy of the bundle (excluding `.git`) — the live tree is
-never mutated, so workers cannot see each other's reverts (the false-"caught" hazard of
-parallel-on-live) and same-file rows need no serialization. A full sweep is **~70 s for 35
-rows**; `PWTEST_MUT_JOBS=1` keeps the original serial live-tree path.
+Sweep mechanics (fixture cache, watchdog/HUNG, parallel workers on disposable copies) are in
+§Inside the harness below. One rule worth stating at the top: **a mutation catcher must never
+depend on the mutation changing fixture BYTES** — catchers test runtime readers on
+template-derived data, which is what lets every sweep child share one warm cache.
 
 ## Inside the harness (read this before editing tests/ or writing mutation rows)
 
