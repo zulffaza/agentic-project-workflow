@@ -27,7 +27,19 @@ _h3="$(cat "$PWTEST_ROOT/$TH.h.out")"
 [ -n "$_h3" ] && [ "$_h3" != "$_h1" ] && pwtest_ok "recipe hash tracks the template tree" \
   || pwtest_bad "recipe hash tracks the template tree" "fake-bundle hash [$_h3] vs real [$_h1]"
 
-# d) cache store/restore round-trip (only when this run built all three fixtures)
+# d) mutation crash-safety stack stays BOUNDED across push/pop (the exponential-pop
+#    rebuild was the plan-17 parent-side "hang" — children done, tree clean, CPU spin)
+_savestack="${PWTEST_MUT_STACK:-}"
+PWTEST_MUT_STACK=""
+_pwt_mutable_push "f1|b1"; _pwt_mutable_push "f2|b2"; _pwt_mutable_push "f3|b3"
+_pwt_mutable_pop "f2|b2"
+pwtest_eq "mutable stack bounded after pop" 2 "$(printf '%s\n' "$PWTEST_MUT_STACK" | grep -c .)"
+_pwt_mutable_pop "f1|b1"; _pwt_mutable_pop "f3|b3"
+[ -z "$PWTEST_MUT_STACK" ] && pwtest_ok "mutable stack drains to empty" \
+  || pwtest_bad "mutable stack drains" "leftover [$PWTEST_MUT_STACK]"
+PWTEST_MUT_STACK="$_savestack"
+
+# e) cache store/restore round-trip (only when this run built all three fixtures)
 if [ -d "$PW_PROJECTS_DIR/pwt-f1-scaffold" ] && [ -d "$PW_PROJECTS_DIR/pwt-f2-mid" ] && [ -d "$PW_PROJECTS_DIR/pwt-f3-hostile" ]; then
   _tc="$PWTEST_ROOT/$TH-cache"
   PWTEST_FIXTURE_CACHE="$_tc" _pwtest_cache_store; unset PWTEST_FIXTURE_CACHE

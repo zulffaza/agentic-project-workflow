@@ -58,12 +58,16 @@ PWTEST_MUT_STACK=""
 _pwt_mutable_push() { PWTEST_MUT_STACK="${PWTEST_MUT_STACK:+$PWTEST_MUT_STACK
 }$1"; }
 _pwt_mutable_pop() {
-  local e
+  # Rebuild into a FRESH accumulator — appending to the live stack while iterating it
+  # doubles its size per pop (O(2^n) string churn): the exact parent-side "hang" that
+  # stalled two plan-17 sweeps after the children had completed (tree clean, CPU spin).
+  local e _new=""
   while IFS= read -r e; do
     [ "$e" = "$1" ] && continue
-    PWTEST_MUT_STACK="${PWTEST_MUT_STACK:+$PWTEST_MUT_STACK
+    _new="${_new:+$_new
 }$e"
   done <<<"$PWTEST_MUT_STACK"
+  PWTEST_MUT_STACK="$_new"
 }
 _pwtest_cleanup() {
   local e

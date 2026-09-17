@@ -35,3 +35,4 @@ C30-signoff-doctrine-line-gone	commands/pw-review.md	**HUMAN-TRIGGERED ONLY (C4)
 # plan 19 rows (C41/C42; C31-C35 + C36+ reserved by draft plans 18/20): harness speedup machinery.
 C41-fixture-cache-hash-frozen	tests/pw_test_lib.sh	print(h.hexdigest()[:16])	print("0"*16)	T1	pw-test-harness
 C42-lazy-scan-always-builds	tests/pw_test_lib.sh	NEED_F1=0; NEED_F2=0; NEED_F3=0	NEED_F1=1; NEED_F2=1; NEED_F3=1	T1	pw-test-harness
+C43-mutable-stack-exponential-pop	tests/pw_test_lib.sh	local e _new=""	local e _new="$PWTEST_MUT_STACK"	T1	pw-test-harness
