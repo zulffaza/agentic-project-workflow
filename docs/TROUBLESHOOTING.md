@@ -43,7 +43,7 @@ task's worktree already has partial/uncommitted changes from the crashed attempt
 happens in that same worktree (nothing is thrown away silently) — check `git -C
 <worktree-path> status` yourself first if you want to see what's there before it continues.
 
-## "`/pw-teardown` (or `/pw-close`) skipped a worktree"
+## "`/pw-close` skipped a worktree"
 
 **Symptom:** the worktree teardown step reports `⚠ SKIP` for a worktree instead of removing it.
 

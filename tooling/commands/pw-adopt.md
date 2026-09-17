@@ -28,7 +28,7 @@ Project dir: `{{PW_PROJECTS}}/<slug>`. Repo: `{{PW_REPOS}}/<repo>`.
 **Reading the snapshot:** flat `key: value` fields — `base:` shows *how* the base branch was
 resolved (`(mr-target)` / `(default)`; pass `[mr-url]` whenever you have one so the base is the
 real MR target), `commits:`/`files-changed:` are the unit's size (0 is legitimate — fresh
-branch, not a failure). Exit 2 + `pw-adopt-snapshot:` names the bad input (repo dir, branch
+branch, not a failure). Exit 2 + `pw-context:` names the bad input (repo dir, branch
 name, or no derivable base) — fix the argument or fetch, then retry.
 (`{{PW_HOME}}/tooling/docs/scripts/workflow-automation.md`)
 

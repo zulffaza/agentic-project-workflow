@@ -16,7 +16,7 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 {{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint task <slug> --all || exit 1
 ```
 **Reading the pre-flight:** `pw-preflight.sh execute` checks the PLAN `approved` sign-off, a
-phase execution is legal in, and every `Execute with:` model resolving; the two `pw-doc-lint`
+phase execution is legal in, and every `Execute with:` model resolving; the two `pw-doc.sh lint`
 calls check PLAN/task-file format (tables, required fields/sections). Silent = pass; otherwise
 one `pw-…:` stderr line + exit 1 — **STOP, relay it verbatim** (it names the unmet gate and the
 fix; e.g. run `/pw-review` for approval). Never reason past a failed pre-flight. Output

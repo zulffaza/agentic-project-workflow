@@ -62,3 +62,32 @@ Unknown command argument → usage line, also exit 1.
 
 **When to use:** first step of `/pw-execute`, `/pw-breakdown`, `/pw-ship`, `/pw-close`,
 `/pw-review`. Any agent invoked *without* a command re-runs the same pre-flight itself.
+
+## pw-status.sh — project-state setters
+
+The same script is the ONLY writer of dashboard/LOG state (commands call these; never
+hand-edit the Status line or LOG.md):
+
+```bash
+$PW_HOME/tooling/scripts/entities/pw-status.sh log   <slug> <actor> <msg...>   # LOG.md bullet, dedup-guarded
+$PW_HOME/tooling/scripts/entities/pw-status.sh status <slug> <phase> [--rewind]  # refuses backward moves
+$PW_HOME/tooling/scripts/entities/pw-status.sh oneliner <slug> <text...>
+$PW_HOME/tooling/scripts/entities/pw-status.sh adopted <slug> <text...>          # insert-or-replace, idempotent
+$PW_HOME/tooling/scripts/entities/pw-status.sh phase  <slug>                     # read the Status token only
+$PW_HOME/tooling/scripts/entities/pw-status.sh dashboard-task-status <slug> <T0n> <status>
+$PW_HOME/tooling/scripts/entities/pw-status.sh task-accept <slug> <T0n>          # merged-MR acceptance flow
+```
+
+## pw-config.sh
+
+Per-project config lines on the dashboard, get-or-set semantics:
+
+```bash
+$PW_HOME/tooling/scripts/entities/pw-config.sh ai-review <slug> [<phase> <mode>]        # off|advisory|auto
+$PW_HOME/tooling/scripts/entities/pw-config.sh ai-model  <slug> [<lane> <provider:model|—>]
+$PW_HOME/tooling/scripts/entities/pw-config.sh model-check <provider> <model-id>        # allowlist guard
+```
+
+`auto` is what lets `pw-review.sh auto-signoff` ever succeed; `model-check` reads
+`PW_MODEL_ALLOWLIST_<PROVIDER>` from pw.config.sh (empty = all allowed). `/pw-review <slug>
+config` is the human-facing surface for the first two — prefer it over calling the script.

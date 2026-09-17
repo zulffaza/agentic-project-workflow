@@ -1,7 +1,10 @@
 # Workflow automation scripts
 
-Side-loop helpers: RFC comments (`pw-rfc.sh comments`), analysis context (`pw-context.sh fetch`),
-adoption snapshots (`pw-context.sh adopt-snapshot`), worktree creation (`pw-worktree.sh create`).
+Side-loop helpers: the rfc-doc entity (`pw-rfc.sh` — the `comments` operator here; the
+state operators `init`/`target`/`state`/`comment-seen`/`dashboard` are documented in
+[`../rfc.md`](../rfc.md)) and the worktree entity (`pw-worktree.sh` — `create` here;
+`remove`/`teardown` close-out guards below). Context fetch/adopt operators live in
+[review-and-context-editing.md](./review-and-context-editing.md).
 
 ## pw-rfc.sh comments
 
@@ -51,3 +54,11 @@ before spawning, never let the executor `cd`- improvise.
 
 **Reading failures:** exit 2 + `repo not found` (wrong repo dir name) or a git error (bad base
 branch — fetch first, or the branch name is wrong).
+
+## pw-worktree.sh remove / teardown
+
+`remove <slug> <task-id>` — one task's worktree, used when its MR is already merged (refuses
+a dirty tree or the worktree you're standing in — the guards live in `teardown`, the single
+owner). `teardown <project-dir> [all|<task-id>] [worktree-path]` — the `/pw-close` sweep;
+exit 1 = skipped with a printed reason, never a silent removal. Both were separate scripts
+before the entity merge; operator semantics unchanged.

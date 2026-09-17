@@ -1,4 +1,4 @@
-# mutations.tsv — coupling register (plan 16 §5; extended by plans 17/19): currently C1–C45.
+# mutations.tsv — coupling register (plan 16 §5; extended by plans 17/19): currently C1–C48.
 # Reverting a documented fix MUST fail the harness. Keep OLD byte-exact AND unique (apply
 # replaces every occurrence; drift only detects absence — verify grep -cF = 1). A drift-flagged
 # row means the anchor moved with the code: re-pin it, never delete it. Catchers must not depend
@@ -45,3 +45,6 @@ C42-lazy-scan-always-builds	tests/pw_test_lib.sh	NEED_F1=0; NEED_F2=0; NEED_F3=0
 C43-mutable-stack-exponential-pop	tests/pw_test_lib.sh	local e _new=""	local e _new="$PWTEST_MUT_STACK"	T1	pw-test-harness
 C44-worker-copy-skipped	tests/mutate.sh	  if ! rsync -a --exclude .git "$src/" "$wt/"; then	  if ! false; then	T1	pw-test-harness
 C45-harness-internals-doc-dies	docs/testing.md	## Inside the harness (read this before editing tests/ or writing mutation rows)	## Internals (read this before editing tests/ or writing mutation rows)	T4	-
+C36-deadpath-canary-fails-open	commands/pw-status.md	Arguments: {{ARGS}} (project slug). Project dir:	Arguments: {{ARGS}} (project slug). Project dir: `tooling/pw-doc-lint.sh`	T4	-
+C37-lib-invisible-canary	commands/pw-sync.md	Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task	Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task `tooling/scripts/lib/pw-mdlib.sh`	T4	-
+C38-toolchain-allowlist-canary	commands/pw-ship.md	Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task	Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task `tooling/scripts/toolchain/gen-commands.sh`	T4	-

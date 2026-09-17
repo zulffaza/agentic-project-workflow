@@ -9,31 +9,46 @@ The `/pw-*` slash commands are duplicated across agent tools (Claude Code, kilo,
 
 ```
 tooling/
-├── scaffold.sh         ← creates a new project from ../template/
-├── gen-commands.sh     ← stamps commands/ into each provider's format + location
-├── gen-agents.sh       ← seeds agents/ into each provider's agent dir (same idea as gen-commands)
-├── pw-common.sh        ← shared plumbing (roots + config + provider hooks) for the scripts below
-├── pw-lib.sh           ← mechanical helpers the commands call: status / oneliner / adopted / adopt /
-│                         review-init / log / phase / ai-review / review note-init|auto-signoff|
-│                         gate|reopen
-├── pw-doctor.sh        ← checks installed skills + commands + agents match this bundle (--fix repairs)
-├── pw-worktree.sh teardown      ← safe worktree removal at close-out (won't nuke your CWD / dirty trees)
-├── pw-status.sh        ┐
-├── pw-preflight.sh     │
-├── pw-doc.sh lint      │ 14 automation scripts — deterministic status/gates/doc/ship/workflow
-├── … (11 more pw-*.sh) │ work that runs without an agent; usage: docs/scripts/README.md
-├── pw-worktree.sh create┘
+├── scripts/                  ← every executable script (L-rules: tooling/docs/conventions.md)
+│   ├── entities/             the 9 entity entry points — what commands/agents/skills invoke
+│   │   ├── pw-status.sh        project state: status report + dashboard/LOG setters
+│   │   │                       (log · status · oneliner · adopted · phase · dashboard-task-status · task-accept)
+│   │   ├── pw-preflight.sh     gate validation before expensive agent invocations
+│   │   ├── pw-review.sh        review-doc: init/init-all · signoff · add-item · answer ·
+│   │   │                       add-question · resolve · gate · has-open · count · scan ·
+│   │   │                       reindex · archive · reopen · note-init · auto-signoff
+│   │   ├── pw-context.sh       context-doc: req-init · add-input · add-repo · fetch ·
+│   │   │                       adopt-snapshot · adopt
+│   │   ├── pw-ship.sh          ship/MR: resolve · exec · monitor · mr-state · mr-state-batch ·
+│   │   │                       comment-seen · dashboard-mr-state
+│   │   ├── pw-rfc.sh           rfc-doc: init · target · state · comment-seen · dashboard · comments
+│   │   ├── pw-worktree.sh      worktree: create · remove · teardown
+│   │   ├── pw-doc.sh           docs: lint · summary · sync
+│   │   └── pw-config.sh        config: ai-model · ai-review · model-check
+│   ├── lib/                  source-only libraries — invisible to callers (L2)
+│   │   ├── pw-common.sh        roots + config + provider hooks (every entity sources it)
+│   │   └── pw-mdlib.sh         pure markdown-document primitives
+│   └── toolchain/            bundle-maintenance scripts — the toolchain test: operand = the
+│                             bundle itself (L3); never in the automation registry
+│       ├── scaffold.sh         creates a new project from ../../template/
+│       ├── gen-commands.sh     stamps commands/ into each provider's format + location
+│       ├── gen-agents.sh       seeds agents/ into each provider's agent dir
+│       └── pw-doctor.sh        checks installed skills + commands + agents match this bundle (--fix repairs)
 ├── commands/           ← THE source of truth for /pw-* (provider-neutral)
 │   ├── pw-new.md        frontmatter: description, args, [agent]; body uses {{ARGS}} + {{PW_*}}
 │   ├── pw-analyze.md
 │   ├── … (pw-adopt, pw-breakdown, pw-review, pw-execute, pw-ship, pw-sync, pw-status, pw-doctor)
 │   └── pw-close.md
-├── agents/             ← THE source of truth for seedable sub-agents: pw-orchestrator, pw-executor,│                         pw-reviewer (optional, only spawned by /pw-review … ai), pw-researcher,
+├── agents/             ← THE source of truth for seedable sub-agents: pw-orchestrator, pw-executor,
+│                         pw-reviewer (optional, only spawned by /pw-review … ai), pw-researcher,
 │                         pw-analyst, pw-writer-task (the phase lanes — see agents/README.md)
 ├── docs/               ← registries/policy the AGENTS read (each has a human-facing peer doc);
 │                         maintainer-owned reference — you never edit these, see below:
-│   ├── scripts/          usage reference for the 14 automation scripts (how to call, how to
+│   ├── conventions.md    capability placement: S-rules (script), L-rules (layout),
+│   │                     C-rules (commands), A-rules (arguments) — read before adding anything
+│   ├── scripts/          usage reference for the entity scripts (how to call, how to
 │   │   └── README.md       read the output, what to do on failure — no internals)
+│   ├── testing.md        the change-test harness (tiers, fixtures, mutation register)
 │   ├── providers.md      cross-provider execution mechanism (headless invocation hooks)
 │   │                     — human peer: ../../docs/EXECUTION.md
 │   ├── memory.md         optional/pluggable memory policy (the pipeline works with none)
@@ -48,6 +63,7 @@ tooling/
 │   ├── pw-review/SKILL.md           ← standalone, portable review method — usable by ANY agent,
 │   │                                  not only the generated pw-reviewer sub-agent
 │   └── pw-rfc/SKILL.md              ← RFC-authoring guide for the /pw-rfc side-loop
+├── tests/              ← the change-test harness (pw_test.sh — see docs/testing.md)
 └── README.md
 ```
 
@@ -60,21 +76,20 @@ override (`PW_FORGE_HOSTS`), or an RFC backend setting (`PW_RFC_*`) are all hook
 never a hand-edit to a file in this directory. If you're just using the pipeline, you shouldn't
 need to open this directory at all.
 
-`pw-lib.sh` makes the load-bearing, format-sensitive steps deterministic instead of hand-edited
-prose — the `/pw-*` commands call `pw-lib.sh status|oneliner|adopted|adopt|review-init|log|phase`
-rather than asking the agent to edit the dashboard (or copy a review template) by hand. `status`
-refuses accidental backward phase moves (`--rewind` to intend one); `review-init` is idempotent, so
-calling it on every `/pw-analyze`/`/pw-breakdown` run never clobbers a review already in progress.
-Run `pw-lib.sh selftest` after changing it.
+The entity scripts make the load-bearing, format-sensitive steps deterministic instead of
+hand-edited prose — the `/pw-*` commands call `pw-status.sh status|oneliner|adopted|log|phase`,
+`pw-review.sh init|gate|reindex|…`, `pw-context.sh adopt|…` rather than asking the agent to edit
+the dashboard (or copy a review template) by hand. `status` refuses accidental backward phase
+moves (`--rewind` to intend one); creation operators are idempotent, so re-running a command never
+clobbers work in progress. Each entity script carries its own `--selftest` (the harness runs them;
+see `docs/testing.md`).
 
-The **14 automation scripts** (`pw-status.sh`, `pw-preflight.sh`, `pw-doc.sh lint`,
-`pw-doc.sh summary`, `pw-doc.sh sync`, `pw-review.sh scan`, `pw-ship.sh resolve`,
-`pw-ship.sh exec`, `pw-ship.sh mr-state-batch`, `pw-ship.sh monitor`, `pw-rfc.sh comments`,
-`pw-context.sh fetch`, `pw-context.sh adopt-snapshot`, `pw-worktree.sh create`) push that idea further:
-whole deterministic steps — gates, doc validation, status reports, ship mechanics, URL fetching —
-run as zero-token scripts instead of agent reasoning. **Commands call them as pre-flight; agents
-and skills call the same ones** so behavior is identical whichever path triggers the work (see
-each agent/skill's script notes, and `docs/scripts/README.md` for the reference).
+The **9 entity scripts** in `scripts/entities/` push that idea further:
+whole deterministic steps — gates, doc validation, status reports, ship mechanics, URL
+fetching — run as zero-token scripts instead of agent reasoning. **Commands call them as
+pre-flight; agents and skills call the same ones** so behavior is identical whichever path
+triggers the work (see each agent/skill's script notes, and `docs/scripts/README.md` for
+the reference).
 
 **Information boundary in `docs/`:** two kinds live there. *Behavioral* docs answer "how does
 this part of the workflow work" and a curious user may read them (`forges.md`, `memory.md`,
@@ -153,7 +168,7 @@ agent: <optional — a provider agent to run the command under, e.g. pw-orchestr
 
 ## changing tooling — the test protocol (`tooling/tests/`)
 
-Anything under `tooling/` or `template/` changes the contract the **14 automation scripts**
+Anything under `tooling/` or `template/` changes the contract the **entity scripts**
 keep. The full agent-change protocol — tiers, which tier for which change type, the corpus
 gate — is [`docs/testing.md`](./docs/testing.md). One command summary:
 **`tooling/tests/pw-test.sh all` before every commit; `--mutation <new-fix>` after any fix**

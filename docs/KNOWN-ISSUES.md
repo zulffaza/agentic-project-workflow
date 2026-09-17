@@ -133,12 +133,21 @@ buried in `tooling/`.
   also matches the template's permanent `> **Add an item:** … <!-- pw-item-status: open -->`
   guidance line (prose on a `>` line, present in every review file) and unfilled R1/Q1 stub
   headings (which carry a REAL live marker by design, per the nesting entry above, so
-  copy-paste yields valid syntax). The gates used pw-lib's heading-level detector and stayed
+  copy-paste yields valid syntax). The gates used the shared heading-level detector and stayed
   correct — the display was just a fourth, un-blessed parser.
 - **Mitigation (built in):** one detector serves everything: the review count read prints
   `open=N resolved=M items=K` off `_review_item_headings` (comment-blanked, `^###`-anchored,
   stubs filtered by their live `<YYYY-MM-DD`/`<§section>` placeholder tokens — BOTH tokens needed:
   live usage produced a half-cleaned stub that dropped only its timestamp). The review scan,
-  pw-status and pw-doc-lint consume it; raw marker greps are banned; `auto-signoff` inherits the
+  the status report and the doc lint consume it; raw marker greps are banned; `auto-signoff` inherits the
   stub exemption (a clean pass must succeed). Coverage: C22 cases in `tests/cases/`, unit checks
   in the harness.
+
+## Existing projects keep pre-layout script paths in generated docs (harmless)
+
+- **Symptom:** a project scaffolded before the tooling-layout move has hint text naming the old
+  flat paths / legacy catch-all script inside its README/review/template-derived files.
+- **Impact:** none — those are inert documentation strings; the live flows call the entity
+  scripts by their current paths. Re-bootstrap regenerates the commands; the project docs can be
+  refreshed opportunistically (or left — they still describe the right operators).
+- **Where:** bundle `tooling/scripts/{entities,lib,toolchain}/` layout, 2026-09.

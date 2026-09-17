@@ -118,7 +118,11 @@ truly must touch a shared fixture, restore it exactly.
 
 ## Writing a mutation row
 
-`expectations/mutations.tsv` columns: `id \t file(rel tooling/) \t OLD \t NEW \t tier \t only`.
+`expectations/mutations.tsv` columns: `id \t file(basename) \t OLD \t NEW \t tier \t only`.
+The `file` column is a **basename** — `_pwt_resolve` finds it under
+`tooling/scripts/{entities,lib,toolchain}/` or the tooling root — so a layout move never touches
+anchors; a code MOVE (entity consolidation) does: re-point `file` + `only` and re-verify in the
+same commit (S7).
 
 1. `OLD` must be **byte-exact and unique** in the file — the apply step replaces *every*
    occurrence, and drift only detects absence. Check: `grep -cF '<OLD>' <file>` → `1`.
@@ -128,7 +132,8 @@ truly must touch a shared fixture, restore it exactly.
 3. The catcher must fail **iff** the mutation is applied — and must not depend on the mutation
    changing fixture BYTES (recipe-hash convention above).
 4. IDs: take the next free number **and** check the register plus the draft-plan reservations
-   (C31–C35 reserved by the `/pw-help` plan, C36+ by the tooling-layout plan) before minting.
+   (C31–C35 reserved by the `/pw-help` plan; C36–C38 taken by the tooling-layout plan's L-canary
+catchers, C39–C40 still reserved for it) before minting.
 5. Verify with `--mutation <your-id>` (single row → serial; ~5–60 s depending on tier) before
    committing.
 

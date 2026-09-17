@@ -24,8 +24,11 @@ agentic-project-workflow/        ← this bundle ($PW_HOME)
     │                              to open this dir day-to-day — docs/ + the /pw-* commands are
     │                              the intended interface. It's here for whoever wants to see how
     │                              the machinery actually works.)
-    ├── scaffold.sh · gen-commands.sh · gen-agents.sh · pw-lib.sh · pw-doctor.sh
-        ├── commands/                ← canonical /pw-* sources (generated per provider; 13 commands incl. `pw-research`/`pw-verify`)
+    ├── scripts/                 ← every executable: entities/ (one script per artifact
+    │                              entity — what the commands call), lib/ (source-only plumbing,
+    │                              invisible to callers), toolchain/ (scaffold + the generators +
+    │                              doctor — they operate on the bundle itself)
+        ├── commands/                ← canonical /pw-* sources (generated per provider; 15 commands incl. `pw-research`/`pw-context`)
         ├── agents/                  ← canonical sub-agents (seeded per provider): pw-orchestrator,        │                              pw-executor, pw-reviewer (optional — see REVIEW.md),
         │                              pw-researcher, pw-analyst, pw-writer-task (phase lanes)
     ├── docs/                    ← registries/policy docs the AGENTS read (their docs/ human peer

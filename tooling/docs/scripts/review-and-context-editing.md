@@ -59,6 +59,16 @@ to stderr prefixed `pw-review:` with a `→ fix:` hint; exit `2` on usage/state 
 heading-changing operator reindexes `## Contents` and appends a LOG.md line automatically —
 never re-run `pw-review.sh reindex` or `log` afterwards by hand.
 
+**Lifecycle + gate reads** (merged from the old `pw-lib.sh review *` block — same semantics,
+`review` prefix dropped): `init <slug> <review-rel> <doc-rel>` creates one review file
+verbatim from the template (idempotent — never clobbers); `note-init <slug>` the
+REVIEWER-NOTES.md header; `gate` prints the latest Sign-off decision (exit 0 iff approved);
+`has-open` yes/no; `count` `open=N resolved=M items=K` (the ONE detector every display reads);
+`reindex` rebuilds `## Contents`; `archive` moves fully-resolved blocks verbatim to the
+`.archive.md` sibling with pointer rows (gate-safe); `reopen` appends a fresh in-review row
+after a post-approval fix; `auto-signoff` is the mode=auto-only tool exception (re-checks the
+config itself + zero open items, tags `pw-reviewer (auto)`, never a human row).
+
 ## pw-review.sh scan
 
 Structured summary of every review file's item counts and sign-off state.
@@ -175,3 +185,18 @@ The shared markdown primitives both scripts (and `pw-lib.sh`) source: comment-bl
 (the detector every review gate trusts), sign-off row reads, item-heading scans, and table
 splice helpers. Never executed directly; if two scripts need the same document primitive, it
 belongs here (S5).
+
+## pw-context.sh adopt
+
+The CONTINUATION workflow's record (was `pw-lib.sh adopt`): appends/upserts ONE unit per
+`repo@branch` into `context/ADOPTED.md` (never clobbers earlier units — the bug free-form
+editing caused), keeps `context/INDEX.md` in lockstep (one generic ADOPTED.md provenance row +
+one hidden-marker-keyed row per unit in "Repos in scope"), and sets the dashboard `Adopted:`
+pointer. `/pw-adopt` drives it once per adopted branch.
+
+```bash
+$PW_HOME/tooling/scripts/entities/pw-context.sh adopt <slug> <repo> <branch> <base> [mr-url]
+```
+
+Re-adopting the same `repo@branch` updates that unit's Base/MR lines in place; prose under the
+unit is the agent's to fill, never the script's to touch.
