@@ -59,10 +59,13 @@ The **T0/T4** checks exist because each banned pattern is a bug that shipped onc
 ## After ANY change under tooling/ or template/
 
 `bash tooling/tests/pw_test.sh` (default tiers T0,T1,T2,T4 — the commit gate; while editing use
-`--tier T0` ~30 s or `--tier T1 --only <script>`). `pw-doctor.sh --test` delegates here.
+`--tier T0` ~2 s, `--tier T4` ~6 s, or `--tier T1 --only <script>` — fixtures build only when the
+selected tiers consume them). `pw-doctor.sh --test` delegates here.
 Changed behavior of a documented format/contract → add a coupling row to
 `tooling/tests/expectations/mutations.tsv` (revert of the fix) and prove it bites:
-`pw_test.sh --mutation <id>`. Change type → minimum tiers: the table in
+`pw_test.sh --mutation <id>` (~5 s/row with a warm cache). During development sweep only the
+rows for files you touched (`--mutation 'C2[5-9]'`); the full `--mutation all` belongs at the
+ship gate. Change type → minimum tiers: the table in
 [`docs/testing.md`](./docs/testing.md). Re-run `pw-doctor.sh` (expect **All synced**) after any
 `commands/`/`agents/`/`skill/`/`template/` edit — it compares generated-vs-installed.
 
