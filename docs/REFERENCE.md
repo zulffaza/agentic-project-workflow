@@ -131,7 +131,6 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | `/pw-rfc <slug> milestone` | same side-loop, Wave 2 — fills Milestone + Conclusion from an approved PLAN |
 | `/pw-rfc <slug> comments` | read-only pull of RFC-doc comments into a local review file |
 | `/pw-help [overview \| command <name> [<slug>] \| operators <name> [<op>] \| project <slug> [<name>] \| workflow \| find <term>]` | the live how-to map: every command + operator with its exact invocation, facet states, and the "what do I run now" lines for a given project — never a stale cheat sheet; read-only, renders doctrine but decides nothing |
-| `/pw-help [overview \| command <name> [<slug>] \| operators <name> [<op>] \| project <slug> [<name>] \| workflow \| find <term>]` | the live how-to map: every command + operator with its exact invocation, facet states, and the "what do I run now" lines for a given project — never a stale cheat sheet; read-only, renders doctrine but decides nothing |
 
 These exist for multiple agent tools (Claude Code, kilo, …) but are **not** maintained per tool. The
 single source is [`tooling/commands/*.md`](../tooling/) (provider-neutral, `{{ARGS}}` placeholder).

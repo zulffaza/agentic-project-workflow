@@ -10,7 +10,7 @@ The `/pw-*` slash commands are duplicated across agent tools (Claude Code, kilo,
 ```
 tooling/
 ├── scripts/                  ← every executable script (L-rules: tooling/docs/conventions.md)
-│   ├── entities/             the 9 entity entry points — what commands/agents/skills invoke
+│   ├── entities/             the 10 entity entry points — what commands/agents/skills invoke
 │   │   ├── pw-status.sh        project state: status report + dashboard/LOG setters
 │   │   │                       (log · status · oneliner · adopted · phase · dashboard-task-status · task-accept)
 │   │   ├── pw-preflight.sh     gate validation before expensive agent invocations
@@ -24,7 +24,9 @@ tooling/
 │   │   ├── pw-rfc.sh           rfc-doc: init · target · state · comment-seen · dashboard · comments
 │   │   ├── pw-worktree.sh      worktree: create · remove · teardown
 │   │   ├── pw-doc.sh           docs: lint · summary · sync
-│   │   └── pw-config.sh        config: ai-model · ai-review · model-check
+│   │   ├── pw-config.sh        config: ai-model · ai-review · model-check
+│   │   └── pw-help.sh          discovery: overview · command · operators · project ·
+│   │                           workflow · find (read-only how-to map + search; --json)
 │   ├── lib/                  source-only libraries — invisible to callers (L2)
 │   │   ├── pw-common.sh        roots + config + provider hooks (every entity sources it)
 │   │   └── pw-mdlib.sh         pure markdown-document primitives
@@ -84,7 +86,7 @@ moves (`--rewind` to intend one); creation operators are idempotent, so re-runni
 clobbers work in progress. Each entity script carries its own `--selftest` (the harness runs them;
 see `docs/testing.md`).
 
-The **9 entity scripts** in `scripts/entities/` push that idea further:
+The **10 entity scripts** in `scripts/entities/` push that idea further:
 whole deterministic steps — gates, doc validation, status reports, ship mechanics, URL
 fetching — run as zero-token scripts instead of agent reasoning. **Commands call them as
 pre-flight; agents and skills call the same ones** so behavior is identical whichever path
