@@ -29,11 +29,13 @@
 #       "what do I run now, with what exact arguments".
 #
 #   pw-help.sh operators  <name> [<operator>]
-#       Deepest level. The name slot resolves a command name, a bare name
-#       (pw- prefix added), or an entity/toolchain script basename — library
-#       scripts are never listable (they are source-only: L2). Without the
-#       operator slot: the verbatim usage-header dump (S1b facet lines
-#       included). With it: just that operator's usage-header paragraph,
+#       Operator deep dive for the named command's entity/toolchain scripts
+#       (the view the `command` footnotes point at). The name slot resolves a
+#       command name, a bare name (pw- prefix added), or an entity/toolchain
+#       script basename — library scripts are never listable (they are
+#       source-only: L2). Without the operator slot: the verbatim
+#       usage-header dump (S1b facet lines included). With it: just that
+#       operator's usage-header paragraph,
 #       one occurrence per owning script, facet-labelled.
 #
 #   pw-help.sh workflow   [--json]
@@ -81,7 +83,7 @@ ST="$HERE/pw-status.sh"
 RV="$HERE/pw-review.sh"
 CFG="$HERE/pw-config.sh"
 
-die() { echo "pw-help: $*" >&2; exit 2; }
+die() { printf "%s\n" "pw-help: $*" | flowline 98 >&2; exit 2; }
 
 # --- the phase -> command map (embedded knowledge; the static.sh set-equality
 # canary pins its names against $CMDS, so a new command cannot stay invisible) ---
@@ -89,7 +91,7 @@ HELP_PHASE_MAP="setup|pw-new pw-adopt pw-context pw-doctor;analysis|pw-research 
 
 # --- shared helpers -------------------------------------------------------------
 sub() { sed -e "s|{{PW_HOME}}|$PW_HOME|g" -e "s|{{PW_PROJECTS}}|$PW_PROJECTS|g"; }
-jstr() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+jstr() { local s="$1"; s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; s="${s//$'\t'/\\t}"; s="${s//$'\r'/\\r}"; printf '%s' "$s"; }
 TABS="$(printf '\t')"
 BT="$(printf '\140')"    # literal backtick — kept OUT of double quotes (there it starts command-sub)
 TF="$(printf '\047')"    # literal single quote, same reason
@@ -585,8 +587,8 @@ render_command() {
 
   local ops_lines; ops_lines="$(ops_surfaced "$c")"
   if [ "$json" = 1 ]; then
-    local o_name o_args o_use o_fac bloc jops="" sep=""
-    while IFS="$TABS" read -r o_name o_args o_use o_fac; do
+    local o_name o_args o_use o_fac o_scr bloc jops="" sep=""
+    while IFS="$TABS" read -r o_name o_args o_use o_fac o_scr; do
       [ -n "$o_name" ] || continue
       jops="$jops$sep{\"name\":\"$(jstr "$o_name")\",\"args\":\"$(jstr "$o_args")\",\"use\":\"$(jstr "$o_use")\",\"facet\":\"$(jstr "$o_fac")\"}"
       sep=", "
@@ -609,8 +611,7 @@ E
   # (default) flow line — args with the operator-selector group removed, slug-filled.
   if has_default "$c"; then
     local dargs
-    dargs="$(printf '%s' "$args" | sed -E -e 's/<[^<>]*\|[^<>]*>//g' -e 's/\[[^][]*\|[^][]*\]//g' -e 's/  +/ /g' -e 's/[ ;.]+$//')"
-    dargs="${dargs#<project-slug> }"; dargs="${dargs#<slug> }"
+    dargs="$(printf '%s' "$args" | sed -E -e 's/<[^<>]*\|[^<>]*>//g' -e 's/\[[^][]*\|[^][]*\]//g' -e 's/^([ ]*<project-slug>[ ]*|[ ]*<slug>[ ]*)//' -e 's/  +/ /g' -e 's/[ ;.]+$//')"
     printf '  (default)  /pw-%s %s %s\n' "${c#pw-}" "${slug:-<project-slug>}" "$dargs" | flowline 98
     printf '    Use:     the no-operator default flow - see the args line above\n'
   fi
@@ -692,15 +693,17 @@ render_operators() {
   else
     die "no such command or script: $c → fix: $(did_you_mean "$c")"
   fi
-  [ -n "$scripts" ] || die "command $c wires no entity/toolchain script → fix: read $CMDS/$c.md"
+  # agent-lane commands have no scripts; the how-to lives in the command view.
+  [ -n "$scripts" ] || die "$c is an agent-lane command - no entity/toolchain scripts -> fix: /pw-help command $c"
   if [ -n "$op" ]; then
     while IFS= read -r s; do
       [ -n "$s" ] || continue
       printf '%s\n' "$(ops_of "$s")" | grep -qx "$op" || continue
       found="yes"
-      printf '%s :: %s %s\n' "$(basename "$s")" "$op" "$(sig_of "$s" "$op")"
+      printf '%s :: %s %s\n' "$(basename "$s")" "$op" "$(sig_of "$s" "$op")" | flowline 98
       para_of "$s" "$op" | fold -s -w 92 | sed 's/^/    /'
       facet="$(facet_of "$s" "$op")"
+      [ -n "$facet" ] && printf '    (facet: %s)\n' "$facet"
       [ -n "$facet" ] && printf '    (facet: %s)\n' "$facet"
     done <<E
 $scripts
@@ -710,7 +713,7 @@ E
     while IFS= read -r s; do
       [ -n "$s" ] || continue
       echo "== $(basename "$s") =="
-      hdr_lines "$s" | sub
+      hdr_lines "$s" | sub | flowline 98
       echo
     done <<E
 $scripts
