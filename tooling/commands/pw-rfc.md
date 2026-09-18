@@ -118,6 +118,10 @@ target question it doesn't need yet.
 8. **Recap:** which sections were filled, whether/where it published, and any diagram that degraded
    to a placeholder.
 
+**If a trailing argument is literally `milestone`, this is Wave 2 — fill Milestone + Conclusion from an approved
+PLAN.md (gate below); if it is literally `comments`, this is the read-only pull of external review
+threads into the review loop. The default flow (no selector token) is Wave 1.**
+
 ## `milestone` (Wave 2)
 1. **Gate:** if `task/PLAN.md` isn't `approved` (its review file's Sign-off row), **refuse and
    report why** — do nothing else.
