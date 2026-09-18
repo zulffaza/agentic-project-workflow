@@ -633,7 +633,13 @@ E
     printf '%s\n' "$par" | ov_wrap "    Does:   " "             + "
     printf '%s\n' "$bloc" | awk '/DOCTRINE|HUMAN-TRIGGERED ONLY/{print "    " $0}' | head -2 | flowline 98 || true
     { printf '%s\n' "$bloc" | grep -oE 'A[12] [a-zA-Z][^`)”]*' | head -1 | sed 's/^/    Shape:  /' | flowline 98; } || true
-    printf '    $ %s\n' "/pw-${c#pw-} ${slug:-<project-slug>} $bargs" | sed -e 's/[ ]*$//' | flowline 98
+    # the runnable example: /pw-help is the C1 exception — its subject is the bundle,
+    # so no <project-slug> slot; every other command leads with the slug.
+    local ex
+    if [ "$c" = pw-help ]; then ex="/pw-help $bargs"
+    else ex="/pw-${c#pw-} ${slug:-<project-slug>} $bargs"
+    fi
+    printf '    $ %s\n' "$ex" | sed -e 's/[ ]*$//' | flowline 98
   done <<E
 $ops_lines
 E
@@ -655,7 +661,7 @@ $(ops_of "$sp")
 EO
   done
   fi
-  [ "$mant" = 1 ] || echo "  (user view - entity scripts and their operators: /pw-help operators $c, or command view with --maintainer)"
+  [ "$mant" = 1 ] || { printf '  (user view - entity scripts: command %s --maintainer, or operators %s)\n' "$c" "$c" | flowline 98; }
   local dpaths dpl
   dpaths="$(grep -oE '(tooling/)?docs/[A-Za-z0-9._/-]+\.md' "$file" | sort -u || true)"
   while IFS= read -r dpl; do
