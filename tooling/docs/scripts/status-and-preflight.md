@@ -98,7 +98,13 @@ Human renderings are **user-safe by default**: `overview` tags rows only by doct
 (`(write)`/`(read)`/`(special)`/`(lifecycle)`), `command <name>` omits entity-script sections,
 `tooling/docs` pointers, and bundle paths entirely — its runnable examples use `/pw-*` command
 forms only. `command <name> --maintainer` adds the maintainer layers back (`operators <name>`
-remains the explicit deep dump; `--json` carries the full raw machine view).
+remains the explicit deep dump; `--json` carries the full raw machine view). Where the
+user prose lives: every `command`/`overview` blurb is sourced from the command file's own
+bullet/`literally <tok>` definition first (the script paragraph is the fallback and is shown
+raw only under `--maintainer`), and whatever reaches a default view passes through
+`user_prose` — the scrubber that rewrites internal terms (`pw-<x>.sh` → `/pw-<x>`,
+the status view, operator-reference etc.) so a renderer edit can never re-leak them. `find`
+defaults to the command files + docs; add `--maintainer` to search the internals surfaces.
 
 The discovery surface (introspection family): renders *live* from command frontmatter,
 script usage headers, and its own phase map — so it cannot drift from the surfaces it
