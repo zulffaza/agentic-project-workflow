@@ -112,7 +112,7 @@ platform, or a local-only doc by default) — see **[docs/RFC.md](./docs/RFC.md)
 | 📝 **[docs/RFC.md](./docs/RFC.md)** | Optional side-loop — publish approved analysis/plan content to an RFC doc, any platform or none |
 | 🧠 **[docs/MEMORY.md](./docs/MEMORY.md)** | Optional cross-project recall — what it's for, why bother, how to turn it on |
 | ⚙️ **[docs/EXECUTION.md](./docs/EXECUTION.md)** | Orchestrator vs executor · picking a model/agent per task · cross-provider execution · worktrees |
-| 📖 **[docs/REFERENCE.md](./docs/REFERENCE.md)** | Bundle layout · project anatomy · naming conventions · the full `/pw-*` command table + generator |
+| 📖 **[docs/REFERENCE.md](./docs/REFERENCE.md)** | Bundle layout · project anatomy · naming conventions · the full `/pw-*` command table + generator (live: `/pw-help`) |
 | 🐛 **[docs/KNOWN-ISSUES.md](./docs/KNOWN-ISSUES.md)** | Verified gotchas this bundle already works around (cross-provider shell-out quirks, GitLab API traps) — dated, with root cause + mitigation |
 | 🚑 **[docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md)** | Symptom → what to do: stuck worktrees, crashed runs, allowlist refusals, missing MR comments, `/pw-doctor` drift |
 | 🚀 **[ONBOARDING.md](./ONBOARDING.md)** | Fresh-machine / teammate setup · registering a new provider · optional memory · offboarding/uninstalling |
@@ -121,6 +121,9 @@ platform, or a local-only doc by default) — see **[docs/RFC.md](./docs/RFC.md)
 
 - **Gated phases.** Each phase stops for a human sign-off, so mistakes get caught at the cheapest
   point. The **PLAN sign-off is the only hard gate**; per-task reviews are optional.
+- **Nothing to memorize.** `/pw-help` renders the live command + operator map (with per-project
+  "what do I run now" lines and a `find` for anything by concept); `/pw-doctor` guards install
+  freshness — the docs list the commands, help shows exactly how to invoke them today.
 - **State on disk, not in a chat.** Every phase writes files, so a run is resumable and auditable
   (`LOG.md`), and you review one artifact type at a time.
 - **Isolated worktrees.** Each task runs in its own `git worktree` off the real repo, so parallel

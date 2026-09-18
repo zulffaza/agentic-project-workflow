@@ -44,6 +44,10 @@ cd <your-repos-root>/projects/agentic-project-workflow
 source ./pw-env.sh
 ```
 
+Forget the syntax? `/pw-help` renders the live how-to — every command and operator with its exact
+arguments, plus `/pw-help project <slug>` for what to run right now and `/pw-help find <term>`
+to locate a concept across the tooling surface. It reads the live bundle, so it cannot go stale.
+
 **If your git repos live somewhere other than two levels above the bundle**, tell bootstrap once:
 
 ```bash
@@ -123,6 +127,7 @@ Read [README.md](./README.md) — the full guide. The loop, once onboarded:
 /pw-context <slug>    edit context docs           /pw-close <slug>      verify, tear down, learn
   (req-init · add-input · add-repo)               /pw-doctor [--fix]    check/repair install sync
                                                   /pw-rfc <slug>        optional — publish to an RFC doc
+/pw-help                how-to map: commands, operators, exact args, next steps for a project
 ```
 
 `/pw-review` also takes write operators so you never hand-copy review-file blocks:

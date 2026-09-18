@@ -119,6 +119,16 @@ The command files are **generated build artifacts** — the single source is
 command's prompt or an agent, edit the canonical file and re-run the generator — never hand-edit the
 per-provider copies.
 
+## Discovery without reading the whole toolkit
+
+- **Help first (agents).** "What exists / how do I invoke it exactly" is answered in one bounded,
+  exit-coded call: `pw-help.sh overview --json`, `pw-help.sh command <name> [<slug>] --json`,
+  `pw-help.sh operators <name> [<operator>]`, `pw-help.sh project <slug> [<name>]`,
+  `pw-help.sh find <term> --json`. It renders from the live sources (frontmatter + usage headers +
+  phase map), so it cannot be a stale snapshot — cheaper than reading command files end to end.
+  Only the `--json` shapes are stable contracts; human table layout may reflow. And help is
+  introspection: it never decides gates, signs off, or replaces the command-file doctrine.
+
 ## Conventions (the contract)
 
 - **Tooling edits follow the test protocol**: work only in the bundle's canonical sources

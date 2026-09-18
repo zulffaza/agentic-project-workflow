@@ -23,7 +23,7 @@ there; mutations sandbox by construction). Every run prints `TEST fixtures built
 
 | Tier | What it checks | Typical single-tier run |
 |---|---|---|
-| **T0** static | `bash -n` every script + the harness; `--help` on the 9 entity scripts; forbidden-idiom greps (`declare -A`, `\| xargs`, `grep -c … \|\| echo 0`, whole-file `verify-failed` greps, bare `## Tasks` anchors, `exec/bash "$0"` respawns) | ~2 s (no fixtures) |
+| **T0** static | `bash -n` every script + the harness; `--help` on the 10 entry-point scripts; forbidden-idiom greps (`declare -A`, `\| xargs`, `grep -c … \|\| echo 0`, whole-file `verify-failed` greps, bare `## Tasks` anchors, `exec/bash "$0"` respawns) | ~2 s (no fixtures) |
 | **T1** unit | per-script cases in `tests/cases/*.t.sh` (happy + negative + idempotency) against F1 scaffold / F2 mid-lifecycle / F3 hostile fixtures, plus the two-owner MR-URL parity case and the per-entity `--selftest` entries invoked from a foreign cwd | ~30 s |
 | **T2** battery | golden matrices `expectations/battery.tsv` + `gates.tsv`: every read-only invocation and every preflight gate on every fixture, rc pinned, **`→ fix:` remediation asserted on every non-zero**, script-crash detector, and a **mode-completeness** rule (every advertised mode appears in a pinned row) | ~1 min |
 | **T3** corpus | read-only battery over real projects when `--corpus-dir DIR` (or `PW_CORPUS_DIR`) is given; crash-vs-clean-failure classification with `→ fix:` contract; pre-baseline projects are clean failures advising "refresh local templates"; a current-baseline project is the golden gate; personal data issues waived via `~/.pw/test-issues.tsv` | opt-in |
@@ -132,7 +132,8 @@ same commit (S7).
 3. The catcher must fail **iff** the mutation is applied — and must not depend on the mutation
    changing fixture BYTES (recipe-hash convention above).
 4. IDs: take the next free number **and** check the register plus the draft-plan reservations
-   (C31–C35 reserved by the `/pw-help` plan; C36–C41 taken by the tooling-layout plan —
+   (C31–C35 minted by the /pw-help plan — frontmatter-derivation bypass, project write-bleed,
+   substitution, C4-echo, phase-map drift; C36–C40 + C46 tooling-layout —
 L-canary catchers C36–C38, dead-usage-string catcher C39, doctor-orphan catcher C40,
 operator-attribution catcher C46) before minting.
 5. Verify with `--mutation <your-id>` (single row → serial; ~5–60 s depending on tier) before

@@ -5,7 +5,7 @@
 # on the mutation changing fixture BYTES (the sweep fixture cache is keyed by the recipe:
 # template/ + scaffold.sh + pw-env.sh + pw_test_lib.sh — runtime scripts excluded).
 # IDs: minted C1–C48 (C36–C40 + C46 tooling-layout, C41–C45 sweep-speedup).
-# C31–C35 reserved by the /pw-help plan — minted as its phases land.
+# C31–C35 minted by the /pw-help plan (derivation bypass, write-bleed, substitution, C4-echo, phase-map drift).
 # Next free: C49. Take the next free number and check draft-plan reservations.
 # Authoring checklist: tooling/docs/testing.md §Writing a mutation row.
 # Columns: id	file	OLD	NEW	tiers	only

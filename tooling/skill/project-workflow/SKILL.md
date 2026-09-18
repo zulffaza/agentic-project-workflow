@@ -32,6 +32,7 @@ phase runs. Don't skip a gate.
 | apply review comments (local `.review.md` or MR/PR feedback) | [`references/review.md`](references/review.md) |
 | close out a finished project | [`references/close.md`](references/close.md) |
 | call an automation script (gates, lint, status, ship, fetch — the 14 `pw-*.sh` helpers) | [`tooling/docs/scripts/README.md`](../../docs/scripts/README.md) |
+| need the live command/operator map or an exact invocation line | `pw-help.sh` — `overview` · `command <name> [<slug>]` · `operators <name> [<op>]` · `project <slug> [<name>]` · `workflow` · `find <term>` (`--json` for bounded agent use) |
 | anything else — the `pw-*.sh` entity-script operators, the slash-command list, branch/worktree naming, the rewind flow | [`references/conventions-and-gotchas.md`](references/conventions-and-gotchas.md) |
 
 ## Golden rules (every phase — no reference file needed for these)
@@ -44,7 +45,9 @@ phase runs. Don't skip a gate.
   [`references/conventions-and-gotchas.md`](references/conventions-and-gotchas.md).
 - **Script the mechanical — call the automation scripts, don't re-implement them.** Pre-phase:
   `pw-preflight.sh <cmd> <slug>` + `pw-doc.sh lint …` (nonzero → STOP, relay stderr). Cheap reads
-  instead of manual file-walking: `pw-status.sh`, `pw-review.sh scan`, `pw-doc.sh summary`.
+  instead of manual file-walking: `pw-status.sh`, `pw-review.sh scan`, `pw-doc.sh summary`, and
+  `pw-help.sh overview` / `pw-help.sh command <name>` / `pw-help.sh find <term>` — the live
+  how-to map (`--json` machine modes; strictly read-only).
   Mechanics: `pw-ship.sh resolve`/`pw-ship.sh exec`, `pw-ship.sh mr-state-batch`,
   `pw-ship.sh monitor`, `pw-worktree.sh create`, `pw-context.sh fetch`, `pw-rfc.sh comments`,
   `pw-context.sh adopt-snapshot`, `pw-doc.sh sync`. Deterministic document writes (never hand-copy

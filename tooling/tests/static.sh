@@ -145,9 +145,11 @@ static_t4() {
   grep -qF 'phase map' "$TOOL/docs/conventions.md" \
     && pwtest_ok "T4 canary: conventions checklist carries the pw-help phase-map duty" \
     || pwtest_bad "T4 canary: conventions checklist phase-map duty" "the durable map-duty line vanished from conventions.md"
-  hits="$(grep -rl 'pw-help\.sh' "$TOOL/agents" "$TOOL/skill" "$TOOL/scripts/entities" "$TOOL/scripts/toolchain" "$TOOL/../template" 2>/dev/null | grep -v 'scripts/entities/pw-help.sh$' | tr '\n' ' ')"
-  [ -z "$hits" ] && pwtest_ok "T4 canary: pw-help.sh is a leaf (no script/agent/skill/template invokes it)" \
-    || pwtest_bad "T4 canary: pw-help.sh leaf" "help invoked as a dependency in: $hits — doctrine: help is for humans/agents at call time, scripts share libs (S5)"
+  hits="$(grep -rl 'pw-help\.sh' "$TOOL/agents" "$TOOL/scripts/entities" "$TOOL/scripts/lib" "$TOOL/scripts/toolchain" "$TOOL/../template" 2>/dev/null | grep -v '/pw-help\.sh$' | tr '\n' ' ')"
+  # skill files MAY teach invocation (guidance surfaces, like docs); agents/scripts/templates may
+  # not consume help as a data source — that is the S5 rule the leaf protects.
+  [ -z "$hits" ] && pwtest_ok "T4 canary: pw-help.sh is a leaf (no script/agent/template consumes it)" \
+    || pwtest_bad "T4 canary: pw-help.sh leaf" "help consumed as a dependency in: $hits — doctrine: help renders for callers, scripts share libs (S5)"
 
 
   # 5) shared plumbing used, not reinvented

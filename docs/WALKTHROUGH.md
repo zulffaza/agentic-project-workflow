@@ -250,6 +250,10 @@ Status: verify-failed        # you flip this on T01
 Running `/pw-review spring-boot-3-upgrade T01` creates that review file from your feedback if it
 doesn't exist, applies the fix in the same worktree, and:
 
+(And if the syntax is foggy: `/pw-help project spring-boot-3-upgrade` prints the live how-to for
+this project — every review file that exists, its gate state, and the exact
+`/pw-review spring-boot-3-upgrade item/answer/signoff …` lines to run.)
+
 ```
 /pw-execute spring-boot-3-upgrade T01
 ```
