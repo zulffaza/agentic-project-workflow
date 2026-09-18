@@ -25,10 +25,13 @@ battery_rows() {
     printf 'batch %s\tpw-ship.sh\tmr-state-batch %s\n'        "$s" "$s"
     printf 'rfc %s\tpw-rfc.sh\tcomments %s\n'                      "$s" "$s"
     printf 'adopt %s\tpw-context.sh\tadopt-snapshot %s api agent/%s/T01-thing\n' "$s" "$s" "$s"
+    printf 'help project %s\tpw-help.sh\tproject %s\n'      "$s" "$s"
+    printf 'help project-review %s\tpw-help.sh\tproject %s pw-review\n' "$s" "$s"
   done
   printf 'lint-task-crlf %s\tpw-doc.sh\tlint task %s\n' "$S3" "$S3"          # T06 (CRLF, sentinels)
   printf 'batch-list F3\tpw-ship.sh\tmr-state-batch %s T02 T05\n' "$S3"
   printf 'unknown-project\tpw-status.sh\tnope-not-here\n'
+  printf 'help unknown-project\tpw-help.sh\tproject nope-not-here\n'
   printf 'unknown-arg\tpw-doc.sh\tlint bogus-mode %s\n' "$S2"
 }
 

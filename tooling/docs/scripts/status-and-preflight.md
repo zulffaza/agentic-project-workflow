@@ -101,7 +101,9 @@ describes, and the T4 canary fails CI if a new command skips its phase-map entry
 ```bash
 $PW_HOME/tooling/scripts/entities/pw-help.sh overview [--json]
 $PW_HOME/tooling/scripts/entities/pw-help.sh operators <name> [<operator>]
+$PW_HOME/tooling/scripts/entities/pw-help.sh project <slug> [<name>] [--json]
 $PW_HOME/tooling/scripts/entities/pw-help.sh workflow [--json]
+$PW_HOME/tooling/scripts/entities/pw-help.sh command <name> [<slug>] [--full|--json]
 ```
 
 - `overview` — one line per command and per exposed operator (the command's own
@@ -113,7 +115,14 @@ $PW_HOME/tooling/scripts/entities/pw-help.sh workflow [--json]
   Library scripts are not listable — they are source-only (L2); names echo in full
   canonical form (`pw-review`, never `review`).
 - `workflow` — the phase spine with gate paths, from `PW_VALID_PHASES` + the phase map.
+- `project <slug> [<name>]` — the project how-to: phase, most-likely-next lines with real
+  targets, on-disk review/plan/task rows with gate + open-item states, and per-operator
+  concretization with `<name>`. Its only subprocesses are reads: `pw-status.sh phase <slug>`,
+  `pw-review.sh gate`/`count`, and `pw-config.sh ai-review <slug>` (get form, never with a
+  mode argument) — pinned by the T1 case's call-site whitelists.
+- `command <name> [<slug>]` — the how-to manual per command (Use when / Does / Shape /
+  doctrine / runnable example per operator; `--full` = substituted source file).
 
-Strictly read-only: opens files for read only; invocation examples it prints are text,
-never executed. Exit 0 / 2 (unknown names carry a `→ fix:` + did-you-mean); zero-hit
+Strictly read-only: opens files for read only, and calls only the read operators above;
+invocation examples it prints are text, never executed. Exit 0 / 2 (unknown names carry a `→ fix:` + did-you-mean); zero-hit
 renderings are not errors.

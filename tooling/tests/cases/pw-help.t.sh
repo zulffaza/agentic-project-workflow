@@ -1,6 +1,13 @@
 # shellcheck shell=bash
 # cases/pw-help.sh T1 (plan 18): discovery rendering, refusals, read-only contract.
 C="$(pwtest_script pw-help.sh)"
+# _pwt_trio_ops <script> <VARname> — every operator token help invokes via that trio member.
+_pwt_trio_ops() {
+  grep -vE '^[[:space:]]*#' "$1" | awk -v t="\"\$$2\" " '{ i = index($0, t); if (i) { r = substr($0, i + length(t)); split(r, f, " "); print f[1] } }' \
+    | tr -d '";()&|' | sort -u | grep -E '^[a-z][a-z-]*$' | tr '\n' ' ' | sed 's/ $//'
+}
+
+
 TOOLDIR="${TOOL:-$PWTEST_TOOLING_DIR}"
 
 # 1) overview — runtime-derived completeness: every command file (independent recount)
@@ -119,19 +126,70 @@ pwtest_rc 2 "operators has no json overload" "$C" --json
 # 7) read-only contract: a projects tree is byte-identical around a full surface pass
 mkdir -p "$PWTEST_ROOT/rocheck/roproj"
 printf 'dashboard\n- **Status:** context\n' > "$PWTEST_ROOT/rocheck/roproj/README.md"
-_pw_md5() { ( cd "$PWTEST_ROOT/rocheck" && find . -type f | sort | xargs -n1 shasum | shasum ); }
+# dirs included: a wayward mkdir is a write too (C32 catcher).
+_pw_md5() { ( cd "$PWTEST_ROOT/rocheck" && { find . -type f -exec shasum {} + ; find . -type d; } | sort | shasum ); }
 _pre="$(_pw_md5)"
 PW_PROJECTS_DIR="$PWTEST_ROOT/rocheck" "$C" overview >/dev/null 2>&1
 PW_PROJECTS_DIR="$PWTEST_ROOT/rocheck" "$C" workflow --json >/dev/null 2>&1
 PW_PROJECTS_DIR="$PWTEST_ROOT/rocheck" "$C" operators pw-context >/dev/null 2>&1
+PW_PROJECTS_DIR="$PWTEST_ROOT/rocheck" "$C" project roproj >/dev/null 2>&1
+PW_PROJECTS_DIR="$PWTEST_ROOT/rocheck" "$C" project roproj pw-review >/dev/null 2>&1
 post="$(_pw_md5)"
 pwtest_eq "read-only: projects tree hash unchanged after full surface" "$_pre" "$post"
 
-# 8) subprocess whitelist (phase 1: pw-help.sh invokes NOTHING — later phases must relax
-# this pin only to the §3.4.1 read-operator whitelist, never to a setter).
-_inv="$(grep -vE '^\s*#' "$C" | grep -oE '\$\{?ST\}? |pw-status\.sh [a-z-]+|pw-review\.sh [a-z-]+|pw-config\.sh [a-z-]+|scaffold\.sh' || true)"
-if [ -z "${_inv// /}" ] || [ "$_inv" = " " ]; then pwtest_ok "help runs zero scripts (read-by-open only)"
-else pwtest_bad "help invokes something forbidden (phase-1 pin)" "$_inv (expand the whitelist deliberately)"; fi
+# 8) subprocess whitelist (§3.4.1): help may call ONLY the read trio, in get forms.
+for trio in ST RV CFG; do
+  ops="$(_pwt_trio_ops "$C" "$trio")"
+  case "$trio" in
+    ST)  want="phase" ;;
+    RV)  want="gate count" ;;
+    CFG) want="ai-review" ;;
+  esac
+  [ "$(printf '%s\n' "$ops" | sort -u | tr '\n' ' ' | sed 's/ $//')" = "$(printf '%s\n' $want | sort -u | tr '\n' ' ' | sed 's/ $//')" ] \
+    && pwtest_ok "subprocess whitelist: $trio == {$want}" \
+    || pwtest_bad "subprocess whitelist violation ($trio)" "used: [$(printf '%s' "$ops" | tr '\n' ' ')] allowed: {$want}"
+done
+_pwt_forbidden="$(grep -vE '^\s*#' "$C" | grep -cE '"\$(ST|RV|CFG)" (status|log|oneliner|adopt|init|signoff|add-item|answer|resolve|reindex|archive|reopen|auto-signoff|note-init|set)' || true)"
+[ "${_pwt_forbidden:-0}" = 0 ] && pwtest_ok "zero setter invocations in help source" || pwtest_bad "setter call sites" "$_pwt_forbidden"
+
+# 8b) project view on a live fixture + hostile fixture (plan §5: only EXISTING paths; no writes)
+CX2=hp1; rm -rf "$PW_PROJECTS_DIR/$CX2"; cp -a "$F2" "$PW_PROJECTS_DIR/$CX2"
+"$(pwtest_script pw-status.sh)" status "$CX2" breakdown --rewind >/dev/null 2>&1
+pwtest_rc 0 "project view on mid-state fixture" "$C" project "$CX2"
+pwtest_re "^$CX2 - phase:" "phase header"
+pwtest_re 'most likely next' "next section"
+pwtest_re 'targets found on disk' "targets section"
+python3 - "$PWTEST_OUT" <<'PYH' >/dev/null && pwtest_ok "no invented targets (every listed review path exists)" || pwtest_bad "invented targets" "listed a file that does not exist"
+import re,sys,os
+out=open(sys.argv[1]).read()
+root=os.environ["PW_PROJECTS_DIR"]+"/hp1/"
+bad=[m for m in re.findall(r'^\s+\S+\s+->\s+(\S+\.review\.md)', out, re.M) if not os.path.exists(root+m)]
+assert not bad, bad
+PYH
+rm -f "$PW_PROJECTS_DIR/$CX2/task/PLAN.md" "$PW_PROJECTS_DIR/$CX2/task/review/PLAN.review.md"
+pwtest_rc 0 "hostile: PLAN removed still renders" "$C" project "$CX2"
+pwtest_re 'no task/PLAN.md yet|init-all|/pw-breakdown' "hostile emits fix line"
+grep -qE 'task/review/PLAN\.review\.md +(\(gate|->)' "$PWTEST_OUT" \
+  && pwtest_bad "hostile invented target" "rendered the deleted PLAN review" || pwtest_ok "hostile: deleted files never rendered as targets"
+pwtest_rc 0 "project per-command view" "$C" project "$CX2" pw-review
+pwtest_re 'gate/count|targets in' "pw-review concrete view"
+pwtest_rc 0 "project --json" "$C" project "$CX2" --json
+python3 - "$PWTEST_OUT" <<'PYJ' && pwtest_ok "project json keys" || pwtest_bad "project json" "schema"
+import json,sys
+d=json.load(open(sys.argv[1]))
+assert {"slug","phase","status","targets","next","tasks"} <= set(d)
+assert all({"doc","review","gate","open"} <= set(t) for t in d["targets"])
+PYJ
+pwtest_rc 2 "project unknown slug" "$C" project ghost-not-here
+pwtest_err 'project not found under' "S8-style refusal"
+pwtest_fix "project refusal has fix hint"
+pwtest_rc 2 "project unknown command slot" "$C" project "$CX2" frobnicate
+pwtest_err 'no such command: pw-frobnicate' "canonical echo in project slot"
+
+# 8c) pw-config is invoked strictly in GET form (ai-review "$slug" — never a mode arg).
+_n_get="$(grep -vE '^[[:space:]]*#' "$C" | grep -cF '"$CFG" ai-review "$slug" 2>' || true)"
+_n_all="$(grep -vE '^[[:space:]]*#' "$C" | grep -cF '"$CFG" ai-review' || true)"
+pwtest_eq "ai-review is only ever a get" "$_n_all" "$_n_get"
 
 # 9) selftest / --help
 pwtest_rc 0 "--help prints usage, exit 0" "$C" --help

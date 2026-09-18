@@ -19,6 +19,14 @@
 #       show that slug. --full renders the entire command file (placeholders
 #       substituted) for the rare reader that needs the doctrine verbatim.
 #
+#   pw-help.sh project    <slug> [<name>] [--json]
+#       Project-specific how-to: current phase (read via the state reader), the
+#       most-likely-next command lines filled with THIS project's real targets,
+#       the review/plan/task files found on disk with gate states and open-item
+#       counts, and (with <name>) one command's operators concretized against
+#       those targets. The state-rich report stays /pw-status - this view answers
+#       "what do I run now, with what exact arguments".
+#
 #   pw-help.sh operators  <name> [<operator>]
 #       Deepest level. The name slot resolves a command name, a bare name
 #       (pw- prefix added), or an entity/toolchain script basename — library
@@ -56,6 +64,10 @@ TOOL="$PW_HOME/tooling"
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 CMDS="$TOOL/commands"
+# the READ-ONLY subprocess trio (the §3.4.1 whitelist; the T1 case pins it mechanically):
+ST="$HERE/pw-status.sh"
+RV="$HERE/pw-review.sh"
+CFG="$HERE/pw-config.sh"
 
 die() { echo "pw-help: $*" >&2; exit 2; }
 
@@ -612,12 +624,181 @@ render_workflow() {
 }
 
 # --- usage / dispatch ------------------------------------------------------------------------
+
+# --- project-specific view ------------------------------------------------------------------
+# proj_dir mirrors the sibling entities' helper (die text in pw-help voice, full names).
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "project not found under $PROJECTS_DIR/$1 -> fix: scaffold it with /pw-new $1, or check /pw-status $1"; printf '%s' "$d"; }
+
+# review_state <slug> <rel> — "<decision>|<open-count>" via the read operators only.
+review_state() {
+  local slug="$1" rel="$2" dec cnt
+  dec="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$RV" gate "$slug" "$rel" 2>/dev/null | pw_phase_token)" || true
+  case "$dec" in "") dec="none yet" ;; approved|changes-requested|in-review) : ;; *) dec="pending" ;; esac
+  cnt="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$RV" count "$slug" "$rel" 2>/dev/null)" || cnt="open=?"
+  printf '%s|%s' "$dec" "$(printf '%s' "$cnt" | sed -e 's/^open=//' -e 's/ resolved=[0-9]*//' -e 's/ items=[0-9]*//')"
+}
+
+# render_project_next <slug> <phase> <plan> <planrev> <dir> <plain|json>
+render_project_next() {
+  local slug="$1" phase="$2" plan="$3" planrev="$4" mode="$6"
+  local lines l first=1 a
+  case "$phase" in
+    context)
+      lines="/pw-context $slug req-init                            (then fill it + register provenance rows)
+/pw-analyze $slug                                      create analysis/<topic>.md (+ its review sibling)" ;;
+    analysis)
+      lines="/pw-review $slug ...                                   item/answer/sign-off your analysis reviews (targets above)
+/pw-breakdown $slug                                      approved analysis -> task/PLAN.md + T0n files" ;;
+    breakdown)
+      if [ -z "$plan" ]; then
+        lines="/pw-breakdown $slug                                      no task/PLAN.md yet: get the analysis gates approved first (see targets + fix hints)"
+      elif [ -z "$planrev" ]; then
+        lines="/pw-review $slug init-all                                review file for PLAN.md missing - create it first
+       (then: item / answer / signoff on task/review/PLAN.review.md, then /pw-execute $slug)"
+      else
+        lines="/pw-review $slug item $planrev §2 <your ask>   file a review item (auto Rn)
+/pw-review $slug signoff $planrev <your decision>   HUMAN-TRIGGERED ONLY (C4)
+       (decision is one of: approved | changes-requested | in-review)
+/pw-execute $slug                                              after the plan gate approves"
+      fi ;;
+    executing)
+      lines="/pw-verify   T0n                                        independent check of ONE change
+/pw-sync $slug                                               merge when the base branch moved
+/pw-ship $slug                                               push verified task branches + open MRs" ;;
+    review)
+      lines="/pw-review $slug                                       apply comments folded back from the MR
+/pw-ship $slug comments                                     pull new MR comments in
+/pw-sync $slug                                               re-sync when the base moves" ;;
+    done)
+      lines="/pw-close $slug                                         teardown, learnings, Status: done" ;;
+    *)
+      lines="/pw-status $slug                                        (phase token unparseable - check the README.md Status: line)" ;;
+  esac
+  if [ "$mode" = json ]; then
+    { local done2=0; while IFS= read -r l; do [ "$done2" = 1 ] && printf ','; done2=1; printf '"%s"' "$(jstr "$l")"; done <<EXN
+$lines
+EXN
+    }
+    return 0
+  fi
+  printf '%s\n' "$lines"
+}
+
+render_project_cmd() {
+  local slug="$1" phase="$2" name="$3" plan="$4" planrev="$5" adocs="$6" trevs="$7" d="$9"
+  local c; c="$(canon "$name")"
+  [ -f "$CMDS/$c.md" ] || die "no such command: $c -> fix: $(did_you_mean "$c")"
+  if [ "$c" = "pw-review" ]; then
+    local rel rvf st sep=""
+    echo "/pw-review targets in $slug (phase: $phase, read via pw-review.sh gate/count)"
+    echo "  gates:"
+    for rel in $planrev; do st="$(review_state "$slug" "$rel")"; printf '    %-42s decision: %-19s open: %s\n' "$rel" "${st%%|*}" "${st##*|}"; done
+    for rel in $adocs; do
+      rvf="analysis/review/${rel#analysis/}"; rvf="${rvf%.md}.review.md"
+      [ -f "$d/$rvf" ] && { st="$(review_state "$slug" "$rvf")"; printf '    %-42s decision: %-19s open: %s\n' "$rvf" "${st%%|*}" "${st##*|}"; } || true
+    done
+    [ -n "$planrev$adocs" ] || echo "    (no review files yet - run: /pw-review $slug init-all)"
+    echo "  items:"
+    local revlist="$planrev" arel shown=0
+    for arel in $adocs; do rvf="analysis/review/${arel#analysis/}"; rvf="${rvf%.md}.review.md"; [ -f "$d/$rvf" ] && revlist="$revlist $rvf" || true; done
+    [ -n "$trevs" ] && revlist="$revlist $trevs"
+    for rvf in $revlist; do
+      [ -f "$d/$rvf" ] || continue
+      if grep -oE '^### (Q|R)[0-9]+.*\[(PENDING|OPEN)\]' "$d/$rvf" 2>/dev/null | head -3 | cut -c5- | sed "s|^|      $rvf  |" | cutw 96 | grep -q .; then shown=1; fi
+    done
+    [ "$shown" = 1 ] || echo "      (no open items / pending questions in the review files found)"
+    echo "  runnable:"
+    printf '    /pw-review %s item %s §3 <your ask>\n' "$slug" "${planrev:-task/review/PLAN.review.md}"
+    printf '    /pw-review %s signoff %s <your decision>   HUMAN-TRIGGERED ONLY (C4)\n' "$slug" "${planrev:-task/review/PLAN.review.md}"
+    printf '           (decision is one of: approved | changes-requested | in-review)\n'
+    local cfgs
+    cfgs="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$CFG" ai-review "$slug" 2>/dev/null | tr '\n' ' ')"
+    [ -n "$cfgs" ] || cfgs="-"
+    printf '    /pw-review %s ai          second opinion (modes: %s)\n' "$slug" "$(printf '%s' "$cfgs" | cutw 44)"
+    printf '    /pw-review %s config analysis <approved mode>   (off|advisory|auto)\n' "$slug"
+    stamp; return 0
+  fi
+  echo "/pw-${c#pw-} for $slug (phase: $phase)"
+  local op args2 use2 fac2 s5
+  while IFS="$TABS" read -r op args2 use2 fac2 s5; do
+    [ -n "$op" ] || continue
+    printf '    /pw-%s %s %s\n' "${c#pw-}" "$slug" "$args2"
+  done <<EPCC
+$(ops_surfaced "$c")
+EPCC
+  stamp
+}
+
+render_project() {
+  [ $# -ge 1 ] || die "usage: project <slug> [<name>] [--json] -> fix: bare /pw-help overview for the global view"
+  local slug="$1"; shift || true
+  local name="${1:-}" a json=0
+  [ "$name" = "--json" ] && { json=1; name=""; }
+  local d; d="$(proj_dir "$slug")"
+  local raw tok
+  raw="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" phase "$slug" 2>/dev/null)" || raw="?"
+  tok="$(pw_phase_token "$raw")"
+  local plan="" planrev="" adocs="" trevs="" tids f rel rvf
+  [ -f "$d/task/PLAN.md" ] && plan="task/PLAN.md" || true
+  [ -f "$d/task/review/PLAN.review.md" ] && planrev="task/review/PLAN.review.md" || true
+  for f in "$d"/analysis/*.md; do
+    [ -f "$f" ] || continue
+    rel="analysis/${f##*/}"; case "$rel" in *review/*) continue ;; esac
+    adocs="$adocs $rel"
+  done
+  for f in "$d"/task/review/T*.review.md; do [ -f "$f" ] && trevs="$trevs task/review/${f##*/}" || true; done
+  for f in "$d"/task/T[0-9][0-9].md; do [ -f "$f" ] && tids="$tids ${f##*.md}"; done
+
+  case "$name" in ""|--json) : ;; *) render_project_cmd "$slug" "$tok" "$name" "$plan" "$planrev" "$adocs" "$trevs" "$tids" "$d"; return 0 ;; esac
+
+  local tail st sep=""
+  tail="${raw#"$tok"}"; tail="$(printf '%s' "$tail" | sed -e 's/^[ ]*//' -e 's/^[([]//' -e 's/[])?]$//')"
+  if [ "$json" = 1 ]; then
+    printf '{"slug":"%s","phase":"%s","status":"%s","targets":[' "$(jstr "$slug")" "$(jstr "$tok")" "$(jstr "$raw")"
+    for rel in $planrev; do st="$(review_state "$slug" "$rel")"; printf '%s{"doc":"task/PLAN.md","review":"%s","gate":"%s","open":"%s"}' "$sep" "$(jstr "$rel")" "$(jstr "${st%%|*}")" "$(jstr "${st##*|}")"; sep=", "; done
+    for rel in $adocs; do
+      rvf="analysis/review/${rel#analysis/}"; rvf="${rvf%.md}.review.md"
+      if [ -f "$d/$rvf" ]; then st="$(review_state "$slug" "$rvf")"; printf '%s{"doc":"%s","review":"%s","gate":"%s","open":"%s"}' "$sep" "$(jstr "$rel")" "$(jstr "$rvf")" "$(jstr "${st%%|*}")" "$(jstr "${st##*|}")"; sep=", "; fi
+    done
+    local jtasks=""
+    if [ -n "$tids" ]; then jtasks="$(printf '%s' "${tids# }" | sed -e 's/ /", "/g' | sed -e 's/^/"/' -e 's/$/"/')"; fi
+    printf '],"next":[%s],"tasks":[%s]}\n' "$(render_project_next "$slug" "$tok" "$plan" "$planrev" "$d" json)" "$jtasks"
+    return 0
+  fi
+  printf '%s - phase: %s' "$slug" "$(printf '%s' "$tok" | cutw 24)"
+  [ -n "$tail" ] && printf '  (%s)' "$(printf '%s' "$tail" | cutw 58)"
+  echo; echo
+  echo "most likely next:"
+  render_project_next "$slug" "$tok" "$plan" "$planrev" "$d" plain
+  echo "any-time for this project:"
+  echo "  /pw-status $slug  ·  /pw-context $slug add-input --file ... --what ... --source ..."
+  echo "targets found on disk:"
+  local trow printed=0
+  trow() { printf '  %-26s -> %-38s (gate: %s, open: %s)\n' "$1" "$2" "$3" "$4" | cutw 99; }
+  if [ -n "$plan" ]; then
+    printed=1
+    if [ -n "$planrev" ]; then st="$(review_state "$slug" "$planrev")"; trow "task/PLAN.md" "$planrev" "${st%%|*}" "${st##*|}"
+    else printf '  %-26s -> %s\n' "task/PLAN.md" "(no review file yet - run: /pw-review $slug init-all)" | cutw 99; fi
+  fi
+  for rel in $adocs; do
+    printed=1
+    rvf="analysis/review/${rel#analysis/}"; rvf="${rvf%.md}.review.md"
+    if [ -f "$d/$rvf" ]; then st="$(review_state "$slug" "$rvf")"; trow "$rel" "$rvf" "${st%%|*}" "${st##*|}"
+    else printf '  %-26s -> %s\n' "$(printf '%s' "$rel" | cutw 25)" "(review file missing - run: /pw-review $slug init-all)" | cutw 99; fi
+  done
+  if [ -n "$trevs" ]; then printed=1; printf '  %-26s -> %s\n' "task/T0n.md (x$(printf '%s' "$trevs" | wc -w | tr -d ' '))" "task/review/T0n.review.md" | cutw 99; fi
+  [ "$printed" = 1 ] || echo "  (nothing in analysis/ or task/ yet - start with /pw-new or /pw-adopt)"
+  echo "  per-command detail with real targets: /pw-help project $slug <name>"
+  stamp
+}
+
 usage() {
   cat <<'EOF'
 usage: pw-help.sh <operator> [args] [--json]
 
   overview                    one line per command and per exposed operator
   command <name> [<slug>]     how-to manual for one command (--full = verbatim file)
+  project <slug> [<name>]     what applies to THIS project right now, with real targets
   operators <name> [<op>]     verbatim usage-header dump (or one operator deep-dive)
   workflow                    the phase spine with gates
   --selftest                  run the isolated harness case
@@ -630,6 +811,7 @@ op0="${1:-overview}"
 case "$op0" in
   overview)   shift; render_overview "$@" ;;
   command)    shift; render_command "$@" ;;
+  project)    shift; render_project "$@" ;;
   operators) shift; render_operators "$@" ;;
   workflow)  shift; render_workflow "$@" ;;
   *)         usage >&2; die "unknown operator: $op0 → fix: bare /pw-help lists every command" ;;

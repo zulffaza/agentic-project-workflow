@@ -110,5 +110,10 @@ lint-task-crlf pwt-f3-hostile	pw-doc.sh	lint task pwt-f3-hostile	2	-
 batch-list F3	pw-ship.sh	mr-state-batch pwt-f3-hostile T02 T05	0	-
 unknown-project	pw-status.sh	nope-not-here	2	-
 unknown-arg	pw-doc.sh	lint bogus-mode pwt-f2-mid	2	-
-
-
+help project pwt-f1-scaffold	pw-help.sh	project pwt-f1-scaffold	0	-
+help project-review pwt-f1-scaffold	pw-help.sh	project pwt-f1-scaffold pw-review	0	-
+help project pwt-f2-mid	pw-help.sh	project pwt-f2-mid	0	-
+help project-review pwt-f2-mid	pw-help.sh	project pwt-f2-mid pw-review	0	-
+help project pwt-f3-hostile	pw-help.sh	project pwt-f3-hostile	0	-
+help project-review pwt-f3-hostile	pw-help.sh	project pwt-f3-hostile pw-review	0	-
+help unknown-project	pw-help.sh	project nope-not-here	2	-

@@ -56,3 +56,4 @@ C31-frontmatter-derivation-canned	pw-help.sh	      desc="$(fmof "$file" descript
 C35-phase-map-drops-a-command	pw-help.sh	executing|pw-execute pw-verify pw-sync	executing|pw-execute pw-sync	T4	-
 C33-path-substitution-dead	pw-help.sh	sub() { sed -e "s|{{PW_HOME}}|$PW_HOME|g" -e "s|{{PW_PROJECTS}}|$PW_PROJECTS|g"; }	sub() { cat; }	T1	pw-help
 C34-C4-echo-dropped-from-renderer	pw-help.sh	awk '/DOCTRINE|HUMAN-TRIGGERED ONLY/{print	awk '/DOCTRINE/{print	T1	pw-help
+C32-project-render-writes	pw-help.sh	raw="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" phase "$slug" 2>/dev/null)" || raw="?"	raw="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" phase "$slug" 2>/dev/null)" || raw="?" ; mkdir -p "$d/.c32-bleed" 2>/dev/null || true	T1	pw-help
