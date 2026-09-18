@@ -40,6 +40,17 @@
 #       gates live — rendered from $PW_VALID_PHASES + the phase map, so the
 #       command half can never drift.
 #
+#   pw-help.sh find       <term...> [--json]
+#       Bounded discovery grep across the caller-visible surfaces (tooling commands,
+#       entity + toolchain script usage headers, tooling docs + root docs) — never
+#       library sources, never corpus projects. The term(s) are ONE literal
+#       case-insensitive phrase (rest-of-line, A1); matches print surface-grouped
+#       file:line with a trimmed snippet, capped at 20 plus a how-to-narrow tail.
+#       Zero hits is a RESULT, not an error (exit 0). It is a pointer, not a reader:
+#       deep content is the command view, doctrine is the command file.
+#       Agents: --json returns [{surface,path,line,text}] — one cheap bounded call
+#       beats exploratory greps to locate a concept across the tooling surface set.
+#
 #   pw-help.sh --selftest                  run the isolated harness case.
 #
 # Read-only by contract: help opens files for read and invokes an audited
@@ -623,6 +634,74 @@ render_workflow() {
   fi
 }
 
+
+# --- find -------------------------------------------------------------------------------
+find_surfaces() { # ordered "label<TAB>root" sources (L2: libraries excluded by design)
+  printf 'cmd\t%s\n' "$TOOL/commands"
+  printf 'script\t%s/scripts/entities\n' "$TOOL"
+  printf 'script\t%s/scripts/toolchain\n' "$TOOL"
+  printf 'tooling-doc\t%s/docs\n' "$TOOL"
+  printf 'doc\t%s/../docs\n' "$TOOL"
+}
+
+render_find() {
+  local json=0 a phrase
+  set -f
+  local -a args=(); for a in "$@"; do case "$a" in --json) json=1 ;; *) args=("${args[@]+"${args[@]}"}" "$a") ;; esac; done
+  set +f
+  [ "${#args[@]}" -gt 0 ] || die "find: no search term -> fix: /pw-help find sign-off (one literal phrase)"
+  phrase="${args[*]}"
+  local label root hits
+  hits="$(mktemp)"
+  while IFS="$TABS" read -r label root; do
+    [ -d "$root" ] || continue
+    grep -rinF --include='*.sh' --include='*.md' -- "$phrase" "$root" 2>/dev/null \
+      | sed -e "s|^|${label}@@|" >> "$hits" || true
+  done <<EF
+$(find_surfaces)
+EF
+  local total
+  total="$(awk 'END{print NR+0}' "$hits")"
+  # path normalization + snippet trim -> uniform records "surface PATH LINE TEXT"
+  local norm; norm="$(mktemp)"
+  python3 - "$hits" "$PW_HOME" <<'PYNORM' > "$norm"
+import sys
+root, home = sys.argv[1], sys.argv[2] + "/"
+out=[]
+for line in open(root, encoding='utf-8', errors='replace'):
+    surf, _, rest = line.partition('@@')
+    rest = rest.rstrip('\n')
+    path, ln, text = rest.split(':', 2)
+    if path.startswith(home): path = path[len(home):]
+    out.append((surf, path, ln, text.strip()[:60]))
+import json
+for surf, path, ln, text in out:
+    print(f"{surf}\t{path}\t{ln}\t{text}")
+PYNORM
+  local n=0
+  if [ "$json" = 1 ]; then
+    local first=1
+    printf '['
+    while IFS="$TABS" read -r surf pth ln txt; do
+      [ "$first" = 1 ] || printf ','; first=0
+      printf '{"surface":"%s","path":"%s","line":%s,"text":"%s"}' "$(jstr "$surf")" "$(jstr "$pth")" "$ln" "$(jstr "$txt")"
+    done < "$norm"
+    printf ']\n'
+    rm -f "$hits" "$norm"
+    return 0
+  elif [ "${total:-0}" = "0" ]; then
+    echo "(no matches) - the term is one literal phrase; try a single word, or just /pw-help"
+  else
+    while IFS="$TABS" read -r surf pth ln txt; do
+      n=$((n+1)); [ "$n" -le 20 ] || break
+      printf '  %-12s %s:%s  %s\n' "$(cutw 11 <<<"$surf")" "$pth" "$ln" "$(cutw 60 <<<"$txt")"
+    done < "$norm"
+    [ "$n" -le 20 ] || printf '  (%s more - narrow the phrase, or the how-to view: /pw-help command <name>)\n' "$((total-20))"
+  fi
+  rm -f "$hits" "$norm"
+  stamp
+}
+
 # --- usage / dispatch ------------------------------------------------------------------------
 
 # --- project-specific view ------------------------------------------------------------------
@@ -801,6 +880,7 @@ usage: pw-help.sh <operator> [args] [--json]
   project <slug> [<name>]     what applies to THIS project right now, with real targets
   operators <name> [<op>]     verbatim usage-header dump (or one operator deep-dive)
   workflow                    the phase spine with gates
+  find <term...> [--json]     literal phrase search across the tooling surface
   --selftest                  run the isolated harness case
 EOF
 }
@@ -813,6 +893,7 @@ case "$op0" in
   command)    shift; render_command "$@" ;;
   project)    shift; render_project "$@" ;;
   operators) shift; render_operators "$@" ;;
+  find)       shift; render_find "$@" ;;
   workflow)  shift; render_workflow "$@" ;;
   *)         usage >&2; die "unknown operator: $op0 → fix: bare /pw-help lists every command" ;;
 esac

@@ -191,6 +191,25 @@ _n_get="$(grep -vE '^[[:space:]]*#' "$C" | grep -cF '"$CFG" ai-review "$slug" 2>
 _n_all="$(grep -vE '^[[:space:]]*#' "$C" | grep -cF '"$CFG" ai-review' || true)"
 pwtest_eq "ai-review is only ever a get" "$_n_all" "$_n_get"
 
+# 8d) find: bounded literal discovery + json contract + surface integrity (plan 18 H3/Q1)
+pwtest_rc 0 "find literal phrase hits" "$C" find HUMAN-TRIGGERED
+pwtest_re "cmd[[:space:]]+tooling/commands/pw-review.md:[0-9]+" "hit prints surface+path:line"
+pwtest_rc 0 "find multi-word phrase works" "$C" find phase map
+pwtest_rc 0 "find zero-hits exits 0 (result, not error)" "$C" find zqx-nothing-here-xyz
+pwtest_re "no matches" "zero-hits prints the hint line"
+pwtest_rc 0 "find capped" "$C" find slug
+if grep -q "more - narrow" "$PWTEST_OUT"; then pwtest_ok "cap tail message (20 + note)"; else pwtest_bad "cap" "no cap note"; fi
+if grep -qF "tooling/scripts/lib/" "$PWTEST_OUT"; then pwtest_bad "L2: lib excluded from find surface" "lib path printed"; else pwtest_ok "L2: lib excluded"; fi
+if grep -qF "pwt-f" "$PWTEST_OUT"; then pwtest_bad "corpus leaked into find" "fixture path printed"; else pwtest_ok "no corpus paths on find surface"; fi
+pwtest_rc 0 "find --json parses" "$C" find auto-signoff --json
+python3 - "$PWTEST_OUT" <<PYF && pwtest_ok "find json schema (surface,path,line,text)" || pwtest_bad "find json schema" "keys"
+import json,sys
+d=json.load(open(sys.argv[1]))
+assert d and all(set(r)=={"surface","path","line","text"} and isinstance(r["line"], int) for r in d)
+assert any(r["path"].endswith("pw-review.sh") for r in d)
+PYF
+pwtest_rc 2 "find without term refuses" "$C" find
+
 # 9) selftest / --help
 pwtest_rc 0 "--help prints usage, exit 0" "$C" --help
 pwtest_re 'usage' "--help is usage-shaped"
