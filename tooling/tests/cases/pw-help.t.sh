@@ -28,7 +28,7 @@ sec_rev(){ sed -n "/\/pw-review /,/\/pw-breakdown/p" "$PWTEST_OUT"; }
 sec_ctx | grep -q 'req-init' && pwtest_ok "req-init under pw-context" || pwtest_bad "req-init under pw-context" "missing"
 sec_ctx | grep -q 'add-repo' && pwtest_ok "add-repo under pw-context" || pwtest_bad "add-repo under pw-context" "missing"
 sec_rev | grep -qE 'item <' && pwtest_ok "sugar op item surfaces under pw-review" || pwtest_bad "sugar op item" "missing"
-sec_rev | grep -q 'this is how I view' && pwtest_ok "config sugar op carries the command-file definition" || pwtest_bad "config op use-clause" "missing"
+sec_rev | grep -q "this is how I view/change this project's AI Review settings" && pwtest_ok "config sugar op carries the command-file definition" || pwtest_bad "config op use-clause" "missing"
 sec_rev | grep -q '(write)' && pwtest_ok "facet labels render (S1b)" || pwtest_bad "facet labels" "no (write) under pw-review"
 sec_ctx | grep -qE '\(default\)' && pwtest_bad "pw-context (default)" "req-init selector is not a default flow" || pwtest_ok "no (default) for op-selector commands"
 grep -q 'HUMAN-TRIGGERED ONLY' "$PWTEST_OUT" && pwtest_bad "overview C4 label" "doctrine echo belongs to command view, not overview columns" || pwtest_ok "overview stays label-free"
@@ -74,7 +74,7 @@ pwtest_fix "unknown operators → fix hint"
 # 5b) command <name> how-to (phase 2)
 pwtest_rc 0 "command how-to renders" "$C" command pw-context
 pwtest_re 'Does:' "per-op Does lines"
-grep -A3 'req-init' "$PWTEST_OUT" | grep -q 'Use when:' && pwtest_ok "req-init block carries command-file prose" || pwtest_bad "Use when for req-init" "missing"
+grep -A4 'req-init' "$PWTEST_OUT" | grep -q 'Does:' && pwtest_ok "req-init block carries command-file prose" || pwtest_bad "Does for req-init" "missing"
 grep -qE '^    \$ /pw-context <project-slug> add-input' "$PWTEST_OUT" && pwtest_ok "runnable example line, full canonical name" || pwtest_bad "example line" "$(grep -E '^    \$' "$PWTEST_OUT" | head -2)"
 grep -qE '\$ /[^p]' "$PWTEST_OUT" && pwtest_bad "full-name rendering" "short-form example leaked: $(grep -oE '\$ /[^ ]*' "$PWTEST_OUT"|head -1)" || pwtest_ok "full-name rendering (examples never short-form)"
 grep -q '{{PW_' "$PWTEST_OUT" && pwtest_bad "no {{PW_ leak (command)" "found" || pwtest_ok "no {{PW_ leak (command)"
@@ -83,8 +83,11 @@ pwtest_re '\$ /pw-context myproj req-init' "slug substitution in examples"
 # C4 doctrine echo (guard the bypass surface): the label must reach the command view verbatim.
 pwtest_rc 0 "command view of the gate command" "$C" command pw-review
 grep -qF 'HUMAN-TRIGGERED ONLY (C4)' "$PWTEST_OUT" && pwtest_ok "C4 doctrine line present (C34 catcher)" || pwtest_bad "C4 doctrine line" "command pw-review lost the HUMAN-TRIGGERED ONLY (C4) echo"
-pwtest_re 'auto-signoff' "SPECIAL path mentioned in the review command view"
-grep -qF 'tooling/scripts/entities/' "$PWTEST_OUT" && pwtest_bad "user view leaks entity scripts" "internal paths in default command view" || pwtest_ok "user view: no internal paths"
+if grep -qE '\.sh|tooling|/Users/|state reader|usage[ -]header|frontmatter|pw-item-status|entities|script headers' "$PWTEST_OUT"; then pwtest_bad "user view clean" "internal tokens leaked: $(grep -oE '\.sh|tooling|state reader|frontmatter' "$PWTEST_OUT" | sort -u | head -3 | tr '\n' ' ')"; else pwtest_ok "user view: default command view exposes no internal terms"; fi
+pwtest_rc 0 "maintainer view of the review command" "$C" command pw-review --maintainer
+grep -qF 'auto-signoff' "$PWTEST_OUT" && pwtest_ok "SPECIAL path mentioned in the maintainer view" || pwtest_bad "SPECIAL path (maintainer)" "auto-signoff missing from --maintainer"
+pwtest_rc 0 "command view of the gate command again" "$C" command pw-review
+grep -qF 'HUMAN-TRIGGERED ONLY (C4)' "$PWTEST_OUT" && pwtest_ok "C4 doctrine line present" || pwtest_bad "C4 doctrine line" "command pw-review lost the HUMAN-TRIGGERED ONLY (C4) echo"
 pwtest_rc 0 "maintainer command view" "$C" command pw-review --maintainer
 pwtest_re 'entity script: tooling/scripts/entities/pw-review\.sh' "own script section (maintainer view)"
 pwtest_re '16 operators' "operator count in maintainer view (full name)"
@@ -197,7 +200,7 @@ pwtest_eq "ai-review is only ever a get" "$_n_all" "$_n_get"
 
 # 8d) find: bounded literal discovery + json contract + surface integrity (plan 18 H3/Q1)
 pwtest_rc 0 "find literal phrase hits" "$C" find HUMAN-TRIGGERED
-pwtest_re "cmd[[:space:]]+tooling/commands/pw-review.md:[0-9]+" "hit prints surface+path:line"
+pwtest_re "command[[:space:]]+commands/pw-review.md:[0-9]+" "hit prints surface+path:line"
 pwtest_rc 0 "find multi-word phrase works" "$C" find phase map
 pwtest_rc 0 "find zero-hits exits 0 (result, not error)" "$C" find zqx-nothing-here-xyz
 pwtest_re "no matches" "zero-hits prints the hint line"
@@ -210,7 +213,7 @@ python3 - "$PWTEST_OUT" <<PYF && pwtest_ok "find json schema (surface,path,line,
 import json,sys
 d=json.load(open(sys.argv[1]))
 assert d and all(set(r)=={"surface","path","line","text"} and isinstance(r["line"], int) for r in d)
-assert any(r["path"].endswith("pw-review.sh") for r in d)
+assert all(not r["path"].endswith(".sh") for r in d)  # scripts are a maintainer surface (T3)
 PYF
 pwtest_rc 2 "find without term refuses" "$C" find
 

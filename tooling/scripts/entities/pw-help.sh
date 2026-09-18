@@ -212,6 +212,24 @@ scripts_of() {
 #       that appears in an invocation shape or a "literally `<tok>`" line and is not
 #       already listed — command-level sugar (ai/config/item) whose script partner
 #       carries a different op name (config ↔ pw-config.sh ai-review; item ↔ add-item).
+# cmd_use_clause <cmd> <op> — the prose the command file carries for an operator's bullet
+# (everything after the "—" of the mapping line), collapsed to the blurb shown in user views.
+cmd_use_clause() {
+  local bloc
+  bloc="$(cmd_block "$1" "$2" | strip_md | sub | awk '/^[ \t]*[0-9]+[.)]/{exit} { line=$0; p=index(line,"/Users/"); if (!p) p=index(line,"tooling/scripts/"); if (p) { pre=substr(line,1,p-1); gsub(/[ \t`→—-]+$/,"",pre); if (pre=="") next; print pre; next } print }')"
+  printf '%s' "$bloc" | awk '{ s = s $0 " " } END {
+    i = index(s, "—"); j = index(s, "→")
+    if (i && (!j || i < j)) { s = substr(s, i); sub(/^—[ ]?/, "", s) }
+    else if (j) { s = substr(s, j); sub(/^→[ ]?/, "", s) }
+    k = index(s, "If the 2nd argument"); if (k) s = substr(s, 1, k - 1)
+    gsub(/[ ]+/, " ", s); sub(/ +$/, "", s)
+    sub(/[ ]*(Run|run)[ ]*:?[ ]*$/, "", s)
+    do { s2 = s; sub(/[ ]+(to|of|in|is|that|and|or|the|a|an|for|with|on|at|by|as|into|through|pass|flags?|from|via)$/, "", s) } while (s != s2)
+    sub(/[ :,.]+$/, "", s)
+    if (s ~ /^[a-z0-9(<]/ && length(s) < 30 && s !~ /[.;:]/ && s ~ /(to|of|in|is|that|and|or|the|a|an|for|with|on|at|by|as|into|through|pass|from|via)$/) s = ""
+    print s }'
+}
+
 selector_tokens() {
   printf '%s' "$1" | awk '{
     s=$0; depth=0; in1=0; seg=""
@@ -242,12 +260,61 @@ has_shape() {
   return 1
 }
 
-# cutw <width> — byte-safe column truncation (awk is locale-blind here): cut wide
-# lines, then iconv sanitizes a mid-sequence split so output stays valid UTF-8.
-cutw() {
-  awk -v n="$1" '{ if (length($0) > n) print substr($0, 1, n); else print }' | iconv -f UTF-8 -t UTF-8 -c
-  return 0
+# user_prose — scrub maintainer-domain terms from prose that reaches the DEFAULT
+# user views (overview, bare, command without --maintainer, project, workflow, find).
+# The command files + script usage headers are maintained in the maintainers'
+# voice; the renderers for the project/agent-facing surfaces pass every lifted
+# clause through here: drop provenance/history parentheticals that name internals,
+# map script names to their user-visible form, replace tooling jargon.
+CMDS_LIST=":pw-new:pw-adopt:pw-context:pw-doctor:pw-research:pw-analyze:pw-review:pw-breakdown:pw-rfc:pw-execute:pw-verify:pw-sync:pw-ship:pw-close:pw-status:pw-help:pw-ship-mr-describe:pw-test:"
+user_prose() {
+  # BSD sed -E: no \b — guard with explicit char classes where needed. Literal parens
+  # in ERE are ( ) — no backslash. Order: history parentheticals first, then jargon,
+  # finally the awk pass maps any remaining pw-*.sh token to its user form.
+  sed -E \
+    -e 's/ \((was|moved from|renamed from|formerly|history:)[^()]*\) ?//gi' \
+    -e 's/\([a-z0-9.-]+\.sh (was|from|moved|renamed)[^()]*\)//gi' \
+    -e 's/read via the state reader/read from the project status/g' \
+    -e 's/\(read via (the )?state reader\)/(read from the project status)/g' \
+    -e 's/state reader/project status view/g' \
+    -e 's/usage-header/operator-reference/g' \
+    -e 's/usage headers/operator references/g' \
+    -e 's/usage header/operator reference/g' \
+    -e 's/entity\/toolchain scripts/internal helpers/g' \
+    -e 's/entity-script sections/internal sections/g' \
+    -e 's/entity \+ toolchain script operator references/internal operator references/g' \
+    -e 's/commands, internal helpers references/command + helper references/g' \
+    -e 's/the entity\x27s /the /g' \
+    -e 's#entities#internal helpers#g' \
+    -e 's#\bentity\b#internals#g' \
+    -e 's#toolchain scripts#internal helpers#g' \
+    -e 's#toolchain docs#internal docs#g' \
+    -e 's#tooling docs#internal docs#g' \
+    -e 's#tooling commands#command files#g' \
+    -e 's#tooling surface#command surface#g' \
+    -e 's#tooling/#internal/#g' \
+    -e 's#\btooling\b#the workflow#g' \
+    -e 's#script headers#operator references#g' \
+    -e 's/frontmatter/command header/g' \
+    -e 's/\$PW_[A-Z_]+/the bundle config/g' \
+    -e 's/phase map/lifecycle map/g' \
+    -e 's/pw-item-status/item-status/g' \
+    -e 's/\(S1[ab][^()]*\)//g' \
+    -e 's/  +/ /g' \
+    -e 's/ +([,.;:!?])/\1/g' \
+  | awk -v cm="$CMDS_LIST" '{
+      line=$0
+      while (match(line, /pw-[a-z][a-z0-9-]*\.sh/)) {
+        tok=substr(line, RSTART+3, RLENGTH-6)
+        pre=substr(line,1,RSTART-1); post=substr(line,RSTART+RLENGTH)
+        if (index(cm, ":" tok ":")) line = pre "/pw-" tok post
+        else line = pre "an internal helper" post
+      }
+      gsub(/  +/, " ", line); sub(/ +$/, "", line)
+      print line
+    }'
 }
+
 
 # fwrap <width> — greedy word-wrap on stdin; one full logical line in, n short lines
 # out. Nothing is ever cut — overflow flows to the next line.
@@ -318,6 +385,13 @@ token_use_clause() {
       END { print p }' "$CMDS/$1.md")"
   [ -n "$para" ] || return 1
   out="$(printf '%s' "$para" | sed -E -e "s/.*literally [$TF$BT]$2[$TF$BT][^a-zA-Z]*//" -e 's/[.,;:].*//' -e 's/^[ ]+//')"
+  # If the author continues the definition after an em-dash and the pre-dash part is a
+  # weak stub, keep the whole sentence; otherwise the pre-dash part is the definition.
+  if [ ${#out} -ge 25 ]; then
+    d="${out%%—*}"
+    [ "${#d}" -ge 25 ] && out="$d"
+  fi
+  out="$(printf '%s' "$out" | sed -E -e 's/[ ]+—[ ]+skip everything below.*//' -e 's/[ ]+$//')"
   [ -n "$out" ] || return 1
   printf '%s' "$out"
 }
@@ -419,10 +493,19 @@ ops_surfaced() {
         case "$text" in *"/$cmd $op "*|*"/$cmd $op$BT"*) : ;; *) continue ;; esac; }
       seen="$seen$op$TABS"
       args="$(cmd_shape_line "$cmd" "$op")"
-      [ -n "$args" ] || args="$op $(sig_of "$sp" "$op")"
+      if [ -z "$args" ]; then sp3="$sp"; a2="$(sig_of "$sp3" "$op")"; args="$op"
+        [ -z "$a2" ] || args="$op $a2"
+      fi
+      # use text for USER surfaces comes from the command file's own bullet (after the
+      # mapping) — never the script's usage paragraph (that is maintainer voice). The raw
+      # script paragraph still backs the --maintainer Does section + operators deep dive.
+      # order: script usage-paragraph gist (terse op sentence) -> command-file bullet
+      # clause -> token sugar clause -> honest pointer. All scrubbed at the printf below.
       use="$(gist "$(para_of "$sp" "$op")")"
+      [ -n "$use" ] || use="$(cmd_use_clause "$cmd" "$op")"
+      [ -n "$use" ] || use="$(token_use_clause "$cmd" "$op" 2>/dev/null || true)"
       fac="$(facet_of "$sp" "$op")"
-      printf '%s\t%s\t%s\t%s\t%s\n' "$op" "$args" "${use:-see: /pw-help operators $cmd}" "$fac" "${script}"
+      printf '%s\t%s\t%s\t%s\t%s\n' "$op" "$args" "$(printf '%s' "${use:-see: /pw-help operators $cmd}" | user_prose)" "$fac" "${script}"
     done
   done
   # R2: frontmatter selector sugar ops (ai/config/item...) not already listed.
@@ -436,17 +519,21 @@ ops_surfaced() {
     [ -n "$shape_ok" ] || continue
     seen="$seen$tok$TABS"
     args="$(cmd_shape_line "$cmd" "$tok")"; [ -n "$args" ] || args="$tok"
-    use=""; fac=""
+    # user blurb priority for selector sugar: the definition sentence in the command
+    # file; then the bullet clause; then (only via a real alias) the script paragraph.
+    # The alias/facet lookup still runs for attribution (operators deep dive).
+    use="$(token_use_clause "$cmd" "$tok" 2>/dev/null || true)"
+    [ -n "$use" ] || use="$(cmd_use_clause "$cmd" "$tok")"
+    fac=""
     if ali="$(r2_alias "$cmd" "$tok" 2>/dev/null || true)"; then
       ascript="${ali%%$TABS*}"; aop="${ali##*$TABS}"
       sp="$(script_path "$ascript" 2>/dev/null || true)"
       if [ -n "$sp" ]; then
-        use="$(gist "$(para_of "$sp" "$aop")")"
         fac="$(facet_of "$sp" "$aop")"
+        [ -n "$use" ] || use="$(gist "$(para_of "$sp" "$aop")")"
       fi
     fi
-    [ -n "$use" ] || use="$(token_use_clause "$cmd" "$tok" 2>/dev/null || true)"
-    printf '%s\t%s\t%s\t%s\t%s\n' "$tok" "$args" "${use:-see: /pw-help operators $cmd}" "$fac" "${ascript:-$cmd.sh}"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$tok" "$args" "$(printf '%s' "${use:-see: /pw-help operators $cmd}" | user_prose)" "$fac" "${ascript:-$cmd.sh}"
   done
   return 0
 }
@@ -564,7 +651,7 @@ EOPS
 # the human-facing prose is lifted verbatim, never re-written.
 cmd_block() {
   local cmd="$1" tok="$2" ln
-  ln="$(grep -m1 -n -E "/$cmd[ ]+(<project-slug>|<slug>)[ ]$tok([ ]|$TF|$BT|[^A-Za-z0-9-])|^If the 2nd argument is literally [$TF$BT]$tok[$TF$BT]" "$CMDS/$cmd.md" 2>/dev/null | cut -d: -f1 || true)"
+  ln="$(grep -m1 -n -E "^[[:space:]]*-[[:space:]]+\*\*\`/$cmd([ ][^\`]*)?[ ]$tok([ ]|$|[^A-Za-z0-9-])|^[[:space:]]*\*\*If the 2nd argument is literally [$TF$BT]$tok[$TF$BT]" "$CMDS/$cmd.md" 2>/dev/null | cut -d: -f1 || true)"
   [ -n "$ln" ] || return 0
   awk -v from="$ln" 'NR<from{next} NR>from && (/^- \*\*/ || /^## / || /^[0-9]+\. \*\*/){exit} NR>=from{print}' "$CMDS/$cmd.md"
 }
@@ -637,11 +724,15 @@ E
     usep="$(printf '%s' "$bloc" | awk '{ s=s $0 " " } END { i=index(s,"—"); j2=index(s,"→"); if (i) { s=substr(s,i); sub(/^—[ ]?/,"",s) } else if (j2) { s=substr(s,j2); sub(/^→[ ]?/,"",s) }; j=index(s,"If the 2nd argument"); if (j) s=substr(s,1,j-1); gsub(/[ ]+/," ",s); sub(/ +$/,"",s); sub(/[ ]*(Run|run)[ ]*:?[ ]*$/,"",s); do { s2=s; sub(/[ ]+(to|of|in|is|that|and|or|the|a|an|for|with|on|at|by|as|into|through|pass|flags?|from|via)$/,"",s) } while (s!=s2); sub(/[ :,.]+$/,"",s); if (s ~ /^[a-z0-9(<]/ && length(s) < 30 && s !~ /[.;:]/ && s ~ /(to|of|in|is|that|and|or|the|a|an|for|with|on|at|by|as|into|through|pass|fl|from|via)$/) s=""; print s }')"
     sp2="$(script_path "$bscript" 2>/dev/null || true)"
     par=""; [ -n "$sp2" ] && par="$(para_of "$sp2" "$bname")"
-    [ -n "$par" ] || par="$buse"
-    if [ -n "$usep" ] && [ "$usep" != "$par" ]; then
-      printf '%s\n' "$usep" | ov_wrap "    Use when: " "             + "
+    # USER view: the same source ops_surfaced picked (definition/bullet/script-paragraph,
+    # scrubbed) so overview and command views never disagree. Maintainer view shows the
+    # raw bullet clause and the raw script paragraph in addition.
+    [ -n "$buse" ] || buse="$usep"
+    if [ "$mant" = 1 ]; then
+      [ -n "$usep" ] && printf '%s\n' "$usep" | ov_wrap "    Use when: " "             + "
+      { printf '%s\n' "$par"; } | ov_wrap "    Does (script): " "             + "
     fi
-    printf '%s\n' "$par" | ov_wrap "    Does:   " "             + "
+    printf '%s\n' "$buse" | user_prose | ov_wrap "    Does:   " "             + "
     printf '%s\n' "$bloc" | awk '/DOCTRINE|HUMAN-TRIGGERED ONLY/{print "    " $0}' | head -2 | flowline 98 || true
     { printf '%s\n' "$bloc" | grep -oE 'A[12] [a-zA-Z][^`)”]*' | head -1 | sed 's/^/    Shape:  /' | flowline 98; } || true
     # the runnable example: /pw-help is the C1 exception — its subject is the bundle,
@@ -672,7 +763,7 @@ $(ops_of "$sp")
 EO
   done
   fi
-  [ "$mant" = 1 ] || { printf '  (user view - entity scripts: command %s --maintainer, or operators %s)\n' "$c" "$c" | flowline 98; }
+  [ "$mant" = 1 ] || { printf '  (user view - detail: command %s --maintainer, or operators %s)\n' "$c" "$c" | flowline 98; }
   local dpaths dpl
   dpaths="$(grep -oE '(tooling/)?docs/[A-Za-z0-9._/-]+\.md' "$file" | sort -u || true)"
   while IFS= read -r dpl; do
@@ -767,18 +858,21 @@ render_workflow() {
 
 
 # --- find -------------------------------------------------------------------------------
-find_surfaces() { # ordered "label<TAB>root" sources (L2: libraries excluded by design)
-  printf 'cmd\t%s\n' "$TOOL/commands"
+find_surfaces() { # "<label>\t<root>" sources. Default (USER) domain: the command files +
+  # the root docs. Maintainer domain (-maintainer): entity/toolchain usage headers +
+  # tooling/docs. L2 libraries are never searched.
+  printf 'command\t%s/commands\n' "$TOOL"
+  printf 'doc\t%s/../docs\n' "$TOOL"
+  [ "${1:-user}" = maint ] || return 0
   printf 'script\t%s/scripts/entities\n' "$TOOL"
   printf 'script\t%s/scripts/toolchain\n' "$TOOL"
   printf 'tooling-doc\t%s/docs\n' "$TOOL"
-  printf 'doc\t%s/../docs\n' "$TOOL"
 }
 
 render_find() {
-  local json=0 a phrase
+  local json=0 mant=0 a phrase
   set -f
-  local -a args=(); for a in "$@"; do case "$a" in --json) json=1 ;; *) args=("${args[@]+"${args[@]}"}" "$a") ;; esac; done
+  local -a args=(); for a in "$@"; do case "$a" in --json) json=1 ;; --maintainer) mant=1 ;; *) args=("${args[@]+"${args[@]}"}" "$a") ;; esac; done
   set +f
   [ "${#args[@]}" -gt 0 ] || die "find: no search term -> fix: /pw-help find sign-off (one literal phrase)"
   phrase="${args[*]}"
@@ -789,7 +883,7 @@ render_find() {
     grep -rinF --include='*.sh' --include='*.md' -- "$phrase" "$root" 2>/dev/null \
       | sed -e "s|^|${label}@@|" >> "$hits" || true
   done <<EF
-$(find_surfaces)
+$(find_surfaces "$([ "$mant" = 1 ] && echo maint || echo user)")
 EF
   local total
   total="$(awk 'END{print NR+0}' "$hits")"
@@ -804,7 +898,7 @@ for line in open(root, encoding='utf-8', errors='replace'):
     rest = rest.rstrip('\n')
     path, ln, text = rest.split(':', 2)
     if path.startswith(home): path = path[len(home):]
-    out.append((surf, path, ln, text.strip()[:60]))
+    out.append((surf, path, ln, " ".join(text.split())))
 import json
 for surf, path, ln, text in out:
     print(f"{surf}\t{path}\t{ln}\t{text}")
@@ -822,10 +916,12 @@ PYNORM
     return 0
   elif [ "${total:-0}" = "0" ]; then
     echo "(no matches) - the term is one literal phrase; try a single word, or just /pw-help"
+    [ "$mant" = 1 ] || echo "  - this default search covers the command files + docs (for maintainers: add --maintainer to search the operator references, tooling docs, and script headers too)"
   else
     while IFS="$TABS" read -r surf pth ln txt; do
       n=$((n+1)); [ "$n" -le 20 ] || break
-      printf '  %-12s %s:%s  %s\n' "$(cutw 11 <<<"$surf")" "$pth" "$ln" "$(cutw 60 <<<"$txt")"
+      [ "$mant" = 1 ] || pth="${pth#tooling/}"
+      printf '  %-12s %s:%s  %s\n' "$surf" "$pth" "$ln" "$txt" | flowline 98
     done < "$norm"
     [ "$n" -le 20 ] || printf '  (%s more - narrow the phrase, or the how-to view: /pw-help command <name>)\n' "$((total-20))"
   fi
@@ -993,7 +1089,7 @@ render_project() {
     printed=1
     rvf="analysis/review/${rel#analysis/}"; rvf="${rvf%.md}.review.md"
     if [ -f "$d/$rvf" ]; then st="$(review_state "$slug" "$rvf")"; trow "$rel" "$rvf" "${st%%|*}" "${st##*|}"
-    else printf '  %-26s -> %s\n' "$(printf '%s' "$rel" | cutw 25)" "(review file missing - run: /pw-review $slug init-all)" | flowline 99; fi
+    else { printf '  %s -> %s\n' "$rel" "(review file missing - run: /pw-review $slug init-all)"; } | flowline 99; fi
   done
   if [ -n "$trevs" ]; then printed=1; printf '  %-26s -> %s\n' "task/T0n.md (x$(printf '%s' "$trevs" | wc -w | tr -d ' '))" "task/review/T0n.review.md" | flowline 99; fi
   [ "$printed" = 1 ] || echo "  (nothing in analysis/ or task/ yet - start with /pw-new or /pw-adopt)"
