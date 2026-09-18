@@ -12,8 +12,8 @@
 #   pw-rfc.sh comment-seen <slug> <thread-id> <reply-count> <solved:yes|no>
 #       per-thread upsert into META's ## Comment tracking (hidden keyed marker).
 #   pw-rfc.sh dashboard    <slug> <text...>      set the dashboard RFC: line.
-#   pw-rfc.sh comments     <slug>                list open threads + per-thread
-#       reply counts (was pw-rfc-comments.sh).
+#   pw-rfc.sh comments     <slug>
+#       list open threads + per-thread reply counts (was pw-rfc-comments.sh).
 #
 # Merged from pw-lib's rfc block + pw-rfc-comments.sh (plan 20). See
 # tooling/docs/rfc.md + rfc-backends.md.

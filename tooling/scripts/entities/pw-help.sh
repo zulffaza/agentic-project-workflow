@@ -133,7 +133,7 @@ para_of() {
       tryflush()
       if (txt != "") { buf=$2; txt="" } else buf = (buf=="" ? $2 : buf SUBSEP $2)
       next }
-    NF==0 { if (txt!="" && buf!="") { tryflush(); buf=""; txt="" } next }
+    NF==0 { if (buf!="" && txt!="") tryflush(); buf=""; txt=""; next }
     { if (buf!="" && !found) { sub(/^[ ]+/,""); txt = (txt=="" ? $0 : txt " " $0) } }
     END { tryflush() }' | head -1
 }
@@ -305,12 +305,22 @@ cmd_shape_line() {
 
 # token_use_clause <cmd> <tok> — the clause a "literally `<tok>`" definition line carries.
 token_use_clause() {
-  local line
-  line="$(grep -m1 -E "literally [$TF$BT]$2[$TF$BT]" "$CMDS/$1.md" || true)"
-  [ -n "$line" ] || return 1
-  printf '%s' "$line" | sed -E -e "s/.*literally [$TF$BT]$2[$TF$BT][^a-zA-Z]*//" -e 's/[.,:].*//' -e 's/^[ ]+//' | head -1
+  # the blurb = the line where "literally <tok>" appears, JOINED with its wrapped
+  # continuation lines (command-file paragraphs wrap mid-sentence), then cut at the
+  # first sentence terminator after the token marker.
+  local n para out
+  n="$(grep -m1 -nE "literally [$TF$BT]$2[$TF$BT]" "$CMDS/$1.md" | cut -d: -f1)" || return 1
+  [ -n "$n" ] || return 1
+  para="$(awk -v n="$n" 'NR == n { p = $0; ok = 1; next }
+      ok && /^[[:space:]]*$/ { exit }
+      ok && /^([-*] |[0-9]+[.)] |#|> |[|]{3})/ { exit }
+      ok && (p != "") { p = p " " $0; next }
+      END { print p }' "$CMDS/$1.md")"
+  [ -n "$para" ] || return 1
+  out="$(printf '%s' "$para" | sed -E -e "s/.*literally [$TF$BT]$2[$TF$BT][^a-zA-Z]*//" -e 's/[.,;:].*//' -e 's/^[ ]+//')"
+  [ -n "$out" ] || return 1
+  printf '%s' "$out"
 }
-
 # r2_alias <cmd> <tok> — "script<TAB>op" for a sugar token: the first REAL script
 # operator invoked from the token\'s bullet block (<=9 lines under the shape).
 r2_alias() {

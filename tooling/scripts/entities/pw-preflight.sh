@@ -2,16 +2,24 @@
 # ============================================================================
 # pw-preflight.sh — gate validation before expensive agent invocations
 #
-#   pw-preflight.sh analyze   <slug>         phase legal + context/ inputs exist
-#   pw-preflight.sh execute   <slug>         check PLAN review gate, phase, scope
-#   pw-preflight.sh breakdown <slug>         check analysis review gates, RFC
-#   pw-preflight.sh ship      <slug>         check shippable tasks, verify
-#   pw-preflight.sh comments  <slug>         check ≥1 task has a linked MR (comment push)
-#   pw-preflight.sh close     <slug>         check all tasks accepted
-#   pw-preflight.sh review    <slug> [phase] check review files exist
+#   pw-preflight.sh analyze     <slug>
+#       phase legal + context/ inputs exist
+#   pw-preflight.sh execute     <slug>
+#       check PLAN review gate, phase, scope
+#   pw-preflight.sh breakdown   <slug>
+#       check analysis review gates, RFC
+#   pw-preflight.sh ship        <slug>
+#       check shippable tasks, verify
+#   pw-preflight.sh comments    <slug>
+#       check ≥1 task has a linked MR (comment push)
+#   pw-preflight.sh close       <slug>
+#       check all tasks accepted
+#   pw-preflight.sh review      <slug> [phase]
+#       check review files exist
 #
-# Every failure names the concrete next action ("→ fix: …"), so a blocked
-# command is never a dead end. Exit 0 + silent on success; exit 1 + message else.
+# Exit 0 + silent on success; exit 1 + message naming the concrete blocker
+# otherwise — the command files carry the recovery actions (every blocked step
+# in /pw-* says "→ fix: …" in prose).
 # ============================================================================
 set -euo pipefail
 
