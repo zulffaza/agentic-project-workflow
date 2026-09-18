@@ -1114,12 +1114,13 @@ EOF
 if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then usage; exit 0; fi
 
 op0="${1:-overview}"
+(( $# > 0 )) && shift || true   # bare /pw-help: $#=0 must not trip set -e on shift
 case "$op0" in
-  overview)   shift; render_overview "$@" ;;
-  command)    shift; render_command "$@" ;;
-  project)    shift; render_project "$@" ;;
-  operators) shift; render_operators "$@" ;;
-  find)       shift; render_find "$@" ;;
-  workflow)  shift; render_workflow "$@" ;;
+  overview)   render_overview "$@" ;;
+  command)    render_command "$@" ;;
+  project)    render_project "$@" ;;
+  operators)  render_operators "$@" ;;
+  find)       render_find "$@" ;;
+  workflow)   render_workflow "$@" ;;
   *)         usage >&2; die "unknown operator: $op0 → fix: bare /pw-help lists every command" ;;
 esac

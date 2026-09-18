@@ -54,6 +54,11 @@ pwtest_re 'SPECIAL' "facet block included (S1b)"
 pwtest_re 'auto-signoff' "never-commanded SPECIAL op surfaces via operators"
 pwtest_rc 0 "operators single op" "$C" operators pw-review count
 pwtest_re 'open=' "single-op deep-dive body"
+
+# BARE invocation (the documented default view) must render the overview with rc 0 —
+# regression: with $#=0 the dispatcher's shift tripped set -e (silent exit 1).
+"pwtest_rc" 0 "bare /pw-help exits 0" "$C"
+"pwtest_re" 'commands [+] operators' "bare /pw-help renders the overview"
 # `review` IS an operator (pw-preflight.sh) — the multi-script operators view must show it too.
 pwtest_rc 0 "op resolves across the command's referenced scripts" "$C" operators pw-review review
 pwtest_re 'pw-preflight.sh :: review' "cross-script op attribution names the owning script"
