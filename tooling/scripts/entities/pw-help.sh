@@ -10,6 +10,15 @@
 #       command-level sugar operators). Rendered live from command frontmatter
 #       + script usage headers — zero maintained snapshot. Includes pw-help.
 #
+#   pw-help.sh command    <name> [<slug>] [--full|--json]
+#       The how-to manual for one command: per-operator blocks (Use when / Does /
+#       Shape / doctrine labels / runnable example line) lifted from the command
+#       file's own bullets + the entity's usage-header paragraphs, the entity and
+#       toolchain scripts with their S1b facet-grouped operator sigs, doc
+#       pointers, and the frontmatter summary. With <slug> the invocation slots
+#       show that slug. --full renders the entire command file (placeholders
+#       substituted) for the rare reader that needs the doctrine verbatim.
+#
 #   pw-help.sh operators  <name> [<operator>]
 #       Deepest level. The name slot resolves a command name, a bare name
 #       (pw- prefix added), or an entity/toolchain script basename — library
@@ -67,24 +76,24 @@ fmof() {
     NR==1 && $0=="---" {infm=1; next}
     infm && $0=="---" {exit}
     infm { if ($0 ~ "^"k":") { sub("^"k":[ \t]*",""); print; exit } }
-  ' "$1"
+  ' "$1" | sed -e "s/^[\"']//" -e "s/[\"']$//"
 }
 
 # hdr_lines <script> — usage-header block (between the "# ====" rules), decommented
 # with leading spaces stripped so operator signatures anchor at column 1.
 hdr_lines() {
-  awk '/^# =+$/{c++; next} c==1 {if (/^#/) {sub(/^#[ ]*/,""); print}} c>=2{exit}' "$1"
+  awk '/^# =+$/{c++; next} c==1 {if (/^#/) {sub(/^# ?/,""); print}} c>=2{exit}' "$1"
 }
 
 # ops_of <script> — operator names from "pw-<s>.sh <op>  <args>" usage-header signatures.
 ops_of() {
-  hdr_lines "$1" | awk '/^pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*([ ]|$)/{print $2}'
+  hdr_lines "$1" | awk '/^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*([ ]|$)/{print $2}'
 }
 
 # sig_of <script> <op> — argument string from the operator's usage-header signature.
 sig_of() {
   hdr_lines "$1" | awk -v op="$2" '
-    $0 ~ "^pw-[a-z0-9-]+\\.sh +"op"([ ]|$)" { sub(/^pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*[ ]+/, ""); print; exit }'
+    $0 ~ "^  pw-[a-z0-9-]+\\.sh +"op"([ ]|$)" { sub(/^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*[ ]+/, ""); print; exit }'
 }
 
 # para_of <script> <op> — the operator\'s usage-header paragraph, joined to one line.
@@ -94,12 +103,12 @@ para_of() {
       if (buf=="") return
       if (txt != "" && index(SUBSEP buf SUBSEP, SUBSEP op SUBSEP)) { printf "%s\n", txt; found=1; exit }
     }
-    /^pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*([ ]|$)/ {
+    /^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*([ ]|$)/ {
       tryflush()
       if (txt != "") { buf=$2; txt="" } else buf = (buf=="" ? $2 : buf SUBSEP $2)
       next }
     NF==0 { if (txt!="" && buf!="") { tryflush(); buf=""; txt="" } next }
-    { if (buf!="" && !found) txt = (txt=="" ? $0 : txt " " $0) }
+    { if (buf!="" && !found) { sub(/^[ ]+/,""); txt = (txt=="" ? $0 : txt " " $0) } }
     END { tryflush() }' | head -1
 }
 
@@ -178,9 +187,19 @@ scripts_of() {
 #       already listed — command-level sugar (ai/config/item) whose script partner
 #       carries a different op name (config ↔ pw-config.sh ai-review; item ↔ add-item).
 selector_tokens() {
-  printf '%s' "$1" | grep -oE '<[^<>]*\|[^<>]*>|\[[^][]*\|[^]]*\]' | tr -d '<>[]' \
-    | tr '|' '\n' | sed -e 's/^[ ]*//' -e 's/[ ].*//' | grep -E '^[a-z][a-z0-9-]*$' | sort
+  printf '%s' "$1" | awk '{
+    s=$0; depth=0; in1=0; seg=""
+    for (i=1; i<=length(s); i++) { c=substr(s,i,1)
+      if (c=="[" || c=="<") { depth++; if (depth==1) { in1=1; continue } }
+      if (c=="]" || c==">") { if (depth==1) { if (in1 && index(seg,"|")>0) found = found seg "\n"; in1=0; seg="" }; if (depth>0) depth--; continue }
+      if (in1 && depth==1) seg = seg c
+    }
+    if (found != "") { n=split(found, G, "\n"); for (k=1; k<=n; k++) { if (G[k]=="") continue; m=split(G[k], P, "|");
+        for (q=1; q<=m; q++) { t=P[q]; sub(/^[ ]+/,"",t); sub(/[ ].*$/,"",t); if (t ~ /^[a-z][a-z0-9-]*$/) print t } } }
+  }' | sort
 }
+
+
 
 # has_shape <cmd> <tok> — token appears in a real invocation span: the slash form
 # `/pw-<cmd> <slug> <tok>` or a "literally `<tok>`" operator definition sentence.
@@ -251,27 +270,34 @@ EPAIRS
 
 # ops_surfaced <cmd> — rendered operator lines: "name<TAB>args<TAB>use<TAB>facet".
 ops_surfaced() {
-  local cmd="$1" text script sp op seen="$TABS" tok ali ascript aop args use fac alias_use alias_fac alias_f
+  local cmd="$1" text script sp op seen="$TABS" tok ali ascript aop args use fac alias_use alias_fac alias_f first_arg_flow shape_ok
   text="$(cat "$CMDS/$cmd.md")"
+  case "$(fmof "$CMDS/$cmd.md" args)" in \[*|\"[\"]*) first_arg_flow=1 ;; *) first_arg_flow="" ;; esac
   # R1: real script operators whose command-form span exists.
   for script in $(own_first "$cmd" $(scripts_of "$cmd")); do
     sp="$(script_path "$script" 2>/dev/null || true)" || continue
     [ -n "$sp" ] || continue
     for op in $(ops_of "$sp"); do
       case "$seen" in *"$TABS$op$TABS"*) continue ;; esac
-      has_shape "$cmd" "$op" || continue
+      has_shape "$cmd" "$op" && : || { [ -n "$first_arg_flow" ] || continue
+        case "$text" in *"/$cmd $op "*|*"/$cmd $op$BT"*) : ;; *) continue ;; esac; }
       seen="$seen$op$TABS"
       args="$(cmd_shape_line "$cmd" "$op")"
       [ -n "$args" ] || args="$op $(sig_of "$sp" "$op")"
       use="$(gist "$(para_of "$sp" "$op")")"
       fac="$(facet_of "$sp" "$op")"
-      printf '%s\t%s\t%s\t%s\n' "$op" "$args" "${use:-see: /pw-help operators $cmd}" "$fac"
+      printf '%s\t%s\t%s\t%s\t%s\n' "$op" "$args" "${use:-see: /pw-help operators $cmd}" "$fac" "${script}"
     done
   done
   # R2: frontmatter selector sugar ops (ai/config/item...) not already listed.
   for tok in $(selector_tokens "$(fmof "$CMDS/$cmd.md" args)"); do
     case "$seen" in *"$TABS$tok$TABS"*) continue ;; esac
-    has_shape "$cmd" "$tok" || continue
+    shape_ok=""
+    has_shape "$cmd" "$tok" && shape_ok=1
+    if [ -z "$shape_ok" ] && [ -n "$first_arg_flow" ]; then
+      case "$text" in *"/$cmd $tok "*|*"/$cmd $tok$BT"*) shape_ok=1 ;; esac
+    fi
+    [ -n "$shape_ok" ] || continue
     seen="$seen$tok$TABS"
     args="$(cmd_shape_line "$cmd" "$tok")"; [ -n "$args" ] || args="$tok"
     use=""; fac=""
@@ -284,7 +310,7 @@ ops_surfaced() {
       fi
     fi
     [ -n "$use" ] || use="$(token_use_clause "$cmd" "$tok" 2>/dev/null || true)"
-    printf '%s\t%s\t%s\t%s\n' "$tok" "$args" "${use:-see: /pw-help operators $cmd}" "$fac"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$tok" "$args" "${use:-see: /pw-help operators $cmd}" "$fac" "${ascript:-$cmd.sh}"
   done
   return 0
 }
@@ -369,7 +395,7 @@ render_overview() {
           jfa="$(printf '{"write":[%s],"read":[%s],"special":[%s]}' "$jfw" "$jfr" "$jfs")"
         fi
         jop=""
-        while IFS="$TABS" read -r jon jon2 jou jou2; do
+        while IFS="$TABS" read -r jon jon2 jou jou2 jon5; do
           [ -n "$jon" ] || continue
           jop="$jop$jonsep{\"name\":\"$(jstr "$jon")\",\"use\":\"$(jstr "$jou")\",\"facet\":\"$(jstr "$jou2")\"}"
           jonsep=", "
@@ -383,7 +409,7 @@ EOPS
       fi
       if [ -n "$ops_lines" ] && has_default "$cmd"; then dflt="(default)"; else dflt=""; fi
       printf '  %-13s %-30s %-9s - %s\n' "/pw-${cmd#pw-}" "$(printf '%s' "$args" | cutw 29)" "$dflt" "$(printf '%s' "$(gist "$desc")" | cutw 40)"
-      while IFS="$TABS" read -r op bargs buse bfac; do
+      while IFS="$TABS" read -r op bargs buse bfac bscript; do
         [ -n "$op" ] || continue
         printf '  %-13s %-30s %-9s - %s\n' "" "$(printf '%s' "$bargs" | cutw 29)" \
           "$( [ -n "$bfac" ] && printf '(%s)' "$bfac" | cutw 8 )" "$(printf '%s' "$buse" | cutw 40)"
@@ -395,6 +421,117 @@ EOPS
   done
   IFS="$saveIFS"
   if [ "$json" = 1 ]; then printf '\n]\n'; else stamp; fi
+}
+
+# --- command how-to --------------------------------------------------------------------
+# cmd_block <cmd> <tok> — the bullet block a command file carries for a token
+# (its own shape line through the next bullet / heading), markdown included —
+# the human-facing prose is lifted verbatim, never re-written.
+cmd_block() {
+  local cmd="$1" tok="$2" ln
+  ln="$(grep -m1 -n -E "/$cmd[ ]+(<project-slug>|<slug>)[ ]$tok([ ]|$TF|$BT|[^A-Za-z0-9-])|^If the 2nd argument is literally [$TF$BT]$tok[$TF$BT]" "$CMDS/$cmd.md" 2>/dev/null | cut -d: -f1 || true)"
+  [ -n "$ln" ] || return 0
+  awk -v from="$ln" 'NR<from{next} NR>from && (/^- \*\*/ || /^## / || /^[0-9]+\. \*\*/){exit} NR>=from{print}' "$CMDS/$cmd.md"
+}
+
+strip_md() { sed -e 's/\*\*//g' -e 's/\*//g' -e 's/`//g' -e 's/^[ >-]\{1,3\}//' -e 's/^[[:space:]]*//'; }
+
+render_command() {
+  [ $# -ge 1 ] || die "usage: command <name> [<slug>] [--full|--json] → fix: bare /pw-help lists every command"
+  local name slug="" flags="" a full=0 json=0
+  name="$1"; shift
+  for a in "$@"; do
+    case "$a" in
+      --full) full=1 ;;
+      --json) json=1 ;;
+      -*) flags="$flags $a" ;;
+      *) [ -n "$name" ] && slug="$a" || name="$a" ;;
+    esac
+  done
+  local c; c="$(canon "$name")"
+  local file="$CMDS/$c.md"
+  [ -f "$file" ] || die "no such command: $(canon "$name") → fix: $(did_you_mean "$c")"
+  local desc args agn
+  desc="$(fmof "$file" description)"; args="$(fmof "$file" args)"; agn="$(fmof "$file" agent)"
+
+  if [ "$full" = 1 ]; then
+    awk 'c==2{print} $0=="---"{c++}' "$file" | sub
+    return 0
+  fi
+
+  local ops_lines; ops_lines="$(ops_surfaced "$c")"
+  if [ "$json" = 1 ]; then
+    local o_name o_args o_use o_fac bloc jops="" sep=""
+    while IFS="$TABS" read -r o_name o_args o_use o_fac; do
+      [ -n "$o_name" ] || continue
+      jops="$jops$sep{\"name\":\"$(jstr "$o_name")\",\"args\":\"$(jstr "$o_args")\",\"use\":\"$(jstr "$o_use")\",\"facet\":\"$(jstr "$o_fac")\"}"
+      sep=", "
+    done <<E
+$ops_lines
+E
+    printf '{"cmd":"%s","args":"%s","summary":"%s","agent":%s,"ops":[%s],"scripts":[%s]}
+' \
+      "$(jstr "$c")" "$(jstr "$args")" "$(jstr "$desc")" \
+      "$( [ -n "$agn" ] && printf '"%s"' "$(jstr "$agn")" || printf 'null' )" \
+      "$jops" "$(scripts_of "$c" | sed 's/.*/"&"/' | paste -sd, - )"
+    return 0
+  fi
+
+  echo "/pw-${c#pw-} — $desc"
+  echo "args: $args"
+  [ -n "$agn" ] && echo "agent lane: $agn"
+  [ -n "$slug" ] && echo "project: $slug"
+  echo
+  # (default) flow line — args with the operator-selector group removed, slug-filled.
+  if has_default "$c"; then
+    local dargs
+    dargs="$(printf '%s' "$args" | sed -E -e 's/<[^<>]*\|[^<>]*>//g' -e 's/\[[^][]*\|[^][]*\]//g' -e 's/  +/ /g' -e 's/[ ;.]+$//')"
+    dargs="${dargs#<project-slug> }"; dargs="${dargs#<slug> }"
+    printf '  (default)  /pw-%s %s %s\n' "${c#pw-}" "${slug:-<project-slug>}" "$dargs"
+    printf '    Use:     the no-operator default flow - see the args line above\n'
+  fi
+  local bname bargs buse bfac bscript sp2 par usep
+  while IFS="$TABS" read -r bname bargs buse bfac bscript; do
+    [ -n "$bname" ] || continue
+    printf '  %s  %s\n' "$(printf '%-11s' "$bname")" "$(printf '%s' "${bargs#$bname }" | cutw 68)"
+    # The command file's OWN bullet prose = use-when behavior; the script paragraph = Does.
+    local bloc
+    bloc="$(cmd_block "$c" "$bname" | strip_md | sub)"
+    # the human prose = block text after the first em-dash (the mapping arrow prefix
+    # ends in "—"); joined, collapsed.
+    usep="$(printf '%s' "$bloc" | awk '{ s=s $0 " " } END { i=index(s,"—"); if (i) { s=substr(s,i); sub(/^—/,"",s) }; gsub(/[ ]+/," ",s); sub(/^ /,"",s); sub(/ $/,"",s); print s }')"
+    sp2="$(script_path "$bscript" 2>/dev/null || true)"
+    par=""; [ -n "$sp2" ] && par="$(para_of "$sp2" "$bname")"
+    [ -n "$par" ] || par="$buse"
+    if [ -n "$usep" ] && [ "$usep" != "$par" ]; then
+      printf '%s\n' "$usep" | fold -s -w 90 | sed 's/^/    Use when: /' | head -6
+    fi
+    printf '%s\n' "$par" | fold -s -w 90 | sed 's/^/    Does:   /' | head -6
+    printf '%s\n' "$bloc" | awk '/DOCTRINE|HUMAN-TRIGGERED ONLY/{print "    " $0}' | head -2 | cutw 96 || true
+    { printf '%s\n' "$bloc" | grep -oE 'A[12] [a-zA-Z][^`)”]*' | head -1 | sed 's/^/    Shape:  /' | cutw 96; } || true
+    printf '    $ %s\n' "$(cutw 90 <<<"/pw-${c#pw-} ${slug:-<project-slug>} $bargs" | sed -e 's/[ ]*$//')"
+  done <<E
+$ops_lines
+E
+  [ -n "$ops_lines" ] || printf '  (single flow - no operator dispatch on this command)\n'
+  echo
+  local script sp nops
+  for script in $(own_first "$c" $(scripts_of "$c")); do
+    sp="$(script_path "$script" 2>/dev/null || true)"; [ -n "$sp" ] || continue
+    nops="$(ops_of "$sp" | wc -l | tr -d ' ')"
+    echo "entity script: ${sp#$PW_HOME/} ($nops operators — read all: /pw-help operators ${script%.sh})"
+    facets_map "$sp" | awk -F'\t' '{ facet_of[$2]=$1 } END { }' >/dev/null
+    while IFS= read -r o; do
+      [ -n "$o" ] || continue
+      f="$(facet_of "$sp" "$o")"
+      printf '    %-8s %-26s %s\n' "$f" "$o" "$(sig_of "$sp" "$o" | cutw 50)"
+    done <<EO
+$(ops_of "$sp")
+EO
+  done
+  grep -oE '(tooling/)?docs/[A-Za-z0-9._/-]+\.md' "$file" | sort -u | sed 's|^|doc: |'
+  grep -qF 'mechanical mapping (C3)' "$file" && echo "doctrine: mechanical mapping (C3) — the script is the single judgment point."
+  stamp
 }
 
 # --- operators (deep dump) --------------------------------------------------------------
@@ -480,6 +617,7 @@ usage() {
 usage: pw-help.sh <operator> [args] [--json]
 
   overview                    one line per command and per exposed operator
+  command <name> [<slug>]     how-to manual for one command (--full = verbatim file)
   operators <name> [<op>]     verbatim usage-header dump (or one operator deep-dive)
   workflow                    the phase spine with gates
   --selftest                  run the isolated harness case
@@ -490,7 +628,8 @@ if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then usage; exit 0; fi
 
 op0="${1:-overview}"
 case "$op0" in
-  overview)  shift; render_overview "$@" ;;
+  overview)   shift; render_overview "$@" ;;
+  command)    shift; render_command "$@" ;;
   operators) shift; render_operators "$@" ;;
   workflow)  shift; render_workflow "$@" ;;
   *)         usage >&2; die "unknown operator: $op0 → fix: bare /pw-help lists every command" ;;

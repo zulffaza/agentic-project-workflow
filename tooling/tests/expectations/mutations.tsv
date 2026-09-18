@@ -54,3 +54,5 @@ C40-doctor-orphan-check-disabled	pw-doctor.sh	corph="$corph $(basename "$inst")"
 C46-operator-cross-attribution	skill/project-workflow/references/conventions-and-gotchas.md	`pw-status.sh adopted <slug> "<pointer>"`	`pw-context.sh adopted <slug> "<pointer>"`	T4	-
 C31-frontmatter-derivation-canned	pw-help.sh	      desc="$(fmof "$file" description)"; args="$(fmof "$file" args)"	      desc="Scaffold a new agentic-workflow project"; args="canned-args"	T1	pw-help
 C35-phase-map-drops-a-command	pw-help.sh	executing|pw-execute pw-verify pw-sync	executing|pw-execute pw-sync	T4	-
+C33-path-substitution-dead	pw-help.sh	sub() { sed -e "s|{{PW_HOME}}|$PW_HOME|g" -e "s|{{PW_PROJECTS}}|$PW_PROJECTS|g"; }	sub() { cat; }	T1	pw-help
+C34-C4-echo-dropped-from-renderer	pw-help.sh	awk '/DOCTRINE|HUMAN-TRIGGERED ONLY/{print	awk '/DOCTRINE/{print	T1	pw-help

@@ -62,6 +62,38 @@ pwtest_err 'no such command or script: pw-revieww' "refusal echoes the FULL cano
 pwtest_err 'did you mean "pw-review"\?' "did-you-mean names the full form (S8)"
 pwtest_fix "unknown operators → fix hint"
 
+# 5b) command <name> how-to (phase 2)
+pwtest_rc 0 "command how-to renders" "$C" command pw-context
+pwtest_re 'Does:' "per-op Does lines"
+grep -A3 'req-init' "$PWTEST_OUT" | grep -q 'Use when:' && pwtest_ok "req-init block carries command-file prose" || pwtest_bad "Use when for req-init" "missing"
+grep -qE '^    \$ /pw-context <project-slug> add-input' "$PWTEST_OUT" && pwtest_ok "runnable example line, full canonical name" || pwtest_bad "example line" "$(grep -E '^    \$' "$PWTEST_OUT" | head -2)"
+grep -qE '\$ /[^p]' "$PWTEST_OUT" && pwtest_bad "full-name rendering" "short-form example leaked: $(grep -oE '\$ /[^ ]*' "$PWTEST_OUT"|head -1)" || pwtest_ok "full-name rendering (examples never short-form)"
+grep -q '{{PW_' "$PWTEST_OUT" && pwtest_bad "no {{PW_ leak (command)" "found" || pwtest_ok "no {{PW_ leak (command)"
+pwtest_rc 0 "command with slug fills slots" "$C" command pw-context myproj
+pwtest_re '\$ /pw-context myproj req-init' "slug substitution in examples"
+# C4 doctrine echo (guard the bypass surface): the label must reach the command view verbatim.
+pwtest_rc 0 "command view of the gate command" "$C" command pw-review
+grep -qF 'HUMAN-TRIGGERED ONLY (C4)' "$PWTEST_OUT" && pwtest_ok "C4 doctrine line present (C34 catcher)" || pwtest_bad "C4 doctrine line" "command pw-review lost the HUMAN-TRIGGERED ONLY (C4) echo"
+pwtest_re 'auto-signoff' "SPECIAL path mentioned in the review command view"
+pwtest_re 'entity script: tooling/scripts/entities/pw-review\.sh' "own script section"
+pwtest_re '16 operators' "script operator count (read all hint, full name)"
+pwtest_rc 0 "command --full renders the file" "$C" command pw-context --full
+grep -qF '{{PW_' "$PWTEST_OUT" && pwtest_bad "no {{PW_ leak (--full)" "the sub() helper died — placeholders surfaced" || pwtest_ok "no {{PW_ leak (--full)"
+grep -qF 'A2 flag-segment' "$PWTEST_OUT" && pwtest_ok "--full carries doctrine prose" || pwtest_bad "--full content" "body missing"
+pwtest_rc 2 "unknown command name: revieww" "$C" command revieww
+pwtest_err 'no such command: pw-revieww' "refusal echoes the canonical form"
+pwtest_err 'did you mean "pw-review"\?' "did-you-mean full form on command too"
+pwtest_rc 0 "command --json" "$C" command pw-context --json
+python3 - "$PWTEST_OUT" <<'PYJ' && pwtest_ok "command json: ops[] with args/use/facet" || pwtest_bad "command json" "schema"
+import json,sys
+d=json.load(open(sys.argv[1]))
+assert d["cmd"]=="pw-context"
+names={o["name"] for o in d["ops"]}
+assert {"req-init","add-input","add-repo"} <= names
+assert all({"name","args","use","facet"} <= set(o) for o in d["ops"])
+assert "pw-context.sh" in d["scripts"]
+PYJ
+
 # 6) --json contracts
 pwtest_rc 0 "overview --json parses (python, stable keys)" "$C" overview --json
 python3 - "$PWTEST_OUT" <<'PY' && pwtest_ok "json shape: 16 cmds, ops[], facets on pw-review, keys stable" || pwtest_bad "json shape" "schema violation"
