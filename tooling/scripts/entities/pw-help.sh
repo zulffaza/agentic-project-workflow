@@ -246,6 +246,19 @@ cutw() {
   return 0
 }
 
+# cutww <width> — word-aware column cap: trims to the last whole word and marks
+# the cut with "..." instead of severing mid-word like cutw (never emits past n).
+cutww() {
+  awk -v n="$1" '{
+    if (length($0) <= n) { print; exit }
+    c = substr($0, 1, n - 3)
+    if (c ~ / /) { sub(/[^ ]* *$/, "", c) }
+    sub(/[ ]+$/, "", c)
+    print c "..."
+  }' | iconv -f UTF-8 -t UTF-8 -c
+  return 0
+}
+
 # cmd_shape_line <cmd> <tok> — the user-typed invocation args: token through the
 # span-closing backtick/quote of the first command-form shape, else empty.
 cmd_shape_line() {
@@ -431,11 +444,11 @@ EOPS
         continue
       fi
       if [ -n "$ops_lines" ] && has_default "$cmd"; then dflt="(default)"; else dflt=""; fi
-      printf '  %-13s %-30s %-9s - %s\n' "/pw-${cmd#pw-}" "$(printf '%s' "$args" | cutw 29)" "$dflt" "$(printf '%s' "$(gist "$desc")" | cutw 40)"
+      printf '  %-13s %-29s %-12s - %s\n' "/pw-${cmd#pw-}" "$(printf '%s' "$args" | cutww 29)" "$dflt" "$(printf '%s' "$(gist "$desc")" | cutww 36)"
       while IFS="$TABS" read -r op bargs buse bfac bscript; do
         [ -n "$op" ] || continue
-        printf '  %-13s %-30s %-9s - %s\n' "" "$(printf '%s' "$bargs" | cutw 29)" \
-          "$( [ -n "$bfac" ] && printf '(%s)' "$bfac" | cutw 8 )" "$(printf '%s' "$buse" | cutw 40)"
+        printf '  %-43s %-12s - %s\n' "$(printf '                %s' "$(printf '%s' "$bargs" | cutww 27)")" \
+          "$( [ -n "$bfac" ] && printf '(%s)' "$(printf '%s' "${bfac%.sh}" | cutww 12)" )" "$(printf '%s' "$buse" | cutww 37)"
       done <<EOPS
 $ops_lines
 EOPS
