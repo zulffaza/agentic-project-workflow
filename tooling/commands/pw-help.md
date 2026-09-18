@@ -9,7 +9,10 @@ operator's optional slug slot.)
 
 **This command is a mechanical mapping (C3): run the script and show its output verbatim. No
 judgment, no doc reading — help renders from the live sources (command frontmatter, script
-usage headers, the phase map), so its answer can never be a stale snapshot.**
+usage headers, the phase map), so its answer can never be a stale snapshot. The script's output
+IS your reply: paste it into a fenced code block in your response — never paraphrase, re-wrap,
+summarize, decorate it, or refer to it as "the output above" (a code block preserves the
+renderer's columns and ASCII alignment exactly as emitted).**
 
 The operators:
 
