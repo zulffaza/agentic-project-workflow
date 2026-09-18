@@ -84,8 +84,10 @@ pwtest_re '\$ /pw-context myproj req-init' "slug substitution in examples"
 pwtest_rc 0 "command view of the gate command" "$C" command pw-review
 grep -qF 'HUMAN-TRIGGERED ONLY (C4)' "$PWTEST_OUT" && pwtest_ok "C4 doctrine line present (C34 catcher)" || pwtest_bad "C4 doctrine line" "command pw-review lost the HUMAN-TRIGGERED ONLY (C4) echo"
 pwtest_re 'auto-signoff' "SPECIAL path mentioned in the review command view"
-pwtest_re 'entity script: tooling/scripts/entities/pw-review\.sh' "own script section"
-pwtest_re '16 operators' "script operator count (read all hint, full name)"
+grep -qF 'tooling/scripts/entities/' "$PWTEST_OUT" && pwtest_bad "user view leaks entity scripts" "internal paths in default command view" || pwtest_ok "user view: no internal paths"
+pwtest_rc 0 "maintainer command view" "$C" command pw-review --maintainer
+pwtest_re 'entity script: tooling/scripts/entities/pw-review\.sh' "own script section (maintainer view)"
+pwtest_re '16 operators' "operator count in maintainer view (full name)"
 pwtest_rc 0 "command --full renders the file" "$C" command pw-context --full
 grep -qF '{{PW_' "$PWTEST_OUT" && pwtest_bad "no {{PW_ leak (--full)" "the sub() helper died — placeholders surfaced" || pwtest_ok "no {{PW_ leak (--full)"
 grep -qF 'A2 flag-segment' "$PWTEST_OUT" && pwtest_ok "--full carries doctrine prose" || pwtest_bad "--full content" "body missing"

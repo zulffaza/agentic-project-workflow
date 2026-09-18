@@ -1,6 +1,6 @@
 ---
 description: One discovery surface for the whole tooling - what commands/operators exist, how to invoke them, and what applies to a project right now (overview, per-command how-to, operator dumps, phase spine, literal-term search)
-args: '[overview | command <name> [<slug>] [--full|--json] | operators <name> [<operator>] | project <slug> [<name>] | workflow | find <term>] [--json]'
+args: '[overview | command <name> [<slug>] [--full|--json|--maintainer] | operators <name> [<operator>] | project <slug> [<name>] | workflow | find <term>] [--json]'
 ---
 The leading group in `args` is the operator; a bare `/pw-help` shows the overview. (`/pw-help`
 is the documented C1 exception where the first argument is the operator, not the slug — help's
@@ -21,7 +21,10 @@ The operators:
 - **`/pw-help command <name> [<slug>]`** → `{{PW_HOME}}/tooling/scripts/entities/pw-help.sh
   command <name> [<slug>]` — the how-to manual for one command: per-operator Use-when / Does /
   Shape / doctrine / runnable-example blocks lifted from the command file and the entity
-  script's usage header, the facet-grouped operator signatures, and doc pointers. `--full`
+  script's usage header, plus user-surface doc pointers. The default human view is command
+  surface only — end-user safe. `--maintainer` adds the entity-script sections (paths +
+  operator signatures) and tooling/docs pointers; `operators <name>` stays the explicit deep
+  dump. `--full`
   prints the whole (substituted) command file; `--json` the machine shape.
 - **`/pw-help operators <name> [<operator>]`** → `{{PW_HOME}}/tooling/scripts/entities/pw-help.sh
   operators <name> [<operator>]` (args pass through verbatim) — the usage-header dump for the

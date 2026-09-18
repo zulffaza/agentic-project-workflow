@@ -15,7 +15,9 @@
 #       Shape / doctrine labels / runnable example line) lifted from the command
 #       file's own bullets + the entity's usage-header paragraphs, the entity and
 #       toolchain scripts with their S1b facet-grouped operator sigs, doc
-#       pointers, and the frontmatter summary. With <slug> the invocation slots
+#       pointers, and the frontmatter summary. --maintainer adds the entity-script
+#       sections (paths + operator signatures) and tooling/docs pointers — the user
+#       view is command surface only. With <slug> the invocation slots
 #       show that slug. --full renders the entire command file (placeholders
 #       substituted) for the rare reader that needs the doctrine verbatim.
 #
@@ -375,6 +377,7 @@ ov_wrap() {
 # marked "+ ". Nothing is cut, nothing is ellipsized — it just flows.
 ov_emit() {
   local lbl="$1" tag="$2" args="$3" use="$4" line
+  case "$tag" in write|read|special|lifecycle) tag="($tag)" ;; '(default)'|""|"(sugar)") : ;; *) tag="" ;; esac
   line="$(printf '  %-13s %-29s %-13s- %s\n' "$lbl" "$args" "${tag:+$tag }" "$use")"
   if printf '%s' "$line" | awk -v n=98 'length($0)<=n{exit 0} {exit 1}' \
      && printf '%s' "$args" | awk -v n=29 'length($0)<=n{exit 0} {exit 1}'; then
@@ -533,7 +536,7 @@ EOPS
       ov_emit "/pw-${cmd#pw-}" "$dflt" "$args" "$(gist "$desc")"
       while IFS="$TABS" read -r op bargs buse bfac bscript; do
         [ -n "$op" ] || continue
-        ov_emit "" "$( [ -n "$bfac" ] && printf '(%s)' "${bfac%.sh}" )" "$bargs" "$buse"
+        ov_emit "" "$bfac" "$bargs" "$buse"
         done <<EOPS
 $ops_lines
 EOPS
@@ -559,12 +562,13 @@ strip_md() { sed -e 's/\*\*//g' -e 's/\*//g' -e 's/`//g' -e 's/^[ >-]\{1,3\}//' 
 
 render_command() {
   [ $# -ge 1 ] || die "usage: command <name> [<slug>] [--full|--json] → fix: bare /pw-help lists every command"
-  local name slug="" flags="" a full=0 json=0
+  local name slug="" flags="" a full=0 json=0 mant=0
   name="$1"; shift
   for a in "$@"; do
     case "$a" in
       --full) full=1 ;;
       --json) json=1 ;;
+      --maintainer) mant=1 ;;
       -*) flags="$flags $a" ;;
       *) [ -n "$name" ] && slug="$a" || name="$a" ;;
     esac
@@ -617,10 +621,10 @@ E
     printf '  %s  %s\n' "$(printf '%-11s' "$bname")" "${bargs#$bname }" | flowline 98
     # The command file's OWN bullet prose = use-when behavior; the script paragraph = Does.
     local bloc
-    bloc="$(cmd_block "$c" "$bname" | strip_md | sub | awk '/^[ \t]*[0-9]+[.)]/{exit} {print}')"
+    bloc="$(cmd_block "$c" "$bname" | strip_md | sub | awk '/^[ \t]*[0-9]+[.)]/{exit} { line=$0; p=index(line,"/Users/"); if (!p) p=index(line,"tooling/scripts/"); if (p) { pre=substr(line,1,p-1); gsub(/[ \t\-`→—]+$/,"",pre); if (pre=="") next; print pre; next } print }')"
     # the human prose = block text after the first em-dash (the mapping arrow prefix
     # ends in "—"); joined, collapsed.
-    usep="$(printf '%s' "$bloc" | awk '{ s=s $0 " " } END { i=index(s,"—"); if (i) { s=substr(s,i); sub(/^—/,"",s) }; gsub(/[ ]+/," ",s); sub(/^ /,"",s); sub(/ $/,"",s); print s }')"
+    usep="$(printf '%s' "$bloc" | awk '{ s=s $0 " " } END { i=index(s,"—"); j2=index(s,"→"); if (i) { s=substr(s,i); sub(/^—[ ]?/,"",s) } else if (j2) { s=substr(s,j2); sub(/^→[ ]?/,"",s) }; j=index(s,"If the 2nd argument"); if (j) s=substr(s,1,j-1); gsub(/[ ]+/," ",s); sub(/ +$/,"",s); sub(/[ ]*(Run|run)[ ]*:?[ ]*$/,"",s); do { s2=s; sub(/[ ]+(to|of|in|is|that|and|or|the|a|an|for|with|on|at|by|as|into|through|pass|flags?|from|via)$/,"",s) } while (s!=s2); sub(/[ :,.]+$/,"",s); if (s ~ /^[a-z0-9(<]/ && length(s) < 30 && s !~ /[.;:]/) s=""; print s }')"
     sp2="$(script_path "$bscript" 2>/dev/null || true)"
     par=""; [ -n "$sp2" ] && par="$(para_of "$sp2" "$bname")"
     [ -n "$par" ] || par="$buse"
@@ -637,6 +641,7 @@ E
   [ -n "$ops_lines" ] || printf '  (single flow - no operator dispatch on this command)\n'
   echo
   local script sp nops
+  if [ "$mant" = 1 ]; then
   for script in $(own_first "$c" $(scripts_of "$c")); do
     sp="$(script_path "$script" 2>/dev/null || true)"; [ -n "$sp" ] || continue
     nops="$(ops_of "$sp" | wc -l | tr -d ' ')"
@@ -650,7 +655,17 @@ E
 $(ops_of "$sp")
 EO
   done
-  grep -oE '(tooling/)?docs/[A-Za-z0-9._/-]+\.md' "$file" | sort -u | sed 's|^|doc: |'
+  fi
+  [ "$mant" = 1 ] || echo "  (user view - entity scripts and their operators: /pw-help operators $c, or command view with --maintainer)"
+  local dpaths dpl
+  dpaths="$(grep -oE '(tooling/)?docs/[A-Za-z0-9._/-]+\.md' "$file" | sort -u || true)"
+  while IFS= read -r dpl; do
+    [ -n "$dpl" ] || continue
+    if [ "$mant" != 1 ]; then case "$dpl" in tooling/*) continue ;; esac; fi
+    printf 'doc: %s\n' "$dpl"
+  done <<EDOC
+$dpaths
+EDOC
   grep -qF 'mechanical mapping (C3)' "$file" && { echo "doctrine: mechanical mapping (C3) - the script is the single judgment point."; } | flowline 98
   stamp
 }
@@ -867,7 +882,7 @@ render_project_cmd() {
   [ -f "$CMDS/$c.md" ] || die "no such command: $c -> fix: $(did_you_mean "$c")"
   if [ "$c" = "pw-review" ]; then
     local rel rvf st sep=""
-    echo "/pw-review targets in $slug (phase: $phase, read via pw-review.sh gate/count)"
+    echo "/pw-review targets in $slug (phase: $phase; live gate/open states below)"
     echo "  gates:"
     for rel in $planrev; do st="$(review_state "$slug" "$rel")"; printf '    %-42s decision: %-19s open: %s\n' "$rel" "${st%%|*}" "${st##*|}"; done
     for rel in $adocs; do

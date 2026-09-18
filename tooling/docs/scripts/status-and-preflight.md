@@ -94,6 +94,12 @@ config` is the human-facing surface for the first two — prefer it over calling
 
 ## pw-help.sh
 
+Human renderings are **user-safe by default**: `overview` tags rows only by doctrine facet
+(`(write)`/`(read)`/`(special)`/`(lifecycle)`), `command <name>` omits entity-script sections,
+`tooling/docs` pointers, and bundle paths entirely — its runnable examples use `/pw-*` command
+forms only. `command <name> --maintainer` adds the maintainer layers back (`operators <name>`
+remains the explicit deep dump; `--json` carries the full raw machine view).
+
 The discovery surface (introspection family): renders *live* from command frontmatter,
 script usage headers, and its own phase map — so it cannot drift from the surfaces it
 describes, and the T4 canary fails CI if a new command skips its phase-map entry.
