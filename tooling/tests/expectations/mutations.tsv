@@ -4,8 +4,9 @@
 # row means the anchor moved with the code: re-pin it, never delete it. Catchers must not depend
 # on the mutation changing fixture BYTES (the sweep fixture cache is keyed by the recipe:
 # template/ + scaffold.sh + pw-env.sh + pw_test_lib.sh — runtime scripts excluded).
-# IDs: take the next free number and check draft-plan reservations (C31–C35 /pw-help plan;
-# C36+ tooling-layout plan — plan 19 took C41–C44 inside that space; re-check at execution).
+# IDs: minted C1–C48 (C36–C40 + C46 tooling-layout, C41–C45 sweep-speedup).
+# C31–C35 reserved by the /pw-help plan — minted as its phases land.
+# Next free: C49. Take the next free number and check draft-plan reservations.
 # Authoring checklist: tooling/docs/testing.md §Writing a mutation row.
 # Columns: id	file	OLD	NEW	tiers	only
 C1-pw-field-packed-cut	pw-common.sh	        q = index(v, "**"); if (q) v = substr(v, 1, q - 1)	        q = 0; if (q) v = substr(v, 1, q - 1)	T1	pw-common
@@ -51,3 +52,5 @@ C38-toolchain-allowlist-canary	commands/pw-ship.md	Follow the `project-workflow`
 C39-usage-string-dead-script	pw-doc.sh	usage: pw-doc.sh lint <type> <slug> [args...]	usage: pw-doc-lint.sh <type> <slug> [args...]	T4	-
 C40-doctor-orphan-check-disabled	pw-doctor.sh	corph="$corph $(basename "$inst")"	corph=""	T1	pw-doctor
 C46-operator-cross-attribution	skill/project-workflow/references/conventions-and-gotchas.md	`pw-status.sh adopted <slug> "<pointer>"`	`pw-context.sh adopted <slug> "<pointer>"`	T4	-
+C31-frontmatter-derivation-canned	pw-help.sh	      desc="$(fmof "$file" description)"; args="$(fmof "$file" args)"	      desc="Scaffold a new agentic-workflow project"; args="canned-args"	T1	pw-help
+C35-phase-map-drops-a-command	pw-help.sh	executing|pw-execute pw-verify pw-sync	executing|pw-execute pw-sync	T4	-

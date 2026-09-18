@@ -139,7 +139,8 @@ and the script only ever receives already-separated values — it never splits s
    `scripts/lib/pw-projectlib.sh`. Env/forge? → `scripts/lib/pw-common.sh`.
 3. Tempted to add a catch-all core? → don't (S2). Operating on the bundle itself? → toolchain (L3).
 4. Command surface: operator on the entity's existing command (C1/C2); mechanical mapping (C3);
-   human-only? → C4 label + static test.
+   human-only? → C4 label + static test. New/renamed command → also add it to pw-help.sh's
+   phase map (the T4 set-equality canary) — same commit, per S7.
 5. Prose argument? → A1 rest-of-line; two prose fields → A2 flag segments; handoff via A3.
 6. Docs before ship: usage header (S6) + a section in `docs/scripts/` + command file + affected
    skills/agents/templates. **No doc-less capability ships.**

@@ -3,7 +3,7 @@
 # Every forbidden pattern here encodes a bug that actually shipped once (plan 16 §5).
 
 # the automation-script registry (single list; T0/T1/T2/mutation reuse it)
-PWTEST_AUTOMATION="pw-status.sh pw-preflight.sh pw-ship.sh pw-review.sh pw-rfc.sh pw-worktree.sh pw-doc.sh pw-context.sh pw-config.sh"
+PWTEST_AUTOMATION="pw-status.sh pw-preflight.sh pw-ship.sh pw-review.sh pw-rfc.sh pw-worktree.sh pw-doc.sh pw-context.sh pw-config.sh pw-help.sh"
 export PWTEST_AUTOMATION
 
 _pwtest_code_lines() { awk '!/^[[:space:]]*#/' "$@" 2>/dev/null | cat -n; }
@@ -133,7 +133,23 @@ static_t4() {
     && grep -qF 'PWTEST_MUT_JOBS' "$TOOL/docs/testing.md" \
     && grep -qF 'PWTEST_MUT_TIMEOUT' "$TOOL/docs/testing.md" \
     && pwtest_ok "T4 canary: harness internals + env knobs + row-authoring documented" \
-    || pwtest_bad "T4 canary: harness docs" "testing.md lost §Inside the harness / §Writing a mutation row or the PWTEST_MUT_* knob names"
+    || pwtest_bad "T4 canary: harness docs" "testing.md lost §Inside the harness / §Writing a mutation row or the PWTEST_MUT_* knob names"  # (f) pw-help forcing function (plan 18): the phase map == the commands tree, the
+  # conventions checklist keeps the map-duty line, and pw-help.sh stays a leaf — no
+  # script/agent/skill/template may invoke help (only its command file + tests + docs).
+  local mapcmds treecmds
+  mapcmds="$(sed -n 's/^HELP_PHASE_MAP="\(.*\)"$/\1/p' "$TOOL/scripts/entities/pw-help.sh")"
+  mapcmds="$(printf '%s\n' "$mapcmds" | tr ';|' '\n\n' | tr ' ' '\n' | grep -E '^pw-[a-z0-9-]+$' | sort -u)"
+  treecmds="$(cd "$TOOL/commands" && ls *.md | sed 's/\.md$//' | sort -u)"
+  [ "$mapcmds" = "$treecmds" ] && pwtest_ok "T4 canary: pw-help phase map == the commands tree (forcing function)" \
+    || pwtest_bad "T4 canary: pw-help phase map == commands tree" "$(comm -3 <(printf '%s\n' "$mapcmds") <(printf '%s\n' "$treecmds") | tr '\n' ' ') — add the command to HELP_PHASE_MAP in the same commit (conventions.md checklist)"
+  grep -qF 'phase map' "$TOOL/docs/conventions.md" \
+    && pwtest_ok "T4 canary: conventions checklist carries the pw-help phase-map duty" \
+    || pwtest_bad "T4 canary: conventions checklist phase-map duty" "the durable map-duty line vanished from conventions.md"
+  hits="$(grep -rl 'pw-help\.sh' "$TOOL/agents" "$TOOL/skill" "$TOOL/scripts/entities" "$TOOL/scripts/toolchain" "$TOOL/../template" 2>/dev/null | grep -v 'scripts/entities/pw-help.sh$' | tr '\n' ' ')"
+  [ -z "$hits" ] && pwtest_ok "T4 canary: pw-help.sh is a leaf (no script/agent/skill/template invokes it)" \
+    || pwtest_bad "T4 canary: pw-help.sh leaf" "help invoked as a dependency in: $hits — doctrine: help is for humans/agents at call time, scripts share libs (S5)"
+
+
   # 5) shared plumbing used, not reinvented
   for f in $PWTEST_AUTOMATION; do
     grep -q 'pw-common\.sh' "$(pwtest_script "$f")" && pwtest_ok "T4: $f sources pw-common" || pwtest_bad "T4: $f sources pw-common" "P2 violation (readers re-implemented)"

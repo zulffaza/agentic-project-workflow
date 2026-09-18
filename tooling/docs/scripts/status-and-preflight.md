@@ -91,3 +91,29 @@ $PW_HOME/tooling/scripts/entities/pw-config.sh model-check <provider> <model-id>
 `auto` is what lets `pw-review.sh auto-signoff` ever succeed; `model-check` reads
 `PW_MODEL_ALLOWLIST_<PROVIDER>` from pw.config.sh (empty = all allowed). `/pw-review <slug>
 config` is the human-facing surface for the first two — prefer it over calling the script.
+
+## pw-help.sh
+
+The discovery surface (introspection family): renders *live* from command frontmatter,
+script usage headers, and its own phase map — so it cannot drift from the surfaces it
+describes, and the T4 canary fails CI if a new command skips its phase-map entry.
+
+```bash
+$PW_HOME/tooling/scripts/entities/pw-help.sh overview [--json]
+$PW_HOME/tooling/scripts/entities/pw-help.sh operators <name> [<operator>]
+$PW_HOME/tooling/scripts/entities/pw-help.sh workflow [--json]
+```
+
+- `overview` — one line per command and per exposed operator (the command's own
+  invocation shapes are the surface proof; a "literally `<op>`" definition line counts
+  for sugar operators like `/pw-review config`), grouped by phase bucket. `--json`
+  returns the stable machine shape (`cmd,args,summary,agent,scripts,facets,phase,ops[]`).
+- `operators <name> [<operator>]` — the verbatim usage-header dump for the named
+  command's entity/toolchain scripts (facet lines included), or one operator's deep-dive.
+  Library scripts are not listable — they are source-only (L2); names echo in full
+  canonical form (`pw-review`, never `review`).
+- `workflow` — the phase spine with gate paths, from `PW_VALID_PHASES` + the phase map.
+
+Strictly read-only: opens files for read only; invocation examples it prints are text,
+never executed. Exit 0 / 2 (unknown names carry a `→ fix:` + did-you-mean); zero-hit
+renderings are not errors.
