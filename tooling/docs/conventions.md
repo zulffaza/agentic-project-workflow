@@ -98,7 +98,11 @@ is normative.
 - **C3 — command files are mechanical operator→script mappings.** The agent's job is: locate the
   project/doc, parse args per the A-rules, hand each value to the script quote-safe, show the
   script's output. No prose judgment, no doc re-reading, no "improvising" the edit by hand when
-  an operator exists.
+  an operator exists. "Show the output" means **in your reply, verbatim, fenced**: most agent
+  UIs collapse tool output, so a comment like "see the output above" is silence to the user —
+  paste the script's stdout as a fenced code block (fences preserve the column alignment
+  ASCII renderers depend on). Beautifying is allowed *additive*: you may add a short plain
+  summary after the block, never instead of it.
 - **C4 — doctrine-restricted operators** (e.g. `review signoff` — "only a human clears a gate")
   are labeled **"human-triggered only, never on agent initiative"** in the command file, and a T0
   anti-idiom static test asserts no agent file mentions them.
