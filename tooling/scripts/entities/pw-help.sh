@@ -246,18 +246,44 @@ cutw() {
   return 0
 }
 
-# cutww <width> — word-aware column cap: trims to the last whole word and marks
-# the cut with "..." instead of severing mid-word like cutw (never emits past n).
-cutww() {
-  awk -v n="$1" '{
-    if (length($0) <= n) { print; exit }
-    c = substr($0, 1, n - 3)
-    if (c ~ / /) { sub(/[^ ]* *$/, "", c) }
-    sub(/[ ]+$/, "", c)
-    print c "..."
-  }' | iconv -f UTF-8 -t UTF-8 -c
+# fwrap <width> — greedy word-wrap on stdin; one full logical line in, n short lines
+# out. Nothing is ever cut — overflow flows to the next line.
+fwrap() {
+  awk -v w="$1" '{
+    n=split($0,W," "); buf=""
+    for (i=1;i<=n;i++) { if (W[i]=="") continue
+      cand = (buf=="") ? W[i] : buf " " W[i]
+      if (buf!="" && length(cand) > w) { print buf; buf = W[i] } else buf = cand }
+    print buf
+  }'
   return 0
 }
+
+# flowline <width> — keep a composed line's content whole: overflow wraps onto
+# continuation lines marked " + " (never past the width; short lines pass 1:1).
+flowline() {
+  awk -v w="$1" '
+  { l=$0
+    if (length(l) <= w) { print; next }
+    first=1
+    while (length(l) > w) {
+      lim = w
+      if (!first) lim = w - 3
+      pos=0
+      for (k=lim; k>0; k--) { if (substr(l,k,1)==" ") { pos=k; break } }
+      if (pos==0) pos=lim
+      seg=substr(l,1,pos-1)
+      if (first) { print seg; first=0 } else { print " + " seg }
+      l=substr(l,pos+1)
+      sub(/^ +/,"",l)
+    }
+    if (l != "") {
+      if (first) { print l } else { print " + " l }
+    }
+  }'
+  return 0
+}
+
 
 # cmd_shape_line <cmd> <tok> — the user-typed invocation args: token through the
 # span-closing backtick/quote of the first command-form shape, else empty.
@@ -270,7 +296,7 @@ cmd_shape_line() {
         if (match($0, cmd" <slug> ")) { print substr($0, RSTART+RLENGTH); exit }
       }' "$CMDS/$1.md" | head -1)"
   m="$(printf '%s' "$m" | cut -d"$TF" -f1 | cut -d"$BT" -f1 | sed -e 's/[ ]*$//')"
-  printf '%s' "$m" | cutw 46
+  printf '%s' "$m"
   return 0
 }
 
@@ -279,7 +305,7 @@ token_use_clause() {
   local line
   line="$(grep -m1 -E "literally [$TF$BT]$2[$TF$BT]" "$CMDS/$1.md" || true)"
   [ -n "$line" ] || return 1
-  printf '%s' "$line" | sed -E -e "s/.*literally [$TF$BT]$2[$TF$BT][^a-zA-Z]*//" -e 's/[.,:].*//' -e 's/^[ ]+//' | head -1 | cutw 44
+  printf '%s' "$line" | sed -E -e "s/.*literally [$TF$BT]$2[$TF$BT][^a-zA-Z]*//" -e 's/[.,:].*//' -e 's/^[ ]+//' | head -1
 }
 
 # r2_alias <cmd> <tok> — "script<TAB>op" for a sugar token: the first REAL script
@@ -302,6 +328,66 @@ r2_alias() {
 $(printf '%s' "$win" | grep -oE 'scripts/(entities|toolchain)/[a-z][a-z0-9-]+\.sh [a-z][a-z0-9-]*' || true)
 EPAIRS
   return 1
+}
+
+# fwrap <width> — one logical line in, word-wrapped lines <=w bytes out;
+# nothing is ever cut — text flows onto the next line.
+fwrap() {
+  awk -v w="$1" '{
+    n=split($0,W," "); buf=""
+    for (i=1;i<=n;i++) { if (W[i]=="") continue
+      cand = (buf=="") ? W[i] : buf " " W[i]
+      if (buf!="" && length(cand) > w) { print buf; buf = W[i] } else buf = cand }
+    print buf
+  }'
+  return 0
+}
+
+# ov_wrap <prefix1> <prefixN> — greedy word-wrap emitting each line as prefix+text,
+# keeping the FULL 98-byte budget per line against the actual prefix lengths (an
+# inline-label shift never overflows).
+ov_wrap() {
+  awk -v p1="$1" -v p2="$2" '{
+    n=split($0,Wd," "); cur=""; first=1
+    for (k=1;k<=n;k++) { if (Wd[k]=="") continue
+      w=Wd[k]
+      lim = 98 - (first ? length(p1) : length(p2))
+      # over-long single token (paths): break at the last punctuation inside the limit
+      while (length(w) > lim) {
+        if (cur != "") { print (first ? p1 : p2) cur; first=0; cur="" }
+        cut=0
+        for (j=lim; j>1; j--) { ch=substr(w,j,1); if (ch=="/" || ch==":" || ch=="-" || ch==".") { cut=j; break } }
+        if (cut<2) cut=lim
+        print (first ? p1 : p2) substr(w,1,cut); first=0; w=substr(w,cut+1)
+        lim = 98 - length(p2)
+      }
+      cand = (cur=="") ? w : cur " " w
+      lim = 98 - (first ? length(p1) : length(p2))
+      if (cur!="" && length(cand) > lim) { print (first ? p1 : p2) cur; first=0; cur=w }
+      else cur = cand }
+    if (cur != "") print (first ? p1 : p2) cur
+  }'
+  return 0
+}
+# ov_emit <cmd-label> <tag> <args> <use> — one overview entry: a fitted single line
+# when the UNTRUNCATED args (<=29) and use stay under 98 cols together; otherwise a
+# block: args fully wrapped from the args column, use text beneath it, continuations
+# marked "+ ". Nothing is cut, nothing is ellipsized — it just flows.
+ov_emit() {
+  local lbl="$1" tag="$2" args="$3" use="$4" line
+  line="$(printf '  %-13s %-29s %-13s- %s\n' "$lbl" "$args" "${tag:+$tag }" "$use")"
+  if printf '%s' "$line" | awk -v n=98 'length($0)<=n{exit 0} {exit 1}' \
+     && printf '%s' "$args" | awk -v n=29 'length($0)<=n{exit 0} {exit 1}'; then
+    printf '%s\n' "$line"
+    return 0
+  fi
+  if [ -n "$args" ]; then
+    printf '%s\n' "$args" | ov_wrap "$(printf '  %-13s ' "$lbl")" "                + "
+  else
+    printf '  %s\n' "$lbl"
+  fi
+  printf '%s\n' "$use" | ov_wrap "                  ${tag:+$tag }- " "                  + "
+  return 0
 }
 
 # ops_surfaced <cmd> — rendered operator lines: "name<TAB>args<TAB>use<TAB>facet".
@@ -444,12 +530,11 @@ EOPS
         continue
       fi
       if [ -n "$ops_lines" ] && has_default "$cmd"; then dflt="(default)"; else dflt=""; fi
-      printf '  %-13s %-29s %-12s - %s\n' "/pw-${cmd#pw-}" "$(printf '%s' "$args" | cutww 29)" "$dflt" "$(printf '%s' "$(gist "$desc")" | cutww 36)"
+      ov_emit "/pw-${cmd#pw-}" "$dflt" "$args" "$(gist "$desc")"
       while IFS="$TABS" read -r op bargs buse bfac bscript; do
         [ -n "$op" ] || continue
-        printf '  %-43s %-12s - %s\n' "$(printf '                %s' "$(printf '%s' "$bargs" | cutww 27)")" \
-          "$( [ -n "$bfac" ] && printf '(%s)' "$(printf '%s' "${bfac%.sh}" | cutww 12)" )" "$(printf '%s' "$buse" | cutww 37)"
-      done <<EOPS
+        ov_emit "" "$( [ -n "$bfac" ] && printf '(%s)' "${bfac%.sh}" )" "$bargs" "$buse"
+        done <<EOPS
 $ops_lines
 EOPS
     done
@@ -513,26 +598,26 @@ E
     return 0
   fi
 
-  echo "/pw-${c#pw-} — $desc"
-  echo "args: $args"
-  [ -n "$agn" ] && echo "agent lane: $agn"
-  [ -n "$slug" ] && echo "project: $slug"
+  { printf '/pw-%s - %s\n' "${c#pw-}" "$desc"; } | flowline 98
+  { printf 'args: %s\n' "$args"; } | flowline 98
+  [ -n "$agn" ] && { printf 'agent lane: %s\n' "$agn"; } | flowline 98
+  [ -n "$slug" ] && { printf 'project: %s\n' "$slug"; } | flowline 98
   echo
   # (default) flow line — args with the operator-selector group removed, slug-filled.
   if has_default "$c"; then
     local dargs
     dargs="$(printf '%s' "$args" | sed -E -e 's/<[^<>]*\|[^<>]*>//g' -e 's/\[[^][]*\|[^][]*\]//g' -e 's/  +/ /g' -e 's/[ ;.]+$//')"
     dargs="${dargs#<project-slug> }"; dargs="${dargs#<slug> }"
-    printf '  (default)  /pw-%s %s %s\n' "${c#pw-}" "${slug:-<project-slug>}" "$dargs"
+    printf '  (default)  /pw-%s %s %s\n' "${c#pw-}" "${slug:-<project-slug>}" "$dargs" | flowline 98
     printf '    Use:     the no-operator default flow - see the args line above\n'
   fi
   local bname bargs buse bfac bscript sp2 par usep
   while IFS="$TABS" read -r bname bargs buse bfac bscript; do
     [ -n "$bname" ] || continue
-    printf '  %s  %s\n' "$(printf '%-11s' "$bname")" "$(printf '%s' "${bargs#$bname }" | cutw 68)"
+    printf '  %s  %s\n' "$(printf '%-11s' "$bname")" "${bargs#$bname }" | flowline 98
     # The command file's OWN bullet prose = use-when behavior; the script paragraph = Does.
     local bloc
-    bloc="$(cmd_block "$c" "$bname" | strip_md | sub)"
+    bloc="$(cmd_block "$c" "$bname" | strip_md | sub | awk '/^[ \t]*[0-9]+[.)]/{exit} {print}')"
     # the human prose = block text after the first em-dash (the mapping arrow prefix
     # ends in "—"); joined, collapsed.
     usep="$(printf '%s' "$bloc" | awk '{ s=s $0 " " } END { i=index(s,"—"); if (i) { s=substr(s,i); sub(/^—/,"",s) }; gsub(/[ ]+/," ",s); sub(/^ /,"",s); sub(/ $/,"",s); print s }')"
@@ -540,12 +625,12 @@ E
     par=""; [ -n "$sp2" ] && par="$(para_of "$sp2" "$bname")"
     [ -n "$par" ] || par="$buse"
     if [ -n "$usep" ] && [ "$usep" != "$par" ]; then
-      printf '%s\n' "$usep" | fold -s -w 90 | sed 's/^/    Use when: /' | head -6
+      printf '%s\n' "$usep" | ov_wrap "    Use when: " "             + "
     fi
-    printf '%s\n' "$par" | fold -s -w 90 | sed 's/^/    Does:   /' | head -6
-    printf '%s\n' "$bloc" | awk '/DOCTRINE|HUMAN-TRIGGERED ONLY/{print "    " $0}' | head -2 | cutw 96 || true
-    { printf '%s\n' "$bloc" | grep -oE 'A[12] [a-zA-Z][^`)”]*' | head -1 | sed 's/^/    Shape:  /' | cutw 96; } || true
-    printf '    $ %s\n' "$(cutw 90 <<<"/pw-${c#pw-} ${slug:-<project-slug>} $bargs" | sed -e 's/[ ]*$//')"
+    printf '%s\n' "$par" | ov_wrap "    Does:   " "             + "
+    printf '%s\n' "$bloc" | awk '/DOCTRINE|HUMAN-TRIGGERED ONLY/{print "    " $0}' | head -2 | flowline 98 || true
+    { printf '%s\n' "$bloc" | grep -oE 'A[12] [a-zA-Z][^`)”]*' | head -1 | sed 's/^/    Shape:  /' | flowline 98; } || true
+    printf '    $ %s\n' "/pw-${c#pw-} ${slug:-<project-slug>} $bargs" | sed -e 's/[ ]*$//' | flowline 98
   done <<E
 $ops_lines
 E
@@ -555,18 +640,18 @@ E
   for script in $(own_first "$c" $(scripts_of "$c")); do
     sp="$(script_path "$script" 2>/dev/null || true)"; [ -n "$sp" ] || continue
     nops="$(ops_of "$sp" | wc -l | tr -d ' ')"
-    echo "entity script: ${sp#$PW_HOME/} ($nops operators — read all: /pw-help operators ${script%.sh})"
+    printf 'entity script: %s (%s operators - read all: /pw-help operators %s)\n' "${sp#$PW_HOME/}" "$nops" "${script%.sh}" | flowline 98
     facets_map "$sp" | awk -F'\t' '{ facet_of[$2]=$1 } END { }' >/dev/null
     while IFS= read -r o; do
       [ -n "$o" ] || continue
       f="$(facet_of "$sp" "$o")"
-      printf '    %-8s %-26s %s\n' "$f" "$o" "$(sig_of "$sp" "$o" | cutw 50)"
+      printf '    %-8s %-26s %s\n' "$f" "$o" "$(sig_of "$sp" "$o")" | flowline 98
     done <<EO
 $(ops_of "$sp")
 EO
   done
   grep -oE '(tooling/)?docs/[A-Za-z0-9._/-]+\.md' "$file" | sort -u | sed 's|^|doc: |'
-  grep -qF 'mechanical mapping (C3)' "$file" && echo "doctrine: mechanical mapping (C3) — the script is the single judgment point."
+  grep -qF 'mechanical mapping (C3)' "$file" && { echo "doctrine: mechanical mapping (C3) - the script is the single judgment point."; } | flowline 98
   stamp
 }
 
@@ -773,7 +858,7 @@ EXN
     }
     return 0
   fi
-  printf '%s\n' "$lines"
+  printf '%s\n' "$lines" | flowline 98
 }
 
 render_project_cmd() {
@@ -796,7 +881,7 @@ render_project_cmd() {
     [ -n "$trevs" ] && revlist="$revlist $trevs"
     for rvf in $revlist; do
       [ -f "$d/$rvf" ] || continue
-      if grep -oE '^### (Q|R)[0-9]+.*\[(PENDING|OPEN)\]' "$d/$rvf" 2>/dev/null | head -3 | cut -c5- | sed "s|^|      $rvf  |" | cutw 96 | grep -q .; then shown=1; fi
+      if grep -oE '^### (Q|R)[0-9]+.*\[(PENDING|OPEN)\]' "$d/$rvf" 2>/dev/null | head -3 | cut -c5- | sed "s|^|      $rvf  |" | flowline 96 | grep -q .; then shown=1; fi
     done
     [ "$shown" = 1 ] || echo "      (no open items / pending questions in the review files found)"
     echo "  runnable:"
@@ -806,7 +891,7 @@ render_project_cmd() {
     local cfgs
     cfgs="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$CFG" ai-review "$slug" 2>/dev/null | tr '\n' ' ')"
     [ -n "$cfgs" ] || cfgs="-"
-    printf '    /pw-review %s ai          second opinion (modes: %s)\n' "$slug" "$(printf '%s' "$cfgs" | cutw 44)"
+    printf '    /pw-review %s ai          second opinion (modes: %s)\n' "$slug" "$cfgs" | flowline 98
     printf '    /pw-review %s config analysis <approved mode>   (off|advisory|auto)\n' "$slug"
     stamp; return 0
   fi
@@ -857,28 +942,27 @@ render_project() {
     printf '],"next":[%s],"tasks":[%s]}\n' "$(render_project_next "$slug" "$tok" "$plan" "$planrev" "$d" json)" "$jtasks"
     return 0
   fi
-  printf '%s - phase: %s' "$slug" "$(printf '%s' "$tok" | cutw 24)"
-  [ -n "$tail" ] && printf '  (%s)' "$(printf '%s' "$tail" | cutw 58)"
-  echo; echo
+  { printf '%s - phase: %s' "$slug" "$tok"; [ -n "$tail" ] && printf '  (%s)' "$tail"; echo; } | flowline 98
+  echo
   echo "most likely next:"
   render_project_next "$slug" "$tok" "$plan" "$planrev" "$d" plain
   echo "any-time for this project:"
   echo "  /pw-status $slug  ·  /pw-context $slug add-input --file ... --what ... --source ..."
   echo "targets found on disk:"
   local trow printed=0
-  trow() { printf '  %-26s -> %-38s (gate: %s, open: %s)\n' "$1" "$2" "$3" "$4" | cutw 99; }
+  trow() { printf '  %-26s -> %-38s (gate: %s, open: %s)\n' "$1" "$2" "$3" "$4" | flowline 99; }
   if [ -n "$plan" ]; then
     printed=1
     if [ -n "$planrev" ]; then st="$(review_state "$slug" "$planrev")"; trow "task/PLAN.md" "$planrev" "${st%%|*}" "${st##*|}"
-    else printf '  %-26s -> %s\n' "task/PLAN.md" "(no review file yet - run: /pw-review $slug init-all)" | cutw 99; fi
+    else printf '  %-26s -> %s\n' "task/PLAN.md" "(no review file yet - run: /pw-review $slug init-all)" | flowline 99; fi
   fi
   for rel in $adocs; do
     printed=1
     rvf="analysis/review/${rel#analysis/}"; rvf="${rvf%.md}.review.md"
     if [ -f "$d/$rvf" ]; then st="$(review_state "$slug" "$rvf")"; trow "$rel" "$rvf" "${st%%|*}" "${st##*|}"
-    else printf '  %-26s -> %s\n' "$(printf '%s' "$rel" | cutw 25)" "(review file missing - run: /pw-review $slug init-all)" | cutw 99; fi
+    else printf '  %-26s -> %s\n' "$(printf '%s' "$rel" | cutw 25)" "(review file missing - run: /pw-review $slug init-all)" | flowline 99; fi
   done
-  if [ -n "$trevs" ]; then printed=1; printf '  %-26s -> %s\n' "task/T0n.md (x$(printf '%s' "$trevs" | wc -w | tr -d ' '))" "task/review/T0n.review.md" | cutw 99; fi
+  if [ -n "$trevs" ]; then printed=1; printf '  %-26s -> %s\n' "task/T0n.md (x$(printf '%s' "$trevs" | wc -w | tr -d ' '))" "task/review/T0n.review.md" | flowline 99; fi
   [ "$printed" = 1 ] || echo "  (nothing in analysis/ or task/ yet - start with /pw-new or /pw-adopt)"
   echo "  per-command detail with real targets: /pw-help project $slug <name>"
   stamp

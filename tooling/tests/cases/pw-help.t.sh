@@ -22,13 +22,15 @@ pwtest_re 'pw-help' "overview includes pw-help itself"
 
 # 2) per-command + per-operator lines: pw-context exposes all three ops (A2 included)
 pwtest_re 'add-input --file <f>' "add-input op line with A2 shape"
-# (grep the human rendering line-by-line: ops surface under their command)
-grep -A6 '/pw-context ' "$PWTEST_OUT" | grep -q 'req-init' && pwtest_ok "req-init under pw-context" || pwtest_bad "req-init under pw-context" "missing"
-grep -A6 '/pw-context ' "$PWTEST_OUT" | grep -q 'add-repo' && pwtest_ok "add-repo under pw-context" || pwtest_bad "add-repo under pw-context" "missing"
-grep -A10 '/pw-review ' "$PWTEST_OUT" | grep -qE 'item <' && pwtest_ok "sugar op item surfaces under pw-review" || pwtest_bad "sugar op item" "missing"
-grep -A14 '/pw-review ' "$PWTEST_OUT" | grep -q 'this is how I view' && pwtest_ok "config sugar op carries the command-file definition" || pwtest_bad "config op use-clause" "missing"
-grep -A14 '/pw-review ' "$PWTEST_OUT" | grep -q '(write)' && pwtest_ok "facet labels render (S1b)" || pwtest_bad "facet labels" "no (write) under pw-review"
-grep -A6 '/pw-context ' "$PWTEST_OUT" | grep -qE '\(default\)' && pwtest_bad "pw-context (default)" "req-init selector is not a default flow" || pwtest_ok "no (default) for op-selector commands"
+sec_ctx(){ sed -n "/\/pw-context /,/\/pw-doctor/p" "$PWTEST_OUT"; }
+sec_rev(){ sed -n "/\/pw-review /,/\/pw-breakdown/p" "$PWTEST_OUT"; }
+# (bounded section greps: ops surface under their command even in block-wrapped render)
+sec_ctx | grep -q 'req-init' && pwtest_ok "req-init under pw-context" || pwtest_bad "req-init under pw-context" "missing"
+sec_ctx | grep -q 'add-repo' && pwtest_ok "add-repo under pw-context" || pwtest_bad "add-repo under pw-context" "missing"
+sec_rev | grep -qE 'item <' && pwtest_ok "sugar op item surfaces under pw-review" || pwtest_bad "sugar op item" "missing"
+sec_rev | grep -q 'this is how I view' && pwtest_ok "config sugar op carries the command-file definition" || pwtest_bad "config op use-clause" "missing"
+sec_rev | grep -q '(write)' && pwtest_ok "facet labels render (S1b)" || pwtest_bad "facet labels" "no (write) under pw-review"
+sec_ctx | grep -qE '\(default\)' && pwtest_bad "pw-context (default)" "req-init selector is not a default flow" || pwtest_ok "no (default) for op-selector commands"
 grep -q 'HUMAN-TRIGGERED ONLY' "$PWTEST_OUT" && pwtest_bad "overview C4 label" "doctrine echo belongs to command view, not overview columns" || pwtest_ok "overview stays label-free"
 
 # 3) width discipline + no template-token leaks
