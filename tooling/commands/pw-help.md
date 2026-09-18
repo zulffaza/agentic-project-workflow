@@ -20,9 +20,10 @@ The operators:
   Shape / doctrine / runnable-example blocks lifted from the command file and the entity
   script's usage header, the facet-grouped operator signatures, and doc pointers. `--full`
   prints the whole (substituted) command file; `--json` the machine shape.
-- **`/pw-help operators <name> [<operator>]`** → passed verbatim — the verbatim usage-header
-  dump for the named command's entity/toolchain scripts (or one operator's paragraph deep
-  dive). Bare library scripts are deliberately not listable — they are source-only (L2).
+- **`/pw-help operators <name> [<operator>]`** → `{{PW_HOME}}/tooling/scripts/entities/pw-help.sh
+  operators <name> [<operator>]` (args pass through verbatim) — the usage-header dump for the
+  named command's entity/toolchain scripts, or one operator's paragraph deep dive. Bare library
+  scripts are deliberately not listable — they are source-only (L2).
 - **`/pw-help project <slug> [<name>]`** → `{{PW_HOME}}/tooling/scripts/entities/pw-help.sh
   project <slug> [<name>]` — what applies to a REAL project right now: phase, the
   most-likely-next lines with existing targets filled, files found on disk with gate/open
