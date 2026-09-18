@@ -10,14 +10,13 @@
 #       command-level sugar operators). Rendered live from command frontmatter
 #       + script usage headers — zero maintained snapshot. Includes pw-help.
 #
-#   pw-help.sh command    <name> [<slug>] [--full|--json]
+#   pw-help.sh command    <name> [<slug>] [--full|--json|--maintainer]
 #       The how-to manual for one command: per-operator blocks (Use when / Does /
 #       Shape / doctrine labels / runnable example line) lifted from the command
-#       file's own bullets + the entity's usage-header paragraphs, the entity and
-#       toolchain scripts with their S1b facet-grouped operator sigs, doc
-#       pointers, and the frontmatter summary. --maintainer adds the entity-script
-#       sections (paths + operator signatures) and tooling/docs pointers — the user
-#       view is command surface only. With <slug> the invocation slots
+#       file's own bullets + the entity's usage-header paragraphs, user-surface doc
+#       pointers, and the frontmatter summary; the default human view is command surface
+#       only, with --maintainer adding the entity-script sections (S1b facet-grouped
+#       operator sigs) and tooling/docs pointers. With <slug> the invocation slots
 #       show that slug. --full renders the entire command file (placeholders
 #       substituted) for the rare reader that needs the doctrine verbatim.
 #
@@ -561,7 +560,7 @@ cmd_block() {
 strip_md() { sed -e 's/\*\*//g' -e 's/\*//g' -e 's/`//g' -e 's/^[ >-]\{1,3\}//' -e 's/^[[:space:]]*//'; }
 
 render_command() {
-  [ $# -ge 1 ] || die "usage: command <name> [<slug>] [--full|--json] → fix: bare /pw-help lists every command"
+  [ $# -ge 1 ] || die "usage: command <name> [<slug>] [--full|--json|--maintainer] → fix: bare /pw-help lists every command"
   local name slug="" flags="" a full=0 json=0 mant=0
   name="$1"; shift
   for a in "$@"; do
@@ -624,7 +623,7 @@ E
     bloc="$(cmd_block "$c" "$bname" | strip_md | sub | awk '/^[ \t]*[0-9]+[.)]/{exit} { line=$0; p=index(line,"/Users/"); if (!p) p=index(line,"tooling/scripts/"); if (p) { pre=substr(line,1,p-1); gsub(/[ \t\-`→—]+$/,"",pre); if (pre=="") next; print pre; next } print }')"
     # the human prose = block text after the first em-dash (the mapping arrow prefix
     # ends in "—"); joined, collapsed.
-    usep="$(printf '%s' "$bloc" | awk '{ s=s $0 " " } END { i=index(s,"—"); j2=index(s,"→"); if (i) { s=substr(s,i); sub(/^—[ ]?/,"",s) } else if (j2) { s=substr(s,j2); sub(/^→[ ]?/,"",s) }; j=index(s,"If the 2nd argument"); if (j) s=substr(s,1,j-1); gsub(/[ ]+/," ",s); sub(/ +$/,"",s); sub(/[ ]*(Run|run)[ ]*:?[ ]*$/,"",s); do { s2=s; sub(/[ ]+(to|of|in|is|that|and|or|the|a|an|for|with|on|at|by|as|into|through|pass|flags?|from|via)$/,"",s) } while (s!=s2); sub(/[ :,.]+$/,"",s); if (s ~ /^[a-z0-9(<]/ && length(s) < 30 && s !~ /[.;:]/) s=""; print s }')"
+    usep="$(printf '%s' "$bloc" | awk '{ s=s $0 " " } END { i=index(s,"—"); j2=index(s,"→"); if (i) { s=substr(s,i); sub(/^—[ ]?/,"",s) } else if (j2) { s=substr(s,j2); sub(/^→[ ]?/,"",s) }; j=index(s,"If the 2nd argument"); if (j) s=substr(s,1,j-1); gsub(/[ ]+/," ",s); sub(/ +$/,"",s); sub(/[ ]*(Run|run)[ ]*:?[ ]*$/,"",s); do { s2=s; sub(/[ ]+(to|of|in|is|that|and|or|the|a|an|for|with|on|at|by|as|into|through|pass|flags?|from|via)$/,"",s) } while (s!=s2); sub(/[ :,.]+$/,"",s); if (s ~ /^[a-z0-9(<]/ && length(s) < 30 && s !~ /[.;:]/ && s ~ /(to|of|in|is|that|and|or|the|a|an|for|with|on|at|by|as|into|through|pass|fl|from|via)$/) s=""; print s }')"
     sp2="$(script_path "$bscript" 2>/dev/null || true)"
     par=""; [ -n "$sp2" ] && par="$(para_of "$sp2" "$bname")"
     [ -n "$par" ] || par="$buse"
