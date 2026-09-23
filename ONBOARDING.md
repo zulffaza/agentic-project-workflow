@@ -158,7 +158,11 @@ including *why* you'd want one: **[docs/MEMORY.md](./docs/MEMORY.md)**.
 - An **API Provider** is a narrower, different thing — which model *backend* a given Agent
   Provider talks to underneath (e.g. KiloCode alone can route to several: its own built-in `kilo`
   gateway, or `command_code`/`openrouter`/…). That's `PW_KILO_API_PROVIDERS` in `pw.config.sh`,
-  unrelated to what follows.
+  unrelated to what follows. Entries are **model-id prefix filters** (slashes allowed — a BYOK
+  registered under the gateway is scoped as `kilo/alibaba-token-plan` and addressed as
+  `kilo:kilo/alibaba-token-plan/<model>`; the prefix-less form names a *direct* provider line
+  instead — the `kilo/` prefix distinguishes the two connections), never `kilo models` query
+  arguments.
 
 **Provider independence (D9).** Every provider's install must be **self-contained in its own
   dirs** — `pw.env.sh`-style shared config aside, one provider never reads or depends on another
@@ -255,7 +259,12 @@ Likewise, which KiloCode **API Providers** you use (default `kilo` itself; also 
 `openrouter`, … if you've added credentials for them — the model backend(s) KiloCode itself
 connects to, a different axis from the Agent Provider list above) is just a list you set
 (`PW_KILO_API_PROVIDERS=(…)`) in `pw.config.sh` — it never constrains a teammate. Reference any
-of them in a task's `Execute with:` as `kilo:<provider>/<model>`.
+of them in a task's `Execute with:` as `kilo:<provider>/<model>`; a BYOK registered *under* the
+gateway uses its catalog path (`kilo:kilo/alibaba-token-plan/<model>`, entry
+`kilo/alibaba-token-plan`) — matching is exact-first, so the prefix-less
+`kilo:alibaba-token-plan/<model>` binds a *direct* provider line when one exists.
+The same prefix-filter axis is generic — `PW_OPENCODE_API_PROVIDERS=(…)` works identically for
+opencode; cursor (one gateway) and claude (fixed aliases) have no API-Provider axis.
 
 ## Offboarding / uninstalling
 

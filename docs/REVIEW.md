@@ -93,6 +93,14 @@ does **not** require you to set any status; you just leave it `[OPEN]` and run `
   `task/review/T0n.review.md` **or** just tell the agent what's wrong — `/pw-review <slug> T0n`
   creates the review file (same as above) if it doesn't exist, applies
   the fix, then `/pw-execute <slug> T0n` re-runs just that task and re-verifies.
+- **Who applies a fix.** Pre-execution artifacts (analysis doc, PLAN, task doc) are edited
+  **inline by the driver** — the review file is the work order; no separate session is spawned and
+  what you re-read is the edited doc. Post-execution *task* fixes follow the **same routing ladder
+  as execution** ([docs/EXECUTION.md](./EXECUTION.md) §The per-spawn ledger): same provider → an
+  in-process fixer you can watch (a single task may be fixed inline by the driver); different
+  provider → a supervised headless session that resumes the executor's recorded session **only
+  when a deterministic liveness check reports it resumable**; ≥2 tasks with open items fan out as
+  parallel per-task fixers. One batched pass per artifact in every case — never one pass per item.
 
 List everything still needing work across a project:
 ```bash

@@ -97,6 +97,26 @@ buried in `tooling/`.
   pattern you configure.
 - Verified 2026-08-11 against a real installed `kilo` CLI.
 
+### A BYOK registered *under* the gateway is a model-id path, not a provider id
+- **Symptom:** `kilo models kilo/alibaba-token-plan` errors `Provider not found`, yet the catalog
+  lists the same models as `kilo/alibaba-token-plan/<model>` lines; a `PW_KILO_API_PROVIDERS` entry
+  written as `kilo/alibaba-token-plan` made `/pw-doctor`'s model-availability check silently return
+  "can't check" (the entry was being passed as a `kilo models` *argument*).
+- **Root cause:** `kilo models <arg>` filters by provider id; a nested BYOK is not a provider id —
+  it is a path segment inside the `kilo` provider's model ids. Treating config entries as query
+  arguments conflates the two.
+- **Mitigation (built in):** `PW_<PROVIDER>_API_PROVIDERS` entries are **model-id prefix filters**
+  over a single full-catalog fetch (`kilo models`), never query arguments; a row's model resolves to
+  its canonical catalog line (explicit gateway row `kilo:kilo/alibaba-token-plan/<m>` → bind id
+  `kilo/alibaba-token-plan/<m>`) and availability/scope checks validate against that. Verified
+  2026-09-22 against the installed `kilo` CLI.
+- **Follow-up (2026-09-23, maintainer report):** the `kilo/` prefix is a *connection* distinction,
+  not decoration — a BYOK wired up *directly* in KiloCode is its own provider with lines
+  `alibaba-token-plan/<m>`, which can coexist in the catalog with the gateway-nested
+  `kilo/alibaba-token-plan/<m>` (different auth/billing paths). Resolution is therefore
+  **exact-first**: the prefix-less row binds the direct line when one exists, and reaches the
+  gateway line only as a fallback, announced on stderr. Pin the full catalog path to disambiguate.
+
 ## Template/tooling gotchas (this bundle's own code)
 
 ### A review template's own format-hint text can permanently false-positive a naive "is anything open" check

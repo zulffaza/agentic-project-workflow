@@ -16,10 +16,16 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 {{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint task <slug> --all || exit 1
 ```
 **Reading the pre-flight:** `pw-preflight.sh execute` checks the PLAN `approved` sign-off, a
-phase execution is legal in, and every `Execute with:` model resolving; the two `pw-doc.sh lint`
+phase execution is legal in, and every `Execute with:` row on both axes — *permission*
+(allowlist) and *availability* (`model-resolve`: the model exists in the live catalog and sits
+inside the configured api-provider prefix scope; a row pinning a since-removed provider is a
+hard stop with the re-pin candidates); the two `pw-doc.sh lint`
 calls check PLAN/task-file format (tables, required fields/sections). Silent = pass; otherwise
 one `pw-…:` stderr line + exit 1 — **STOP, relay it verbatim** (it names the unmet gate and the
-fix; e.g. run `/pw-review` for approval). Never reason past a failed pre-flight. Output
+fix; e.g. run `/pw-review` for approval). After the gates pass, run
+`{{PW_HOME}}/tooling/scripts/entities/pw-status.sh provider-audit <slug>` once as a **warning**
+pass (non-blocking here): `stale-provider`/`unbound` rows name exactly what to re-pin before
+spawning. Never reason past a failed pre-flight. Output
 semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
 
 1. Read `<project>/task/PLAN.md` fully. **Gate:** `…/{{PW_HOME}}/tooling/scripts/entities/pw-review.sh gate
@@ -78,15 +84,23 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
        **Serialize tasks that share a branch** (one worktree), but **parallelize across different
        adopted branches and all fresh tasks**. If git refuses because a branch is checked out in the
        main repo, tell me to switch that main checkout to another branch first.
-4. **How to run each task** — resolve `Execute with: <provider>:<model-or-agent>` via
-   `{{PW_HOME}}/tooling/docs/providers.md`. Tasks default to the plan's **Produced by** provider, so most
-   run under the agent you're already in. **Before invoking**, re-check the resolved model against
-   the allowlist (empty/unset = every model is allowed, the default) — catches a task file that
-   was hand-edited after breakdown already checked it:
+4. **How to run each task** — resolve `Execute with: <provider>:<model-or-agent>` **and the
+   task's optional `Route:` field** (ladder precedence: task `Route:` > PLAN `- Routing:` line >
+   `PW_ROUTE_DEFAULT` > `auto`; values `auto|subagent|headless`) via
+   `{{PW_HOME}}/tooling/docs/providers.md` + the routing ladder in the skill's
+   `references/execution-and-routing.md`. Tasks default to the plan's **Produced by** provider, so most
+   run under the agent you're already in. **Before invoking**, re-check the resolved model on both
+   axes — permission (allowlist; empty/unset = every model is allowed, the default) and
+   availability (live catalog + api-provider prefix scope; catches a hand-edited task file AND a
+   row pinning a provider that since left `PW_KILO_API_PROVIDERS`):
    ```bash
-   {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-check <provider> <model-id>
+   {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-check   <provider> <model-id>
+   {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-resolve <provider> <model-id>
    ```
-   If it refuses, STOP that task and tell me — don't substitute a different model yourself or run
+   `model-resolve` exit 0 prints the **canonical** catalog id — that is what a headless
+   `-m`/`--model` receives (a nested BYOK row `kilo:alibaba-token-plan/<m>` binds as
+   `kilo/alibaba-token-plan/<m>`), never the raw row text. If either refuses, STOP that task and
+   tell me — don't substitute a different model yourself or run
    it anyway. **The task file binds the model:** the resolved `Execute with:` (or the plan's
    Produced-by default) is the *only* model the spawn runs under — pass it explicitly with the
    provider's bind flag (`kilo run -m`, `claude --model`, cursor `--model`). Never let the
@@ -95,7 +109,12 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
    - **Same provider you're running under → spawn a native, in-process SUB-AGENT** (NOT a shell      invocation). A task naming a same-provider def (`pw-executor`/custom `tooling/agents/` role)
       spawns it; **a plain `provider:model` is not an agent name** — it runs that provider's default
       agent on this task file as its work order (Option A: one executor concept — no bespoke
-      implementer def, ad-hoc code work belongs to the *main* agent). Native sub-agents are easier to monitor and cheaper to supervise. If `Execute
+      implementer def, ad-hoc code work belongs to the *main* agent). Native sub-agents are easier to monitor and cheaper to supervise. **Model binding is
+      best-effort in-process:** where your CLI can't bind the row's model at spawn time (kilo's
+      Task-tool has no model arg), run on the parent model and record
+      `model-degraded <row>→<used>` in the ledger + the task's `Actually used:` — unless the
+      row's `Route:` is `headless` (strict binding: stay headless to bind, supervised per §Headless
+      supervision in the ladder). If `Execute
           with:` names a registered same-provider def (`pw-executor` or a custom          `{{PW_HOME}}/tooling/agents/<name>.md`), spawn that; otherwise — the plain `provider:model`
           default — run a session on that **provider's default agent with the task file as its work
           order** (Option A: one executor concept; ad-hoc non-pw code work is the *main* agent's, there
@@ -118,19 +137,28 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
      them. Route to a capable model (tiny models stop mid-task). Capture the final text for the
      report, but **confirm the real git artifacts** (branch/commit/Verify), not the CLI's
      self-report.
-      - **Ledger it every time.** One `pw-status.sh log` line per executor spawn —        `spawned T0n (provider:model) · session=<id> · seed=task/T0n.md · out=worktree/<T0n>.log ·
-        <outcome>` — plus the same session id into the task's `## Result → Session:` (executor also
+      - **Ledger it every time.** One `pw-status.sh log` line per executor spawn —        `spawned T0n (provider:model) · via=subagent|headless · session=<id> · seed=task/T0n.md · out=worktree/<T0n>.log · state=success|failed|stalled`
+        (+ `model-degraded <row>→<used>` when degraded; `session-check=live|dead|unverified` on
+        resume paths) — plus the same session id into the task's `## Result → Session:` (executor also
         writes it as the first line of that log when the run is theirs). A later **re-repair, Row-8
-        batch, or §3.6 dependent recheck resumes that id** (`kilo run -s <id>`/`--fork`,
-        `claude --resume <id>`/`-c`) instead of cold-re-spawning — cold-respawn is only the fallback
-        when the id is dead/crashed (machine restarts can invalidate ids; on-disk PLAN/task state is
-        the durable recovery).
+        batch, or §3.6 dependent recheck** is routed by the ladder: resume that id
+        (`kilo run -s <id>`/`--fork`, `claude --resume <id>`/`-c`) only after
+        `pw-session.sh session-check <provider> <id>` exits 0 (live) — never blind; cold/inline is
+        the fallback when it is dead/absent (machine restarts can invalidate ids; on-disk
+        PLAN/task state is the durable recovery).
       - **Either way, tee the run to a log** so I can watch it: append the executor's combined output        to `{{PW_PROJECTS}}/<slug>/worktree/<T0n>.log` — the FIRST line of that log is
         `session <id>` — and log the spawn so it's resumable:
-        `pw-status.sh log <slug> execute "spawned T0n (provider:model) · session=<id> · seed=task/T0n.md ·
-        out=worktree/<T0n>.log · <outcome>"` + in the task's `## Result → Session: <provider>:<id>`.
+        `pw-status.sh log <slug> execute "spawned T0n (provider:model) · via=… · session=<id> · seed=task/T0n.md ·
+        out=worktree/<T0n>.log · state=…"` + in the task's `## Result → Session: <provider>:<id>`.
         (kilo prints a session id on headless runs; where none is observable, write `session —` and
         cold-resume from the task file. Ids stay machine-local — never in MR text.)
+      - **Supervise every headless run to a terminal state** (ladder §Headless supervision): run
+        it as a tracked background child, poll its liveness + log growth on a fixed cadence, honor
+        `PW_HEADLESS_STALL` (no growth → kill the child tree, ledger `state=stalled`, task →
+        `verify-failed (headless-stall)`, next pass seed-patched — never resume the killed id) and
+        `PW_HEADLESS_TIMEOUT` (hard cap). `success` requires the real git artifacts, not the
+        self-report; unparsable output is `failed`, never blank success. Do not declare the run
+        done, and never move to `/pw-ship`, while a headless child is still live.
       - **Regression-first self-repair (opt-in, PLAN `- AI execution limit:` + `PW_MAX_SELF_REPAIR`
         default 3):** if this run owns clean execution (PLAN `- Results acceptance:` or `--acceptance`),
         a *real regression* from the task's own change goes back to the executor (resume its session)

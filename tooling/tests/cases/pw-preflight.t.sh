@@ -28,3 +28,39 @@ grep -qE "T01[ ,]|T02[ ,]|T03[ ,]|T04[ ,]|task" "$PWTEST_BOTH" && pwtest_ok "nam
 ' ' ')"
 pwtest_fix "close refusal actionable"
 rm -rf "$PW_PROJECTS_DIR/$E"
+
+# --- execute gate: availability axis (plan-22) — a row pinning a gone model/provider is a
+# hard stop BEFORE any spawn; a live in-scope row passes. Shim catalog + fixture config keep
+# this machine-independent. (python3 edits — the PLAN rows are data, sed quoting isn't worth it.)
+G=pre-gate; rm -rf "$PW_PROJECTS_DIR/$G"; cp -a "$F2" "$PW_PROJECTS_DIR/$G"
+PLAN="$PW_PROJECTS_DIR/$G/task/PLAN.md"
+python3 - "$PLAN" <<'PYEOF'
+import sys
+f=sys.argv[1]; t=open(f).read()
+t=t.replace("kilotest/test-model","kilo:alibaba-token-plan/test-model")
+t=t.replace("| [T01](./T01.md) | Fix api's retry shim | api | — | G1 | kilo:alibaba-token-plan/test-model |",
+            "| [T01](./T01.md) | Fix api's retry shim | api | — | G1 | kilo:alibaba-token-plan/gone-xyz |",1)
+open(f,"w").write(t)
+PYEOF
+pwtest_rc 1 "execute gate refuses a row whose model is not in the catalog" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" "$(pwtest_script pw-preflight.sh)" execute "$G"
+grep -qE "model-resolve refused.*gone-xyz|not in the live catalog" "$PWTEST_BOTH" \
+  && pwtest_ok "refusal names the row + the availability reason" || pwtest_bad "gate refusal text" "$(head -c 160 "$PWTEST_BOTH" | tr '\n' ' ')"
+# out-of-scope provider (the migration case) → refused too:
+python3 - "$PLAN" <<'PYEOF'
+import sys
+f=sys.argv[1]; t=open(f).read()
+t=t.replace("kilo:alibaba-token-plan/gone-xyz","kilo:command_code/MiniMaxAI/MiniMax-M3",1)
+open(f,"w").write(t)
+PYEOF
+pwtest_rc 1 "execute gate refuses a row whose provider left PW_KILO_API_PROVIDERS" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" "$(pwtest_script pw-preflight.sh)" execute "$G"
+grep -qE "OUTSIDE the PW_KILO_API_PROVIDERS scope" "$PWTEST_BOTH" \
+  && pwtest_ok "scope refusal relayed with its fix" || pwtest_bad "scope refusal text" "$(head -c 160 "$PWTEST_BOTH" | tr '\n' ' ')"
+# all rows live + in scope → gate passes (positive direction):
+python3 - "$PLAN" <<'PYEOF'
+import sys
+f=sys.argv[1]; t=open(f).read()
+t=t.replace("kilo:command_code/MiniMaxAI/MiniMax-M3","kilo:alibaba-token-plan/test-model")
+open(f,"w").write(t)
+PYEOF
+pwtest_rc 0 "execute gate passes with every row resolvable" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" "$(pwtest_script pw-preflight.sh)" execute "$G"
+rm -rf "$PW_PROJECTS_DIR/$G"

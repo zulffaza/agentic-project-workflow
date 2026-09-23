@@ -3,7 +3,7 @@
 # Every forbidden pattern here encodes a bug that actually shipped once (plan 16 §5).
 
 # the automation-script registry (single list; T0/T1/T2/mutation reuse it)
-PWTEST_AUTOMATION="pw-status.sh pw-preflight.sh pw-ship.sh pw-review.sh pw-rfc.sh pw-worktree.sh pw-doc.sh pw-context.sh pw-config.sh pw-help.sh"
+PWTEST_AUTOMATION="pw-status.sh pw-preflight.sh pw-ship.sh pw-review.sh pw-rfc.sh pw-worktree.sh pw-doc.sh pw-context.sh pw-config.sh pw-session.sh pw-help.sh"
 export PWTEST_AUTOMATION
 
 _pwtest_code_lines() { awk '!/^[[:space:]]*#/' "$@" 2>/dev/null | cat -n; }
@@ -150,6 +150,26 @@ static_t4() {
   # not consume help as a data source — that is the S5 rule the leaf protects.
   [ -z "$hits" ] && pwtest_ok "T4 canary: pw-help.sh is a leaf (no script/agent/template consumes it)" \
     || pwtest_bad "T4 canary: pw-help.sh leaf" "help consumed as a dependency in: $hits — doctrine: help renders for callers, scripts share libs (S5)"
+
+
+  # (g) plan-22 routing-ladder canaries: the ONE ladder text lives in the skill reference and is
+  # referenced (not re-described) by the entry paths…
+  grep -qF 'AVAILABILITY GATE first' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
+    && grep -qF 'Route resolution' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
+    && grep -qF 'Headless supervision' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
+    && grep -qF 'session-check' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
+    && grep -qF 'session-check' "$TOOL/skill/project-workflow/references/review.md" \
+    && pwtest_ok "T4 canary: one ladder + script-decided liveness in the skill reference" \
+    || pwtest_bad "T4 canary: routing ladder text" "the ladder/availability-gate/session-check text died from execution-and-routing.md or review.md — commands must *reference* it, commands+agents+refs must not re-describe policy" ;\
+  grep -qF 'ladder' "$TOOL/commands/pw-ship.md" && grep -qF 'ladder' "$TOOL/commands/pw-review.md" \
+    && grep -qF 'model-resolve' "$TOOL/commands/pw-execute.md" \
+    && pwtest_ok "T4 canary: entry paths reference the ladder (no per-command policy rewording)" \
+    || pwtest_bad "T4 canary: entry-path ladder references" "pw-ship/pw-review lost the ladder reference, or pw-execute lost the availability gate"
+  # …and the RETIRED repair-routing policy text never creeps back (resume-first default, the `!`
+  # shorthand, the dropped global flag, the merged fourth Route value, the producer-resume clause).
+  hits="$(grep -rlE 'Execute with!|PW_STRICT_MODELS|Route: resume|resume that producer|batched, resume-first|batched \+ resume-first' "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" "$TOOL/docs" 2>/dev/null | tr '\n' ' ')"
+  [ -z "$hits" ] && pwtest_ok "T4 canary: retired repair-routing text stays retired" \
+    || pwtest_bad "T4 canary: retired repair-routing text" "reappeared in: $hits"
 
 
   # 5) shared plumbing used, not reinvented

@@ -83,18 +83,24 @@ forced to switch agents mid-workflow — a task is routed elsewhere only with a 
 | `sonnet` | claude | well-specified standard implementation (most tasks) |
 | `haiku` | claude | trivial mechanical bulk edits |
 | `kilo/<model>` | kilo | KiloCode's own built-in gateway — the **default** API Provider, no separate credential (proxies Claude/GPT/Gemini/etc. through KiloCode itself) |
-| `command_code/MiniMaxAI/MiniMax-M3`, `openrouter/<model>`, … | kilo | open-weight/third-party models — needs its own credential; routed via any *additional* KiloCode API Provider you've listed in `PW_KILO_API_PROVIDERS` (`kilo models <provider>`) |
+| `command_code/MiniMaxAI/MiniMax-M3`, `openrouter/<model>`, `kilo/alibaba-token-plan/<model>`, … | kilo | open-weight/third-party/BYOK models — each needs its own credential; routed via any *additional* KiloCode API Provider you've listed in `PW_KILO_API_PROVIDERS` (a BYOK registered *under* the gateway is addressed by its catalog path, e.g. `kilo/alibaba-token-plan/<model>`; entries are model-id **prefix filters**, so they may contain slashes — but you list the catalog with plain `kilo models`, not `kilo models <that-path>`, which errors) |
 | a same-provider def (`pw-executor`, etc.) | (that provider) | reuse a registered executor natively; across providers a **model + task file** is the portable form (sub-agent names don't cross — `kilo run --agent` takes **primary** defs only and silently continues on the default agent otherwise; claude `--agents '<json>'` injects session defs that carry only a model) |
 | `cursor:cursor-grok-4.5-high`, `cursor:claude-opus-5-thinking-xhigh[context=1m]` | cursor | Cursor's own single model gateway — no API-Provider axis; ids from `agent models`; effort/fast/thinking are **catalog-id variants** (or bracket params), not flags |
 | a custom `tooling/agents/` def | (its provider) | a genuinely new recurring role — same cross-provider caveat: a `mode: subagent` def is not addressable from the other CLI |
 
 **How the agent knows what's actually available:** claude's models are the fixed set in the table
 above — nothing to look up. kilo, opencode, and cursor each have a real, changeable catalog,
-so `/pw-breakdown` is instructed to **query it live** (`kilo models <api-provider>` /
+so `/pw-breakdown` is instructed to **query it live** (`kilo models` /
 `opencode models` / `agent models`) rather than recall an id from memory before writing a task's `Execute with:` —
 a plausible-looking id can simply not exist, or a display name can differ from the actual id
 (verified case: KiloCode's own credential list shows "Kilo Gateway," but the usable id is `kilo`,
-not `kilo_gateway`). This is a separate concern from the allowlist below — discovery is about
+not `kilo_gateway`). A row's model is then resolved to its **canonical** catalog id (the exact line
+the catalog prints, matched **exact-first** — the agent-provider prefix is a *connection*
+distinction: `kilo:alibaba-token-plan/<model>` names a *direct* BYOK provider and binds
+`alibaba-token-plan/<model>` when the catalog lists it; it reaches the gateway-nested
+`kilo/alibaba-token-plan/<model>` line only as a fallback, announced on stderr. Write
+`kilo:kilo/alibaba-token-plan/<model>` to pin the gateway explicitly). That canonical id
+is what a headless `-m`/`--model` receives. This is a separate concern from the allowlist below — discovery is about
 *what exists*, the allowlist is about *what you'll permit*.
 
 ## Opt-in clean execution (pre-reviewed plans)
@@ -246,9 +252,11 @@ Seeds are a contract, not a vibe (lane defs + `tooling/skill/…/references/exec
 is fixed at the producer — a cheap researcher pass — never by spawning a floundering analyst),
 pointers-as-menu, never raw dumps/credentials. After a draft, an **exit check**: diff result vs the
 brief's scope list; a gap means a **resume with a seed patch** (`kilo run -s <id>` / claude
-`--resume <id>` / cursor `agent -p --force --resume <session_id>`), not a cold re-spawn. N review items on ONE artifact (human / `pw-reviewer` /
-verifier / `dep-impact` items share that queue) get ONE batched fix spawn, per-item replies intact
-— never one spawn per comment.
+`--resume <id>` / cursor `agent -p --force --resume <session_id>`) — iff the liveness check reports
+that id resumable — not a cold re-spawn. N review items on ONE artifact (human / `pw-reviewer` /
+verifier / `dep-impact` items share that queue) get ONE batched fix pass, per-item replies intact
+— never one spawn per comment; who runs the pass (in-process fixer / supervised headless / the
+driver inline) is the routing ladder's call — §The per-spawn ledger below.
 
 **Model lanes vs executor pins are different axes.** A task's `Execute with:` binds the EXECUTOR
 per unit (above). A *lane* spawns on the provider default unless the project's
@@ -265,26 +273,62 @@ elsewhere: run the row/role as a headless session — Flow B/C in
 [`../tooling/agents/README.md`](../tooling/agents/README.md) (Claude Code has no custom
 **primary** agent: only sub-agents + the built-in main), or drive from Kilo with `pw-orchestrator`.
 
-## The per-spawn ledger (why it exists: resume > re-derive)
+## The per-spawn ledger (why it exists: resume > re-derive) and the routing ladder
 
-Every delegated spawn writes one line where the pipeline already logs, so later fixes resume the
+Every delegated spawn writes one line where the pipeline already logs, so later fixes can reuse the
 **warm** session instead of re-deriving from a cold start (`LOG.md` line, via the flow's log step,
-carries `· session=<id> · seed=<ref> · out=<artifact> · <outcome>`; the task's `## Result →
-Session:` records its run's id, and the executor writes `session <id>` as the first line of
-`worktree/<T0n>.log` when the provider exposes one — `-` if not). A Row-8 rejection, an MR-comment
+carries `· via=subagent|headless · session=<id> · seed=<ref> · out=<artifact> · state=…`; the task's
+`## Result → Session:` records its run's id, and the executor writes `session <id>` as the first line
+of `worktree/<T0n>.log` when the provider exposes one — `-` if not). A Row-8 rejection, an MR-comment
 batch, or a dependency's §3.6 recheck **resumes that id** (`kilo run -s <id>` / cursor
-`agent -p --force --resume <id>`; ids are `ses_…` on kilo, plain UUIDs on cursor) when live; cold —
-spawn with the task file / recorded seed — is the fallback, because session stores are
+`agent -p --force --resume <id>`; ids are `ses_…` on kilo, plain UUIDs on cursor) *only when a
+deterministic liveness check says it is still resumable* — the pipeline never blind-resumes an id
+and reads the error to find out it was dead; when the check says dead/unverifiable, it takes the
+ladder's cold path instead (spawn with the task file / recorded seed), because session stores are
 machine-local (never cross-machine) and a dead id must not strand the work. Session ids are
 **machine-local pointers** — they stay in the workspace; nothing goes into MR text. State that
 *must* survive machines stays on disk (PLAN / dashboard / worktree commits).
+
+**One ladder for execute and repair (post-execution).** The same routing rule governs a task's first
+spawn and every later fix, so a repair is as monitorable as an execution:
+
+- **Same provider as the orchestrator → an in-process sub-agent** (natively monitorable). Where the
+  CLI can't bind the row's model in-session (kilo's spawn has no model arg), the parent model runs
+  and the ledger records `model-degraded <row>→<used>` — unless the row opts into strict binding.
+- **Different provider → a supervised headless session** of that CLI, **resuming the live id first**
+  when the liveness check reports one.
+- **Per-task `Route:` field** (default `auto`) overrides the branch: `subagent` forces in-process
+  (errors on a cross-provider row); `headless` forces exact-model binding (and still resumes a live
+  session first when the row is unchanged). Precedence: task `Route:` → PLAN `- Routing:` →
+  `PW_ROUTE_DEFAULT` → `auto`. It's plain text, editable between spawns — so a provider that dies
+  mid-project (subs ended, auth failed) is survivable by editing the row or the config, not by
+  re-planning.
+- **Availability gate, on every path including resume:** before any spawn the row's model is
+  resolved against the provider's *live* catalog and the configured API-Provider scope; a row that
+  pins a model/provider no longer available is a hard stop naming the re-pin candidates — never a
+  detached run that fails mid-flight.
+- **Headless runs are supervised to a terminal state** (`success`/`failed`/`stalled`) with the log +
+  stall/timeout budgets enforced; a stalled child is killed and the task flips `verify-failed` with
+  a `headless-stall` note (the next pass is a seed-patched re-spawn, not a resume of the killed id),
+  and a run never ends while a headless child is still live.
+- **Repair fan-out:** ≥2 tasks with open items get one fixer **per task, in parallel** (independent
+  worktrees); a single same-provider task may be fixed **inline by the driver** (bounded to the
+  batch's items, run its `## Verify`, commit, reply per item) — the maximally visible, zero-spawn
+  form; `headless` on a single task tries resume and falls back to inline rather than cold-detach.
+  Batch discipline is unchanged: one pass per artifact, never one per item.
+- **Pre-execution doc fixes** (analysis / PLAN / task docs) are driver-inline — the review file is
+  the seed; no spawn, no resume. The ladder's spawn machinery is for post-execution task fixes only.
 
 ## Providers & the registry
 
 Which CLI runs which model lives in the [Agent Provider registry](../tooling/docs/providers.md).
 Claude models → Claude Code; open-weight models → KiloCode, which can connect to **several API
 Providers at once** (list them in `PW_KILO_API_PROVIDERS` — e.g. `command_code`, `openrouter`, …
-— and reference any as `kilo:<provider>/<model>`). It's a one-row-per-Agent-Provider extension
+— and reference any as `kilo:<provider>/<model>`). A BYOK you register *under* the gateway is
+addressed by its catalog path — `kilo:alibaba-token-plan/<model>` — so an array entry may itself
+contain a slash; entries are **model-id prefix filters** over the live catalog, not catalog-query
+arguments (querying the catalog *by* a sub-provider path errors — the CLI lists it only under the
+top-level provider). It's a one-row-per-Agent-Provider extension
 point, so new providers slot in without code changes.
 
 When `Execute with:` names an agent, resolve its provider the same way as a model: an explicit

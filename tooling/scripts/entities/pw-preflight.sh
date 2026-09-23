@@ -107,7 +107,10 @@ case "$COMMAND" in
     fi
 
     # Check provider awareness: validate each task's Execute-with table value
-    # (column-name driven — pw_plan_execs; covers both PLAN generations).
+    # (column-name driven — pw_plan_execs; covers both PLAN generations). Two axes:
+    # model-check = PERMISSION (allowlist), model-resolve = AVAILABILITY (live catalog +
+    # api-provider prefix scope). model-resolve fails open on "can't check" (no catalog /
+    # unknown provider), so a refusal here is a positive determination, safe to hard-stop on.
     while IFS= read -r EXEC_WITH; do
       EXEC_WITH="$(printf '%s' "$EXEC_WITH" | pw_trim)"
       if [ -n "$EXEC_WITH" ] && [ "$EXEC_WITH" != "—" ]; then
@@ -115,6 +118,11 @@ case "$COMMAND" in
         MODEL="${EXEC_WITH#*:}"
         if ! "$HERE/pw-config.sh" model-check "$PROVIDER" "$MODEL" >/dev/null 2>&1; then
           die_fix "model check failed for '$EXEC_WITH' (not in allowlist)" "allow it via PW_$(printf '%s' "$PROVIDER" | tr a-z A-Z)_MODELS in pw.config.sh, or change the PLAN 'Execute with' cell"
+        fi
+        _mr_rc=0
+        _mr_err="$("$HERE/pw-config.sh" model-resolve "$PROVIDER" "$MODEL" 2>&1 >/dev/null)" || _mr_rc=$?
+        if [ "$_mr_rc" != 0 ]; then
+          die_fix "model-resolve refused '$EXEC_WITH' — this row pins a model/provider that is NOT available right now" "$(printf '%s' "$_mr_err" | tr '\n' ' ' | sed -E 's/^(model-resolve| *→ fix:)+ *//')"
         fi
       fi
     done < <(pw_plan_execs "$D/task/PLAN.md")

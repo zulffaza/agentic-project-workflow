@@ -6,7 +6,10 @@
 # template/ + scaffold.sh + pw-env.sh + pw_test_lib.sh — runtime scripts excluded).
 # IDs: minted C1–C48 (C36–C40 + C46 tooling-layout, C41–C45 sweep-speedup).
 # C31–C35 minted by the /pw-help plan (derivation bypass, write-bleed, substitution, C4-echo, phase-map drift).
-# Next free: C49. Take the next free number and check draft-plan reservations.
+# C49–C60 minted by the repair-routing plan (availability gate, prefix filters, session liveness,
+# doctor catalog/allowlist, ladder + supervision doctrine text, audit verdicts, the dead idi-reader
+# fix, exact-first model matching). C49 RE-PINNED 2026-09-23 when model-resolve went two-stage.
+# Next free: C61. Take the next free number and check draft-plan reservations.
 # Authoring checklist: tooling/docs/testing.md §Writing a mutation row.
 # Columns: id	file	OLD	NEW	tiers	only
 C1-pw-field-packed-cut	pw-common.sh	        q = index(v, "**"); if (q) v = substr(v, 1, q - 1)	        q = 0; if (q) v = substr(v, 1, q - 1)	T1	pw-common
@@ -57,3 +60,17 @@ C35-phase-map-drops-a-command	pw-help.sh	executing|pw-execute pw-verify pw-sync	
 C33-path-substitution-dead	pw-help.sh	sub() { sed -e "s|{{PW_HOME}}|$PW_HOME|g" -e "s|{{PW_PROJECTS}}|$PW_PROJECTS|g"; }	sub() { cat; }	T1	pw-help
 C34-C4-echo-dropped-from-renderer	pw-help.sh	awk '/DOCTRINE|HUMAN-TRIGGERED ONLY/{print	awk '/DOCTRINE/{print	T1	pw-help
 C32-project-render-writes	pw-help.sh	raw="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" phase "$slug" 2>/dev/null)" || raw="?"	raw="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" phase "$slug" 2>/dev/null)" || raw="?" ; mkdir -p "$d/.c32-bleed" 2>/dev/null || true	T1	pw-help
+C49-model-resolve-nested-byok	pw-config.sh	grep -F -x "$prov/$model" | head -1	grep -F -x "$model" | head -1	T1	pw-config
+C50-api-prefix-filter-exact	pw-common.sh	case "$line" in "$e"*) found=1; break ;; esac	case "$line" in "$e") found=1; break ;; esac	T1	pw-config
+C51-session-check-kilo-grep	pw-session.sh	printf '%s' "$out" | grep -qF "$id"	printf '%s' "$out" | grep -qF "ses_"	T1	pw-session
+C52-doctor-catalog-arg-bug	pw-doctor.sh	raw="$(pw_api_catalog "$prov")"	raw="$(for ap in $(pw_api_entries "$prov"); do kilo models "$ap" 2>/dev/null || true; done); [ -n "$(pw_api_entries "$prov")" ] || raw="$(kilo models 2>/dev/null || true)"	T1	pw-doctor
+C53-doctor-allowlist-shortform	pw-doctor.sh	case "${line#"$p"/}" in $allow_pat) n=$((n+1)) ;; esac	case "$line" in $allow_pat_zz) n=$((n+1)) ;; esac	T1	pw-doctor
+C54-preflight-availability-gate	pw-preflight.sh	_mr_err="$("$HERE/pw-config.sh" model-resolve "$PROVIDER" "$MODEL" 2>&1 >/dev/null)" || _mr_rc=$?	_mr_rc=0	T1	pw-preflight
+C55-ladder-availability-text	skill/project-workflow/references/execution-and-routing.md	0. AVAILABILITY GATE first — on EVERY path, including resume:	0. AVAILABILITY GATE first — on execute paths only:	T4	-
+C56-plan-exec-idi-reader	pw-common.sh	awk -F'|' -v idi="$idi" -v bei="$bei" '	awk -F'|' -v bei="$bei" '	T1	pw-preflight
+C57-audit-unbound-verdict	pw-status.sh	1) verdict="unbound" ;;	1) verdict="ok" ;;	T1	pw-status
+C58-session-check-task-form	pw-session.sh	if [ -d "$PROJECTS_DIR/$prov" ] && printf '%s' "$id" | grep -qE '^T[0-9]+$'; then	if [ -d "$PROJECTS_DIR/$prov" ] && false; then	T1	pw-session
+C59-supervision-contract-text	skill/project-workflow/references/execution-and-routing.md	**Headless supervision (never fire-and-forget):**	**Headless supervision (optional):**	T4	-
+C60-model-resolve-exact-preferred	pw-config.sh	grep -F -x "$model" | head -1	grep -F -x "$prov/$model" | head -1	T1	pw-config
+C61-monitor-skipped-red	pw-ship.sh	      failed|FAILURE|failed|canceled|CANCELLED|failing)	      failed|FAILURE|failed|canceled|skipped|CANCELLED|SKIPPED|failing)	T1	pw-ship
+C62-monitor-no-sha-select	pw-ship.sh	(if ($s | length) > 0 and (any(.[]?; has("sha"))) then (map(select(.sha == $s))) else . end) as $sel	(.) as $sel	T1	pw-ship

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# tests/bin/opencode — deterministic fake of `opencode models` (the catalog surface the
+# availability gate + doctor read). Line shape mirrors the real CLI: `<provider>/<model>`,
+# including a nested multi-slash id to prove prefix-filter semantics are axis-generic.
+case "$1" in
+  models)
+    printf '%s\n' \
+      'testprov/test-model' \
+      'testprov/nested/deep-model' ;;
+  --help|-h|help)
+    printf 'opencode-shim: models\n' ;;
+  *)
+    printf 'opencode-shim: unsupported invocation: %s\n' "$*" >&2; exit 1 ;;
+esac

@@ -41,7 +41,7 @@ Checks **all** gates for one command and fails fast — run it before invoking t
 
 ```bash
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh analyze      <slug>   # phase context|analysis + context/INDEX.md exists with ≥1 filled input row
-$PW_HOME/tooling/scripts/entities/pw-preflight.sh execute      <slug>   # PLAN approved, phase valid, scope/model resolvable
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh execute      <slug>   # PLAN approved, phase valid, scope/model resolvable (allowlist + availability gate)
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh breakdown    <slug>   # analysis reviews approved, RFC open items resolved
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh ship         <slug>   # shippable tasks exist, verify passed
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh comments     <slug>   # ≥1 task has a linked MR (for /pw-ship <slug> comments — no 'done' requirement)
@@ -76,7 +76,17 @@ $PW_HOME/tooling/scripts/entities/pw-status.sh adopted <slug> <text...>         
 $PW_HOME/tooling/scripts/entities/pw-status.sh phase  <slug>                     # read the Status token only
 $PW_HOME/tooling/scripts/entities/pw-status.sh dashboard-task-status <slug> <T0n> <status>
 $PW_HOME/tooling/scripts/entities/pw-status.sh task-accept <slug> <T0n>          # merged-MR acceptance flow
+$PW_HOME/tooling/scripts/entities/pw-status.sh provider-audit <slug> [task-ids…] # report-only (below)
 ```
+
+**`provider-audit`** compares each task row's `Execute with:` (expected) against the LOG.md spawn
+ledger + the task's `Actually used:` (what ran), validates the row against the live catalog via
+`pw-config.sh model-resolve`, and prints one pipe row per task:
+`T0n|expected=…|used=<q[:model]|never-run>|via=…|route=…|verdict=ok|mismatch|stale-provider|unbound`.
+`stale-provider` = the row pins a provider/api-provider gone from `PW_PROVIDERS`/
+`PW_KILO_API_PROVIDERS` (the migration case); `unbound` = the model isn't in the catalog. Exit 0
+iff nothing but `ok`/`never-run`; mutates nothing (no LOG line). Wired as a warning pass into
+`/pw-execute`/`/pw-ship` and the `/pw-close` recap.
 
 ## pw-config.sh
 
@@ -85,12 +95,43 @@ Per-project config lines on the dashboard, get-or-set semantics:
 ```bash
 $PW_HOME/tooling/scripts/entities/pw-config.sh ai-review <slug> [<phase> <mode>]        # off|advisory|auto
 $PW_HOME/tooling/scripts/entities/pw-config.sh ai-model  <slug> [<lane> <provider:model|—>]
-$PW_HOME/tooling/scripts/entities/pw-config.sh model-check <provider> <model-id>        # allowlist guard
+$PW_HOME/tooling/scripts/entities/pw-config.sh model-check <provider> <model-id>        # PERMISSION axis (allowlist guard)
+$PW_HOME/tooling/scripts/entities/pw-config.sh model-resolve <provider> <model-id>      # AVAILABILITY axis (below)
 ```
 
 `auto` is what lets `pw-review.sh auto-signoff` ever succeed; `model-check` reads
 `PW_MODEL_ALLOWLIST_<PROVIDER>` from pw.config.sh (empty = all allowed). `/pw-review <slug>
 config` is the human-facing surface for the first two — prefer it over calling the script.
+
+**`model-resolve`** proves a model *exists right now* (model-check only proves it's *permitted*):
+match against the provider's live catalog **exact-first** — the exact line wins, because the
+agent-provider prefix is semantic, not cosmetic: `alibaba-token-plan/<m>` is a *direct* provider
+line and `kilo/alibaba-token-plan/<m>` is the same BYOK registered *under* the gateway (different
+connections, auth, billing); the prefix-less row falls back to the gateway line only when no
+direct line exists, announcing the substitution on stderr. Then verify it sits inside the
+`PW_<PROVIDER>_API_PROVIDERS` **prefix** scope, and print the
+**canonical** catalog id (what `-m`/`--model` must receive). Exit `0` resolved (id on stdout) /
+`1` not in catalog (candidates on stderr) / `2` out of configured scope (current entries on
+stderr). Fails **open** on "can't check" (claude has no catalog; CLI off PATH; unknown provider) —
+exit 0 + an "unverified" note — so every non-zero is a positive determination safe to hard-stop
+on. `pw-preflight.sh execute` runs it per row; the routing ladder runs it before every spawn.
+
+## pw-session.sh
+
+Deterministic headless-session liveness — the resume gate. "Is this recorded `Session:` id still
+resumable?" is a script answer, never an attempted-resume-and-read-the-error:
+
+```bash
+$PW_HOME/tooling/scripts/entities/pw-session.sh session-check <provider> <session-id>
+$PW_HOME/tooling/scripts/entities/pw-session.sh session-check <slug> <task-id>   # reads provider+id from the task file
+```
+
+Exit `0` live / `1` dead-or-absent / `2` unverifiable (the conservative reading on the ladder is
+"not resumable" → cold/inline path). Per-provider surfaces: kilo `kilo session list --format
+json -a`; claude `~/.claude/projects/<cwd-encoded>/<id>.jsonl` (searched across all project dirs;
+empty file = dead); cursor `~/.cursor/chats/<hash>/<id>/` (the `agent ls` TUI is not scriptable);
+opencode has no verified surface yet → always `2` (implement it HERE when a machine with opencode
+shows up, never in callers). Every lookup is a pure read — no model calls, no CLI resume attempt.
 
 ## pw-help.sh
 

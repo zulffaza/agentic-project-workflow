@@ -10,12 +10,17 @@ Rules you MUST follow:
   [--phase <phase>]` prints one line per review file — open/resolved/pending counts + last
   sign-off state — so you go straight to the files with live `[OPEN]` items instead of
   grep-walking `review/` (same scan `/pw-review` pre-flight and `pw-status.sh` use).
-- **Fixes are batched, per artifact, and resume-first.** All `[OPEN]` items on one artifact go to  its **producer** as one fix pass (the task's executor session, resumed by its logged id when
-  live — §Spawn ledger) holding every item for that artifact at once (human + `pw-reviewer` AI
-  items + `dep-impact:T0n` items + verifier items all share that one queue), with **per-item
-  `↳ agent:` replies** preserved for each thing it handled. Human *decisions* (Qn/"you decide"
-  rows) are never batch-auto-resolved — those wait for the human. Reviewers never edit the
-  artifact (that rule holds: reviewer = read + file; the fixer = the producer).
+- **Fixes are batched, per artifact, and ladder-routed (post-execution) / driver-inline (before execution).** All `[OPEN]` items on one artifact go as one fix pass holding every item for that
+  artifact at once (human + `pw-reviewer` AI items + `dep-impact:T0n` items + verifier items all
+  share that one queue), with **per-item `↳ agent:` replies** preserved for each thing it handled.
+  Where the artifact is a TASK (post-execution repair), the pass is routed by the §routing ladder
+  (references/execution-and-routing.md): same provider → in-process fixer (single task → driver
+  inline); different provider → supervised headless, resume-first iff
+  `pw-session.sh session-check` says the recorded id is live. Where the artifact is a *doc*
+  (analysis, PLAN, a task doc — pre-execution), the driver edits it inline: the review file is the
+  seed, no spawn, no resume. Human *decisions* (Qn/"you decide" rows) are never batch-auto-resolved
+  — those wait for the human. Reviewers never edit the artifact (that rule holds: reviewer = read
+  + file; the fixer = the driver or an executor-side pass).
 - **`/pw-review` is scoped to the current phase** (resolved from the dashboard `Status:`), not the
   whole project — process only that phase's `review/` dir, don't open every `.review.md`.
 - **`/pw-review` NEVER changes the dashboard `Status:`** — reviewing is not a phase transition.
@@ -147,15 +152,26 @@ method: the `pw-review` skill. Full human-facing explanation: `docs/REVIEW.md`'s
 review" section.
 
 
-## Fixer routing (batched + resume-first)
+## Fixer routing (batched; ladder-routed for tasks, driver-inline for docs)
 
 All `[OPEN]` items on **one** artifact — yours, `pw-reviewer`'s, an independent verifier's, and
 `dep-impact:T0n` items a §3.6 dependency fan filed — share **one queue** that drains as **one**
-fixer pass per artifact (not one spawn per comment; N spawns → 1): the driver spawns the artifact's
-producer fixer with the item-id list + pointers (`seed-review-batch`), **resuming the recorded
-`Session:` id first** when there is one, else a fresh spawn off the seed. Per-item
-`[OPEN]→[RESOLVED]` + `↳ agent:` replies stay exactly per-item; the fixer never touches a human's
-ask text, and review itself stays read-only for `pw-reviewer` (it raises items; the task's
-*executor* resolves them and re-runs its own `## Verify`). `Qn` / "you decide" rows are human
-answers — never auto-resolved by a batch. Cost + rules: docs/EXECUTION.md §The per-spawn ledger +
-references/execution-and-routing.md.
+fix pass per artifact (not one spawn per comment; N spawns → 1). *Who* runs the pass:
+
+- **Task artifact, single task, same provider, `Route: auto|subagent`** → the **driver fixes it
+  inline** in that task's worktree (bounded exception to "never edit repo source as orchestrator":
+  only the batch's listed items, run the task's `## Verify`, commit, post the `↳ agent:` replies).
+- **Task artifact, single task, `Route: headless`** → resume-try iff
+  `pw-session.sh session-check` reports the recorded `Session:` id live; dead/failed resume →
+  **inline fallback** with `resume-failed→inline` + `model-degraded` in the ledger.
+- **Task artifact, ≥2 tasks carrying items** → one fixer **per task, in parallel** (independent
+  worktrees), each routed by the §routing ladder; supervised per its headless rules.
+- **Doc artifact (analysis / PLAN / task doc — pre-execution)** → the **driver edits inline**,
+  review file as the seed. No producer-session resume (that clause retired): the doc is the
+  context, the human re-reads the doc anyway.
+
+Per-item `[OPEN]→[RESOLVED]` + `↳ agent:` replies stay exactly per-item; the fixer never touches a
+human's ask text, and review itself stays read-only for `pw-reviewer` (it raises items; the
+task's *executor-side pass* resolves them and re-runs its own `## Verify`). `Qn` / "you decide"
+rows are human answers — never auto-resolved by a batch. Cost + rules:
+docs/EXECUTION.md §The per-spawn ledger + references/execution-and-routing.md.

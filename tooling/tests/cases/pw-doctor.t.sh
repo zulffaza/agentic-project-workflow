@@ -12,6 +12,9 @@ cp "$REAL/pw.config.sh" "$PW/pw.config.sh"
 cat >> "$PW/pw.config.sh" <<CFG
 # --- test overrides: single provider, all dirs under \$FH ---
 PW_PROVIDERS=(kilo)
+# plan-22: a nested-BYOK-scoped allowlist exercises the catalog fetch (prefix-filter entries +
+# short-form pattern matching against the tests/bin/kilo shim's provider-prefixed lines)
+PW_MODEL_ALLOWLIST_KILO="alibaba-token-plan/*"
 kilo_commanddir() { echo "$FH/.config/kilo/command"; }
 kilo_skilldir()   { echo "$FH/.kilocode/skills"; }
 kilo_agentdir()   { echo "$FH/.config/kilo/agent"; }
@@ -23,6 +26,18 @@ DOCTOR="$PW/tooling/scripts/toolchain/pw-doctor.sh"
 # 1) --fix on a bare fake HOME installs everything; a follow-up check must be clean
 pwtest_rc 0 "doctor --fix installs a bare provider surface" env HOME="$FH" bash "$DOCTOR" --fix
 pwtest_rc 0 "doctor clean after fix" env HOME="$FH" bash "$DOCTOR"
+# plan-22: catalog fetched ONCE and filtered locally (entries are prefix filters, never `kilo
+# models` args — the shim errors on slash args, pinning that), allowlist patterns validated
+# against the provider-prefixed lines (short form), and the session-liveness surface reachable.
+grep -qE 'model allowlist "alibaba-token-plan/\*": [1-9][0-9]* match\(es\) in the live catalog' "$PWTEST_OUT" \
+  && pwtest_ok "allowlist validated against nested-BYOK catalog lines" \
+  || pwtest_bad "allowlist validation" "$(grep -a 'model allowlist' "$PWTEST_OUT" | head -2 | tr '\n' ' ')"
+grep -qa "can't check" "$PWTEST_OUT" \
+  && pwtest_bad "doctor must not skip the check for slash entries" "$(grep -a "can't check" "$PWTEST_OUT" | head -1)" \
+  || pwtest_ok "no silent 'can't check' with a slash-scoped entry"
+grep -qE 'session liveness: kilo surface reachable' "$PWTEST_OUT" \
+  && pwtest_ok "session-liveness probe row present + reachable" \
+  || pwtest_bad "session liveness row" "$(grep -a 'session liveness' "$PWTEST_OUT" | head -1)"
 
 # 2) orphans: installed pw-named artifacts the bundle no longer generates must be NAMED
 echo stale > "$FH/.config/kilo/command/pw-gone.md"

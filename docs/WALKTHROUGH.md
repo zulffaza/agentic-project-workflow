@@ -173,7 +173,7 @@ manifest, a dependency DAG, and a task table:
 |-----|----------------------------------|-----------------------|-----------|--------------|
 | T01 | Bump payments-api to Boot 3      | payments-api          | —         | opus         |
 | T02 | Bump orders-api to Boot 3        | orders-api            | —         | sonnet       |
-| T03 | Bump notifications-worker+Kafka  | notifications-worker  | —         | sonnet       |
+| T03 | Bump notifications-worker+Kafka  | notifications-worker  | —         | kilo:kilo/alibaba-token-plan/deepseek-v4-pro (BYOK under the gateway) |
 ```
 
 ...plus one self-contained `T01.md`/`T02.md`/`T03.md` per row, each with exact steps and a runnable
@@ -236,6 +236,14 @@ T03 notifications-worker   done   commit 4c5d6e7   verify: BUILD SUCCESS
 > `/pw-execute spring-boot-3-upgrade --wave` instead runs only the tasks that are immediately ready
 > right now, then stops and reports which tasks are newly ready for the *next* `--wave` call — a
 > checkpoint-sized chunk so a lost session only costs one wave, not the whole remaining DAG.
+
+> **Provider changed mid-project?** If an API Provider you were using goes away (a BYOK ends, auth
+> fails, you drop it from `pw.config.sh`), tasks whose `Execute with:` still pin it are caught at the
+> **availability gate** before any spawn — `/pw-execute` refuses them with the live-catalog
+> candidates to re-pin to, and the provider-consistency audit names every `stale-provider`/`unbound`
+> row. Because routing is plain text (the task's `Route:` field, the PLAN `- Routing:` line,
+> `PW_ROUTE_DEFAULT`), you can also change *how* a task runs — in-process vs a strict-model headless
+> session — between spawns to match what's still working, without re-planning.
 
 ## Review an execution result (optional)
 

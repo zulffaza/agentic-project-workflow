@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# tests/bin/kilo — deterministic fake of the kilo CLI surfaces the tooling reads (plan-22
+# test tier). Shapes mirror the REAL CLI verified 2026-09-22/23 on the maintainer machine:
+#   `kilo models`                → full catalog; a gateway-nested BYOK appears as
+#                                  `kilo/alibaba-…/<m>`, a DIRECT provider as `alibaba-…/<m>`
+#                                  (both can coexist — exact-first matching test hook:
+#                                  PWTEST_KILO_CATALOG_EXTRA appends lines)
+#   `kilo models <top-level-id>` → filter by provider id (the only arg shape the real CLI takes)
+#   `kilo models <a/b-path>`     → "Provider not found" (the pinned bug class: entries are
+#                                  prefix FILTERS, never query arguments)
+#   `kilo session list …`        → JSON array of resumable sessions (`ses_…` ids)
+# Unknown invocations fail LOUD — never a silent empty success.
+cat_lines() {
+  printf '%s\n' \
+    'kilo/~anthropic/claude-test-latest' \
+    'kilo/alibaba-token-plan/test-model' \
+    'kilo/alibaba-token-plan/other-model' \
+    'kilo/kilo/test-gateway-model' \
+    'command_code/MiniMaxAI/MiniMax-M3'
+  # extra lines for cases that need a coexisting DIRECT provider line next to the gateway one
+  # (e.g. 'alibaba-token-plan/test-model' — the exact-first matching test).
+  if [ -n "${PWTEST_KILO_CATALOG_EXTRA:-}" ]; then
+    printf '%s\n' "$PWTEST_KILO_CATALOG_EXTRA"
+  fi
+}
+case "$1" in
+  models)
+    shift
+    if [ $# -gt 0 ]; then
+      case "$1" in
+        */*) printf 'Error: Provider not found: %s\n' "$1" >&2; exit 1 ;;
+        -h|--help) cat_lines; exit 0 ;;
+      esac
+      cat_lines | grep "^$1/" >/dev/null || { printf 'Error: Provider not found: %s\n' "$1" >&2; exit 1; }
+      cat_lines | grep "^$1/"
+      exit 0
+    fi
+    cat_lines ;;
+  session)
+    case "$2" in
+      list) printf '[{"id":"ses_livetest0000000001","title":"pwt fixture session","time":{"updated":1790000000}}]\n' ;;
+      *) printf 'kilo-shim: unsupported session subcommand: %s\n' "$*" >&2; exit 1 ;;
+    esac ;;
+  --help|-h|help)
+    printf 'kilo-shim: models | session list\n' ;;
+  *)
+    printf 'kilo-shim: unsupported invocation: %s\n' "$*" >&2; exit 1 ;;
+esac

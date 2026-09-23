@@ -92,8 +92,18 @@ green ≠ merged; that column belongs to true merged-ness from `pw-ship.sh mr-st
 | Exit | Last line looks like | Meaning |
 |---|---|---|
 | `0` | `T03: pipeline SUCCESS (4m 12s)` | CI green; the task's `- **Build check:**` field is upserted to `SUCCESS` (a template placeholder never blocks the record) |
+| `0` | `T03: pipeline SKIPPED (1m 2s) — no CI jobs ran for this push (repo pipeline rules)` | Terminal-**neutral**: every pipeline registered for the MR head sha was `skipped`. Not a failure — records `Build check: SKIPPED (no jobs …)`. Do NOT enter the build-fix loop on this |
 | `1` | `T03: pipeline FAILED (2m 03s) — status: failed` | CI red/Cancelled; task file records `Build check: FAILED (…)` |
 | `2` | `T03: pipeline still running after 30m — not yet resolved` | **timeout, not failure** — re-run or raise `--timeout` |
+
+**Which pipeline it trusts (GitLab):** the MR's *head sha*, not "the first entry". Right after a
+push the pipelines list can contain a **branch** pipeline that the repo's rules skip (the MR
+pipeline registers a beat later) and a **stale** pipeline from the previous push — reading either
+first produced, respectively, false `FAILED (skipped)` and false instant `SUCCESS` in live runs
+(2026-09-23). The monitor filters the list to pipelines whose `sha` equals the MR head sha,
+prefers a non-`skipped` status among those, and only concludes SKIPPED after two consecutive
+skipped-only polls (registration grace). Requires `jq` for sha filtering; without it, falls back
+to the older first-entry read.
 
 Intermediate `T03: pipeline running (…elapsed) — status: …` lines stream while polling. Exit `2`
 is overloaded with usage errors — distinguish by message ("still running" = timeout). A query

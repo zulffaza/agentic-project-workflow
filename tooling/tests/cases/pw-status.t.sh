@@ -101,3 +101,47 @@ pl_status_selftest() {
   rm -rf "$tmp"
 }
 pl_status
+
+# --- provider-audit: Execute-with expected vs ledger/Actually-used, + availability verdicts ---
+# Owns a scratch project (not F2) so rows/log lines are exact; shim catalog + scoped fixture
+# config keep the verdicts machine-independent.
+PA="$ROOT/projects/paaudit"; mkdir -p "$PA/task"
+cat > "$PA/task/PLAN.md" <<'PLAN'
+# PLAN — paaudit
+## Task table
+| ID | Title | Repo | depends_on | Group | Execute with | SP | Status | Time | Result |
+|----|-------|------|------------|-------|--------------|----|--------|------|--------|
+| [T01](./T01.md) | ok | api | — | G1 | kilo:alibaba-token-plan/test-model | 1 | done | — | — |
+| [T02](./T02.md) | unbound | api | — | G1 | kilo:alibaba-token-plan/gone-xyz | 1 | todo | — | — |
+| [T03](./T03.md) | stale | api | — | G1 | kilo:command_code/MiniMaxAI/MiniMax-M3 | 1 | done | — | — |
+| [T04](./T04.md) | mismatch | api | — | G1 | kilo:alibaba-token-plan/test-model | 1 | done | — | — |
+| [T05](./T05.md) | degraded-ok | api | — | G1 | kilo:alibaba-token-plan/test-model | 1 | done | — | — |
+| [T06](./T06.md) | provider-gone | api | — | G1 | kilotest:test-model | 1 | done | — | — |
+PLAN
+printf -- '- **Route:** headless\n' > "$PA/task/T01.md"
+cat > "$PA/LOG.md" <<'LOG'
+# Activity log — paaudit
+- **2026-09-23 10:00** · `exec` — spawned T01 (kilo:alibaba-token-plan/test-model) · via=subagent · session=— · seed=task/T01.md · out=worktree/T01.log · state=success
+- **2026-09-23 10:10** · `exec` — spawned T04 (claude:opus) · via=headless · session=— · seed=x · out=y
+- **2026-09-23 10:20** · `exec` — spawned T05 (kilo:alibaba-token-plan/other-model) · via=subagent · model-degraded kilo:alibaba-token-plan/test-model→kilo:alibaba-token-plan/other-model · session=— · seed=x · out=y
+LOG
+PAE="$(pwtest_script pw-status.sh)"
+pwtest_rc 1 "provider-audit flags planted rows" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit paaudit
+grep -qE '^T01\|expected=kilo:alibaba-token-plan/test-model\|used=kilo:alibaba-token-plan/test-model\|via=subagent\|route=headless\|verdict=ok$' "$PWTEST_OUT" \
+  && pwtest_ok "ok row renders expected shape (route from task file)" \
+  || pwtest_bad "ok row shape" "$(grep '^T01' "$PWTEST_OUT")"
+grep -qE '^T02\|.*verdict=unbound$' "$PWTEST_OUT" && pwtest_ok "catalog miss → unbound" || pwtest_bad "unbound" "$(grep '^T02' "$PWTEST_OUT")"
+grep -qE '^T03\|.*verdict=stale-provider$' "$PWTEST_OUT" && pwtest_ok "out-of-scope api-provider → stale-provider" || pwtest_bad "stale" "$(grep '^T03' "$PWTEST_OUT")"
+grep -qE '^T04\|.*used=claude:opus\|via=headless.*verdict=mismatch$' "$PWTEST_OUT" && pwtest_ok "wrong provider used → mismatch" || pwtest_bad "mismatch" "$(grep '^T04' "$PWTEST_OUT")"
+grep -qE '^T05\|.*verdict=ok$' "$PWTEST_OUT" && pwtest_ok "recorded model-degrade is policy-blessed" || pwtest_bad "degrade ok" "$(grep '^T05' "$PWTEST_OUT")"
+grep -qE '^T06\|.*verdict=stale-provider$' "$PWTEST_OUT" && pwtest_ok "provider absent from PW_PROVIDERS → stale-provider" || pwtest_bad "provider stale" "$(grep '^T06' "$PWTEST_OUT")"
+# ledger-tolerant (pre-ladder lines lack via= → '—') + task-id filter + all-ok subset exits 0:
+cat >> "$PA/LOG.md" <<'LOG'
+- **2026-09-23 09:00** · `exec` — spawned T06 (kilotest:test-model) · session=— · seed=x · out=y
+LOG
+pwtest_rc 0 "provider-audit filtered to clean rows exits 0" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit paaudit T01 T05
+pwtest_rc 1 "provider-audit names the filtered offender" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit paaudit T04
+# report-only: audit must never mutate LOG.md
+before="$(cat "$PA/LOG.md")"
+env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit paaudit >/dev/null 2>&1
+[ "$before" = "$(cat "$PA/LOG.md")" ] && pwtest_ok "provider-audit mutates nothing (LOG.md byte-identical)" || pwtest_bad "audit mutating" "LOG.md changed"

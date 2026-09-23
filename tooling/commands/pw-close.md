@@ -40,9 +40,13 @@ moment to skip a lint. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
    (`{{PW_HOME}}/template/` for project scaffolding, `{{PW_HOME}}/tooling/` for machinery).
 5. Close out via the helper, then summarize:
    ```bash
+   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh provider-audit <slug>
    {{PW_HOME}}/tooling/scripts/entities/pw-status.sh log <slug> close "closed — N MRs open, worktrees removed, memories seeded"
    {{PW_HOME}}/tooling/scripts/entities/pw-status.sh status <slug> done
    ```
    Summarize: MRs opened / merged, worktrees removed, memories seeded, and any leftover follow-ups.
+   **Include unresolved `provider-audit` verdicts** (`stale-provider`/`unbound`/`mismatch` rows) in
+   the recap — a provider that drifted mid-project is exactly the kind of follow-up the close
+   summary exists to carry forward.
 
 Confirm with me before removing any worktree with uncommitted changes.

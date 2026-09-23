@@ -38,6 +38,14 @@
      (effort covers reasoning). -->
 - **Effort:** <low|medium|high|xhigh|max>
 - **Thinking:** <on|off>
+<!-- Route (optional — omit the bullet for `auto`): how this task's spawn is routed, per the
+     routing ladder — `auto` = same provider → in-process sub-agent (natively monitorable; where
+     the CLI can't bind the row's model in-session, the parent model runs and `model-degraded` is
+     recorded), different provider → supervised headless with resume-first; `subagent` = force
+     in-process (errors on a cross-provider row); `headless` = strict exact-model binding via a
+     headless session (resume-first internally). Precedence: this bullet > PLAN `- Routing:` >
+     `PW_ROUTE_DEFAULT` > auto. Ladder + supervision contract:
+     `{{PW_HOME}}/tooling/skill/project-workflow/references/execution-and-routing.md`. -->
 - **Why:** <one line — why this model/agent/effort fits this task>
 <!-- Story points: manual-effort estimate, 2 SP = 1 person-day. [🤖 set at breakdown] -->
 - **Story points:** <n>

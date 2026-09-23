@@ -46,6 +46,11 @@ Custom rules that shaped this breakdown, and per-task routing overrides. Seed th
   switching agents mid-workflow.
 - **Default agent/model:** <e.g. `<produced-by>:sonnet` unless a task says otherwise>
 - **Routing overrides:** <e.g. "T05 → KiloCode (bulk mechanical); T03 → opus (ambiguous)">
+- **Routing:** <optional project-level route default — `auto` | `subagent` | `headless` (the
+  spawn-routing ladder: same provider → in-process sub-agent, different → supervised headless,
+  resume-first; `headless` = strict exact-model binding). Precedence: task `Route:` > this line >
+  `pw.config.sh PW_ROUTE_DEFAULT` > `auto`. Omit this bullet for `auto`. Full ladder:
+  `{{PW_HOME}}/tooling/skill/project-workflow/references/execution-and-routing.md`>
 - **Sizing / splitting rules used:** <e.g. "one repo per task; split anything touching two repos">
 - <other custom rule that affected how tasks were cut>
 

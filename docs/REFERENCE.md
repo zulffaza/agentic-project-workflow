@@ -91,6 +91,12 @@ Every table/form in a project carries a `Filled by:` marker so it's unambiguous 
   (e.g. `agent/spring-boot-3-upgrade/T03-bump-parent-pom`).
 - **Worktree path** — `worktree/<repo>/<task-id>-<short-slug>/` (per-repo, per-task, so parallel
   agents never collide even within the same repo).
+- **Execute with / Route** — each task pins `<provider>:<model-or-agent>` (its only model binding;
+  lanes are separate — see docs/EXECUTION.md). An optional `Route:` field (`auto|subagent|headless`)
+  chooses how the spawn is routed (in-process vs supervised-headless vs strict-model); a PLAN-level
+  `- Routing:` line and `PW_ROUTE_DEFAULT` set the default it overrides. Before any spawn the row is
+  checked against the live catalog + configured API-Provider scope, so a row pinning a since-removed
+  provider fails fast with re-pin candidates rather than launching a dead run.
 - **Commits** — Conventional Commits (`feat:`, `fix:`, `chore:`…), scoped to one task's worktree.
 - **Definition of Done** — every task file has a `## Verify` block with **runnable commands and
   expected result**. An agent may only report a task done after running it and pasting real output.

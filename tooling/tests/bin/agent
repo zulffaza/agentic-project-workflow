@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# tests/bin/agent — deterministic fake of the Cursor CLI (`agent models`). One gateway, no
+# API-provider axis: catalog lines are bare ids (verified shape 2026-09-09). `agent ls` is an
+# interactive TUI in the real CLI and is never scripted — the shim refuses it too.
+case "$1" in
+  models)
+    printf '%s\n' \
+      'cursor-test-high' \
+      'cursor-test-low-fast' ;;
+  ls)
+    printf 'agent-shim: `ls` is an interactive TUI — not scriptable (use the filesystem surface)\n' >&2
+    exit 1 ;;
+  --help|-h|help)
+    printf 'agent-shim: models\n' ;;
+  *)
+    printf 'agent-shim: unsupported invocation: %s\n' "$*" >&2; exit 1 ;;
+esac

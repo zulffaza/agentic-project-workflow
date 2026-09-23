@@ -84,7 +84,9 @@ Then produce, from `{{PW_HOME}}/template/task/`:
    with its **`Repo:` + `Base branch:`** set (the base the task forks from — two tasks in the same
    repo may declare different bases, e.g. `master` vs `spring3`), a runnable `## Verify` block, an
    `Execute with: <provider>:<model-or-agent>` + `Why:`, a **`Story points:`** estimate, optional
-   **`Effort:`**/**`Thinking:`**, and an empty `## Result` block.
+   **`Effort:`**/**`Thinking:`**/**`Route:`** (route = `auto|subagent|headless` spawn-routing per
+   the ladder — only write it when the task needs strict binding (`headless`) or forced
+   in-process (`subagent`); omit for `auto`), and an empty `## Result` block.
       - **Per-lane model default on top of "Produced by":** the dashboard's `- **AI Models:**` line is        what the *next* run's lane spawns will use (`pw-config.sh ai-model <slug> [role <provider:model>]`
         reads/sets it — researcher/analyst/writer-task/reviewer/verifier; the **executor is never a
         row**, a task's `Execute with:` is its only pin). Surface the current rows in your summary so I
@@ -98,18 +100,25 @@ Then produce, from `{{PW_HOME}}/template/task/`:
      id from memory.** A plausible-looking id can simply not exist, or its display name can differ
      from the real id.
      ```bash
-     kilo models <api-provider>      # once per entry in PW_KILO_API_PROVIDERS (pw.config.sh)
-     opencode models                 # opencode manages its own provider config internally
-     agent models                    # cursor — one gateway, no provider arg; effort/thinking are
-                                     # catalog-id variants (e.g. claude-opus-5-thinking-xhigh)
+     kilo models                   # full catalog; PW_KILO_API_PROVIDERS entries are model-id
+     opencode models               #   prefix FILTERS over these lines (slashes allowed — a
+     agent models                  #   nested BYOK appears as `kilo/alibaba-token-plan/<m>`),
+                                   #   never as `kilo models <arg>` arguments (that errors).
+                                   #   cursor: one gateway; effort/thinking are catalog-id variants
+                                   #   (e.g. claude-opus-5-thinking-xhigh)
      ```
-     Pick the id from that actual output. Claude has no live catalog — its fixed alias set is
+     Pick the id from that actual output; confirm it resolves (and get its canonical bind id) with
+     `pw-config.sh model-resolve <provider> <model-id>` before writing the row. Claude has no live
+     catalog — its fixed alias set is
      already fully documented in `{{PW_HOME}}/tooling/docs/providers.md`.
    - **Before finalizing each task's `Execute with:`**, check the chosen model against the
      project's model allowlist (empty/unset = every model is allowed, the default — see
-     `pw.config.sh`):
+     `pw.config.sh`), and confirm it actually resolves right now (live catalog + api-provider
+     prefix scope — a row pinning a model/provider that isn't available fails the execute gate
+     later, so don't write it now):
      ```bash
-     {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-check <provider> <model-id>
+     {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-check   <provider> <model-id>
+     {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-resolve <provider> <model-id>
      ```
      If it refuses, pick a different allowed model for that task rather than writing one the
      allowlist excludes — don't silently override it.

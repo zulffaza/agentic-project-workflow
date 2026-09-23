@@ -11,6 +11,14 @@
 #   adopted <slug> <text...> · phase <slug> · dashboard-task-status <slug> <task-id> <status>
 #   task-accept <slug> <task-id>
 #
+#   provider-audit <slug> [task-ids…]
+#       REPORT-ONLY consistency audit of `Execute with:` rows vs. what actually ran:
+#       per task prints T0n|expected=…|used=…|via=…|route=…|verdict=ok|mismatch|stale-provider|unbound|never-run.
+#       "expected" is validated against the live catalog via pw-config.sh model-resolve, so a
+#       row pinning a removed provider/api-provider reads stale-provider (the migration case)
+#       and a row whose model simply does not exist reads unbound. Exit 0 iff no
+#       mismatch/stale-provider/unbound. Mutates nothing (no LOG line — this is a reader).
+#
 # Produces the same output as /pw-status today, with zero agent invocation.
 # Reads README.md, PLAN.md, greps for open items, shows LOG.md lines, reports
 # blockers, and checks CLI auth status (informational, non-blocking).
@@ -187,6 +195,99 @@ cmd_dashboard_task_status() {
 }
 
 
+# --- provider-audit (report-only; plan-22 §3.2) -----------------------------------------
+# PLAN row reader: "T0n|Execute-with" pairs, column-NAME driven (same _pw_plan_map spec as
+# pw_plan_execs — both PLAN generations, never positional).
+_pw_audit_rows() {
+  local spec idi sti bei
+  spec="$(_pw_plan_map "$1")"
+  idi="${spec%% *}"; rest="${spec#* }"; sti="${rest%% *}"; bei="${rest##* }"
+  [ "${idi:-0}" -gt 0 ] 2>/dev/null || return 0
+  [ "${bei:-0}" -gt 0 ] 2>/dev/null || return 0
+  awk -F'|' -v idi="$idi" -v bei="$bei" '
+    /^## Task/ { p=1; next }
+    p && /^## / { exit }
+    p && /^[ \t]*\|/ && !($0 ~ /^[ \t]*\|[ \t:|+-]*\|[ \t]*$/) {
+      split($0, c, "|")
+      id = c[idi + 0]; gsub(/[ \t`\*]/, "", id)
+      if (match(id, /T[0-9]+/)) { id = substr(id, RSTART, RLENGTH) } else { id = "" }
+      v = c[bei + 0]; gsub(/^[ \t]+/, "", v); gsub(/[ \t]+$/, "", v)
+      if (id ~ /^T[0-9]+/) print id "|" v
+    }' "$1"
+}
+
+cmd_provider_audit() {
+  [ $# -ge 1 ] || die "usage: provider-audit <slug> [task-ids…]   (report-only; exit 0 iff every row is ok/never-run)"
+  local slug="$1"; shift
+  local d; d="$(proj_dir "$slug")"
+  local plan="$d/task/PLAN.md"
+  [ -f "$plan" ] || die "no task/PLAN.md in $slug → fix: run /pw-breakdown $slug first"
+  local logf="$d/LOG.md"
+  local ids="$*"
+  local bad=0 rc id exec prov model route expected used via verdict mr_err lline au _seen _p
+  while IFS='|' read -r id exec; do
+    [ -n "$id" ] || continue
+    if [ -n "$ids" ]; then
+      case " $ids " in *" $id "*) ;; *) continue ;; esac
+    fi
+    exec="$(printf '%s' "$exec" | pw_trim)"
+    [ -n "$exec" ] && [ "$exec" != "—" ] || continue
+    # provider = text before the first ':' (rows without a ':' bind no agent-provider)
+    case "$exec" in
+      *:*) prov="${exec%%:*}"; model="${exec#*:}" ;;
+      *)   prov=""; model="$exec" ;;
+    esac
+    expected="$exec"
+    route="—"
+    if [ -f "$d/task/$id.md" ]; then
+      au="$(pw_field "$d/task/$id.md" Route || true)"
+      [ -n "${au:-}" ] && route="$au"
+    fi
+    # availability: model-resolve is the shared oracle (exit 1 = not in catalog → unbound;
+    # exit 2 = out of configured api-provider scope → stale-provider; it fails open on
+    # "can't check", so a non-zero here is a positive determination).
+    verdict="ok"
+    if [ -n "$prov" ]; then
+      rc=0
+      mr_err="$("$HERE/pw-config.sh" model-resolve "$prov" "$model" 2>&1 >/dev/null)" || rc=$?
+      case "$rc" in
+        1) verdict="unbound" ;;
+        2) verdict="stale-provider" ;;
+      esac
+      # provider itself gone from the enabled set (the migration case)
+      if [ "$verdict" = "ok" ]; then
+        _seen=0
+        for _p in "${PW_PROVIDERS[@]}"; do [ "$_p" = "$prov" ] && _seen=1; done
+        [ "$_seen" = 1 ] || verdict="stale-provider"
+      fi
+    fi
+    # what actually ran: newest ledger line for this task, else the task's Actually used:
+    used="never-run"; via="—"
+    if [ -f "$logf" ]; then
+      lline="$(grep -E "spawned $id( |\()" "$logf" 2>/dev/null | tail -1 || true)"
+      if [ -n "$lline" ]; then
+        used="$(printf '%s' "$lline" | sed -nE 's/.*spawned [^ ]+ \(([^)]*)\).*/\1/p')"
+        [ -n "$used" ] || used="unknown"
+        via="$(printf '%s' "$lline" | sed -nE 's/.*via=([a-z]+).*/\1/p')"
+        via="${via:-—}"
+        # a recorded degrade is policy-blessed; anything else that differs is a mismatch
+        if [ "$verdict" = "ok" ] && [ "$used" != "$exec" ]; then
+          printf '%s' "$lline" | grep -q 'model-degraded' || verdict="mismatch"
+        fi
+      fi
+    fi
+    if [ "$used" = "never-run" ] && [ -f "$d/task/$id.md" ]; then
+      au="$(pw_field "$d/task/$id.md" "Actually used" || true)"
+      case "${au:-}" in ""|"—"|"<*") ;; *) used="$au" ;; esac
+    fi
+    [ "$verdict" = "ok" ] || bad=1
+    printf '%s|expected=%s|used=%s|via=%s|route=%s|verdict=%s\n' "$id" "$expected" "$used" "$via" "$route" "$verdict"
+  done <<EOF
+$(_pw_audit_rows "$plan")
+EOF
+  [ "$bad" = 0 ]
+}
+
 case "${1:-}" in
   log)                   shift; cmd_log "$@"; exit $? ;;
   status)                shift; cmd_status "$@"; exit $? ;;
@@ -195,6 +296,7 @@ case "${1:-}" in
   phase)                 shift; cmd_phase "$@"; exit $? ;;
   dashboard-task-status) shift; cmd_dashboard_task_status "$@"; exit $? ;;
   task-accept)           shift; cmd_task_accept "$@"; exit $? ;;
+  provider-audit)        shift; cmd_provider_audit "$@"; exit $? ;;
 esac
 
 SKIP_CLI_CHECK=0

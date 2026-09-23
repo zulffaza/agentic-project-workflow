@@ -21,7 +21,9 @@ $PW_HOME/tooling/scripts/entities/pw-doc.sh lint all      <slug>                
 
 - `analysis` — sections §1 Problem … §5 Decisions present.
 - `task` — required fields (`Repo:`, `Base branch:`, `Branch:`, `Execute with:`, `Story
-  points:`) and required sections (`## Steps`, `## Verify`, `## Result`).
+  points:`) and required sections (`## Steps`, `## Verify`, `## Result`). Optional fields —
+  `Route:` (`auto|subagent|headless`), `Effort:`, `Thinking:` — are read by the routing ladder
+  but never linted; absent = `auto`/provider default, so old task files keep passing.
 - `plan` — task table (template heading `## Task table`, also accepts `## Tasks`) has the
   Task/Repo/Branch/SP/Execute with columns.
 - `review` — review-file structure (Items / Open questions / Sign-off).

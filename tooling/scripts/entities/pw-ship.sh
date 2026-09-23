@@ -386,6 +386,7 @@ cmd_monitor() {
   START_TIME="$(date +%s)"
 
   UNKNOWN_STREAK=0
+  SKIPPED_STREAK=0
   echo "Monitoring pipeline for $TASK_ID (MR !$MR_IID)..."
   echo "  Timeout: ${TIMEOUT_MIN}m, Interval: ${INTERVAL_SEC}s"
   echo
@@ -394,11 +395,38 @@ cmd_monitor() {
     STATUS=""
 
     if [ "$FORGE_CLI" = "glab" ]; then
-      # GitLab: pipelines list. "[]" = none registered yet (cold-start race) → keep waiting.
+      # GitLab: MR-linked pipelines, newest first. Two races killed here: (1) right after a push
+      # the first list entry is often a BRANCH pipeline the repo rules SKIP (the MR pipeline
+      # registers moments later) — reading it reported false FAILED; (2) the first non-skipped
+      # entry can be a STALE pipeline from the PREVIOUS push — reading it reported false SUCCESS
+      # at 0m. Select by the MR's current head sha, prefer a non-skipped status among that sha's
+      # pipelines, and only conclude "all skipped" after two consecutive polls (creation grace).
+      # "[]" / no match yet (cold-start race) → keep waiting.
+      HEAD_SHA="$(glab api "projects/:id/merge_requests/$MR_IID" ${GL_REPO:+-R "$GL_REPO"} 2>/dev/null | grep -o '"sha":"[0-9a-f]*"' | head -1 | sed 's/.*:"//;s/"$//' || true)"
       RAW="$(glab api "projects/:id/merge_requests/$MR_IID/pipelines" ${GL_REPO:+-R "$GL_REPO"} 2>/dev/null || true)"
       if [ -n "$RAW" ]; then
-        STATUS="$(echo "$RAW" | grep -o '"status":"[^"]*"' | head -1 | sed 's/"status":"//;s/"//' || true)"
+        STATUS=""
+        JQ_OK=""
+        if command -v jq >/dev/null 2>&1; then
+          # jq legitimately answers "" (no pipelines for the head sha yet) — that must stay
+          # "keep waiting", NOT fall through to the sha-blind grep fallback.
+          if JQ_OUT="$(echo "$RAW" | jq -r --arg s "${HEAD_SHA:-}" '
+            (if ($s | length) > 0 and (any(.[]?; has("sha"))) then (map(select(.sha == $s))) else . end) as $sel
+            | ($sel | map(.status // "")) as $st
+            | if ($st | length) == 0 then ""
+              else (($st | map(select(. != "skipped" and . != "")) | .[0]) // "skipped")
+              end' 2>/dev/null)"; then JQ_OK=1; STATUS="$JQ_OUT"; fi
+        fi
+        # no jq (or unparsable list) → old head-1 fallback, sha filtering unavailable
+        [ -n "$JQ_OK" ] || STATUS="$(echo "$RAW" | grep -o '"status":"[^"]*"' | head -1 | sed 's/"status":"//;s/"//' || true)"
         [ -n "$STATUS" ] || STATUS="pending"
+        # all pipelines for this head are skipped → neutral SKIPPED, but only after the
+        # grace of a second consecutive poll (the MR pipeline may still be registering).
+        if [ "$STATUS" = "skipped" ]; then
+          SKIPPED_STREAK=$((SKIPPED_STREAK + 1))
+        else
+          SKIPPED_STREAK=0
+        fi
       fi
     elif [ "$FORGE_CLI" = "gh" ]; then
       # GitHub: check PR checks status ("no checks reported" cold-start keeps waiting).
@@ -429,12 +457,28 @@ cmd_monitor() {
 
         exit 0
         ;;
-      failed|FAILURE|failed|canceled|skipped|CANCELLED|SKIPPED|failing)
+      failed|FAILURE|failed|canceled|CANCELLED|failing)
         echo "$TASK_ID: pipeline FAILED (${ELAPSED_MIN}m ${ELAPSED_SEC}s) — status: $STATUS"
 
         _record_build_check "$TASK_FILE" "FAILED ($STATUS)"
 
         exit 1
+        ;;
+      skipped|SKIPPED)
+        # Creation grace: one skipped-only reading may be the branch pipeline racing the MR
+        # pipeline's registration — keep polling once before concluding.
+        if [ "$SKIPPED_STREAK" -lt 2 ]; then
+          echo "$TASK_ID: pipeline running (${ELAPSED_MIN}m ${ELAPSED_SEC}s elapsed) — status: skipped (waiting for MR pipeline)"
+          sleep "$INTERVAL_SEC"
+          continue
+        fi
+        # Terminal-neutral: repo pipeline rules ran no jobs for this push. Not a failure —
+        # reporting it red sends the build-fix loop chasing a build that never existed.
+        echo "$TASK_ID: pipeline SKIPPED (${ELAPSED_MIN}m ${ELAPSED_SEC}s) — no CI jobs ran for this push (repo pipeline rules)"
+
+        _record_build_check "$TASK_FILE" "SKIPPED (no jobs — repo pipeline rules)"
+
+        exit 0
         ;;
       unknown)
         # A query that can't resolve state (auth, bad URL, CLI error) must fail fast —

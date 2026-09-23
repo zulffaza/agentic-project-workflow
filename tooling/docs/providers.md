@@ -57,22 +57,29 @@ sync by whoever maintains the bundle, not something you edit here to change beha
   immune (see [Verification notes](#verification-notes-historical)). Model aliases (`opus`/
   `sonnet`/`haiku`/`fable`) follow the *latest* of that family — pin a full name
   (`claude-opus-4-8` vs `claude-opus-5`) for reproducibility on risky tasks.
-- **kilo** — `kilo run --auto -m <api-provider>/<model> "<prompt>" --dir <path> [--variant <low|
+- **kilo** — `kilo run --auto -m <canonical-catalog-id> "<prompt>" --dir <path> [--variant <low|
   medium|high|max|minimal>] [--thinking] [--format json]`. `--auto` is **required** headless
   (without it, `kilo run` auto-*rejects* every permission — it can't even read the task file).
   Add `--agent <name>` only when targeting a **primary** agent, never a sub-agent: verified    2026-09-04, `--agent pw-executor` prints *"agent 'pw-executor' is a subagent, not a primary
     agent. Falling back to default agent"* and runs the fallback model anyway (unknown names likewise
     fall back silently) — so cross-provider *execution* always carries the **task file as the work
-    order** on a `<api-provider>/<model>`, never a sub-agent name. Two related kilo facts from the
+    order** on a `<canonical-catalog-id>`, never a sub-agent name. Two related kilo facts from the
     same probe session (`kilo agent list` / `kilo debug agent <name>`): an `agent/*.md` file with
     `mode:` + `options:` registers on its own (no map block needed), and a `model:` line *in that md*
     binds — outranking a `kilo.jsonc` map block if both set it. So a dashboard `- **AI Models:**` row
     can reach kilo's md path without any user-config edit once `render_kilo_agent` prints a canonical
-    `model:`. `<api-provider>` is
-  one of `PW_KILO_API_PROVIDERS` (`pw.config.sh`) — e.g. `kilo`, `command_code`, `openrouter`.
-- **opencode** — `opencode run --auto -m <api-provider>/<model> "<prompt>" [--format json]
+    `model:`. `<canonical-catalog-id>` is the exact line `kilo models` prints — resolve a row's model
+    to it with `pw-config.sh model-resolve kilo <model-id>` (it also enforces the
+    `PW_KILO_API_PROVIDERS` **prefix-filter** scope: entries may contain slashes — a BYOK nested
+    under the gateway is `kilo/alibaba-token-plan/<model>` — but are never `kilo models`
+    *arguments*, which error "Provider not found" for sub-provider paths; verified 2026-09-22).
+    Matching is **exact-first**: `alibaba-token-plan/<model>` as a row model names a *direct*
+    provider line — a different connection than the gateway's `kilo/alibaba-token-plan/<model>` —
+    and falls back to the gateway line only when no direct line exists, announced on stderr.
+- **opencode** — `opencode run --auto -m <canonical-catalog-id> "<prompt>" [--format json]
   [--attach <url>]`. `--auto` is required headless. **Not yet run end-to-end in this bundle**
   (unlike claude/kilo/cursor — see Verification notes); confirmed against OpenCode's own docs only.
+  `PW_OPENCODE_API_PROVIDERS` (if set) uses the same prefix-filter semantics as the kilo axis.
 - **cursor** — `agent -p --force [--trust] --model <id> [--output-format json] [--resume
   <session_id>] [--workspace <path>]`. `--force` (alias `--yolo`) is **required headless** (no TTY
   for approvals; `--trust` clears the per-folder gate when needed). **Pipe the prompt via a plain
@@ -120,11 +127,14 @@ pattern yourself. `/pw-breakdown` checks a task's chosen model against it while 
 with:`; `/pw-execute` checks again right before running it.
 
 **To see what's actually available, and whether your allowlist patterns match anything real, run
-`/pw-doctor`** — its "Model availability" section queries each provider's live catalog and flags
-a configured pattern that matches zero models (a likely typo, a deprecated id, or a model your
+`/pw-doctor`** — its "Model availability" section queries each provider's live catalog (fetched
+once per provider, then filtered locally against the `PW_<PROVIDER>_API_PROVIDERS` **prefix**
+entries — never as catalog-query arguments) and flags a configured pattern that matches zero
+models (a likely typo, a deprecated id, or a model your
 authenticated API Providers don't cover). It's informational only — never something you check by
 running a provider's CLI by hand, and never blocks `/pw-doctor` itself. (kilo's own catalog is
-browsable directly via `kilo models [provider-id]`, opencode's via `opencode models
+browsable directly via `kilo models` (full list; sub-provider paths are NOT valid filter
+arguments — filter the output yourself), opencode's via `opencode models
 [provider-id]`, cursor's via `agent models`, if you want to look yourself — but `/pw-doctor` is the one that actually validates your config.)
 
 ## Verified agent/session facts (probed 2026-09-04 kilo/claude + 2026-09-09 cursor, this machine — re-run before trusting elsewhere)
@@ -137,11 +147,14 @@ browsable directly via `kilo models [provider-id]`, opencode's via `opencode mod
   (mode/description/options/permission + body) **and** a `kilo.jsonc → agent` mirror block (the
   mirror can carry `model:` and `prompt:`). md-only registers too (`options:` + `mode:` are what
   makes a bare md resolve). **When both exist and set `model:`, the md's model wins** (probed).
-- **`kilo run` headless surface**: `-m <apiProvider>/<model>` binds the model; `--agent <name>`
-  resolves **only primary** agents (probed: a `mode: subagent` def prints "…is a subagent, not a
+- **`kilo run` headless surface**: `-m <apiProvider>/<model>` binds the model (use the canonical
+  catalog line — `pw-config.sh model-resolve` prints it); `--agent <name>` resolves **only primary**
+  agents (probed: a `mode: subagent` def prints "…is a subagent, not a
   primary agent. Falling back to default agent" with no error exit — it silently *continues* with
   the default agent, so never treat a headless `--agent` on a sub-agent as "worked"); **`-c` /
-  `-s <ses_…>` / `--fork`** resume sessions; **`--dir <path>`** runs in another directory (see
+  `-s <ses_…>` / `--fork`** resume sessions — and whether an id is still resumable is answered
+  deterministically by `pw-session.sh session-check` (`kilo session list --format json -a`), never
+  by attempting the resume and reading the error; **`--dir <path>`** runs in another directory (see
   `PW_KILO_WORKDIR` below).
 - **`claude -p` headless surface**: `--model` binds; `--agents '<json>'` injects *session-level*
   custom defs (probed to work for a headless `-p` run); `--permission-mode` is real
@@ -192,16 +205,25 @@ than inline here.
    (built-in agent, no def) the orchestrator's own provider. Its `model`/effort defaults apply
    unless the task overrides. (See `tooling/agents/README.md`.)
 1. Otherwise resolve each task's provider from its `Execute with:` **explicit `<provider>:`
-   prefix** — always present, never inferred.
+   prefix** — always present, never inferred — then apply the availability gate + route
+   (`pw-config.sh model-resolve` → canonical id or hard stop; task `Route:` > PLAN `- Routing:` >
+   `PW_ROUTE_DEFAULT` > `auto`, values `auto|subagent|headless` — full ladder:
+   `tooling/skill/project-workflow/references/execution-and-routing.md`).
 2. **Same provider** as the orchestrator → spawn a normal in-process **sub-agent** (the usual path):
    `pw-executor`, another same-provider agent, or a bare model. Sub-agents are same-provider only.
+   Where the CLI can't bind the row's model in-session (kilo), run on the parent model and record
+   `model-degraded <row>→<used>` — unless `Route: headless` demands strict binding.
 3. **Different provider** → read that provider's `<name>_headless()` hook output, and invoke its
    **CLI headlessly** per that template, passing the *task file* as the work order to its
-   **default/primary** agent. You **cannot** name the other provider's *sub-agent* here (e.g. a
-   Claude orchestrator can't use kilo's `pw-executor` sub-agent) — sub-agents don't cross a
-   provider boundary; only a provider's own primary agents are invocable from outside, and a lone
-   task just needs the default agent + task file. The discipline travels with the task, not the
-   provider — the other CLI still follows the `project-workflow` skill + the task file.
+   **default/primary** agent, on the **canonical catalog id** `model-resolve` printed. Resume an
+   existing session first iff `pw-session.sh session-check` reports the recorded id live. Every
+   headless run is supervised to a terminal state (ladder §Headless supervision — `success`/`failed`/`stalled`,
+   stall/timeout budgets, no run-end with a live child). You **cannot** name the other provider's
+   *sub-agent* here (e.g. a Claude orchestrator can't use kilo's `pw-executor` sub-agent) —
+   sub-agents don't cross a provider boundary; only a provider's own primary agents are invocable
+   from outside, and a lone task just needs the default agent + task file. The discipline travels
+   with the task, not the provider — the other CLI still follows the `project-workflow` skill + the
+   task file.
       Concretely (`-m <model>` always carries the routing; `--agent` is optional and names **primary**
    agents only — a `mode: subagent` def is rejected headless, verified 2026-09-04 — so the portable
    invocation passes the task file as the work order and lets that CLI's default agent run it):

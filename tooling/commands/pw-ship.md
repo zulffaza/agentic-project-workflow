@@ -30,7 +30,11 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 **Reading the pre-flight:** `pw-preflight.sh ship` checks at least one task is actually shippable
 (`done`, verified) in a legal phase; `pw-preflight.sh comments` just requires a legal phase plus at
 least one task with a linked MR (nothing to comment on before the first push). Non-zero +
-`pw-…:` stderr = STOP and relay it — never push against an unmet gate. Once confirmed, the
+`pw-…:` stderr = STOP and relay it — never push against an unmet gate. After the gates pass, run
+`{{PW_HOME}}/tooling/scripts/entities/pw-status.sh provider-audit <slug>` as a **warning** pass:
+relay any `stale-provider`/`unbound`/`mismatch` row verbatim (each names a row to re-pin; the
+per-spawn availability gate will hard-stop on it anyway — fix the rows first and the fan-out
+never spawns a dead model). Once confirmed, the
 mechanical halves are scripted:
 `pw-ship.sh resolve` (candidate list), `pw-ship.sh exec` (push + MR), `pw-ship.sh mr-state-batch` /
 `pw-ship.sh monitor` (state + CI waits) — how to read each:
@@ -88,7 +92,8 @@ task; here we push branches and open MRs.
      `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log <slug> ship "T0n pushed <branch>; MR <url>"`.
     - **Unless `--skip-build-check` was passed:** once the MR is open, monitor its pipeline/checks to
       a terminal state with `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh monitor <slug> <task-id>`
-      (exit 0 green / 1 red / 2 still-running — it records the task file's `## Result → Build
+      (exit 0 green — or neutral `SKIPPED`, no jobs ran, which is NOT a red build — / 1 red /
+      2 still-running — it records the task file's `## Result → Build
       check:` line itself; you fill the dashboard row's `Build` column from that outcome) before
       moving to the next task. A **red**
       build → that task is **not done**: enter the build-check fix loop below (fix in the worktree,
@@ -133,8 +138,11 @@ its base (`git diff origin/<base>...<branch>`), grouped per file/module with rea
 
 ## MR-comment mode  (`/pw-ship <slug> [task-ids] comments`)
 Handle review comments left on the **MR itself** — **all open threads on one task arrive as ONE fixer pass** for that task's worktree (a batched `seed-review-batch`, per-thread replies mirrored
-into `task/review/T0n.review.md`; resume the task's `## Result → Session:` executor by id, cold
-re-spawn only if dead), not one run per comment. And when a fix *lands* on a task whose dependents
+into `task/review/T0n.review.md`; the pass is routed by the §routing ladder —
+`references/execution-and-routing.md` — not by blind resume: same-provider single task → you fix
+it inline; `Route: headless` → resume iff `pw-session.sh session-check <slug> <task-id>` says the recorded id is
+live, else inline fallback; cross-provider → resume-first-then-supervised-cold-headless), not one
+run per comment. And when a fix *lands* on a task whose dependents
 already ran, apply the **§3.6 fan** exactly once: merge the fixed branch → re-run each already-run
 dependent's own `## Verify` (clean → stays `done`; conflict/regression → that dependent's own flip,
 driver-side) + ≤1 `dep-impact:T0n` review-style pass where their files/landing units actually
@@ -212,9 +220,15 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      — but that auto-resolve does **not** happen for a resolvable *general* (no diff position)
      thread, so don't assume pushing a fix closed it out; you must explicitly resolve it (below).
    - A task whose MR has no open/unrecorded threads at all is skipped (note it in the recap).
-2. **One executor pass per task, not one spawn per comment** (the §4.8 batch): apply *all* the   open thread fixes in that task's **worktree**, re-run its `## Verify` once for the batch, and
-   push. Resume that task's own executor session first when its `## Result → Session:` id is live —
-   you are handing it a work order, not re-deriving context from a cold spawn.
+2. **One fixer pass per task, not one spawn per comment** (the §4.8 batch): apply *all* the   open thread fixes in that task's **worktree**, re-run its `## Verify` once for the batch, and
+   push. Fan-out per the ladder: **≥2 tasks with open threads → one fixer per task, run in
+   parallel** (independent worktrees; each routed by the ladder — same provider → in-process
+   sub-agent, `Route: headless`/cross-provider → supervised headless); **exactly one task, same
+   provider, `Route: auto|subagent` → you fix it inline** (bounded exception to the no-source-edit
+   rule: listed items only, run its `## Verify`, commit, reply per item); `Route: headless` single
+   task → resume-try iff `pw-session.sh session-check <slug> <task-id>` exits 0, dead/failed →
+   inline fallback (`resume-failed→inline` + `model-degraded` in the ledger). Where a session is
+   resumed, you are handing it a work order, not re-deriving context from a cold spawn.
    - **A landed fix on a dependency fans the §3.6 passthrough** onto tasks *already run* from it:
      each affected dependent re-merges its dependency and re-runs **its own** `## Verify` (conflict
      = that dependent's own `verify-failed`; the driver flips statuses, never the fixer); where
@@ -278,9 +292,12 @@ resolution as everything else here — never hardcode a host or a CLI). Pass `--
 skip this entirely for the run and get the old immediate-return behavior (dashboard/`## Result`
 `Build`/`Build check` fields stay `—`, recap says "skipped"). **A red build means that task is NOT
 done** — it is not shipped until the pipeline passes; see the fix loop below.
-- **Terminal states:** GitHub `SUCCESS`/`FAILURE`/`CANCELLED`/`SKIPPED` (via `gh pr checks`);
-  GitLab `success`/`failed`/`canceled`/`skipped` (via the pipeline's `.status`). Anything else
-  (`pending`/`running`/`created`) means keep polling.
+- **Terminal states:** GitHub `SUCCESS`/`FAILURE`/`CANCELLED` (via `gh pr checks`); GitLab
+  `success`/`failed`/`canceled` (via the pipeline's `.status`). Anything else
+  (`pending`/`running`/`created`) means keep polling. A **`skipped`** pipeline is terminal-**neutral**
+  (exit 0, "no CI jobs ran for this push" — repo pipeline rules), NOT a red build: never enter the
+  fix loop on it, and say so in the recap. The monitor selects the MR **head sha's** pipelines —
+  a skipped branch pipeline or a stale previous-push pipeline can't masquerade as the result.
 - **Timeout, not an infinite wait:** poll on a short interval (~30s) up to a ~15 minute budget. Still
   not terminal at the budget → report it as **"still running — not yet resolved"** in the recap and
   the `## Result → Build check:` field, rather than blocking the rest of the run on it.

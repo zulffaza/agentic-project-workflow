@@ -110,6 +110,19 @@ re-pin it against the current code, don't delete the row), `applyfail`. Child lo
 T2 battery later in the same run). Read-only invocations against `$S1..$S3` are fine. If a case
 truly must touch a shared fixture, restore it exactly.
 
+**Provider shims + fixture configs (plan-22 surfaces).** `tests/bin/` carries fake provider
+CLIs (`kilo`, `opencode`, `agent`) that the suite's PATH prepends before the machine's real
+ones: `models` prints a deterministic catalog (including the nested-BYOK shape
+`kilo/alibaba-token-plan/<m>` — and `kilo models <slash-path>` errors, pinning the
+prefix-filter-not-query-arg rule), and `kilo session list --format json -a` prints one live
+`ses_livetest…` id. Claude/cursor liveness is exercised through fake `$HOME` trees
+(`.claude/projects/*/<id>.jsonl`, `.cursor/chats/<hash>/<uuid>/`) — no shim needed. Scope is
+controlled per-subprocess via `PW_CONFIG_FILE` pointing at `tests/pw.config.test.sh`
+(entries = `kilo/alibaba-token-plan`) or `tests/pw.config.test.noscope.sh` (empty = no
+filtering) — never the maintainer's real `pw.config.sh`, so availability/scope assertions are
+machine-independent. New shims must fail LOUD on unknown invocations (a silent empty success
+reads as "can't check" and hides regressions).
+
 **Env knobs:** `PWTEST_MUT_JOBS` (parallelism; `1` = serial live-tree), `PWTEST_MUT_TIMEOUT`
 (watchdog seconds), `PWTEST_MUT_CACHE` (cache dir), `PWTEST_FIXTURE_CACHE=` (disable cache),
 `PWTEST_KEEP_DIR` (child-log dir), `PWTEST_VERBOSE=1`. Internal (don't set by hand):

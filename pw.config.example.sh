@@ -41,7 +41,7 @@ PW_PROVIDERS=(claude)
 # How to check what's available on YOUR machine:
 #   kilo auth list            # your configured credentials, by DISPLAY NAME (e.g. "Kilo Gateway")
 #   kilo models                # every model across every configured provider, as <id>/<model>
-#   kilo models <provider-id>  # filter to just one provider
+#   kilo models <provider-id>  # filter to just one TOP-LEVEL provider id
 #
 # How to write the provider id: use the string that appears BEFORE the first "/" in `kilo
 # models`' output — NOT necessarily the display name `kilo auth list` shows. These can differ:
@@ -50,11 +50,35 @@ PW_PROVIDERS=(claude)
 # sanity-check a new id with `kilo models <id>` before using it in PW_KILO_API_PROVIDERS or a
 # task's `Execute with:` — don't guess from the display name alone.
 #
+# SEMANTICS: entries are MODEL-ID PREFIX FILTERS over the catalog — they scope which models
+# availability checks accept, and may themselves contain slashes. A BYOK registered *under* the
+# gateway is addressed by its catalog path (`kilo/alibaba-token-plan/<model>` lines), so the
+# entry that scopes it is `kilo/alibaba-token-plan`. The `kilo/` prefix is a CONNECTION
+# distinction: the same BYOK wired up *directly* in KiloCode is its own provider with lines
+# `alibaba-token-plan/<model>` — different auth/billing paths, and both can coexist in one
+# catalog. Do NOT pass such an entry to `kilo models`
+# as an argument (`kilo models kilo/alibaba-token-plan` errors "Provider not found" — verified
+# 2026-09-22); list the full catalog and filter locally.
+#
 # Reference any provider you've listed in a task's `Execute with:` as `kilo:<provider>/<model>`
-# (e.g. `kilo:kilo/anthropic/claude-opus-5`, `kilo:command_code/MiniMaxAI/MiniMax-M3`).
+# (e.g. `kilo:kilo/anthropic/claude-opus-5`, `kilo:command_code/MiniMaxAI/MiniMax-M3`,
+# `kilo:kilo/alibaba-token-plan/deepseek-v4-pro` for a BYOK nested under the gateway). Row-model
+# matching is exact-first: the prefix-less `kilo:alibaba-token-plan/deepseek-v4-pro` names the
+# DIRECT provider when one is configured, and only falls back to the gateway line otherwise.
 # The shipped examples in tooling/docs/providers.md use `command_code`, but that's just the
 # maintainer's own verified setup — it does NOT constrain teammates who use a different one.
 PW_KILO_API_PROVIDERS=(kilo)
+# Nested-BYOK example (a sub-provider registered under the kilo gateway):
+#   PW_KILO_API_PROVIDERS=(kilo/alibaba-token-plan)
+
+# --- Routing + headless supervision (spawn-ladder floors; per-task `Route:` and the PLAN's
+#     `- Routing:` bullet win over these) -------------------------------------------------------
+# Default route for spawns with no per-task/per-plan override: auto | subagent | headless.
+#   PW_ROUTE_DEFAULT=auto
+# Headless supervision budgets (minutes): kill a child whose log hasn't grown for STALL; hard
+# cap per spawn at TIMEOUT. A killed child → ledger state=stalled + verify-failed(headless-stall).
+#   PW_HEADLESS_STALL=10
+#   PW_HEADLESS_TIMEOUT=90
 
 # --- Execution knobs (env floor; a task's `Execute with:` and PLAN's `- AI execution limit:`/
 #     `- Results acceptance:` bullets are per-project and win over these defaults) -------------

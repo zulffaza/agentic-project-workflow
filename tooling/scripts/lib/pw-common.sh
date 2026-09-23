@@ -11,7 +11,9 @@ PW_PROJECTS="${PW_PROJECTS:-$(cd "$PW_HOME/.." && pwd)}"
 PW_REPOS="${PW_REPOS:-$(cd "$PW_PROJECTS/.." && pwd)}"
 
 # --- local config (enabled providers + optional overrides) -------------------
-if   [ -f "$PW_HOME/pw.config.sh" ];         then . "$PW_HOME/pw.config.sh"
+# PW_CONFIG_FILE lets a test (or a second machine profile) point at an alternate config
+# without moving PW_HOME — same shape as PW_PROJECTS_DIR. Default: the bundle's pw.config.sh.
+if   [ -f "${PW_CONFIG_FILE:-$PW_HOME/pw.config.sh}" ]; then . "${PW_CONFIG_FILE:-$PW_HOME/pw.config.sh}"
 elif [ -f "$PW_HOME/pw.config.example.sh" ]; then . "$PW_HOME/pw.config.example.sh"
 fi
 # PW_PROVIDERS = your Agent Providers (the AI-agent CLI(s) you actually run: claude, kilo,
@@ -67,6 +69,71 @@ if ! declare -p PW_KILO_API_PROVIDERS >/dev/null 2>&1; then
     PW_KILO_API_PROVIDERS=()
   fi
 fi
+
+# Routing default (plan-22 ladder): task `Route:` field > PLAN `- Routing:` line > this value >
+# auto. Values: auto | subagent | headless (strict model binding, resume-first internally).
+# Headless supervision budgets (§3.7): kill a child whose log has not grown for PW_HEADLESS_STALL
+# minutes, and cap any single headless spawn at PW_HEADLESS_TIMEOUT minutes.
+: "${PW_ROUTE_DEFAULT:=auto}"
+: "${PW_HEADLESS_STALL:=10}"
+: "${PW_HEADLESS_TIMEOUT:=90}"
+
+# --- API-provider scope helpers (plan-22 §3.5) ------------------------------------------
+# A PW_<PROVIDER>_API_PROVIDERS entry is a MODEL-ID PREFIX FILTER, not a provider-list
+# argument: entries may contain any number of slashes (`kilo`, `kilo/alibaba-token-plan`,
+# `command_code`, `openrouter` all valid) because nested BYOK models are listed by the CLI
+# catalogs as full ids WITH slashes (`kilo models` prints `kilo/alibaba-token-plan/<m>`),
+# while `kilo models kilo/alibaba-token-plan` errors ("Provider not found" — verified
+# 2026-09-22). Empty/unset array = full catalog (no filtering). Providers without the axis
+# (claude: no catalog; cursor: one gateway) simply have no entries defined.
+pw_api_entries() {  # <agent-provider> -> one entry per line (nothing when no scope is set)
+  local upper var _n _i
+  upper="$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')"
+  var="PW_${upper}_API_PROVIDERS"
+  declare -p "$var" >/dev/null 2>&1 || return 0
+  eval "_n=\${#$var[@]}" 2>/dev/null || _n=0
+  [ "${_n:-0}" -gt 0 ] || return 0
+  for _i in $(seq 0 $((_n - 1))); do eval "printf '%s\n' \"\${$var[$_i]}\""; done
+  return 0
+}
+
+pw_api_bin() {  # <agent-provider> -> its CLI binary name (hook-resolved), or the provider name
+  local prov="$1"
+  declare -f "${prov}_bin" >/dev/null 2>&1 && { "${prov}_bin"; return 0; }
+  printf '%s\n' "$prov"
+}
+
+pw_api_catalog() {  # <agent-provider> -> live catalog lines (provider prefix included), nothing on failure
+  local prov="$1" bin
+  case "$prov" in
+    kilo|opencode|cursor)
+      bin="$(pw_api_bin "$prov")"
+      command -v "$bin" >/dev/null 2>&1 || return 0
+      "$bin" models 2>/dev/null || true ;;
+  esac
+  return 0
+}
+
+pw_api_in_scope() {  # <agent-provider> <catalog-line> -> 0 when no scope set or line matches an entry prefix
+  local prov="$1" line="$2" e any=0 found=0
+  while IFS= read -r e; do
+    [ -n "$e" ] || continue
+    any=1
+    case "$line" in "$e"*) found=1; break ;; esac
+  done <<EOF
+$(pw_api_entries "$prov")
+EOF
+  [ "$any" = 0 ] || [ "$found" = 1 ]
+}
+
+pw_api_filter() {  # stdin catalog lines -> keep those in scope for <agent-provider>
+  local prov="$1" line
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    pw_api_in_scope "$prov" "$line" && printf '%s\n' "$line"
+  done
+  return 0
+}
 
 # --- built-in provider hooks (a function defined in pw.config.sh overrides these) ---
 # Each Agent Provider needs the four REQUIRED hooks (bin/skilldir/commanddir/
@@ -138,10 +205,13 @@ declare -f render_kilo_agent >/dev/null 2>&1 || render_kilo_agent() {  local mod
 }
 declare -f kilo_headless >/dev/null 2>&1 || kilo_headless() {
   cat <<'EOF'
-kilo run --auto -m <api-provider>/<model> "<prompt>" --dir <path> [--variant <low|medium|high|max|minimal>] [--thinking] [--format json]
+kilo run --auto -m <canonical-catalog-id> "<prompt>" --dir <path> [--variant <low|medium|high|max|minimal>] [--thinking] [--format json]
 --auto is REQUIRED headless — without it kilo run auto-REJECTS every permission (it can't even
 read the task file). Add --agent <name> when targeting a native agent instead of a bare model.
-<api-provider> is one of PW_KILO_API_PROVIDERS (pw.config.sh) — e.g. kilo, command_code, openrouter.
+-m receives the CANONICAL catalog id — the exact line `kilo models` prints (resolve it with
+`pw-config.sh model-resolve kilo <model-id>`). PW_KILO_API_PROVIDERS entries are model-id
+PREFIX FILTERS (slashes allowed, e.g. `kilo/alibaba-token-plan` for a nested BYOK), never
+`kilo models` arguments — `kilo models kilo/alibaba-token-plan` errors "Provider not found".
 EOF
 }
 
@@ -166,9 +236,12 @@ declare -f render_opencode_agent >/dev/null 2>&1 || render_opencode_agent() {
 }
 declare -f opencode_headless >/dev/null 2>&1 || opencode_headless() {
   cat <<'EOF'
-opencode run --auto -m <api-provider>/<model> "<prompt>" [--format json] [--attach <url>]
+opencode run --auto -m <canonical-catalog-id> "<prompt>" [--format json] [--attach <url>]
 --auto is REQUIRED headless — auto-approves permissions not explicitly denied.
 --attach <url> connects to an already-running server, avoiding a cold-boot delay.
+-m receives the CANONICAL id `opencode models` prints (resolve with
+`pw-config.sh model-resolve opencode <model-id>`); PW_OPENCODE_API_PROVIDERS entries, if set,
+are model-id prefix filters — same semantics as the kilo axis.
 EOF
 }
 
@@ -330,7 +403,7 @@ pw_plan_execs() {
   spec="$(_pw_plan_map "$1")"
   idi="${spec%% *}"; rest="${spec#* }"; sti="${rest%% *}"; bei="${rest##* }"
   [ "${bei:-0}" -gt 0 ] 2>/dev/null || return 0
-  awk -F'|' -v bei="$bei" '
+  awk -F'|' -v idi="$idi" -v bei="$bei" '
     /^## Task/ { p=1; next }
     p && /^## / { exit }
     p && /^[ \t]*\|/ && !($0 ~ /^[ \t]*\|[ \t:|+-]*\|[ \t]*$/) {

@@ -148,23 +148,23 @@ PY
 }
 
 # Live model catalog for one Agent Provider, one line per model id (provider-prefix included),
-# or nothing on any failure — every call site treats "nothing" as "can't check", never an error.
-# kilo/opencode/cursor have a queryable catalog (`kilo models | opencode models | agent models`);
-# claude alone doesn't (fixed alias set — see docs/EXECUTION.md); callers check that before
-# ever reaching here.
+# or nothing on any failure — every call site treats "nothing" as "can't check", never an
+# error. kilo/opencode/cursor have a queryable catalog (`kilo models | opencode models |
+# agent models`); claude alone doesn't (fixed alias set — see docs/EXECUTION.md); callers check
+# that before ever reaching here. PW_<PROVIDER>_API_PROVIDERS entries are MODEL-ID PREFIX
+# FILTERS (slashes allowed — nested BYOK ids like `kilo/alibaba-token-plan`), never catalog
+# arguments: `kilo models kilo/alibaba-token-plan` errors "Provider not found" (verified
+# 2026-09-22), which used to silently empty this catalog and skip every downstream check.
+# Fetch once, filter locally (pw-common.sh §API-provider scope helpers).
 _pw_doctor_model_catalog() {
-  local prov="$1" ap
-  case "$prov" in
-    kilo)
-      if [ "${#PW_KILO_API_PROVIDERS[@]}" -gt 0 ]; then
-        for ap in "${PW_KILO_API_PROVIDERS[@]}"; do kilo models "$ap" 2>/dev/null || true; done
-      else
-        kilo models 2>/dev/null || true
-      fi
-      ;;
-    opencode) opencode models 2>/dev/null || true ;;
-    cursor) agent models 2>/dev/null || true ;;
-  esac
+  local prov="$1" raw
+  raw="$(pw_api_catalog "$prov")"
+  [ -n "$raw" ] || return 0
+  if [ -n "$(pw_api_entries "$prov")" ]; then
+    printf '%s\n' "$raw" | pw_api_filter "$prov"
+  else
+    printf '%s\n' "$raw"
+  fi
   return 0
 }
 
@@ -329,7 +329,12 @@ for p in "${PW_PROVIDERS[@]}"; do
         allow_pat="$(printf '%s' "$allow_pat" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
         n=0
         while IFS= read -r line; do
-          case "$line" in $allow_pat) n=$((n+1)) ;; esac
+          # match the full catalog line AND the agent-provider-stripped form — model-check
+          # matches patterns against the row's model part (`alibaba-token-plan/<m>`), while
+          # kilo's catalog carries the provider prefix (`kilo/alibaba-token-plan/<m>`); a
+          # pattern must validate against both or every nested-BYOK allowlist reads as 0.
+          case "$line" in $allow_pat) n=$((n+1)); continue ;; esac
+          case "${line#"$p"/}" in $allow_pat) n=$((n+1)) ;; esac
         done <<< "$catalog"
         if [ "$n" -gt 0 ]; then
           echo "    ✓ model allowlist \"$allow_pat\": $n match(es) in the live catalog"
@@ -339,6 +344,17 @@ for p in "${PW_PROVIDERS[@]}"; do
       done
     fi
   fi
+
+  # session-liveness surface (INFORMATIONAL ONLY — never touches $issues): can pw-session.sh
+  # actually tell live from dead for this provider? A probe id must come back dead(1); 2 means
+  # the store/CLI is unreachable — resume paths treat "unverified" conservatively (cold).
+  _sirc=0
+  "$HERE/../entities/pw-session.sh" session-check "$p" ses-doctor-probe-nonexistent >/dev/null 2>&1 || _sirc=$?
+  case "$_sirc" in
+    0) echo "    ⚠ session liveness: probe id unexpectedly reported LIVE (check pw-session.sh)" ;;
+    2) echo "    · session liveness: unverifiable for $p (store/CLI not reachable — resumes fall back to cold)" ;;
+    *) echo "    ✓ session liveness: $p surface reachable (dead ids correctly reported dead)" ;;
+  esac
   echo
 done
 

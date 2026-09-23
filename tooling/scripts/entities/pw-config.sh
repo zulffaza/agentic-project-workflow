@@ -13,6 +13,13 @@
 #   pw-config.sh model-check  <provider> <model-id>
 #       Pass/refuse a model against PW_MODEL_ALLOWLIST_<PROVIDER> from
 #       pw.config.sh (empty/unset = all allowed — the default rule).
+#   pw-config.sh model-resolve <provider> <model-id>
+#       AVAILABILITY check (the sibling of model-check's PERMISSION check): match the model
+#       against the provider's live catalog, verify it sits inside the
+#       PW_<PROVIDER>_API_PROVIDERS prefix scope, and print the CANONICAL catalog id that a
+#       headless `-m`/`--model` must receive. exit 0 resolved / 1 not in catalog /
+#       2 matched but out of configured scope. Providers with no queryable catalog (claude)
+#       or no catalog reachable (CLI off PATH) exit 0 "unverified" — never a false dead.
 #
 # Merged from pw-lib's config block (plan 20 entity consolidation); semantics
 # unchanged. (was pw-lib.sh ai-model / ai-review / model-check)
@@ -184,10 +191,69 @@ cmd_model_check() {
 }
 
 
+# Availability sibling of cmd_model_check (permission vs. availability — model-check NEVER
+# proves a model exists, it only tests the allowlist). Resolves a task/PLAN row's model part
+# against the provider's LIVE catalog and the PW_<PROVIDER>_API_PROVIDERS prefix scope
+# (pw-common.sh §API-provider scope helpers), printing the canonical catalog id to bind with
+# (`-m`/`--model` must receive that line, never the raw row text). The agent-provider prefix is
+# SEMANTIC, not cosmetic: a BYOK wired up *directly* in the provider CLI is its own catalog line
+# (`alibaba-token-plan/<m>`) and the same BYOK registered *under* the gateway is a different one
+# (`kilo/alibaba-token-plan/<m>`) — different connections, auth, and billing — so matching is
+# EXACT-FIRST: the row binds the line it literally names, and the prefix-less form falls back to
+# the gateway line only when no direct line exists, announcing the substitution on stderr.
+# Fail-open on "can't check" (claude has no catalog; a CLI off
+# PATH, an empty catalog, or an unknown provider = unverified, exit 0) — a non-zero here is a
+# POSITIVE determination, which is what makes it safe as a pre-spawn hard stop.
+#   model-resolve <provider> <model-id>
+cmd_model_resolve() {
+  [ $# -eq 2 ] || die "usage: model-resolve <provider> <model-id>   (prints the canonical catalog id on exit 0)"
+  local prov="$1" model="$2" catalog line cands upper via=0
+  case "$prov" in
+    claude)
+      echo "model-resolve: $prov:$model — unverified (Claude Code has a fixed alias set, no queryable catalog; model-check governs)"
+      return 0 ;;
+    kilo|opencode|cursor) ;;
+    *)
+      echo "model-resolve: $prov:$model — unverified (no catalog surface for provider '$prov')"
+      return 0 ;;
+  esac
+  catalog="$(pw_api_catalog "$prov")"
+  if [ -z "$catalog" ]; then
+    echo "model-resolve: $prov:$model — unverified ('$prov models' catalog empty or CLI not on PATH)" >&2
+    return 0
+  fi
+  # EXACT catalog line first — the prefix distinguishes connections (see header), so a bare
+  # row must never silently bind the gateway line when a direct provider line exists.
+  line="$(printf '%s\n' "$catalog" | grep -F -x "$model" | head -1 || true)"
+  if [ -z "$line" ]; then
+    line="$(printf '%s\n' "$catalog" | grep -F -x "$prov/$model" | head -1 || true)"
+    via=1
+  fi
+  if [ -z "$line" ]; then
+    echo "model-resolve: $prov:$model — not in the live catalog (exit 1)" >&2
+    echo "  → fix: re-pin the row to a real id — candidates from \`$(pw_api_bin "$prov") models\`:" >&2
+    cands="$(printf '%s\n' "$catalog" | grep -F "${model##*/}" | head -5 || true)"
+    [ -n "$cands" ] && printf '%s\n' "$cands" | sed 's/^/      /' >&2 || echo "      (none matching '${model##*/}' — check the provider scope too)" >&2
+    return 1
+  fi
+  if [ "$via" = 1 ]; then
+    echo "model-resolve: $prov:$model — no exact catalog line; bound the gateway-nested '$line'. A direct provider '$model' is a different connection; pin the full id if you meant the other." >&2
+  fi
+  if ! pw_api_in_scope "$prov" "$line"; then
+    upper="$(printf '%s' "$prov" | tr '[:lower:]' '[:upper:]')"
+    echo "model-resolve: $prov:$model — matched '$line' but it is OUTSIDE the PW_${upper}_API_PROVIDERS scope (exit 2)" >&2
+    echo "  → fix: restore the matching entry in pw.config.sh, or re-pin the row to an in-scope id. Current scope:" >&2
+    pw_api_entries "$prov" | sed 's/^/      /' >&2
+    return 2
+  fi
+  printf '%s\n' "$line"
+}
+
 case "${1:-}" in
-  ai-model)    shift; cmd_ai_model "$@" ;;
-  ai-review)   shift; cmd_ai_review "$@" ;;
-  model-check) shift; cmd_model_check "$@" ;;
+  ai-model)      shift; cmd_ai_model "$@" ;;
+  ai-review)     shift; cmd_ai_review "$@" ;;
+  model-check)   shift; cmd_model_check "$@" ;;
+  model-resolve) shift; cmd_model_resolve "$@" ;;
   -h|--help) pw_usage ;;
-  *) die "usage: pw-config.sh <ai-model|ai-review|model-check> … (see --help)" ;;
+  *) die "usage: pw-config.sh <ai-model|ai-review|model-check|model-resolve> … (see --help)" ;;
 esac

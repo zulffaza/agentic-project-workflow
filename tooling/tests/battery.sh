@@ -27,7 +27,16 @@ battery_rows() {
     printf 'adopt %s\tpw-context.sh\tadopt-snapshot %s api agent/%s/T01-thing\n' "$s" "$s" "$s"
     printf 'help project %s\tpw-help.sh\tproject %s\n'      "$s" "$s"
     printf 'help project-review %s\tpw-help.sh\tproject %s pw-review\n' "$s" "$s"
+    printf 'provider-audit %s\tpw-status.sh\tprovider-audit %s\n' "$s" "$s"
   done
+  # plan-22 operators (shim catalog + session list make these deterministic in-suite):
+  printf 'model-check allow\tpw-config.sh\tmodel-check claude opus\n'
+  printf 'model-resolve ok\tpw-config.sh\tmodel-resolve kilo alibaba-token-plan/test-model\n'
+  printf 'model-resolve gone\tpw-config.sh\tmodel-resolve kilo alibaba-token-plan/nope-xyz\n'
+  printf 'model-resolve claude\tpw-config.sh\tmodel-resolve claude opus\n'
+  printf 'session-check live\tpw-session.sh\tsession-check kilo ses_livetest0000000001\n'
+  printf 'session-check dead\tpw-session.sh\tsession-check kilo ses_dead00000000000000000000\n'
+  printf 'session-check unknown\tpw-session.sh\tsession-check kilotest ses_any\n'
   printf 'lint-task-crlf %s\tpw-doc.sh\tlint task %s\n' "$S3" "$S3"          # T06 (CRLF, sentinels)
   printf 'batch-list F3\tpw-ship.sh\tmr-state-batch %s T02 T05\n' "$S3"
   printf 'unknown-project\tpw-status.sh\tnope-not-here\n'
@@ -53,9 +62,15 @@ _gate_cmd() {     # "<mode> <fixture>" → echo preflight args (review-plan → 
   esac
 }
 
-PWTEST_MODES="pw-doc|lint summary sync
+# Modes that must appear in some pinned battery/gates row. `pw-doc.sh sync` is deliberately NOT
+# listed: battery runs read-only invocations only (sync mutates fixtures mid-run — its rows were
+# removed from battery_rows; the T1 pw-doc case owns sync coverage).
+PWTEST_MODES="pw-doc|lint summary
 pw-doc|analysis task plan review dashboard all
-pw-preflight|analyze execute breakdown ship review comments close"
+pw-preflight|analyze execute breakdown ship review comments close
+pw-config|model-check model-resolve
+pw-session|session-check
+pw-status|provider-audit"
 
 pwtest_is_crash() {  # file → 0 if output looks like a *script* defect (not a clean failure)
   grep -qE "^(pw-[a-z-]+\.sh|.*\.sh): line [0-9]+:|unbound variable|syntax error near|command not found|Traceback|glab-shim: unexpected|gh-shim: unexpected" "$1"

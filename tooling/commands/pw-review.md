@@ -263,14 +263,18 @@ if a fix was left unverified (`--skip-build-check`) or hit the 3-round cap. **If
 (the check above), say so explicitly and name which file/phase — that's the one thing here that
 changes whether a *later* command will run, so it can't just be buried in the item recap.
 
-## Fixer routing for local review files (batched, resume-first)
+## Fixer routing for local review files (batched; ladder-routed for tasks, inline for docs)
 
-When the review pass is over and items exist on **one** artifact, fixes don't fan out per item: the
-driver spawns **one** fixer pass for that artifact holding all its `[OPEN]` items — human,
-`pw-reviewer`, verifier and `dep-impact:T0n` items share that queue (docs/EXECUTION.md §The
-per-spawn ledger; `tooling/skill/project-workflow/references/review.md`). Where the artifact has a
-producer session worth resuming (the task's `pw-executor` `## Result → Session:`), the spawn-list
-carries its id and the driver resumes it first; decision items (`Qn`/"you decide") are human answers
-and are excluded from any batched fix. Reviewers read; fixers are the executor-side (and re-run
-their own `## Verify` once).
+When the review pass is over and items exist on **one** artifact, fixes don't fan out per item:
+**one** fix pass per artifact holds all its `[OPEN]` items — human, `pw-reviewer`, verifier and
+`dep-impact:T0n` items share that queue (docs/EXECUTION.md §The per-spawn ledger;
+`tooling/skill/project-workflow/references/review.md` §Fixer routing). *Who* runs it: a **doc**
+artifact (analysis / PLAN / task doc) is edited **driver-inline** — the review file is the seed,
+no spawn, no producer-session resume (that clause is retired). A **task** artifact (post-execution
+repair) follows the §routing ladder: same provider → in-process fixer or, single task, driver
+inline; `Route: headless` → resume-try iff `pw-session.sh session-check <slug> <task-id>` exits 0
+(dead/failed → inline fallback, `resume-failed→inline` recorded); cross-provider →
+resume-first-then-supervised-cold-headless; ≥2 tasks → parallel per-task fixers. Decision items
+(`Qn`/"you decide") are human answers and are excluded from any batched fix. Reviewers read;
+fixers are the executor-side (and re-run their own `## Verify` once).
 

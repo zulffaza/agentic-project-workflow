@@ -82,4 +82,72 @@ pl_config_selftest() {
     || die "selftest FAIL: ai-model line vanished after clears"
   rm -rf "$tmp"
 }
-pl_config
+pl_config_selftest
+
+# --- model-resolve: the AVAILABILITY axis (catalog + api-provider prefix scope) -------------
+# Uses the tests/bin/kilo|opencode shims + fixture configs via PW_CONFIG_FILE, so the checks
+# never depend on the maintainer machine's real pw.config.sh.
+CFG_SCOPED="$PWTEST_TESTSDIR/pw.config.test.sh"          # PW_KILO_API_PROVIDERS=(kilo/alibaba-token-plan)
+CFG_OPEN="$PWTEST_TESTSDIR/pw.config.test.noscope.sh"    # entries unset → no filtering
+MR="$(pwtest_script pw-config.sh)"
+
+# nested BYOK: the row's model part (no `kilo/` prefix) resolves to the CANONICAL catalog line.
+mr_out="$(PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve kilo alibaba-token-plan/test-model 2>/dev/null)" \
+  || pwtest_bad "model-resolve nested BYOK" "refused an in-catalog in-scope model"
+[ "$mr_out" = "kilo/alibaba-token-plan/test-model" ] \
+  && pwtest_ok "model-resolve prints the canonical nested-BYOK id" \
+  || pwtest_bad "model-resolve canonical id" "got '$mr_out'"
+# a row already carrying the full catalog line matches exactly too.
+mr_out2="$(PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve kilo kilo/alibaba-token-plan/test-model 2>/dev/null)" \
+  && [ "$mr_out2" = "kilo/alibaba-token-plan/test-model" ] \
+  && pwtest_ok "model-resolve accepts the exact catalog line" \
+  || pwtest_bad "model-resolve exact line" "got '$mr_out2'"
+# The prefix is SEMANTIC, not cosmetic (maintainer-verified 2026-09-23): `alibaba-token-plan/<m>`
+# is a DIRECT BYOK provider line and `kilo/alibaba-token-plan/<m>` is the same BYOK under the
+# gateway — different connections. When both exist, matching is exact-first: the row binds the
+# line it literally names, never whichever the catalog happens to print first.
+mr_out3="$(PWTEST_KILO_CATALOG_EXTRA='alibaba-token-plan/test-model' PW_CONFIG_FILE="$CFG_OPEN" \
+  "$MR" model-resolve kilo alibaba-token-plan/test-model 2>/dev/null)" \
+  && [ "$mr_out3" = "alibaba-token-plan/test-model" ] \
+  && pwtest_ok "model-resolve exact line wins over the gateway-prefixed form" \
+  || pwtest_bad "model-resolve exact-preferred" "got '$mr_out3'"
+# …and a coexisting DIRECT line that is OUT of scope is a hard exit 2 — never silently re-bound
+# to the in-scope gateway line.
+PW_CONFIG_FILE="$CFG_SCOPED" PWTEST_KILO_CATALOG_EXTRA='alibaba-token-plan/test-model' \
+  "$MR" model-resolve kilo alibaba-token-plan/test-model >/dev/null 2>"$ROOT/mr3.err"
+[ "$?" = 2 ] && pwtest_ok "out-of-scope direct line exits 2 (no silent gateway re-bind)" \
+  || pwtest_bad "direct out-of-scope" "rc=$?; $(head -c 120 "$ROOT/mr3.err")"
+# the gateway-only fallback still resolves, but announces the substitution on stderr.
+PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve kilo alibaba-token-plan/other-model >/dev/null 2>"$ROOT/mr4.err" \
+  && grep -q "gateway-nested" "$ROOT/mr4.err" \
+  && pwtest_ok "gateway fallback is announced on stderr" \
+  || pwtest_bad "gateway fallback note" "rc/note missing: $(head -c 120 "$ROOT/mr4.err")"
+# not in the catalog → exit 1 + candidates/fix line.
+PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve kilo alibaba-token-plan/gone-xyz >/dev/null 2>"$ROOT/mr1.err"
+[ "$?" = 1 ] && pwtest_ok "model-resolve exit 1 for a catalog miss" || pwtest_bad "model-resolve exit 1" "rc=$?"
+grep -qE 'not in the live catalog|→ fix:' "$ROOT/mr1.err" \
+  && pwtest_ok "catalog-miss refusal is actionable" || pwtest_bad "catalog-miss fix" "$(head -c 120 "$ROOT/mr1.err")"
+# in the catalog but OUT of the configured prefix scope → exit 2 naming the scope (the
+# `kilo:`→`kilo/alibaba-token-plan` migration case).
+PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve kilo command_code/MiniMaxAI/MiniMax-M3 >/dev/null 2>"$ROOT/mr2.err"
+[ "$?" = 2 ] && pwtest_ok "model-resolve exit 2 for out-of-scope provider" || pwtest_bad "model-resolve exit 2" "rc=$?; $(head -c 120 "$ROOT/mr2.err")"
+grep -qE 'OUTSIDE the PW_KILO_API_PROVIDERS scope|kilo/alibaba-token-plan' "$ROOT/mr2.err" \
+  && pwtest_ok "out-of-scope refusal names the current scope" || pwtest_bad "out-of-scope fix" "$(head -c 140 "$ROOT/mr2.err")"
+# no scope configured → every catalog line is in scope (the fallback rule).
+PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve kilo command_code/MiniMaxAI/MiniMax-M3 >/dev/null 2>&1 \
+  && pwtest_ok "empty entries = no filtering (in scope)" \
+  || pwtest_bad "empty entries fallback" "refused with no scope configured"
+# the axis is generic: opencode nested id resolves the same way.
+PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve opencode testprov/nested/deep-model >/dev/null 2>&1 \
+  && pwtest_ok "opencode axis resolves (prefix semantics generic)" \
+  || pwtest_bad "opencode axis" "refused an in-catalog id"
+# claude (no catalog) + unknown provider + CLI-off-PATH all FAIL OPEN as unverified — never a
+# false dead, so a non-zero is always a positive determination safe to hard-stop on.
+"$MR" model-resolve claude anything >/dev/null 2>&1 \
+  && pwtest_ok "claude unverified → exit 0" || pwtest_bad "claude unverified" "refused"
+"$MR" model-resolve kilotest anything >/dev/null 2>&1 \
+  && pwtest_ok "unknown provider unverified → exit 0" || pwtest_bad "unknown provider" "refused"
+mkdir -p "$ROOT/nobin"
+PATH="$ROOT/nobin:/usr/bin:/bin" PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve kilo alibaba-token-plan/test-model >/dev/null 2>&1 \
+  && pwtest_ok "CLI off PATH → unverified, never a false dead" \
+  || pwtest_bad "CLI off PATH fallback" "refused as if dead"

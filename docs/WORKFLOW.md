@@ -19,7 +19,7 @@ state lives on disk, not in an agent's head.
 | 5 | Review tasks | You | `task/review/PLAN.review.md` + fixes | **plan approved (only hard gate)** | `/pw-review` |
 | 6 | Execute | Orchestrator + executor sessions/lanes (one per ready task; `Execute with:` → same-provider def or `provider:model`; each spawn ledgered `session=<id>` in `LOG.md`+`## Result`) | commits/branches in `worktree/*` (committed + verified) | per-task DoD | `/pw-execute` — opt-in `- Results acceptance: auto` + `--acceptance`/`--then-ship` |
 | 7 | Ship | Executor agent (strong) | pushed branches + MRs (rich description) | you confirm the push | `/pw-ship` (`--then-ship` chains it after a run) |
-| 8 | Review results | You + agent (fixes return through the task's own executor: one batched pass per artifact, resume-by-id first; a landed fix fans the capped §3.6 dependent recheck) | accepted tasks (optional `task/review/T0n`) | you accept each task — *the clean-execution option moves only green, item-free tasks, and remains human-reversible* | `/pw-review` |
+| 8 | Review results | You + agent (fixes return per the routing ladder — same-provider in-process fixer or driver-inline, cross-provider supervised headless; resume-by-id only when a liveness check says live; one batched pass per artifact; a landed fix fans the capped §3.6 dependent recheck) | accepted tasks (optional `task/review/T0n`) | you accept each task — *the clean-execution option moves only green, item-free tasks, and remains human-reversible* | `/pw-review` |
 | 9 | Learn + close | You + agent | memory (if configured), worktrees torn down, Status→done | — | `/pw-close` |
 | — | Any time | You | `/pw-help` renders the live command/operator map (and `find` locates a concept across the surface); state via `/pw-status`; install health via `/pw-doctor` | — | `/pw-help` · `/pw-status` · `/pw-doctor` |
 
@@ -99,10 +99,16 @@ the task file as the work order (a *sub-agent* name never crosses a provider bou
 executor **tees its output to `worktree/<T0n>.log`** so you can `tail -f` a run in your own window.
 Each executor works in its **own worktree**, runs the task's `Verify` block (a same-changeregression may self-repair inside the run, bounded by `- AI execution limit:` /
 `PW_MAX_SELF_REPAIR`, before declaring `verify-failed`), reports the actual output, and fills the
-task file's `## Result`. **Every spawn is ledgered** — the LOG.md record carries `session=<id>` +
-seed/outcome, and the task's `## Result → Session:` carries it — so a later Row 8 repair *resumes*
-the executor's own session instead of re-deriving the context, and MR-comment fixes arrive to the
-executor as **one batched pass per artifact** (per-item replies preserved). When a landed fix
+task file's `## Result`. **Every spawn is ledgered** — the LOG.md record carries `via=` +
+`session=<id>` + seed/outcome/**state**, and the task's `## Result → Session:` carries it. A later
+Row 8 repair follows the **same routing ladder as execution** (docs/EXECUTION.md §The per-spawn
+ledger): same-provider → an in-process fixer you can watch, different-provider → a supervised
+headless session that **resumes the executor's own session only when a deterministic liveness check
+says the id is still resumable** (never a blind resume), and a single same-provider task may be
+fixed inline by the driver. MR-comment fixes arrive as **one batched pass per artifact** (per-item
+replies preserved); ≥2 tasks fan out as parallel per-task fixers. Every headless run is supervised
+to a terminal `state` (`success`/`failed`/`stalled`) with the log + stall/timeout budgets enforced —
+a run never ends with a live child. When a landed fix
 followed a dependent that already ran, the driver fans one capped §3.6 recheck (mechanical
 re-`Verify` per dependent + ≤1 `dep-impact` review pass where files overlap, filed as items — no
 edit-backward into the dependency). **Execution stops at committed + verified** — it does

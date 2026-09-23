@@ -23,6 +23,13 @@ pwtest_rc any "unknown pipeline fast-fails" env PWTEST_PIPELINE='' "$(pwtest_scr
 pwtest_fix "fast-fail says why"
 pwtest_rc 2 "monitor unknown project" "$(pwtest_script $SH)" monitor nope-xyz T01
 
+# --- monitor races (head-sha selection + skipped semantics; live incident 2026-09-23) ---
+# shim reports MR head sha = dead000f (tests/bin/glab _state_json)
+pwtest_rc 0 "branch-skipped before MR-success same sha → SUCCESS" env PWTEST_PIPELINE='[{"sha":"dead000f","status":"skipped"},{"sha":"dead000f","status":"success"}]' "$(pwtest_script $SH)" monitor "$S2" T02 --interval 1 --timeout 1
+pwtest_rc 0 "all-skipped after grace → neutral SKIPPED, exit 0" env PWTEST_PIPELINE='[{"sha":"dead000f","status":"skipped"}]' "$(pwtest_script $SH)" monitor "$S2" T02 --interval 1 --timeout 2
+pwtest_re 'SKIPPED' "skipped vocab (not FAILED)"
+pwtest_rc 2 "stale pipeline on old sha not claimed while head has none" env PWTEST_PIPELINE='[{"sha":"aaaa1111","status":"success"}]' "$(pwtest_script $SH)" monitor "$S2" T02 --interval 1 --timeout 1
+
 # --- exec (WRITE facet) — push + MR create (shim), idempotent rerun, honest failure (C6).
 E=exec-f2; rm -rf "$PW_PROJECTS_DIR/$E"; cp -a "$F2" "$PW_PROJECTS_DIR/$E"
 printf 'Ship test fixture MR\n' > "$ROOT/desc.md"

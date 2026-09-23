@@ -71,6 +71,37 @@ to see, per configured pattern, how many real models in your live catalog it act
 zero-match pattern is usually a typo or a stale model id) — full detail in
 [docs/EXECUTION.md](./EXECUTION.md#model-allowlist-optional--a-cost-guard-not-a-routing-mechanism).
 
+## "`/pw-execute` refused a row — model/provider *not available* (not the allowlist)"
+
+**Symptom:** the execute pre-flight (or a spawn-time check) stops with a `model-resolve` refusal —
+"not in the live catalog" or "OUTSIDE the PW_..._API_PROVIDERS scope" — even though no allowlist is
+configured.
+
+**Cause:** this is the *availability* axis, separate from the allowlist's *permission* axis: the row
+pins a model that doesn't exist right now, or a provider/api-provider that left your
+`pw.config.sh` since the row was written (a mid-project provider migration — subs ended, BYOK
+removed, auth dropped). The pipeline refuses instead of launching a detached run that would fail
+mid-flight.
+
+**Fix:** the refusal prints the candidates — re-pin the task's `Execute with:` to a real in-scope
+id, or restore the removed entry in `pw.config.sh`. To see every affected row at once, run the
+provider-consistency audit the `/pw-ship` comments flow and `/pw-close` recap perform (per-task
+`stale-provider`/`unbound` verdicts). Full contract:
+[docs/EXECUTION.md](./EXECUTION.md) §The per-spawn ledger.
+
+## "A headless run is stuck / a task flipped `verify-failed (headless-stall)`"
+
+**Symptom:** a detached executor stops producing output; after a while the child is killed and the
+task shows `verify-failed` with a `headless-stall` note in the ledger.
+
+**Cause:** supervision working as designed — a child whose log hasn't grown for the configured
+stall budget (or that blew its timeout) is killed rather than left wedged (an auth prompt with no
+TTY, a network wedge, a model that stopped responding).
+
+**Fix:** read `worktree/<T0n>.log` (its tail shows where it stalled), then re-run the task — the
+next pass is a **seed-patched re-spawn**, not a resume of the killed id. Budgets are
+`PW_HEADLESS_STALL` / `PW_HEADLESS_TIMEOUT` in `pw.config.sh`.
+
 ## "A cross-provider handoff produced no output, or the target CLI says no prompt was received"
 
 This is a known, already-mitigated gotcha (a long inline CLI argument can vanish across a
