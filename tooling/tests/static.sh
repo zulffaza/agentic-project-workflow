@@ -3,7 +3,7 @@
 # Every forbidden pattern here encodes a bug that actually shipped once (plan 16 §5).
 
 # the automation-script registry (single list; T0/T1/T2/mutation reuse it)
-PWTEST_AUTOMATION="pw-status.sh pw-preflight.sh pw-ship.sh pw-review.sh pw-rfc.sh pw-worktree.sh pw-doc.sh pw-context.sh pw-config.sh pw-session.sh pw-help.sh"
+PWTEST_AUTOMATION="pw-status.sh pw-preflight.sh pw-ship.sh pw-review.sh pw-rfc.sh pw-worktree.sh pw-doc.sh pw-context.sh pw-config.sh pw-session.sh pw-help.sh pw-project-doctor.sh"
 export PWTEST_AUTOMATION
 
 _pwtest_code_lines() { awk '!/^[[:space:]]*#/' "$@" 2>/dev/null | cat -n; }
@@ -170,6 +170,22 @@ static_t4() {
   hits="$(grep -rlE 'Execute with!|PW_STRICT_MODELS|Route: resume|resume that producer|batched, resume-first|batched \+ resume-first' "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" "$TOOL/docs" 2>/dev/null | tr '\n' ' ')"
   [ -z "$hits" ] && pwtest_ok "T4 canary: retired repair-routing text stays retired" \
     || pwtest_bad "T4 canary: retired repair-routing text" "reappeared in: $hits"
+
+  # (h) explicit-line doctrine canaries: every config line is always present with an explicit
+  # value — the dashboard template carries the AI Review line with its scaffold token, and
+  # scaffold.sh still renders it. Losing either half re-creates the template↔render drift where
+  # fresh projects silently start without an `AI Review:` line.
+  grep -qE '^- \*\*AI Review:\*\* <AI_REVIEW_DEFAULT>' "$TOOL/../template/PROJECT.template.md" \
+    && pwtest_ok "T4 canary: AI Review line is explicit in the dashboard template" \
+    || pwtest_bad "T4 canary: AI Review line in template" "PROJECT.template.md lost its '- **AI Review:** <AI_REVIEW_DEFAULT>' line — absence must stay a defect, not the default"
+  grep -qF '<AI_REVIEW_DEFAULT>' "$TOOL/scripts/toolchain/scaffold.sh" \
+    && pwtest_ok "T4 canary: scaffold still renders <AI_REVIEW_DEFAULT>" \
+    || pwtest_bad "T4 canary: scaffold AI-Review render" "scaffold.sh no longer seds <AI_REVIEW_DEFAULT> — the template token would ship unexpanded"
+  # (i) the configuration domain left /pw-review for /pw-config — the retired recipe form must
+  # never resurface in any published surface (pattern kept backtick-free: it runs unquoted).
+  hits="$(grep -rlE 'pw-review [^ ]+ config (model|analysis|plan|task-plan|task-exec|ship|<phase>)' "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" "$TOOL/docs" "$TOOL/../docs" "$TOOL/../README.md" "$TOOL/../AGENTS.md" 2>/dev/null | tr '\n' ' ')"
+  [ -z "$hits" ] && pwtest_ok "T4 canary: retired /pw-review config recipes stay retired" \
+    || pwtest_bad "T4 canary: retired config recipes" "reappeared in: $hits — configuration lives on /pw-config"
 
 
   # 5) shared plumbing used, not reinvented

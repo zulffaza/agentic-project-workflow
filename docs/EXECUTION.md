@@ -41,7 +41,7 @@ pending. Full semantics: [`tooling/commands/pw-execute.md`](../tooling/commands/
 **The executor's model** is per-task and lives in the PLAN's task table (`Execute with:`) — it is
 *never* overridden by the dashboard (below), because a task file is the executor's contract.
 **The spawn lanes'** models are per-project and live on the dashboard's `- **AI Models:**` row
-(shown/set by `/pw-review <slug> config`)
+(shown/set by `/pw-config <slug>`)
 — because a lane is spawned by a phase, not by a task file. Four rungs, highest wins; what a run
 actually used is *recorded*, so a pin silently failing becomes visible drift, not folklore:
 **(1)** run-time override this call → **(2)** the project's `AI Models:` row for that lane →
@@ -261,7 +261,7 @@ driver inline) is the routing ladder's call — §The per-spawn ledger below.
 **Model lanes vs executor pins are different axes.** A task's `Execute with:` binds the EXECUTOR
 per unit (above). A *lane* spawns on the provider default unless the project's
 `- **AI Models:** researcher=… analyst=… writer-task=… verifier=… reviewer=…` row binds it
-(`/pw-review <slug> config model <lane> <provider:model|—>`; unset = provider/session default;
+(`/pw-config <slug> set ai-model <lane> <provider:model|—>`; unset = provider/session default;
 the `AI Models:` dashboard line — same anchored-line config idiom as `AI Review`). Per-provider honesty: **claude**
 can start a session per model and per-spawn override is real; **kilo**'s Task-tool has no model arg
 — its levers are a map-block pin (user's own config) or running the lane **headless**:
@@ -325,7 +325,10 @@ Which CLI runs which model lives in the [Agent Provider registry](../tooling/doc
 Claude models → Claude Code; open-weight models → KiloCode, which can connect to **several API
 Providers at once** (list them in `PW_KILO_API_PROVIDERS` — e.g. `command_code`, `openrouter`, …
 — and reference any as `kilo:<provider>/<model>`). A BYOK you register *under* the gateway is
-addressed by its catalog path — `kilo:alibaba-token-plan/<model>` — so an array entry may itself
+addressed by its catalog path — row `kilo:kilo/alibaba-token-plan/<model>`, bind id
+`kilo/alibaba-token-plan/<model>` (the same BYOK wired up *directly* is its own line
+`alibaba-token-plan/<model>` — a different connection; row matching is exact-first) — so an
+array entry may itself
 contain a slash; entries are **model-id prefix filters** over the live catalog, not catalog-query
 arguments (querying the catalog *by* a sub-provider path errors — the CLI lists it only under the
 top-level provider). It's a one-row-per-Agent-Provider extension

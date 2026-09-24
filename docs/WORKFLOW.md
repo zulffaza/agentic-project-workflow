@@ -21,7 +21,7 @@ state lives on disk, not in an agent's head.
 | 7 | Ship | Executor agent (strong) | pushed branches + MRs (rich description) | you confirm the push | `/pw-ship` (`--then-ship` chains it after a run) |
 | 8 | Review results | You + agent (fixes return per the routing ladder — same-provider in-process fixer or driver-inline, cross-provider supervised headless; resume-by-id only when a liveness check says live; one batched pass per artifact; a landed fix fans the capped §3.6 dependent recheck) | accepted tasks (optional `task/review/T0n`) | you accept each task — *the clean-execution option moves only green, item-free tasks, and remains human-reversible* | `/pw-review` |
 | 9 | Learn + close | You + agent | memory (if configured), worktrees torn down, Status→done | — | `/pw-close` |
-| — | Any time | You | `/pw-help` renders the live command/operator map (and `find` locates a concept across the surface); state via `/pw-status`; install health via `/pw-doctor` | — | `/pw-help` · `/pw-status` · `/pw-doctor` |
+| — | Any time | You | `/pw-help` renders the live command/operator map (and `find` locates a concept across the surface); state via `/pw-status`; install health via `/pw-doctor` (a project's own consistency via `/pw-doctor --project`); per-project config via `/pw-config` | — | `/pw-help` · `/pw-status` · `/pw-doctor` · `/pw-config` |
 
 Keeping an MR up to date after it's open is a side-loop, not a numbered step: **`/pw-sync`** (see
 step 7). Another side-loop, **`/pw-rfc`** (optional, any platform or none — see

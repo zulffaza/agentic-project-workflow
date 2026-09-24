@@ -153,9 +153,9 @@ That row is the actual gate — but **`/pw-breakdown` also checks that `Chosen a
 still pending**, even if this row already says `approved`. Answering `Q0` isn't optional
 paperwork; it's what breakdown actually builds from.
 
-> **AI-assisted option:** turn this on with `/pw-review spring-boot-3-upgrade config analysis
-> advisory` (dashboard `AI Review:` line — off by default; `/pw-review spring-boot-3-upgrade
-> config` on its own shows all five phases). Once it's `advisory`/`auto`, `/pw-review
+> **AI-assisted option:** turn this on with `/pw-config spring-boot-3-upgrade set ai-review analysis
+> advisory` (dashboard `AI Review:` line — off by default; `/pw-config spring-boot-3-upgrade
+> show` on its own shows all five phases). Once it's `advisory`/`auto`, `/pw-review
 > spring-boot-3-upgrade ai` runs a fresh `pw-reviewer` pass first, filing items like `R1` above but
 > tagged `(pw-reviewer, …)`. See [docs/REVIEW.md](./REVIEW.md#3-ai-assisted-review-optional-per-phase).
 

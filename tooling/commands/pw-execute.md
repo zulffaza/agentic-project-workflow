@@ -98,8 +98,9 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
    {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-resolve <provider> <model-id>
    ```
    `model-resolve` exit 0 prints the **canonical** catalog id — that is what a headless
-   `-m`/`--model` receives (a nested BYOK row `kilo:alibaba-token-plan/<m>` binds as
-   `kilo/alibaba-token-plan/<m>`), never the raw row text. If either refuses, STOP that task and
+   `-m`/`--model` receives (gateway-nested rows bind as `kilo/alibaba-token-plan/<m>`;
+   matching is exact-first — the prefix-less row names the *direct* provider line when one
+   exists, gateway only as an announced fallback), never the raw row text. If either refuses, STOP that task and
    tell me — don't substitute a different model yourself or run
    it anyway. **The task file binds the model:** the resolved `Execute with:` (or the plan's
    Produced-by default) is the *only* model the spawn runs under — pass it explicitly with the

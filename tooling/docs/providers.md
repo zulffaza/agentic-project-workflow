@@ -209,6 +209,9 @@ than inline here.
    (`pw-config.sh model-resolve` → canonical id or hard stop; task `Route:` > PLAN `- Routing:` >
    `PW_ROUTE_DEFAULT` > `auto`, values `auto|subagent|headless` — full ladder:
    `tooling/skill/project-workflow/references/execution-and-routing.md`).
+   Scope note: `model-check`/`model-resolve` are deliberately **global, slug-less validators**
+   (they answer machine-level questions); per-project settings live behind `pw-config.sh project …`
+   and delegate here rather than duplicating the check.
 2. **Same provider** as the orchestrator → spawn a normal in-process **sub-agent** (the usual path):
    `pw-executor`, another same-provider agent, or a bare model. Sub-agents are same-provider only.
    Where the CLI can't bind the row's model in-session (kilo), run on the parent model and record

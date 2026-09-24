@@ -2,7 +2,9 @@
 description: One discovery surface for the workflow - what commands and operators exist, how to invoke them, and what applies to a project right now (overview, per-command how-to, operator deep dives, phase spine, literal-term search)
 args: '[overview | command <name> [<slug>] [--full|--json|--maintainer] | operators <name> [<operator>] | project <slug> [<name>] | workflow | find <term>] [--json]'
 ---
-The leading group in `args` is the operator; a bare `/pw-help` shows the overview. (`/pw-help`
+The leading group in `args` is the operator. A bare `/pw-help` — my message carries NO operator
+argument — maps to `overview`: that is the invocation. Never guess an operator from this file's
+own example lines; only words I actually typed after `/pw-help ` select one. (`/pw-help`
 is the documented C1 exception where the first argument is the operator, not the slug — help's
 subject is the bundle; projects appear only inside the `project` operator and the `command`
 operator's optional slug slot.)
@@ -16,6 +18,9 @@ renderer's columns and ASCII alignment exactly as emitted).**
 
 The operators:
 
+- **`/pw-help` bare (no operator typed)** → `{{PW_HOME}}/tooling/scripts/entities/pw-help.sh overview` —
+  the DEFAULT mapping when my message has no arguments: identical to `overview` below, nothing
+  else is assumed.
 - **`/pw-help overview`** → `{{PW_HOME}}/tooling/scripts/entities/pw-help.sh overview` — every
   command, one line per exposed operator with its use case, grouped by phase bucket.
 - **`/pw-help command <name> [<slug>]`** → `{{PW_HOME}}/tooling/scripts/entities/pw-help.sh

@@ -19,6 +19,12 @@ pwtest_re '/pw-adopt  .*<repo>' "args render from each file's own frontmatter"
 pwtest_re '/pw-close   .*<project-slug>' "a second command's args too (kills canned-args mutation C31)"
 pwtest_re 'Close out a finished project' "descriptions render from frontmatter"
 pwtest_re 'pw-help' "overview includes pw-help itself"
+# 1b) bare /pw-help self-maps (owner 09-24): the injected command file must SPELL OUT the
+# no-argument mapping, so a reader can never guess an operator from its own examples.
+grep -qF 'maps to `overview`' "$TOOLDIR/commands/pw-help.md" \
+  && pwtest_ok "bare /pw-help mapping spelled out" || pwtest_bad "bare mapping" "command file lost the explicit overview default"
+grep -qF 'Never guess an operator from this file' "$TOOLDIR/commands/pw-help.md" \
+  && pwtest_ok "guess prohibition present" || pwtest_bad "guess prohibition" "missing"
 
 # 2) per-command + per-operator lines: pw-context exposes all three ops (A2 included)
 pwtest_re 'add-input --file <f>' "add-input op line with A2 shape"
@@ -28,7 +34,7 @@ sec_rev(){ sed -n "/\/pw-review /,/\/pw-breakdown/p" "$PWTEST_OUT"; }
 sec_ctx | grep -q 'req-init' && pwtest_ok "req-init under pw-context" || pwtest_bad "req-init under pw-context" "missing"
 sec_ctx | grep -q 'add-repo' && pwtest_ok "add-repo under pw-context" || pwtest_bad "add-repo under pw-context" "missing"
 sec_rev | grep -qE 'item <' && pwtest_ok "sugar op item surfaces under pw-review" || pwtest_bad "sugar op item" "missing"
-sec_rev | grep -q "this is how I view/change this project's AI Review settings" && pwtest_ok "config sugar op carries the command-file definition" || pwtest_bad "config op use-clause" "missing"
+sec_rev | grep -q "configuration domain" && pwtest_ok "config sugar op carries the command-file definition" || pwtest_bad "config op use-clause" "missing"
 sec_rev | grep -q '(write)' && pwtest_ok "facet labels render (S1b)" || pwtest_bad "facet labels" "no (write) under pw-review"
 sec_ctx | grep -qE '\(default\)' && pwtest_bad "pw-context (default)" "req-init selector is not a default flow" || pwtest_ok "no (default) for op-selector commands"
 grep -q 'HUMAN-TRIGGERED ONLY' "$PWTEST_OUT" && pwtest_bad "overview C4 label" "doctrine echo belongs to command view, not overview columns" || pwtest_ok "overview stays label-free"
@@ -115,10 +121,10 @@ PYJ
 
 # 6) --json contracts
 pwtest_rc 0 "overview --json parses (python, stable keys)" "$C" overview --json
-python3 - "$PWTEST_OUT" <<'PY' && pwtest_ok "json shape: 16 cmds, ops[], facets on pw-review, keys stable" || pwtest_bad "json shape" "schema violation"
+python3 - "$PWTEST_OUT" <<'PY' && pwtest_ok "json shape: 17 cmds, ops[], facets on pw-review, keys stable" || pwtest_bad "json shape" "schema violation"
 import json,sys
 d=json.load(open(sys.argv[1]))
-assert isinstance(d,list) and len(d)==16, len(d)
+assert isinstance(d,list) and len(d)==17, len(d)
 ctx=next(c for c in d if c["cmd"]=="pw-context")
 names={o["name"] for o in ctx["ops"]}
 assert {"req-init","add-input","add-repo"} <= names, names
@@ -155,13 +161,13 @@ for trio in ST RV CFG; do
   case "$trio" in
     ST)  want="phase" ;;
     RV)  want="gate count" ;;
-    CFG) want="ai-review" ;;
+    CFG) want="project" ;;
   esac
   [ "$(printf '%s\n' "$ops" | sort -u | tr '\n' ' ' | sed 's/ $//')" = "$(printf '%s\n' $want | sort -u | tr '\n' ' ' | sed 's/ $//')" ] \
     && pwtest_ok "subprocess whitelist: $trio == {$want}" \
     || pwtest_bad "subprocess whitelist violation ($trio)" "used: [$(printf '%s' "$ops" | tr '\n' ' ')] allowed: {$want}"
 done
-_pwt_forbidden="$(grep -vE '^\s*#' "$C" | grep -cE '"\$(ST|RV|CFG)" (status|log|oneliner|adopt|init|signoff|add-item|answer|resolve|reindex|archive|reopen|auto-signoff|note-init|set)' || true)"
+_pwt_forbidden="$(grep -vE '^\s*#' "$C" | grep -cE '"\$(ST|RV|CFG)" (status|log|oneliner|adopt|init|signoff|add-item|answer|resolve|reindex|archive|reopen|auto-signoff|note-init|set|project (set|ensure))' || true)"
 [ "${_pwt_forbidden:-0}" = 0 ] && pwtest_ok "zero setter invocations in help source" || pwtest_bad "setter call sites" "$_pwt_forbidden"
 
 # 8b) project view on a live fixture + hostile fixture (plan §5: only EXISTING paths; no writes)
@@ -198,10 +204,37 @@ pwtest_fix "project refusal has fix hint"
 pwtest_rc 2 "project unknown command slot" "$C" project "$CX2" frobnicate
 pwtest_err 'no such command: pw-frobnicate' "canonical echo in project slot"
 
-# 8c) pw-config is invoked strictly in GET form (ai-review "$slug" — never a mode arg).
-_n_get="$(grep -vE '^[[:space:]]*#' "$C" | grep -cF '"$CFG" ai-review "$slug" 2>' || true)"
-_n_all="$(grep -vE '^[[:space:]]*#' "$C" | grep -cF '"$CFG" ai-review' || true)"
-pwtest_eq "ai-review is only ever a get" "$_n_all" "$_n_get"
+# 8c) pw-config is invoked strictly in GET form (project get <slug> ai-review — never set/ensure).
+_n_get="$(grep -vE '^[[:space:]]*#' "$C" | grep -cF '"$CFG" project get "$slug" ai-review 2>' || true)"
+_n_all="$(grep -vE '^[[:space:]]*#' "$C" | grep -cF '"$CFG" project' || true)"
+pwtest_eq "project is only ever a get" "$_n_all" "$_n_get"
+
+# 8b) command pw-config — value discoverability (owner 09-24): every operator of the config
+# surface must RENDER, and the set/show blocks must carry the per-key value vocabulary.
+pwtest_rc 0 "command pw-config renders" "$C" command pw-config
+for cop in global model-check ensure get set show; do
+  grep -qF "  $cop" "$PWTEST_OUT" && pwtest_ok "op surfaced: $cop" \
+    || pwtest_bad "op surfaced: $cop" "absent from command view"
+done
+grep -qF 'headless = strict binding' "$PWTEST_OUT" && pwtest_ok "set block carries routing values" \
+  || pwtest_bad "set block values" "routing enum missing"
+grep -qF 'off|advisory|auto' "$PWTEST_OUT" && pwtest_ok "set block carries ai-review modes" \
+  || pwtest_bad "review values" "modes missing"
+grep -qF 'researcher|analyst|writer-task|reviewer|verifier' "$PWTEST_OUT" \
+  && pwtest_ok "set block carries ai-model roles" || pwtest_bad "model roles" "roles missing"
+# 8b-2) scope boundary (owner 09-24 feedback): the global vs per-project split must RENDER
+# as explicit tiers (never a flat same-tier list), and machine operators must print their
+# example line WITHOUT the slug.
+grep -qF 'global operators - typed WITHOUT a <project-slug>' "$PWTEST_OUT" \
+  && pwtest_ok "global tier header renders" || pwtest_bad "global tier header" "missing in command pw-config"
+grep -qF 'per-project operators - typed as /pw-config <project-slug>' "$PWTEST_OUT" \
+  && pwtest_ok "per-project tier header renders" || pwtest_bad "per-project tier header" "missing in command pw-config"
+grep -qF '$ /pw-config global show' "$PWTEST_OUT" \
+  && pwtest_ok "global example drops the slug" || pwtest_bad "global example" "slug-free /pw-config global show line missing"
+if grep -qF '/pw-config <project-slug> global' "$PWTEST_OUT"; then pwtest_bad "global example" "slug-prefixed global form rendered"; else pwtest_ok "no slug-prefixed global form"; fi
+if grep -qF '/pw-config <project-slug> model-check' "$PWTEST_OUT"; then pwtest_bad "model-check example" "slug-prefixed model-check rendered"; else pwtest_ok "model-check example slug-free"; fi
+pwtest_rc 0 "command pw-review renders (ungrouped)" "$C" command pw-review
+if grep -qF 'WITHOUT a <project-slug>' "$PWTEST_OUT"; then pwtest_bad "pw-review ungrouped" "scope header leaked to an all-project command"; else pwtest_ok "pw-review ungrouped"; fi
 
 # 8d) find: bounded literal discovery + json contract + surface integrity (plan 18 H3/Q1)
 pwtest_rc 0 "find literal phrase hits" "$C" find HUMAN-TRIGGERED

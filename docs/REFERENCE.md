@@ -115,7 +115,7 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | `/pw-analyze <slug> [focus]` | analysis |
 | `/pw-review <slug> [phase\|Tid(s)\|path]` | apply review comments (defaults to current phase's review; task ids can be a list — `T01 T03 T05 T06` — processed in one pass) |
 | `/pw-review <slug> ai [phase\|Tid(s)\|path]` | optional — delegate a fresh review pass to `pw-reviewer` (see [docs/REVIEW.md](./REVIEW.md#3-ai-assisted-review-optional-per-phase)) |
-| `/pw-review <slug> config [<phase> <mode> \| model <lane> <provider:model\|—>]` | optional — view (no args: AI Review modes **and** AI Model lanes) or change one: a phase's review mode, or a lane's model row (`—` = provider default). The human-facing surface; don't poke the dashboard config lines by hand |
+| `/pw-config <slug> [show \| get <key> \| set <key> <value…> \| ensure \| global show \| model-check <provider> <model>]` | the configuration domain, one surface: view every axis (config = validated get/set knobs — see the table below; state/data facts show only) and change config knobs — `off`/`—` are explicit values, every write validated and logged; `ai-review`/`ai-model` accept batch `k=v` pairs in one call. The human-facing surface; don't poke the dashboard config lines by hand — see "What you can update per project" below |
 | `/pw-review <slug> init-all` | create every missing review file in the project (each analysis doc, the PLAN, every task) — idempotent catch-up |
 | `/pw-review <slug> item <path> <§anchor> <ask…>` | add a review item deterministically (heading, timestamp, marker, rule, reindex — never hand-copy the template block) |
 | `/pw-review <slug> answer <path> <Qn> <text…>` | add your `↳ you:` answer under a question, in house style |
@@ -132,11 +132,34 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | `/pw-close <slug>` | learn + close-out |
 | `/pw-research <question>` | ad-hoc `pw-researcher` Mode B answer pass (seed rules from the skill; no project needed) |
 | `/pw-verify <target-of-verification>` | independent fresh-context `pw-verifier` stand-alone check (§3.4 — not part of the default executor flow; lands findings as review items, never edits) |
-| `/pw-doctor [--fix]` | check (or repair) that installed commands + agents + skill match this bundle |
+| `/pw-doctor [--fix]` | check (or repair) that installed commands + agents + skill match this bundle (global side) |
+| `/pw-doctor --project <slug> [--fix]` | project side — is this project operated well and still consistent with the current global config: doc format, template currency, PLAN/RFC/MR agreement, config validity — `--fix` applies only the repairs that have a deterministic writer |
 | `/pw-rfc <slug> [--target <ref>]` | optional side-loop: publish approved analysis to an RFC doc (see [docs/RFC.md](./RFC.md)) |
 | `/pw-rfc <slug> milestone` | same side-loop, Wave 2 — fills Milestone + Conclusion from an approved PLAN |
 | `/pw-rfc <slug> comments` | read-only pull of RFC-doc comments into a local review file |
 | `/pw-help [overview \| command <name> [<slug>] \| operators <name> [<op>] \| project <slug> [<name>] \| workflow \| find <term>]` | the live how-to map: every command + operator with its exact invocation, facet states, and the "what do I run now" lines for a given project — never a stale cheat sheet; read-only, renders doctrine but decides nothing |
+
+### What you can update per project (`/pw-config`)
+
+`/pw-config <slug> show` lists every key with its kind and source; `set` accepts exactly these —
+anything else is refused at write time, so there is no guessing the shapes:
+
+| key | settable to |
+|---|---|
+| `routing` | `auto` · `subagent` · `headless` (headless = **strict** model binding, no silent downgrade) |
+| `execution-limit` | integer `0..99` — self-repair rounds per run (floor: `PW_MAX_SELF_REPAIR`) |
+| `max-parallel` | integer `1..99` — concurrent executors |
+| `produced-by` | a provider from your enabled list (`/pw-config global show` lists it) |
+| `ai-review` | `phase=mode` pairs — phases `analysis`·`plan`·`task-plan`·`task-exec`·`ship`; modes `off`·`advisory`·`auto` (`off` is explicit; batches validate all-or-nothing) |
+| `ai-model` | `role=provider:model` or `role=—` pairs — roles `researcher`·`analyst`·`writer-task`·`reviewer`·`verifier` (values checked live: allowlist + catalog + provider scope) |
+| `rfc-target` | a doc ref/URL for the `/pw-rfc` side-loop |
+
+**Show-only, never set here** — these are facts the flows derive, and `set` refuses them naming the
+owning command: `status` (`/pw-status` moves phases), `adopted` (`/pw-adopt`), `base-branches` and
+`landing-units` (`/pw-breakdown`). Result acceptance is likewise the human workflow gate
+(accepting shipped tasks), not a config knob. Machine floors live in `pw.config.sh` (human-owned;
+`/pw-config global show` is the read view).
+
 
 These exist for multiple agent tools (Claude Code, kilo, …) but are **not** maintained per tool. The
 single source is [`tooling/commands/*.md`](../tooling/) (provider-neutral, `{{ARGS}}` placeholder).

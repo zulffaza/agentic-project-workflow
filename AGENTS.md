@@ -35,8 +35,7 @@ review → close**, driven by `/pw-*` slash commands. Work happens in scaffolded
 | Ship | `/pw-ship` | pushed branches + MRs | you confirm the push |
 | Review results | `/pw-review` | accepted tasks | you accept each task |
 | Close | `/pw-close` | learnings + teardown, `Status → done` | — |
-| Any-time | `/pw-status` · `/pw-help` · `/pw-doctor` | state report · live how-to (commands/operators/project next-steps) · install sync | — |
-| Any-time | `/pw-status` · `/pw-help` · `/pw-doctor` | state report · live how-to (commands/operators/project next-steps) · install sync | — |
+| Any-time | `/pw-status` · `/pw-help` · `/pw-doctor` · `/pw-config` | state report · live how-to (commands/operators/project next-steps) · install + `--project` consistency · validated per-project config | — |
 
 Side-loops: **`/pw-sync`** refreshes open MRs against a moved base · **`/pw-ship … comments`**
 services MR review threads · **`/pw-status`** shows where a project is · **`/pw-context`** edits

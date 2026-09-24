@@ -90,18 +90,35 @@ iff nothing but `ok`/`never-run`; mutates nothing (no LOG line). Wired as a warn
 
 ## pw-config.sh
 
-Per-project config lines on the dashboard, get-or-set semantics:
+The **one per-project config surface**. Storage stays markdown (dashboard/PLAN/task files/
+rfc-META — no parallel config file); this script is the only validated writer, and every write is
+logged to `LOG.md`. Two scopes, deliberately split:
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-config.sh ai-review <slug> [<phase> <mode>]        # off|advisory|auto
-$PW_HOME/tooling/scripts/entities/pw-config.sh ai-model  <slug> [<lane> <provider:model|—>]
-$PW_HOME/tooling/scripts/entities/pw-config.sh model-check <provider> <model-id>        # PERMISSION axis (allowlist guard)
-$PW_HOME/tooling/scripts/entities/pw-config.sh model-resolve <provider> <model-id>      # AVAILABILITY axis (below)
+$PW_HOME/tooling/scripts/entities/pw-config.sh project show   <slug> [--json]   # kind | stored | source | effective — READ-ONLY
+$PW_HOME/tooling/scripts/entities/pw-config.sh project get    <slug> <key>
+$PW_HOME/tooling/scripts/entities/pw-config.sh project set    <slug> <key> <value…>
+$PW_HOME/tooling/scripts/entities/pw-config.sh project ensure <slug>            # insert missing explicit dashboard config lines
+$PW_HOME/tooling/scripts/entities/pw-config.sh global   show                    # effective machine floors — read-only (no 'global set' on purpose)
+$PW_HOME/tooling/scripts/entities/pw-config.sh model-check  <provider> <model-id>     # PERMISSION axis (allowlist guard) — global verb, slug-less
+$PW_HOME/tooling/scripts/entities/pw-config.sh model-resolve <provider> <model-id>    # AVAILABILITY axis (below) — global verb, slug-less
 ```
 
-`auto` is what lets `pw-review.sh auto-signoff` ever succeed; `model-check` reads
-`PW_MODEL_ALLOWLIST_<PROVIDER>` from pw.config.sh (empty = all allowed). `/pw-review <slug>
-config` is the human-facing surface for the first two — prefer it over calling the script.
+Config keys: `routing | execution-limit | max-parallel | produced-by | ai-review | ai-model |
+rfc-target`. `state`/`data` keys (`status`, `adopted`, `base-branches`, `landing-units`) appear in
+`show` but `get`/`set` **refuse** them — they're facts the owning flow derives. `set` validates
+before touching any file: bad enums (`routing ∈ auto|subagent|headless`; review modes
+`off|advisory|auto` — `off` is a real value, absence is a defect), integer bounds, `produced-by`
+against current `PW_PROVIDERS`, and ai-model rows against the allowlist **and** the live catalog +
+configured API-provider scope (`model-check` + `model-resolve`) — a pin that can't bind is refused
+at write time, not discovered at spawn time. **Batch form:** `ai-review`/`ai-model` accept several
+`<k>=<v>` pairs in one call — validate-all-first (any illegal pair refuses the whole batch,
+nothing written), then one line-update and **one** LOG line. Per-task `Execute with:` pins are not
+a key here — they have two holders (task file + PLAN cell) and wait on the single-writer
+propagator (KNOWN-ISSUES remediation plan). Bare `ai-model`/`ai-review` remain **deprecated
+shims** onto `project …` (same engine + stderr pointer) for pre-existing callers.
+`/pw-config <slug> …` is the human-facing surface — prefer it over calling the script, and note
+configuration is no longer a `/pw-review` sub-verb.
 
 **`model-resolve`** proves a model *exists right now* (model-check only proves it's *permitted*):
 match against the provider's live catalog **exact-first** — the exact line wins, because the
@@ -115,6 +132,32 @@ direct line exists, announcing the substitution on stderr. Then verify it sits i
 stderr). Fails **open** on "can't check" (claude has no catalog; CLI off PATH; unknown provider) —
 exit 0 + an "unverified" note — so every non-zero is a positive determination safe to hard-stop
 on. `pw-preflight.sh execute` runs it per row; the routing ladder runs it before every spawn.
+
+## pw-project-doctor.sh
+
+The **project side** of `pw-doctor` (behind `pw-doctor.sh --project <slug>`): is this project
+operated well, and does it still match the *current* global config? A deterministic walk of the
+project's own phases — each check prints `✓` / `✗` / `·` (· = informational, never fails) with a
+`→ fix:` line per `✗`; exit 0 iff no `✗` (CI-usable). Read-only unless `--fix`, and even then only
+repairs with a deterministic writer (config-line ensure) are applied — everything else prints its
+fix command.
+
+```bash
+$PW_HOME/tooling/scripts/entities/pw-project-doctor.sh <slug> [--fix]
+```
+
+Checks (workflow order, stable IDs): C10 doc format (`pw-doc.sh lint all` — reused, never
+re-implemented) · C11 template currency (required dashboard/PLAN lines incl. the explicit
+`AI Review:`; unexpanded scaffold tokens) · C12 RFC ↔ analysis (META well-formed; backend drift vs
+current `PW_RFC_BACKEND` lights up) · C1 PLAN rows (status vocabulary, filled pins, task files) ·
+C3 `depends_on` (resolve + acyclic) · C6 config validity (present/legal/resolvable/in-sync with
+`pw.config.sh` as it is today) · C8 provider/executor audit (`pw-status.sh provider-audit`) ·
+C5 stale in-progress runs (`PW_DOCTOR_STALE_DAYS`, default 7) · C2 worktree/branch pairs ·
+C4 PLAN gate passing right now (`pw-preflight.sh review <slug> plan`) · C7 MR ↔ task agreement
+(merged-but-unaccepted etc.) · C9 verification-kinds (forward reference — always `·`).
+
+Doctrine: every check **delegates** to the owning helper (the reuse map is the point — a check
+must not fork near-copies of gate logic); "can't check" is always `·`, never a false `✗`.
 
 ## pw-session.sh
 

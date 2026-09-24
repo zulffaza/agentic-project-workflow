@@ -61,14 +61,30 @@ pl_config_selftest() {
   # duplicated a task's `Execute with:` would silently drift from it — the executor is pinned in
   # its task file, never here (§5.1). The row IS advisory on kilo at Task-spawn time (a headless
   # session carries it instead, §8c) — recorded in the result, never silently ignored.
-  local got_m; got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model demo2)"
+  local got_m; got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" project get demo2 ai-model 2>/dev/null)"
   [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=—" ] \
     || die "selftest FAIL: ai-model default line wrong: '$got_m'"
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model demo2 researcher kilo:command_code/x >/dev/null
-  got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model demo2)"
-  [ "$got_m" = "researcher=kilo:command_code/x analyst=— writer-task=— reviewer=— verifier=—" ] \
+  # write-time validation (permission + availability + provider membership) rides the shim
+  # catalog + noscope fixture config: only rows that can actually bind are accepted.
+  PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" \
+    "$(pwtest_script pw-config.sh)" project set demo2 ai-model researcher kilo:command_code/MiniMaxAI/MiniMax-M3 >/dev/null 2>&1 || die "selftest FAIL: project set ai-model refused a resolvable in-scope row"
+  got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" project get demo2 ai-model 2>/dev/null)"
+  [ "$got_m" = "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 analyst=— writer-task=— reviewer=— verifier=—" ] \
     || die "selftest FAIL: ai-model set not isolated to researcher: '$got_m'"
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model demo2 researcher — >/dev/null
+  # a catalog miss is refused AT WRITE TIME (not discovered at spawn), leaving the line intact:
+  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" \
+     "$(pwtest_script pw-config.sh)" project set demo2 ai-model researcher kilo:command_code/gone-xyz >/dev/null 2>&1; then
+    die "selftest FAIL: project set ai-model accepted a model missing from the live catalog"
+  fi
+  # a provider absent from PW_PROVIDERS is refused the same way:
+  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" \
+     "$(pwtest_script pw-config.sh)" project set demo2 ai-model analyst ghostprov:some-model >/dev/null 2>&1; then
+    die "selftest FAIL: project set ai-model accepted a provider that is not enabled"
+  fi
+  got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" project get demo2 ai-model 2>/dev/null)"
+  [ "$got_m" = "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 analyst=— writer-task=— reviewer=— verifier=—" ] \
+    || die "selftest FAIL: refused ai-model sets still mutated the line: '$got_m'"
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model demo2 researcher — >/dev/null 2>&1
   got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model demo2)"
   [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=—" ] \
     || die "selftest FAIL: ai-model clear-to-default failed: '$got_m'"
@@ -151,3 +167,106 @@ mkdir -p "$ROOT/nobin"
 PATH="$ROOT/nobin:/usr/bin:/bin" PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve kilo alibaba-token-plan/test-model >/dev/null 2>&1 \
   && pwtest_ok "CLI off PATH → unverified, never a false dead" \
   || pwtest_bad "CLI off PATH fallback" "refused as if dead"
+
+# --- project scope: show / get / set / ensure + global show + state refusals ------------------
+# Own scratch project (no F2 needed): a minimal dashboard + PLAN skeleton exercising both
+# writer paths — replace-existing-bullet and insert-after-anchor.
+PRJ="$ROOT/projects/pcfg-demo"; mkdir -p "$PRJ/task"
+printf -- '- **Status:** context\n- **One-liner:** cfg fixture\n' > "$PRJ/README.md"
+: > "$PRJ/LOG.md"
+printf '## Breakdown rules / execution routing (project-specific)\n- **Routing overrides:** none\n\n## Execution strategy\n- Max parallelism: <n> concurrent executors.\n- **AI execution limit:** <n> (default 3)\n- **Produced by:** <provider>\n\n## Task table\n| ID | Title | Repo | depends_on | Group | Execute with | SP | Status | Time | Result |\n|----|-------|------|------------|-------|--------------|----|--------|------|--------|\n' > "$PRJ/task/PLAN.md"
+PC="$(pwtest_script pw-config.sh)"
+PCS="env PW_CONFIG_FILE=$PWTEST_TESTSDIR/pw.config.test.sh PW_PROJECTS_DIR=$ROOT/projects $PC"
+
+# ensure: both explicit config lines appear (absent line = defect doctrine), idempotent.
+pwtest_rc 0 "project ensure inserts config lines" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project ensure pcfg-demo
+grep -qE '^- \*\*AI Review:\*\* analysis=off plan=off' "$PRJ/README.md" \
+  && pwtest_ok "AI Review line ensured with explicit off values" || pwtest_bad "ensure review line" "$(grep -c 'AI Review' "$PRJ/README.md")"
+grep -qE '^- \*\*AI Models:\*\* researcher=—' "$PRJ/README.md" \
+  && pwtest_ok "AI Models line ensured with explicit — rows" || pwtest_bad "ensure models line" "$(grep -c 'AI Models' "$PRJ/README.md")"
+_before_ensure2="$(cat "$PRJ/README.md")"
+pwtest_rc 0 "project ensure idempotent" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project ensure pcfg-demo
+[ "$_before_ensure2" = "$(cat "$PRJ/README.md")" ] && pwtest_ok "second ensure is a no-op" || pwtest_bad "ensure not idempotent" "README changed twice"
+
+# get: unset values report the effective floor, not silence.
+pwtest_rc 0 "project get routing (unset)" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo routing
+pwtest_re 'unset — effective: auto' "unset routing names the effective floor"
+
+# set: enum validation refuses first…
+pwtest_rc 2 "project set refuses a bad routing value" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo routing turbo
+# …and accepts the strict rung (headless) via the insert-anchor path (no bullet existed).
+pwtest_rc 0 "project set routing headless (strict)" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo routing headless
+grep -qE '^- \*\*Routing:\*\* headless$' "$PRJ/task/PLAN.md" \
+  && pwtest_ok "routing bullet inserted after the routing section anchor" || pwtest_bad "routing insert" "$(grep 'Routing' "$PRJ/task/PLAN.md")"
+# existing-bullet replace: execution-limit + produced-by; max-parallel keeps its sentence shape.
+pwtest_rc 0 "project set execution-limit" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo execution-limit 5
+grep -qE '^- \*\*AI execution limit:\*\* 5$' "$PRJ/task/PLAN.md" && pwtest_ok "limit bullet replaced" || pwtest_bad "limit bullet" "$(grep 'execution limit' "$PRJ/task/PLAN.md")"
+pwtest_rc 2 "execution-limit refuses non-integer" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo execution-limit many
+pwtest_rc 2 "execution-limit refuses out-of-range" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo execution-limit 100
+pwtest_rc 0 "project set max-parallel" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo max-parallel 4
+grep -qE '^- Max parallelism: 4 concurrent executors\.$' "$PRJ/task/PLAN.md" && pwtest_ok "max-parallel keeps its sentence" || pwtest_bad "max-parallel line" "$(grep 'Max parallelism' "$PRJ/task/PLAN.md")"
+# produced-by validates against the CURRENT global config: kilotest is not enabled in
+# pw.config.test.sh (kilo claude cursor)…
+pwtest_rc 2 "produced-by refuses an unlisted provider" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo produced-by kilotest
+# …but replaces cleanly when it is (f2 fixture config).
+pwtest_rc 0 "produced-by accepts an enabled provider" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.f2.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo produced-by kilotest
+grep -qE '^- \*\*Produced by:\*\* kilotest$' "$PRJ/task/PLAN.md" && pwtest_ok "produced-by bullet replaced (placeholder gone)" || pwtest_bad "produced-by bullet" "$(grep 'Produced by' "$PRJ/task/PLAN.md")"
+
+# state/data keys: show-only, refused by get and set with the owning flow named.
+pwtest_rc 2 "project get refuses state key" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo status
+pwtest_err "state/data" "refusal explains state/data"
+pwtest_rc 2 "project set refuses data key" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo base-branches master
+pwtest_err "owning flow" "refusal names the owning flow"
+
+# ai-review through project: same validated writer as the (deprecated) bare verb.
+pwtest_rc 0 "project set ai-review plan auto" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review plan auto
+pwtest_rc 0 "project get ai-review shows it" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo ai-review
+pwtest_re 'plan=auto' "ai-review write landed"
+# BATCH set: several phase=mode pairs in ONE command → one write, one LOG line.
+_before_log="$(grep -c '^- ' "$PRJ/LOG.md")"
+pwtest_rc 0 "project set ai-review batch" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review analysis=advisory task-plan=auto ship=off
+pwtest_rc 0 "batch get reflects all pairs" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo ai-review
+pwtest_re 'analysis=advisory plan=auto task-plan=auto task-exec=off ship=off' "all three pairs landed, untouched kept"
+_after_log="$(grep -c '^- ' "$PRJ/LOG.md")"
+[ "$(( _after_log - _before_log ))" = 1 ] \
+  && pwtest_ok "batch is one LOG line" || pwtest_bad "batch log" "$((_after_log-_before_log)) new lines (want 1)"
+# all-or-nothing: a batch with one illegal pair must write NOTHING.
+_aim_before="$(grep -m1 '^- \*\*AI Models:\*\*' "$PRJ/README.md" | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//')"
+if PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-model \
+   "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3" "analyst=ghostprov:m" >/dev/null 2>&1; then
+  pwtest_bad "batch all-or-nothing" "refused-batch returned 0"
+else
+  pwtest_ok "batch refuses when ANY pair is invalid"
+fi
+_aim_after="$(grep -m1 '^- \*\*AI Models:\*\*' "$PRJ/README.md" | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//')"
+[ "$_aim_before" = "$_aim_after" ] && pwtest_ok "refused batch wrote nothing (validated before write)" || pwtest_bad "batch atomicity" "line changed: '$_aim_after'"
+# batch ai-model with all-valid pairs lands in one write + one log.
+pwtest_rc 0 "project set ai-model batch valid" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-model \
+  "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3" "reviewer=—"
+pwtest_rc 0 "batch ai-model get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo ai-model
+pwtest_re 'researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 analyst=— writer-task=— reviewer=— verifier=—' "model batch landed both kinds of pair"
+# rfc-target delegates to the rfc entity (META gets created + stamped).
+pwtest_rc 0 "project set rfc-target" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo rfc-target "https://example/rfcs/42"
+grep -qF 'https://example/rfcs/42' "$PRJ/rfc/META.md" 2>/dev/null && pwtest_ok "rfc-target persisted to META" || pwtest_bad "rfc-target META" "$(cat "$PRJ/rfc/META.md" 2>/dev/null | head -3)"
+
+# show lists kinds + json parses; LOG.md recorded the writes; global show is pure read.
+pwtest_rc 0 "project show lists the whole surface" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project show pcfg-demo
+pwtest_re 'routing[[:space:]]+config' "show row: routing is config-kind"
+pwtest_re 'status[[:space:]]+state' "show row: status is state-kind"
+# discoverability (owner 09-24): the settable vocabulary ships IN the show output's footer —
+# you never have to open a doc to learn what can change and to which values.
+pwtest_re 'settable keys: routing' "show footer lists settable keys + value shapes"
+pwtest_re 'show-only .flows derive' "show footer names the show-only kinds"
+pwtest_rc 0 "project show --json parses" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project show pcfg-demo --json
+python3 -c "import json,sys; d=json.load(sys.stdin); assert d['slug']=='pcfg-demo' and any(r['key']=='routing' and r['stored']=='headless' for r in d['rows'])" < "$PWTEST_OUT" \
+  && pwtest_ok "json carries the written values" || pwtest_bad "json shape" "$(head -c 120 "$PWTEST_OUT")"
+grep -qE '· `config` — routing -> headless' "$PRJ/LOG.md" && pwtest_ok "every set logs to LOG.md" || pwtest_bad "LOG lines" "$(grep -c '^- ' "$PRJ/LOG.md")"
+LOGN="$(grep -c '^- ' "$PRJ/LOG.md")"; READMEB="$(cat "$PRJ/README.md")"
+pwtest_rc 0 "global show" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" global show
+pwtest_re 'providers[[:space:]]+: kilo claude cursor' "global show lists providers"
+pwtest_re 'route-default' "global show lists the route floor"
+[ "$(grep -c '^- ' "$PRJ/LOG.md")" = "$LOGN" ] && [ "$READMEB" = "$(cat "$PRJ/README.md")" ] \
+  && pwtest_ok "global show mutates nothing (read-only floor view)" || pwtest_bad "global show mutated" "LOG/README changed"
+# deprecated shims still work but announce the pointer on stderr.
+pwtest_rc 0 "bare ai-review still functions (shim)" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" ai-review pcfg-demo
+pwtest_err 'deprecated' "bare verb prints the deprecation pointer"

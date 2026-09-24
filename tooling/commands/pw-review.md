@@ -50,9 +50,9 @@ like the apply-comments flow does):
    `analysis`, `plan`, `task-plan`, `task-exec`, `ship`. A list of task ids means one reviewer
    pass PER named task (each task is its own artifact + review file) — never one pass across
    several tasks.
-2. Check this project's mode for that phase: `…/{{PW_HOME}}/tooling/scripts/entities/pw-config.sh ai-review <slug>` (an
+2. Check this project's mode for that phase: `…/{{PW_HOME}}/tooling/scripts/entities/pw-config.sh project get <slug> ai-review` (an
    internal check — I never type this myself). If `off`, tell me AI review isn't enabled for this
-   phase and stop — point me at `/pw-review <slug> config <phase> <mode>` rather than guessing I
+   phase and stop — point me at `/pw-config <slug> set ai-review <phase> <mode>` rather than guessing I
    want it turned on, and never at the underlying script.
 3. If `advisory` or `auto`, ensure the review file exists (`review-init` if not), then spawn the
    `pw-reviewer` agent **fresh** — same provider, in-process sub-agent (Claude Task tool / kilo
@@ -70,33 +70,15 @@ like the apply-comments flow does):
    apply-comments recap below. `advisory` mode: remind me a human still needs to review its items
    and sign off. An escalation means this needs my attention now, not another `ai` re-run.
 
-**If the 2nd argument is literally `config`, this is how I view/change this project's AI Review
-settings — skip everything below and follow this instead.** This command is the interface for
-that; regardless of what else I ask for, never tell me to run the raw config script myself for this — that's
-the internal mechanism this sub-verb wraps, not something I should need to know exists.
-
-1. **No further arguments** → run `…/{{PW_HOME}}/tooling/scripts/entities/pw-config.sh ai-review <slug>` and show me
-   the five phases (`analysis`/`plan`/`task-plan`/`task-exec`/`ship`) and their current mode
-   (`off`/`advisory`/`auto`) as a small table, in plain language — not the raw
-   `analysis=off plan=off …` line verbatim. One line reminding me what each mode means: `off` = no
-   AI reviewer, `advisory` = it files items but I still sign off, `auto` = it may sign off itself
-      on a genuinely clean pass. Tell me how to change one: `/pw-review <slug> config <phase> <mode>`.   1b. **Also run** `…/{{PW_HOME}}/tooling/scripts/entities/pw-config.sh ai-model <slug>` and show the five lane rows
-       (`researcher`/`analyst`/`writer-task`/`reviewer`/`verifier`; `—` = provider default, executor not a
-       row). Same one-line explanation: this is *which model* the next lane spawn runs on (row → else
-       provider/session default); changing one is
-       `/pw-review <slug> config model <role> <provider:model>` (see docs/EXECUTION.md §Spawning phase
-       work). This is a **view**, not a re-approval — never flip anything from here without my words.
-2. **`<phase> <mode>` given** → validate `<phase>` is one of the five above and `<mode>` is one of
-   `off`/`advisory`/`auto` yourself (a friendlier error than the tool's if not), then run
-   `…/{{PW_HOME}}/tooling/scripts/entities/pw-config.sh ai-review <slug> <phase> <mode>` (or `ai-model <slug> <lane>
-   <provider:model|—>` for a model lane — never an executor lane: a lane that can't take a per-spawn
-   model records the provider default it actually ran with, §docs/EXECUTION.md The per-spawn ledger)
-   and confirm back in plain
-   language — e.g. *"AI review for the plan-approval gate is now `auto` — a clean pw-reviewer pass
-   can sign off the PLAN itself now, no human needed, unless something's still open."* If `plan`
-   is being set to `auto`, add a one-line reminder that it's the only hard gate, so I know what
-   I'm opting into.
-3. This never changes the dashboard `Status:` line either — same rule as everything else here.
+**If the 2nd argument is literally `config`, this is the configuration domain — which is no longer
+part of reviewing.** Tell me that in one line and hand me the right command instead of doing it
+half-heartedly from here: viewing/changing this project's AI-review modes and spawn-lane model
+rows lives on **`/pw-config`** now (`/pw-config <slug> show` to see all five phases + the five
+lanes and what each mode means; `/pw-config <slug> set ai-review <phase> <mode>` /
+`set ai-model <role> <provider:model>` to change one — validated writes, `off`/`—` are explicit
+values). If `/pw-config` is somehow unavailable in this install, say so and stop — do not run raw
+scripts at me. (The mode a phase runs in is still read here at step 2 of the `ai` flow via the
+internal config check — reading your setting to honor it is not "configuring".)
 
 **Step 0 — pinpoint before reading, IF a memory tool is configured** (optional; see
 `{{PW_HOME}}/tooling/docs/memory.md` and `PW_MEMORY` in `pw.config.sh`). For the item(s) about to

@@ -163,6 +163,28 @@ buried in `tooling/`.
   stub exemption (a clean pass must succeed). Coverage: C22 cases in `tests/cases/`, unit checks
   in the harness.
 
+### `task-accept` syncs the task file but not the PLAN row — close pre-flight then blocks on a stale cell
+- **Symptom:** (a `/pw-close` run, mm-spring-redis-sentinel-adoption, 2026-09-23) the close gate failed
+  with `not all tasks are accepted: T01(done)` even though `task/T01.md` already read
+  `- **Status:** accepted` and the dashboard row said accepted — the **PLAN task-table cell** still
+  read `done`, and the acceptance checks read the PLAN row.
+- **Root cause:** the `task-accept` helper rewrites only `task/<T0n>.md`. It never touches
+  `task/PLAN.md`'s task table — and it is exactly the helper the
+  `/pw-sync` already-merged path tells you to run, so a merged task lands in this half-synced state.
+- **Workaround:** after `task-accept`, also set that task's PLAN Status cell to `accepted` by hand,
+  then refresh the dashboard (the doc-sync operator's `--dashboard-only` mode) and re-run
+  `/pw-close` to confirm the gate is green.
+
+### Dashboard status/MR helpers can't write into a still-empty table body
+- **Symptom:** `dashboard-task-status` / `dashboard-mr-state` printed
+  `ERR: no row with ID="T01" in the matched table` on a project whose README task table was still the
+  template's empty `| | | | | |` placeholder — the update is simply skipped, so the dashboard silently
+  drifts from the task files.
+- **Root cause:** the row matcher requires an existing data row; there is no "insert the first row"
+  path for an untouched table.
+- **Workaround:** populate the first row by hand (or run the doc-sync operator's
+  `--dashboard-only` mode) before calling the helpers.
+
 ## Existing projects keep pre-layout script paths in generated docs (harmless)
 
 - **Symptom:** a project scaffolded before the tooling-layout move has hint text naming the old

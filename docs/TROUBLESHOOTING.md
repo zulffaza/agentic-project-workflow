@@ -129,3 +129,13 @@ for each: a general (non-diff) comment being wrongly filtered out by `individual
 `/pw-status <slug>` — it's built for exactly this question (phase, dashboard `Status:`, what's
 still open, what command comes next). Don't try to reconstruct it by reading `LOG.md`/`PLAN.md` by
 hand first.
+
+## "I want every consistency question about one project answered at once"
+
+`/pw-doctor --project <slug>` — the project side of the doctor: doc format, template currency,
+PLAN/RFC/MR agreement, and every config line checked against your **current** `pw.config.sh` (so a
+provider you dropped mid-project surfaces as `✗`, not a surprise at spawn time). `✗` lines carry
+their fix command; add `--fix` and it applies only the repairs that have a deterministic writer
+(e.g. inserting a missing `AI Review:` line with explicit `off` values — older projects started
+before that line was mandatory self-heal here). Exit non-zero on any `✗`, so you can gate CI on it.
+This never replaces `/pw-status` (report) or the phase gates themselves — it *reuses* them.

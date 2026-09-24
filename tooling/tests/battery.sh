@@ -29,6 +29,14 @@ battery_rows() {
     printf 'help project-review %s\tpw-help.sh\tproject %s pw-review\n' "$s" "$s"
     printf 'provider-audit %s\tpw-status.sh\tprovider-audit %s\n' "$s" "$s"
   done
+  # project-doctor battery rows: F1 (fresh scaffold → green) + F3 (hostile → red) only — the
+  # all-green-on-planted-defects walk is config-sensitive (produced-by membership reads
+  # PW_PROVIDERS) and owned by the T1 case with its deterministic f2 fixture config.
+  printf 'doctor-project F1\tpw-project-doctor.sh\t%s\n' "$S1"
+  printf 'doctor-project F3\tpw-project-doctor.sh\t%s\n' "$S3"
+  # config surface (read-only forms; per-fixture doctor covers the walk itself):
+  printf 'project show F2\tpw-config.sh\tproject show %s\n' "$S2"
+  printf 'global show\tpw-config.sh\tglobal show\n'
   # plan-22 operators (shim catalog + session list make these deterministic in-suite):
   printf 'model-check allow\tpw-config.sh\tmodel-check claude opus\n'
   printf 'model-resolve ok\tpw-config.sh\tmodel-resolve kilo alibaba-token-plan/test-model\n'
@@ -68,7 +76,7 @@ _gate_cmd() {     # "<mode> <fixture>" → echo preflight args (review-plan → 
 PWTEST_MODES="pw-doc|lint summary
 pw-doc|analysis task plan review dashboard all
 pw-preflight|analyze execute breakdown ship review comments close
-pw-config|model-check model-resolve
+pw-config|model-check model-resolve project global
 pw-session|session-check
 pw-status|provider-audit"
 

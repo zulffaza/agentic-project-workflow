@@ -11,14 +11,20 @@
 - **One-liner:** <what this project is>
   <!-- 🤖 set by /pw-analyze. Leave the placeholder until analysis fills it. -->
 - **AI Models:** <AI_MODELS_DEFAULT>
-  <!-- 🤖 set via `/pw-review <slug> config model <role> <provider:model>` — one row per spawn
+  <!-- 🤖 set via `/pw-config <slug> ai-model <role> <provider:model>` — one row per spawn
        lane (researcher/analyst/writer-task/reviewer/verifier); `—` = no row = the provider's own
        default (kilo `small_model`/`subagent_model`; claude the session model; cursor the `auto`/
        `selectedModel` floor). The EXECUTOR is not
        a row — its pin is the task file's `Execute with:`/the PLAN's produced-by. Where a spawn
        can't bind the row (Kilo's Task-tool has no model arg), the driver runs the row as a headless
        session of that model over the same work order and the result says which actually ran.
-       See docs/EXECUTION.md §Spawning phase work + `pw-config.sh ai-model`. -->
+       See docs/EXECUTION.md §Spawning phase work + `pw-config.sh project ai-model`. -->
+- **AI Review:** <AI_REVIEW_DEFAULT>
+  <!-- 🤖 set via `/pw-config <slug> ai-review <phase> <mode>` — one mode per review phase
+       (analysis/plan/task-plan/task-exec/ship); `off` is an EXPLICIT value, not an absence: this
+       line is always present, even when nothing is enabled. `off` = no AI reviewer ·
+       `advisory` = pw-reviewer files items, a human still signs off ·
+       `auto` = it may also sign off itself on a genuinely clean pass. See docs/REVIEW.md. -->
 
 
 ## Where things are

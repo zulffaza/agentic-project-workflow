@@ -244,10 +244,10 @@ an echo of the producer's own reasoning — the same idea as having someone who'
 draft read it cold, rather than asking yourself "does this look right to me?"
 
 **Turning it on** — one dashboard line per project, five independent phases, viewed/changed through
-an agent command, never a shell script:
+the config command (never a shell script, and not from `/pw-review` — reviewing is not configuring):
 ```
-/pw-review myproj config              # view all 5 phases' current modes, in plain language
-/pw-review myproj config plan auto    # e.g. let the plan-review gate run itself
+/pw-config myproj show                # every axis incl. all 5 phases' modes, in plain language
+/pw-config myproj set ai-review plan auto    # e.g. let the plan-review gate run itself
 ```
 Each phase (`analysis` / `plan` / `task-plan` / `task-exec` / `ship`) is independently `off`
 (default — nothing changes), `advisory`, or `auto`:

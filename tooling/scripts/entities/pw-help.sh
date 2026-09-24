@@ -87,7 +87,7 @@ die() { printf "%s\n" "pw-help: $*" | flowline 98 >&2; exit 2; }
 
 # --- the phase -> command map (embedded knowledge; the static.sh set-equality
 # canary pins its names against $CMDS, so a new command cannot stay invisible) ---
-HELP_PHASE_MAP="setup|pw-new pw-adopt pw-context pw-doctor;analysis|pw-research pw-analyze pw-review;breakdown|pw-breakdown pw-rfc;executing|pw-execute pw-verify pw-sync;ship|pw-ship;close|pw-close;anytime|pw-status pw-help"
+HELP_PHASE_MAP="setup|pw-new pw-adopt pw-context pw-doctor;analysis|pw-research pw-analyze pw-review;breakdown|pw-breakdown pw-rfc;executing|pw-execute pw-verify pw-sync;ship|pw-ship;close|pw-close;anytime|pw-status pw-help pw-config"
 
 # --- shared helpers -------------------------------------------------------------
 sub() { sed -e "s|{{PW_HOME}}|$PW_HOME|g" -e "s|{{PW_PROJECTS}}|$PW_PROJECTS|g"; }
@@ -211,7 +211,7 @@ scripts_of() {
 #  R2 — a frontmatter selector token (C1 operator group `<a | b | c>` / `[a | b]`)
 #       that appears in an invocation shape or a "literally `<tok>`" line and is not
 #       already listed — command-level sugar (ai/config/item) whose script partner
-#       carries a different op name (config ↔ pw-config.sh ai-review; item ↔ add-item).
+#       carries a different op name (config ↔ pw-config.sh project get ai-review; item ↔ add-item).
 # cmd_use_clause <cmd> <op> — the prose the command file carries for an operator's bullet
 # (everything after the "—" of the mapping line), collapsed to the blurb shown in user views.
 cmd_use_clause() {
@@ -713,8 +713,37 @@ E
     printf '    Use:     the no-operator default flow - see the args line above\n'
   fi
   local bname bargs buse bfac bscript sp2 par usep
+  # Scope boundary (owner 09-24): on a slug-leading command, an operator whose own
+  # bullet invokes the command WITHOUT the slug (e.g. /pw-config global show) is a
+  # machine-wide operator. Group the blocks under explicit headers and drop the
+  # slug from the example line, so the per-project vs global split is rendered,
+  # never inferred from a flat same-tier list.
+  local op_scope="" osc sname sline nproj=0 nmach=0 mixed="" prev_sc="" bsc
+  case "$args" in '<project-slug>'*|'<slug>'*)
+    while IFS="$TABS" read -r sname _sa _su _sf _ss; do
+      [ -n "$sname" ] || continue
+      sline="$(cmd_block "$c" "$sname" | sed -n '1p' || true)"
+      osc=project
+      if [ -n "$sline" ] && printf '%s' "$sline" | grep -qF "/$c" \
+         && ! printf '%s' "$sline" | grep -q 'slug>'; then osc=machine; fi
+      op_scope="$op_scope$sname$TABS$osc"$'\n'
+      if [ "$osc" = machine ]; then nmach=$((nmach+1)); else nproj=$((nproj+1)); fi
+    done <<E
+$ops_lines
+E
+  ;; esac
+  [ "$nmach" -gt 0 ] && [ "$nproj" -gt 0 ] && mixed=1
   while IFS="$TABS" read -r bname bargs buse bfac bscript; do
     [ -n "$bname" ] || continue
+    bsc="$(printf '%s\n' "$op_scope" | awk -F'\t' -v n="$bname" '$1==n{print $2; exit}' || true)"
+    if [ -n "$mixed" ] && [ -n "$bsc" ] && [ "$bsc" != "$prev_sc" ]; then
+      if [ "$bsc" = machine ]; then
+        printf '\n  global operators - typed WITHOUT a <project-slug> (machine floors & validators):\n'
+      else
+        printf '\n  per-project operators - typed as /pw-%s <project-slug> ...:\n' "${c#pw-}"
+      fi
+      prev_sc="$bsc"
+    fi
     printf '  %s  %s\n' "$(printf '%-11s' "$bname")" "${bargs#$bname }" | flowline 98
     # The command file's OWN bullet prose = use-when behavior; the script paragraph = Does.
     local bloc
@@ -739,6 +768,7 @@ E
     # so no <project-slug> slot; every other command leads with the slug.
     local ex
     if [ "$c" = pw-help ]; then ex="/pw-help $bargs"
+    elif [ "$bsc" = machine ]; then ex="/pw-${c#pw-} $bargs"
     else ex="/pw-${c#pw-} ${slug:-<project-slug>} $bargs"
     fi
     printf '    $ %s\n' "$ex" | sed -e 's/[ ]*$//' | flowline 98
@@ -1018,10 +1048,10 @@ render_project_cmd() {
     printf '    /pw-review %s signoff %s <your decision>   HUMAN-TRIGGERED ONLY (C4)\n' "$slug" "${planrev:-task/review/PLAN.review.md}"
     printf '           (decision is one of: approved | changes-requested | in-review)\n'
     local cfgs
-    cfgs="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$CFG" ai-review "$slug" 2>/dev/null | tr '\n' ' ')"
+    cfgs="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$CFG" project get "$slug" ai-review 2>/dev/null | tr '\n' ' ')"
     [ -n "$cfgs" ] || cfgs="-"
     printf '    /pw-review %s ai          second opinion (modes: %s)\n' "$slug" "$cfgs" | flowline 98
-    printf '    /pw-review %s config analysis <approved mode>   (off|advisory|auto)\n' "$slug"
+    printf '    /pw-config %s set ai-review analysis <approved mode>   (off|advisory|auto)\n' "$slug"
     stamp; return 0
   fi
   echo "/pw-${c#pw-} for $slug (phase: $phase)"

@@ -15,7 +15,7 @@ script or operator? Placement rules (one script per entity, no second catch-all 
 
 | Group | Scripts | Use when |
 |---|---|---|
-| [Status and pre-flight](./status-and-preflight.md) | `pw-status.sh` `pw-preflight.sh` `pw-config.sh` `pw-session.sh` `pw-help.sh` | Getting an overview, or before any expensive agent invocation |
+| [Status and pre-flight](./status-and-preflight.md) | `pw-status.sh` `pw-preflight.sh` `pw-config.sh` `pw-project-doctor.sh` `pw-session.sh` `pw-help.sh` | Getting an overview, or before any expensive agent invocation |
 | [Document automation](./document-automation.md) | `pw-doc.sh` | Validating structure, extracting summaries, reconciling drifted docs |
 | [Ship and sync](./ship-and-sync.md) | `pw-ship.sh` | Running `/pw-ship` (resolve/exec/monitor/mr-state/comment-seen), waiting on CI, checking MR states in bulk |
 | [Workflow automation](./workflow-automation.md) | `pw-rfc.sh` `pw-worktree.sh` | RFC comment loops, worktree creation |

@@ -108,8 +108,8 @@ the on-disk PLAN/dashboard/task state stays the durable cross-machine recovery.
 
 The phase roles without a task file (researcher / analyst / writer-task / reviewer / verifier)
 bind their model one rung up the ladder: an interactive override for that spawn, the project
-dashboard's `- **AI Models:**` line (`pw-config.sh ai-model <slug> [role <provider:model>]`, the
-sibling of `- **AI Review:**`; also settable via `/pw-review <slug> config`), or nothing — which
+dashboard's `- **AI Models:**` line (`pw-config.sh project set ai-model <slug> <role> <provider:model>`,
+the sibling of `- **AI Review:**`; the human surface is `/pw-config`), or nothing — which
 falls through to the provider's floor (`small_model`/`subagent_model` on kilo; the session model on
 claude). Canonical defs ship with `model:` **unset** on purpose: a provider alias baked into a def
 is a false pin on the other provider. The executor keeps its per-task `Execute with:`; the ladder

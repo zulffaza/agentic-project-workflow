@@ -9,7 +9,10 @@
 # C49–C60 minted by the repair-routing plan (availability gate, prefix filters, session liveness,
 # doctor catalog/allowlist, ladder + supervision doctrine text, audit verdicts, the dead idi-reader
 # fix, exact-first model matching). C49 RE-PINNED 2026-09-23 when model-resolve went two-stage.
-# Next free: C61. Take the next free number and check draft-plan reservations.
+# C61–C62 minted by the monitor-skipped/sha-selection follow-up (2026-09-23).
+# C63–C65 minted by the project-doctor + project-config plan (explicit-line doctrine ×2 template/
+# scaffold render, retired /pw-review config recipes).
+# Next free: C66. Take the next free number and check draft-plan reservations.
 # Authoring checklist: tooling/docs/testing.md §Writing a mutation row.
 # Columns: id	file	OLD	NEW	tiers	only
 C1-pw-field-packed-cut	pw-common.sh	        q = index(v, "**"); if (q) v = substr(v, 1, q - 1)	        q = 0; if (q) v = substr(v, 1, q - 1)	T1	pw-common
@@ -74,3 +77,6 @@ C59-supervision-contract-text	skill/project-workflow/references/execution-and-ro
 C60-model-resolve-exact-preferred	pw-config.sh	grep -F -x "$model" | head -1	grep -F -x "$prov/$model" | head -1	T1	pw-config
 C61-monitor-skipped-red	pw-ship.sh	      failed|FAILURE|failed|canceled|CANCELLED|failing)	      failed|FAILURE|failed|canceled|skipped|CANCELLED|SKIPPED|failing)	T1	pw-ship
 C62-monitor-no-sha-select	pw-ship.sh	(if ($s | length) > 0 and (any(.[]?; has("sha"))) then (map(select(.sha == $s))) else . end) as $sel	(.) as $sel	T1	pw-ship
+C63-template-ai-review-line-gone	../template/PROJECT.template.md	- **AI Review:** <AI_REVIEW_DEFAULT>	- **AI Review:** analysis=off	T4	-
+C64-scaffold-ai-review-render-dropped	scaffold.sh	s|<AI_REVIEW_DEFAULT>|	(no-op-token|	T4	-
+C65-config-recipe-resumes	commands/pw-config.md	reviewing is not configuring;	reviewing is not configuring; legacy: /pw-review <slug> config plan auto	T4	-

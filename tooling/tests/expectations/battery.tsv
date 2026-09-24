@@ -56,6 +56,10 @@ adopt pwt-f3-hostile	pw-context.sh	adopt-snapshot pwt-f3-hostile api agent/pwt-f
 help project pwt-f3-hostile	pw-help.sh	project pwt-f3-hostile	0	-
 help project-review pwt-f3-hostile	pw-help.sh	project pwt-f3-hostile pw-review	0	-
 provider-audit pwt-f3-hostile	pw-status.sh	provider-audit pwt-f3-hostile	0	-
+doctor-project F1	pw-project-doctor.sh	pwt-f1-scaffold	0	-
+doctor-project F3	pw-project-doctor.sh	pwt-f3-hostile	1	-
+project show F2	pw-config.sh	project show pwt-f2-mid	0	-
+global show	pw-config.sh	global show	0	-
 model-check allow	pw-config.sh	model-check claude opus	0	-
 model-resolve ok	pw-config.sh	model-resolve kilo alibaba-token-plan/test-model	0	-
 model-resolve gone	pw-config.sh	model-resolve kilo alibaba-token-plan/nope-xyz	1	-
