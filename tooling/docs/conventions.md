@@ -1,9 +1,10 @@
-# Capability-placement conventions (scripts, layout, commands, arguments)
+# Capability-placement conventions (scripts, layout, commands, arguments, docs)
 
 **Audience:** maintainers (human or agent) adding capability to this bundle. Read this BEFORE
 creating a script, a slash command, or an operator — it answers "where does this go?" twice over:
-which **script** (S-rules), which **directory** (L-rules), which **command** (C-rules), and how
-arguments are **shaped** (A-rules). The lesson it encodes: `pw-lib.sh` grew to 2095 lines because
+which **script** (S-rules), which **directory** (L-rules), which **command** (C-rules), how
+arguments are **shaped** (A-rules), and which **doc layer** an issue/record belongs to (D-rules).
+The lesson it encodes: `pw-lib.sh` grew to 2095 lines because
 placement was never defined; it is now dissolved (see S2) and the layout under `tooling/scripts/`
 is normative.
 
@@ -135,6 +136,42 @@ and the script only ever receives already-separated values — it never splits s
   shell-quoted argv. The script takes the value verbatim and never re-parses.
 - **A4** — new operators follow A1 by default; A2 only when a second prose field is unavoidable.
 
+## D-rules — doc layers & issue routing
+
+Where knowledge and issue records live. Born 2026-09-25 when the user-facing known-issues page
+(`docs/`) was retired: it had become a mixed shelf (settled maintainer records,
+open bugs, a superseded design note) that users were routed through for "why does this exist"
+detail — two audiences, one page, neither served.
+
+- **D1 — layers.** `docs/` is the **user/behavioral** layer ("what do I do"); `tooling/docs/` is
+  the **maintainer** layer ("why does this exist / how does it work"). The split the T4 boundary
+  canaries already enforce for script names and plan numbers extends to issue records: mechanism
+  detail never duplicates into `docs/`.
+- **D2 — issue routing** (the decision procedure for ANY new issue/gotcha finding):
+
+  | Finding | Destination |
+  |---|---|
+  | Symptom a user can hit in their workflow, with an action to take | `docs/TROUBLESHOOTING.md` — Symptom → what-to-do, user voice |
+  | Unfixed defect needing a bundle change | `tooling/docs/known-issues.md` — the maintainer backlog (dated, `file:line` evidence, fix-plan pointer) |
+  | Settled gotcha whose mitigation is built in | the **mechanism-owning** doc under `tooling/docs/` as a dated *Mitigation (built in)* record (prefer extending the owner; e.g. review/mdlib mechanisms → `scripts/review-and-context-editing.md`, cross-provider → `providers.md`, forge → `forges.md`, status/gates → `scripts/status-and-preflight.md`) |
+  | Superseded design record | deleted — the owning doc carries current design; history is the EverOS KB's job (SoT) |
+
+  When a backlog entry's fix lands, it MOVES to the mechanism-owning doc as a dated record
+  (symptom + root cause + fix date preserved — records move between layers, they never shorten).
+- **D3 — one story, two layers; the user layer is self-contained.** A TROUBLESHOOTING entry
+  carries the action plus enough cause to act on — a user never needs a maintainer doc to do the
+  right thing. Dated records and mechanism detail live in `tooling/docs/`, which may link freely
+  *into* the user layer; the user layer (`docs/`, `template/`) does **not** link into it (owner
+  decision 2026-09-25: templates and `docs/` are user-facing surfaces — no script names in user
+  prose, no step-by-step user guidance duplicated into mechanism docs, no record deep-links).
+  Pre-D3 "full detail" pointers from `docs/`/`template/` into `tooling/docs/` still exist — they
+  are tracked in [`known-issues.md`](./known-issues.md), must not be extended, and tighten
+  opportunistically.
+- **D4 — category rule.** "Known issue" is a **maintainer state** (a backlog entry awaiting a
+  fix), never a user-facing genre. There is no user known-issues page, and none may be recreated
+  without retiring this rule — users get troubleshooting, maintainers get the backlog + records.
+  The T4 canary (C69) pins all of it: page absent, zero stale references, D-rules present.
+
 ## Checklist for adding capability
 
 1. Which entity? → its script in `tooling/scripts/entities/` (S1/S1a). No script yet and ≥3
@@ -147,7 +184,10 @@ and the script only ever receives already-separated values — it never splits s
    phase map (the T4 set-equality canary) — same commit, per S7.
 5. Prose argument? → A1 rest-of-line; two prose fields → A2 flag segments; handoff via A3.
 6. Docs before ship: usage header (S6) + a section in `docs/scripts/` + command file + affected
-   skills/agents/templates. **No doc-less capability ships.**
+   skills/agents/templates. **No doc-less capability ships.** Found an issue/gotcha on the way?
+   Route it by **D2** — user symptom → `docs/TROUBLESHOOTING.md`; unfixed defect →
+   `docs/known-issues.md` (maintainer backlog); settled → dated record in the mechanism-owning
+   doc. Never a user-facing known-issues page (D4).
 7. Tests before ship: T1 selftest cases + battery rows + mutation-register catchers — see
    [`testing.md`](./testing.md). Register rows: OLD byte-exact **and unique**, catcher must not
    depend on the mutation changing fixture BYTES (recipe-hash cache rule), check next-free ID

@@ -113,7 +113,6 @@ platform, or a local-only doc by default) — see **[docs/RFC.md](./docs/RFC.md)
 | 🧠 **[docs/MEMORY.md](./docs/MEMORY.md)** | Optional cross-project recall — what it's for, why bother, how to turn it on |
 | ⚙️ **[docs/EXECUTION.md](./docs/EXECUTION.md)** | Orchestrator vs executor · picking a model/agent per task · cross-provider execution · worktrees |
 | 📖 **[docs/REFERENCE.md](./docs/REFERENCE.md)** | Bundle layout · project anatomy · naming conventions · the full `/pw-*` command table + generator (live: `/pw-help`) |
-| 🐛 **[docs/KNOWN-ISSUES.md](./docs/KNOWN-ISSUES.md)** | Verified gotchas this bundle already works around (cross-provider shell-out quirks, GitLab API traps) — dated, with root cause + mitigation |
 | 🚑 **[docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md)** | Symptom → what to do: stuck worktrees, crashed runs, allowlist refusals, missing MR comments, `/pw-doctor` drift |
 | 🚀 **[ONBOARDING.md](./ONBOARDING.md)** | Fresh-machine / teammate setup · registering a new provider · optional memory · offboarding/uninstalling |
 

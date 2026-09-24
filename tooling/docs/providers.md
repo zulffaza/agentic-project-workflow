@@ -260,8 +260,12 @@ you ever add a `_headless()` hook).
 ## Verification notes (historical)
 
 Provenance for the operational rules stated above — kept for reference and future debugging, not
-required reading to just use this mechanism. A dated symptom/root-cause/mitigation summary lives in
-[`docs/KNOWN-ISSUES.md`](../../docs/KNOWN-ISSUES.md) — read that instead of this whole section.
+required reading to just use this mechanism. **This section is the dated record owner** for the
+cross-provider gotchas (stdin-vs-argument vanish, `--auto`, JetBrains-vs-CLI worktree
+auto-approve, display-name-vs-id, nested-BYOK/exact-first): the user-facing known-issues page was
+retired 2026-09-25 — settled records live with the mechanism that owns them (D2 routing,
+[`conventions.md`](./conventions.md) D-rules); user-reachable symptoms stay in
+[`docs/TROUBLESHOOTING.md`](../../docs/TROUBLESHOOTING.md).
 
 **Built-in headless hooks** — verified 2026-08-04 against the installed CLIs.
 

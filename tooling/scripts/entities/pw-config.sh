@@ -9,10 +9,15 @@
 #       project get    <slug> <key>      one config key's stored value (or "(unset — effective: …)")
 #       project set    <slug> <key> <value…>   validated write through the single owner location
 #                                        (keys: routing | execution-limit | max-parallel |
-#                                               produced-by | ai-review | ai-model | rfc-target)
+#                                               produced-by | ai-review | ai-model | pin | rfc-target)
 #                                        ai-review/ai-model accept BATCH pairs (`plan=auto
 #                                        ship=advisory`): every pair validated first
 #                                        (all-or-nothing), then ONE write + ONE LOG line.
+#                                        pin accepts BATCH task pins (`pin T01=kilo:prov/model
+#                                        T02=claude:sonnet`, `—` clears): same all-or-nothing
+#                                        validation (membership + model-check + model-resolve),
+#                                        written to BOTH holders — task file `Execute with:` +
+#                                        PLAN cell — by one propagator, ONE LOG line.
 #       project ensure <slug>            insert any missing explicit dashboard config lines
 #                                        (AI Models: / AI Review: — `off`/`—` are legal explicit
 #                                        values; an absent line is a defect, never a style choice)
@@ -53,6 +58,7 @@ if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/../../.." && pwd)"
 . "$HERE/../lib/pw-common.sh"
+. "$HERE/../lib/pw-mdlib.sh"
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 ST="$HERE/pw-status.sh"
@@ -116,26 +122,32 @@ _ai_review_validate() { # <phase> <mode> — die on anything illegal (validate-a
 
 _ai_model_validate() { # <role> <provider:model|—>
   case " $AI_MODEL_ROLES " in *" $1 "*) ;; *) die "invalid role '$1' (allowed: $AI_MODEL_ROLES)" ;; esac
-  local value="$2"
+  _model_pin_validate "ai-model '$1=$2'" "$2"
+}
+
+# Shared write-time gate for every <provider:model> pin (plan 04 rev-c semantics; plan 23 made it
+# a shared primitive so task pins ride the SAME validation, never a second implementation):
+# a pin that can't bind must be caught at WRITE time (same lesson as the pre-spawn availability
+# gate): membership (enabled Agent Provider), permission = allowlist (model-check), availability
+# = live catalog + configured API-provider scope (model-resolve). "unverified" (no catalog
+# surface, CLI off PATH) passes fail-open — a non-zero here is a positive determination.
+#   _model_pin_validate <context-label> <provider:model|—>
+_model_pin_validate() {
+  local context="$1" value="$2"
   case "$value" in
-    —|-) ;;  # clearing to no-row is always valid
+    —|-) return 0 ;;  # clearing to no-pin/no-row is always valid
     *:*)
-      # a pin that can't bind must be caught at WRITE time (same lesson as the pre-spawn
-      # availability gate): membership (enabled Agent Provider), permission = allowlist
-      # (model-check), availability = live catalog + configured API-provider scope
-      # (model-resolve). "unverified" (no catalog surface, CLI off PATH) passes fail-open —
-      # a non-zero here is a positive determination.
       local _prov="${value%%:*}" _mdl="${value#*:}" _mres _mrc=0 _pp _pin=0
       [ -n "$_prov" ] && [ -n "$_mdl" ] \
-        || die "invalid value '$value' — write <provider>:<model> (e.g. kilo:command_code/<m>, claude:sonnet) or — for no row"
+        || die "invalid value '$value' ($context) — write <provider>:<model> (e.g. kilo:command_code/<m>, claude:sonnet) or — to clear"
       for _pp in "${PW_PROVIDERS[@]}"; do [ "$_pp" = "$_prov" ] && _pin=1; done
-      [ "$_pin" = 1 ] || die "ai-model '$1=$value' refused at write time — provider '$_prov' is not an enabled Agent Provider (pw.config.sh PW_PROVIDERS: ${PW_PROVIDERS[*]})"
+      [ "$_pin" = 1 ] || die "$context refused at write time — provider '$_prov' is not an enabled Agent Provider (pw.config.sh PW_PROVIDERS: ${PW_PROVIDERS[*]})"
       cmd_model_check "$_prov" "$_mdl" >/dev/null
       _mres="$(cmd_model_resolve "$_prov" "$_mdl" 2>&1)" || _mrc=$?
       if [ "$_mrc" = 1 ] || [ "$_mrc" = 2 ]; then
-        die "ai-model '$1=$value' refused at write time — $_mres"
+        die "$context refused at write time — $_mres"
       fi ;;
-    *) die "invalid value '$value' — write <provider>:<model> (e.g. kilo:command_code/<m>, claude:sonnet) or — for no row" ;;
+    *) die "invalid value '$value' ($context) — write <provider>:<model> (e.g. kilo:command_code/<m>, claude:sonnet) or — to clear" ;;
   esac
 }
 
@@ -323,7 +335,7 @@ cmd_model_resolve() {
 # Storage stays markdown (dashboard/PLAN/META — the single source of truth; no parallel .pwrc).
 # kind split (owner decision): config = a get/set knob; state/data = derived facts the owning flow
 # writes — show lists them, get/set refuses them.
-CONFIG_KEYS="routing execution-limit max-parallel produced-by ai-review ai-model rfc-target"
+CONFIG_KEYS="routing execution-limit max-parallel produced-by ai-review ai-model pin rfc-target"
 STATE_KEYS="status adopted base-branches landing-units"
 
 _dep_note() {
@@ -442,7 +454,7 @@ cmd_project_show() {
     [ -n "$k" ] || continue
     printf '  %-24s %-6s %-28s %-26s %s\n' "$k" "$p" "$v" "$s" "$e"
   done <<< "$rows"
-  printf '  settable keys: routing[auto|subagent|headless] execution-limit[int 0..99] max-parallel[int 1..99] produced-by[from PW_PROVIDERS] ai-review[phase=off|advisory|auto] ai-model[role=provider:model|—] rfc-target[ref]\n'
+  printf '  settable keys: routing[auto|subagent|headless] execution-limit[int 0..99] max-parallel[int 1..99] produced-by[from PW_PROVIDERS] ai-review[phase=off|advisory|auto] ai-model[role=provider:model|—] pin[T0n=provider:model|—] rfc-target[ref]\n'
   printf '  show-only (flows derive them; set refuses): status · adopted · base-branches · landing-units\n'
 }
 
@@ -452,6 +464,17 @@ cmd_project_get() {
   case "$key" in
     ai-review)   cmd_ai_review "$slug" ;;
     ai-model)    cmd_ai_model "$slug" ;;
+    pin)         local _t _v _f _any=0
+                 for _f in "$d"/task/T*.md; do
+                   [ -e "$_f" ] || continue
+                   _t="$(basename "$_f" .md)"; _v="$(pw_field "$_f" "Execute with")"
+                   printf '%s=%s\n' "$_t" "${_v:-—}"; _any=1
+                 done
+                 [ "$_any" = 1 ] || die "project get pin: no task files in $slug — nothing pinned yet (/pw-breakdown creates tasks)" ;;
+    pin.T*)      local _t="${key#pin.}"
+                 local _f="$d/task/$_t.md"
+                 [ -f "$_f" ] || die "project get: no task file task/$_t.md"
+                 v="$(pw_field "$_f" "Execute with")"; printf '%s\n' "${v:-(unset — spawn uses the route ladder)}" ;;
     routing)     v="$(_plan_value "$d/task/PLAN.md" Routing)";   printf '%s\n' "${v:-(unset — effective: $PW_ROUTE_DEFAULT)}" ;;
     execution-limit) v="$(_plan_value "$d/task/PLAN.md" "AI execution limit")"; printf '%s\n' "${v:-(unset — effective: $PW_MAX_SELF_REPAIR)}" ;;
     max-parallel) v="$(_plan_get_maxparallel "$d/task/PLAN.md")"; printf '%s\n' "${v:-(unset)}" ;;
@@ -461,6 +484,22 @@ cmd_project_get() {
       die "project get: '$key' is project state/data, not configuration — written by its owning flow (/pw-status phase moves, /pw-adopt, /pw-breakdown; read it in 'project show')" ;;
     *) die "project get: unknown key '$key' (config keys: $CONFIG_KEYS; show-only state/data: $STATE_KEYS — see --help)" ;;
   esac
+}
+
+# The single propagator for the executor pin's TWO holders (plan 23 / KI-1 doctrine — one writer,
+# never two): the task file's `- **Execute with:**` field (what the spawn binds) and the PLAN
+# task-table `Execute with` cell (what the gate/audit/resume-guard reads). Writing one without
+# the other is exactly the drift class provider-audit's `mismatch` verdict exists to catch.
+#   _pin_propagate <proj-dir> <plan-file> <task-id> <provider:model|—>
+_pin_propagate() {
+  local d="$1" plan="$2" tid="$3" val="$4"
+  local tf="$d/task/$tid.md"
+  grep -q '^- \*\*Execute with:\*\*' "$tf" \
+    || die "pin: task/$tid.md has no '- **Execute with:**' field — fix the task doc first (template line missing; pw-doctor --project C11 flags it)"
+  awk -v v="$val" '!w && /^- \*\*Execute with:\*\*/ { print "- **Execute with:** " v; w=1; next } { print }' \
+    "$tf" > "$tf.tmp" && mv "$tf.tmp" "$tf"
+  _plan_cell_update "$plan" "$tid" executewith "$val" \
+    || die "pin: PLAN 'Execute with' cell write failed for $tid (see above) — the PLAN task-table row must exist; repair the PLAN doc, then re-run"
 }
 
 cmd_project_set() {
@@ -476,6 +515,35 @@ cmd_project_set() {
                cmd_ai_review "$slug" "$@" ;;
     ai-model)  [ $# -ge 1 ] || die "usage: project set <slug> ai-model <role>=<value> […] | <role> <value>   (roles: $AI_MODEL_ROLES)"
                cmd_ai_model "$slug" "$@" ;;
+    pin)       [ $# -ge 1 ] || die "usage: project set <slug> pin <T0n>=<provider:model|—> […] | <T0n> <value>   (batch: several pairs, all-or-nothing; writes task file + PLAN cell)"
+               if [ "${1#*=}" = "$1" ]; then
+                 [ $# -eq 2 ] || die "usage: project set <slug> pin <T0n>=<provider:model|—> […]   (or single: pin <T0n> <value>)"
+                 set -- "$1=$2"
+               fi
+               [ -f "$plan" ] || die "no task/PLAN.md in $slug → fix: run /pw-breakdown $slug first"
+               local _pair _tid _val
+               # validate-all-first (plan 04 batch discipline): nothing is written unless EVERY pair binds
+               for _pair in "$@"; do
+                 case "$_pair" in *=*) ;; *) die "pin: expected <T0n>=<provider:model|—>, got '$_pair' (single form: pin <T0n> <value>)" ;; esac
+                 _tid="${_pair%%=*}"; _val="${_pair#*=}"
+                 case "$_tid" in T[0-9]*) ;; *) die "pin: '$_tid' is not a task id (expected T01, T02, …)" ;; esac
+                 [ -f "$d/task/$_tid.md" ] || die "pin: no task file task/$_tid.md — /pw-breakdown owns task creation"
+                 grep -q '^- \*\*Execute with:\*\*' "$d/task/$_tid.md" \
+                   || die "pin: task/$_tid.md has no '- **Execute with:**' field — fix the task doc first (template line missing; pw-doctor --project C11 flags it)"
+                 pw_plan_pairs "$plan" | awk -F'|' -v t="$_tid" '$1 == t { f=1 } END { exit !f }' \
+                   || die "pin: no PLAN task-table row for $_tid — repair the PLAN doc first (rows are /pw-breakdown's)"
+                 _model_pin_validate "pin '$_tid=$_val'" "$_val"
+               done
+               for _pair in "$@"; do
+                 _pin_propagate "$d" "$plan" "${_pair%%=*}" "${_pair#*=}"
+               done
+               if [ $# -eq 1 ]; then
+                 "$ST" log "$slug" config "pin ${1%%=*} -> ${1#*=} (task file + PLAN cell)"
+                 echo "$slug: pin ${1%%=*} -> ${1#*=}"
+               else
+                 "$ST" log "$slug" config "pin set: $* (task files + PLAN cells)"
+                 echo "$slug: pins set: $*"
+               fi ;;
     rfc-target) [ $# -eq 1 ] || die "usage: project set <slug> rfc-target <ref>"
                "$HERE/pw-rfc.sh" target "$slug" "$1" ;;
     routing)   [ $# -eq 1 ] || die "usage: project set <slug> routing <auto|subagent|headless>   (headless = strict model binding)"
@@ -507,7 +575,7 @@ cmd_project_set() {
   # dual-holder propagation (e.g. an executor pin's PLAN cell) is the half-sync fix's job —
   # the writer logs exactly what it changed, never claims more.
   case "$key" in
-    ai-review|ai-model|rfc-target) : ;;   # those writers log their own change line
+    ai-review|ai-model|pin|rfc-target) : ;;   # those writers log their own change line
     *) "$ST" log "$slug" config "$key -> $1" ;;
   esac
 }

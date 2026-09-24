@@ -339,8 +339,11 @@ When `Execute with:` names an agent, resolve its provider the same way as a mode
 orchestrator's own provider — then apply the same-vs-different routing above.
 
 **Requesting a specific model/agent — three ways, all honored:**
-1. **Statically** — set the task's `Execute with:` field (edit it, or ask the breakdown agent to set
-   it: "make T03 use opus because it's the risky migration").
+1. **Statically** — set the task's `Execute with:` field. Preferred: `/pw-config <slug> set pin
+   T03=claude:opus` (batches: several `T0n=<provider:model>` pairs in one call, `—` clears;
+   validated at write time and written to BOTH holders — the task file and the PLAN cell — so
+   they can't drift). Asking the breakdown agent also works ("make T03 use opus because it's the
+   risky migration"); a raw hand-edit must keep the task file and its PLAN cell in sync yourself.
 2. **At execution** — tell the orchestrator: `/pw-execute myproj T03 with opus`, or "run T03 with
    the `pw-executor` agent". It overrides and writes what it used into `Actually used:`.
 3. **Default** — if unset, the orchestrator picks per the table above and records its choice + why.

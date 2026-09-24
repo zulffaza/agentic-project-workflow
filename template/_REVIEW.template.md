@@ -93,7 +93,7 @@ heading in place once it resolves the item (flips the tag + marker, appends the 
 never creates a second heading for the same item.
 ↑↑ END EXAMPLE ↑↑ -->
 <!-- `[marker: ...]` above is a bracket stand-in, not real comment syntax — HTML comments can't
-nest inside this wrapping one. See docs/KNOWN-ISSUES.md. Live headings below use the real syntax. -->
+nest inside this wrapping one. Live headings below use the real syntax. -->
 
 ### R1 · <§section or anchor> — [OPEN] (you, <YYYY-MM-DD HH:MM>) <!-- pw-item-status: open -->
 <what needs to change, and why. One concrete ask per item — split unrelated asks into R2, R3…>

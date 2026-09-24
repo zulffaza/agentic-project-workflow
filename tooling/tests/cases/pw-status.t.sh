@@ -145,3 +145,81 @@ pwtest_rc 1 "provider-audit names the filtered offender" env PW_CONFIG_FILE="$PW
 before="$(cat "$PA/LOG.md")"
 env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit paaudit >/dev/null 2>&1
 [ "$before" = "$(cat "$PA/LOG.md")" ] && pwtest_ok "provider-audit mutates nothing (LOG.md byte-identical)" || pwtest_bad "audit mutating" "LOG.md changed"
+
+# --- plan 23 (KI-1/KI-2): placeholder fill + task-accept three-holder sync + close gate ---
+# Fixture = a REAL scaffold (template-fresh, untouched placeholder tables) + a one-task PLAN,
+# proving the whole already-merged path — task-accept → PLAN cell → close gate — with no manual
+# cell edits anywhere. (Lives in T1, not the T2 battery: battery rows are read-only by design.)
+p23_selftest() {
+  local SL=p23fresh
+  rm -rf "$PW_PROJECTS_DIR/$SL"
+  pwtest_scaffold_into "$SL"
+  [ -d "$PW_PROJECTS_DIR/$SL" ] || { pwtest_bad "plan-23 fixture" "scaffold did not create $SL"; return 0; }
+  local P="$PW_PROJECTS_DIR/$SL"
+  die() { pwtest_bad "plan-23: $*" "selftest assert failed"; }
+  local ST SH PF
+  ST="$(pwtest_script pw-status.sh)"; SH="$(pwtest_script pw-ship.sh)"; PF="$(pwtest_script pw-preflight.sh)"
+  mkdir -p "$P/task"
+  cat > "$P/task/PLAN.md" <<'PLAN'
+# PLAN — p23fresh
+## Task table
+| ID | Title | Repo | depends_on | Group | Execute with | SP | Status | Time | Result |
+|----|-------|------|------------|-------|--------------|----|--------|------|--------|
+| [T01](./T01.md) | fix x | api | — | G1 | kilotest/test-model | 1 | done | — | — |
+PLAN
+  printf -- '- **Status:** done\n- **Execute with:** kilotest/test-model\n' > "$P/task/T01.md"
+  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" status "$SL" review >/dev/null
+
+  # KI-2: both dashboard tables are untouched template placeholders — writers fill the first blank row
+  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" dashboard-task-status "$SL" T01 done >/dev/null
+  grep -q '^| T01 | | | done | |$' "$P/README.md" || die "placeholder task row not filled"
+  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$SH" dashboard-mr-state "$SL" T01 merged >/dev/null
+  grep -q '^| T01 | | | | merged | — / green / red / still-running |$' "$P/README.md" \
+    || die "MR placeholder fill wrong / hint cell lost"
+  # genuinely missing row (no blank left) → loud failure, file untouched
+  local before; before="$(cat "$P/README.md")"
+  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" dashboard-task-status "$SL" T99 done >/dev/null 2>&1; then
+    die "T99 dashboard write succeeded with no row and no placeholder"
+  fi
+  [ "$(cat "$P/README.md")" = "$before" ] || die "failed dashboard write mutated the file"
+
+  # KI-1: task-accept syncs task file + PLAN cell + dashboard row, ONE log line
+  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" task-accept "$SL" T01 >/dev/null
+  grep -q '| accepted | — | — |$' "$P/task/PLAN.md" || die "PLAN Status cell not synced"
+  grep -q '^- \*\*Status:\*\* accepted$' "$P/task/T01.md" || die "task file Status not synced"
+  grep -q '^| T01 | | | accepted | |$' "$P/README.md" || die "dashboard row not synced"
+  [ "$(grep -c 'marked as accepted' "$P/LOG.md")" = "1" ] || die "expected exactly one accept LOG line"
+  # the close gate — the whole point of KI-1 — is green now, with no manual cell edits
+  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$PF" close "$SL" || die "close gate still blocked after task-accept"
+
+  # idempotent rerun: holders byte-identical, no second LOG line
+  local lc; lc="$(grep -c '^- \*\*' "$P/LOG.md")"
+  before="$(cat "$P/README.md")$(cat "$P/task/PLAN.md")$(cat "$P/task/T01.md")"
+  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" task-accept "$SL" T01 >/dev/null
+  [ "$before" = "$(cat "$P/README.md")$(cat "$P/task/PLAN.md")$(cat "$P/task/T01.md")" ] \
+    || die "idempotent rerun mutated a holder"
+  [ "$(grep -c '^- \*\*' "$P/LOG.md")" = "$lc" ] || die "idempotent rerun logged again"
+
+  # a task file with NO PLAN row → die, never silence
+  printf -- '- **Status:** done\n' > "$P/task/T02.md"
+  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" task-accept "$SL" T02 >/dev/null 2>&1; then
+    die "accepted a task with no PLAN row"
+  fi
+  rm -f "$P/task/T02.md"
+
+  # best-effort dashboard: no tables at all → warning, exit 0, gate holders still written
+  local ND=p23nodash; rm -rf "$PW_PROJECTS_DIR/$ND"; mkdir -p "$PW_PROJECTS_DIR/$ND/task"
+  printf -- '- **Status:** review\n- **One-liner:** no tables\n' > "$PW_PROJECTS_DIR/$ND/README.md"
+  : > "$PW_PROJECTS_DIR/$ND/LOG.md"
+  cp "$P/task/PLAN.md" "$PW_PROJECTS_DIR/$ND/task/PLAN.md"
+  printf -- '- **Status:** done\n' > "$PW_PROJECTS_DIR/$ND/task/T01.md"
+  sed -i '' 's/p23fresh/p23nodash/' "$PW_PROJECTS_DIR/$ND/task/PLAN.md"
+  if ! PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" task-accept "$ND" T01 >/dev/null 2>"$ROOT/p23err"; then
+    die "task-accept failed when the dashboard has no tables (must stay best-effort)"
+  fi
+  grep -q 'warning: dashboard row' "$ROOT/p23err" || die "best-effort warning not printed"
+  grep -q '| accepted | — | — |$' "$PW_PROJECTS_DIR/$ND/task/PLAN.md" || die "PLAN not written on the best-effort path"
+  rm -rf "$PW_PROJECTS_DIR/$ND" "$ROOT/p23err" "$PW_PROJECTS_DIR/$SL"
+  pwtest_ok "plan-23 three-holder sync + placeholder fill + close gate (all asserts passed)"
+}
+p23_selftest

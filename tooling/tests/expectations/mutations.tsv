@@ -12,7 +12,9 @@
 # C61–C62 minted by the monitor-skipped/sha-selection follow-up (2026-09-23).
 # C63–C65 minted by the project-doctor + project-config plan (explicit-line doctrine ×2 template/
 # scaffold render, retired /pw-review config recipes).
-# Next free: C66. Take the next free number and check draft-plan reservations.
+# C66–C69 minted by the known-issues remediation plan (task-accept PLAN sync, dashboard
+# placeholder fill, best-effort dashboard call, D-rules doc doctrine).
+# Next free: C70 (C70–C72 reserved by draft plan 24 — versioning/changelog).
 # Authoring checklist: tooling/docs/testing.md §Writing a mutation row.
 # Columns: id	file	OLD	NEW	tiers	only
 C1-pw-field-packed-cut	pw-common.sh	        q = index(v, "**"); if (q) v = substr(v, 1, q - 1)	        q = 0; if (q) v = substr(v, 1, q - 1)	T1	pw-common
@@ -80,3 +82,7 @@ C62-monitor-no-sha-select	pw-ship.sh	(if ($s | length) > 0 and (any(.[]?; has("s
 C63-template-ai-review-line-gone	../template/PROJECT.template.md	- **AI Review:** <AI_REVIEW_DEFAULT>	- **AI Review:** analysis=off	T4	-
 C64-scaffold-ai-review-render-dropped	scaffold.sh	s|<AI_REVIEW_DEFAULT>|	(no-op-token|	T4	-
 C65-config-recipe-resumes	commands/pw-config.md	reviewing is not configuring;	reviewing is not configuring; legacy: /pw-review <slug> config plan auto	T4	-
+C66-task-accept-plan-sync-reverted	pw-status.sh	  if [ "$plan_status" != "accepted" ]; then	  if false; then	T1	pw-status
+C67-dashboard-fill-reverted	pw-mdlib.sh	    if grep -q '^ERR: no row with' "$errfile" 2>/dev/null \	    if false && grep -q '^ERR: no row with' "$errfile" 2>/dev/null \	T1	pw-status
+C68-dashboard-call-fatal	pw-status.sh	      echo "pw-status: warning: dashboard row for $task not updated (no row and no fillable placeholder) — task file + PLAN are the gate truth" >&2	      die "dashboard row for $task not updated"	T1	pw-status
+C69-d-rules-retired	docs/conventions.md	## D-rules — doc layers & issue routing	## Doc placement notes	T4	-

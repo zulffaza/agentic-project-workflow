@@ -159,12 +159,13 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
    ```
    Read each line's state per the bullets below (a single-task `state` recheck mid-flow can still
    use `pw-ship.sh mr-state <slug> <task-id>`).
-   - **If `merged`**: The MR was already merged downstream. Handle it:
-     1. Update task status: `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh task-accept <slug> <task-id>`
-     2. Update dashboard task table: `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh dashboard-task-status <slug> <task-id> "accepted (MR merged)"`
-     3. Update dashboard MR table: `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh dashboard-mr-state <slug> <task-id> merged`
-     4. Remove worktree: `{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh remove <slug> <task-id>`
-     5. **Skip this task** — do NOT attempt to fetch/process comments.
+    - **If `merged`**: The MR was already merged downstream. Handle it:
+      1. Accept the task — ONE call sets all three acceptance holders (task-file `Status:`, the
+         PLAN task-table cell the close gate reads, and the dashboard task row; the dashboard is
+         best-effort): `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh task-accept <slug> <task-id>`
+      2. Update dashboard MR table: `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh dashboard-mr-state <slug> <task-id> merged`
+      3. Remove worktree: `{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh remove <slug> <task-id>`
+      4. **Skip this task** — do NOT attempt to fetch/process comments.
    - **If `closed`**: The MR was closed without merging. Note it in the recap and skip.
    - **If `open`**: Proceed with comment processing (steps 1–3).
    - **If it prints `unknown`** (no MR URL/worktree/origin, or the forge query failed or returned

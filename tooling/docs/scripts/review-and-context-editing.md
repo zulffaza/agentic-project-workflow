@@ -186,6 +186,23 @@ The shared markdown primitives the entity scripts source: comment-blanked scanni
 splice helpers. Never executed directly; if two scripts need the same document primitive, it
 belongs here (S5).
 
+Two table-cell writers with hard contracts:
+
+- `_dashboard_update <file> <id-col> <target-col> <row-id> <value>` — the ONE dashboard-table
+  cell writer (`dashboard-task-status`, `dashboard-mr-state`): resolves columns from the header
+  by NAME (never positional — the MR table's State is column 5), rewrites exactly one cell, and
+  fails loudly (`ERR: no row with ID=…`, file untouched) rather than no-op silently. **Fill rule
+  (plan 23 / KI-2):** when no row matches but the table still carries an untouched template
+  placeholder (a data row whose ID cell trims to empty — scaffold's `| | | | | |`), the FIRST
+  such row is filled instead: ID ← row-id, target ← value, every other cell (including hint
+  cells like `open / on-hold / merged`) preserved byte-for-byte. Only blank-ID rows can be
+  placeholders — authored rows always carry an ID, so there is no clobber path.
+- `_plan_cell_update <plan-file> <task-id> <col-name> <value>` — the ONE PLAN task-table cell
+  writer (task-accept's Status sync, pw-config's pin propagator): `## Task` section, header
+  cells mapped by NAME with the same normalization as `_pw_plan_map` (`status`, `executewith`),
+  row matched by the `T0n` inside the ID cell (markdown links preserved), both PLAN generations,
+  never positional; loud miss (section/column/row) with the file untouched.
+
 ## pw-context.sh adopt
 
 The CONTINUATION workflow's record (was `pw-lib.sh adopt`): appends/upserts ONE unit per
@@ -200,3 +217,72 @@ $PW_HOME/tooling/scripts/entities/pw-context.sh adopt <slug> <repo> <branch> <ba
 
 Re-adopting the same `repo@branch` updates that unit's Base/MR lines in place; prose under the
 unit is the agent's to fill, never the script's to touch.
+
+## Verified gotchas — dated record owner (D2 routing)
+
+This doc owns the settled records for the review/mdlib editing mechanisms (the user-facing
+known-issues page was retired 2026-09-25 — [`../conventions.md`](../conventions.md) D-rules route
+settled gotchas to the mechanism's own doc; user-reachable symptoms live in
+[`docs/TROUBLESHOOTING.md`](../../../docs/TROUBLESHOOTING.md)). Each record: symptom, root cause,
+the built-in mitigation, and a date — nothing shortened in the move.
+
+### A review template's own format-hint text can permanently false-positive a naive "is anything open" check — *Mitigation (built in), 2026-08-10*
+- **Symptom:** a plain `grep -qF '[OPEN]'` on any review file is *always* true, forever — even one
+  with zero real open items.
+- **Root cause:** `template/_REVIEW.template.md`'s permanent format-hint blockquote and its
+  deletable worked-example block both contain the literal string `[OPEN]` as a syntax
+  demonstration, by design — a naive whole-file grep can't tell that apart from a real item.
+- **Mitigation (built in):** `_review_has_open_marker()` (`pw-mdlib.sh`) strips HTML comments
+  first, then anchors only to real `### ` headings (not `> ` blockquote lines) — this is what the
+  auto-signoff gate actually checks, and it's covered by the harness.
+- Discovered during the AI-review feature's own testing, 2026-08-10.
+
+### HTML comments cannot nest — a worked example living inside one needs bracket notation instead — *Mitigation (built in), 2026-08-10*
+- **Symptom:** a real `<!-- pw-item-status: … -->` marker placed on a line inside
+  `template/_REVIEW.template.md`'s WORKED-EXAMPLE block would prematurely close the *outer*
+  `<!-- ↓↓ WORKED EXAMPLE … -->` comment at its own first `-->`, leaking the rest of the example
+  into real, rendered content and exposing it to the gate check above.
+- **Root cause:** HTML comments cannot nest — there is no way to open a second `<!--` while
+  already inside one and have it behave as a distinct, independently-closable region.
+- **Mitigation (built in):** every worked example in that template uses bracket notation
+  (`[marker: pw-item-status open]`) instead of the real comment syntax, purely as a visual
+  stand-in — never processed by tooling. The **live** headings outside any wrapping comment use
+  the real syntax; only content already inside another comment needs the bracket substitute.
+  Applies to both the Items and Open-questions worked examples — same reasoning either place.
+
+### Status-marker TEXT in guidance prose = permanent phantom counts for every raw grep — *Mitigation (built in), 2026-09-16*
+- **Symptom:** (`pw-status` "Unresolved review items") every review file reported "(1 open)"
+  forever — even ones fully reviewed and resolved — and the review scan carried a dead `pending`
+  counter on top.
+- **Root cause:** three display paths counted with raw `grep -c "pw-item-status: open"`, which
+  also matches the template's permanent `> **Add an item:** … <!-- pw-item-status: open -->`
+  guidance line (prose on a `>` line, present in every review file) and unfilled R1/Q1 stub
+  headings (which carry a REAL live marker by design, per the nesting record above, so
+  copy-paste yields valid syntax). The gates used the shared heading-level detector and stayed
+  correct — the display was just a fourth, un-blessed parser.
+- **Mitigation (built in):** one detector serves everything: the review count read prints
+  `open=N resolved=M items=K` off `_review_item_headings` (comment-blanked, `^###`-anchored,
+  stubs filtered by their live `<YYYY-MM-DD`/`<§section>` placeholder tokens — BOTH tokens
+  needed: live usage produced a half-cleaned stub that dropped only its timestamp). The review
+  scan, the status report and the doc lint consume it; raw marker greps are banned;
+  `auto-signoff` inherits the stub exemption (a clean pass must succeed).
+
+### Existing projects keep pre-layout script paths in generated docs (harmless) — *informational, 2026-09*
+- **Symptom:** a project scaffolded before the tooling-layout move has hint text naming the old
+  flat paths / legacy catch-all script inside its README/review/template-derived files.
+- **Impact:** none — those are inert documentation strings; the live flows call the entity
+  scripts by their current paths (`tooling/scripts/{entities,lib,toolchain}/`). Re-bootstrap
+  regenerates the commands; project docs can be refreshed opportunistically (or left — they
+  still describe the right operators).
+
+### Dashboard cell writers couldn't write into a still-empty table body (KI-2) — *Fixed 2026-09-25, mitigation built in*
+- **Symptom (historical):** `dashboard-task-status` / `dashboard-mr-state` printed
+  `ERR: no row with ID="T01" in the matched table` on a project whose README task table was still
+  the template's empty `| | | | | |` placeholder — the update was skipped, so the dashboard
+  silently drifted from the task files.
+- **Root cause:** the row matcher required an existing data row; there was no "fill the first
+  row" path for an untouched table.
+- **Fix (built in):** `_dashboard_update`'s fill rule (contract above) fills the first untouched
+  placeholder row — blank ID cell — preserving every other cell byte-for-byte; genuinely missing
+  rows still fail loudly. Companion record: the `task-accept` half-sync (KI-1) lives in
+  [`status-and-preflight.md`](./status-and-preflight.md).

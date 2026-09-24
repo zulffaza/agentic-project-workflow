@@ -270,3 +270,79 @@ pwtest_re 'route-default' "global show lists the route floor"
 # deprecated shims still work but announce the pointer on stderr.
 pwtest_rc 0 "bare ai-review still functions (shim)" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" ai-review pcfg-demo
 pwtest_err 'deprecated' "bare verb prints the deprecation pointer"
+
+# --- plan 23: `pin` — the dual-holder batch key riding the KI-1 propagator ---
+# Same write-time validation as ai-model (membership + model-check + model-resolve via the shim
+# catalog + noscope fixture config), all-or-nothing batches, ONE log line, both holders per pin.
+p23_pin_selftest() {
+  local tmp="$ROOT/p23-pin"; rm -rf "$tmp"; mkdir -p "$tmp/pinproj/task"
+  printf -- '- **Status:** breakdown\n- **One-liner:** pin fixture\n' > "$tmp/pinproj/README.md"
+  : > "$tmp/pinproj/LOG.md"
+  cat > "$tmp/pinproj/task/PLAN.md" <<'PLAN'
+# PLAN — pinproj
+## Task table
+| ID | Title | Repo | depends_on | Group | Execute with | SP | Status | Time | Result |
+|----|-------|------|------------|-------|--------------|----|--------|------|--------|
+| [T01](./T01.md) | a | api | — | G1 | claude:sonnet | 1 | todo | — | — |
+| [T02](./T02.md) | b | api | T01 | G1 | claude:sonnet | 1 | todo | — | — |
+PLAN
+  printf -- '- **Status:** todo\n- **Execute with:** claude:sonnet\n' > "$tmp/pinproj/task/T01.md"
+  printf -- '- **Status:** todo\n- **Execute with:** claude:sonnet\n' > "$tmp/pinproj/task/T02.md"
+  die() { pwtest_bad "plan-23 pin: $*" "selftest assert failed"; }
+  local CFG NOSCOPE GOOD
+  CFG="$(pwtest_script pw-config.sh)"; NOSCOPE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh"
+  GOOD="kilo:command_code/MiniMaxAI/MiniMax-M3"
+
+  # single pin → BOTH holders + exactly one LOG line
+  PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin "T01=$GOOD" >/dev/null
+  grep -q "^- \*\*Execute with:\*\* $GOOD\$" "$tmp/pinproj/task/T01.md" || die "task-file holder not written"
+  grep -qF "| $GOOD | 1 | todo |" "$tmp/pinproj/task/PLAN.md" || die "PLAN cell holder not written"
+  [ "$(grep -c 'pin T01 ->' "$tmp/pinproj/LOG.md")" = "1" ] || die "expected exactly one LOG line for the single pin"
+
+  # batch → both pins, both holders, ONE log line
+  PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin T01=claude:opus T02=claude:haiku >/dev/null
+  grep -q '^- \*\*Execute with:\*\* claude:opus$' "$tmp/pinproj/task/T01.md" || die "batch T01 file holder not written"
+  grep -q '^- \*\*Execute with:\*\* claude:haiku$' "$tmp/pinproj/task/T02.md" || die "batch T02 file holder not written"
+  grep -q '| claude:haiku | 1 | todo |' "$tmp/pinproj/task/PLAN.md" || die "batch T02 PLAN cell not written"
+  grep -q '| claude:opus | 1 | todo |' "$tmp/pinproj/task/PLAN.md" || die "batch T01 PLAN cell not written"
+  [ "$(grep -c 'pin set: T01=claude:opus T02=claude:haiku' "$tmp/pinproj/LOG.md")" = "1" ] || die "batch LOG line missing or doubled"
+
+  # all-or-nothing: a catalog-miss pair refuses the WHOLE batch — the valid pair is not written
+  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin "T01=$GOOD" T02=kilo:command_code/gone-xyz >/dev/null 2>&1; then
+    die "catalog-miss pair was not refused at write time"
+  fi
+  grep -q '^- \*\*Execute with:\*\* claude:opus$' "$tmp/pinproj/task/T01.md" || die "refused batch still wrote the valid pair (not all-or-nothing)"
+  # provider not enabled → refused
+  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin T01=ghostprov:m >/dev/null 2>&1; then
+    die "provider absent from PW_PROVIDERS was accepted"
+  fi
+  # malformed id / missing task file / missing PLAN row → refused
+  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin X9=claude:opus >/dev/null 2>&1; then die "non-T0n id accepted"; fi
+  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin T99=claude:opus >/dev/null 2>&1; then die "missing task file accepted"; fi
+  printf -- '- **Status:** todo\n- **Execute with:** claude:sonnet\n' > "$tmp/pinproj/task/T03.md"
+  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin T03=claude:opus >/dev/null 2>&1; then die "task with no PLAN row accepted"; fi
+  rm -f "$tmp/pinproj/task/T03.md"
+  # a task file WITHOUT the Execute-with field is refused at validation (nothing half-written)
+  printf -- '- **Status:** todo\n' > "$tmp/pinproj/task/T04.md"
+  awk '/^\| \[T02\]/ { print; print "| [T04](./T04.md) | d | api | — | G1 | claude:sonnet | 1 | todo | — | — |"; next } { print }' \
+    "$tmp/pinproj/task/PLAN.md" > "$tmp/pinproj/task/PLAN.md.tmp" && mv "$tmp/pinproj/task/PLAN.md.tmp" "$tmp/pinproj/task/PLAN.md"
+  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin T04=claude:opus >/dev/null 2>&1; then die "task without the Execute-with field accepted"; fi
+  rm -f "$tmp/pinproj/task/T04.md"
+
+  # clear to — (both holders)
+  PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin T02=— >/dev/null
+  grep -q '^- \*\*Execute with:\*\* —$' "$tmp/pinproj/task/T02.md" || die "clear did not write the task file"
+  grep -q '| — | 1 | todo |' "$tmp/pinproj/task/PLAN.md" || die "clear did not write the PLAN cell"
+
+  # read side: get pin (list) + get pin.T0n (one)
+  local got; got="$(PW_PROJECTS_DIR="$tmp" "$CFG" project get pinproj pin | tr '\n' ' ')"
+  [ "$got" = "T01=claude:opus T02=— " ] || die "get pin list wrong: '$got'"
+  got="$(PW_PROJECTS_DIR="$tmp" "$CFG" project get pinproj pin.T01)"
+  [ "$got" = "claude:opus" ] || die "get pin.T01 wrong: '$got'"
+
+  # discoverability: the show footer carries the pin vocabulary
+  PW_PROJECTS_DIR="$tmp" "$CFG" project show pinproj | grep -qF 'pin[T0n=provider:model|—]' || die "show footer missing the pin key vocabulary"
+  rm -rf "$tmp"
+  pwtest_ok "plan-23 pin key: dual-holder batches, all-or-nothing, clear, get, footer (all asserts passed)"
+}
+p23_pin_selftest

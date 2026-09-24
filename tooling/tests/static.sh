@@ -187,6 +187,23 @@ static_t4() {
   [ -z "$hits" ] && pwtest_ok "T4 canary: retired /pw-review config recipes stay retired" \
     || pwtest_bad "T4 canary: retired config recipes" "reappeared in: $hits — configuration lives on /pw-config"
 
+  # (j) plan-23 D-rules: the user known-issues page stays retired — no file, zero references
+  # outside the harness, no maintainer-shape records in user docs, the D-rules doctrine lives in
+  # conventions.md, and the maintainer backlog exists and is linked from tooling/README.md.
+  if [ ! -e "$TOOL/../docs/KNOWN-ISSUES.md" ]; then pwtest_ok "T4 canary: user KNOWN-ISSUES page stays retired (D4)"
+  else pwtest_bad "T4 canary: user KNOWN-ISSUES page retired" "docs/KNOWN-ISSUES.md exists again — D4: a known issue is a maintainer state (tooling/docs/known-issues.md), never a user genre"; fi
+  hits="$(grep -rl 'KNOWN-ISSUES' "$TOOL/.." --include='*.md' --include='*.sh' 2>/dev/null | grep -v '/tests/' | tr '\n' ' ')"
+  [ -z "$hits" ] && pwtest_ok "T4 canary: zero stale KNOWN-ISSUES references outside the harness" \
+    || pwtest_bad "T4 stale KNOWN-ISSUES references" "$hits — repoint by D2: user symptom → docs/TROUBLESHOOTING.md, defect → tooling/docs/known-issues.md, settled → mechanism doc"
+  hits="$(grep -rl 'Mitigation (built in)' "$TOOL/../docs/"*.md 2>/dev/null | tr '\n' ' ')"
+  [ -z "$hits" ] && pwtest_ok "T4 canary: no maintainer-shape records in user docs (D1)" \
+    || pwtest_bad "T4 user-doc record shape" "$hits — settled-gotcha records belong in tooling/docs/ (D2), user docs carry symptoms+actions only"
+  grep -qF 'D-rules' "$TOOL/docs/conventions.md" \
+    && [ -f "$TOOL/docs/known-issues.md" ] && grep -qF 'known-issues.md' "$TOOL/README.md" \
+    && grep -qF 'TROUBLESHOOTING' "$TOOL/docs/known-issues.md" \
+    && pwtest_ok "T4 canary: D-rules doctrine + maintainer backlog present and linked" \
+    || pwtest_bad "T4 D-rules/backlog" "conventions.md lost its D-rules section, tooling/docs/known-issues.md is missing or lost its tooling/README.md link, or the backlog lost its TROUBLESHOOTING routing row"
+
 
   # 5) shared plumbing used, not reinvented
   for f in $PWTEST_AUTOMATION; do

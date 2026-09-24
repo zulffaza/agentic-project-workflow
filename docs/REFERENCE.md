@@ -115,7 +115,7 @@ You drive each phase with a `/pw-*` command instead of retyping prompts:
 | `/pw-analyze <slug> [focus]` | analysis |
 | `/pw-review <slug> [phase\|Tid(s)\|path]` | apply review comments (defaults to current phase's review; task ids can be a list — `T01 T03 T05 T06` — processed in one pass) |
 | `/pw-review <slug> ai [phase\|Tid(s)\|path]` | optional — delegate a fresh review pass to `pw-reviewer` (see [docs/REVIEW.md](./REVIEW.md#3-ai-assisted-review-optional-per-phase)) |
-| `/pw-config <slug> [show \| get <key> \| set <key> <value…> \| ensure \| global show \| model-check <provider> <model>]` | the configuration domain, one surface: view every axis (config = validated get/set knobs — see the table below; state/data facts show only) and change config knobs — `off`/`—` are explicit values, every write validated and logged; `ai-review`/`ai-model` accept batch `k=v` pairs in one call. The human-facing surface; don't poke the dashboard config lines by hand — see "What you can update per project" below |
+| `/pw-config <slug> [show \| get <key> \| set <key> <value…> \| ensure \| global show \| model-check <provider> <model>]` | the configuration domain, one surface: view every axis (config = validated get/set knobs — see the table below; state/data facts show only) and change config knobs — `off`/`—` are explicit values, every write validated and logged; `ai-review`/`ai-model`/`pin` accept batch `k=v` pairs in one call. The human-facing surface; don't poke the dashboard config lines by hand — see "What you can update per project" below |
 | `/pw-review <slug> init-all` | create every missing review file in the project (each analysis doc, the PLAN, every task) — idempotent catch-up |
 | `/pw-review <slug> item <path> <§anchor> <ask…>` | add a review item deterministically (heading, timestamp, marker, rule, reindex — never hand-copy the template block) |
 | `/pw-review <slug> answer <path> <Qn> <text…>` | add your `↳ you:` answer under a question, in house style |
@@ -152,6 +152,7 @@ anything else is refused at write time, so there is no guessing the shapes:
 | `produced-by` | a provider from your enabled list (`/pw-config global show` lists it) |
 | `ai-review` | `phase=mode` pairs — phases `analysis`·`plan`·`task-plan`·`task-exec`·`ship`; modes `off`·`advisory`·`auto` (`off` is explicit; batches validate all-or-nothing) |
 | `ai-model` | `role=provider:model` or `role=—` pairs — roles `researcher`·`analyst`·`writer-task`·`reviewer`·`verifier` (values checked live: allowlist + catalog + provider scope) |
+| `pin` | `T0n=provider:model` or `T0n=—` pairs — per-task executor pins, same live validation; one call writes both holders (the task's `Execute with:` field and its PLAN-table cell), batches validate all-or-nothing |
 | `rfc-target` | a doc ref/URL for the `/pw-rfc` side-loop |
 
 **Show-only, never set here** — these are facts the flows derive, and `set` refuses them naming the

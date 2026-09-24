@@ -27,12 +27,13 @@ history rewrite). Pushing is **outward-facing**, so confirm before anything goes
    This queries the forge (GitLab/GitHub) once per task and prints `task-id|state` lines, with
    `state` one of `open`, `merged`, `closed`, or `unknown` (per-task handling below is unchanged;
    a mid-flow recheck of a single task may use `pw-ship.sh mr-state <slug> <task-id>` directly).
-   - **If `merged`**: The MR was already merged downstream. Handle it:
-     1. Update task status: `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh task-accept <slug> <task-id>`
-     2. Update dashboard task table: `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh dashboard-task-status <slug> <task-id> "accepted (MR merged)"`
-     3. Update dashboard MR table: `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh dashboard-mr-state <slug> <task-id> merged`
-     4. Remove worktree: `{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh remove <slug> <task-id>`
-     5. Mark this task as `already-merged` in your tracking — **do NOT attempt to sync it**.
+    - **If `merged`**: The MR was already merged downstream. Handle it:
+      1. Accept the task — ONE call sets all three acceptance holders (task-file `Status:`, the
+         PLAN task-table cell the close gate reads, and the dashboard task row; the dashboard is
+         best-effort): `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh task-accept <slug> <task-id>`
+      2. Update dashboard MR table: `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh dashboard-mr-state <slug> <task-id> merged`
+      3. Remove worktree: `{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh remove <slug> <task-id>`
+      4. Mark this task as `already-merged` in your tracking — **do NOT attempt to sync it**.
    - **If `closed`**: The MR was closed without merging. Note it in the recap but skip sync.
    - **If `open`**: Proceed with sync (step 3).
    - **If it prints `unknown`** (no MR URL/worktree/origin, or the forge query failed or returned

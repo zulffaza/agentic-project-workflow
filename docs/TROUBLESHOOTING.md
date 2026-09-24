@@ -1,12 +1,11 @@
 # Troubleshooting
 
-← [back to README](../README.md) · see also: [docs/KNOWN-ISSUES.md](./KNOWN-ISSUES.md) (verified,
-dated gotchas this bundle already works around under the hood — this page is "what do I do right
-now," that one is "why does this exist")
+← [back to README](../README.md)
 
 Symptom → what to do. If you don't see your symptom here, `/pw-status <slug>` (where a project
-actually is) and `/pw-doctor` (whether your install is actually in sync) answer most "why isn't this
-working" questions before you go digging further.
+actually is) and `/pw-doctor` (whether your install is actually in sync) answer most "why isn't
+this working" questions before you go digging further. Every entry below is self-contained: the
+action, plus the one-line cause where knowing it helps.
 
 ## "A `/pw-*` command isn't found / behaves like an old version"
 
@@ -107,22 +106,25 @@ next pass is a **seed-patched re-spawn**, not a resume of the killed id. Budgets
 This is a known, already-mitigated gotcha (a long inline CLI argument can vanish across a
 shell-out boundary) — every headless invocation this bundle generates already pipes the prompt via
 stdin to avoid it. If you're driving a CLI by hand outside this bundle's own routing and hit this,
-see [docs/KNOWN-ISSUES.md](./KNOWN-ISSUES.md#a-long-inline-prompt-argument-can-silently-vanish-across-a-shell-out-boundary)
-for the exact symptom and the stdin fix.
+the fix is the same: pipe the prompt via stdin (`printf '%s' "$PROMPT" | <cli> …`) instead of
+passing it as a trailing argument — stdin is immune.
 
 ## "KiloCode's auto-approve isn't working inside a worktree"
 
-This is a JetBrains-plugin-specific issue, not the `kilo` CLI — see
-[docs/KNOWN-ISSUES.md](./KNOWN-ISSUES.md#kilocode-auto-approve-breaks-inside-git-worktrees-is-a-jetbrains-plugin-issue-not-the-cli)
-for the verified cause and the workaround (drive the run from Claude Code, or approve manually;
-`kilo run --auto` from the CLI itself is unaffected).
+This is a JetBrains-plugin-specific issue, not the `kilo` CLI — verified: a headless `kilo run`
+creates worktrees, writes, and commits inside them without issue. The workaround is to drive the
+run from Claude Code, or approve manually (`kilo run --auto` from the CLI itself is unaffected).
 
 ## "An MR comment I know is there isn't showing up in a fetch"
 
-Two different, both-verified causes, depending on the shape of the comment — see
-[docs/KNOWN-ISSUES.md](./KNOWN-ISSUES.md#gitlab-mr-comment-handling) for the full symptom/cause/fix
-for each: a general (non-diff) comment being wrongly filtered out by `individual_note`, or GitLab's
-`/discussions` endpoint lagging the raw notes table by 20+ minutes.
+Two verified causes, depending on the shape of the comment: a general (non-diff) comment being
+wrongly filtered out by GitLab's `individual_note` field (it means "single comment vs threaded
+chain" — a *different axis* from diff-anchored, so a real resolvable follow-up can carry
+`individual_note: false`; this bundle classifies strictly by system/resolvable/resolved instead),
+and — historically — GitLab's `/discussions` endpoint lagging the raw notes table by 20+ minutes,
+which is why this bundle reads `/notes` as the primary source. If a hand-rolled fetch outside
+this bundle misses a comment, check both: don't filter on `individual_note`, and query `/notes`
+rather than `/discussions`.
 
 ## "I don't know what state a project is in, or what to run next"
 

@@ -24,7 +24,8 @@ tooling/
 │   │   ├── pw-rfc.sh           rfc-doc: init · target · state · comment-seen · dashboard · comments
 │   │   ├── pw-worktree.sh      worktree: create · remove · teardown
 │   │   ├── pw-doc.sh           docs: lint · summary · sync
-│   │   ├── pw-config.sh        config: ai-model · ai-review · model-check
+│   │   ├── pw-config.sh        config: project show|get|set|ensure · global show ·
+│   │   │                       model-check · model-resolve (+ deprecated ai-model/ai-review shims)
 │   │   └── pw-help.sh          discovery: overview · command · operators · project ·
 │   │                           workflow · find (read-only how-to map + search; --json)
 │   ├── lib/                  source-only libraries — invisible to callers (L2)
@@ -47,7 +48,11 @@ tooling/
 ├── docs/               ← registries/policy the AGENTS read (each has a human-facing peer doc);
 │                         maintainer-owned reference — you never edit these, see below:
 │   ├── conventions.md    capability placement: S-rules (script), L-rules (layout),
-│   │                     C-rules (commands), A-rules (arguments) — read before adding anything
+│   │                     C-rules (commands), A-rules (arguments), D-rules (doc layers +
+│   │                     issue routing) — read before adding anything
+│   ├── known-issues.md   maintainer backlog: UNFIXED defects (dated, evidence-linked);
+│   │                     settled records live with their mechanism doc, user symptoms in
+│   │                     ../../docs/TROUBLESHOOTING.md (D-rules)
 │   ├── scripts/          usage reference for the entity scripts (how to call, how to
 │   │   └── README.md       read the output, what to do on failure — no internals)
 │   ├── testing.md        the change-test harness (tiers, fixtures, mutation register)

@@ -75,9 +75,23 @@ $PW_HOME/tooling/scripts/entities/pw-status.sh oneliner <slug> <text...>
 $PW_HOME/tooling/scripts/entities/pw-status.sh adopted <slug> <text...>          # insert-or-replace, idempotent
 $PW_HOME/tooling/scripts/entities/pw-status.sh phase  <slug>                     # read the Status token only
 $PW_HOME/tooling/scripts/entities/pw-status.sh dashboard-task-status <slug> <T0n> <status>
-$PW_HOME/tooling/scripts/entities/pw-status.sh task-accept <slug> <T0n>          # merged-MR acceptance flow
+$PW_HOME/tooling/scripts/entities/pw-status.sh task-accept <slug> <T0n>          # merged-MR acceptance: task file + PLAN cell + dashboard row in ONE call (plan 23/KI-1 propagator; dashboard best-effort, one LOG line, idempotent)
 $PW_HOME/tooling/scripts/entities/pw-status.sh provider-audit <slug> [task-ids…] # report-only (below)
 ```
+
+**Verified gotcha — dated record (D2 routing):** *`task-accept` synced the task file but not the
+PLAN row (KI-1) — **fixed 2026-09-25, mitigation built in**.* Symptom (a `/pw-close` run,
+mm-spring-redis-sentinel-adoption, 2026-09-23): the close gate failed with `not all tasks are
+accepted: T01(done)` even though `task/T01.md` already read `- **Status:** accepted` and the
+dashboard row said accepted — the **PLAN task-table cell** still read `done`, and the acceptance
+check reads the PLAN row. Root cause: the old `task-accept` helper rewrote only
+`task/<T0n>.md` — never `task/PLAN.md` — and it is exactly the helper the `/pw-sync`
+already-merged path tells you to run, so a merged task landed half-synced. The fix is the
+three-holder propagator documented above (task file + PLAN cell + best-effort dashboard, one LOG
+line); the close gate's `die_fix` hint now names it. The user-facing known-issues page was
+retired 2026-09-25 ([`../conventions.md`](../conventions.md) D-rules); the dashboard-table
+companion record (KI-2 placeholder fill) lives in
+[`review-and-context-editing.md`](./review-and-context-editing.md).
 
 **`provider-audit`** compares each task row's `Execute with:` (expected) against the LOG.md spawn
 ledger + the task's `Actually used:` (what ran), validates the row against the live catalog via
@@ -105,17 +119,20 @@ $PW_HOME/tooling/scripts/entities/pw-config.sh model-resolve <provider> <model-i
 ```
 
 Config keys: `routing | execution-limit | max-parallel | produced-by | ai-review | ai-model |
-rfc-target`. `state`/`data` keys (`status`, `adopted`, `base-branches`, `landing-units`) appear in
+pin | rfc-target`. `state`/`data` keys (`status`, `adopted`, `base-branches`, `landing-units`) appear in
 `show` but `get`/`set` **refuse** them — they're facts the owning flow derives. `set` validates
 before touching any file: bad enums (`routing ∈ auto|subagent|headless`; review modes
 `off|advisory|auto` — `off` is a real value, absence is a defect), integer bounds, `produced-by`
 against current `PW_PROVIDERS`, and ai-model rows against the allowlist **and** the live catalog +
 configured API-provider scope (`model-check` + `model-resolve`) — a pin that can't bind is refused
-at write time, not discovered at spawn time. **Batch form:** `ai-review`/`ai-model` accept several
-`<k>=<v>` pairs in one call — validate-all-first (any illegal pair refuses the whole batch,
-nothing written), then one line-update and **one** LOG line. Per-task `Execute with:` pins are not
-a key here — they have two holders (task file + PLAN cell) and wait on the single-writer
-propagator (KNOWN-ISSUES remediation plan). Bare `ai-model`/`ai-review` remain **deprecated
+at write time, not discovered at spawn time. **Batch form:** `ai-review`/`ai-model`/`pin` accept
+several `<k>=<v>` pairs in one call — validate-all-first (any illegal pair refuses the whole batch,
+nothing written), then one line-update and **one** LOG line. **`pin`** (`pin T01=<provider:model>
+T02=…`, `—` clears) writes the per-task executor pin through the plan-23 single propagator
+(`_pin_propagate`): BOTH holders — the task file's `- **Execute with:**` field (the spawn bind)
+and the PLAN task-table `Execute with` cell (the gate/audit/resume-guard read) — so
+provider-audit's `mismatch` verdict can't arise from the config surface itself; `get pin` lists
+`T0n=value` pairs, `get pin.T0n` reads one. Bare `ai-model`/`ai-review` remain **deprecated
 shims** onto `project …` (same engine + stderr pointer) for pre-existing callers.
 `/pw-config <slug> …` is the human-facing surface — prefer it over calling the script, and note
 configuration is no longer a `/pw-review` sub-verb.

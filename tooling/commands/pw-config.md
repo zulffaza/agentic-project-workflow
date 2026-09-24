@@ -25,6 +25,7 @@ The keys you can `set`, and their legal values (the same list `show` prints as i
 | `produced-by` | a provider from `PW_PROVIDERS` (see `global show`) | default executor provider for new task pins |
 | `ai-review` | `<phase>=<mode>` pairs; phases `analysis`·`plan`·`task-plan`·`task-exec`·`ship`; modes `off`·`advisory`·`auto` | per-phase AI reviewer; `off` is an explicit value; `auto` may self-sign a genuinely clean pass (plan = the only hard gate) |
 | `ai-model` | `<role>=<provider>:<model>` or `<role>=—` pairs; roles `researcher`·`analyst`·`writer-task`·`reviewer`·`verifier` | spawn-lane model rows; `—` = provider/session default; values are validated live (allowlist + catalog + scope) at write time |
+| `pin` | `<T0n>=<provider>:<model>` or `<T0n>=—` pairs | per-task executor pins; written to **both holders** (task-file `Execute with:` + PLAN cell) by one propagator, so gate/audit never see drift; same live validation at write time |
 | `rfc-target` | a doc ref/URL | where `/pw-rfc` publishes |
 
 Keys that are **not settable** (facts the flows derive — `set` refuses them and names the owning
@@ -46,7 +47,10 @@ The operators:
   provider (`global show`) · `ai-review` = `phase=mode` pairs (phases `analysis|plan|task-plan|task-exec|ship`,
   modes `off|advisory|auto`) · `ai-model` = `role=value` pairs (roles
   `researcher|analyst|writer-task|reviewer|verifier`, value `provider:model` or `—`) ·
-  `rfc-target` = a doc ref. `ai-review`/`ai-model` accept **batch pairs** (`plan=auto ship=off`):
+  `pin` = `T0n=value` pairs (value `provider:model` or `—` to clear; each pin lands in BOTH
+  holders — task-file `Execute with:` and the PLAN cell — via the single propagator) ·
+  `rfc-target` = a doc ref. `ai-review`/`ai-model`/`pin` accept **batch pairs** (`plan=auto
+  ship=off`, `T01=kilo:prov/m T02=claude:sonnet`):
   every pair is validated first and ANY illegal pair refuses the whole call with nothing written;
   a good batch is one line-update + one LOG line. A value that can't bind (bad enum, provider not
   enabled, model not in the live catalog / out of the configured API-provider scope) is refused

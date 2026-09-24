@@ -206,12 +206,19 @@ md_replace_range() {
 # <row-id>. Leaves the file untouched and prints an error (exit 1) if the table, a column, or the
 # row isn't found — never a silent no-op. Deliberately regex-free on pipes (BSD awk rejects `\|`
 # in a -v variable used as a regex) — header/separator detection is by cell comparison instead.
+# FILL RULE (plan 23 / KI-2): when no row matches <row-id> but the matched table still carries an
+# UNTOUCHED TEMPLATE PLACEHOLDER row — a data row whose ID-column cell trims to empty (scaffold
+# emits `| | | | | |`) — the FIRST such row is filled instead: ID cell ← <row-id>, target cell ←
+# <new-value>, every other cell preserved byte-for-byte (including non-empty hint cells like the
+# MR table's `open / on-hold / merged`). Only a blank-ID row can be a placeholder (authored rows
+# always carry an ID), so there is no clobber path for real rows, and the row width is unchanged.
+# The `no row with ID=…` error remains only when no blank-ID row exists either.
 #   _dashboard_update <file> <id-col-name> <target-col-name> <row-id> <new-value>
 _dashboard_update() {
   [ $# -eq 5 ] || { echo "_dashboard_update: expected 5 args, got $#" >&2; return 2; }
   local file="$1" idname="$2" tgtname="$3" rowid="$4" newval="$5"
-  local errfile="${file}.dash-err"
-  if ! awk -v idname="$idname" -v tgtname="$tgtname" -v rowid="$rowid" -v newval="$newval" '
+  local errfile="${file}.dash-err" rc=0
+  awk -v idname="$idname" -v tgtname="$tgtname" -v rowid="$rowid" -v newval="$newval" '
     function trim(s){ sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
     BEGIN{ idcol=0; tgtcol=0; intable=0; found=0; matched=0 }
     {
@@ -249,10 +256,126 @@ _dashboard_update() {
       else if (idcol == 0) print "ERR: no \"" idname "\" column in the matched table" > "/dev/stderr"
       else if (!matched) print "ERR: no row with " idname "=\"" rowid "\" in the matched table" > "/dev/stderr"
     }
-  ' "$file" > "$file.tmp" 2> "$errfile"; then
-    rm -f "$file.tmp"; cat "$errfile" >&2; rm -f "$errfile"; return 1
+  ' "$file" > "$file.tmp" 2> "$errfile" || rc=$?
+  if [ "$rc" -ne 0 ] || [ -s "$errfile" ]; then
+    rm -f "$file.tmp"
+    # KI-2 fill-rule fallback: only when the failure is "no matching row" — the original error
+    # stays the contract message when the fill finds no untouched placeholder either.
+    if grep -q '^ERR: no row with' "$errfile" 2>/dev/null \
+       && _dashboard_fill "$file" "$idname" "$tgtname" "$rowid" "$newval"; then
+      rm -f "$errfile"
+      return 0
+    fi
+    cat "$errfile" >&2; rm -f "$errfile"; return 1
   fi
-  if [ -s "$errfile" ]; then
+  rm -f "$errfile"
+  mv "$file.tmp" "$file"
+}
+
+# Private: the fill half of _dashboard_update's KI-2 rule — rewrites the FIRST untouched
+# placeholder row (blank ID cell) of the table whose header's first cell equals <id-col-name>.
+# Same detection idiom as _dashboard_update (cell comparison, no pipe regexes). A separator row
+# (dashes/pipes/colons only) is never a placeholder; a data row is a placeholder iff its ID cell
+# trims to empty — hint text in OTHER cells (MR table) does not disqualify it and is preserved.
+# Exits non-zero without touching the file when the table/columns/blank-ID row are absent.
+#   _dashboard_fill <file> <id-col-name> <target-col-name> <row-id> <new-value>
+_dashboard_fill() {
+  local file="$1" idname="$2" tgtname="$3" rowid="$4" newval="$5"
+  local errfile="${file}.fill-err" rc=0
+  awk -v idname="$idname" -v tgtname="$tgtname" -v rowid="$rowid" -v newval="$newval" '
+    function trim(s){ sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+    BEGIN{ idcol=0; tgtcol=0; intable=0; found=0; matched=0 }
+    {
+      if (!intable && $0 ~ /^[ \t]*\|/) {
+        n = split($0, c, "|")
+        if (n >= 3 && trim(c[2]) == idname) {
+          intable = 1; found = 1
+          for (i = 2; i < n; i++) { t = trim(c[i]); if (t == idname) idcol = i; if (t == tgtname) tgtcol = i }
+        }
+      } else if (intable && ($0 ~ /^[ \t]*$/ || $0 !~ /^[ \t]*\|/)) {
+        intable = 0
+      }
+      if (intable && idcol > 0 && tgtcol > 0 && !matched && $0 ~ /^[ \t]*\|/) {
+        sep = $0; gsub(/[ \t|:-]/, "", sep)
+        if (sep == "" && $0 ~ /-/) { print; next }        # separator row, not a placeholder
+        n = split($0, c, "|")
+        if (n > tgtcol && trim(c[idcol]) == "") {
+          c[idcol] = " " rowid " "; c[tgtcol] = " " newval " "
+          line = ""
+          for (i = 1; i <= n; i++) line = line c[i] (i < n ? "|" : "")
+          print line
+          matched = 1
+          next
+        }
+      }
+      print
+    }
+    END {
+      if (!found) print "ERR: no table whose first column is \"" idname "\" in " FILENAME > "/dev/stderr"
+      else if (tgtcol == 0) print "ERR: no \"" tgtname "\" column in the matched table" > "/dev/stderr"
+      else if (!matched) print "ERR: no untouched placeholder row (blank " idname " cell) to fill" > "/dev/stderr"
+    }
+  ' "$file" > "$file.tmp" 2> "$errfile" || rc=$?
+  if [ "$rc" -ne 0 ] || [ -s "$errfile" ]; then
+    rm -f "$file.tmp" "$errfile"; return 1
+  fi
+  rm -f "$errfile"
+  mv "$file.tmp" "$file"
+}
+
+# Update one cell of a PLAN.md task-table row (both table generations): find the `## Task`
+# section, map the header cells BY NAME — same normalization as pw-common's _pw_plan_map (strip
+# spaces/backticks/asterisks, lowercase: "status", "executewith") — and rewrite the <col-name>
+# cell of the row whose ID cell contains <task-id> (T0n, possibly markdown-linked). Never
+# positional. Leaves the file untouched and prints ERR on stderr (exit 1) when the section, the
+# column, or the row is missing — the caller owns the fix hint. BSD-awk safe: no pipe regexes
+# built from -v variables.
+#   _plan_cell_update <plan-file> <task-id> <col-name> <new-value>
+_plan_cell_update() {
+  [ $# -eq 4 ] || { echo "_plan_cell_update: expected 4 args, got $#" >&2; return 2; }
+  local file="$1" taskid="$2" colname="$3" newval="$4"
+  local errfile="${file}.plan-err" rc=0
+  awk -v taskid="$taskid" -v colname="$colname" -v newval="$newval" '
+    function trim(s){ sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+    function norm(s){ gsub(/[ \t`*]/, "", s); return tolower(s) }
+    BEGIN{ p=0; sawhdr=0; idcol=0; tgt=0; matched=0 }
+    /^## Task/ { p=1; print; next }
+    p && /^## / { p=0 }
+    {
+      if (p && $0 ~ /^[ \t]*\|/) {
+        n = split($0, c, "|")
+        if (!sawhdr) {
+          sawhdr = 1
+          for (i = 2; i < n; i++) {
+            v = norm(c[i])
+            if (v == "id" || v == "task") idcol = i
+            if (v == colname) tgt = i
+          }
+          print; next
+        }
+        if ($0 ~ /^[ \t]*\|[ \t:|+-]*\|[ \t]*$/) { print; next }   # separator row
+        if (idcol > 0 && tgt > 0 && n > tgt && !matched) {
+          id = c[idcol]; gsub(/[ \t]/, "", id)
+          if (match(id, /T[0-9]+/)) id = substr(id, RSTART, RLENGTH); else id = ""
+          if (id == taskid) {
+            c[tgt] = " " newval " "
+            line = ""
+            for (i = 1; i <= n; i++) line = line c[i] (i < n ? "|" : "")
+            print line
+            matched = 1
+            next
+          }
+        }
+      }
+      print
+    }
+    END {
+      if (!sawhdr) print "ERR: no task table (## Task section with a | header) in " FILENAME > "/dev/stderr"
+      else if (tgt == 0) print "ERR: no \"" colname "\" column in the PLAN task table" > "/dev/stderr"
+      else if (!matched) print "ERR: no row for " taskid " in the PLAN task table" > "/dev/stderr"
+    }
+  ' "$file" > "$file.tmp" 2> "$errfile" || rc=$?
+  if [ "$rc" -ne 0 ] || [ -s "$errfile" ]; then
     rm -f "$file.tmp"; cat "$errfile" >&2; rm -f "$errfile"; return 1
   fi
   rm -f "$errfile"

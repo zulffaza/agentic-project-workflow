@@ -203,7 +203,7 @@ case "$COMMAND" in
       [ "$status" = "accepted" ] || UNACCEPTED="$UNACCEPTED $task_id($status)"
     done < <(pw_plan_pairs "$D/task/PLAN.md")
     if [ -n "$UNACCEPTED" ]; then
-      die_fix "not all tasks are accepted:$UNACCEPTED" "a human accepts each shipped task (set '- **Status:** accepted' in the task file + PLAN row), then sync the dashboard: pw-doc.sh sync $SLUG --dashboard-only"
+      die_fix "not all tasks are accepted:$UNACCEPTED" "a human accepts each shipped task — the mechanical way to set all three holders at once is: pw-status.sh task-accept $SLUG <T0n> (task file + PLAN row + dashboard; the decision to accept stays human)"
     fi
     ;;
 

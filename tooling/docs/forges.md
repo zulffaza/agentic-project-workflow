@@ -7,8 +7,12 @@
 **Filled by:** [🤖 maintainer] — the day-to-day override you actually set is `PW_FORGE_HOSTS` in
 `pw.config.sh` (a self-hosted GitLab host, or any forge whose CLI needs a host env var). This file
 itself is maintainer-owned reference: the resolution algorithm + the Registry's exact CLI
-invocations. `/pw-ship`/`/pw-adopt` READ this registry; you don't edit it day-to-day. The
-gotchas below are summarized in [`docs/KNOWN-ISSUES.md`](../../docs/KNOWN-ISSUES.md).
+invocations. `/pw-ship`/`/pw-adopt` READ this registry; you don't edit it day-to-day.
+**This file is the dated record owner** for the GitLab comment-handling gotchas (the
+`individual_note` misclassification — corrected 2026-08-10 — and the `/discussions` indexing lag
+that made `/notes` primary — verified 2026-08-26); the user-facing known-issues page was retired
+2026-09-25 (D2 routing, [`conventions.md`](./conventions.md) D-rules), and the user-reachable
+symptom stays in [`docs/TROUBLESHOOTING.md`](../../docs/TROUBLESHOOTING.md).
 
 `/pw-ship` (open MRs, fetch MR comments) and `/pw-adopt` (resolve an MR's target branch) both need
 to know **which CLI talks to a given repo's Git host**. That's a per-repo fact, not a global one —

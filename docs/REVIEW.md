@@ -278,7 +278,7 @@ fill, not items, so a clean pass over an untouched stub section auto-signs; a fi
 the review scan, the review lint) reads the same machine predicate as the gates —
 the count read → `open=N resolved=M items=K`. Never grep a review file
 raw for `pw-item-status`: the template's guidance line and worked examples contain the marker
-*text* as prose and will phantom-count (see KNOWN-ISSUES.md).
+*text* as prose and will phantom-count — the shared detector every surface reads is the guard.
 
 **What stops an endless loop** — before filing anything, `pw-reviewer` checks the review file for
 an existing item on the same section it's about to flag. A 2nd item on that same section (after
