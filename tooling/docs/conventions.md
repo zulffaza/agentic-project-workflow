@@ -107,6 +107,11 @@ is normative.
 - **C4 — doctrine-restricted operators** (e.g. `review signoff` — "only a human clears a gate")
   are labeled **"human-triggered only, never on agent initiative"** in the command file, and a T0
   anti-idiom static test asserts no agent file mentions them.
+- **Reserved names.** `pw-maintainer` is reserved for the internal maintainer skill under
+  `tooling/skill-internal/` (read-as-file, NOT provider-installed) — never reuse it for a `/pw-*`
+  user command or a `tooling/skill/` user skill. This bullet is the durable registry of reserved
+  names: check it before proposing a new command/skill name, and append any new reservation **here**
+  (not only in the proposing plan — a plan is single-use, this doc is not).
 
 ## A-rules — arguments that contain spaces (free text)
 

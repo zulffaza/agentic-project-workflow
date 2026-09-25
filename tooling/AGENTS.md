@@ -6,6 +6,11 @@ generators, docs policy, the test harness. This is the *internal* surface: imple
 lives here deliberately. Users driving projects through `/pw-*` never need this file; the
 bundle-root [`../AGENTS.md`](../AGENTS.md) covers them.
 
+> **Cheat-sheet first:** [`skill-internal/pw-maintainer/SKILL.md`](./skill-internal/pw-maintainer/SKILL.md)
+> is the navigational front door over everything below — the change/test loop, the placement
+> conventions, and the doc boundary, one reference at a time. Maintainer-only; **not**
+> provider-installed (it lives outside the generated `skill/` set).
+
 Start here, in order: the doctrine below, then the change protocol
 ([`docs/testing.md`](./docs/testing.md)), then a script's usage contract
 ([`docs/scripts/README.md`](./docs/scripts/README.md)). Adding a script, command, or operator?
@@ -45,6 +50,7 @@ tooling/
 ├── automation scripts (pw-status … pw-context)  ← usage: docs/scripts/ (index + groups); registry: tests/static.sh
 ├── pw-worktree.sh teardown       ← safe worktree removal at close-out (refuses CWD/dirty trees)
 ├── commands/ · agents/ · skill/           ← canonical sources (provider-neutral; tokens {{PW_HOME}} …)
+├── skill-internal/pw-maintainer/          ← maintainer cheat-sheet skill — read-as-file, NOT provider-installed (outside the skill/ glob)
 ├── docs/                                  ← registries/policy docs the AGENTS read
 │   ├── scripts/                           ← script usage contracts (exit codes, → fix: lines)
 │   └── testing.md · forges.md · rfc.md · rfc-backends.md · providers.md · memory.md

@@ -1,7 +1,7 @@
 # tooling/ — command source of truth + generator
 
 **Maintainer entry points:** [`AGENTS.md`](./AGENTS.md) (agent-facing: doctrine + implementation map + change/test protocol —
-imported by `CLAUDE.md`), [`docs/testing.md`](./docs/testing.md) (the test flow), this README (human how-to).
+imported by `CLAUDE.md`), the [`skill-internal/pw-maintainer`](./skill-internal/pw-maintainer/SKILL.md) cheat-sheet (navigational front door over the doctrine/conventions/testing/boundary docs — read-as-file, not provider-installed), [`docs/testing.md`](./docs/testing.md) (the test flow), this README (human how-to).
 
 
 The `/pw-*` slash commands are duplicated across agent tools (Claude Code, kilo, …), but you
