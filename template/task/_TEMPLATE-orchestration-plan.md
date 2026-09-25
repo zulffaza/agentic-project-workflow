@@ -50,7 +50,7 @@ Custom rules that shaped this breakdown, and per-task routing overrides. Seed th
   spawn-routing ladder: same provider → in-process sub-agent, different → supervised headless,
   resume-first; `headless` = strict exact-model binding). Precedence: task `Route:` > this line >
   `pw.config.sh PW_ROUTE_DEFAULT` > `auto`. Omit this bullet for `auto`. Full ladder:
-  `{{PW_HOME}}/tooling/skill/project-workflow/references/execution-and-routing.md`>
+  `{{PW_HOME}}/docs/EXECUTION.md` (§ledger & routing ladder)>
 - **Sizing / splitting rules used:** <e.g. "one repo per task; split anything touching two repos">
 - <other custom rule that affected how tasks were cut>
 
@@ -103,7 +103,7 @@ measure them reliably; pull them from session telemetry afterward if you need th
 ## Model & sub-agent selection
 Each task declares `Execute with:` (a **model or agent**, `<provider>:<model>` form) plus a `Why:`.
 The **provider** decides which CLI runs it — see the
-[provider registry]({{PW_HOME}}/tooling/docs/providers.md) (models are tied to a provider there, and
+[provider registry]({{PW_HOME}}/docs/TOOLING.md) (models are tied to a provider there, and
 cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
 
 | Choose | Provider | For |
@@ -115,7 +115,7 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
 | `command_code/<model>` | kilo | open-weight/third-party models — needs its own credential; `kilo models command_code` for the full list |
 | `cursor-grok-4.5-high` / `…-low-fast`, `claude-opus-5-thinking-xhigh` | cursor | Cursor's own single gateway — effort/thinking are catalog-id variants (or `[context=1m,effort=…]` bracket params); `agent models` for the list |
 | a registered agent / a model | (its provider) | same-provider reuse only — e.g. `pw-executor`; a cross-provider task always routes as `provider:model` (a *sub-agent* name is unreachable from the other CLI's headless path; `--agent` accepts **primary** defs only, verified 2026-09-04) |
-| `pw-executor` / a `tooling/agents/` def | (its provider) | the shipped executor, or a custom role no existing agent covers |
+| `pw-executor` / a custom role def | (its provider) | the shipped executor, or a custom role no existing agent covers |
 
 - **Pin risky tasks:** claude aliases (`opus`/`sonnet`/…) track the *latest* version — use the full  name (`claude-opus-4-8` vs `claude-opus-5`) when reproducibility matters. Cursor ids from
   `agent models` are already exact — pin the full variant (`cursor:claude-opus-5-thinking-high`);
@@ -128,8 +128,8 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
   names; the discipline comes from the skill + task file, not a special agent.
 - **Override at run time:** "run T03 with opus" — the orchestrator records what it actually used in
   `Actually used:`.
-- Headless invocation + the `Effort`/`Thinking` flag mapping: `{{PW_HOME}}/tooling/docs/providers.md`
-  (onboarding a new Agent Provider is a `pw.config.sh` edit, never that file).
+- Headless invocation + the `Effort`/`Thinking` flag mapping: `{{PW_HOME}}/docs/TOOLING.md`
+  (provider registry). Onboarding a new Agent Provider is a `pw.config.sh` edit, never a registry edit.
 
 ## Execution strategy
 - Max parallelism: <n> concurrent executors.

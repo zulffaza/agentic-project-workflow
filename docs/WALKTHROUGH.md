@@ -279,7 +279,7 @@ you don't re-run the whole plan.
 ```
 
 Pushes each task's branch and opens one MR/PR per (repo, base) pair, using your configured Git
-forge CLI (`gh`/`glab` — see [`tooling/docs/forges.md`](../tooling/docs/forges.md)). Each MR title
+forge CLI (`gh`/`glab`). Each MR title
 is prefixed with the ticket from `context/INDEX.md`'s `Source` column (`JIRA-4821` here) — that's
 where the `[JIRA-4821]` below comes from, not something typed by hand:
 

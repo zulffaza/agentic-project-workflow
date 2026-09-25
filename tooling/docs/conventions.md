@@ -81,7 +81,7 @@ is normative.
 - **L5b — no dead names in runtime hints.** `usage:`/`die_fix`/`add_error` lines may only name
   scripts that exist: every `<name>.sh` token on those lines must resolve under
   `scripts/{entities,lib,toolchain}/` or the bundle root. Bare dead names slip past L5's
-  `tooling/`-prefixed scan — after plan 20's merges, users were still told to run
+  `tooling/`-prefixed scan — after the 2026-09-17 consolidation merges, users were still told to run
   `pw-doc-lint.sh`. A T4 canary enforces it.
 - **L5c — the entity owns its operators.** A `pw-<entity>.sh <tok>` reference where `<tok>` is
   another entity's operator is a stale pointer (post-consolidation, `adopted` moved to
@@ -166,16 +166,68 @@ detail — two audiences, one page, neither served.
 - **D3 — one story, two layers; the user layer is self-contained.** A TROUBLESHOOTING entry
   carries the action plus enough cause to act on — a user never needs a maintainer doc to do the
   right thing. Dated records and mechanism detail live in `tooling/docs/`, which may link freely
-  *into* the user layer; the user layer (`docs/`, `template/`) does **not** link into it (owner
-  decision 2026-09-25: templates and `docs/` are user-facing surfaces — no script names in user
-  prose, no step-by-step user guidance duplicated into mechanism docs, no record deep-links).
-  Pre-D3 "full detail" pointers from `docs/`/`template/` into `tooling/docs/` still exist — they
-  are tracked in [`known-issues.md`](./known-issues.md), must not be extended, and tighten
-  opportunistically.
+  *into* the user layer; never the reverse. **Strict form (owner ruling 2026-09-25, sweep
+  complete — see the dated record below):** user-layer files (`docs/`, `template/`, root
+  `README.md`/`CLAUDE.md`/`ONBOARDING.md`/`AGENTS.md`) carry **no
+  `tooling/` references at all** — no links, no "go read" instructions, no layout naming. A user
+  entry needing mechanism context gets a behavior-level sentence, a pointer to another user doc,
+  or the single hub: `docs/TOOLING.md` — the one user-layer file whose whole job is pinning where
+  the machinery lives (curiosity has one address). **The hub is the only exemption** (owner
+  tightening, same day as the sweep): root `AGENTS.md` carries no maintainer handoff —
+  maintaining is onboarded via `tooling/AGENTS.md` directly (the per-directory AGENTS.md
+  convention), and the audience-split doctrine canary now *asserts* a tooling-free user entry
+  point (register row `C76-…` pins that a handoff pointer must not return). No step
+  by step user guidance duplicated into mechanism docs, no record deep-links.
 - **D4 — category rule.** "Known issue" is a **maintainer state** (a backlog entry awaiting a
   fix), never a user-facing genre. There is no user known-issues page, and none may be recreated
   without retiring this rule — users get troubleshooting, maintainers get the backlog + records.
   The T4 canary (C69) pins all of it: page absent, zero stale references, D-rules present.
+- **D5 — user-relevant mechanics are DUPLICATED, not deep-linked.** Where the user layer needs
+  behavior whose detail lives in a maintainer doc (the routing ladder, the seed + pointer
+  contract, effort mapping), the user doc carries the short behavior-voice twin and the
+  maintainer doc keeps the mechanics. A twin is only allowed when **registered** in the
+  duplication registry below — pair, owners, sync trigger — so "which information is duplicated,
+  and where must I re-sync it?" always has one answer. Before minting a twin, check whether
+  `docs/TOOLING.md` (the D3 hub) is the sufficient user-layer answer; twins are for behavior the
+  user's workflow *depends on*, not for curiosity.
+
+## Duplication registry (D5)
+
+| User-layer twin (behavior voice) | Maintainer detail (mechanism voice) | Sync trigger |
+|---|---|---|
+| `docs/EXECUTION.md` §Spawning phase work (seed-contract summary) | `tooling/skill/project-workflow/references/execution-and-routing.md` §Seed contracts | change to seed/exit-check contract → update both |
+| `docs/EXECUTION.md` §The per-spawn ledger and the routing ladder (+ `Route:` bullets in `template/task/_TEMPLATE-task.md`, `- **Routing:**` in `_TEMPLATE-orchestration-plan.md`) | `tooling/docs/providers.md` (§headless mechanics, hooks) | change to routing precedence / binding honesty / supervision contract → update both |
+| `ONBOARDING.md` §Register a new provider (facts: `pw.config.sh` hooks, no script editing, re-run bootstrap) | `tooling/docs/providers.md` §Registering a new Agent Provider (hook contract + worked example) | hook contract or renderer variables change → update both |
+| `docs/RFC.md` §Doc hygiene (the fixed rule list) | `tooling/docs/rfc.md` (agent-facing publishing rules) | change to publish-hygiene rules → update both |
+
+## Dated records (boundary)
+
+### The user layer leaked machinery content in ~48 lines; the leak class was invisible to the guards — cleared 2026-09-25, mitigation built in
+- **Symptom (historical):** 36 `tooling/` link/mention lines across `docs/` (9 files) and
+  `template/` (3 files) deep-linked maintainer docs the user was never supposed to need, root
+  `ONBOARDING.md` carried ~12 more lines of internal mechanics — including the full
+  provider-registration hook contract naming `pw-common.sh` render functions — and `tooling/docs/`
+  prose carried ~16 dead `plan NN`/`KI-n`/`D9` tokens pointing at single-use planning docs that
+  ship nowhere.
+- **Root cause:** D3 was born doctrine-with-a-legacy-exception, and every existing T4 boundary
+  grep had a file-list hole (the script-name grep skipped `ONBOARDING.md` and `template/`; the
+  plan-refs grep skipped root files, `template/`, and `tooling/docs/`) — leaks could only be
+  caught by human review.
+- **Fix (built in):** the full sweep landed (user layer now zero-`tooling/` outside the
+  `docs/TOOLING.md` hub and `AGENTS.md` handoff lines; the provider-registration how-to relocated
+  into `tooling/docs/providers.md`; deliberate twins registered under D5; plan/KI tokens replaced
+  by self-describing dates+mechanism names). Three mechanical guards pin it: a user-layer
+  machinery-refs grep (hub + handoff exemptions encoded in its shape), the plan-refs grep widened
+  to root `*.md`/`template/`/`tooling/docs/` plus `KI-[0-9]` with the plural "plans NN" form, and
+  `ONBOARDING.md` added to the script-name grep's file list. Each is pinned by a mutations.tsv
+  row (re-adding a `tooling/` link, a dead hyphenated plan-token, or a registry script name must
+  fail T4).
+- **Follow-up (owner feedback, same day):** the last exemption — root `AGENTS.md`'s maintainer
+  handoff lines — was removed too: maintaining is onboarded via `tooling/AGENTS.md` directly
+  (per-directory AGENTS.md convention), so the root entry point is now a pure user file and the
+  hub is the only exemption. The audience-split doctrine canary was flipped from *requiring* the
+  pointer to *forbidding* any machinery ref in the user entry point, the machinery-refs grep lost
+  its handoff special-case, and row `C76-…` was minted so a returned handoff pointer fails T4.
 
 ## Checklist for adding capability
 

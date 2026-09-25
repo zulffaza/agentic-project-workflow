@@ -75,12 +75,12 @@ $PW_HOME/tooling/scripts/entities/pw-status.sh oneliner <slug> <text...>
 $PW_HOME/tooling/scripts/entities/pw-status.sh adopted <slug> <text...>          # insert-or-replace, idempotent
 $PW_HOME/tooling/scripts/entities/pw-status.sh phase  <slug>                     # read the Status token only
 $PW_HOME/tooling/scripts/entities/pw-status.sh dashboard-task-status <slug> <T0n> <status>
-$PW_HOME/tooling/scripts/entities/pw-status.sh task-accept <slug> <T0n>          # merged-MR acceptance: task file + PLAN cell + dashboard row in ONE call (plan 23/KI-1 propagator; dashboard best-effort, one LOG line, idempotent)
+$PW_HOME/tooling/scripts/entities/pw-status.sh task-accept <slug> <T0n>          # merged-MR acceptance: task file + PLAN cell + dashboard row in ONE call (single propagator, since 2026-09-25; dashboard best-effort, one LOG line, idempotent)
 $PW_HOME/tooling/scripts/entities/pw-status.sh provider-audit <slug> [task-ids…] # report-only (below)
 ```
 
 **Verified gotcha — dated record (D2 routing):** *`task-accept` synced the task file but not the
-PLAN row (KI-1) — **fixed 2026-09-25, mitigation built in**.* Symptom (a `/pw-close` run,
+PLAN row — **fixed 2026-09-25, mitigation built in**.* Symptom (a `/pw-close` run,
 mm-spring-redis-sentinel-adoption, 2026-09-23): the close gate failed with `not all tasks are
 accepted: T01(done)` even though `task/T01.md` already read `- **Status:** accepted` and the
 dashboard row said accepted — the **PLAN task-table cell** still read `done`, and the acceptance
@@ -90,7 +90,7 @@ already-merged path tells you to run, so a merged task landed half-synced. The f
 three-holder propagator documented above (task file + PLAN cell + best-effort dashboard, one LOG
 line); the close gate's `die_fix` hint now names it. The user-facing known-issues page was
 retired 2026-09-25 ([`../conventions.md`](../conventions.md) D-rules); the dashboard-table
-companion record (KI-2 placeholder fill) lives in
+companion record (placeholder-row fill) lives in
 [`review-and-context-editing.md`](./review-and-context-editing.md).
 
 **`provider-audit`** compares each task row's `Execute with:` (expected) against the LOG.md spawn
@@ -128,7 +128,7 @@ configured API-provider scope (`model-check` + `model-resolve`) — a pin that c
 at write time, not discovered at spawn time. **Batch form:** `ai-review`/`ai-model`/`pin` accept
 several `<k>=<v>` pairs in one call — validate-all-first (any illegal pair refuses the whole batch,
 nothing written), then one line-update and **one** LOG line. **`pin`** (`pin T01=<provider:model>
-T02=…`, `—` clears) writes the per-task executor pin through the plan-23 single propagator
+T02=…`, `—` clears) writes the per-task executor pin through the single propagator (since 2026-09-25)
 (`_pin_propagate`): BOTH holders — the task file's `- **Execute with:**` field (the spawn bind)
 and the PLAN task-table `Execute with` cell (the gate/audit/resume-guard read) — so
 provider-audit's `mismatch` verdict can't arise from the config surface itself; `get pin` lists

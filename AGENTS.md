@@ -4,9 +4,7 @@ You (an AI coding agent) are in the reusable **project-workflow** bundle: a phas
 pipeline that takes a multi-repo change from **context → analysis → breakdown → worktree execution →
 review → close**, driven by `/pw-*` slash commands. Work happens in scaffolded projects under
 `$PW_PROJECTS/<slug>/`; this bundle (`$PW_HOME`) is the machinery, and it is itself a git repo.
-**Using** the pipeline is the whole of this file. **Maintaining** the machinery itself (editing
-`tooling/`/`template/`, the generators, the test harness) is a different job — its entry point is
-[`tooling/AGENTS.md`](./tooling/AGENTS.md); you don't need it to run projects.
+**Using** the pipeline is the whole of this file.
 
 ## Start here (do this in order)
 
@@ -62,14 +60,14 @@ real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./do
 - **Never hand-edit generated artifacts.** The per-provider command files (`~/.claude/commands`,
   `~/.config/kilo/command`, `~/.cursor/commands`) and seeded agents (`~/.claude/agents`,
   `~/.config/kilo/agent`, `~/.cursor/agents`) are build output. If one drifted, run `/pw-doctor`
-  to see it and `/pw-doctor --fix` to resync — the canonical sources live under `tooling/` and are
-  the maintainer's domain (see `tooling/AGENTS.md` before changing anything there).
-- **Provider independence (D9).** Each Agent Provider's install is self-contained in its **own**
+  to see it and `/pw-doctor --fix` to resync — the canonical sources live with the bundle's
+  machinery, and a regen replaces anything hand-edited in the copies.
+- **Provider independence.** Each Agent Provider's install is self-contained in its **own**
   dirs (`~/.claude/*` for claude, `~/.cursor/*` for cursor, …) generated solely from the bundle's
   registry. Vendor CLIs sometimes *also* glob other vendors' dirs as compat fallback (Cursor reads
   `~/.claude/{skills,agents}`); that is unmanaged bleed, never a contract you may build on across
   providers — hooks, generated files, and docs must not assume another provider is installed.
-  `pw-doctor.sh` flags such bleed informationally.
+  `/pw-doctor` flags such bleed informationally.
 - **Configure via `pw.config.sh`, never the scripts** — enabling/adding a provider or model lives
   there (gitignored, yours). Keep command/agent/skill sources tokenized with `{{PW_HOME}}` /
   `{{PW_PROJECTS}}` / `{{PW_REPOS}}`; never hardcode an absolute path.
@@ -84,18 +82,9 @@ real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./do
   [ADOPTION](./docs/ADOPTION.md) · [REVIEW](./docs/REVIEW.md) · [EXECUTION](./docs/EXECUTION.md) ·
   [REFERENCE](./docs/REFERENCE.md) · [RFC](./docs/RFC.md) · [MEMORY](./docs/MEMORY.md).
 - **`pw.config.sh`** — YOUR config (CLIs, models, optional `PW_MEMORY`); the one file you edit.
-- **`template/` + `tooling/`** — what projects are scaffolded from, and the machinery underneath
-  the commands. You invoke them through `/pw-*` and the skill; you don't open these to *use* the
-  pipeline. If you've been asked to **maintain** this bundle, switch to
-  **[tooling/AGENTS.md](./tooling/AGENTS.md)** — that's the maintainer entry point with the
-  internal map and the change/test protocol.
+- **`template/`** + the machinery underneath the commands — what projects are scaffolded from and
+  what the `/pw-*` commands call. You invoke it through the commands and the skill; you don't open
+  it to *use* the pipeline. Curious how it's wired? [docs/TOOLING.md](./docs/TOOLING.md).
 
 Human-facing overview: **[README.md](./README.md)**. Restated working rules on demand: the
 **`project-workflow` skill**.
-
-## Changing the tooling
-
-Maintaining the machinery (`tooling/`, `template/`, generators, harness) has its own rulebook —
-sources-only doctrine, the change test tiers, and the remediation/mutation protocol live in
-**[`tooling/AGENTS.md`](./tooling/AGENTS.md)** (+ `tooling/docs/testing.md`). If that's your task,
-switch there before editing. `pw-doctor.sh --test` (or `tooling/tests/pw_test.sh`) is the harness.

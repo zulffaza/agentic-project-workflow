@@ -66,5 +66,6 @@ read of the live doc.
 ## Going deeper
 
 The exact agent-facing contract (skip-silently rule, the two touch points above, spelled out for
-an agent reading it mid-phase) lives in [`tooling/docs/memory.md`](../tooling/docs/memory.md) — you
-shouldn't need to open it unless you're debugging why an agent isn't searching/seeding as expected.
+an agent reading it mid-phase) lives with the machinery — [TOOLING.md](./TOOLING.md) says where it
+lives. You shouldn't need it unless you're debugging why an agent isn't searching/seeding as
+expected.

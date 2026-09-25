@@ -185,12 +185,11 @@ since the forge doesn't prompt for it the way an unresolved thread does.
 **Build check runs by default, in both modes:** polls the MR's pipeline/checks to a terminal state
 (green/red/still-running) and shows the result in the recap and the task's `## Result` — meaning a
 plain run now waits on CI before it finishes. Pass `--skip-build-check` to opt out and get the
-immediate-return behavior back. See
-[`tooling/commands/pw-ship.md`](../tooling/commands/pw-ship.md)'s own "Build check" section for the
-exact per-forge mechanics and timeout handling. **A red build means that task is NOT done:** the
+immediate-return behavior back — `/pw-help command pw-ship` spells out the exact per-forge
+mechanics, the build-check section, and timeout handling. **A red build means that task is NOT done:** the
 agent diagnoses the failure, fixes the change in the worktree, re-runs the task's `## Verify`,
 pushes, and re-monitors until the pipeline passes — up to 3 fix rounds, then it stops and surfaces
-the failure for you (see "Build-check fix loop" in `pw-ship.md`). With `--skip-build-check`, the
+the failure for you (the same help output covers the build-check fix loop). With `--skip-build-check`, the
 whole check (and the fix loop) is skipped.
 
 ### ⚠️ A general MR comment (no diff line) can still need action
@@ -200,9 +199,9 @@ filters by diff-position. And some comment types can never be marked "resolved" 
 matter what — for those, `/pw-ship … comments` checks the **local** `## MR comment tracking` table
 in `task/review/T0n.review.md` (written by the comments flow) instead of waiting on a
 forge-side flag that will never flip (the same pattern `/pw-rfc comments` uses for RFC-platform
-comments). The exact API fields this relies on, and why, are in
-[`tooling/docs/forges.md`](../tooling/docs/forges.md#standalone-vs-diff-anchored-comments-both-forges--read-before-writing-a-fetch-comments-step)
-— only worth opening if you're implementing a new forge or debugging a missed comment.
+comments). The exact API fields this relies on, and why, live with the machinery —
+[TOOLING.md](./TOOLING.md) says where — only worth opening if you're implementing a new forge or
+debugging a missed comment.
 
 ### Why the mirror matters (the reconciliation rule)
 An MR comment lives in your Git host, which the project dir doesn't automatically know about. If a

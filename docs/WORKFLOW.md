@@ -19,7 +19,7 @@ state lives on disk, not in an agent's head.
 | 5 | Review tasks | You | `task/review/PLAN.review.md` + fixes | **plan approved (only hard gate)** | `/pw-review` |
 | 6 | Execute | Orchestrator + executor sessions/lanes (one per ready task; `Execute with:` → same-provider def or `provider:model`; each spawn ledgered `session=<id>` in `LOG.md`+`## Result`) | commits/branches in `worktree/*` (committed + verified) | per-task DoD | `/pw-execute` — opt-in `- Results acceptance: auto` + `--acceptance`/`--then-ship` |
 | 7 | Ship | Executor agent (strong) | pushed branches + MRs (rich description) | you confirm the push | `/pw-ship` (`--then-ship` chains it after a run) |
-| 8 | Review results | You + agent (fixes return per the routing ladder — same-provider in-process fixer or driver-inline, cross-provider supervised headless; resume-by-id only when a liveness check says live; one batched pass per artifact; a landed fix fans the capped §3.6 dependent recheck) | accepted tasks (optional `task/review/T0n`) | you accept each task — *the clean-execution option moves only green, item-free tasks, and remains human-reversible* | `/pw-review` |
+| 8 | Review results | You + agent (fixes return per the routing ladder — same-provider in-process fixer or driver-inline, cross-provider supervised headless; resume-by-id only when a liveness check says live; one batched pass per artifact; a landed fix fans the capped late-fix dependent recheck) | accepted tasks (optional `task/review/T0n`) | you accept each task — *the clean-execution option moves only green, item-free tasks, and remains human-reversible* | `/pw-review` |
 | 9 | Learn + close | You + agent | memory (if configured), worktrees torn down, Status→done | — | `/pw-close` |
 | — | Any time | You | `/pw-help` renders the live command/operator map (and `find` locates a concept across the surface); state via `/pw-status`; install health via `/pw-doctor` (a project's own consistency via `/pw-doctor --project`); per-project config via `/pw-config` | — | `/pw-help` · `/pw-status` · `/pw-doctor` · `/pw-config` |
 
@@ -109,7 +109,7 @@ fixed inline by the driver. MR-comment fixes arrive as **one batched pass per ar
 replies preserved); ≥2 tasks fan out as parallel per-task fixers. Every headless run is supervised
 to a terminal `state` (`success`/`failed`/`stalled`) with the log + stall/timeout budgets enforced —
 a run never ends with a live child. When a landed fix
-followed a dependent that already ran, the driver fans one capped §3.6 recheck (mechanical
+followed a dependent that already ran, the driver fans one capped dependent recheck (mechanical
 re-`Verify` per dependent + ≤1 `dep-impact` review pass where files overlap, filed as items — no
 edit-backward into the dependency). **Execution stops at committed + verified** — it does
 *not* push or open MRs.
@@ -143,7 +143,7 @@ MR's pipeline to a terminal state and reports it — meaning the run waits on CI
 pass `--skip-build-check` if you'd rather it return immediately, unchecked. A **red** pipeline means
 that task is **not done**: `/pw-ship` fixes the failing change in the worktree, re-verifies, pushes,
 and re-monitors until the build passes (up to 3 fix rounds, then it stops and surfaces the failure
-for you) — see the build-check fix loop in `tooling/commands/pw-ship.md`. MRs already merged or
+for you — `/pw-help command pw-ship` spells out the build-check fix loop). MRs already merged or
 closed downstream are detected up front (a per-task forge query) and skipped + cleaned up instead of
 being re-shipped or synced.
 
@@ -204,7 +204,7 @@ reconstructing it from chat.
 ## Going back a phase (rewind)
 Phases aren't one-way. To reopen an earlier phase after you've moved on (e.g. breakdown revealed the
 analysis was wrong), run **`/pw-status <slug> rewind <phase>`**. It walks you through the same three
-steps either way, but drives them through the command rather than you touching `tooling/` yourself:
+steps either way, but drives them through the command rather than hand-editing project state:
 1. Add a fresh `[OPEN]` item to that phase's review file (`analysis/review/…` or `task/review/…`)
    describing what needs to change (`/pw-review <slug> item <path> <§anchor> <what needs to
    change>`), and add a new `in-review` Sign-off row (`/pw-review <slug> signoff <path>

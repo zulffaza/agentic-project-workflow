@@ -92,7 +92,7 @@ table**. `No review files found` + exit `0` is a valid empty state (project too 
 
 Counts come from `pw-review.sh count <slug> <rel>` — the single heading-level detector the
 gates use: template guidance text, worked examples inside comments, and UNFILLED `<…>` placeholder
-stubs can never inflate them (2026-09-16 fix; see plan 15 §14).
+stubs can never inflate them (2026-09-16 fix).
 
 **Reading failures:** exit `2` = usage error or missing project (`pw-review: …` on stderr).
 
@@ -192,7 +192,7 @@ Two table-cell writers with hard contracts:
   cell writer (`dashboard-task-status`, `dashboard-mr-state`): resolves columns from the header
   by NAME (never positional — the MR table's State is column 5), rewrites exactly one cell, and
   fails loudly (`ERR: no row with ID=…`, file untouched) rather than no-op silently. **Fill rule
-  (plan 23 / KI-2):** when no row matches but the table still carries an untouched template
+  (built in 2026-09-25):** when no row matches but the table still carries an untouched template
   placeholder (a data row whose ID cell trims to empty — scaffold's `| | | | | |`), the FIRST
   such row is filled instead: ID ← row-id, target ← value, every other cell (including hint
   cells like `open / on-hold / merged`) preserved byte-for-byte. Only blank-ID rows can be
@@ -275,7 +275,7 @@ the built-in mitigation, and a date — nothing shortened in the move.
   regenerates the commands; project docs can be refreshed opportunistically (or left — they
   still describe the right operators).
 
-### Dashboard cell writers couldn't write into a still-empty table body (KI-2) — *Fixed 2026-09-25, mitigation built in*
+### Dashboard cell writers couldn't write into a still-empty table body — *Fixed 2026-09-25, mitigation built in*
 - **Symptom (historical):** `dashboard-task-status` / `dashboard-mr-state` printed
   `ERR: no row with ID="T01" in the matched table` on a project whose README task table was still
   the template's empty `| | | | | |` placeholder — the update was skipped, so the dashboard
@@ -284,5 +284,5 @@ the built-in mitigation, and a date — nothing shortened in the move.
   row" path for an untouched table.
 - **Fix (built in):** `_dashboard_update`'s fill rule (contract above) fills the first untouched
   placeholder row — blank ID cell — preserving every other cell byte-for-byte; genuinely missing
-  rows still fail loudly. Companion record: the `task-accept` half-sync (KI-1) lives in
+  rows still fail loudly. Companion record: the `task-accept` half-sync lives in
   [`status-and-preflight.md`](./status-and-preflight.md).

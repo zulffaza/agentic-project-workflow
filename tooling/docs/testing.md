@@ -14,7 +14,7 @@ bash tooling/tests/pw_test.sh --tier T1 --only doc-lint   # one script's unit ca
 
 Exit `0` only when everything selected passed; the final `pwtest: P pass, F fail, S skip` line is
 CI-greppable. `--only <pattern>` filters T1 case files. Fixtures are **generated from `template/`**
-into a temp root, and only the ones the selected tiers/cases actually consume are built (plan 19):
+into a temp root, and only the ones the selected tiers/cases actually consume are built:
 a `--tier T0`/`--tier T4` run builds **nothing**, `--only <script>` builds just the fixture its
 case clones, and `--mutation` children copy fixtures from a shared pristine cache. Nothing on disk
 under `tooling/tests/` is fixture *content*, and no test writes to a real project (T3 is read-only
@@ -47,7 +47,7 @@ register rows — during development use it per changed file (e.g. `--mutation '
 ## The meta-test (`--mutation`)
 
 `expectations/mutations.tsv` reverts one **documented fix** per coupling-register row (C1–C44;
-plan 16 §5, extended by plans 17/19) in the working tree and asserts the harness catches it: a
+the protocol born with the 2026-09-16 harness, extended since) in the working tree and asserts the harness catches it: a
 mutation that passes = a vacuous test — the exact failure mode that produced this protocol. Each
 row: `id \t file(rel tooling/) \t OLD \t NEW \t tier \t only`; a drift-flagged row means the
 anchor moved with the code — re-pin it, don't delete it. After adding any nontrivial fix, add a
@@ -97,7 +97,7 @@ copies are stale by design — identical to what a fresh build produces; don't "
   tree, wrapped in the `_pwt_mutable_push/pop` crash-safety stack so the EXIT trap can replay a
   restore if the sweep is killed mid-row. ⚠ `_pwt_mutable_pop` must rebuild into a **fresh**
   accumulator — appending to the live stack while iterating doubles its size per pop (O(2ⁿ)
-  churn); that bug was the plan-17 "parent-side hang" (clean tree, child done, CPU spin).
+  churn); that bug was a 2026-09-18 "parent-side hang" (clean tree, child done, CPU spin).
 
 `_pwtest_run_row` (shared by both paths) classifies each row: `caught` (harness rc 1), `hung`
 (watchdog `PWTEST_MUT_TIMEOUT`, default 300 s — file restored, sweep continues), `died` (rc 2 =
@@ -110,7 +110,7 @@ re-pin it against the current code, don't delete the row), `applyfail`. Child lo
 T2 battery later in the same run). Read-only invocations against `$S1..$S3` are fine. If a case
 truly must touch a shared fixture, restore it exactly.
 
-**Provider shims + fixture configs (plan-22 surfaces).** `tests/bin/` carries fake provider
+**Provider shims + fixture configs (added 2026-09-23).** `tests/bin/` carries fake provider
 CLIs (`kilo`, `opencode`, `agent`) that the suite's PATH prepends before the machine's real
 ones: `models` prints a deterministic catalog (including the nested-BYOK shape
 `kilo/alibaba-token-plan/<m>` — and `kilo models <slash-path>` errors, pinning the

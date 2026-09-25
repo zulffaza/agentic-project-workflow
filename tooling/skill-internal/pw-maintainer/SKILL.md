@@ -37,9 +37,12 @@ that matches your task.
   Two specifics bite hardest — full treatment in
   [`references/boundary-and-docs.md`](references/boundary-and-docs.md): **shipped docs are
   self-contained** (no plan-local jargon — rule labels, tier/task refs, `rev x` — in user prose;
-  define a term in place or don't use it), and **the user layer never references `tooling/`**
-  (`docs/`, `template/`, root `README.md`/`AGENTS.md` link only to user docs; `tooling/docs/` may
-  link into `docs/`, never the reverse).
+  define a term in place or don't use it), and **the user layer never references `tooling/`** —
+  strict since the 2026-09-25 sweep, mechanically canaried, with exactly one sanctioned exit:
+  the `docs/TOOLING.md` hub (root `AGENTS.md` is a pure user file — maintainers onboard via
+  `tooling/AGENTS.md` directly). User-relevant mechanics
+  that can't live in a user doc alone get a **registered twin** pair (D5, duplication registry in
+  `conventions.md`).
 
 ## Which reference do I load?
 

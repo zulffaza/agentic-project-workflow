@@ -33,8 +33,8 @@
 - **Author:** <agent/you>
 <!-- Provider: the agent/CLI this ran under (kilo / claude / cursor / …).
      Model: provider:model actually run; if drafted by a spawned `pw-analyst`, copy its
-     `Model used:` footer — unset row ⇒ provider default; this is what the §8.5 ledger compares
-     to. -->
+     `Model used:` footer — unset row ⇒ provider default; this is what the per-spawn ledger
+     (docs/EXECUTION.md) compares to. -->
 - **Provider:** <provider id>
 - **Model:** <provider:model>
 - **Date:** <YYYY-MM-DD HH:MM>  <!-- timestamp ONLY — never a changelog; a round's summary is a

@@ -29,8 +29,8 @@ nothing else notices.
 
 `/pw-rfc` always writes/updates `<project>/rfc/RFC.md` locally — the **Generate** step, and it
 needs **no external tool at all**. **Publish** — pushing those sections to a real doc platform
-(Lark today; Confluence/Google Docs/Notion documented but not yet implemented, see
-[`tooling/docs/rfc-backends.md`](../tooling/docs/rfc-backends.md)) — is a separate, optional step layered on
+(Lark today; Confluence/Google Docs/Notion documented but not yet implemented — backend registry in
+[TOOLING.md](./TOOLING.md)) — is a separate, optional step layered on
 top, controlled by `PW_RFC_BACKEND` in `pw.config.sh`. Leave it unset (or `"markdown"`) and you get
 a maintained local RFC doc with zero external dependency — that's the bundle-wide default, so a
 fresh clone (including an AI agent onboarding itself) can run `/pw-rfc` immediately.
@@ -188,9 +188,7 @@ Caught from a real published doc: a blank metadata table, instructional placehol
 sitting beside real content, rejected alternatives crammed into the wrong subsection, and a
 Dependencies write that landed under an unrelated approach's subsection instead of its own
 top-level heading. None of these are cosmetic taste — a doc with them looks abandoned mid-draft to
-anyone outside the pipeline who opens it. `/pw-rfc` now follows a fixed set of rules for this (see
-`tooling/docs/rfc.md` for the agent-facing version, `rfc-backends.md`'s `lark` row for the concrete
-backend fix):
+anyone outside the pipeline who opens it. `/pw-rfc` follows a fixed set of rules for this:
 - Placeholder/instructional text a template ships gets **replaced**, not left beside real content.
 - Content maps to the backend's **real fetched heading**, never a guessed position — this is what
   went wrong with the Dependencies write above.
@@ -206,15 +204,15 @@ backend fix):
 ## Diagrams
 
 Block/Sequence Diagram subsections generate via an isolated, ad-hoc sub-agent call (not a
-persistent agent — this role never recurs across tasks or crosses a provider boundary, see
-`tooling/agents/README.md`'s bar for when a new agent def is warranted). On any rendering failure,
+persistent agent — this role never recurs across tasks or crosses a provider boundary).
+On any rendering failure,
 the section gets a plain-text placeholder instead and the rest of the RFC still publishes — a
 diagram is never a single point of failure for the whole push.
 
 ## Adding a backend
 
 `/pw-rfc` never hardcodes a platform — every backend implements the same 4-operation contract
-(`create_from_template` / `fetch_anchors` / `update_section` / `list_comments`) documented in
-[`tooling/docs/rfc-backends.md`](../tooling/docs/rfc-backends.md). The one non-negotiable rule for any
+(`create_from_template` / `fetch_anchors` / `update_section` / `list_comments`; the backend
+registry lives with the machinery — see [TOOLING.md](./TOOLING.md)). The one non-negotiable rule for any
 backend: `update_section` must be scoped to that section's own anchor, **never** a whole-doc
 overwrite — that's what keeps a reviewer's comment from being silently orphaned.

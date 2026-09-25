@@ -30,7 +30,7 @@
      "Produced by") — route elsewhere only when this task genuinely needs a stronger/cheaper/
      open-weight model, and say why in `Why:`. Aliases (`opus`/`sonnet`/…) track the *latest*
      version — pin the full name when reproducibility matters.
-     Full detail: `{{PW_HOME}}/tooling/docs/providers.md`. -->
+     Full detail: `{{PW_HOME}}/docs/TOOLING.md` (provider registry). -->
 - **Execute with:** <provider:model-or-agent>
 <!-- Effort: reasoning effort. Maps to `--effort` (claude) / `--variant` (kilo) / nearest
      catalog-id variant or `[effort=…]` bracket param (cursor). Omit the bullet for the CLI
@@ -44,8 +44,8 @@
      recorded), different provider → supervised headless with resume-first; `subagent` = force
      in-process (errors on a cross-provider row); `headless` = strict exact-model binding via a
      headless session (resume-first internally). Precedence: this bullet > PLAN `- Routing:` >
-     `PW_ROUTE_DEFAULT` > auto. Ladder + supervision contract:
-     `{{PW_HOME}}/tooling/skill/project-workflow/references/execution-and-routing.md`. -->
+      `PW_ROUTE_DEFAULT` > auto. Ladder + supervision contract:
+      `{{PW_HOME}}/docs/EXECUTION.md` (§ledger & routing ladder). -->
 - **Why:** <one line — why this model/agent/effort fits this task>
 <!-- Story points: manual-effort estimate, 2 SP = 1 person-day. [🤖 set at breakdown] -->
 - **Story points:** <n>

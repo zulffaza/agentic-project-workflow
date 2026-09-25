@@ -10,7 +10,7 @@ the doc owns the full text.
 | Where a file lives on disk | **L-rules** — everything under `scripts/{entities,lib,toolchain}/`, decided by the *toolchain test*: operand = the bundle itself ⇒ `toolchain/` (never in the automation registry); operand = a project ⇒ `entities/`; a pure reusable primitive ⇒ `lib/` |
 | A slash command or operator | **C-rules** — one command per entity, first argument is the operator (C1); new behavior → a new operator, not a new command (C2); command files are mechanical operator→script mappings, output shown verbatim fenced (C3); doctrine-restricted operators get a human-only label + a static test (C4) |
 | An argument that contains spaces | **A-rules** — A1 rest-of-line slot (at most one, always last); A2 flag-segment form for two prose fields; A3 quote-safe handoff (`--stdin` heredoc) |
-| Where knowledge or an issue record lives | **D-rules** — D1 layers (`docs/` user vs `tooling/docs/` maintainer), D2 issue routing, D3 self-contained user layer, D4 "known issue = a maintainer state". See also [boundary-and-docs.md](boundary-and-docs.md) |
+| Where knowledge or an issue record lives | **D-rules** — D1 layers (`docs/` user vs `tooling/docs/` maintainer), D2 issue routing, D3 self-contained user layer (zero `tooling/` refs outside the `docs/TOOLING.md` hub — root `AGENTS.md` included; now T4-grepped), D4 "known issue = a maintainer state", D5 user-relevant mechanics duplicated as *registered* twins (duplication registry lives with the D-rules). See also [boundary-and-docs.md](boundary-and-docs.md) |
 
 **Decision aid:** adding a script → S + L; adding a command or operator → C; adding an argument →
 A; placing a doc or an issue record → D. When in doubt, the **Checklist for adding capability** at

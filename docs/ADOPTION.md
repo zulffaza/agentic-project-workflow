@@ -114,4 +114,4 @@ For continue-dev, the differences vs a fresh project are:
 - **Ship** — each adopted branch is **one shipment**: `/pw-ship` updates its existing MR (no
   duplicate) or opens one. `/pw-sync` and `/pw-ship … comments` work as normal.
 
-Full command detail: [`tooling/commands/pw-adopt.md`](../tooling/commands/pw-adopt.md).
+Full command detail: `/pw-help command pw-adopt`.

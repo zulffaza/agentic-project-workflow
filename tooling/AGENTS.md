@@ -26,6 +26,9 @@ generated: `pw-doctor.sh --fix` regenerates them. Never hand-edit `~/.claude`, `
 or `~/.config/kilo` command/agent/skill surfaces — a regen destroys anything that lived only
 there (this has actually happened; the rule is a canary-tested doctrine). A fix applied to live
 copies must be **moved into the sources before regenerating**, or the regen silently destroys it.
+If you maintain a shipped skill's canonical copy elsewhere (e.g. a personal hub dir), refresh the
+bundle copy under `skill/<name>/SKILL.md` before committing/sharing — the bundle copy is the source
+the installer links (moved here from the human onboarding guide 2026-09-25).
 
 State mutations inside any project go through the entity scripts — `pw-status.sh`
 (`log|status|oneliner|adopted|phase|dashboard-task-status|task-accept`), `pw-review.sh`

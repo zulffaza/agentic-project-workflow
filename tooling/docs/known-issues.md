@@ -20,18 +20,7 @@ stays as short as the backlog is.
 
 ## Open backlog
 
-### Pre-D3 deep links from the user layer into `tooling/docs/` — filed 2026-09-25
-- **Evidence:** `grep -rn 'tooling/docs' docs/ template/` — "full detail" pointers that predate
-  the D3 self-contained-user-layer rule: `docs/EXECUTION.md` (:56, :71, :324 → providers.md),
-  `docs/RFC.md` (:33, :192, :218), `docs/REVIEW.md` (:204 → forges.md), `docs/MEMORY.md` (:69),
-  `docs/WALKTHROUGH.md` (:282), `template/task/_TEMPLATE-task.md` (:33),
-  `template/task/_TEMPLATE-orchestration-plan.md` (:106, :131), `template/rfc/README.md` (:17);
-  related class: `docs/WORKFLOW.md:146`, `docs/ADOPTION.md:117`, `docs/REVIEW.md:189` point into
-  `tooling/commands/`.
-- **Impact:** none functionally — the entries are accurate — but D3 says the user layer is
-  self-contained, and these predate it. The three NEW record links plan 23 introduced
-  (_REVIEW.template.md, REVIEW.md phantom-count note, TROUBLESHOOTING deep-dives) were removed
-  the same day on owner review; this backlog covers only the legacy set.
-- **Fix plan:** none yet — owner decision needed on a blanket tightening (inline the needed
-  detail, or drop the pointers). Until then: add no new ones (D3); a T4 canary can be minted
-  once the legacy set is cleared.
+_Empty._ The boundary-debt entry that lived here (pre-D3 user→`tooling/` deep links, ~48 lines
+across docs/template/ONBOARDING) was swept 2026-09-25 and moved to its mechanism-owning doc as a
+dated record: [`conventions.md`](./conventions.md) §Dated records (boundary). The three T4 greps
+that now guard it are pinned in `tooling/tests/expectations/mutations.tsv`.

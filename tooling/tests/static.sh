@@ -79,26 +79,46 @@ static_t4() {
   # 3) information boundary — only registry names; pw-env.sh remains the allowed human ref
   hits=""
   for n in $PWTEST_AUTOMATION; do
-    for f in "$TOOL/../README.md" "$TOOL/../AGENTS.md" "$TOOL/../CLAUDE.md" "$TOOL/../docs/"*.md; do
+    for f in "$TOOL/../README.md" "$TOOL/../AGENTS.md" "$TOOL/../CLAUDE.md" "$TOOL/../ONBOARDING.md" "$TOOL/../docs/"*.md; do
       [ -f "$f" ] && grep -qF "$n" "$f" && hits="$hits $n@$(basename "$f")"
     done
   done
   [ -z "$hits" ] && pwtest_ok "T4 user docs free of automation-script names" \
     || pwtest_bad "T4 user docs free of automation-script names" "$hits"
+
+  # 3a) the user layer is self-contained (D3, mechanical): no machinery references outside the
+  # docs/TOOLING.md hub. Root AGENTS.md is a pure user file (owner tightening 2026-09-25):
+  # maintainers onboard via tooling/AGENTS.md directly, never a handoff pointer in the user layer.
   hits=""
-  for f in "$TOOL/../docs/"*.md "$TOOL"/commands/*.md "$TOOL"/agents/*.md "$TOOL"/skill/*/*.md "$TOOL"/skill/*/*/*.md; do
-    [ -f "$f" ] && grep -qE '\b[Pp]lan[ .-]?[1-9][0-9]\b' "$f" && hits="$hits $f"
+  for f in "$TOOL/../README.md" "$TOOL/../AGENTS.md" "$TOOL/../CLAUDE.md" "$TOOL/../ONBOARDING.md" \
+           "$TOOL/../docs/"*.md "$TOOL/../template/"*.md "$TOOL/../template/"*/*.md; do
+    [ -f "$f" ] || continue
+    [ "$(basename "$f")" = "TOOLING.md" ] && continue
+    grep -q "tooling/" "$f" && hits="$hits $(basename "$f")"
+  done
+  [ -z "$hits" ] && pwtest_ok "T4 user layer free of machinery refs (TOOLING.md hub exempt)" \
+    || pwtest_bad "T4 user layer free of machinery refs" "$hits"
+
+  # 3b) internal plan numbers / issue-record labels never reach published prose — scope now covers
+  # root *.md, template/, and tooling/docs (tooling/skill-internal is maintainer-facing, unshipped).
+  hits=""
+  for f in "$TOOL/../"*.md "$TOOL/../docs/"*.md "$TOOL/../template/"*.md "$TOOL/../template/"*/*.md \
+           "$TOOL"/commands/*.md "$TOOL"/agents/*.md "$TOOL"/skill/*/*.md "$TOOL"/skill/*/*/*.md \
+           "$TOOL"/docs/*.md "$TOOL"/docs/scripts/*.md; do
+    [ -f "$f" ] && grep -qE '\b[Pp]lans?[ .-]?[1-9][0-9]\b|\bKI-[0-9]\b' "$f" && hits="$hits $f"
   done
   [ -z "$hits" ] && pwtest_ok "T4 no internal plan references in published files" \
     || pwtest_bad "T4 no internal plan references" "$hits"
 
   # 4) doctrine canaries
   # audience split (users: bundle-root AGENTS.md; maintainers: tooling/AGENTS.md + CLAUDE.md) —
-  # the doctrine must live in the maintainer entry point, and the user entry point must point there.
+  # the doctrine must live in the maintainer entry point, and the user entry point must stay
+  # clean of it (owner tightening 2026-09-25: no handoff pointer in the root file; maintainers
+  # onboard via tooling/AGENTS.md directly).
   grep -qF 'single source of truth' "$TOOL/AGENTS.md" \
-    && grep -qF 'tooling/AGENTS.md' "$TOOL/../AGENTS.md" && grep -qF '@AGENTS.md' "$TOOL/CLAUDE.md" \
-    && pwtest_ok "T4 canary: sources-only doctrine in tooling/AGENTS.md + user pointer + tooling CLAUDE import" \
-    || pwtest_bad "T4 canary: sources-only doctrine" "doctrine text missing from tooling/AGENTS.md, or the user entry-point pointer/tooling CLAUDE.md import died (C23: this exact rule dying cost a fixes round)"
+    && ! grep -q "tooling/" "$TOOL/../AGENTS.md" && grep -qF '@AGENTS.md' "$TOOL/CLAUDE.md" \
+    && pwtest_ok "T4 canary: sources-only doctrine in tooling/AGENTS.md + clean user entry + tooling CLAUDE import" \
+    || pwtest_bad "T4 canary: sources-only doctrine" "doctrine text missing from tooling/AGENTS.md, or a machinery ref crept into the user entry point, or tooling CLAUDE.md import died (C23: this exact rule dying cost a fixes round)"
   grep -qE '^- \*\*Status:\*\* context' "$TOOL/../template/PROJECT.template.md" \
     && grep -qE 'context → analysis → breakdown' "$TOOL/../template/PROJECT.template.md" \
     && pwtest_ok "T4 canary: phase machine line + vocabulary in template" \

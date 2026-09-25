@@ -1,4 +1,4 @@
-# mutations.tsv — coupling register (plan 16 §5; extended by plans 17/19): currently C1–C48.
+# mutations.tsv — coupling register (protocol born with the 2026-09-16 harness): currently C1–C48.
 # Reverting a documented fix MUST fail the harness. Keep OLD byte-exact AND unique (apply
 # replaces every occurrence; drift only detects absence — verify grep -cF = 1). A drift-flagged
 # row means the anchor moved with the code: re-pin it, never delete it. Catchers must not depend
@@ -14,7 +14,14 @@
 # scaffold render, retired /pw-review config recipes).
 # C66–C69 minted by the known-issues remediation plan (task-accept PLAN sync, dashboard
 # placeholder fill, best-effort dashboard call, D-rules doc doctrine).
-# Next free: C70 (C70–C72 reserved by draft plan 24 — versioning/changelog).
+# C73–C75 minted by the boundary-jargon sweep (user-layer machinery-refs grep with TOOLING.md-hub +
+# AGENTS.md-handoff exemptions, plan-refs grep widened to root/template/tooling-docs + KI-n,
+# ONBOARDING.md added to the script-name grep scope). C73 RE-PINNED same-day owner tightening:
+# the AGENTS.md handoff exemption was retired (root entry now pure user layer) and C76 minted to
+# pin that a handoff pointer must not return.
+# C76-user-entry-handoff-returns pinned with C73–C75 (audience-split canary flipped to assert a
+# tooling-free user entry point; anchors byte-exact-unique).
+# Next free: C77 (C70–C72 reserved by draft plan 24 — versioning/changelog).
 # Authoring checklist: tooling/docs/testing.md §Writing a mutation row.
 # Columns: id	file	OLD	NEW	tiers	only
 C1-pw-field-packed-cut	pw-common.sh	        q = index(v, "**"); if (q) v = substr(v, 1, q - 1)	        q = 0; if (q) v = substr(v, 1, q - 1)	T1	pw-common
@@ -86,3 +93,7 @@ C66-task-accept-plan-sync-reverted	pw-status.sh	  if [ "$plan_status" != "accept
 C67-dashboard-fill-reverted	pw-mdlib.sh	    if grep -q '^ERR: no row with' "$errfile" 2>/dev/null \	    if false && grep -q '^ERR: no row with' "$errfile" 2>/dev/null \	T1	pw-status
 C68-dashboard-call-fatal	pw-status.sh	      echo "pw-status: warning: dashboard row for $task not updated (no row and no fillable placeholder) — task file + PLAN are the gate truth" >&2	      die "dashboard row for $task not updated"	T1	pw-status
 C69-d-rules-retired	docs/conventions.md	## D-rules — doc layers & issue routing	## Doc placement notes	T4	-
+C73-user-layer-tooling-ref	../docs/EXECUTION.md	table: [TOOLING.md](./TOOLING.md)). The `AI Models` lane set is	table: [`tooling/docs/providers.md`](../tooling/docs/providers.md)). The `AI Models` lane set is	T4	-
+C74-jargon-scope-tooling-docs	docs/providers.md	**Cursor CLI, verified end-to-end 2026-09-09** (probes bundled with the Cursor onboarding;	**Cursor CLI, verified end-to-end 2026-09-09** (bundled probes for plan-12;	T4	-
+C75-onboarding-script-name-scope	../ONBOARDING.md	right now (the same check `/pw-doctor` uses) — anything you hand-edited, or a foreign file that	right now (the same check `pw-ship.sh` uses) — anything you hand-edited, or a foreign file that	T4	-
+C76-user-entry-handoff-returns	../AGENTS.md	Human-facing overview: **[README.md](./README.md)**. Restated working rules on demand: the	Maintenance entry: `tooling/AGENTS.md`. Human-facing overview: **[README.md](./README.md)**. Restated working rules on demand: the	T4	-

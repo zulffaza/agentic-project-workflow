@@ -7,7 +7,8 @@
 **Filled by:** [🤖 maintainer] — this documents the mechanism; you never edit this file to
 register a provider or a model. Adding cross-provider execution support for a new Agent Provider
 means defining `<name>_headless()` in `pw.config.sh` — see
-[ONBOARDING.md](../../ONBOARDING.md#register-a-new-provider) — never editing this file.
+[§Registering a new Agent Provider](#registering-a-new-agent-provider-hook-contract) below — never
+editing this file.
 
 > **Not the same registry as [ONBOARDING.md](../../ONBOARDING.md)'s "Register a new provider."**
 > That one is about wiring a new AI-agent CLI into this bundle at all (skills/commands/agents,
@@ -25,7 +26,88 @@ means defining `<name>_headless()` in `pw.config.sh` — see
 > Path vars below (`$PW_HOME`/`$PW_PROJECTS`/`$PW_REPOS`) are exported by `bootstrap.sh`; see the
 > bundle [README](../README.md) legend.
 
-`Execute with:` on a task names a **model** or an **agent**. Each belongs to an **Agent Provider**
+> **This file is machine/account-specific reference, not code** — model IDs and available providers
+> differ per person. Treat the committed version as a sensible starting point; each person tunes
+> their own. It is maintained with the bundle: you never edit it to register a provider (the
+> hook contract below is what you edit — in `pw.config.sh`).
+
+## Registering a new Agent Provider (hook contract)
+
+The full mechanics of wiring a CLI that isn't one of the four built-ins (`claude`, `kilo`,
+`opencode`, `cursor`) into the bundle — previously inline in `ONBOARDING.md`, moved here 2026-09-25
+so the user layer carries only the behavior (ONBOARDING §"Register a new provider" keeps the facts;
+this section owns the contract). **You don't edit any script** — everything goes in
+**`pw.config.sh`** (created on first bootstrap; gitignored, so it stays yours):
+
+1. Add its name to `PW_PROVIDERS=(…)`.
+2. Define its **required** hooks in the same file (the scripts only supply defaults for the
+   built-ins, so yours win — this is also why you should never redefine `claude_*`/`kilo_*`/
+   `opencode_*`/`cursor_*` here: your version would silently replace the working built-in one):
+   - `<name>_bin()` — the command to detect on `PATH`
+   - `<name>_skilldir()` — where it reads skills (these are plain files/dirs, copied or
+     symlinked as-is — no rendering involved)
+   - `<name>_commanddir()` — where its generated slash-commands go
+   - `render_<name>_command()` — **prints one finished command file to stdout.** Before calling
+     it, `gen-commands.sh` sets four plain shell variables it inherits (no arguments are
+     passed): `$desc` (one-line description), `$args` (argument hint, may be empty), `$agent`
+     (optional provider-agent name, may be empty), `$bodytext` (the prompt body, with
+     `{{PW_*}}` tokens already stamped to real paths, and `{{ARGS}}` still literal — map that to
+     your CLI's own argument-placeholder syntax). Your function's only job is to `printf` the
+     complete frontmatter + body to stdout — `gen-commands.sh` redirects that into the real
+     file; the function itself never opens a file, and it never runs or invokes anything.
+     Minimal shape (mirrors `render_claude_command` in `tooling/scripts/lib/pw-common.sh`):
+     ```sh
+     render_myprov_command() {
+       printf -- '---\ndescription: %s\n---\n%s' "$desc" "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
+     }
+     ```
+ 3. *(Optional)* `<name>_agentdir()` + `render_<name>_agent()` to also seed the sub-agents
+    (`pw-orchestrator`, `pw-executor`, `pw-reviewer`) for it. Same idea as `render_<name>_command`,
+    but `gen-agents.sh` sets a different variable set beforehand: `$agentname` (the file's
+    basename), `$desc`, `$displayName`, `$role`, `$claude_tools`, `$model`, `$bodytext` — see
+    `render_claude_agent`/`render_kilo_agent`/`render_cursor_agent` in `tooling/scripts/lib/pw-common.sh`.
+    Providers without these two hooks just skip agent-seeding — the `/pw-*` commands still work.
+ 4. *(Optional)* `<name>_headless()` — makes the provider a cross-provider execution **target**;
+    contract below in §"Adding cross-provider execution for a new Agent Provider". Without it the
+    provider is fully usable same-provider.
+ 5. Re-run `./bootstrap.sh`.
+
+### Worked example: registering Cline
+
+Say you want to add [Cline](https://cline.bot/cli)'s CLI (`npm i -g cline`; binary is just `cline`).
+This is the shape of what goes in `pw.config.sh` — verify the exact frontmatter Cline's workflow
+loader expects before relying on this, it's a starting point, not tested code:
+
+```sh
+PW_PROVIDERS+=(cline)
+
+cline_bin()        { echo cline; }
+cline_skilldir()   { echo "$HOME/.cline/skills"; }             # Cline's global skills dir
+cline_commanddir() { echo "$HOME/Documents/Cline/Workflows"; } # global custom slash-commands ("workflows")
+
+render_cline_command() {
+  # Cline turns a workflow's FILENAME into its slash command (pw-new.md -> /pw-new) and only
+  # reads a `description` frontmatter field — there's no {{ARGS}}-placeholder convention like
+  # Claude's $ARGUMENTS, so the body just states "arguments follow the command" in prose instead
+  # of substituting a token.
+  printf -- '---\ndescription: %s\n---\n%s' "$desc" "${bodytext//\{\{ARGS\}\}/the arguments given}"
+}
+
+# OPTIONAL — only needed for cross-provider execution (an orchestrator on another provider
+# handing a task to Cline headlessly). Skip this and Cline still works fully for same-provider use.
+cline_headless() {
+  cat <<'EOF'
+cline "<prompt>" --yolo --json   (or piped: <prompt> | cline --yolo --json)
+--yolo/--no-interactive auto-approves every action (required headless, same spirit as kilo's
+--auto); --json gives structured output to scrape.
+EOF
+}
+```
+
+No `<name>_agentdir`/`render_<name>_agent` shown here either — skip those and Cline just won't
+get the seeded sub-agents; the `/pw-*` commands still work.
+
+## How headless invocation actually works
 — the CLI that can actually run it. The orchestrator decides, per task: run it in-process (same
 Agent Provider the orchestrator is running under) or **shell out to another Agent Provider's
 CLI**. This is what lets a `/pw-execute` started in Claude Code hand specific tasks to KiloCode
@@ -178,8 +260,8 @@ arguments — filter the output yourself), opencode's via `opencode models
   record what was **requested** on GOTO-team accounts. Blocked/gated ids (`(NO ZDR)` rows;
   `claude-fable-5-*`) fail loud — `ActionRequiredError: Model Blocked`, exit 1, non-JSON — so
   admin-block ≠ silent-fallback; the *silent* case is plan-gated models per Cursor docs, unprobed
-  here (docs-claimed feature, plan-12 §Risk).
-- **`~/.cursor/{skills,commands,agents}` fully self-sufficient (D9 quarantine proof, 2026-09-09):**
+  here (docs-claimed feature — noted as a risk when Cursor was onboarded 2026-09-09).
+- **`~/.cursor/{skills,commands,agents}` fully self-sufficient (cross-provider quarantine proof, 2026-09-09):**
   with `~/.claude/{agents,skills}` moved to quarantine, `/pw-hello` still expanded (from
   `~/.cursor/commands` — the CLI has **no** `.claude/commands` compat read at all, verified by
   bundle grep) and the skills palette still resolved — every surface cursor used came from its own
@@ -254,8 +336,8 @@ any operational gotchas (an auto-approve flag, a stdin-vs-argument quirk, etc.),
 the built-ins above. No edit to this file is required, and none of this even needs to exist if
 you only ever want same-provider execution for that CLI — cross-provider routing is the only
 thing it enables. **This is a separate, optional step from registering the CLI itself** — that's
-[ONBOARDING.md](../../ONBOARDING.md#register-a-new-provider) (needed once, regardless of whether
-you ever add a `_headless()` hook).
+[§Registering a new Agent Provider](#registering-a-new-agent-provider-hook-contract) above (needed
+once, regardless of whether you ever add a `_headless()` hook).
 
 ## Verification notes (historical)
 
@@ -269,7 +351,8 @@ retired 2026-09-25 — settled records live with the mechanism that owns them (D
 
 **Built-in headless hooks** — verified 2026-08-04 against the installed CLIs.
 
-**Cursor CLI, verified end-to-end 2026-09-09** (bundled probes for plan-12; kilo→cursor pairing
+**Cursor CLI, verified end-to-end 2026-09-09** (probes bundled with the Cursor onboarding;
+kilo→cursor pairing
 below): `agent -p --force --trust` writes/loops headlessly; `/pw-*` and `$ARGUMENTS` expand in
 print mode; workspace `.cursor/commands` + `~/.cursor/agents` both load (defs win over same-named
 commands on name-collision, and **workspace def wins over global** — probe-4); `argument-hint`
