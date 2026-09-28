@@ -415,5 +415,5 @@ if [ "$FIX" -eq 1 ]; then
   echo "$issues issue(s) — fixes applied above. Re-run pw-doctor.sh to confirm."
   exit 0
 fi
-echo "$issues issue(s) out of sync. Fix with:  $HERE/pw-doctor.sh --fix   (or ./bootstrap.sh)"
+echo "$issues issue(s) out of sync. Fix with:  /pw-doctor --fix   (or ./bootstrap.sh after a bundle update)"
 exit 1

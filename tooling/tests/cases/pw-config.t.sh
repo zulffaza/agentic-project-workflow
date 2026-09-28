@@ -157,6 +157,18 @@ PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve kilo command_code/MiniMaxAI/MiniM
 PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve opencode testprov/nested/deep-model >/dev/null 2>&1 \
   && pwtest_ok "opencode axis resolves (prefix semantics generic)" \
   || pwtest_bad "opencode axis" "refused an in-catalog id"
+# The cursor axis with the REAL catalog shape ("agent models" lines carry a " - description"
+# tail — the 09-28 corpus case where every cursor pin read false-unbound): the resolver must
+# strip the tail, bind the bare id, and still refuse a true catalog miss.
+PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve cursor cursor-test-high >/dev/null 2>&1 \
+  && pwtest_ok "cursor id resolves despite ' - description' catalog lines" \
+  || pwtest_bad "cursor resolve tail" "refused an in-catalog cursor model"
+mr_cur="$(PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve cursor cursor-test-high 2>/dev/null || true)"
+[ "$mr_cur" = "cursor-test-high" ] && pwtest_ok "canonical cursor id printed bare" \
+  || pwtest_bad "canonical cursor id" "got '$mr_cur'"
+if PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve cursor cursor-test-gone >/dev/null 2>&1; then
+  pwtest_bad "cursor catalog miss exits 1" "resolved a model that is not in the catalog"
+else pwtest_ok "cursor catalog miss still exits 1"; fi
 # claude (no catalog) + unknown provider + CLI-off-PATH all FAIL OPEN as unverified — never a
 # false dead, so a non-zero is always a positive determination safe to hard-stop on.
 "$MR" model-resolve claude anything >/dev/null 2>&1 \

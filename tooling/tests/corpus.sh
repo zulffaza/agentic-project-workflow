@@ -13,7 +13,7 @@
 #
 # NOTHING here writes into the corpus: only read-only scripts run.
 
-PWTEST_CORPUS_RO="pw-status.sh pw-review.sh pw-doc.sh pw-ship.sh"
+PWTEST_CORPUS_RO="pw-status.sh pw-review.sh pw-doc.sh pw-ship.sh pw-project-doctor.sh"
 # per-project read-only invocations (modes with no side effects only):
 pwtest_corpus_rows() {
   printf 'status\tpw-status.sh\t%s --skip-cli-check\n' "$1"
@@ -22,6 +22,7 @@ pwtest_corpus_rows() {
   printf 'lint-plan\tpw-doc.sh\tlint plan %s\n' "$1"
   printf 'lint-dashboard\tpw-doc.sh\tlint dashboard %s\n' "$1"
   printf 'review-scan-plan\tpw-review.sh\tscan %s --phase plan\n' "$1"
+  printf 'doctor\tpw-project-doctor.sh\t%s\n' "$1"
 }
 corpus_t3() {
   echo "== T3 real corpus (read-only) ==" >&2
@@ -58,7 +59,7 @@ corpus_t3() {
         pwtest_ok "T3 $slug/$label clean"
       elif [ "$rc" = 1 ]; then
         if [ -n "$waiver" ]; then printf '  skip  %s %s: waived finding (%s)\n' "$slug" "$label" "${waiver#*	*	}"
-        elif grep -qE '→ fix:|fix:|run |repair|--help|create it with|check the slug' "$ROOT/c.err"; then
+        elif grep -qE '→ fix:|→ decision|fix:|run |repair|--help|create it with|check the slug' "$ROOT/c.both"; then
           pwtest_ok "T3 $slug/$label finding WITH remediation"
         else pwtest_bad "T3 $slug/$label" "rc=1 without a → fix: style remediation: $(head -c140 "$ROOT/c.both"|tr '\n' ' ')"; hits=$((hits+1)); fi
       else

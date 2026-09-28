@@ -156,22 +156,42 @@ The **project side** of `pw-doctor` (behind `pw-doctor.sh --project <slug>`): is
 operated well, and does it still match the *current* global config? A deterministic walk of the
 project's own phases — each check prints `✓` / `✗` / `·` (· = informational, never fails) with a
 `→ fix:` line per `✗`; exit 0 iff no `✗` (CI-usable). Read-only unless `--fix`, and even then only
-repairs with a deterministic writer (config-line ensure) are applied — everything else prints its
-fix command.
+repairs with a deterministic writer are applied (config-line ensure; stamping unexpanded scaffold
+tokens — the same render `scaffold.sh` applies) — everything else prints its fix command. Fix and
+decision hints are phrased for the **user surface**: `/pw-*` commands or the human-owned
+`pw.config.sh`, never raw script paths (a T4 canary greps the hint literals to prove it).
 
 ```bash
 $PW_HOME/tooling/scripts/entities/pw-project-doctor.sh <slug> [--fix]
 ```
 
-Checks (workflow order, stable IDs): C10 doc format (`pw-doc.sh lint all` — reused, never
-re-implemented) · C11 template currency (required dashboard/PLAN lines incl. the explicit
-`AI Review:`; unexpanded scaffold tokens) · C12 RFC ↔ analysis (META well-formed; backend drift vs
-current `PW_RFC_BACKEND` lights up) · C1 PLAN rows (status vocabulary, filled pins, task files) ·
-C3 `depends_on` (resolve + acyclic) · C6 config validity (present/legal/resolvable/in-sync with
-`pw.config.sh` as it is today) · C8 provider/executor audit (`pw-status.sh provider-audit`) ·
-C5 stale in-progress runs (`PW_DOCTOR_STALE_DAYS`, default 7) · C2 worktree/branch pairs ·
-C4 PLAN gate passing right now (`pw-preflight.sh review <slug> plan`) · C7 MR ↔ task agreement
-(merged-but-unaccepted etc.) · C9 verification-kinds (forward reference — always `·`).
+Output is grouped in 8 human-labelled sections (internal IDs stay stable in the script header):
+
+`[1/8] Documentation & template lint` — C10 (`pw-doc.sh lint all`, reused never re-implemented — its
+`add_error` remediation texts print verbatim in owner output, so they follow the same command-only
+hint ban, pinned by the T4 canary) +
+C11 required dashboard/PLAN lines incl. the explicit `AI Review:`, unexpanded scaffold tokens ·
+`[2/8] RFC data (optional until used)` — C12 META well-formed; backend/target vs current
+`PW_RFC_BACKEND`. An NOT-engaged side-loop (no RFC.md, empty Target, nothing pushed, no wave yes)
+surfaces findings as `·` **warnings that never fail** — the flow isn't part of that project. Once
+the project has engaged RFC (any engagement marker set), the same findings are **real ✗**: the RFC
+joined the normal flow and broken publish data must block (owner rulings 09-28 + 09-28 rev d) · `[3/8] Plan` — C1 rows (status vocabulary, filled pins, task files) + C3
+`depends_on` over **every** task-file id (a target without the field is normal shape; non-id
+tokens are annotation, never false edges) + acyclic · `[4/8] Configuration` — C6 present/legal/
+in-sync with `pw.config.sh` as it is today (no cosmetic notes — hygiene prose was dropped 09-28;
+per-task pin enforcement covers LIVE work only — a pin problem on an accepted task counts into a
+`·` history line, rev f ruling) ·
+`[5/8] Provider & model pins` — C8 via `pw-status.sh provider-audit`: ✗ only when a LIVE task's
+pin is **unusable** (unbound/stale-provider) with a finite `/pw-*`-command decision block;
+"ran with a different model than the pin" (mismatch) is history-vs-intent → `·`, never ✗ (owner
+ruling 09-28; users may freely re-pin, the ledger stays the record) · `[6/8] Execution health` —
+C5 stale in-progress runs (`PW_DOCTOR_STALE_DAYS`, default 7) + C2 status-aware worktrees/branches
+(accepted tasks' teardown is the expected post-close shape → `·`, agreed with C7) ·
+`[7/8] Review gates` — C4 PLAN gate passing right now (`pw-preflight.sh review <slug> plan`) ·
+`[8/8] Merge requests ↔ task status` — C7 reads the **dashboard MR table** (project-local, kept
+fresh by `/pw-ship`) against each task's Status: merged-but-unaccepted / accepted-before-merge.
+No live forge call — post-teardown `mr-state` reads `unknown` and only adds noise (owner ruling
+09-28). C9 (typed verify kinds) was dropped from output; it activates with its plan.
 
 Doctrine: every check **delegates** to the owning helper (the reuse map is the point — a check
 must not fork near-copies of gate logic); "can't check" is always `·`, never a false `✗`.

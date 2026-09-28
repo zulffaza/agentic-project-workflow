@@ -28,20 +28,23 @@ moved/renamed bundle, edited command sources, or a stale skill.
 {{PW_HOME}}/tooling/scripts/toolchain/pw-doctor.sh --project <slug> [--fix]
 ```
 (behind it: the deterministic project walk in `tooling/scripts/entities/pw-project-doctor.sh`).
-It checks the project against itself and against the CURRENT global config: doc format (lint),
-template currency (every config line explicit — `off`/`—` are values, absence is a defect), the
-RFC loop still resolvable under the configured backend, PLAN rows/status/pins, `depends_on`
-acyclicity, config validity (routing incl. the strictness enum, limits, produced-by, model rows,
-pins — all checked against `pw.config.sh` as it is today, so a provider dropped mid-project
-lights up), the spawn ledger audit, stale in-progress runs, worktree/branch pairs, gate
-freshness, and MR ↔ task agreement.
+The report is grouped into 8 human-labelled sections — Documentation & template lint, RFC data
+(optional side-loop: findings are `·` warnings while the project hasn't engaged RFC — once a
+target/push/publication exists there, they are real ✗ like any other check), Plan (rows +
+dependencies), Configuration, Provider & model pins (an ✗ means a live task's pin is unusable
+against the current config; "ran with a different model than the pin" is history-vs-intent and
+stays a `·` — re-pinning is the user's free choice), Execution health (stale runs + status-aware
+worktrees/branches: an accepted task's torn-down worktree is expected), Review gates, and
+Merge requests ↔ task status (read from the dashboard MR table the flows maintain — no live
+forge call). Absence of a config line is a defect (`off`/`—` are values); everything is checked
+against `pw.config.sh` as it is today, so a provider dropped mid-project lights up.
 
 Present the ✓/✗/· report as-is (· lines are informational and never fail). Then:
 - On any ✗ without `--fix`: list each one with its `→ fix:` line. Do not repair anything yourself —
   the script is the writer.
 - With `--fix`: only repairs that have a deterministic writer are applied (config lines ensured
-  with explicit defaults); everything else keeps printing its fix command. Report what changed and
-  re-run the check to confirm.
+  with explicit defaults; unexpanded scaffold tokens in task files stamped); everything else keeps
+  printing its fix command. Report what changed and re-run the check to confirm.
 
 Per-project *configuration values* (not this check) live on `/pw-config`.
 

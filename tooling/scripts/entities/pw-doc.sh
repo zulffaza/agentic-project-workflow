@@ -161,7 +161,7 @@ lint_plan() {
     PLAN_TASKS="$(awk '/^## Task( |s)/{p=1; next} p && /^\|.*T[0-9]/{count++} END{print count+0}' "$f")"
     ACTUAL_TASKS="$(find "$D/task" -maxdepth 1 -name 'T*.md' ! -name '_TEMPLATE*' 2>/dev/null | wc -l | pw_trim)"
     if [ "$PLAN_TASKS" != "$ACTUAL_TASKS" ]; then
-      add_error "$f: task count mismatch (PLAN has $PLAN_TASKS, found $ACTUAL_TASKS task files)" "align the task table with task/*.md — add missing rows or delete stale ones (then pw-doc.sh sync <slug> --dashboard-only)"
+      add_error "$f: task count mismatch (PLAN has $PLAN_TASKS, found $ACTUAL_TASKS task files)" "align the task table with task/*.md — add missing rows or delete stale ones (then tell your agent to refresh the dashboard task table from the PLAN)"
     fi
   fi
 }
@@ -200,7 +200,7 @@ lint_dashboard() {
     DASHBOARD_TASKS="$(awk '/^## Task( |s)/{p=1; next} /^## /{p=0} p && /^\|.*T[0-9]/{count++} END{print count+0}' "$f")"
     ACTUAL_TASKS="$(find "$D/task" -maxdepth 1 -name 'T*.md' ! -name '_TEMPLATE*' 2>/dev/null | wc -l | pw_trim)"
     if [ "$DASHBOARD_TASKS" != "$ACTUAL_TASKS" ]; then
-      add_error "$f: task table row count ($DASHBOARD_TASKS) doesn't match task files ($ACTUAL_TASKS)" "run: $HERE/pw-doc.sh sync <slug> --dashboard-only (rebuilds the table from task-file truth)"
+      add_error "$f: task table row count ($DASHBOARD_TASKS) doesn't match task files ($ACTUAL_TASKS)" "tell your agent to rebuild the dashboard task table from the task files (task-file truth is authoritative)"
     fi
   fi
 }

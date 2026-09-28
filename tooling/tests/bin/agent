@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # tests/bin/agent — deterministic fake of the Cursor CLI (`agent models`). One gateway, no
-# API-provider axis: catalog lines are bare ids (verified shape 2026-09-09). `agent ls` is an
-# interactive TUI in the real CLI and is never scripted — the shim refuses it too.
+# API-provider axis. REAL shape (verified 2026-09-28): "agent models" prints "<id> -
+# <description>" per line — pw_api_catalog strips the tail; tests assert the resolver on this
+# shape. `agent ls` is an interactive TUI in the real CLI and is never scripted — refuse it too.
 case "$1" in
   models)
     printf '%s\n' \
-      'cursor-test-high' \
-      'cursor-test-low-fast' ;;
+      'cursor-test-high - Test High' \
+      'cursor-test-low-fast - Test Low Fast' ;;
   ls)
     printf 'agent-shim: `ls` is an interactive TUI — not scriptable (use the filesystem surface)\n' >&2
     exit 1 ;;

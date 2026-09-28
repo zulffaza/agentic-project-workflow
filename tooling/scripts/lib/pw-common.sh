@@ -109,7 +109,11 @@ pw_api_catalog() {  # <agent-provider> -> live catalog lines (provider prefix in
     kilo|opencode|cursor)
       bin="$(pw_api_bin "$prov")"
       command -v "$bin" >/dev/null 2>&1 || return 0
-      "$bin" models 2>/dev/null || true ;;
+      # Cursor's `agent models` prints "<id> - <description>"; kilo/opencode print bare ids.
+      # Normalize centrally: strip the first " - " tail so every exact-line consumer
+      # (model-resolve, provider-audit, the spawn availability gate, doctor allowlist counts)
+      # matches ids, not descriptions (corpus 09-28: every cursor pin read false-unbound).
+      "$bin" models 2>/dev/null | sed 's/ - .*//' || true ;;
   esac
   return 0
 }

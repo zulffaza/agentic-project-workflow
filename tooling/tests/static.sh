@@ -54,7 +54,19 @@ IDIOMS
 
 static_t4() {
   echo "== T4 consistency & boundaries ==" >&2
-  local n hits f
+  local n hits f hintline
+
+  # 0) fix hints are user-command-only (plan 27 F1; rev i widened): hint/decision literals in
+  # entities/pw-project-doctor.sh AND the add_error remediations the doctor embeds verbatim from
+  # entities/pw-doc.sh must name /pw-* commands or the human-owned pw.config.sh —
+  # never raw scripts ($CFG expansions, tool script names). Comments stay exempt (maintainer prose).
+  hintline="$(awk '!/^[[:space:]]*#/' "$TOOL/scripts/entities/pw-project-doctor.sh" \
+    | grep -E 'echo .*(→ (fix|decision)|decision \(|re-pin)' \
+    | grep -E 'pw-[a-z-]*\.sh|\$CFG|\$\{CFG\}|scaffold\.sh' || true)"
+  lintfix="$(awk '!/^[[:space:]]*#/' "$TOOL/scripts/entities/pw-doc.sh" \
+    | grep -E 'add_error' | grep -E 'pw-[a-z-]*\.sh|\$HERE|scaffold\.sh' || true)"
+  if [ -z "$hintline$lintfix" ]; then pwtest_ok "T4 canary: doctor + doc-lint fix hints are script-free"
+  else pwtest_bad "T4 canary: doctor + doc-lint fix hints are script-free" "$(printf '%s\n%s' "$hintline" "$lintfix" | grep . | head -2 | cut -c1-110 | tr '\n' '|')"; fi
 
   # 1) providers in sync (doctor compares generated vs installed; run before any regen)
   # real PATH during the real-install check: the forge shims change `command -v` answers and

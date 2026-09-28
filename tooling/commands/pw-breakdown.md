@@ -81,6 +81,15 @@ Then produce, from `{{PW_HOME}}/template/task/`:
    plan's `Parallelism:`, independent tasks batched together with one shared decisions seed — the
    same batching rule as §4.8 fixes, never one spawn per file; log each spawn + `Session:`), you
    fill/verify the decisions fields below and `PLAN.md` yourself:
+
+   Task files must be **final, never template-shaped** (they are written after scaffold ran, so
+   nothing stamps them):
+   - Replace every literal `PW_HOME`/`PW_PROJECTS`/`PW_REPOS` brace-token copied from the template
+     with its real absolute path before saving (same render scaffold applies to copied files).
+   - Machine fields (`Repo:`, `Base branch:`, `Branch:`, `Worktree:`, `depends_on:`, `Status:`,
+     `Execute with:`) carry a single value only — no prose after it; the reasoning belongs in
+     `Why:` or an HTML comment. `Worktree:` stays project-relative exactly as the template shows
+     (`worktree/<repo>/<T0n>-<slug>/`); absolute paths appear only inside `## Steps` commands.
    with its **`Repo:` + `Base branch:`** set (the base the task forks from — two tasks in the same
    repo may declare different bases, e.g. `master` vs `spring3`), a runnable `## Verify` block, an
    `Execute with: <provider>:<model-or-agent>` + `Why:`, a **`Story points:`** estimate, optional

@@ -21,7 +21,13 @@
 # pin that a handoff pointer must not return.
 # C76-user-entry-handoff-returns pinned with C73–C75 (audience-split canary flipped to assert a
 # tooling-free user entry point; anchors byte-exact-unique).
-# Next free: C77 (C70–C72 reserved by draft plan 24 — versioning/changelog).
+# C82–C84 minted by the doctor output-contract ruling (mismatch-never-fails, RFC gate, MR-table
+# scope); C85 by the accepted-pin-history ruling (rev f); C86 by the catalog description-strip
+# reader (rev h); C87 by the doc-lint remediation scrub widened into the T4 hint canary (rev i).
+# Next free: C88 (C70–C72 stay reserved).
+# C77–C81 minted by the project-doctor live-triage plan (fix-hint command-only scrubber,
+# token-expansion reader, depends_on full-id universe, accepted-teardown status-awareness,
+# backtick-first field reader).
 # Authoring checklist: tooling/docs/testing.md §Writing a mutation row.
 # Columns: id	file	OLD	NEW	tiers	only
 C1-pw-field-packed-cut	pw-common.sh	        q = index(v, "**"); if (q) v = substr(v, 1, q - 1)	        q = 0; if (q) v = substr(v, 1, q - 1)	T1	pw-common
@@ -97,3 +103,14 @@ C73-user-layer-tooling-ref	../docs/EXECUTION.md	table: [TOOLING.md](./TOOLING.md
 C74-jargon-scope-tooling-docs	docs/providers.md	**Cursor CLI, verified end-to-end 2026-09-09** (probes bundled with the Cursor onboarding;	**Cursor CLI, verified end-to-end 2026-09-09** (bundled probes for plan-12;	T4	-
 C75-onboarding-script-name-scope	../ONBOARDING.md	right now (the same check `/pw-doctor` uses) — anything you hand-edited, or a foreign file that	right now (the same check `pw-ship.sh` uses) — anything you hand-edited, or a foreign file that	T4	-
 C76-user-entry-handoff-returns	../AGENTS.md	Human-facing overview: **[README.md](./README.md)**. Restated working rules on demand: the	Maintenance entry: `tooling/AGENTS.md`. Human-facing overview: **[README.md](./README.md)**. Restated working rules on demand: the	T4	-
+C77-doctor-fix-hint-command-only	scripts/entities/pw-project-doctor.sh	      echo "      → fix: /pw-config $SLUG project ensure   (inserts the missing config lines; Status/One-liner are owned by /pw-* flows)"	      echo "      → fix: $CFG project ensure $SLUG   (inserts the missing config lines; Status/One-liner are owned by /pw-* flows)"	T4	-
+C78-doctor-token-expansion	scripts/entities/pw-project-doctor.sh	  s="${s//"{{PW_PROJECTS}}"/$PROJECTS_DIR}"	  s="${s//"{{PW_PROJECTZZ}}"/$PROJECTS_DIR}"	T1	pw-project-doctor
+C79-doctor-depends-on-universe	scripts/entities/pw-project-doctor.sh	  ids="$(cd "$D/task" && ls T*.md | sed 's/\.md$//')"	  ids=""	T1	pw-project-doctor
+C80-doctor-accepted-teardown-aware	scripts/entities/pw-project-doctor.sh	    live=1; case "$st" in accepted) live=0 ;; esac	    live=1; case "$st" in never-matching-status) live=0 ;; esac	T1	pw-project-doctor
+C81-doctor-backtick-first-reader	scripts/entities/pw-project-doctor.sh	    *'`'*) val="${raw#*\`}"; val="${val%%\`*}" ;;	    *'`'*) val="$raw" ;;	T1	pw-project-doctor
+C82-doctor-mismatch-must-not-fail	scripts/entities/pw-project-doctor.sh	            c8drift=$((c8drift+1)) ;;	            c8drift=0 ;;	T1	pw-project-doctor
+C83-doctor-rfc-engaged-must-fail	scripts/entities/pw-project-doctor.sh	    if [ "$rfc_used" = 1 ]; then bad "$@"; else note "$@ (warning only — RFC side-loop not engaged yet)"	    if false; then bad "$@"; else note "$@ (warning only — RFC side-loop not engaged yet)"	T1	pw-project-doctor
+C84-doctor-mr-table-scope	scripts/entities/pw-project-doctor.sh	'/^## Merge requests/{sec=1; next} /^##[ ]/{sec=0} sec && $2 ~	'$2 ~	T1	pw-project-doctor
+C85-doctor-accepted-pin-history	scripts/entities/pw-project-doctor.sh	      if [ "$(pw_field "$f" Status)" = "accepted" ]; then	      if false; then	T1	pw-project-doctor
+C86-doctor-catalog-desc-strip	pw-common.sh	      "$bin" models 2>/dev/null | sed 's/ - .*//' || true ;;	      "$bin" models 2>/dev/null || true ;;	T1	pw-config
+C87-doclint-fix-hint-command-only	pw-doc.sh	"tell your agent to rebuild the dashboard task table from the task files (task-file truth is authoritative)"	"run: pw-doc.sh sync <slug> --dashboard-only (rebuilds the table from task-file truth)"	T4	-
