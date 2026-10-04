@@ -45,12 +45,16 @@ pending. Full operator semantics: `/pw-help command pw-execute`.
 actually used is *recorded*, so a pin silently failing becomes visible drift, not folklore:
 **(1)** run-time override this call → **(2)** the project's `AI Models:` row for that lane →
 **(3)** the registered def's own model (kilo map block/generated md, cursor seeded def's `model:`,
-**claude per-agent only via the def** — see §Providers & the registry) → **(4)** the provider/session
+**claude per-agent only via the def** — see §Providers & the registry; codex has no defs at all,
+so this rung doesn't exist there) → **(4)** the provider/session
 floor (`small_model`/`subagent_model` on kilo; session `/model` on claude; the `auto` router or
-`cli-config.json → selectedModel` on cursor). On kilo — and likewise on cursor, whose named spawns
+`cli-config.json → selectedModel` on cursor; codex's own configured default on codex). On kilo —
+and likewise on cursor, whose named spawns
 carry no per-run model parameter — the in-process spawn can't
 carry a model at all, so a lane row there is served as a **headless session of that model over the
-same work order** (`kilo run --auto -m <api>/<model> … --dir <path>`) — a row that can't bind in an
+same work order** (`kilo run --auto -m <api>/<model> … --dir <path>`); codex goes further — it has
+**no in-process sub-agent spawn at all**, so every lane/bulk run there is a headless `codex exec`
+session over the work order (ledger-recorded like any headless run) — a row that can't bind in an
 in-process spawn says so in the ledger instead of lying (docs: §Spawning phase work below; provider
 table: [TOOLING.md](./TOOLING.md)). The `AI Models` lane set is
 `researcher analyst writer-task reviewer verifier` — no executor row by design. `verify`-lane work is
@@ -67,7 +71,9 @@ in an agent's head:
   name** (`claude-opus-4-8` vs `claude-opus-5`) when reproducibility matters.
 - `Effort:` / `Thinking:` — optional reasoning tuning (→ claude `--effort`, kilo
   `--variant`/`--thinking`; cursor: nearest catalog-id variant (`…-thinking-xhigh`, `…-high-fast`) or
-  a `[effort=…]` bracket param — full mapping in [TOOLING.md](./TOOLING.md)'s provider registry).
+  a `[effort=…]` bracket param; codex: a per-run reasoning-effort setting on the same slug — its
+  "Fast" tier is likewise a per-run setting, never part of an id — full mapping in
+  [TOOLING.md](./TOOLING.md)'s provider registry).
 - `Why:` — one line of rationale.
 - `Story points:` — manual-effort estimate (2 SP = 1 person-day).
 - `Actually used:` — what the orchestrator really ran it with (if it differed).
@@ -85,12 +91,13 @@ forced to switch agents mid-workflow — a task is routed elsewhere only with a 
 | `command_code/MiniMaxAI/MiniMax-M3`, `openrouter/<model>`, `kilo/alibaba-token-plan/<model>`, … | kilo | open-weight/third-party/BYOK models — each needs its own credential; routed via any *additional* KiloCode API Provider you've listed in `PW_KILO_API_PROVIDERS` (a BYOK registered *under* the gateway is addressed by its catalog path, e.g. `kilo/alibaba-token-plan/<model>`; entries are model-id **prefix filters**, so they may contain slashes — but you list the catalog with plain `kilo models`, not `kilo models <that-path>`, which errors) |
 | a same-provider def (`pw-executor`, etc.) | (that provider) | reuse a registered executor natively; across providers a **model + task file** is the portable form (sub-agent names don't cross — `kilo run --agent` takes **primary** defs only and silently continues on the default agent otherwise; claude `--agents '<json>'` injects session defs that carry only a model) |
 | `cursor:cursor-grok-4.5-high`, `cursor:claude-opus-5-thinking-xhigh[context=1m]` | cursor | Cursor's own single model gateway — no API-Provider axis; ids from `agent models`; effort/fast/thinking are **catalog-id variants** (or bracket params), not flags |
+| `codex:<slug>` | codex | Codex's own single gateway (ChatGPT login) — no API-Provider axis; ids are **bare slugs** from `codex debug models` (no effort/fast suffixes — both are per-run settings); hidden-visibility slugs run silently if invoked, so the allowlist is the real gate |
 | a custom role def | (its provider) | a genuinely new recurring role — same cross-provider caveat: a `mode: subagent` def is not addressable from the other CLI |
 
 **How the agent knows what's actually available:** claude's models are the fixed set in the table
-above — nothing to look up. kilo, opencode, and cursor each have a real, changeable catalog,
+above — nothing to look up. kilo, opencode, cursor, and codex each have a real, changeable catalog,
 so `/pw-breakdown` is instructed to **query it live** (`kilo models` /
-`opencode models` / `agent models`) rather than recall an id from memory before writing a task's `Execute with:` —
+`opencode models` / `agent models` / `codex debug models`) rather than recall an id from memory before writing a task's `Execute with:` —
 a plausible-looking id can simply not exist, or a display name can differ from the actual id
 (verified case: KiloCode's own credential list shows "Kilo Gateway," but the usable id is `kilo`,
 not `kilo_gateway`). A row's model is then resolved to its **canonical** catalog id (the exact line
@@ -167,6 +174,13 @@ capability. How a Claude-only session still runs the phases:
   hand a session the task file as its work order (exactly what `/pw-execute <slug> <T0n>`'s
   `provider:model` default already is). The commands' `agent:` frontmatter that starts a *Kilo* session with a
   primary role is **Kilo-only sugar** — on Claude-like providers it does nothing.
+- **Codex twist (Flow B only):** codex has **no sub-agent surface at all** — no defs are seeded and
+  no in-process spawn exists. A codex driver session plays the orchestrator inline (the `/pw-*`
+  command bodies are self-contained lane personas), and every delegated or bulk run is a
+  **supervised headless `codex exec` session over the work order** — the same machinery as a
+  cross-provider handoff, aimed at itself — ledger-recorded like any headless spawn (prompt via
+  stdin; the `thread_id` is the resume handle). There is no Flow C on codex; role defs it can't
+  spawn stay readable-as-file prompt bodies (the spawn-less fallback, as its normal mode).
 
 Same rule as model lanes (above): document per-provider capability where it bites, not in prose
 that implies symmetry.
@@ -174,12 +188,12 @@ that implies symmetry.
 ## Model allowlist (optional — a cost guard, not a routing mechanism)
 
 There's no fixed, pre-approved model list in this bundle — an agent (during `/pw-breakdown`) or
-you can pick any model any configured API Provider serves, for claude, kilo, opencode, or
-cursor alike.
+you can pick any model any configured API Provider serves, for claude, kilo, opencode, cursor, or
+codex alike.
 
 **If you want to rule some OUT** — typically to stop an agent reaching for an unexpectedly
 expensive model — set an allowlist per Agent Provider in `pw.config.sh`
-(`PW_MODEL_ALLOWLIST_CLAUDE` / `_KILO` / `_OPENCODE` / `_CURSOR`), a comma-separated list of glob
+(`PW_MODEL_ALLOWLIST_CLAUDE` / `_KILO` / `_OPENCODE` / `_CURSOR` / `_CODEX`), a comma-separated list of glob
 patterns
 matched against the model id (everything after the `<provider>:` prefix, e.g. `sonnet` or
 `command_code/deepseek/*`).
@@ -209,7 +223,7 @@ These two words are **not** interchangeable — the distinction decides how a ta
 | | **Sub-agent** | **Agent** (primary / invocable) |
 |---|---|---|
 | What | spawned **in-process** by an orchestrator | a top-level agent invoked through a provider's **CLI** |
-| How | Claude's Task tool `subagent_type`; KiloCode `mode: subagent`; Cursor auto-delegation on def `description` (or explicit `/pw-<agent>` — and a **direct** cursor sub-agent can itself fan out one more level, verified 2026-09-09) | that provider's CLI: `kilo run --agent <primary-agent>` / `claude -p` / cursor `agent -p --force --model <id>`+task file (a sub-agent def is NOT nameable from across the boundary; cursor has no CLI primary-agent slot at all) |
+| How | Claude's Task tool `subagent_type`; KiloCode `mode: subagent`; Cursor auto-delegation on def `description` (or explicit `/pw-<agent>` — and a **direct** cursor sub-agent can itself fan out one more level, verified 2026-09-09); **codex: none — no in-process spawn exists** (inline lane personas, or a headless `codex exec` session as the spawn) | that provider's CLI: `kilo run --agent <primary-agent>` / `claude -p` / cursor `agent -p --force --model <id>`+task file / codex `codex exec -m <slug>`+task file via stdin (a sub-agent def is NOT nameable from across the boundary; cursor has no CLI primary-agent slot at all; codex has no agent defs at all) |
 | Boundary | **same provider only** — a provider can spawn only its *own* sub-agents | the **only** unit that crosses a provider boundary |
 | Here | `pw-executor` | `pw-orchestrator` |
 
@@ -251,7 +265,8 @@ execution-and-routing reference, §Seed contracts): a dense executive summary + 
 is fixed at the producer — a cheap researcher pass — never by spawning a floundering analyst),
 pointers-as-menu, never raw dumps/credentials. After a draft, an **exit check**: diff result vs the
 brief's scope list; a gap means a **resume with a seed patch** (`kilo run -s <id>` / claude
-`--resume <id>` / cursor `agent -p --force --resume <session_id>`) — iff the liveness check reports
+`--resume <id>` / cursor `agent -p --force --resume <session_id>` / codex `codex exec resume
+<thread_id>` — cd to the worktree first, resume has no directory flag) — iff the liveness check reports
 that id resumable — not a cold re-spawn. N review items on ONE artifact (human / `pw-reviewer` /
 verifier / `dep-impact` items share that queue) get ONE batched fix pass, per-item replies intact
 — never one spawn per comment; who runs the pass (in-process fixer / supervised headless / the
@@ -280,7 +295,8 @@ carries `· via=subagent|headless · session=<id> · seed=<ref> · out=<artifact
 `## Result → Session:` records its run's id, and the executor writes `session <id>` as the first line
 of `worktree/<T0n>.log` when the provider exposes one — `-` if not). A Row-8 rejection, an MR-comment
 batch, or a late-fix dependent recheck (above) **resumes that id** (`kilo run -s <id>` / cursor
-`agent -p --force --resume <id>`; ids are `ses_…` on kilo, plain UUIDs on cursor) *only when a
+`agent -p --force --resume <id>` / codex `codex exec resume <id>`; ids are `ses_…` on kilo, plain
+UUIDs on cursor and codex — codex's is the `thread_id` from its JSONL event stream) *only when a
 deterministic liveness check says it is still resumable* — the pipeline never blind-resumes an id
 and reads the error to find out it was dead; when the check says dead/unverifiable, it takes the
 ladder's cold path instead (spawn with the task file / recorded seed), because session stores are

@@ -105,17 +105,20 @@ Then produce, from `{{PW_HOME}}/template/task/`:
      justify it in `Why:`. Fold in any custom routing I gave ("run the mechanical bumps in
      KiloCode", "T03 → opus"). Resolve providers via `{{PW_HOME}}/tooling/docs/providers.md`. **Pin the
      Claude version** (full name like `claude-opus-4-8`) on risky tasks; raise `Effort:` for complex ones.
-   - **Picking a kilo, opencode, or cursor model: query the live catalog, never recall/guess an
-     id from memory.** A plausible-looking id can simply not exist, or its display name can differ
-     from the real id.
-     ```bash
-     kilo models                   # full catalog; PW_KILO_API_PROVIDERS entries are model-id
-     opencode models               #   prefix FILTERS over these lines (slashes allowed — a
-     agent models                  #   nested BYOK appears as `kilo/alibaba-token-plan/<m>`),
-                                   #   never as `kilo models <arg>` arguments (that errors).
-                                   #   cursor: one gateway; effort/thinking are catalog-id variants
-                                   #   (e.g. claude-opus-5-thinking-xhigh)
-     ```
+    - **Picking a kilo, opencode, cursor, or codex model: query the live catalog, never recall/guess an
+      id from memory.** A plausible-looking id can simply not exist, or its display name can differ
+      from the real id.
+      ```bash
+      kilo models                   # full catalog; PW_KILO_API_PROVIDERS entries are model-id
+      opencode models               #   prefix FILTERS over these lines (slashes allowed — a
+      agent models                  #   nested BYOK appears as `kilo/alibaba-token-plan/<m>`),
+      codex debug models            #   never as `kilo models <arg>` arguments (that errors).
+                                    #   cursor: one gateway; effort/thinking are catalog-id variants
+                                    #   (e.g. claude-opus-5-thinking-xhigh)
+                                    #   codex: one gateway; ONE-LINE JSON — pw reads the bare
+                                    #   visible slugs; effort + Fast tier are per-run flags on the
+                                    #   same slug, never id segments
+      ```
      Pick the id from that actual output; confirm it resolves (and get its canonical bind id) with
      `pw-config.sh model-resolve <provider> <model-id>` before writing the row. Claude has no live
      catalog — its fixed alias set is

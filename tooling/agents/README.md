@@ -25,6 +25,12 @@ tooling/agents/
   **no** tools/permission keys — spawn access is ambient on Cursor). Its vendor compat read of
   `~/.claude/agents` is out-of-contract bleed (AGENTS golden rule: provider independence) — the
   native dir is always seeded regardless.
+- **codex** → **nowhere — no defs are seeded by design.** Codex has no user-facing agent-def
+  surface (`codex agents` browses sessions, not definitions), so it has no `<name>_agentdir`/
+  `render_<name>_agent` hooks and gen-agents skips it. A codex driver runs Flow B (main session
+  orchestrates; the `/pw-*` command-skill bodies carry the lane personas inline; delegated work
+  is headless `codex exec` over the work order). The canonical defs still serve codex as
+  **readable-as-file prompt bodies** (the spawn-less fallback is its normal mode).
 
 `gen-agents.sh` stamps `{{PW_HOME}}` / `{{PW_PROJECTS}}` / `{{PW_REPOS}}` into the bodies, then each
 provider's `render_<name>_agent` hook wraps the body in that provider's frontmatter (see
@@ -90,8 +96,9 @@ When a task's `Execute with:` names an agent, resolve its provider: an explicit 
 agent's own provider → else (a
 built-in with no def here) the orchestrator's own provider. Then:
 - **Same provider as the orchestrator** → spawn the sub-agent in-process (the normal path).
-- **Different provider** → shell out to that CLI (`kilo run --auto -m <model> …`, `claude -p`, or
-  `agent -p --force --model <id>` for cursor) via its `<name>_headless()` template
+- **Different provider** → shell out to that CLI (`kilo run --auto -m <model> …`, `claude -p`,
+  `agent -p --force --model <id>` for cursor, or `codex exec -m <slug>` for codex — prompt on
+  stdin) via its `<name>_headless()` template
   passing the **task file + skill inline** to its default/primary agent. You **cannot** name the
   other provider's *sub-agent* across the boundary — e.g. a Claude orchestrator delegating to kilo
   does NOT use kilo's `pw-executor`; kilo's default agent runs the task file instead. So each
@@ -101,7 +108,9 @@ Record the concrete `provider:model(+flags)` in the task's `Actually used:` — 
 `LOG.md` line records, the provider's **session id** too (`pw-research` docs in
 `docs/EXECUTION.md` §Spawn ledger): a later fix/resume/re-review pass **resumes the same session**
 (`kilo run --session <ses_…>` / `-c`, `--fork`; claude `--resume`/`/resume`; cursor
-`agent -p --force --resume <session-id>` — plain UUID, not kilo's `ses_…`) instead of cold-spawning
+`agent -p --force --resume <session-id>` — plain UUID, not kilo's `ses_…`; codex
+`codex exec resume <thread_id>` — plain UUID from its `thread.started` JSONL event, cd to the
+worktree first: resume has no directory flag) instead of cold-spawning
 when the id is live, and cold-spawns a plain-model session with the recorded seed only when it's
 dead. The session id is a machine-local pointer — never pushed into MR text or committed artifacts;
 the on-disk PLAN/dashboard/task state stays the durable cross-machine recovery.
@@ -125,6 +134,22 @@ never overrides a task file.
   not attempted) — that fan-out is what makes Flow C (spawn `/pw-orchestrator` for one bounded wave)
   workable on cursor; fast-tier ids are unreliable at it — route orchestrator/executors to capable
   models (same doctrine as kilo's MiniMax-vs-flash-lite line in providers.md).
+
+## Codex-specifics (probed 2026-10-04)
+- No agent defs, no in-process spawn, no Flow C — a codex driver IS the orchestrator (Flow B) and
+  every delegated run is a supervised headless `codex exec` (prompt via stdin; an 18KB trailing
+  arg exits 0 having written nothing — artifact checks prove runs, not exit codes).
+- Its `/pw-*` commands are generated **skill dirs** (`~/.codex/skills/<name>/SKILL.md`,
+  explicit-invocation-only via `agents/openai.yaml` policy) — codex removed custom prompts in
+  0.117.0, so skills are its only slash surface. Skills and commands share one namespace: the
+  `pw-review`/`pw-rfc` bundle skills are skipped there (the command-skills own the names) and
+  their METHOD travels read-as-file in reviewer spawn prompts.
+- Session/ledger: `thread_id` (UUID) from the `--json` `thread.started` event; liveness =
+  `pw-session.sh session-check codex <id>` (rollout file under `~/.codex/sessions/`); resume =
+  `codex exec resume <id>` (cd first — no `-C` on resume).
+- Models: bare visible slugs from `codex debug models`; effort = per-run reasoning-effort
+  override; Fast = per-run `service_tier="priority"` on the SAME slug (requested-only — invalid
+  values are silently ignored, so record what was requested). No `PW_CODEX_API_PROVIDERS` axis.
 
 ## What the *surfaces* actually do (probed 2026-09-04 kilo; `kilo agent list` / `kilo debug agent <name>`
 are the ground truth — reload the client before trusting either)

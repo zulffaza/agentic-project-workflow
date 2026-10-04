@@ -26,7 +26,7 @@ the project without reading the whole base guide. Cover, concisely:
    answer with `↳ you:`; only I write the Sign-off (date-time to the minute) that clears a gate.
 5. **Execution routing** — tasks carry `Execute with: <provider>:<model>` — **always write the
    explicit `<provider>:` prefix** (e.g. `claude:opus`, `kilo:command_code/...`,
-   `cursor:cursor-grok-4.5-high`) — there's no
+   `cursor:cursor-grok-4.5-high`, `codex:gpt-6.1-sol`) — there's no
    static model→provider lookup to infer it from. As a rough mental model: Claude models tend to
    run via Claude Code, open-weight/third-party ones via KiloCode; the exact mechanics are in
    `{{PW_HOME}}/tooling/docs/providers.md`. `/pw-execute` stops at committed + verified, and

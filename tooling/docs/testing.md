@@ -115,8 +115,12 @@ CLIs (`kilo`, `opencode`, `agent`) that the suite's PATH prepends before the mac
 ones: `models` prints a deterministic catalog (including the nested-BYOK shape
 `kilo/alibaba-token-plan/<m>` — and `kilo models <slash-path>` errors, pinning the
 prefix-filter-not-query-arg rule), and `kilo session list --format json -a` prints one live
-`ses_livetest…` id. Claude/cursor liveness is exercised through fake `$HOME` trees
-(`.claude/projects/*/<id>.jsonl`, `.cursor/chats/<hash>/<uuid>/`) — no shim needed. Scope is
+`ses_livetest…` id; `codex` prints the REAL one-line JSON shape of `codex debug models`
+(compact `{"models":[{"slug":…,"visibility":"list"|"hide",…}]}` — the reader's split/filter
+asserts depend on that byte-shape, never a prettified one). Claude/cursor/codex liveness is
+exercised through fake `$HOME` trees
+(`.claude/projects/*/<id>.jsonl`, `.cursor/chats/<hash>/<uuid>/`,
+`.codex/sessions/<Y>/<M>/<D>/rollout-<ts>-<thread-id>.jsonl`) — no shim needed. Scope is
 controlled per-subprocess via `PW_CONFIG_FILE` pointing at `tests/pw.config.test.sh`
 (entries = `kilo/alibaba-token-plan`) or `tests/pw.config.test.noscope.sh` (empty = no
 filtering) — never the maintainer's real `pw.config.sh`, so availability/scope assertions are

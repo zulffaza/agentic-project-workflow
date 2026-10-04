@@ -147,7 +147,8 @@ owning command: `status` (`/pw-status` moves phases), `adopted` (`/pw-adopt`), `
 
 
 These exist for multiple agent tools (Claude Code, kilo, …) but are **not** maintained per tool. The
-provider copies (`~/.claude/commands/`, `~/.config/kilo/command/`, `~/.cursor/commands/`, and the
+provider copies (`~/.claude/commands/`, `~/.config/kilo/command/`, `~/.cursor/commands/`,
+`~/.codex/skills/pw-*/SKILL.md` — codex commands are generated skill dirs — and the
 agents dirs beside them) are **build artifacts — never hand-edit them.** The single canonical source
 lives with the bundle machinery (see [TOOLING.md](./TOOLING.md)); change a prompt there, then run
 **`/pw-doctor --fix`** to resync every provider copy (it regenerates from the canonical source and

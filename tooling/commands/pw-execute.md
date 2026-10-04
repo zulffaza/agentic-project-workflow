@@ -104,7 +104,7 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
    tell me — don't substitute a different model yourself or run
    it anyway. **The task file binds the model:** the resolved `Execute with:` (or the plan's
    Produced-by default) is the *only* model the spawn runs under — pass it explicitly with the
-   provider's bind flag (`kilo run -m`, `claude --model`, cursor `--model`). Never let the
+   provider's bind flag (`kilo run -m`, `claude --model`, cursor `--model`, codex `codex exec -m`). Never let the
    spawner's own session tokens (your harness's `model=`/`variant=` values) ride along — that
    silently rebinds a task away from what breakdown approved.
    - **Same provider you're running under → spawn a native, in-process SUB-AGENT** (NOT a shell      invocation). A task naming a same-provider def (`pw-executor`/custom `tooling/agents/` role)
@@ -127,7 +127,11 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
      `agent -p --force --model <id> --output-format json` (`--force` required; prompt on plain
      stdin — a bare `-` arg is treated as LITERAL prompt text; scrape `.result`; a blocked model
      exits non-zero printing `ActionRequiredError` with NO json event → treat unparsable output as
-     failure). **Pipe the prompt via stdin,
+     failure), or a `codex:<slug>` task to `codex exec
+     --dangerously-bypass-approvals-and-sandbox -m <slug> -C <worktree> --json` (prompt via stdin —
+     NEVER a long trailing arg: an 18KB arg exits 0 having written nothing; capture `thread_id`
+     from the first `thread.started` event; resume = `codex exec resume <thread_id>`, cd to the
+     worktree first — resume has no `-C`). **Pipe the prompt via stdin,
      never as a trailing CLI argument** — a long inline argument can vanish entirely across the
      shell-out boundary (confirmed 2026-08-08, kilo→claude: `claude --print` reported no prompt was
      received even though it was right there in the command; the CLI's own syntax was fine in
@@ -167,7 +171,9 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
         environmental/pre-existing failures follow today's `done`+caveat rule and never loop.
    - **Apply `Effort:`/`Thinking:`** via the provider's flag (claude `--effort`, kilo
      `--variant` + `--thinking`; cursor: choose the catalog id variant up front — effort/thinking
-     live *in* `--model <id>`, or as `[effort=…]` bracket params) per `providers.md`. **Honor version pins** — a full name
+     live *in* `--model <id>`, or as `[effort=…]` bracket params; codex: a per-run
+     reasoning-effort config override on the same slug — its Fast tier is another per-run
+     override, never an id segment) per `providers.md`. **Honor version pins** — a full name
      (`claude-opus-4-8`) is passed verbatim, never swapped for the alias. Record resolved flags in
      `Actually used:` (e.g. `claude:claude-opus-4-8 --effort high`). Don't use a bespoke executor
      agent; the discipline comes from the skill + task file. Unverified flags → check `--help` or

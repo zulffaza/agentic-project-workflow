@@ -23,6 +23,11 @@ Want to see this in action first, with no setup at all? → [docs/WALKTHROUGH.md
   - **OpenCode** — `opencode`
   - **Cursor CLI** — `agent`  (its own single model gateway — no API-Provider axis; ids
     come from `agent models`)
+  - **Codex CLI (ChatGPT)** — `codex`  (its own single gateway via your ChatGPT login — no
+    API-Provider axis; ids are bare slugs from `codex debug models`). Note: Codex has **no
+    native command surface** (custom prompts were removed upstream) — the `/pw-*` commands
+    install as explicit-invocation skills under `~/.codex/skills/`, and no sub-agents are seeded;
+    a Codex session drives the pipeline itself (Flow B)
   - Something else? You can add it — see [Register a new provider](#register-a-new-provider).
 
 ## Onboard in 3 steps
@@ -153,7 +158,7 @@ including *why* you'd want one: **[docs/MEMORY.md](./docs/MEMORY.md)**.
 
 **Two different meanings of "provider," worth separating up front:**
 - An **Agent Provider** is the AI-agent CLI you actually run — `claude`, `kilo`, `opencode`,
-  `cursor`, or a new one you're wiring up here. This section is about registering one of those.
+  `cursor`, `codex`, or a new one you're wiring up here. This section is about registering one of those.
 - An **API Provider** is a narrower, different thing — which model *backend* a given Agent
   Provider talks to underneath (e.g. KiloCode alone can route to several: its own built-in `kilo`
   gateway, or `command_code`/`openrouter`/…). That's `PW_KILO_API_PROVIDERS` in `pw.config.sh`,
@@ -170,13 +175,13 @@ including *why* you'd want one: **[docs/MEMORY.md](./docs/MEMORY.md)**.
   contract — never build on it, and `/pw-doctor` flags it informationally. A provider's hooks,
   generated files, and runtime behavior must survive another provider's install or removal entirely.
 
-**Is your CLI already `claude`, `kilo`, `opencode`, or `cursor`?** Those four are **built into**
+**Is your CLI already `claude`, `kilo`, `opencode`, `cursor`, or `codex`?** Those five are **built into**
 the bundle — you don't need anything below. Just add the name to `PW_PROVIDERS=(…)`
 in `pw.config.sh` and re-run `./bootstrap.sh`. **Built-in is not the same as enabled** — a
 built-in provider still does nothing until you list it in `PW_PROVIDERS` yourself; skip this
 step and it's simply not wired up, whether or not the CLI is installed on your machine.
 
-Registering a CLI that **isn't** one of those four is still **no script editing** — everything goes
+Registering a CLI that **isn't** one of those five is still **no script editing** — everything goes
 in **`pw.config.sh`** (gitignored, so it stays yours): add its name to `PW_PROVIDERS=(…)`, then
 define its provider hooks there (detect binary, install dirs, renderer functions). The hook
 contract, the built-in reference implementations, and a worked registration example live with the
@@ -193,7 +198,8 @@ gateway uses its catalog path (`kilo:kilo/alibaba-token-plan/<model>`, entry
 `kilo/alibaba-token-plan`) — matching is exact-first, so the prefix-less
 `kilo:alibaba-token-plan/<model>` binds a *direct* provider line when one exists.
 The same prefix-filter axis is generic — `PW_OPENCODE_API_PROVIDERS=(…)` works identically for
-opencode; cursor (one gateway) and claude (fixed aliases) have no API-Provider axis.
+opencode; cursor (one gateway), codex (one gateway — your ChatGPT login), and claude (fixed
+aliases) have no API-Provider axis.
 
 ## Offboarding / uninstalling
 
@@ -205,7 +211,7 @@ commands, and seeded sub-agents per provider.
 ./offboard.sh                    # dry-run (default, always) — reports what WOULD be removed
 ./offboard.sh --yes              # actually remove it
 ./offboard.sh --provider kilo    # scope to one/more providers (comma-separated)
-./offboard.sh --all-known        # also sweep ALL built-ins (claude, kilo, opencode, cursor)
+./offboard.sh --all-known        # also sweep ALL built-ins (claude, kilo, opencode, cursor, codex)
                                  # even if no longer in PW_PROVIDERS —
                                   # catches files orphaned by disabling a provider in pw.config.sh
 ```

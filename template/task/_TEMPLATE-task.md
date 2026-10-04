@@ -23,7 +23,8 @@
 - **Landing unit:** <short-name or none>
 - **Status:** todo | in-progress | verify-failed | done | accepted
 <!-- Execute with: e.g. `claude:sonnet`, `claude:claude-opus-4-8` (pinned),
-     `kilo:command_code/<model>`, `cursor:gpt-5.6-sol-high`; or the same-provider `pw-executor`
+     `kilo:command_code/<model>`, `cursor:gpt-5.6-sol-high`, `codex:<slug>` (bare catalog slug);
+     or the same-provider `pw-executor`
      def. A plain `provider:model` = that provider's default agent on this task file as its work
      order (portable across providers); a named sub-agent only resolves when the orchestrator
      shares its provider. Defaults to the same provider that ran the breakdown (`PLAN.md` →
@@ -33,9 +34,11 @@
      Full detail: `{{PW_HOME}}/docs/TOOLING.md` (provider registry). -->
 - **Execute with:** <provider:model-or-agent>
 <!-- Effort: reasoning effort. Maps to `--effort` (claude) / `--variant` (kilo) / nearest
-     catalog-id variant or `[effort=…]` bracket param (cursor). Omit the bullet for the CLI
-     default. Thinking: kilo `--thinking`; cursor via a `-thinking-` id variant; claude: omit
-     (effort covers reasoning). -->
+     catalog-id variant or `[effort=…]` bracket param (cursor) / a per-run reasoning-effort
+     override on the same slug (codex — its Fast tier is another per-run override, never an id
+     segment). Omit the bullet for the CLI
+     default. Thinking: kilo `--thinking`; cursor via a `-thinking-` id variant; claude + codex:
+     omit (effort covers reasoning). -->
 - **Effort:** <low|medium|high|xhigh|max>
 - **Thinking:** <on|off>
 <!-- Route (optional — omit the bullet for `auto`): how this task's spawn is routed, per the

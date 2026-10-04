@@ -43,8 +43,10 @@ is the one case that *does* stop after just that task.
 
 Every task carries `Execute with: <provider>:<model-or-agent>` + `Why:` + `Story points:`, and
 optional `Effort:` (`low`/`medium`/`high`/`xhigh`/`max` → claude `--effort`, kilo `--variant`,
-cursor nearest id-variant / `[effort=…]` bracket param) + `Thinking:` (kilo `--thinking`; cursor
-via `-thinking-` id segment). `PLAN.md` mirrors it in **Execute with** + **SP** columns.
+cursor nearest id-variant / `[effort=…]` bracket param, codex a per-run reasoning-effort override
+on the same bare slug — its Fast tier is a separate per-run override, never an id segment) +
+`Thinking:` (kilo `--thinking`; cursor via `-thinking-` id segment; codex n/a — effort covers it).
+`PLAN.md` mirrors it in **Execute with** + **SP** columns.
 **Default the provider to the plan's "Produced by"** (the agent that did the breakdown) so a run
 doesn't force an agent switch; route a task to a different provider only with a stated `Why:`.
 **Claude aliases (`opus`/`sonnet`/…) follow the latest version — pin the full name
@@ -64,8 +66,9 @@ prefix-less row binds the direct line when one exists, reaching the gateway line
 announced fallback. List ids with `kilo models` (full catalog; filter locally — see the
 discovery bullet below).
 
-- **Discover real kilo/opencode/cursor model ids by querying the live catalog — never recall/guess one
-  from memory.** There's no fixed roster to read off anymore; a plausible-looking id can simply
+- **Discover real kilo/opencode/cursor/codex model ids by querying the live catalog — never recall/guess one
+  from memory** (`kilo models` / `opencode models` / `agent models` / `codex debug models` —
+  codex prints one-line JSON; pw's reader emits the bare visible slugs). There's no fixed roster to read off anymore; a plausible-looking id can simply
   not exist, or a display name can differ from the real id (verified case: KiloCode's own `auth
   list` shows "Kilo Gateway," but the id it actually resolves under is `kilo`, not `kilo_gateway`
   — `kilo models kilo_gateway` errors). Before writing a task's `Execute with:`:
@@ -83,7 +86,7 @@ discovery bullet below).
   registry and `docs/EXECUTION.md`'s table, so there's nothing to discover there.
 - **Cross-provider execution mechanism** = `agentic-project-workflow/tooling/docs/providers.md`:
   explains how the orchestrator reads a provider's `<name>_headless()` hook (built-in for claude/
-  kilo/opencode/cursor; added or overridden in `pw.config.sh` — never edited in `tooling/` directly) to
+  kilo/opencode/cursor/codex; added or overridden in `pw.config.sh` — never edited in `tooling/` directly) to
   invoke it non-interactively.
 - **Model allowlist — check before you write, and again before you run.** No model is off-limits
   by default; `PW_MODEL_ALLOWLIST_<PROVIDER>` in `pw.config.sh` is empty/unset for every provider
@@ -201,7 +204,8 @@ Values: auto | subagent | headless.
 ```
 
 **Headless supervision (never fire-and-forget):** launch as a tracked background child, prompt on
-stdin, `tee` to `worktree/<T0n>.log`, `--format json` where supported (kilo/cursor); record the
+stdin, `tee` to `worktree/<T0n>.log`, `--format json` where supported (kilo/cursor; codex `--json`
+= JSONL events, first one carries the resumable `thread_id`); record the
 pid + out= in the ledger. Poll at a fixed cadence: process alive, log growing, elapsed vs budgets
 (`PW_HEADLESS_STALL` min without growth, `PW_HEADLESS_TIMEOUT` hard cap — pw.config.sh).
 Terminal classes: `success` = exit 0/final JSON event **and** the git artifacts real (branch +
@@ -250,7 +254,9 @@ claude per-spawn model is direct, kilo's route is a map pin or a headless
 canonical id is what `pw-config.sh model-resolve` prints (the catalog line, e.g.
 `kilo/alibaba-token-plan/<m>`, never the raw row text);
 cursor's is the seeded def's `model:` or the same headless route via `cursor_headless()`
-(`agent -p --force --model <id>` over the work order — `--model` binds per-run, not per-spawn); the
+(`agent -p --force --model <id>` over the work order — `--model` binds per-run, not per-spawn);
+codex has NO in-process spawn at all — every lane/bulk row there is the headless route via
+`codex_headless()` (`codex exec -m <slug>`, prompt on stdin) even from a codex driver; the
 spawn records `Model used:` so the ledger shows *actual*, never folklore; a row that can't fire is
 visible, not assumed. Where the executor would otherwise run "generic with named model", it runs the
 provider's **default agent** (Option A: no generic implementer def ships; `pw-executor` is the one

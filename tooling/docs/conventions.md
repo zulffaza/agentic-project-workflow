@@ -190,6 +190,20 @@ detail — two audiences, one page, neither served.
   and where must I re-sync it?" always has one answer. Before minting a twin, check whether
   `docs/TOOLING.md` (the D3 hub) is the sufficient user-layer answer; twins are for behavior the
   user's workflow *depends on*, not for curiosity.
+- **D6 — a provider with no command surface gets commands as WRAPPED SKILLS, visibly distinct
+  from normal skills.** Codex forced this doctrine (2026-10-04): OpenAI removed custom prompts in
+  codex-cli 0.117.0, making codex the first registered provider with **no native command surface
+  at all** — its only slash mechanism is skills. The bundle answer is the optional
+  `<name>_command_style` hook (`flat` = the historical `<name>.md` layout; `skill` = generated
+  `<name>/SKILL.md` dirs via `render_<name>_command` + an optional `render_<name>_skill_policy`
+  for the harness-side invocation policy — explicit-only, so phase-driver bodies never
+  auto-inject). Two invariants travel with it: **(a)** skills and commands then share ONE
+  namespace, so a bundle skill colliding with a canonical command name is skipped at install and
+  the command-skill owns the name (derived skip list — `pw_skill_skips_for`, never hardcoded),
+  and the skill's method content travels read-as-file in spawn prompts; **(b)** generated
+  command-skills are build artifacts like any other rendered command — doctor/offboard treat the
+  dir as the unit, byte-exact as always. The next command-less provider inherits this pattern
+  instead of re-deriving it.
 
 ## Duplication registry (D5)
 

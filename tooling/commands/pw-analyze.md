@@ -30,7 +30,8 @@ CLI: STOP and ask the user (add `--ignore-errors` only if they choose to continu
 step here gets: (a) a seeded brief (pointer-list, no re-gathering), (b) your **pre-flight** that the
 seed covers its scope, (c) a `LOG.md` spawn line with `· session=<id>` + `seed=` + `out=`, and
 (d) an **exit-check** against the brief — a thin result is fixed by resuming that id with a seed
-patch (kilo `kilo run -s <id>`, claude `--resume`, cursor `agent -p --force --resume <session_id>`),
+patch (kilo `kilo run -s <id>`, claude `--resume`, cursor `agent -p --force --resume <session_id>`,
+codex `codex exec resume <thread_id>` — cd to the worktree first),
 not by a cold respawn. Lane models come from
 the dashboard's `AI Models:` row; the executor lane never does (tasks bind it per unit).
 

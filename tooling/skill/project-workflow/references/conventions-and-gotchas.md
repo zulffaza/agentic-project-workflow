@@ -115,7 +115,10 @@ analysis/plan content to an RFC doc, any configured backend or none; see `toolin
 The command files are **generated build artifacts** — the single source is
 `agentic-project-workflow/tooling/commands/*.md`, emitted per provider by
 `gen-commands.sh` (in `tooling/scripts/toolchain/`; Claude → `~/.claude/commands/`, kilo →
-`~/.config/kilo/command/`, cursor → `~/.cursor/commands/`); the sub-agents (`pw-orchestrator`,
+`~/.config/kilo/command/`, cursor → `~/.cursor/commands/`, codex → `~/.codex/skills/<name>/SKILL.md`
+— codex has NO native command surface (custom prompts removed upstream in codex-cli 0.117.0), so
+its commands are generated explicit-only skill dirs sharing the skills namespace; a bundle skill
+colliding with a command name is skipped at install and the command-skill owns the name); the sub-agents (`pw-orchestrator`,
 `pw-executor`) are seeded the same way from `tooling/agents/` by `gen-agents.sh`. To change a
 command's prompt or an agent, edit the canonical file and re-run the generator — never hand-edit the
 per-provider copies.

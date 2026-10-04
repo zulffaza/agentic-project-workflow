@@ -18,7 +18,7 @@ editing this file.
 > Provider.
 >
 > **Terminology:** an **Agent Provider** is the CLI itself (`claude`, `kilo`, `opencode`,
-> `cursor`, …). An
+> `cursor`, `codex`, …). An
 > **API Provider** is a narrower, different thing: which model *backend* a given Agent Provider
 > talks to underneath (e.g. `command_code`/`openrouter` inside KiloCode). One Agent Provider can
 > have several API Providers; don't conflate the two when reading this file.
@@ -33,8 +33,8 @@ editing this file.
 
 ## Registering a new Agent Provider (hook contract)
 
-The full mechanics of wiring a CLI that isn't one of the four built-ins (`claude`, `kilo`,
-`opencode`, `cursor`) into the bundle — previously inline in `ONBOARDING.md`, moved here 2026-09-25
+The full mechanics of wiring a CLI that isn't one of the five built-ins (`claude`, `kilo`,
+`opencode`, `cursor`, `codex`) into the bundle — previously inline in `ONBOARDING.md`, moved here 2026-09-25
 so the user layer carries only the behavior (ONBOARDING §"Register a new provider" keeps the facts;
 this section owns the contract). **You don't edit any script** — everything goes in
 **`pw.config.sh`** (created on first bootstrap; gitignored, so it stays yours):
@@ -42,7 +42,7 @@ this section owns the contract). **You don't edit any script** — everything go
 1. Add its name to `PW_PROVIDERS=(…)`.
 2. Define its **required** hooks in the same file (the scripts only supply defaults for the
    built-ins, so yours win — this is also why you should never redefine `claude_*`/`kilo_*`/
-   `opencode_*`/`cursor_*` here: your version would silently replace the working built-in one):
+   `opencode_*`/`cursor_*`/`codex_*` here: your version would silently replace the working built-in one):
    - `<name>_bin()` — the command to detect on `PATH`
    - `<name>_skilldir()` — where it reads skills (these are plain files/dirs, copied or
      symlinked as-is — no rendering involved)
@@ -61,16 +61,32 @@ this section owns the contract). **You don't edit any script** — everything go
        printf -- '---\ndescription: %s\n---\n%s' "$desc" "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
      }
      ```
- 3. *(Optional)* `<name>_agentdir()` + `render_<name>_agent()` to also seed the sub-agents
-    (`pw-orchestrator`, `pw-executor`, `pw-reviewer`) for it. Same idea as `render_<name>_command`,
-    but `gen-agents.sh` sets a different variable set beforehand: `$agentname` (the file's
-    basename), `$desc`, `$displayName`, `$role`, `$claude_tools`, `$model`, `$bodytext` — see
-    `render_claude_agent`/`render_kilo_agent`/`render_cursor_agent` in `tooling/scripts/lib/pw-common.sh`.
-    Providers without these two hooks just skip agent-seeding — the `/pw-*` commands still work.
- 4. *(Optional)* `<name>_headless()` — makes the provider a cross-provider execution **target**;
-    contract below in §"Adding cross-provider execution for a new Agent Provider". Without it the
-    provider is fully usable same-provider.
- 5. Re-run `./bootstrap.sh`.
+  3. *(Optional)* `<name>_command_style()` — the command LAYOUT: `flat` (the default; one
+     `<name>.md` file per command in `commanddir`) or `skill` (one `<name>/SKILL.md` skill dir per
+     command). **For CLIs with no native command surface at all** — codex is the first and the
+     reason this hook exists: OpenAI removed custom prompts (`~/.codex/prompts`) in codex-cli
+     0.117.0 ("convert your custom prompts to skills"), so its ONLY slash surface is skills. With
+     `skill` layout, `gen-commands.sh` writes `$outdir/<name>/SKILL.md` (the render hook must emit
+     the skill frontmatter contract — `name:` matching the dir + `description:`), and an optional
+     `render_<name>_skill_policy()` hook writes `agents/openai.yaml` beside it (codex's harness-read
+     policy file; pw uses it for `allow_implicit_invocation: false` so phase-driver bodies are
+     explicit-invocation-only, never auto-injected). **Namespace consequence:** skills and commands
+     share ONE dir on such providers — a bundle skill colliding with a canonical command name is
+     skipped at install and the generated command-skill owns the name (`pw_skill_skips_for`;
+     bootstrap/doctor/offboard all honor the derived skip list — never hardcode the pair).
+  4. *(Optional)* `<name>_agentdir()` + `render_<name>_agent()` to also seed the sub-agents
+     (`pw-orchestrator`, `pw-executor`, `pw-reviewer`) for it. Same idea as `render_<name>_command`,
+     but `gen-agents.sh` sets a different variable set beforehand: `$agentname` (the file's
+     basename), `$desc`, `$displayName`, `$role`, `$claude_tools`, `$model`, `$bodytext` — see
+     `render_claude_agent`/`render_kilo_agent`/`render_cursor_agent` in `tooling/scripts/lib/pw-common.sh`.
+     Providers without these two hooks just skip agent-seeding — the `/pw-*` commands still work
+     (codex ships this way on purpose: it has no user-facing agent-def surface — `codex agents`
+     browses sessions, not definitions — so it drives Flow B: the main session orchestrates and
+     the inline lane personas in the command bodies carry the lanes).
+  5. *(Optional)* `<name>_headless()` — makes the provider a cross-provider execution **target**;
+     contract below in §"Adding cross-provider execution for a new Agent Provider". Without it the
+     provider is fully usable same-provider.
+  6. Re-run `./bootstrap.sh`.
 
 ### Worked example: registering Cline
 
@@ -120,7 +136,7 @@ there won't be one again — see "Choosing a model" below for why); write it exp
 ## How headless invocation actually works
 
 Each Agent Provider has an **optional** `<name>_headless()` hook — built-in for claude/kilo/
-opencode/cursor in `tooling/scripts/lib/pw-common.sh`, overridable (or added fresh, for a provider that isn't
+opencode/cursor/codex in `tooling/scripts/lib/pw-common.sh`, overridable (or added fresh, for a provider that isn't
 built-in) in `pw.config.sh` — that prints the exact non-interactive invocation template plus
 operational gotchas for that CLI. The orchestrator reads **that hook's output**, not a markdown
 table, when routing a task to a *different* provider than its own. A provider without this hook
@@ -128,7 +144,7 @@ is still fully usable same-provider; it just can't be a cross-provider **target*
 treatment as `agentdir`/`render_*_agent` for sub-agent seeding).
 
 **What the built-in hooks currently return** (source of truth is `tooling/scripts/lib/pw-common.sh`'s
-`claude_headless`/`kilo_headless`/`opencode_headless`/`cursor_headless` — the lines below are
+`claude_headless`/`kilo_headless`/`opencode_headless`/`cursor_headless`/`codex_headless` — the lines below are
 illustrative, kept in
 sync by whoever maintains the bundle, not something you edit here to change behavior):
 
@@ -171,18 +187,36 @@ sync by whoever maintains the bundle, not something you edit here to change beha
   ledger/resume handle (`--resume <session_id>` round-trip verified). Blocked or plan-gated model
   ids exit non-zero with `ActionRequiredError` **text, not JSON** — treat unparsable output as an
   error, never blank success. No `PW_CURSOR_API_PROVIDERS` axis: one gateway (`agent models` =
-  the catalog). Like kilo's rule: cross-provider `cursor:*` tasks carry the **task file as work
-  order** on a `--model <id>`; a named sub-agent can't cross the boundary (cursor has no primary
-  CLI slot at all).
+   the catalog). Like kilo's rule: cross-provider `cursor:*` tasks carry the **task file as work
+   order** on a `--model <id>`; a named sub-agent can't cross the boundary (cursor has no primary
+   CLI slot at all).
+- **codex** — `codex exec --dangerously-bypass-approvals-and-sandbox -m <slug> [-c
+  model_reasoning_effort="<low|medium|high|xhigh>"] [-c service_tier="priority"] [-C <path>]
+  [--json] [-o <last-message-file>]`. **Pipe the prompt via stdin** — and this is not just the
+  claude vanish-bug doctrine: an 18 KB trailing argument made a codex run **exit 0 while claiming
+  "no filesystem tool available" and writing nothing** (verified 2026-10-04) — artifact checks, not
+  exit codes, prove the run. The bypass flag is required headless (no TTY for approvals); the
+  tighter `--approve-for-me` (workspace-write + auto-review; conflicts with an explicit `-s`) also
+  completes headless but **blocks network** — only for network-free tasks. Model ids are BARE
+  catalog slugs (`codex debug models`; resolve with `pw-config.sh model-resolve codex <id>`); no
+  `PW_CODEX_API_PROVIDERS` axis (single ChatGPT gateway). **Fast tier** = `-c
+  service_tier="priority"` on the SAME slug (not an id segment) — requested tier is NOT verifiable
+  from output (invalid values are silently ignored), so `Model used:` records the REQUESTED tier.
+  Unknown slugs fail loud (`ERROR` event + exit 1); hidden-visibility slugs (e.g. `gpt-reserve`)
+  run silently — the visible catalog + allowlist are the gate. Ledger id: `--json` first event
+  `{"type":"thread.started","thread_id":"<uuid>"}`; resume with `printf '%s' "$PROMPT" | codex
+  exec resume <thread_id> --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -` —
+  **`resume` has no `-C` flag**: cd to the worktree first (runs in the invocation cwd).
 
 ## Effort / variant / thinking (per-task tuning)
 A task may carry two optional fields alongside `Execute with:` — the orchestrator maps them to the
 right CLI flag by provider:
 
-| Task field | `claude` maps to | `kilo` maps to | `cursor` maps to |
-|------------|------------------|----------------|----------------|
-| `Effort:` (`low`/`medium`/`high`/`xhigh`/`max`) | `--effort <level>` | `--variant <level>` (provider-specific: `high`/`max`/`minimal`/…; nearest match) | nearest `cursor:<id>-<level>[-fast]` catalog id (e.g. `claude-opus-5-thinking-xhigh`); bracket `[effort=…]` params per-run |
-| `Thinking:` (`on`/`off`) | (n/a — omit; effort covers reasoning) | `--thinking` when `on` | encoded in catalog ids (`-thinking-<level>` variants); no standalone flag |
+| Task field | `claude` maps to | `kilo` maps to | `cursor` maps to | `codex` maps to |
+|------------|------------------|----------------|----------------|----------------|
+| `Effort:` (`low`/`medium`/`high`/`xhigh`/`max`) | `--effort <level>` | `--variant <level>` (provider-specific: `high`/`max`/`minimal`/…; nearest match) | nearest `cursor:<id>-<level>[-fast]` catalog id (e.g. `claude-opus-5-thinking-xhigh`); bracket `[effort=…]` params per-run | `-c model_reasoning_effort="<level>"` (headless) or TUI `/model` (in-session); levels are per-model in the catalog (`supported_reasoning_levels`) |
+| `Thinking:` (`on`/`off`) | (n/a — omit; effort covers reasoning) | `--thinking` when `on` | encoded in catalog ids (`-thinking-<level>` variants); no standalone flag | (n/a — effort covers reasoning) |
+| Fast tier (no task field — per-run/PLAN note) | n/a | n/a | `-fast` catalog-id variants | `-c service_tier="priority"` on the same slug (requested-only; unverifiable from output) |
 
 - **Version pinning (Claude):** `opus`/`sonnet`/`haiku`/`fable` resolve to the *latest* of that
   family. To pin, use the full name — `claude:claude-opus-4-8` vs `claude:claude-opus-5`,
@@ -193,7 +227,7 @@ right CLI flag by provider:
 ## Choosing a model — no fixed roster, model-agnostic by default
 
 There's deliberately no fixed "blessed models" list, and no static model→provider catalog either
-— any model any configured API Provider serves is fair game, for kilo, opencode, cursor, or
+— any model any configured API Provider serves is fair game, for kilo, opencode, cursor, codex, or
 claude alike.
 An agent (during `/pw-breakdown`) or you can pick whatever fits the task, but **always write the
 explicit `<provider>:` prefix** — this is exactly why: a static catalog goes stale (a display name
@@ -202,7 +236,7 @@ under the id `kilo`, not `kilo_gateway`), so there's nothing here to infer a pro
 
 **If you don't want that fully open** — e.g. to keep an agent from reaching for an unexpectedly
 expensive model — set an optional **model allowlist** per Agent Provider in `pw.config.sh`
-(`PW_MODEL_ALLOWLIST_CLAUDE` / `_KILO` / `_OPENCODE` / `_CURSOR`, comma-separated glob
+(`PW_MODEL_ALLOWLIST_CLAUDE` / `_KILO` / `_OPENCODE` / `_CURSOR` / `_CODEX`, comma-separated glob
   patterns). **The
 rule: empty/unset = ALL models allowed — the default.** Nothing is restricted unless you set a
 pattern yourself. `/pw-breakdown` checks a task's chosen model against it while filling `Execute
@@ -217,9 +251,11 @@ authenticated API Providers don't cover). It's informational only — never some
 running a provider's CLI by hand, and never blocks `/pw-doctor` itself. (kilo's own catalog is
 browsable directly via `kilo models` (full list; sub-provider paths are NOT valid filter
 arguments — filter the output yourself), opencode's via `opencode models
-[provider-id]`, cursor's via `agent models`, if you want to look yourself — but `/pw-doctor` is the one that actually validates your config.)
+[provider-id]`, cursor's via `agent models`, codex's via `codex debug models` (one-line JSON;
+pw's reader prints the bare visible slugs — hidden-visibility rows still RUN if invoked, so the
+allowlist is the real gate), if you want to look yourself — but `/pw-doctor` is the one that actually validates your config.)
 
-## Verified agent/session facts (probed 2026-09-04 kilo/claude + 2026-09-09 cursor, this machine — re-run before trusting elsewhere)
+## Verified agent/session facts (probed 2026-09-04 kilo/claude + 2026-09-09 cursor + 2026-10-04 codex, this machine — re-run before trusting elsewhere)
 
 - **Registered set = ground truth via `kilo agent list`** (prints `name (mode)` + resolved
   permission JSON); `kilo debug agent <name>` prints the **effective config incl. the model a
@@ -272,6 +308,43 @@ arguments — filter the output yourself), opencode's via `opencode models
   context means the Cursor binary; sub-agent roles are always written `pw-*` or "sub-agent".
   `cursor_bin()` → `agent` — a machine where something shadows that name overrides the hook in
   `pw.config.sh`.
+
+- **`codex exec` (ChatGPT Codex CLI) surfaces — probed live 2026-10-04 on codex-cli 0.160.0**
+  (bundled with ChatGPT.app; `~/.local/bin/codex` symlink; ChatGPT-account auth):
+  - **No command surface at all** — the first such provider in the bundle. Custom prompts
+    (`~/.codex/prompts`) were deprecated, then **removed in 0.117.0** (upstream: "convert your
+    custom prompts to skills"; GitHub #15941/#15939). The ONLY slash surface is **skills**
+    (`~/.codex/skills/<name>/SKILL.md`; "a skill is a reusable slash-command package"). pw
+    therefore generates its 17 `/pw-*` commands AS command-skills (`command_style=skill`) with
+    `agents/openai.yaml → policy.allow_implicit_invocation: false` — explicit-invocation-only,
+    the closest parity to a typed slash command. Verified: a **symlinked** skill dir is followed;
+    explicit invocation ("Use the <name> skill" / `$<name>` / the TUI `/skills` picker) loads the
+    body and the skill's scripts run; an explicit-only skill is **absent from the model's
+    available-skills listing by design** (not injected unless invoked) — invisibility to
+    "list your skills" is the policy working, not a discovery failure.
+  - **Namespace sharing (D13):** commands and skills live in ONE dir → the bundle skills
+    `pw-review`/`pw-rfc` collide with the same-named commands; the generated command-skill owns
+    the name, bootstrap skips the bundle-skill install (derived skip list), and the review/rfc
+    METHOD travels as read-as-file (`$PW_HOME/tooling/skill/pw-review/SKILL.md` paths in spawn
+    prompts) instead of a skill load.
+  - **Skill roots:** codex reads `$CODEX_HOME/skills` natively and ALSO `~/.agents/skills` (vendor
+    root — duplication there is cosmetic bleed, never a pw dependency; quarantine-proven
+    2026-10-04: with `~/.claude` and `~/.cursor` pw surfaces hidden, codex's install and a live
+    headless run were unchanged).
+  - **Sessions/ledger:** `codex exec --json` first event `{"type":"thread.started",
+    "thread_id":"<uuid>"}`; rollout file `~/.codex/sessions/<Y>/<M>/<D>/rollout-<ts>-<uuid>.jsonl`
+    (id embedded in the FILENAME — `pw-session.sh session-check codex <uuid>` globs it);
+    `codex exec resume <uuid>` round-trips context (verified) but has **no `-C` flag** — cd first.
+  - **Model/tier axes:** bare slugs only; effort = `model_reasoning_effort`; Fast = `service_tier
+    = "priority"` (same slug; invalid values SILENTLY ignored — record the requested tier, never
+    a confirmed one). `gpt-reserve`/`codex-auto-review` are hidden-visibility but runnable —
+    catalog reader filters to `visibility:"list"`.
+  - **No sub-agent surface:** `codex agents` browses SESSIONS; there is no user agent-def dir →
+    codex drives Flow B only (main session = orchestrator; bulk waves = headless `codex exec`
+    self-shell-outs, ledger-recorded like any cross-provider run).
+  - **Config hands-off:** `~/.codex/config.toml` is app-managed (ChatGPT desktop writes
+    plugins/notify/desktop keys) — generators NEVER touch it (same rule as `kilo.jsonc` and
+    cursor's `cli-config.json`). Model gating lives in `PW_MODEL_ALLOWLIST_CODEX` only.
 
 ## Cross-provider execution (how the orchestrator routes)
 
@@ -397,3 +470,17 @@ inline argument is a generic risk regardless of which two CLIs are involved. Sep
 `claude --print` **without** `--dangerously-skip-permissions` headless hangs producing zero
 output (a tool-approval prompt has no TTY to answer it) — always include it for a headless
 executor invocation, same spirit as kilo's `--auto`.
+
+**Codex CLI, verified end-to-end 2026-10-04** (probes bundled with the codex onboarding; all runs
+pinned `gpt-6-luna`): `codex exec --dangerously-bypass-approvals-and-sandbox` writes/loops
+headlessly; **stdin is the only safe prompt channel** — an 18 KB trailing argument produced
+exit 0 + "no filesystem tool available" + no artifact (a SHORT argument works; the failure is
+length-dependent, so artifact checks must prove every run). `--approve-for-me` completes headless
+with network blocked and conflicts with an explicit `-s`. `--json` `thread.started` →
+`thread_id`; `codex exec resume <thread_id>` round-trips context (secret-number recall), no `-C`
+on resume. Symlinked explicit-only skill invoked headlessly (exact-token reply); `pw-help`
+command-skill ran its script end-to-end from a fresh session. Bogus model id: stderr warning +
+`ERROR` JSON events + exit 1; hidden slug `gpt-reserve`: runs silently (allowlist is the gate);
+invalid `service_tier`: silently ignored (requested-only honesty). Quarantine proof passed
+(claude+cursor pw surfaces hidden → codex unchanged, restored byte-identical). `pw-doctor` green
+on all four providers post-install; offboard dry-run byte-exact (18 codex artifacts).

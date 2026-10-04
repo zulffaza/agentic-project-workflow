@@ -58,8 +58,8 @@ real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./do
   (`status|oneliner|adopted|adopt|log|phase`). Hand-editing these load-bearing, format-sensitive
   bits is what causes drift and clobbers — always go through the helper.
 - **Never hand-edit generated artifacts.** The per-provider command files (`~/.claude/commands`,
-  `~/.config/kilo/command`, `~/.cursor/commands`) and seeded agents (`~/.claude/agents`,
-  `~/.config/kilo/agent`, `~/.cursor/agents`) are build output. If one drifted, run `/pw-doctor`
+  `~/.config/kilo/command`, `~/.cursor/commands`, `~/.codex/skills/pw-*`) and seeded agents (`~/.claude/agents`,
+  `~/.config/kilo/agent`, `~/.cursor/agents`; codex gets none — no agent surface) are build output. If one drifted, run `/pw-doctor`
   to see it and `/pw-doctor --fix` to resync — the canonical sources live with the bundle's
   machinery, and a regen replaces anything hand-edited in the copies.
 - **Provider independence.** Each Agent Provider's install is self-contained in its **own**

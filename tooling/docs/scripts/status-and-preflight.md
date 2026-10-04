@@ -210,6 +210,8 @@ Exit `0` live / `1` dead-or-absent / `2` unverifiable (the conservative reading 
 "not resumable" → cold/inline path). Per-provider surfaces: kilo `kilo session list --format
 json -a`; claude `~/.claude/projects/<cwd-encoded>/<id>.jsonl` (searched across all project dirs;
 empty file = dead); cursor `~/.cursor/chats/<hash>/<id>/` (the `agent ls` TUI is not scriptable);
+codex `~/.codex/sessions/<Y>/<M>/<D>/rollout-<ts>-<thread-id>.jsonl` (the id is embedded in the
+FILENAME; empty rollout = dead);
 opencode has no verified surface yet → always `2` (implement it HERE when a machine with opencode
 shows up, never in callers). Every lookup is a pure read — no model calls, no CLI resume attempt.
 

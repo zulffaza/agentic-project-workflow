@@ -31,7 +31,7 @@
 <!-- FIELD-BULLET RULE: one field per line, value only — tooling parses these as machine
      fields; anything after the value is parsed as the value. -->
 - **Author:** <agent/you>
-<!-- Provider: the agent/CLI this ran under (kilo / claude / cursor / …).
+<!-- Provider: the agent/CLI this ran under (kilo / claude / cursor / codex / …).
      Model: provider:model actually run; if drafted by a spawned `pw-analyst`, copy its
      `Model used:` footer — unset row ⇒ provider default; this is what the per-spawn ledger
      (docs/EXECUTION.md) compares to. -->

@@ -14,7 +14,7 @@
   <!-- 🤖 set via `/pw-config <slug> ai-model <role> <provider:model>` — one row per spawn
        lane (researcher/analyst/writer-task/reviewer/verifier); `—` = no row = the provider's own
        default (kilo `small_model`/`subagent_model`; claude the session model; cursor the `auto`/
-       `selectedModel` floor). The EXECUTOR is not
+       `selectedModel` floor; codex its own configured default). The EXECUTOR is not
        a row — its pin is the task file's `Execute with:`/the PLAN's produced-by. Where a spawn
        can't bind the row (Kilo's Task-tool has no model arg), the driver runs the row as a headless
        session of that model over the same work order and the result says which actually ran.

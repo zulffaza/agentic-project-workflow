@@ -14,10 +14,15 @@
 # to be confused with an "API Provider" (see the KiloCode section below), which is a different,
 # narrower concept: which model BACKEND a given Agent Provider talks to underneath.
 #
-# Built-in (claude, kilo, opencode, cursor) means the hooks already exist in
+# Built-in (claude, kilo, opencode, cursor, codex) means the hooks already exist in
 # tooling/scripts/lib/pw-common.sh — you
 # never write bin/skilldir/commanddir/render_* functions for these. But "built-in" is NOT the
 # same as "enabled": you still list a provider's name here yourself for it to become active.
+# (codex = ChatGPT's Codex CLI. It has NO native command surface — custom prompts were removed
+# upstream in codex-cli 0.117.0 — so its /pw-* commands install AS SKILLS under ~/.codex/skills,
+# explicit-invocation-only, and the two bundle skills whose names collide with commands
+# (pw-review, pw-rfc) are skipped there by design. No sub-agents are seeded for it either —
+# it drives Flow B. Details: tooling/docs/providers.md.)
 # List ONLY the CLIs you actually use; others are ignored even if installed.
 # Example — someone who only uses KiloCode would set: PW_PROVIDERS=(kilo)
 PW_PROVIDERS=(claude)
@@ -127,10 +132,16 @@ PW_MEMORY_NOTES=""
 #   PW_MODEL_ALLOWLIST_CURSOR=""     # e.g. "claude-opus-5*,gpt-5*" — ids from `agent models`;
 #                                    # prefer suffix-free id forms + '*' — model-check globs treat
 #                                    # a literal '[…]' bracket awkwardly (see selftest asserts)
+#   PW_MODEL_ALLOWLIST_CODEX=""      # e.g. "gpt-6*" — BARE slugs from `codex debug models`
+#                                    # (visible rows only; hidden slugs like gpt-reserve still
+#                                    # RUN if invoked, so the allowlist is the real gate). The
+#                                    # "Fast" tier rides the SAME slug (service_tier flag, not an
+#                                    # id segment) — allowing a slug allows its Fast variant.
 PW_MODEL_ALLOWLIST_CLAUDE=""
 PW_MODEL_ALLOWLIST_KILO=""
 PW_MODEL_ALLOWLIST_OPENCODE=""
 PW_MODEL_ALLOWLIST_CURSOR=""
+PW_MODEL_ALLOWLIST_CODEX=""
 
 # --- AI-assisted review (OPTIONAL — off leaves today's human-only review unchanged) ----------
 # Every scaffolded project gets a per-phase "AI Review" dashboard line (off|advisory|auto for each
@@ -161,7 +172,7 @@ PW_RFC_LARK_SPACE=""
 PW_RFC_NOTES=""
 
 # --- Onboard a brand-new Agent Provider without touching the scripts --------
-# First check: is your CLI already claude, kilo, opencode, or cursor? Those are built into
+# First check: is your CLI already claude, kilo, opencode, cursor, or codex? Those are built into
 # tooling/scripts/lib/pw-common.sh — just add the name to PW_PROVIDERS above, nothing else. Everything
 # below is ONLY for a CLI that ISN'T on that list — don't redefine a built-in provider's hooks
 # here, since a function you define in this file always wins over the built-in default, and a
@@ -183,6 +194,13 @@ PW_RFC_NOTES=""
 #   render_myprov_command() {
 #     printf -- '---\ndescription: %s\n---\n%s' "$desc" "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
 #   }
+#
+# OPTIONAL — for a CLI with NO native command surface (its "slash commands" ARE skills — codex
+# is the built-in precedent): myprov_command_style() { echo skill; } makes gen-commands.sh write
+# <name>/SKILL.md dirs into commanddir instead of flat <name>.md files (render hook must emit the
+# skill frontmatter contract), plus an optional render_myprov_skill_policy() for the harness-side
+# policy file. Colliding bundle skills are skipped automatically (derived list). Full contract:
+# tooling/docs/providers.md §Registering.
 #
 # OPTIONAL — to also seed the sub-agents (pw-orchestrator, pw-executor, pw-reviewer) for it, add:
 #   myprov_agentdir()     { echo "$HOME/.myprov/agents"; }  # where it reads sub-agents
