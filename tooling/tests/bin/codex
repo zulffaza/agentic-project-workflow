@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# tests/bin/codex — deterministic fake of the Codex CLI (`codex debug models`). REAL shape
+# (captured 2026-10-04 from codex-cli 0.160.0): ONE-LINE compact JSON {"models":[…]} — model
+# objects start with {"slug", nest other objects (supported_reasoning_levels), and carry
+# "visibility":"list"|"hide"; pw_api_catalog's codex reader splits on {"slug, keeps only
+# visibility:"list" rows, and prints bare slugs — the asserts depend on THIS shape, never a
+# prettified one (plan-27 rev-h lesson: shims must match the real CLI's output byte-shape).
+case "${1:-}" in
+  debug)
+    [ "${2:-}" = "models" ] || { printf 'codex-shim: unsupported invocation: %s\n' "$*" >&2; exit 1; }
+    printf '%s\n' '{"models":[{"slug":"codex-test-luna","display_name":"Codex Test Luna","description":"Fast and affordable test model.","supported_reasoning_levels":[{"effort":"low","description":"Fast responses"},{"effort":"high","description":"Greater depth"}],"additional_speed_tiers":["fast"],"visibility":"list"},{"slug":"codex-test-reserve","display_name":"Codex Test Reserve","visibility":"hide"},{"slug":"codex-test-astra","display_name":"Codex Test Astra","supported_reasoning_levels":[{"effort":"low","description":"Fast responses"}],"additional_speed_tiers":["fast"],"visibility":"list"}]}' ;;
+  --version)
+    printf 'codex-cli 0.0.0-shim\n' ;;
+  *)
+    printf 'codex-shim: unsupported invocation: %s\n' "$*" >&2; exit 1 ;;
+esac

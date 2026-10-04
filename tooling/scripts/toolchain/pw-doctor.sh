@@ -154,8 +154,9 @@ PY
 
 # Live model catalog for one Agent Provider, one line per model id (provider-prefix included),
 # or nothing on any failure — every call site treats "nothing" as "can't check", never an
-# error. kilo/opencode/cursor have a queryable catalog (`kilo models | opencode models |
-# agent models`); claude alone doesn't (fixed alias set — see docs/EXECUTION.md); callers check
+# error. kilo/opencode/cursor/codex have a queryable catalog (`kilo models | opencode models |
+# agent models | codex debug models` — the codex reader lives in pw_api_catalog and prints bare
+# visible slugs); claude alone doesn't (fixed alias set — see docs/EXECUTION.md); callers check
 # that before ever reaching here. PW_<PROVIDER>_API_PROVIDERS entries are MODEL-ID PREFIX
 # FILTERS (slashes allowed — nested BYOK ids like `kilo/alibaba-token-plan`), never catalog
 # arguments: `kilo models kilo/alibaba-token-plan` errors "Provider not found" (verified
@@ -192,9 +193,16 @@ for p in "${PW_PROVIDERS[@]}"; do
   # caught on a copy-fallback filesystem (a symlink install is trivially "in sync" since diff -rq
   # dereferences it). Loops every tooling/skill/*/ dir — adding a new skill needs no change here.
   skilldir="$("${p}_skilldir")"
+  # Skill-layout providers (codex): bundle skills whose names collide with canonical commands
+  # are NOT installed by design — the generated command-skill owns the name (single namespace).
+  skips="$(pw_skill_skips_for "$p")"
   for skill_src in "$SKILL_DIR"/*/; do
     [ -f "${skill_src}SKILL.md" ] || continue
     skill_src="${skill_src%/}"; skill_name="$(basename "$skill_src")"
+    if [ -n "$skips" ] && printf '%s\n' "$skips" | grep -qx "$skill_name"; then
+      echo "    · skill '$skill_name' not installed by design (name owned by its generated command-skill)"
+      continue
+    fi
     starget="$skilldir/$skill_name"
     if [ ! -e "$starget" ]; then
       echo "    ✗ skill '$skill_name' NOT installed ($starget)"; issues=$((issues+1))
@@ -221,10 +229,18 @@ for p in "${PW_PROVIDERS[@]}"; do
 
   # orphan skills: installed entries named like bundle skills that the bundle no longer ships
   # (the loop above only checks names the bundle DOES ship — dropped/renamed skills linger).
+  # Skill-layout providers: generated command-skills live in the SAME dir under pw-* names —
+  # they are command artifacts, not orphan skills, so canonical command names are excluded here
+  # (the command sync check below owns them).
   sorph=""
+  cmdstyle="$(pw_provider_command_style "$p")"
+  cmdnames=" $(pw_canonical_command_names | tr '\n' ' ') "   # case-matched below (pipefail-proof)
   for inst in "$skilldir"/project-workflow "$skilldir"/pw-*; do
     { [ -e "$inst" ] || [ -L "$inst" ]; } || continue
-    [ -d "$SKILL_DIR/$(basename "$inst")" ] || sorph="$sorph $(basename "$inst")"
+    iname="$(basename "$inst")"
+    [ -d "$SKILL_DIR/$iname" ] && continue
+    case "$cmdstyle:$cmdnames" in skill:*" $iname "*) continue ;; esac   # generated command-skill, not an orphan
+    sorph="$sorph $iname"
   done
   if [ -n "$sorph" ]; then
     echo "    ✗ orphan skill(s) — installed but no longer shipped:$sorph"; issues=$((issues+1))
@@ -233,17 +249,28 @@ for p in "${PW_PROVIDERS[@]}"; do
     echo "    ✓ no orphan skills"
   fi
 
-  # commands: generate to temp, diff against what's installed
+  # commands: generate to temp, diff against what's installed.
+  # Layout-aware: flat = <name>.md files; skill = <name>/ dirs (SKILL.md + agents/openai.yaml)
+  # compared as whole trees, so drift in the policy file counts too.
   odir="$("${p}_commanddir")"
   "$HERE/gen-commands.sh" --outdir "$tmp" "$p" >/dev/null
   drift=0; missing=0
-  for exp in "$tmp/$p"/*.md; do
-    n="$(basename "$exp")"
-    if [ ! -f "$odir/$n" ]; then missing=$((missing+1))
-    elif ! cmp -s "$exp" "$odir/$n"; then drift=$((drift+1)); fi
-  done
+  if [ "$cmdstyle" = "skill" ]; then
+    for exp in "$tmp/$p"/*/; do
+      [ -d "$exp" ] || continue
+      n="$(basename "$exp")"
+      if { [ ! -d "$odir/$n" ] && [ ! -L "$odir/$n" ]; }; then missing=$((missing+1))
+      elif ! diff -rq "${exp%/}" "$odir/$n" >/dev/null 2>&1; then drift=$((drift+1)); fi
+    done
+  else
+    for exp in "$tmp/$p"/*.md; do
+      n="$(basename "$exp")"
+      if [ ! -f "$odir/$n" ]; then missing=$((missing+1))
+      elif ! cmp -s "$exp" "$odir/$n"; then drift=$((drift+1)); fi
+    done
+  fi
   if [ $((drift+missing)) -eq 0 ]; then
-    echo "    ✓ commands in sync ($odir)"
+    echo "    ✓ commands in sync ($odir, $cmdstyle layout)"
   else
     echo "    ✗ commands OUT OF SYNC ($odir): $drift changed, $missing missing"; issues=$((issues+1))
     if [ "$FIX" -eq 1 ]; then
@@ -251,15 +278,29 @@ for p in "${PW_PROVIDERS[@]}"; do
     fi
   fi
 
-  # orphan commands: installed pw-*.md the bundle NO LONGER generates (renamed/dropped commands
+  # orphan commands: installed pw-* the bundle NO LONGER generates (renamed/dropped commands
   # would otherwise linger forever — the sync check only diffs names that still exist).
-  corph=""; for inst in "$odir"/pw-*.md; do
-    [ -e "$inst" ] || continue
-    [ -f "$tmp/$p/$(basename "$inst")" ] || corph="$corph $(basename "$inst")"
-  done
+  corph=""
+  if [ "$cmdstyle" = "skill" ]; then
+    for inst in "$odir"/pw-*/; do
+      [ -d "$inst" ] || continue
+      n="$(basename "$inst")"
+      [ -d "$tmp/$p/$n" ] || corph="$corph $n"
+    done
+  else
+    for inst in "$odir"/pw-*.md; do
+      [ -e "$inst" ] || continue
+      [ -f "$tmp/$p/$(basename "$inst")" ] || corph="$corph $(basename "$inst")"
+    done
+  fi
   if [ -n "$corph" ]; then
     echo "    ✗ orphan command file(s) — installed but no longer generated:$corph"; issues=$((issues+1))
-    if [ "$FIX" -eq 1 ]; then for n in $corph; do rm -f "$odir/$n"; done; echo "      fixed: removed orphan commands"; fi
+    if [ "$FIX" -eq 1 ]; then
+      for n in $corph; do
+        if [ "$cmdstyle" = "skill" ]; then rm -rf "$odir/$n"; else rm -f "$odir/$n"; fi
+      done
+      echo "      fixed: removed orphan commands"
+    fi
   else
     echo "    ✓ no orphan commands"
   fi
@@ -269,9 +310,16 @@ for p in "${PW_PROVIDERS[@]}"; do
   # filled in at all. Check the freshly-generated output (not the installed copy), so this catches
   # a broken render hook even before the drift check above would ever surface it via --fix.
   unsub=0
-  for exp in "$tmp/$p"/*.md; do
-    grep -q '{{ARGS}}' "$exp" 2>/dev/null && unsub=$((unsub+1))
-  done
+  if [ "$cmdstyle" = "skill" ]; then
+    for exp in "$tmp/$p"/*/SKILL.md; do
+      [ -e "$exp" ] || continue
+      grep -q '{{ARGS}}' "$exp" 2>/dev/null && unsub=$((unsub+1))
+    done
+  else
+    for exp in "$tmp/$p"/*.md; do
+      grep -q '{{ARGS}}' "$exp" 2>/dev/null && unsub=$((unsub+1))
+    done
+  fi
   if [ "$unsub" -gt 0 ]; then
     echo "    ✗ {{ARGS}} left unsubstituted in $unsub rendered command file(s) — render_${p}_command never maps it to this CLI's argument placeholder"; issues=$((issues+1))
   fi
@@ -327,7 +375,7 @@ for p in "${PW_PROVIDERS[@]}"; do
   else
     catalog="$(_pw_doctor_model_catalog "$p")"
     if [ -z "$catalog" ]; then
-      echo "    · model allowlist: \"$allow\" — can't check (no models returned by '$bin models')"
+      echo "    · model allowlist: \"$allow\" — can't check (no models returned by '$bin' catalog query)"
     else
       IFS=',' read -ra allow_pats <<< "$allow"
       for allow_pat in "${allow_pats[@]}"; do

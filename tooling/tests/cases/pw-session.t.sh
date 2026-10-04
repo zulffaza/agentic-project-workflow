@@ -24,6 +24,17 @@ pwtest_rc 0 "cursor live chat dir" env HOME="$CU" "$SES" session-check cursor de
 pwtest_rc 1 "cursor absent uuid is dead" env HOME="$CU" "$SES" session-check cursor 11112222-3333-4444-5555-666677778888
 pwtest_rc 2 "cursor with no chats store is unverifiable" env HOME="$ROOT/home-missing" "$SES" session-check cursor deadbeef-0000-1111-2222-333344445555
 
+# --- codex: rollout files ~/.codex/sessions/<Y>/<M>/<D>/rollout-<ts>-<thread-id>.jsonl (the
+# thread_id from `codex exec --json`'s thread.started event is embedded in the FILENAME —
+# probe-verified 2026-10-04 on codex-cli 0.160.0; zero-byte rollout = dead, claude's stance) ---
+CX="$ROOT/home-codex"; mkdir -p "$CX/.codex/sessions/2026/10/04"
+printf '{"type":"event_msg"}\n' > "$CX/.codex/sessions/2026/10/04/rollout-2026-10-04T22-02-07-01a1076f-c2a2-7512-85bb-4edb1bb67e0a.jsonl"
+: > "$CX/.codex/sessions/2026/10/04/rollout-2026-10-04T22-03-00-01a1076f-0000-1111-2222-333344445555.jsonl"
+pwtest_rc 0 "codex live rollout" env HOME="$CX" "$SES" session-check codex 01a1076f-c2a2-7512-85bb-4edb1bb67e0a
+pwtest_rc 1 "codex empty rollout is dead" env HOME="$CX" "$SES" session-check codex 01a1076f-0000-1111-2222-333344445555
+pwtest_rc 1 "codex absent id is dead" env HOME="$CX" "$SES" session-check codex 99999999-0000-0000-0000-000000000000
+pwtest_rc 2 "codex with no sessions store is unverifiable" env HOME="$ROOT/home-missing" "$SES" session-check codex 01a1076f-c2a2-7512-85bb-4edb1bb67e0a
+
 # --- conservative readings: opencode (no verified surface yet) + unknown provider ---
 pwtest_rc 2 "opencode unverifiable (never a false live)" env HOME="$ROOT" "$SES" session-check opencode ses_anything
 grep -qE 'unverifiable|probe' "$PWTEST_ERR" && pwtest_ok "opencode note names the probe path" || pwtest_bad "opencode note" "$(head -c 120 "$PWTEST_ERR")"

@@ -18,6 +18,10 @@
 #              zero-byte file counts as dead)
 #   cursor   — dir ~/.cursor/chats/<workspace-hash>/<chat-uuid>/ (the uuid is the
 #              `--resume` handle; `agent ls` is an interactive TUI, NOT scriptable)
+#   codex    — rollout file ~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<thread-id>.jsonl
+#              (the thread_id from `codex exec --json`'s thread.started event is embedded
+#              in the FILENAME; resume handle = `codex exec resume <thread-id>`).
+#              Probe-verified 2026-10-04 on codex-cli 0.160.0.
 #   opencode — no verified surface yet (CLI absent on the probe machine): always 2
 #              with the probe hint. Verified elsewhere? Implement it HERE, not in
 #              callers — the ladder asks this script, never a CLI, "is it live".
@@ -75,6 +79,22 @@ _sc_cursor() {
   return 1
 }
 
+# _sc_codex <thread-id> — rollout JSONL whose FILENAME embeds the id, under
+# ~/.codex/sessions/<YYYY>/<MM>/<DD>/rollout-<ts>-<thread-id>.jsonl (a zero-byte file counts
+# as dead, same stance as claude's transcript check).
+_sc_codex() {
+  local id="$1" f found=0
+  [ -d "$HOME/.codex/sessions" ] || return 2
+  for f in "$HOME"/.codex/sessions/*/*/*/*"$id"*.jsonl; do
+    [ -e "$f" ] || continue
+    found=1
+    if [ -s "$f" ]; then echo "session-check: codex:$id — live ($f)"; return 0; fi
+  done
+  if [ "$found" = 1 ]; then echo "session-check: codex:$id — dead (rollout present but empty) → fix: take the ladder's cold path (seed-patched re-spawn)" >&2; return 1; fi
+  echo "session-check: codex:$id — dead (no rollout under ~/.codex/sessions) → fix: take the ladder's cold path (seed-patched re-spawn)" >&2
+  return 1
+}
+
 cmd_session_check() {
   [ $# -eq 2 ] || die "usage: session-check <provider> <session-id> | session-check <slug> <task-id>"
   local prov="$1" id="$2" rc=0
@@ -93,6 +113,7 @@ cmd_session_check() {
     kilo)     _sc_kilo "$id"   ;;
     claude)   _sc_claude "$id" ;;
     cursor)   _sc_cursor "$id" ;;
+    codex)    _sc_codex "$id"  ;;
     opencode) echo "session-check: opencode:$id — unverifiable (no checked liveness surface) → fix: probe \`opencode\` on a machine that has it and implement it in pw-session.sh, not in callers; until then treat as not-resumable" >&2; rc=2 ;;
     *)        echo "session-check: $prov:$id — unverifiable (unknown provider '$prov') → fix: run --help for the supported providers" >&2; rc=2 ;;
   esac

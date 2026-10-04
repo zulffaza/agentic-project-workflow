@@ -45,10 +45,14 @@ declare -p PW_FORGE_HOSTS >/dev/null 2>&1 || PW_FORGE_HOSTS=()
 : "${PW_MODEL_ALLOWLIST_KILO:=}"
 : "${PW_MODEL_ALLOWLIST_OPENCODE:=}"
 : "${PW_MODEL_ALLOWLIST_CURSOR:=}"
+: "${PW_MODEL_ALLOWLIST_CODEX:=}"
 
 # Cursor — its own single gateway (api2.cursor.sh); no PW_CURSOR_API_PROVIDERS axis (the
 # API-Provider concept doesn't apply to it). Model ids: `agent models` (200+ entries incl.
 # per-variant ids and [param=…] syntax); `cursor:<id>` is the explicit-prefix form in tasks.
+# Codex — same single-gateway shape (ChatGPT auth); no PW_CODEX_API_PROVIDERS axis. Model ids
+# are BARE SLUGS from `codex debug models` (no effort/variant/fast suffixes — reasoning effort
+# and the Fast service tier are per-run flags, not id segments); `codex:<slug>` in tasks.
 # --- Agent Provider vs API Provider — two different axes, don't conflate them ---------------
 #   Agent Provider = PW_PROVIDERS above: the CLI you actually run (claude, kilo, opencode,
 #                      cursor, …).
@@ -114,6 +118,18 @@ pw_api_catalog() {  # <agent-provider> -> live catalog lines (provider prefix in
       # (model-resolve, provider-audit, the spawn availability gate, doctor allowlist counts)
       # matches ids, not descriptions (corpus 09-28: every cursor pin read false-unbound).
       "$bin" models 2>/dev/null | sed 's/ - .*//' || true ;;
+    codex)
+      bin="$(pw_api_bin "$prov")"
+      command -v "$bin" >/dev/null 2>&1 || return 0
+      # Codex has no `models` subcommand — `codex debug models` prints ONE-LINE JSON
+      # {"models":[{…}]}. Split on model-object boundaries (nested objects never start with
+      # {"slug"), keep only visibility:"list" rows (hidden slugs like gpt-reserve still RUN
+      # silently — verified 2026-10-04 — so the visible catalog + allowlist are the real gate),
+      # print bare slugs. Shape pinned by a real-CLI fixture in the T1 suite.
+      "$bin" debug models 2>/dev/null \
+        | sed 's/{"slug"/\n{"slug"/g' \
+        | grep '"visibility":"list"' \
+        | sed 's/.*"slug":"\([^"]*\)".*/\1/' || true ;;
   esac
   return 0
 }
@@ -289,6 +305,96 @@ success. Model ids from `agent models` (per-variant ids, e.g. claude-opus-5-thin
 params like '[context=1m,effort=high]' also accepted). --workspace targets a tree different from
 the invocation cwd (verified).
 EOF
+}
+
+# --- Codex CLI (ChatGPT) — native surfaces verified against the installed build (codex-cli
+# 0.160.0 via ChatGPT.app, 2026-10-04). FIRST PROVIDER WITH NO NATIVE COMMAND SURFACE: custom
+# prompts (~/.codex/prompts) were removed upstream in 0.117.0 ("convert custom prompts to
+# skills"), so /pw-* commands ship AS SKILL DIRS — command_style=skill makes gen-commands.sh
+# write <name>/SKILL.md (+ agents/openai.yaml policy) into the skills root instead of flat
+# <name>.md files. Skills and commands therefore share ONE namespace on codex: a bundle skill
+# whose name collides with a canonical command is SKIPPED at install (pw_skill_skips_for) —
+# the generated command-skill owns the name. Codex has no user-facing sub-agent surface
+# (`codex agents` browses sessions, not defs) → no agentdir/render_agent hooks: agent seeding
+# is skipped and codex drives Flow B (main session orchestrates; inline lane personas).
+# Hooks/generators NEVER write ~/.codex/config.toml — app-managed user config (the
+# generator-never-writes-user-config rule spans kilo.jsonc, cli-config.json, and config.toml).
+declare -f codex_bin        >/dev/null 2>&1 || codex_bin()        { echo codex; }
+declare -f codex_skilldir   >/dev/null 2>&1 || codex_skilldir()   { echo "$HOME/.codex/skills"; }
+declare -f codex_commanddir >/dev/null 2>&1 || codex_commanddir() { echo "$HOME/.codex/skills"; }  # commands ARE skills on codex
+declare -f codex_command_style >/dev/null 2>&1 || codex_command_style() { echo skill; }
+declare -f render_codex_command >/dev/null 2>&1 || render_codex_command() {
+  # SKILL.md contract (codex's own built-in skill-creator spec, verified 2026-10-04): frontmatter
+  # requires `name` (must equal the skill dir name) + `description`; body loads on invocation.
+  # {{ARGS}} → `<arguments>`: codex skills have NO argument-expansion token — arguments arrive as
+  # the user's invocation text and `<arguments>` is self-describing to the model (canonical bodies
+  # already say "Arguments: … (first token = project slug …)").
+  printf -- '---\nname: %s\ndescription: %s\n---\n%s' "$name" "$desc" "${bodytext//\{\{ARGS\}\}/<arguments>}"
+}
+declare -f render_codex_skill_policy >/dev/null 2>&1 || render_codex_skill_policy() {
+  # agents/openai.yaml — product policy read by the harness, not the model (spec: the built-in
+  # skill-creator's references/openai_yaml.md). Explicit-only invocation: the phase-driver bodies
+  # must never auto-inject into unrelated turns (parity with the typed /pw-* command UX elsewhere).
+  printf 'policy:\n  allow_implicit_invocation: false\n'
+}
+declare -f codex_headless >/dev/null 2>&1 || codex_headless() {
+  cat <<'EOF'
+codex exec --dangerously-bypass-approvals-and-sandbox -m <slug> [-c model_reasoning_effort="<low|medium|high|xhigh>"] [-c service_tier="priority"] [-C <worktree-path>] [--json] [-o <last-message-file>]
+Pipe the prompt via STDIN — printf '%s' "$PROMPT" | codex exec … ; NEVER pass a task-shaped prompt
+as a trailing argument: an 18KB arg degrades the run to exit 0 + "no filesystem tool" + nothing
+written (verified 2026-10-04 — stronger than claude's vanish-bug: it exits SUCCESS having done
+nothing, so artifact checks, not exit codes, prove the run). Short args are fine; stdin is the rule.
+--dangerously-bypass-approvals-and-sandbox is REQUIRED headless (no TTY for approvals). The tighter
+--approve-for-me (workspace-write + auto-review, conflicts with -s) also completes headless but
+BLOCKS NETWORK — use it only for network-free tasks.
+Model ids are BARE catalog slugs (`codex debug models`; resolve with `pw-config.sh model-resolve
+codex <id>`). Fast tier = -c service_tier="priority" on the SAME slug — requested tier is NOT
+verifiable from output (invalid values are silently ignored), so record the REQUESTED tier in
+`Model used:`. Unknown slugs fail loud (ERROR event + exit 1); hidden slugs (gpt-reserve) run
+silently — the allowlist/catalog gate is the real control.
+Session id for the ledger: --json first event {"type":"thread.started","thread_id":"<uuid>"}.
+Resume: cd <worktree> FIRST — `codex exec resume <thread_id>` has NO -C flag and runs in the
+invocation cwd: printf '%s' "$PROMPT" | codex exec resume <thread_id>
+  --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -
+EOF
+}
+
+# command_style <provider> -> "flat" (default: commands are <name>.md files in commanddir) or
+# "skill" (commands are <name>/SKILL.md skill dirs — providers with no native command surface;
+# codex is the first: its custom prompts were removed in codex-cli 0.117.0).
+pw_provider_command_style() {
+  declare -f "${1}_command_style" >/dev/null 2>&1 && { "${1}_command_style"; return 0; }
+  printf 'flat\n'
+}
+
+# Canonical command basenames (no .md) — the names a skill-layout provider's generated
+# command-skills own inside its (shared) skills dir.
+pw_canonical_command_names() {
+  local f
+  for f in "$PW_HOME"/tooling/commands/*.md; do
+    [ -e "$f" ] || continue
+    basename "$f" .md
+  done
+}
+
+# Bundle skill names that must be SKIPPED when installing skills for <provider>: on a
+# skill-layout provider, skills and commands share one namespace, and a bundle skill colliding
+# with a canonical command name (pw-review, pw-rfc today) would collide with its generated
+# command-skill. Derived dynamically — never a hardcoded pair. Flat-layout providers: nothing.
+# Membership is case-glob, NOT `… | grep -q`: under `set -o pipefail` (bootstrap/offboard/
+# doctor all run it) grep -q exits at the first match, SIGPIPEs the writer, and the pipeline's
+# 141 silently swallows the result — the skip list came back EMPTY on the first live run
+# (2026-10-04). Space-padded whole-word case matching is pipefail-proof and bash-3.2-safe.
+pw_skill_skips_for() {
+  [ "$(pw_provider_command_style "$1")" = "skill" ] || return 0
+  local s n cmds
+  cmds=" $(pw_canonical_command_names | tr '\n' ' ') "
+  for s in "$PW_HOME"/tooling/skill/*/; do
+    [ -f "${s}SKILL.md" ] || continue
+    n="$(basename "$s")"
+    case "$cmds" in *" $n "*) printf '%s\n' "$n" ;; esac
+  done
+  return 0
 }
 
 # has_hooks <provider> -> 0 if the four REQUIRED hooks exist (bin/skilldir/commanddir/render_*_command)

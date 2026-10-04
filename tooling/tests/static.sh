@@ -305,6 +305,18 @@ for r in [tool+"/commands", tool+"/agents", tool+"/skill", tool+"/docs", root+"/
 print(" ".join(sorted(hits)))
 PY
 )"
-  [ -z "$xref" ] && pwtest_ok "T4: entity refs use that entity's own operators (L5c)" \
-    || pwtest_bad "T4: entity refs vs operator sets" "misattributed operators: $xref — L5c: the entity owning the artifact owns the operator"
+   [ -z "$xref" ] && pwtest_ok "T4: entity refs use that entity's own operators (L5c)" \
+     || pwtest_bad "T4: entity refs vs operator sets" "misattributed operators: $xref — L5c: the entity owning the artifact owns the operator"
+
+  # (h) codex provider doctrine (plan 28): codex is the FIRST built-in with no native command
+  # surface (custom prompts removed upstream in codex-cli 0.117.0) — its /pw-* commands are
+  # generated SKILL DIRS in the shared skills root. The layout hook, the derived D13 skip
+  # policy, the config.toml hands-off rule, and offboard's built-in list are one contract.
+  grep -qF 'pw_provider_command_style' "$TOOL/scripts/toolchain/gen-commands.sh" \
+    && grep -qF 'codex_command_style' "$TOOL/scripts/lib/pw-common.sh" \
+    && grep -qF 'pw_skill_skips_for' "$TOOL/scripts/lib/pw-common.sh" \
+    && grep -qF 'NEVER write ~/.codex/config.toml' "$TOOL/scripts/lib/pw-common.sh" \
+    && grep -qF 'KNOWN_PROVIDERS=(claude kilo opencode cursor codex)' "$TOOL/../offboard.sh" \
+    && pwtest_ok "T4 canary: codex skill-layout + D13 skips + config.toml hands-off + offboard list" \
+    || pwtest_bad "T4 canary: codex provider doctrine" "a plan-28 anchor died: command_style hook (gen-commands.sh), codex hooks/skips/config.toml comment (pw-common.sh), or codex in offboard.sh KNOWN_PROVIDERS"
 }

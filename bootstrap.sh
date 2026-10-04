@@ -111,8 +111,18 @@ install_skill() {
 for p in "${DETECTED[@]}"; do
   echo "  $p:"
   skdir="$("${p}_skilldir")"
+  # Skill-layout providers (codex): skills and generated command-skills share ONE namespace —
+  # a bundle skill whose name collides with a canonical command is skipped here (the generated
+  # command-skill owns the name; see pw_skill_skips_for / tooling/docs/providers.md).
+  skips=" $(pw_skill_skips_for "$p" | tr '\n' ' ') "   # space-padded for pipefail-proof case matching
   for src in "$SKILL_DIR"/*/; do
     [ -f "${src}SKILL.md" ] || continue   # skip any non-skill subdir
+    sname="$(basename "${src%/}")"
+    case "$skips" in
+      *" $sname "*)
+        echo "    skill: '$sname' skipped for $p — name owned by its generated command-skill (shared namespace)"
+        continue ;;
+    esac
     install_skill "$skdir" "${src%/}"
   done
 done

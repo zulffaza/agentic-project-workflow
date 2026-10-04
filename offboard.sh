@@ -9,7 +9,7 @@
 #   ./offboard.sh --yes                  actually remove it
 #   ./offboard.sh --provider kilo        scope to one/more providers (comma-separated)
 #   ./offboard.sh --all-known            also sweep built-in providers (claude, kilo,
-#                                          opencode, cursor) even
+#                                          opencode, cursor, codex) even
 #                                        if no longer listed in PW_PROVIDERS — catches files
 #                                        orphaned by disabling a provider in pw.config.sh
 #
@@ -29,7 +29,7 @@
 # KNOWN LIMITATION: a fully custom provider whose hooks were later deleted entirely from
 # pw.config.sh can't have its install paths recomputed — there's nothing left to compute them
 # from. Best-effort only; not tracked by a separate install manifest. --all-known covers the
-# four built-ins (claude, kilo, opencode, cursor), which always have hooks available
+# built-ins (claude, kilo, opencode, cursor, codex), which always have hooks available
 # regardless of PW_PROVIDERS.
 # ============================================================================
 set -euo pipefail
@@ -59,10 +59,12 @@ export PW_PROJECTS PW_REPOS
 . "$PW_HOME/tooling/scripts/lib/pw-common.sh"
 
 # --- known built-ins (always have hooks, regardless of PW_PROVIDERS membership) ---
-# (opencode + cursor added 2026-09: this list had drifted since each went live. Sweep
-# --all-known now covers ALL four built-ins; removal stays byte-exact, and each provider's
-# install surface is strictly its own dirs — offboard never touches another provider's.)
-KNOWN_PROVIDERS=(claude kilo opencode cursor)
+# (opencode + cursor added 2026-09: this list had drifted since each went live; codex added
+# 2026-10. Sweep --all-known now covers ALL built-ins; removal stays byte-exact, and each
+# provider's install surface is strictly its own dirs — offboard never touches another
+# provider's. Codex note: its commands live AS SKILL DIRS in the shared skills root — the
+# command removal below is layout-aware and only ever matches generated content byte-exactly.)
+KNOWN_PROVIDERS=(claude kilo opencode cursor codex)
 
 echo "project-workflow offboard"
 echo "  PW_HOME     = $PW_HOME"
@@ -102,9 +104,15 @@ plan_provider() {
 
   # --- skills (every tooling/skill/*/ with a SKILL.md) ---
   local skilldir; skilldir="$("${p}_skilldir")"
+  local skips; skips=" $(pw_skill_skips_for "$p" | tr '\n' ' ') "   # D13 collision skips (case-matched: pipefail-proof)
   for skill_src in "$SKILL_DIR"/*/; do
     [ -f "${skill_src}SKILL.md" ] || continue
     skill_src="${skill_src%/}"; local skill_name; skill_name="$(basename "$skill_src")"
+    case "$skips" in
+      *" $skill_name "*)
+        echo "    skill '$skill_name': not installed by design (name owned by its generated command-skill)"
+        continue ;;
+    esac
     local starget sfile; starget="$skilldir/$skill_name"; sfile="$starget/SKILL.md"
     if [ -L "$starget" ]; then
       local real; real="$(readlink "$starget")"
@@ -130,23 +138,43 @@ plan_provider() {
   done
 
   # --- commands: regenerate to a temp dir, only remove exact matches ---
-  local odir rm_c=0 skip_c=0 absent_c=0
+  # Layout-aware: flat providers = <name>.md files; skill-layout providers (codex) = <name>/
+  # SKILL.md dirs inside the shared skills root — a dir is removed only when the WHOLE tree
+  # matches the fresh generation byte-for-byte (diff -rq), so a foreign/hand-edited skill of the
+  # same name is never touched.
+  local odir rm_c=0 skip_c=0 absent_c=0 style exp n
   odir="$("${p}_commanddir")"
+  style="$(pw_provider_command_style "$p")"
   "$PW_HOME/tooling/scripts/toolchain/gen-commands.sh" --outdir "$tmp/cmd" "$p" >/dev/null 2>&1 || true
   if [ -d "$tmp/cmd/$p" ]; then
-    for exp in "$tmp/cmd/$p"/*.md; do
-      n="$(basename "$exp")"
-      if [ ! -f "$odir/$n" ]; then
-        absent_c=$((absent_c+1))
-      elif cmp -s "$exp" "$odir/$n"; then
-        REMOVE_PATHS+=("$odir/$n"); rm_c=$((rm_c+1))
-      else
-        echo "    command SKIPPED (modified/foreign): $odir/$n"
-        skip_c=$((skip_c+1))
-      fi
-    done
+    if [ "$style" = "skill" ]; then
+      for exp in "$tmp/cmd/$p"/*/; do
+        [ -d "$exp" ] || continue
+        n="$(basename "$exp")"
+        if [ ! -d "$odir/$n" ] && [ ! -L "$odir/$n" ]; then
+          absent_c=$((absent_c+1))
+        elif diff -rq "${exp%/}" "$odir/$n" >/dev/null 2>&1; then
+          REMOVE_PATHS+=("$odir/$n"); rm_c=$((rm_c+1))
+        else
+          echo "    command-skill SKIPPED (modified/foreign): $odir/$n"
+          skip_c=$((skip_c+1))
+        fi
+      done
+    else
+      for exp in "$tmp/cmd/$p"/*.md; do
+        n="$(basename "$exp")"
+        if [ ! -f "$odir/$n" ]; then
+          absent_c=$((absent_c+1))
+        elif cmp -s "$exp" "$odir/$n"; then
+          REMOVE_PATHS+=("$odir/$n"); rm_c=$((rm_c+1))
+        else
+          echo "    command SKIPPED (modified/foreign): $odir/$n"
+          skip_c=$((skip_c+1))
+        fi
+      done
+    fi
   fi
-  echo "    commands: $rm_c to remove, $skip_c skipped (modified/foreign), $absent_c already absent  ($odir)"
+  echo "    commands: $rm_c to remove, $skip_c skipped (modified/foreign), $absent_c already absent  ($odir, $style layout)"
   skipped_count=$((skipped_count+skip_c))
 
   # --- agents (only if this provider has agent-seeding hooks) ---

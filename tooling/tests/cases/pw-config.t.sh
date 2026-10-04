@@ -30,18 +30,23 @@ pl_config_selftest() {
 
 
   # --- model-check: empty/unset allowlist = all models allowed (the default rule) ---
-  local mc
-  mc="$(PW_MODEL_ALLOWLIST_CLAUDE="" "$(pwtest_script pw-config.sh)" model-check claude some-random-model-nobody-configured)" \
+  # HERMETICITY: every invocation pins PW_CONFIG_FILE to the noscope fixture. The entity sources
+  # the machine's real pw.config.sh by default, and an owner allowlist set there (e.g.
+  # PW_MODEL_ALLOWLIST_CODEX, live 2026-10-04) OVERRIDES the env prefix these asserts set —
+  # the suite failed on the maintainer machine the day a real allowlist landed. Env prefixes
+  # only win when the sourced config doesn't assign the same variable.
+  local mc NOSCOPE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh"
+  mc="$(PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CLAUDE="" "$(pwtest_script pw-config.sh)" model-check claude some-random-model-nobody-configured)" \
     || die "selftest FAIL: model-check refused with an empty allowlist (should always pass)"
   echo "$mc" | grep -q "all models allowed" || die "selftest FAIL: model-check's empty-allowlist message didn't state the 'all models allowed' rule"
   # a configured allowlist passes a matching model...
-  PW_MODEL_ALLOWLIST_CLAUDE="sonnet,haiku" "$(pwtest_script pw-config.sh)" model-check claude sonnet >/dev/null \
+  PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CLAUDE="sonnet,haiku" "$(pwtest_script pw-config.sh)" model-check claude sonnet >/dev/null \
     || die "selftest FAIL: model-check refused a model matching its configured allowlist"
   # ...glob patterns match...
-  PW_MODEL_ALLOWLIST_KILO="command_code/deepseek/*" "$(pwtest_script pw-config.sh)" model-check kilo command_code/deepseek/deepseek-v4-flash >/dev/null \
+  PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_KILO="command_code/deepseek/*" "$(pwtest_script pw-config.sh)" model-check kilo command_code/deepseek/deepseek-v4-flash >/dev/null \
     || die "selftest FAIL: model-check refused a model matching a glob pattern in its allowlist"
   # ...and refuses one that doesn't, without silently passing.
-  if PW_MODEL_ALLOWLIST_CLAUDE="sonnet,haiku" "$(pwtest_script pw-config.sh)" model-check claude opus >/dev/null 2>&1; then
+  if PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CLAUDE="sonnet,haiku" "$(pwtest_script pw-config.sh)" model-check claude opus >/dev/null 2>&1; then
     die "selftest FAIL: model-check allowed a model NOT in its configured allowlist"
   fi
   # ...cursor provider (2026-09): the rules are provider-generic, but the bracket-param quirk is
@@ -49,11 +54,11 @@ pl_config_selftest() {
   # suffixes; model-check's shell `case` GLOB treats a bracket literal-ish (char class), so docs
   # steer allowlist patterns to the suffix-free id part with '*' — here we assert the plain, glob,
   # and refuse paths so a future refactor can't silently change that contract.
-  mc="$(PW_MODEL_ALLOWLIST_CURSOR="" "$(pwtest_script pw-config.sh)" model-check cursor cursor-grok-4.6-low)" \
+  mc="$(PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CURSOR="" "$(pwtest_script pw-config.sh)" model-check cursor cursor-grok-4.6-low)" \
     || die "selftest FAIL: model-check refused cursor with an empty allowlist (should always pass)"
-  PW_MODEL_ALLOWLIST_CURSOR="claude-opus-5*,gpt-5*" "$(pwtest_script pw-config.sh)" model-check cursor gpt-5.6-sol >/dev/null \
+  PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CURSOR="claude-opus-5*,gpt-5*" "$(pwtest_script pw-config.sh)" model-check cursor gpt-5.6-sol >/dev/null \
     || die "selftest FAIL: model-check refused cursor model matching an allowlist glob"
-  if PW_MODEL_ALLOWLIST_CURSOR="claude-opus-5*" "$(pwtest_script pw-config.sh)" model-check cursor gpt-5.6-everything >/dev/null 2>&1; then
+  if PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CURSOR="claude-opus-5*" "$(pwtest_script pw-config.sh)" model-check cursor gpt-5.6-everything >/dev/null 2>&1; then
     die "selftest FAIL: model-check allowed a cursor model NOT in its configured allowlist"
   fi
   # ai-model: the lane row exists, defaults to all-—, updates one lane only, clears back, refuses
@@ -358,3 +363,24 @@ PLAN
   pwtest_ok "plan-23 pin key: dual-holder batches, all-or-nothing, clear, get, footer (all asserts passed)"
 }
 p23_pin_selftest
+
+# --- codex (plan 28): BARE-SLUG catalog via `codex debug models` (tests/bin/codex shim, real
+# one-line JSON shape); allowlist allow/refuse; hidden-visibility slugs are REFUSED by
+# model-resolve — a hidden slug still RUNS silently on the real CLI (probe 2026-10-04), so the
+# visible-catalog filter is the availability gate, and the allowlist is the permission gate.
+mc="$(PW_CONFIG_FILE="$CFG_OPEN" PW_MODEL_ALLOWLIST_CODEX="" "$MR" model-check codex codex-test-luna 2>/dev/null)" \
+  && pwtest_ok "model-check codex: empty allowlist passes" \
+  || pwtest_bad "model-check codex empty allowlist" "refused with an empty allowlist"
+PW_CONFIG_FILE="$CFG_OPEN" PW_MODEL_ALLOWLIST_CODEX="codex-test-*" "$MR" model-check codex codex-test-astra >/dev/null 2>&1 \
+  && pwtest_ok "model-check codex: glob pattern allows" \
+  || pwtest_bad "model-check codex glob allow" "refused a slug matching the allowlist glob"
+PW_CONFIG_FILE="$CFG_OPEN" PW_MODEL_ALLOWLIST_CODEX="codex-test-astra" "$MR" model-check codex codex-test-luna >/dev/null 2>&1 \
+  && pwtest_bad "model-check codex refuse" "allowed a slug outside the allowlist" \
+  || pwtest_ok "model-check codex: non-matching slug refused"
+mrx="$(PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve codex codex-test-luna 2>/dev/null)" \
+  && [ "$mrx" = "codex-test-luna" ] \
+  && pwtest_ok "model-resolve codex: exact bare slug binds" \
+  || pwtest_bad "model-resolve codex exact" "got '$mrx'"
+PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve codex codex-test-reserve >/dev/null 2>&1 \
+  && pwtest_bad "model-resolve codex hidden slug" "resolved a visibility:hide slug (it would run silently)" \
+  || pwtest_ok "model-resolve codex: hidden-visibility slug refused (positive exit 1)"

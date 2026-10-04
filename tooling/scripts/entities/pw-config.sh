@@ -294,14 +294,14 @@ cmd_model_resolve() {
     claude)
       echo "model-resolve: $prov:$model — unverified (Claude Code has a fixed alias set, no queryable catalog; model-check governs)"
       return 0 ;;
-    kilo|opencode|cursor) ;;
+    kilo|opencode|cursor|codex) ;;
     *)
       echo "model-resolve: $prov:$model — unverified (no catalog surface for provider '$prov')"
       return 0 ;;
   esac
   catalog="$(pw_api_catalog "$prov")"
   if [ -z "$catalog" ]; then
-    echo "model-resolve: $prov:$model — unverified ('$prov models' catalog empty or CLI not on PATH)" >&2
+    echo "model-resolve: $prov:$model — unverified ('$prov' catalog empty or CLI not on PATH)" >&2
     return 0
   fi
   # EXACT catalog line first — the prefix distinguishes connections (see header), so a bare
@@ -313,7 +313,7 @@ cmd_model_resolve() {
   fi
   if [ -z "$line" ]; then
     echo "model-resolve: $prov:$model — not in the live catalog (exit 1)" >&2
-    echo "  → fix: re-pin the row to a real id — candidates from \`$(pw_api_bin "$prov") models\`:" >&2
+    echo "  → fix: re-pin the row to a real id — candidates from the '$prov' live catalog (\`pw-help\` lists each provider's catalog command):" >&2
     cands="$(printf '%s\n' "$catalog" | grep -F "${model##*/}" | head -5 || true)"
     [ -n "$cands" ] && printf '%s\n' "$cands" | sed 's/^/      /' >&2 || echo "      (none matching '${model##*/}' — check the provider scope too)" >&2
     return 1

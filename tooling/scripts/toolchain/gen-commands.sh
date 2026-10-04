@@ -45,6 +45,11 @@ count=0
 for prov in "${PROVIDERS[@]}"; do
   if [ -n "$OUTDIR_OVERRIDE" ]; then outdir="$OUTDIR_OVERRIDE/$prov"; else outdir="$("${prov}_commanddir")"; fi
   mkdir -p "$outdir"
+  # Command layout (pw_provider_command_style): "flat" = <name>.md files (claude/kilo/opencode/
+  # cursor); "skill" = <name>/SKILL.md dirs for providers with NO native command surface (codex —
+  # custom prompts removed upstream in codex-cli 0.117.0; commands ship as skills). In the skill
+  # layout an optional render_<prov>_skill_policy hook writes agents/openai.yaml beside SKILL.md.
+  style="$(pw_provider_command_style "$prov")"
   for f in "$CANON_DIR"/*.md; do
     name="$(basename "$f" .md)"
     desc="$(fm "$f" description)"
@@ -55,9 +60,21 @@ for prov in "${PROVIDERS[@]}"; do
     bodytext="${bodytext//\{\{PW_HOME\}\}/$PW_HOME}"
     bodytext="${bodytext//\{\{PW_PROJECTS\}\}/$PW_PROJECTS}"
     bodytext="${bodytext//\{\{PW_REPOS\}\}/$PW_REPOS}"
-    "render_${prov}_command" > "$outdir/$name.md"
+    if [ "$style" = "skill" ]; then
+      # A stale SYMLINK at the target (e.g. a bundle skill from before the collision-skip policy)
+      # would make `>` write THROUGH it into the bundle — remove links before writing.
+      [ -L "$outdir/$name" ] && rm -f "$outdir/$name"
+      mkdir -p "$outdir/$name"
+      "render_${prov}_command" > "$outdir/$name/SKILL.md"
+      if declare -f "render_${prov}_skill_policy" >/dev/null 2>&1; then
+        mkdir -p "$outdir/$name/agents"
+        "render_${prov}_skill_policy" > "$outdir/$name/agents/openai.yaml"
+      fi
+    else
+      "render_${prov}_command" > "$outdir/$name.md"
+    fi
     count=$((count+1))
   done
-  echo "✓ $prov  → $outdir  ($(ls "$CANON_DIR"/*.md | wc -l | tr -d ' ') commands)"
+  echo "✓ $prov  → $outdir  ($(ls "$CANON_DIR"/*.md | wc -l | tr -d ' ') commands, $style layout)"
 done
 echo "Generated $count files from $CANON_DIR"
