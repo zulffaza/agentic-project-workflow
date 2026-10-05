@@ -10,12 +10,26 @@
 # Functions (review-file detectors — the ONE source of truth, see docs/REVIEW.md):
 #   _comment_blanked <file>              file with multi-line HTML comments blanked
 #                                        (line numbers preserved; same-line comments kept)
-#   _review_item_headings <file>         real, filled ### item/question headings only
-#   _review_has_open_marker <file>       0 iff a real heading is still open/pending
+#   _review_item_headings <file>         real, filled item/question headings (3+ hashes) only
+#   _heading_status_tag <id> <line>      OPEN|PENDING|RESOLVED|ANSWERED|CONFLICT|"" — the ONE
+#                                        status classifier every item parser shares
+#   _review_has_open_marker <file>       0 iff any real heading (any level, 3+ hashes) is
+#                                        open/pending/conflicting — fail closed, a deeper
+#                                        malformed heading can never be auto-approved past
 #   _decision_is_approved <text>         0 iff a Sign-off Decision cell reads approved
 #                                        (accepts the legacy "approved ✅" form)
 #   _signoff_last_real_row_line <file>   line no. of the Sign-off table's last REAL row (0=none)
+#   _signoff_last_data_row_line <file>   line no. of the last authored DATA row, header/separator/
+#                                        placeholder excluded (0=none) — the append anchor
 #   _signoff_latest_decision <file>      current (latest-row) Decision cell text; exit 1 if none
+#   _signoff_latest_actor <file>         current (latest-row) By/actor cell; exit 1 if none
+#   _decision_actor_kind <by-text>       human|repair|feedback|reopen|reviewer — attribution class
+#                                        of one By cell (unknown actors read as human: fail closed)
+#   _signoff_human_rejection_active <f>  0 iff the latest HUMAN-class row says changes-requested
+#   _review_approval_valid <file>        0 iff the approval gate holds: latest row approved AND
+#                                        no real open item AND no active human rejection
+#   _review_eligible_counts <file>       "eligible=N open=A foldin=B awaiting=C unactionable=D"
+#                                        — the actionable-work detector pass entry checks
 #   _review_items_tsv <file>             "LINE\tID\tanchor\tSTATUS" per real Rn/Qn heading
 #
 # Generic table/splice helpers (used by pw-context.sh / pw-review.sh):
@@ -95,11 +109,52 @@ _review_item_headings() {
   _comment_blanked "$1" | awk '/^###+ / && !/<YYYY-MM-DD/ && !/<§section/'
 }
 
+# The ONE status classifier every heading parser shares (awk source, embedded by
+# sttag(line, id)). Priority: the machine marker `pw-item-status:` is the documented primary
+# signal; with no marker the FIRST canonical bracket tag wins (leftmost, never the greedy
+# last-match the old `sub(/^.*— \[/)` took — a crafted `) — [RESOLVED] (you` actor suffix
+# used to flip a real [OPEN] item into a movable one); with neither, the legacy emoji tags.
+# A marker and a bracket tag that disagree about open-vs-settled is CONFLICT: fail closed —
+# the gate blocks on it, archive never moves it, resolve refuses it, eligible reports it as
+# unactionable. Malformed input can hide no work but can never grant approval authority.
+_MD_STTAG='
+function sttag(line, id,   m_open, m_res, b, p, t) {
+  m_open = index(line, "pw-item-status: open") > 0
+  m_res  = index(line, "pw-item-status: resolved") > 0
+  if (m_open && m_res) return "CONFLICT"
+  b = ""; p = 0
+  t = index(line, "[OPEN]");     if (t > 0 && (p == 0 || t < p)) { p = t; b = "OPEN" }
+  t = index(line, "[PENDING]");  if (t > 0 && (p == 0 || t < p)) { p = t; b = "PENDING" }
+  t = index(line, "[RESOLVED]"); if (t > 0 && (p == 0 || t < p)) { p = t; b = "RESOLVED" }
+  t = index(line, "[ANSWERED]"); if (t > 0 && (p == 0 || t < p)) { p = t; b = "ANSWERED" }
+  if (b == "") {
+    if (m_open) return (substr(id, 1, 1) == "Q") ? "PENDING" : "OPEN"
+    if (m_res)  return (substr(id, 1, 1) == "Q") ? "ANSWERED" : "RESOLVED"
+    if (index(line, "🔴 open")) return "OPEN"
+    if (index(line, "⏳ awaiting answer")) return "PENDING"
+    return ""
+  }
+  if (!m_open && !m_res) return b
+  t = (b == "OPEN" || b == "PENDING")
+  if (m_open && t)  return b
+  if (m_res && !t)  return b
+  return "CONFLICT"
+}'
+
+# Gate/has-open detector: ANY real heading (comment-blanked, stub-filtered) at ANY level of
+# three hashes or deeper whose classifier reads open/pending/conflict. Scanning only exact
+# `### ` let an injected `#### R9 … [OPEN] …` heading sit invisible to the gate while the
+# broader heading filter still saw it — a real blocker auto-approved past. The gate is the
+# safety half, so it fails CLOSED: deeper-than-canonical headings still block.
 _review_has_open_marker() {
-  local f="$1" h
-  h="$(_review_item_headings "$f")"
-  printf '%s\n' "$h" | grep -qE '^### .*pw-item-status: open' && return 0
-  printf '%s\n' "$h" | grep -qE '^### .*(🔴 open|⏳ awaiting answer|\[OPEN\]|\[PENDING\])'
+  local f="$1"
+  _review_item_headings "$f" | awk "$_MD_STTAG"'
+    {
+      id = $0; sub(/^#+ /, "", id); sub(/[^A-Za-z0-9].*$/, "", id)
+      t = sttag($0, id)
+      if (t == "OPEN" || t == "PENDING" || t == "CONFLICT") { found = 1 }
+    }
+    END { exit(found ? 0 : 1) }'
 }
 
 # True iff a Sign-off Decision cell reads as "approved" — accepts both the CURRENT plain form
@@ -130,6 +185,24 @@ _signoff_last_real_row_line() {
   _comment_blanked "$f" | awk '/^## Sign-off/{s=1} s && /^\|/{n=NR} END{print n+0}'
 }
 
+# Line no. of the Sign-off table's last AUTHORED DATA row — header row, separator row, and
+# the template's untouched placeholder ("| | | in-review |") excluded (0 = none yet). This,
+# not last_real_row, is the append anchor for new decisions: a placeholder that was never
+# replaced but sits ABOVE real rows must not send the next row above the current latest one.
+_signoff_last_data_row_line() {
+  local f="$1"
+  _comment_blanked "$f" | awk '
+    /^## Sign-off/ { s = 1; next }
+    s && /^\|/ {
+      t = $0; gsub(/[ \t|:-]/, "", t)
+      if (t == "") { sep = 1; next }                       # separator row
+      if (!sep) next                                      # header row (before the separator)
+      if ($0 ~ /^\| \| \| in-review \|$/) next            # untouched template placeholder
+      n = NR
+    }
+    END { print n + 0 }'
+}
+
 # The Sign-off table's CURRENT (latest) Decision cell only — "approved ✅" / "in-review" /
 # "changes-requested" — never "was this ever approved anywhere in the file's history". Empty
 # output (+ non-zero exit) if the file has no real Sign-off rows at all.
@@ -139,18 +212,149 @@ _signoff_latest_decision() {
   [ "$lastrow" -gt 0 ] || return 1
   sed -n "${lastrow}p" "$f" | awk -F'|' '{ gsub(/^[ \t]+|[ \t]+$/, "", $4); print $4 }'
 }
-# Extract "LINE<TAB>ID<TAB>anchor text<TAB>STATUS" for every REAL ### Rn/Qn heading in $1, in file
-# order — comment-blanked first (see _comment_blanked) so template worked-examples/format-hints
-# never appear, same reasoning as _review_has_open_marker. Shared by cmd_review_reindex and
-# cmd_review_archive so both agree on exactly what counts as a "real" item/question.
+
+# The By (actor) cell of the Sign-off table's CURRENT (latest) real row — the counterpart of
+# _signoff_latest_decision, so every reader shows decision AND actor from ONE scan (the shared
+# latest-actor+decision contract). Empty output + non-zero exit if the table has no
+# real rows. A placeholder row ("| | | in-review |") yields an empty actor — callers treat that
+# as "blank / first use", never as a human or automated decision.
+_signoff_latest_actor() {
+  local f="$1" lastrow
+  lastrow="$(_signoff_last_real_row_line "$f")"
+  [ "$lastrow" -gt 0 ] || return 1
+  sed -n "${lastrow}p" "$f" | awk -F'|' '{ gsub(/^[ \t]+|[ \t]+$/, "", $3); print $3 }'
+}
+
+# Attribution class of one By cell. Recognition is by EXACT automated-actor string or the
+# pw-reviewer role prefix (with or without the identity fields), so legacy
+# "pw-reviewer (auto)" rows, new "pw-reviewer (advisory; provider=kilo; model=x)" rows, the
+# operational writers, and the legacy "pw-review (auto-reopen)" tag all parse forever.
+# Anything unrecognized — "you", a named human, or an ambiguous future label — is human:
+# an unidentified row must never be inferred to carry AI approval authority, and a human
+# rejection must never be silently reclassified as agent bookkeeping.
+_decision_actor_kind() {
+  case "$1" in
+    "pw-review (repair)")                    echo repair ;;
+    "pw-review (feedback)")                  echo feedback ;;
+    "pw-review (auto-reopen)")               echo reopen ;;
+    pw-reviewer\ \(advisory*\)|pw-reviewer\ \(auto*\)|pw-reviewer)
+                                              echo reviewer ;;
+    "")                                      echo blank ;;
+    *)                                       echo human ;;
+  esac
+}
+
+# 0 iff an explicit HUMAN rejection is still active: scanning the real Sign-off rows newest
+# first, the first HUMAN-class row (blank placeholder rows and agent/reviewer bookkeeping rows
+# are skipped — they never withdraw a human decision) reads changes-requested. Withdrawal is
+# only a NEWER human row saying in-review or approved; no human row at all → no rejection.
+_signoff_human_rejection_active() {
+  local f="$1"
+  _comment_blanked "$f" | awk '
+    /^## Sign-off/ { s = 1; next }
+    s && /^\|/ {
+      cellsep = $0; gsub(/[ \t|:-]/, "", cellsep)
+      if (cellsep == "") next                       # separator row
+      n = split($0, c, "|")
+      if (n < 5) next
+      d = c[4]; gsub(/^[ \t]+|[ \t]+$/, "", d)
+      b = c[3]; gsub(/^[ \t]+|[ \t]+$/, "", b)
+      if (b == "" || b == "By") next                # placeholder / header row
+      if (b == "pw-review (repair)" || b == "pw-review (feedback)" \
+          || b == "pw-review (auto-reopen)") next
+      if (b ~ /^pw-reviewer/) next
+      rows[++r] = b "\t" d
+    }
+    END {
+      if (r == 0) exit 1
+      last = rows[r]
+      sub(/^[^\t]*\t/, "", last)
+      exit (last == "changes-requested") ? 0 : 1
+    }'
+}
+
+# The approval gate, fail-closed: 0 ONLY when the LATEST real Sign-off row reads
+# approved (legacy "approved ✅" accepted via _decision_is_approved), the file carries no real
+# open item/question (the same heading-level detector the auto-signoff guard uses — feedback
+# added after an approval, by any route including hand edits, invalidates consumption), and no
+# explicit human rejection is still active under the conservative policy. No Sign-off rows at
+# all (malformed table) → non-zero, never a silent pass.
+_review_approval_valid() {
+  local f="$1" d
+  d="$(_signoff_latest_decision "$f")" || return 1
+  _decision_is_approved "$d" || return 1
+  _review_has_open_marker "$f" && return 1
+  _signoff_human_rejection_active "$f" && return 1
+  return 0
+}
+
+# Eligible-work counts for one review file — the pass-entry decision the gate detectors alone
+# cannot make: a pass is actionable only with REAL work, not mere open markers. Categories:
+#   open=A            real [OPEN] R-items with non-empty actionable body
+#   foldin=B          real Q whose block already carries a "↳ **you**" answer not yet folded
+#   awaiting=C        real [PENDING] Q with no human answer yet — an approval blocker, NOT a
+#                     repair pass (waiting for the human is not actionable agent work)
+#   unactionable=D    open headings with no body, or real headings with no recognizable state
+# Stubs (<YYYY-MM-DD / <§section tokens), resolved/answered items, archived pointer rows, and
+# worked-example comment content are invisible here (same blanking + stub filters as the gates).
+# Only CANONICAL `### ` items can make a pass eligible — a malformed deeper heading (`#### R9`)
+# may block the gate (fail closed, see _review_has_open_marker) but never grants repair
+# authority. CONFLICT/disagreeing markers count unactionable, never eligible.
+# Prints one line: "eligible=N open=A foldin=B awaiting=C unactionable=D" (eligible = A + B).
+_review_eligible_counts() {
+  _comment_blanked "$1" | awk "$_MD_STTAG"'
+    function flush() {
+      if (id == "") return
+      if (status == "open") {
+        if (kind == "R") { if (body > 0) { A++; E++ } else D++ }
+        else if (kind == "Q") { if (answered > 0) { B++; E++ } else C++ }
+      } else if (status == "malformed") D++
+    }
+    /^###+ / {
+      flush(); id = ""; kind = ""; status = ""; body = 0; answered = 0
+      if ($0 ~ /^### [RQ][0-9]+ · / && $0 !~ /<YYYY-MM-DD/ && $0 !~ /<§section/) {
+        id = $0; sub(/^### /, "", id); sub(/ ·.*/, "", id)
+        kind = substr(id, 1, 1)
+        t = sttag($0, id)
+        if (t == "OPEN" || t == "PENDING") status = "open"
+        else if (t == "RESOLVED" || t == "ANSWERED") status = "resolved"
+        else status = "malformed"
+        intop = 1
+      } else if ($0 ~ /^###+ /) {
+        status = ""; intop = 0                       # other headings end the scan window
+      }
+      next
+    }
+    intop {
+      if ($0 ~ /^## /) { flush(); id = ""; intop = 0 }   # a new ## section ends the item block
+    }
+    intop {
+      line = $0
+      sub(/^[ \t]+/, "", line); sub(/[ \t]+$/, "", line)
+      if (line == "" || line == "---") next
+      if (line ~ /^> ↳ \*\*you\*\*/) { answered = 1; next }
+      if (line !~ /^>/) body++
+    }
+    END { flush(); printf "eligible=%d open=%d foldin=%d awaiting=%d unactionable=%d\n", E, A, B, C, D }
+  '
+}
+
+# Extract "LINE<TAB>ID<TAB>anchor text<TAB>STATUS" for every REAL canonical `### ` Rn/Qn
+# heading in $1, in file order — comment-blanked first (see _comment_blanked) so template
+# worked-examples/format-hints never appear, same reasoning as _review_has_open_marker, plus
+# the stub-token exclusion so an unfilled placeholder never reaches the Contents table or the
+# archive selection either. STATUS comes from the shared sttag classifier (marker-first,
+# leftmost canonical bracket, CONFLICT on disagreement) — the old greedy last-`— [`-tag scan
+# let a crafted actor suffix rewrite a real [OPEN] item's status. Deeper injected headings
+# (`#### R9 …`) are NOT canonical work here (no repair/move authority) even though the gate
+# still blocks on them. Shared by reindex and archive so both agree on what is a real item.
 _review_items_tsv() {
-  _comment_blanked "$1" | awk '
-    /^### [RQ][0-9]+ · / {
+  _comment_blanked "$1" | awk "$_MD_STTAG"'
+    /^### [RQ][0-9]+ · / && index($0, "<YYYY-MM-DD") == 0 && index($0, "<§section") == 0 {
       id = $0; sub(/^### /, "", id); sub(/ ·.*/, "", id)
       rest = $0; sub(/^### [RQ][0-9]+ · /, "", rest)
       anchor = rest; sub(/ — \[[A-Z]+\].*/, "", anchor)
-      tag = rest; sub(/^.*— \[/, "", tag); sub(/\].*/, "", tag)
-      printf "%d\t%s\t%s\t%s\n", NR, id, anchor, tag
+      printf "%d\t%s\t%s\t%s\n", NR, id, anchor, sttag($0, id)
     }
   '
 }

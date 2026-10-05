@@ -1,7 +1,7 @@
 # Status and pre-flight scripts
 
 The three scripts you call **before** anything expensive: get a picture (`pw-status.sh`), check
-the gates (`pw-preflight.sh`), and see where reviews stand (`pw-review.sh scan`). All three are
+the gates (`pw-preflight.sh`), and see where reviews stand (`pw-review-read.sh scan`). All three are
 read-only — they never modify a project.
 
 ## pw-status.sh
@@ -20,7 +20,9 @@ $PW_HOME/tooling/scripts/entities/pw-status.sh --selftest              # isolate
 ## Phase: executing
 ## Tasks                      ← README.md task table, verbatim
 ## PLAN                       ← task/PLAN.md task table (omitted if no PLAN.md)
-## Unresolved review items     ← "  - <file> (N open)" lines, or "  (none)"
+## Unresolved review items     ← "  - <file> (N open)" lines, or "  (none)"; gate lines show the
+                          latest decision WITH its By actor, through the same shared reader
+                          the scan uses (hyphenated decisions never split at a dash)
 ## AI Review modes            ← analysis/plan/task-plan/task-exec/ship modes
 ## Recent activity            ← last 5 LOG.md lines
 ## Blockers                   ← heuristic list (unapproved gates, open items, verify-failed)
@@ -42,7 +44,7 @@ Checks **all** gates for one command and fails fast — run it before invoking t
 ```bash
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh analyze      <slug>   # phase context|analysis + context/INDEX.md exists with ≥1 filled input row
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh execute      <slug>   # PLAN approved, phase valid, scope/model resolvable (allowlist + availability gate)
-$PW_HOME/tooling/scripts/entities/pw-preflight.sh breakdown    <slug>   # analysis reviews approved, RFC open items resolved
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh breakdown    <slug>   # analysis reviews approved (approval discovery excludes RFC staging — only its Sign-off-bearing files), RFC open items resolved
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh ship         <slug>   # shippable tasks exist, verify passed
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh comments     <slug>   # ≥1 task has a linked MR (for /pw-ship <slug> comments — no 'done' requirement)
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh close        <slug>   # all tasks accepted
@@ -253,7 +255,7 @@ $PW_HOME/tooling/scripts/entities/pw-help.sh command <name> [<slug>] [--full|--j
 - `project <slug> [<name>]` — the project how-to: phase, most-likely-next lines with real
   targets, on-disk review/plan/task rows with gate + open-item states, and per-operator
   concretization with `<name>`. Its only subprocesses are reads: `pw-status.sh phase <slug>`,
-  `pw-review.sh gate`/`count`, and `pw-config.sh ai-review <slug>` (get form, never with a
+  `pw-review-read.sh gate`/`count`, and `pw-config.sh ai-review <slug>` (get form, never with a
   mode argument) — pinned by the T1 case's call-site whitelists.
 - `command <name> [<slug>]` — the how-to manual per command (Use when / Does / Shape /
   doctrine / runnable example per operator; `--full` = substituted source file).

@@ -32,7 +32,8 @@ the installer links (moved here from the human onboarding guide 2026-09-25).
 
 State mutations inside any project go through the entity scripts — `pw-status.sh`
 (`log|status|oneliner|adopted|phase|dashboard-task-status|task-accept`), `pw-review.sh`
-(`init|gate|reopen|auto-signoff|has-open|count|reindex|archive|…`), `pw-context.sh`
+(`init|init-docs|init-all|start|gate|reopen|auto-signoff|has-open|count|reindex|archive|…`),
+`pw-context.sh`
 (`adopt|add-input|add-repo|fetch|…`), `pw-config.sh` (`ai-review|ai-model|model-check`) —
 never hand-edits of load-bearing lines, and `pw_field`/`pw_plan_pairs`/`_pw_url_from_line`/
 `pw_trim` in `pw-common.sh` are the reader plumbing commands rely on. New shared logic: add to

@@ -103,8 +103,9 @@ one's big enough that another team's lead wants visibility before you break it i
    reopens `analysis/review/spring-boot-3-upgrade.review.md`'s own Sign-off** — even though the fix
    came in through `RFC.review.md`, it's the analysis doc's *own* review file that
    `/pw-breakdown` actually gates on, so that's the one that has to stop reading `approved`
-   once the doc's changed out from under it. The row is tagged `pw-review (auto-reopen)` so you can
-   tell at a glance it wasn't your own decision to reopen it.
+   once the doc's changed out from under it. The invalidating row is recorded with the workflow's
+   own `By` attribution (`pw-review (feedback)` / `pw-review (repair)`; files may also hold the older
+   `pw-review (auto-reopen)` tag) so you can tell at a glance it wasn't your own decision.
 6. **Push the revision:** re-run `/pw-rfc spring-boot-3-upgrade` — it updates only the affected
    section(s) in the external doc, never a whole-doc overwrite, so nothing else on that page (their
    comment thread included) gets disturbed. The RFC doc **only ever moves when you explicitly ask
@@ -143,13 +144,15 @@ distinct from the analysis's local Sign-off. It still doesn't — there's no sec
 no second decision to make. What changed is that `/pw-breakdown` no longer trusts the analysis
 Sign-off *alone* to prove "nothing outstanding remains." Two independent checks now both have to
 clear:
-- **The Sign-off's current row must read `approved`** — step 5's auto-reopen keeps this honest
-  for anything that's already been *folded in*: a fix landing after an earlier approval flips this
-  row back to `in-review` automatically.
+- **The Sign-off's current row must read `approved`** — step 5's workflow-attributed transitions
+  keep this honest for anything that's already been *folded in*: a fix (or a fresh item) landing
+  after an earlier approval records a current decision back at `in-review`/`changes-requested`.
+  Approval is discovered ONLY in the analysis doc's own review file — `RFC.review.md` stages
+  comments, its own Sign-off table never gates anything.
 - **`analysis/review/RFC.review.md` must have zero open items** (checked by `/pw-breakdown`'s gate) — this
   catches the *other* half: a comment that's been pulled (step 4) but not yet folded in at all
   (still sitting between steps 4 and 5) leaves the Sign-off table completely untouched, so the
-  auto-reopen alone can't see it. Without this second check, an analysis approved *before* a late
+  invalidating rows alone can't see it. Without this second check, an analysis approved *before* a late
   comment ever arrived would let breakdown run right past an open negotiation.
 
 Analysis-approved and RFC-approved are still the same fact by design — you only ever write one

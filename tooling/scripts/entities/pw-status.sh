@@ -21,8 +21,9 @@
 #       mismatch/stale-provider/unbound. Mutates nothing (no LOG line — this is a reader).
 #
 # Produces the same output as /pw-status today, with zero agent invocation.
-# Reads README.md, PLAN.md, greps for open items, shows LOG.md lines, reports
-# blockers, and checks CLI auth status (informational, non-blocking).
+# Reads README.md, PLAN.md, the latest Sign-off row of each review (shared mdlib
+# readers — never a whole-file "approved" grep), and real open-item counts, shows
+# LOG.md lines, reports blockers, and checks CLI auth status (informational, non-blocking).
 # ============================================================================
 set -euo pipefail
 
@@ -37,6 +38,26 @@ PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 
 die() { echo "pw-status: $*" >&2; exit 2; }
 proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scripts/toolchain/scaffold.sh $1)"; printf '%s' "$d"; }
+
+# --- latest-row sign-off readers (report display; shared mdlib primitives — NEVER a
+# whole-file "approved" grep: a historical approved row survives a reopen and would hide a
+# real blocker; the readers return the LATEST Decision + By cells verbatim, richer
+# provider/model By values included, without altering the decision token). RFC staging
+# carries no Sign-off gate of its own and is excluded from approval discovery everywhere —
+# the same boundary pw-preflight.sh enforces; its open items ride the list above.
+_latest_signoff_approved() { # <file> → 0 iff the latest approval is consumable
+  _review_approval_valid "$1"
+}
+_latest_signoff_display() { # <file> → "changes-requested by pw-review (repair)" / "approved ✅" / "none yet"
+  local _f="$1" _dec _act
+  _dec="$(_signoff_latest_decision "$_f")" || _dec=""
+  _act="$(_signoff_latest_actor "$_f")" || _act=""
+  [ -n "$_dec" ] || _dec="none yet"
+  if [ -n "$_act" ]; then printf '%s by %s' "$_dec" "$_act"; else printf '%s' "$_dec"; fi
+  if _decision_is_approved "$_dec" && ! _review_approval_valid "$_f"; then
+    printf ' [blocked by unresolved work or an active human rejection]'
+  fi
+}
 
 
 # --- project-state entity (merged from pw-lib, plan 20 Phase 4) ---------------
@@ -451,7 +472,7 @@ echo "## Unresolved review items"
 OPEN_ITEMS=""
 for rf in "$D"/analysis/review/*.review.md "$D"/task/review/*.review.md; do
   [ -f "$rf" ] || continue
-  _c="$("$HERE/pw-review.sh" count "$SLUG" "${rf#$D/}" 2>/dev/null || true)"
+  _c="$("$HERE/pw-review-read.sh" count "$SLUG" "${rf#$D/}" 2>/dev/null || true)"
   _n="$(printf '%s' "$_c" | sed -n 's/open=\([0-9]*\).*/\1/p')"; _n="${_n:-0}"
   [ "$_n" -gt 0 ] && OPEN_ITEMS="$OPEN_ITEMS${rf#$D/}|$_n
 "
@@ -481,23 +502,31 @@ echo
 echo "## Blockers"
 BLOCKERS=()
 
-# Check for unapproved analysis
+# Check for unapproved analysis (latest Sign-off row only — historical approvals never
+# clear a reopened review; RFC staging is excluded from approval discovery since it has no
+# Sign-off gate of its own, its open items already ride the list above).
 if [ "$PHASE" = "analysis" ] || [ "$PHASE" = "breakdown" ] || [ "$PHASE" = "executing" ]; then
   ANALYSIS_REVIEW="$D/analysis/review"
   if [ -d "$ANALYSIS_REVIEW" ]; then
-    UNAPPROVED="$(find "$ANALYSIS_REVIEW" -name '*.review.md' -exec grep -L 'approved' {} \; 2>/dev/null || true)"
-    if [ -n "$UNAPPROVED" ]; then
-      BLOCKERS+=("Unapproved analysis review files")
+    _unapproved=""
+    for _rf in "$ANALYSIS_REVIEW"/*.review.md; do
+      [ -f "$_rf" ] || continue
+      case "${_rf##*/}" in RFC.review.md) continue ;; esac
+      _latest_signoff_approved "$_rf" && continue
+      _unapproved="$_unapproved ${_rf#$D/}"
+    done
+    if [ -n "$_unapproved" ]; then
+      for _rf in $_unapproved; do
+        BLOCKERS+=("Unapproved analysis review: $_rf ($(_latest_signoff_display "$D/$_rf"))")
+      done
     fi
   fi
 fi
 
-# Check for unapproved PLAN
+# Check for unapproved PLAN (latest Sign-off row only, not a whole-file "approved" grep)
 if [ "$PHASE" = "breakdown" ] || [ "$PHASE" = "executing" ]; then
-  if [ -f "$D/task/review/PLAN.review.md" ]; then
-    if ! grep -q 'approved' "$D/task/review/PLAN.review.md"; then
-      BLOCKERS+=("Unapproved PLAN review")
-    fi
+  if [ -f "$D/task/review/PLAN.review.md" ] && ! _latest_signoff_approved "$D/task/review/PLAN.review.md"; then
+    BLOCKERS+=("Unapproved PLAN review ($(_latest_signoff_display "$D/task/review/PLAN.review.md"))")
   fi
 fi
 
@@ -537,7 +566,7 @@ case "$PHASE" in
     fi
     ;;
   breakdown)
-    if [ -f "$D/task/review/PLAN.review.md" ] && ! grep -q 'approved' "$D/task/review/PLAN.review.md"; then
+    if [ -f "$D/task/review/PLAN.review.md" ] && ! _latest_signoff_approved "$D/task/review/PLAN.review.md"; then
       echo "  Get PLAN approved via /pw-review"
     else
       echo "  Run /pw-execute to start execution"

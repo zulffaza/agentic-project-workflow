@@ -101,7 +101,7 @@ pwtest_rc 0 "command view of the gate command again" "$C" command pw-review
 grep -qF 'HUMAN-TRIGGERED ONLY (C4)' "$PWTEST_OUT" && pwtest_ok "C4 doctrine line present" || pwtest_bad "C4 doctrine line" "command pw-review lost the HUMAN-TRIGGERED ONLY (C4) echo"
 pwtest_rc 0 "maintainer command view" "$C" command pw-review --maintainer
 pwtest_re 'entity script: tooling/scripts/entities/pw-review\.sh' "own script section (maintainer view)"
-pwtest_re '16 operators' "operator count in maintainer view (full name)"
+pwtest_re '19 operators' "operator count in maintainer view (full name)"
 pwtest_rc 0 "command --full renders the file" "$C" command pw-context --full
 grep -qF '{{PW_' "$PWTEST_OUT" && pwtest_bad "no {{PW_ leak (--full)" "the sub() helper died — placeholders surfaced" || pwtest_ok "no {{PW_ leak (--full)"
 grep -qF 'A2 flag-segment' "$PWTEST_OUT" && pwtest_ok "--full carries doctrine prose" || pwtest_bad "--full content" "body missing"
@@ -160,7 +160,7 @@ for trio in ST RV CFG; do
   ops="$(_pwt_trio_ops "$C" "$trio")"
   case "$trio" in
     ST)  want="phase" ;;
-    RV)  want="gate count" ;;
+    RV)  want="count" ;;   # plan-31: gate is no longer shelled — latest-row state reads go through sourced mdlib readers
     CFG) want="project" ;;
   esac
   [ "$(printf '%s\n' "$ops" | sort -u | tr '\n' ' ' | sed 's/ $//')" = "$(printf '%s\n' $want | sort -u | tr '\n' ' ' | sed 's/ $//')" ] \
@@ -203,6 +203,68 @@ pwtest_err 'project not found under' "S8-style refusal"
 pwtest_fix "project refusal has fix hint"
 pwtest_rc 2 "project unknown command slot" "$C" project "$CX2" frobnicate
 pwtest_err 'no such command: pw-frobnicate' "canonical echo in project slot"
+
+# 8e) plan-31 latest-state + actor display parity (JSON-first parser asserts): decisions
+# read from the LATEST Sign-off row verbatim (never the old pw_phase_token hyphen split,
+# never a "pending" bucket, never a historical approved grep), the By actor is shown
+# without altering the decision token, legacy decorations stay readable.
+HPX=hpx1; rm -rf "$PW_PROJECTS_DIR/$HPX"; cp -a "$F2" "$PW_PROJECTS_DIR/$HPX"
+_hrv() { awk -v a="$2" -v n="$3" 'BEGIN{done=0} {print; if(!done && index($0,a)>0){print n; done=1}}' "$1" > "$1.tmp" && mv "$1.tmp" "$1"; }
+PLRV="$PW_PROJECTS_DIR/$HPX/task/review/PLAN.review.md"
+FRRV="$PW_PROJECTS_DIR/$HPX/analysis/review/fixture.review.md"
+_hrv "$PLRV" '| pwtest | approved |' '| 2026-10-05 12:30 | pw-reviewer (auto; provider=kilotest; model=test-model) | changes-requested |'
+_hrv "$FRRV" '| pwtest | approved |' '| 2026-10-05 13:00 | pw-review (auto-reopen) | in-review |'
+pwtest_rc 0 "hpx project json parity" "$C" project "$HPX" --json
+python3 - "$PWTEST_OUT" <<'PY31' && pwtest_ok "json: latest decision + actor, token verbatim" || pwtest_bad "plan-31 json parity" "assertion failed"
+import json,sys
+d=json.load(open(sys.argv[1]))
+t={x["review"]:x for x in d["targets"]}
+p=t["task/review/PLAN.review.md"]
+assert {"doc","review","gate","actor","open"} <= set(p)
+assert p["gate"]=="changes-requested", p
+assert p["actor"]=="pw-reviewer (auto; provider=kilotest; model=test-model)", p
+f=t["analysis/review/fixture.review.md"]
+assert f["gate"]=="in-review" and f["actor"]=="pw-review (auto-reopen)", f
+PY31
+pwtest_rc 0 "hpx project plain" "$C" project "$HPX"
+pwtest_re 'changes-requested' "full hyphenated token rendered (single word: wrap-safe)"
+pwtest_re 'by:' "actor segment rendered (token: wrap-safe)"
+if grep -qE 'gate: pending|decision: pending' "$PWTEST_OUT"; then pwtest_bad "no pending bucket" "old truncation bucket resurfaced"; else pwtest_ok "no 'pending' bucket"; fi
+if grep -qE '\.sh|tooling|/Users/' "$PWTEST_OUT"; then pwtest_bad "plan-31 view script-free" "internal token leaked"; else pwtest_ok "plan-31 view: decision+actor shown, script-free"; fi
+# JSON negative: the decision token is NEVER truncated or bucketed (asserted on the parser
+# output — flowline wrap cannot hide a split, per the plan-31 required-cases rule):
+pwtest_rc 0 "hpx project json negative pass" "$C" project "$HPX" --json
+python3 - "$PWTEST_OUT" <<'PY31n' && pwtest_ok "json negative: token neither split nor 'pending'" || pwtest_bad "json negative" "truncated/bucketed decision"
+import json,sys
+d=json.load(open(sys.argv[1]))
+vals=[t["gate"] for t in d["targets"]]
+assert all(v not in ("changes","in","pending") for v in vals), vals
+PY31n
+# legacy decorated approval: actor + decorated token shown verbatim (row rewrite):
+python3 - "$PLRV" <<'PYS'
+import sys
+f=sys.argv[1]; t=open(f).read()
+t=t.replace('| 2026-10-05 12:30 | pw-reviewer (auto; provider=kilotest; model=test-model) | changes-requested |',
+            '| 2026-09-16 09:00 | you | approved ✅ |',1)
+open(f,'w').write(t)
+PYS
+pwtest_rc 0 "hpx legacy row" "$C" project "$HPX" --json
+python3 - "$PWTEST_OUT" <<'PY31b' && pwtest_ok "legacy approved ✅ readable with actor" || pwtest_bad "legacy display" "assertion failed"
+import json,sys
+d=json.load(open(sys.argv[1]))
+p={x["review"]:x for x in d["targets"]}["task/review/PLAN.review.md"]
+assert p["gate"]=="approved ✅" and p["actor"]=="you", p
+PY31b
+# no Sign-off rows at all → "none yet", never an invented decision:
+printf '# stub\nno table here\n' > "$PLRV"
+pwtest_rc 0 "hpx none yet" "$C" project "$HPX" --json
+python3 - "$PWTEST_OUT" <<'PY31c' && pwtest_ok "missing table reads none yet, actor blank" || pwtest_bad "none yet" "assertion failed"
+import json,sys
+d=json.load(open(sys.argv[1]))
+p={x["review"]:x for x in d["targets"]}["task/review/PLAN.review.md"]
+assert p["gate"]=="none yet" and p["actor"]=="", p
+PY31c
+rm -rf "$PW_PROJECTS_DIR/$HPX"
 
 # 8c) pw-config is invoked strictly in GET form (project get <slug> ai-review — never set/ensure).
 _n_get="$(grep -vE '^[[:space:]]*#' "$C" | grep -cF '"$CFG" project get "$slug" ai-review 2>' || true)"

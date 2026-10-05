@@ -56,9 +56,10 @@
 #
 #   pw-help.sh --selftest                  run the isolated harness case.
 #
-# Read-only by contract: help opens files for read and invokes an audited
-# whitelist of read operators only (pw-status.sh phase; pw-review.sh
-# gate/has-open/count/scan). It never runs a setter and never writes — a
+# Read-only by contract: sign-off state is read through the shared mdlib latest-row
+# readers (_signoff_latest_decision/_signoff_latest_actor, sourced from pw-mdlib.sh), and the
+# audited subprocess whitelist stays read-only (pw-status.sh phase; pw-review-read.sh count;
+# pw-config.sh project get). It never runs a setter and never writes — a
 # command line it prints is example text, never executed.
 #
 # Exit codes: 0 success · 2 usage / unknown name (stderr carries a → fix:
@@ -75,12 +76,13 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/../../.." && pwd)"
 TOOL="$PW_HOME/tooling"
 . "$HERE/../lib/pw-common.sh"
+. "$HERE/../lib/pw-mdlib.sh"
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 CMDS="$TOOL/commands"
 # the READ-ONLY subprocess trio (the §3.4.1 whitelist; the T1 case pins it mechanically):
 ST="$HERE/pw-status.sh"
-RV="$HERE/pw-review.sh"
+RV="$HERE/pw-review-read.sh"
 CFG="$HERE/pw-config.sh"
 
 die() { printf "%s\n" "pw-help: $*" | flowline 98 >&2; exit 2; }
@@ -135,7 +137,7 @@ para_of() {
       next }
     NF==0 { if (buf!="" && txt!="") tryflush(); buf=""; txt=""; next }
     { if (buf!="" && !found) { sub(/^[ ]+/,""); txt = (txt=="" ? $0 : txt " " $0) } }
-    END { tryflush() }' | head -1
+    END { tryflush() }' | awk 'NR==1'   # drain-safe first line: `head -1` would exit early and SIGPIPE the awk chain under pipefail (rc 141 abort)
 }
 
 # gist <text> — first sentence; a period is a boundary only before space/EOL
@@ -164,8 +166,9 @@ facets_map() {
 }
 
 # facet_of <script> <op> — write | read | special, or empty when unlabelled.
+# Stop-flag over {exit}: an early exit SIGPIPEs the facets_map producer under pipefail (rc 141).
 facet_of() {
-  facets_map "$1" | awk -F'\t' -v op="$2" '$2==op{print $1; exit}'
+  facets_map "$1" | awk -F'\t' -v op="$2" '!v && $2==op{v=$1} END{if(v!="")print v}'
 }
 
 # own_first <cmd> [scripts...] — order so the command\'s own entity script is checked first.
@@ -216,7 +219,7 @@ scripts_of() {
 # (everything after the "—" of the mapping line), collapsed to the blurb shown in user views.
 cmd_use_clause() {
   local bloc
-  bloc="$(cmd_block "$1" "$2" | strip_md | sub | awk '/^[ \t]*[0-9]+[.)]/{exit} { line=$0; p=index(line,"/Users/"); if (!p) p=index(line,"tooling/scripts/"); if (p) { pre=substr(line,1,p-1); gsub(/[ \t`→—-]+$/,"",pre); if (pre=="") next; print pre; next } print }')"
+  bloc="$(cmd_block "$1" "$2" | strip_md | sub | awk '/^[ \t]*[0-9]+[.)]/{s=1; next} s{next} { line=$0; p=index(line,"/Users/"); if (!p) p=index(line,"tooling/scripts/"); if (p) { pre=substr(line,1,p-1); gsub(/[ \t`→—-]+$/,"",pre); if (pre=="") next; print pre; next } print }')"   # stop-flag, not early {exit} (SIGPIPE under pipefail)
   printf '%s' "$bloc" | awk '{ s = s $0 " " } END {
     i = index(s, "—"); j = index(s, "→")
     if (i && (!j || i < j)) { s = substr(s, i); sub(/^—[ ]?/, "", s) }
@@ -364,7 +367,7 @@ cmd_shape_line() {
   m="$(awk -v ln="$ln" -v cmd="$1" 'NR==ln {
         if (match($0, cmd" (<project-slug>|<slug>) ")) { print substr($0, RSTART+RLENGTH); exit }
         if (match($0, cmd" <slug> ")) { print substr($0, RSTART+RLENGTH); exit }
-      }' "$CMDS/$1.md" | head -1)"
+      }' "$CMDS/$1.md")"   # awk already exits after the one printed line; a trailing `head -1` could SIGPIPE under load
   m="$(printf '%s' "$m" | cut -d"$TF" -f1 | cut -d"$BT" -f1 | sed -e 's/[ ]*$//')"
   printf '%s' "$m"
   return 0
@@ -747,7 +750,7 @@ E
     printf '  %s  %s\n' "$(printf '%-11s' "$bname")" "${bargs#$bname }" | flowline 98
     # The command file's OWN bullet prose = use-when behavior; the script paragraph = Does.
     local bloc
-    bloc="$(cmd_block "$c" "$bname" | strip_md | sub | awk '/^[ \t]*[0-9]+[.)]/{exit} { line=$0; p=index(line,"/Users/"); if (!p) p=index(line,"tooling/scripts/"); if (p) { pre=substr(line,1,p-1); gsub(/[ \t\-`→—]+$/,"",pre); if (pre=="") next; print pre; next } print }')"
+    bloc="$(cmd_block "$c" "$bname" | strip_md | sub | awk '/^[ \t]*[0-9]+[.)]/{s=1; next} s{next} { line=$0; p=index(line,"/Users/"); if (!p) p=index(line,"tooling/scripts/"); if (p) { pre=substr(line,1,p-1); gsub(/[ \t\-`→—]+$/,"",pre); if (pre=="") next; print pre; next } print }')"   # stop-flag, NOT {exit}: an early exit SIGPIPEs the producing chain under pipefail (rc 141)
     # the human prose = block text after the first em-dash (the mapping arrow prefix
     # ends in "—"); joined, collapsed.
     usep="$(printf '%s' "$bloc" | awk '{ s=s $0 " " } END { i=index(s,"—"); j2=index(s,"→"); if (i) { s=substr(s,i); sub(/^—[ ]?/,"",s) } else if (j2) { s=substr(s,j2); sub(/^→[ ]?/,"",s) }; j=index(s,"If the 2nd argument"); if (j) s=substr(s,1,j-1); gsub(/[ ]+/," ",s); sub(/ +$/,"",s); sub(/[ ]*(Run|run)[ ]*:?[ ]*$/,"",s); do { s2=s; sub(/[ ]+(to|of|in|is|that|and|or|the|a|an|for|with|on|at|by|as|into|through|pass|flags?|from|via)$/,"",s) } while (s!=s2); sub(/[ :,.]+$/,"",s); if (s ~ /^[a-z0-9(<]/ && length(s) < 30 && s !~ /[.;:]/ && s ~ /(to|of|in|is|that|and|or|the|a|an|for|with|on|at|by|as|into|through|pass|fl|from|via)$/) s=""; print s }')"
@@ -965,13 +968,41 @@ PYNORM
 # proj_dir mirrors the sibling entities' helper (die text in pw-help voice, full names).
 proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "project not found under $PROJECTS_DIR/$1 -> fix: scaffold it with /pw-new $1, or check /pw-status $1"; printf '%s' "$d"; }
 
-# review_state <slug> <rel> — "<decision>|<open-count>" via the read operators only.
+# review_state <slug> <rel> — "<decision>|<actor>|<open-count>" via the read operators only.
+# Decision and actor come from the shared mdlib latest-ROW readers: the Sign-off table's
+# CURRENT cells verbatim — never a historical whole-file "approved" grep, and never the
+# phase-token parser (whose hyphen split truncated "changes-requested" to "changes" and
+# rendered every hyphenated decision as "pending"). Richer By values
+# ("pw-reviewer (auto; provider=<p>; model=<m>)") display as the actor WITHOUT altering the
+# decision token; a placeholder row yields an empty actor (blank = first use, not a person).
 review_state() {
-  local slug="$1" rel="$2" dec cnt
-  dec="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$RV" gate "$slug" "$rel" 2>/dev/null | pw_phase_token)" || true
-  case "$dec" in "") dec="none yet" ;; approved|changes-requested|in-review) : ;; *) dec="pending" ;; esac
+  local slug="$1" rel="$2" f dec actor="" cnt
+  f="$PROJECTS_DIR/$slug/$rel"
+  dec="$(_signoff_latest_decision "$f" 2>/dev/null)" || dec=""
+  actor="$(_signoff_latest_actor "$f" 2>/dev/null)" || actor=""
+  [ -n "$dec" ] || dec="none yet"
   cnt="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$RV" count "$slug" "$rel" 2>/dev/null)" || cnt="open=?"
-  printf '%s|%s' "$dec" "$(printf '%s' "$cnt" | sed -e 's/^open=//' -e 's/ resolved=[0-9]*//' -e 's/ items=[0-9]*//')"
+  printf '%s|%s|%s' "$dec" "$actor" "$(printf '%s' "$cnt" | sed -e 's/^open=//' -e 's/ resolved=[0-9]*//' -e 's/ items=[0-9]*//')"
+}
+
+# split_state <triple> — "<decision>|<actor>|<open>" into RS_DEC/RS_ACT/RS_OPEN.
+# Table cells cannot contain "|", so positional splits are exact.
+split_state() {
+  RS_DEC="${1%%|*}"
+  RS_ACT="$(printf '%s' "$1" | cut -d'|' -f2)"
+  RS_OPEN="$(printf '%s' "$1" | cut -d'|' -f3)"
+}
+
+# review_line <rel> <triple> — one aligned gates display row: current decision, its actor
+# when non-blank, live open count. Values are row DATA, never script names — the view stays
+# script-free.
+review_line() {
+  split_state "$2"
+  if [ -n "$RS_ACT" ]; then
+    printf '    %-42s decision: %-19s open: %s · by: %s\n' "$1" "$RS_DEC" "$RS_OPEN" "$RS_ACT" | flowline 98
+  else
+    printf '    %-42s decision: %-19s open: %s\n' "$1" "$RS_DEC" "$RS_OPEN"
+  fi
 }
 
 # render_project_next <slug> <phase> <plan> <planrev> <dir> <plain|json>
@@ -1028,10 +1059,10 @@ render_project_cmd() {
     local rel rvf st sep=""
     echo "/pw-review targets in $slug (phase: $phase; live gate/open states below)"
     echo "  gates:"
-    for rel in $planrev; do st="$(review_state "$slug" "$rel")"; printf '    %-42s decision: %-19s open: %s\n' "$rel" "${st%%|*}" "${st##*|}"; done
+    for rel in $planrev; do st="$(review_state "$slug" "$rel")"; review_line "$rel" "$st"; done
     for rel in $adocs; do
       rvf="analysis/review/${rel#analysis/}"; rvf="${rvf%.md}.review.md"
-      [ -f "$d/$rvf" ] && { st="$(review_state "$slug" "$rvf")"; printf '    %-42s decision: %-19s open: %s\n' "$rvf" "${st%%|*}" "${st##*|}"; } || true
+      [ -f "$d/$rvf" ] && { st="$(review_state "$slug" "$rvf")"; review_line "$rvf" "$st"; } || true
     done
     [ -n "$planrev$adocs" ] || echo "    (no review files yet - run: /pw-review $slug init-all)"
     echo "  items:"
@@ -1040,7 +1071,8 @@ render_project_cmd() {
     [ -n "$trevs" ] && revlist="$revlist $trevs"
     for rvf in $revlist; do
       [ -f "$d/$rvf" ] || continue
-      if grep -oE '^### (Q|R)[0-9]+.*\[(PENDING|OPEN)\]' "$d/$rvf" 2>/dev/null | head -3 | cut -c5- | sed "s|^|      $rvf  |" | flowline 96 | grep -q .; then shown=1; fi
+      _ishown="$(grep -oE '^### (Q|R)[0-9]+.*\[(PENDING|OPEN)\]' "$d/$rvf" 2>/dev/null | awk 'NR<=3' | cut -c5- | sed "s|^|      $rvf  |" | flowline 96)"
+      [ -n "$_ishown" ] && { printf '%s\n' "$_ishown"; shown=1; }   # capture-then-print: a trailing `grep -q .` would SIGPIPE flowline under pipefail
     done
     [ "$shown" = 1 ] || echo "      (no open items / pending questions in the review files found)"
     echo "  runnable:"
@@ -1091,10 +1123,10 @@ render_project() {
   tail="${raw#"$tok"}"; tail="$(printf '%s' "$tail" | sed -e 's/^[ ]*//' -e 's/^[([]//' -e 's/[])?]$//')"
   if [ "$json" = 1 ]; then
     printf '{"slug":"%s","phase":"%s","status":"%s","targets":[' "$(jstr "$slug")" "$(jstr "$tok")" "$(jstr "$raw")"
-    for rel in $planrev; do st="$(review_state "$slug" "$rel")"; printf '%s{"doc":"task/PLAN.md","review":"%s","gate":"%s","open":"%s"}' "$sep" "$(jstr "$rel")" "$(jstr "${st%%|*}")" "$(jstr "${st##*|}")"; sep=", "; done
+    for rel in $planrev; do st="$(review_state "$slug" "$rel")"; split_state "$st"; printf '%s{"doc":"task/PLAN.md","review":"%s","gate":"%s","actor":"%s","open":"%s"}' "$sep" "$(jstr "$rel")" "$(jstr "$RS_DEC")" "$(jstr "$RS_ACT")" "$(jstr "$RS_OPEN")"; sep=", "; done
     for rel in $adocs; do
       rvf="analysis/review/${rel#analysis/}"; rvf="${rvf%.md}.review.md"
-      if [ -f "$d/$rvf" ]; then st="$(review_state "$slug" "$rvf")"; printf '%s{"doc":"%s","review":"%s","gate":"%s","open":"%s"}' "$sep" "$(jstr "$rel")" "$(jstr "$rvf")" "$(jstr "${st%%|*}")" "$(jstr "${st##*|}")"; sep=", "; fi
+      if [ -f "$d/$rvf" ]; then st="$(review_state "$slug" "$rvf")"; split_state "$st"; printf '%s{"doc":"%s","review":"%s","gate":"%s","actor":"%s","open":"%s"}' "$sep" "$(jstr "$rel")" "$(jstr "$rvf")" "$(jstr "$RS_DEC")" "$(jstr "$RS_ACT")" "$(jstr "$RS_OPEN")"; sep=", "; fi
     done
     local jtasks=""
     if [ -n "$tids" ]; then jtasks="$(printf '%s' "${tids# }" | sed -e 's/ /", "/g' | sed -e 's/^/"/' -e 's/$/"/')"; fi
@@ -1109,16 +1141,22 @@ render_project() {
   echo "  /pw-status $slug  ·  /pw-context $slug add-input --file ... --what ... --source ..."
   echo "targets found on disk:"
   local trow printed=0
-  trow() { printf '  %-26s -> %-38s (gate: %s, open: %s)\n' "$1" "$2" "$3" "$4" | flowline 99; }
+  trow() { split_state "$3"
+    if [ -n "$RS_ACT" ]; then
+      printf '  %-26s -> %-38s (gate: %s, open: %s, by: %s)\n' "$1" "$2" "$RS_DEC" "$RS_OPEN" "$RS_ACT" | flowline 99
+    else
+      printf '  %-26s -> %-38s (gate: %s, open: %s)\n' "$1" "$2" "$RS_DEC" "$RS_OPEN" | flowline 99
+    fi
+  }
   if [ -n "$plan" ]; then
     printed=1
-    if [ -n "$planrev" ]; then st="$(review_state "$slug" "$planrev")"; trow "task/PLAN.md" "$planrev" "${st%%|*}" "${st##*|}"
+    if [ -n "$planrev" ]; then st="$(review_state "$slug" "$planrev")"; trow "task/PLAN.md" "$planrev" "$st"
     else printf '  %-26s -> %s\n' "task/PLAN.md" "(no review file yet - run: /pw-review $slug init-all)" | flowline 99; fi
   fi
   for rel in $adocs; do
     printed=1
     rvf="analysis/review/${rel#analysis/}"; rvf="${rvf%.md}.review.md"
-    if [ -f "$d/$rvf" ]; then st="$(review_state "$slug" "$rvf")"; trow "$rel" "$rvf" "${st%%|*}" "${st##*|}"
+    if [ -f "$d/$rvf" ]; then st="$(review_state "$slug" "$rvf")"; trow "$rel" "$rvf" "$st"
     else { printf '  %s -> %s\n' "$rel" "(review file missing - run: /pw-review $slug init-all)"; } | flowline 99; fi
   done
   if [ -n "$trevs" ]; then printed=1; printf '  %-26s -> %s\n' "task/T0n.md (x$(printf '%s' "$trevs" | wc -w | tr -d ' '))" "task/review/T0n.review.md" | flowline 99; fi

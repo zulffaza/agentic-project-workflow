@@ -1,37 +1,57 @@
 ---
-description: Apply my review comments for the current phase (or a given review file) — or, with the "ai" sub-verb, delegate a fresh review pass to pw-reviewer — or, with "config", view/change this project's AI Review settings — or, with the write operators (init-all/item/answer/signoff), deterministically create review files and record my items, answers, and gate decisions; --skip-build-check disables the task-fix build loop
-args: <project-slug> [ai | config | init-all | item | answer | signoff] [phase | Tid(s) | path-to-.review.md | <phase> <mode>] [--skip-build-check]
+description: Apply my review comments for the current phase (or a given review file) — or, with the "ai" sub-verb, delegate a fresh review pass to pw-reviewer — or, with "config", view/change this project's AI Review settings — or, with the write operators (init/init-all/item/answer/signoff), deterministically create review files for selected docs or the current phase and record my items, answers, and gate decisions; --skip-build-check disables the task-fix build loop
+args: <project-slug> [ai | config | init <artifact-path…> | init-all | item | answer | signoff] [phase | Tid(s) | path-to-.review.md | <phase> <mode>] [--skip-build-check]
 ---
 Invoke the `project-workflow` skill (review rules). Arguments: {{ARGS}}.
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
-**If the 2nd argument is literally one of `init-all`, `item`, `answer`, `signoff`, this is a
+**If the 2nd argument is literally one of `init`, `init-all`, `item`, `answer`, `signoff`, this is a
 deterministic review-WRITE operation — mechanical mapping only (C3): parse the arguments per the
 A-rules below, run the script verbatim, show its output. No judgment, no doc reading, no
 "improving" or retyping my text — it is handed over VERBATIM via a `--stdin` heredoc (A3).**
 Everything else below (apply-comments / `ai` / `config`) does NOT run for these operators.
 
+- **`/pw-review <slug> init <artifact-path> [<artifact-path> …]`** →
+  `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init-docs <slug> <artifact-rel-path>…` —
+  creates the review files for EXACTLY the named project-relative artifacts (one is a valid list;
+  derive each review path internally, never scan for extra targets). The script validates the whole
+  list before writing anything (missing docs, `template`/`README` targets, unsupported artifacts,
+  out-of-project paths reject the full list — zero files created); idempotent — a rerun finishes
+  missing files without touching existing review content or history. Selecting an earlier-phase
+  artifact is allowed (I chose it) and creates ONLY that file — never reopens or repairs it.
 - **`/pw-review <slug> init-all`** → `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init-all <slug>` —
-  creates every missing review file (each `analysis/<topic>.md`, `task/PLAN.md`, each
-  `task/T0n.md` → its sibling `review/<name>.review.md`). Idempotent; existing files untouched.
+  creates the missing review files for the project's ACTUAL CURRENT dashboard phase only (read at
+  invocation: `analysis` phase → each `analysis/<topic>.md`; `breakdown` → `task/PLAN.md` + current
+  task-plan artifacts; `executing`/`review` → current task-result artifacts; `context`/`done` →
+  nothing implicit). There is NO phase override and no project-wide scan — for anything beyond the
+  current phase, use `init` with explicit documents. Missing/unknown phase fails closed with a
+  recovery hint. Idempotent; existing files untouched; earlier/later-phase reviews are never
+  created or deleted as a side effect.
 - **`/pw-review <slug> item <review-rel-path> <§anchor> <ask…>`** — `<§anchor>` is the next
   single token (e.g. `§4`); everything after it is the ask, unquoted, spaces included (A1
   rest-of-line). Run:
   `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh add-item <slug> <review-rel-path> --section <§anchor> --stdin`
   with the ask piped in as a heredoc. Need a multi-word anchor? Use the flag form instead:
   `… item <path> --section <anchor words…> --text <ask words…>` (A2: each value runs until the
-  next `--flag`).
+  next `--flag`). A successful FIRST new item after the file was blank/`approved`/`changes-requested`
+  also records one `pw-review (feedback)` `in-review` row (stale approval stops being current, in the
+  same validated write); repeated items in an already-queued cycle add no row. You only run the
+  command — the script does the row.
 - **`/pw-review <slug> answer <review-rel-path> <Qid> <text…>`** — `<Qid>` like `Q2`; rest of
   line is your answer. Run: `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh answer <slug> <path> <Qid>
   --stdin` (heredoc). The script never flips the question's status — the fold-in + `[ANSWERED]`
-  flip happens on the next apply-comments pass, per docs/REVIEW.md.
+  flip happens on the next apply-comments pass, per docs/REVIEW.md. A first answer after an approval
+  records the same `pw-review (feedback)` `in-review` row a new item does.
 - **`/pw-review <slug> signoff <review-rel-path> <approved|changes-requested|in-review>`** →
   `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh signoff <slug> <path> <decision>`.
-  **HUMAN-TRIGGERED ONLY (C4): run this operator ONLY when my message explicitly asks to sign
-  off / record that gate decision — never on your own initiative, never as a "helpful" close of
-  a review round, never because all items look resolved.** The agent-side path stays
-  `pw-review.sh auto-signoff` (mode=auto + zero open items, its own refusals intact).
+   **HUMAN-TRIGGERED ONLY (C4): run this operator ONLY when my message explicitly asks to sign
+   off / record that gate decision — never on your own initiative, never as a "helpful" close of
+ a review round, never because all items look resolved.** The agent-side path stays
+  `pw-review.sh auto-signoff` (mode=auto + zero open items + artifact/lane match + no active human
+  rejection, its own refusals intact) — and the operational transitions are `pw-review.sh start`
+  (below), which can only ever write `changes-requested`, never approval. A `signoff` row you run
+  verbatim stays attributed to me (`--by` only when I name a person).
 
 **`--skip-build-check`** (last argument, either flow) skips the task-fix build loop below — apply
 task fixes and flip their items without re-running the task's `## Verify`, noting in the reply that
@@ -54,21 +74,35 @@ like the apply-comments flow does):
    internal check — I never type this myself). If `off`, tell me AI review isn't enabled for this
    phase and stop — point me at `/pw-config <slug> set ai-review <phase> <mode>` rather than guessing I
    want it turned on, and never at the underlying script.
-3. If `advisory` or `auto`, ensure the review file exists (`review-init` if not), then spawn the
-   `pw-reviewer` agent **fresh** — same provider, in-process sub-agent (Claude Task tool / kilo
-   `mode: subagent`). Hand it **only**: the artifact path, the review-file path, the phase name,
+3. If `advisory` or `auto`, ensure the review file exists (`pw-review.sh init-docs <slug>
+   <artifact-rel-path>` if not), then spawn the `pw-reviewer` agent **fresh** — same provider,
+   in-process sub-agent (Claude Task tool / kilo `mode: subagent`). Hand it **only**: the artifact
+    path, the review-file path, the phase name, and neutral routing metadata. Identify requested
+    routing as requested; pass an actual provider/model only when the runtime confirms the REVIEWER's run,
    and `REVIEWER-NOTES.md` if it exists. Do **not** pass this session's own reasoning about the
    artifact, or any chat history about how it was produced — that defeats the entire point of a
    second opinion. Invoke the `pw-review` skill yourself first if you need the full method before
-   spawning it.
+    spawning it.
+    The reviewer must confirm its own execution identity. Your model as the spawning agent is
+    not evidence of its model; absent runtime confirmation, the reviewer records `unknown`.
 4. `pw-reviewer` files items (tagged `(pw-reviewer, <timestamp>)`) and a `REVIEWER-NOTES.md` entry
-   on its own — you don't do this part. It checks for an existing item on the same section anchor
-   before filing anything (loop prevention — a 3rd item on the same anchor becomes a [OPEN]
-   escalation instead of a normal finding, never resolved by it). In `auto` mode with a genuinely
-   clean pass, it may also call `pw-review.sh auto-signoff` itself; you never write that row.
+    on its own — you don't do this part. It checks for an existing item on the same section anchor
+    before filing anything (loop prevention — a 3rd item on the same anchor becomes a [OPEN]
+    escalation instead of a normal finding, never resolved by it). Its pass entry is
+    `pw-review.sh start <slug> <review-rel-path> --phase <phase> --provider <actual-provider>
+    --model <actual-model>`, which records `changes-requested` ONLY once the pass has persisted
+    real findings — a reviewer that starts empty and finds nothing files no such row and leaves
+    Sign-off untouched (its verdict lives in `REVIEWER-NOTES.md`). A reviewer that starts empty and
+    discovers real findings persists them first (the item write invalidates a stale approval via
+    the `pw-review (feedback)` row), then records the pass row. In `auto` mode with a genuinely
+    clean pass it may call `pw-review.sh auto-signoff` with its actual `--provider`/`--model`
+    directly — never after first fabricating a `changes-requested` row; you never write either row.
+    If the run's identity is unconfirmed it records `unknown`, never a guessed or configured value.
 5. Recap what it did (items filed, whether it signed off, any escalation) exactly like the
-   apply-comments recap below. `advisory` mode: remind me a human still needs to review its items
-   and sign off. An escalation means this needs my attention now, not another `ai` re-run.
+   apply-comments recap below, naming the actual reviewer identity shown in the rows. `advisory`
+   mode: remind me a human still needs to review its items and sign off — an advisory pass never
+   approves, even when it finds nothing. An escalation means this needs my attention now, not
+   another `ai` re-run.
 
 **If the 2nd argument is literally `config`, this is the configuration domain — which is no longer
 part of reviewing.** Tell me that in one line and hand me the right command instead of doing it
@@ -93,9 +127,10 @@ step silently — do not block.**
 
 **Start mechanical:** `{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh review <slug> [phase-word]` confirms
 the phase's review files exist (exit 1 + `pw-preflight:` line = report and stop — nothing to
-apply), then `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh scan <slug> [--phase <phase>]` prints
-`<file>: N open[, N resolved][, N pending] (sign-off)` per review file — pick which files to
-open from that instead of reading them blind. Mapping rules below still decide the scope set.
+apply), then `{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh scan <slug> [--phase <phase>]` prints
+`<file>: N open[, N resolved][, N pending] (latest decision · its By actor)` per review file —
+pick which files to open from that instead of reading them blind. Mapping rules below still decide
+the scope set.
 - If the 2nd arg is a **path** to a `.review.md`, use exactly that file.
 - If the 2nd+ args are **task ids** (`T0n`, one or many — `T01 T03 T05 T06` works), process each
   named task's `task/review/<T0n>.review.md` in **ONE pass**: apply all `[OPEN]` items across the
@@ -130,7 +165,7 @@ For each task I've flipped to `Status: verify-failed`:
 **Before applying a fix — if the doc being edited is `analysis/<topic>.md` or `task/PLAN.md`,
 check whether this fix needs to reopen that doc's own gate first** (analysis and PLAN are the two
 docs with a real hard-gate Sign-off table — `/pw-breakdown` and `/pw-execute` read them via
-`pw-review.sh gate`, the current/latest row only, never "was it ever approved"). This matters
+`pw-review-read.sh gate`, the current/latest row only, never "was it ever approved"). This matters
 even when the file you're processing ISN'T that doc's own review file — e.g. an RFC comment lives
 in `analysis/review/RFC.review.md`, but the doc it fixes is `analysis/<topic>.md`, whose OWN gate
 lives in the *separate* `analysis/review/<topic>.review.md` (derived from the doc's path per the
@@ -140,23 +175,45 @@ Sign-off, so there's nothing to reopen.
 1. Derive the doc's own canonical review file: `analysis/<topic>.md` → `analysis/review/
    <topic>.review.md`; `task/PLAN.md` → `task/review/PLAN.review.md`. (Usually this IS the file
    already being processed — the derivation only diverges for RFC.review.md's case above.)
-2. `…/{{PW_HOME}}/tooling/scripts/entities/pw-review.sh gate <slug> <canonical-review>`. If it's not currently
-   `approved`, there's nothing to reopen — just apply the fix as normal.
+2. `…/{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh gate <slug> <canonical-review>`. If it's not currently
+   `approved`, there's nothing to invalidate — just apply the fix as normal (the pass-entry rule
+   below still records the `changes-requested` row when you start the work).
 3. If it IS currently `approved`: compare that doc's phase (`analysis`→`analysis`,
    `task/PLAN.md`→`breakdown`) against the project's actual current phase
    (`…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh phase <slug>`), using the fixed order `context < analysis <
    breakdown < executing < review < done`:
-   - **Same phase** (the common case — nothing has advanced past this doc yet, e.g. mid-RFC
-     negotiation where `Status:` is still `analysis`) → reopen it automatically:
-     `…/{{PW_HOME}}/tooling/scripts/entities/pw-review.sh reopen <slug> <canonical-review>`, then apply the fix.
-     This is the ordinary case and needs no confirmation — a bare `/pw-review <slug>` used for its
-     everyday purpose will only ever hit this branch, never the one below.
-   - **Doc's phase is EARLIER than the current phase** (only reachable by explicitly naming an
-     earlier phase/file — the project has already moved on, e.g. `Status:` is `executing` and
-     you're fixing analysis post-hoc) → **STOP and ask me to confirm before reopening.** A later
-     phase already relied on this approval (execution may have real commits depending on the PLAN
-     gate you're about to invalidate) — never do this silently. Only call `review reopen` after I
-     explicitly say to proceed.
+    - **Same phase** (the common case — nothing has advanced past this doc yet, e.g. mid-RFC
+      negotiation where `Status:` is still `analysis`) → the pass-entry call in the rule below
+      invalidates it automatically: `pw-review.sh start <slug> <canonical-review>` appends the
+      attributed `changes-requested` row before the work runs. This is the ordinary case and needs
+      no confirmation — a bare `/pw-review <slug>` used for its everyday purpose will only ever hit
+      this branch, never the one below. (A fix that arrives through a DIFFERENT review file — an
+      RFC comment — with no eligible work on the gate file itself for `start` to validate: invalidate
+      with `pw-review.sh reopen <slug> <canonical-review>` BEFORE applying the fix — one
+      workflow-attributed `in-review` row, never `approved`, never attributed to me.)
+    - **Doc's phase is EARLIER than the current phase** (only reachable by explicitly naming an
+      earlier phase/file — the project has already moved on, e.g. `Status:` is `executing` and
+      you're fixing analysis post-hoc) → **STOP and ask me to confirm before reopening.** A later
+      phase already relied on this approval (execution may have real commits depending on the PLAN
+      gate you're about to invalidate) — never do this silently. I can still ask you to record the
+      item (the write succeeds; its unresolved status blocks the next phase from consuming the
+      stale approval even while the historical `approved` row stands); only run the pass/repair
+      with `pw-review.sh start <slug> <canonical-review> --confirm-earlier` after I explicitly say
+      to proceed. Never rewind the dashboard or rewrite my earlier decision on your own.
+
+**Pass entry — record the transition, then work (per file, only with real work).** Before you
+apply anything to a review file, check it has ELIGIBLE work: at least one real unresolved `[OPEN]`
+item or a question whose answer needs incorporating (template stubs, resolved/archived rows,
+settled questions, unanswered waiting-human `Qn`s, malformed entries, out-of-scope asks don't
+count — the script's own detector decides). If yes, run
+`{{PW_HOME}}/tooling/scripts/entities/pw-review.sh start <slug> <review-rel-path>` — it appends one
+`changes-requested` row attributed `pw-review (repair)` before the work set, per artifact; only
+files with eligible work get a row. If the set is empty (no-op invocation, stubs only, everything
+resolved), skip `start` entirely — no row, signoff history unchanged, and say what was skipped.
+A resume/retry of the same pass doesn't duplicate the row, and item writes inside an active pass
+don't toggle the state back. `start` refuses to write `approved` — approval stays with me (or the
+guarded `auto` path). An explicit `changes-requested`/rejection row **I** recorded stands until I
+withdraw it; your operational rows never paper over it.
 
 **If a single item's ask names 3+ distinct concerns/sections** (e.g. it touches several repos'
 worth of design at once), first list every target heading by name before touching anything, apply
@@ -213,8 +270,13 @@ task's `## Verify` block IS its build check. After applying the fix in that task
 (Analysis / PLAN / RFC-doc items are prose, not code — no build loop; this applies to task items
 only.)
 
-Never edit or delete my comment text (items OR my `↳ you:` answers). Never write the Sign-off row
-— only I clear the gate (and never run `pw-review.sh signoff` on your own initiative — C4).
+Never edit or delete my comment text (items OR my `↳ you:` answers). Approval is mine: never run
+`pw-review.sh signoff` on your own initiative (C4) and never make `start`/`auto-signoff` say
+`approved` outside the guarded `auto` path — your only Sign-off writes are the attributed
+**operational rows** (`pw-review (feedback)` via item/answer writes, `pw-review (repair)` via
+`start`) and, in `auto` mode, the tool-enforced `pw-reviewer (auto; …)` row. A row I explicitly
+rejected (my own `changes-requested`) stands until I withdraw or re-approve it — operational rows
+never clear it.
 Log the pass (this is the ONLY dashboard-adjacent write you make) — **one
 line per processed file**: `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log <slug> review "<n> items resolved in
 <file>"`. The `## Contents` table needs no manual refresh when you flipped headings via
@@ -238,11 +300,12 @@ whatever `PW_MEMORY_NOTES` already documents for this tool's buckets.
 
 When done, recap each resolved item (one line, grouped by its task/file), and tell me how many
 `[OPEN]` items remain **in the resolved scope** (and, as a footnote, across the whole project:
-a final `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh scan <slug>` run — its per-file `N open` counts, not a
+a final `{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh scan <slug>` run — its per-file `N open` counts, not a
 raw grep, which would also count the root `_REVIEW.template.md`'s example markers). For a task review: task fixes are
 re-verified in the worktree by the build loop above — only point me at `/pw-execute <slug> T0n`
-if a fix was left unverified (`--skip-build-check`) or hit the 3-round cap. **If a gate got auto-reopened**
-(the check above), say so explicitly and name which file/phase — that's the one thing here that
+if a fix was left unverified (`--skip-build-check`) or hit the 3-round cap. **If a gate got
+invalidated by a workflow-recorded row** (the `start`/reopen transitions above — name the row's
+actor too), say so explicitly and name which file/phase — that's the one thing here that
 changes whether a *later* command will run, so it can't just be buried in the item recap.
 
 ## Fixer routing for local review files (batched; ladder-routed for tasks, inline for docs)
@@ -259,4 +322,3 @@ inline; `Route: headless` → resume-try iff `pw-session.sh session-check <slug>
 resume-first-then-supervised-cold-headless; ≥2 tasks → parallel per-task fixers. Decision items
 (`Qn`/"you decide") are human answers and are excluded from any batched fix. Reviewers read;
 fixers are the executor-side (and re-run their own `## Verify` once).
-

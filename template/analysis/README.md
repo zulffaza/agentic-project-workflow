@@ -16,4 +16,6 @@ approved **before** any task breakdown. Files starting with `_` are templates, n
 **Review:** feedback lives in `review/<topic>.review.md` (a `review/` subdir here, from
 `../_REVIEW.template.md`), not inline — the agent rewrites this doc when applying fixes. The agent
 reads the review file first, replies with `↳ agent:` and flips `[OPEN]`→`[RESOLVED]`, and never edits your comment
-text. Only you sign off. See `../README.md` → "Review & feedback".
+text. Only you approve: agents may record attributed `in-review`/`changes-requested` bookkeeping
+rows as your feedback queues a cycle, but an `approved` row stays yours (guarded AI `auto` mode
+aside). See `../README.md` → "Review & feedback".

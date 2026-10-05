@@ -69,10 +69,11 @@ If this analysis also goes through the optional [RFC side-loop](./RFC.md) (exter
 often a days/weeks negotiation): publishing the draft (`/pw-rfc`'s Wave 1) only needs §4's chosen
 approach, **not** this Sign-off — negotiating with outside reviewers is normal *before* you decide
 this is final, not after. Once negotiated, a comment-driven fix applied after this row already
-reads `approved` **automatically reopens this exact gate** — analysis-approved and RFC-approved
+reads `approved` **automatically records a workflow-attributed transition on this exact gate**
+(`in-review` / `changes-requested`, never attributed to you) — analysis-approved and RFC-approved
 are the same fact, by design, so `/pw-breakdown` keeps correctly refusing until the whole
-negotiation settles and you (re-)approve. That auto-reopen only covers comments already *folded in*,
-though — `/pw-breakdown` also hard-refuses outright if `analysis/review/RFC.review.md` has any
+negotiation settles and you (re-)approve. Those automatic rows only cover comments already *folded
+in*, though — `/pw-breakdown` also hard-refuses outright if `analysis/review/RFC.review.md` has any
 comment still sitting [OPEN]/[PENDING] (pulled via `/pw-rfc … comments` but not yet folded
 in or resolved), even when this Sign-off already reads `approved` on its own. Fold it in via
 `/pw-review` or resolve it directly before re-running `/pw-breakdown`.
@@ -215,9 +216,11 @@ steps either way, but drives them through the command rather than hand-editing p
 Downstream artifacts already produced stay on disk; regenerate them once the upstream phase is
 re-approved.
 
-**This is different from `/pw-review`'s automatic Sign-off reopen** (docs/RFC.md) — that one fires
-on analysis's or the PLAN's own review file the moment a fix lands there post-approval, tagged
-`pw-review (auto-reopen)`, and never touches the dashboard `Status:` line at all (it doesn't need
-to — if `Status:` hasn't advanced past that phase yet, which is the normal case, there's nothing to
-rewind). Reach for the manual `rewind` flow above only once `Status:` has genuinely moved on and
-you need to walk it backward on purpose.
+**This is different from `/pw-review`'s automatic Sign-off transitions** (docs/RFC.md) — those fire
+the moment feedback or a repair pass touches a file whose gate was already approved: your first new
+item or answer records an `in-review` row (`pw-review (feedback)`), and the pass that works it
+records `changes-requested` (`pw-review (repair)`), each attributed to the workflow in the `By`
+column, never to you (older files may also hold a `pw-review (auto-reopen)` row — readable history).
+None of them touch the dashboard `Status:` line at all, and an EARLIER phase's gate is not reopened
+without your explicit confirmation. Reach for the manual `rewind` flow above only once `Status:` has
+genuinely moved on and you need to walk it backward on purpose.

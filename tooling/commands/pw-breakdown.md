@@ -29,7 +29,7 @@ resumption.
 
 First check the analysis gate — **per analysis doc, its CURRENT Sign-off decision, not "was it
 ever approved":** for each real `<project>/analysis/<topic>.md`, run
-`{{PW_HOME}}/tooling/scripts/entities/pw-review.sh gate <slug> analysis/review/<topic>.review.md` (the file
+`{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh gate <slug> analysis/review/<topic>.review.md` (the file
 doesn't exist yet → treat as not approved). If it exits non-zero for **any** topic, STOP and ask me
 to (re-)approve that analysis first — quote the decision it printed (`in-review` or
 `changes-requested`). **Do not fall back to scanning the file for an `approved` string anywhere
@@ -43,7 +43,7 @@ it says nothing about a comment that's been pulled but never folded in. That gap
 below, a genuinely separate mechanism from this Sign-off read.
 
 **Third check — an open RFC negotiation blocks breakdown outright:** run
-`{{PW_HOME}}/tooling/scripts/entities/pw-review.sh has-open <slug> analysis/review/RFC.review.md`. If it prints
+`{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh has-open <slug> analysis/review/RFC.review.md`. If it prints
 `yes` (exit 0), STOP — do not produce `PLAN.md` or any task file, even if the analysis Sign-off
 above reads `approved`. Tell me which item(s) are still [OPEN]/[PENDING] in that file
 and that I need to either fold each one into the analysis via `/pw-review` (which reopens the
@@ -191,8 +191,10 @@ Then, **create the PLAN review file (idempotent)** — never hand-write it:
 {{PW_HOME}}/tooling/scripts/entities/pw-review.sh init <slug> task/review/PLAN.review.md task/PLAN.md
 ```
 No-ops if it already exists; otherwise creates it verbatim from the template so I don't have to
-copy it myself. (Task review files T0n.review.md are created the same way per task — or all at
-once via `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init-all <slug>`; my own items/answers/sign-off
+copy it myself. (Task review files T0n.review.md are created the same way per task — or in one
+pass via `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init-docs <slug> task/PLAN.md <named-task-paths>`,
+which creates only the chosen docs. `init-all` applies only after the dashboard actually enters
+breakdown; before that move it still selects analysis. My own items/answers/sign-off
 rows go through the `/pw-review <slug> item|answer|signoff` operators, never hand-copied blocks.)
 
 Then **MANDATORY final step — do NOT skip** — update status + log via the helper

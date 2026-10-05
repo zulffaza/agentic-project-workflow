@@ -20,7 +20,9 @@ prompt**: an agent handed only that one file can do the work. Non-negotiable par
 isolation. If a task needs two repos, split it and add a dependency edge.
 
 **Review:** comment on `PLAN.md` or a task in `review/PLAN.review.md` / `review/T0n.review.md`
-(a `review/` subdir here, from `../_REVIEW.template.md`), not inline. To reject an execution
+(a `review/` subdir here, from `../_REVIEW.template.md`; a missing one is created on demand with
+`/pw-review <slug> init task/T0n.md`, or with `… init-all` during the breakdown phase), not
+inline. To reject an execution
 result, add items to `review/T0n.review.md` **and** set that task's `Status: verify-failed` so
 it's re-run. See `../README.md` → "Review & feedback".
 

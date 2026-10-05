@@ -3,7 +3,7 @@
 # Every forbidden pattern here encodes a bug that actually shipped once (plan 16 §5).
 
 # the automation-script registry (single list; T0/T1/T2/mutation reuse it)
-PWTEST_AUTOMATION="pw-status.sh pw-preflight.sh pw-ship.sh pw-review.sh pw-rfc.sh pw-worktree.sh pw-doc.sh pw-context.sh pw-config.sh pw-session.sh pw-help.sh pw-project-doctor.sh"
+PWTEST_AUTOMATION="pw-status.sh pw-preflight.sh pw-ship.sh pw-review.sh pw-review-read.sh pw-rfc.sh pw-worktree.sh pw-doc.sh pw-context.sh pw-config.sh pw-session.sh pw-help.sh pw-project-doctor.sh"
 export PWTEST_AUTOMATION
 
 _pwtest_code_lines() { awk '!/^[[:space:]]*#/' "$@" 2>/dev/null | cat -n; }
@@ -148,6 +148,14 @@ static_t4() {
   hits="$(grep -lE 'pw-review\.sh signoff|pw-review-edit\.sh' "$TOOL"/agents/*.md 2>/dev/null | tr '\n' ' ')"
   [ -z "$hits" ] && pwtest_ok "T4 canary: no agent file invokes signoff" \
     || pwtest_bad "T4 canary: no agent file invokes signoff" "C4 violation in: $hits — only a human triggers a gate decision (agent path: pw-review.sh auto-signoff)"
+  grep -qF 'pw-review.sh init-docs <slug> <artifact-rel-path>' "$TOOL/commands/pw-review.md" \
+    && grep -qF '/pw-review <slug> init <artifact-path>' "$TOOL/commands/pw-review.md" \
+    && pwtest_ok "T4 canary: selected document command maps to list initialization" \
+    || pwtest_bad "T4 canary: selected document command mapping" "public init must accept artifact paths and call init-docs, not the legacy review/doc pair API"
+  grep -qF "The reviewer must confirm its own execution identity." "$TOOL/commands/pw-review.md" \
+    && grep -qF 'never substitute the configured model pin' "$TOOL/agents/pw-reviewer.md" \
+    && pwtest_ok "T4 canary: AI identity belongs to the reviewer, not the orchestrator" \
+    || pwtest_bad "T4 canary: actual AI reviewer identity" "review handoff must distinguish actual reviewer runtime identity from requested routing and the spawning agent"
   # (c) capability-placement conventions doc exists, is linked from the maintainer entry,
   # and the pw-lib legacy core is fully dissolved (S2 endgame, plan 20)
   [ -f "$TOOL/docs/conventions.md" ] && grep -qF 'docs/conventions.md' "$TOOL/AGENTS.md" \

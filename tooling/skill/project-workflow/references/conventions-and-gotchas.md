@@ -36,19 +36,26 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   adopted branch and re-churned the provenance line each attempt). It also bumps the `Adopted:`
   count. Resolve `<base>` from the **MR's target branch** when there's an MR.
 - `pw-review.sh init <slug> <review-rel-path> <doc-rel-path>` — **idempotently create a review
-  file from the template** if (and only if) it doesn't exist yet. `/pw-analyze` and `/pw-breakdown`
-  call this so `analysis/review/<topic>.review.md` / `task/review/PLAN.review.md` are already there
-  — the human never has to copy the template themselves. Never hand-write a review file; this also
-  guarantees the permanent `> **Add an item:**` / `> **Answer a question:**` format hints never get
-  silently dropped. Batch catch-up for a whole project (analysis docs + PLAN + every T0n):
-  `pw-review.sh init-all <slug>`.
+  file from the template** if (and only if) it doesn't exist yet (the legacy single-file triple,
+  kept for mechanical callers like `/pw-analyze`/`/pw-breakdown` creating their OWN artifact's
+  review). `pw-review.sh init-docs <slug> <artifact-rel>…` takes the selected-artifact list
+  (validate-all-then-create; exactly those reviews, nothing as a side effect).
+  `pw-review.sh init-all <slug>` is the catch-up for the **current dashboard phase only** —
+  never earlier/later phases, no user override. Never hand-write a review file; these guarantee
+  the permanent `> **Add an item:**` / `> **Answer a question:**` format hints never get
+  silently dropped.
 - `pw-review.sh` — **the write side of review files** (human entry: `/pw-review <slug>
-  item|answer|signoff|init-all`): `add-item` (next Rn, timestamp + `pw-item-status` marker +
-  `---` + reindex, fills the template stub in place), `answer` (styled `↳ you:` line under a Qn —
-  never flips status), `add-question` / `resolve` (agent-side: Qn creation; in-place tag+marker
-  flip with the `↳ agent:` reply — `resolve` on a Qn refuses unless a `↳ you:` line exists),
-  `signoff` (**human-triggered only, C4 — never on agent initiative**; the agent-side gate path
-  stays `pw-review.sh auto-signoff`). Free text via `--text <rest-of-line>` or `--stdin`
+  item|answer|signoff|init|init-all`): `add-item` (next Rn, timestamp + `pw-item-status` marker +
+  `---` + reindex, fills the template stub in place; a first real item/answer after an approval
+  also appends the attributed `pw-review (feedback)` `in-review` row in the same write), `answer`
+  (styled `↳ you:` line under a Qn — never flips status), `add-question` / `resolve` (agent-side:
+  Qn creation; in-place tag+marker flip with the `↳ agent:` reply — `resolve` on a Qn refuses
+  unless a `↳ you:` line exists), `start <slug> <review-rel> [--phase <lane>] [--provider <actual>]
+  [--model <actual>] [--confirm-earlier]` (pass entry: `changes-requested` ONLY with validated
+  eligible work, repair mode unphased / AI mode phased; never `approved`), `signoff`
+  (**human-triggered only, C4 — never on agent initiative**; the agent-side gate path stays
+  `pw-review.sh auto-signoff`, extended with `--provider`/`--model`/`--confirm-earlier` and the
+  lane/rejection guards). Free text via `--text <rest-of-line>` or `--stdin`
   heredoc, stored verbatim (A-rules, `tooling/docs/conventions.md`).
 - `pw-context.sh` — **deterministic context-doc writes** (human entry: `/pw-context <slug> …`):
   `req-init` (REQUIREMENTS.md from template, idempotent), `add-input` (INDEX.md inputs row —

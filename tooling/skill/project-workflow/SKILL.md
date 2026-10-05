@@ -45,14 +45,15 @@ phase runs. Don't skip a gate.
   [`references/conventions-and-gotchas.md`](references/conventions-and-gotchas.md).
 - **Script the mechanical — call the automation scripts, don't re-implement them.** Pre-phase:
   `pw-preflight.sh <cmd> <slug>` + `pw-doc.sh lint …` (nonzero → STOP, relay stderr). Cheap reads
-  instead of manual file-walking: `pw-status.sh`, `pw-review.sh scan`, `pw-doc.sh summary`, and
+  instead of manual file-walking: `pw-status.sh`, `pw-review-read.sh scan`, `pw-doc.sh summary`, and
   `pw-help.sh overview` / `pw-help.sh command <name>` / `pw-help.sh find <term>` — the live
   how-to map (`--json` machine modes; strictly read-only).
   Mechanics: `pw-ship.sh resolve`/`pw-ship.sh exec`, `pw-ship.sh mr-state-batch`,
   `pw-ship.sh monitor`, `pw-worktree.sh create`, `pw-context.sh fetch`, `pw-rfc.sh comments`,
   `pw-context.sh adopt-snapshot`, `pw-doc.sh sync`. Deterministic document writes (never hand-copy
-  template blocks): `pw-review.sh` (`init-all|add-item|answer|add-question|resolve`;
-  `signoff` is human-triggered only — C4) and `pw-context.sh` (`req-init|add-input|add-repo`).
+  template blocks): `pw-review.sh` (`init|init-docs|init-all|start|add-item|answer|add-question|resolve`;
+  `init-all` is current-phase-only, `signoff` is human-triggered only — C4 — and `start` can only
+  ever write `changes-requested`, never approval) and `pw-context.sh` (`req-init|add-input|add-repo`).
   The `/pw-*` commands already invoke their share; when
   you reach a phase **without** the command (direct spawn, skill-only session), run the same calls
   yourself — identical behavior whichever path triggers the work is the point.

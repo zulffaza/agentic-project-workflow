@@ -14,7 +14,8 @@ an artifact + this skill to manually — the method is the same either way.
 ## The one rule that matters more than any other
 
 **You are a second opinion, not an echo.** Judge ONLY what you were explicitly handed: the
-artifact, its `.review.md`, the phase name, and (if it exists) `REVIEWER-NOTES.md`. Never the
+artifact, its `.review.md`, the phase name, your run's actual provider/model (a neutral routing
+fact, nothing about the artifact's production), and (if it exists) `REVIEWER-NOTES.md`. Never the
 producing agent's chat history, scratch reasoning, or self-justification for why it did what it
 did — if any of that leaks into your context, say so and ask for a narrower handoff. A review that
 shares the producer's framing just confirms its own reasoning; the entire point of running this
@@ -53,8 +54,12 @@ EOF
 - `## Items`: each item is `### Rn · <§anchor> — [OPEN] (pw-reviewer, <YYYY-MM-DD HH:MM>)` + the
   ask. **Use `--actor pw-reviewer`, never the default `you`** — a human's items and yours must
   stay visually distinguishable in the file's history.
-- `## Sign-off`: **never write this by hand, and never via `pw-review.sh signoff`** — that
-  operator is human-triggered only (C4). Your one path is the guarded `auto-signoff` call below.
+- `## Sign-off`: **never write this by hand, and the human gate operator is C4-restricted and
+  not yours to run** — your one path to `approved` is the guarded `auto-signoff` call below, and
+  your ONLY state transition is the `start` pass entry. A first real item on a file whose gate
+  reads `approved` invalidates that stale approval automatically via the write itself (the
+  attributed `pw-review (feedback)` `in-review` row); your later writes inside an active pass
+  never toggle its recorded state.
 - Never edit or delete existing item/question text (human- or agent-authored) — you only ever
   *add* new items/questions, or (if you're the one applying fixes elsewhere in the pipeline —
   that's a different role, `/pw-review`'s apply flow, not this skill) reply and flip status via
@@ -70,7 +75,7 @@ marker — tooling keys off it, not the tag text.
 
 ## Read only what you need — never the whole file to find one section
 
-With bundle access, orient first via the script — `tooling/scripts/entities/pw-review.sh scan <slug>
+With bundle access, orient first via the script — `tooling/scripts/entities/pw-review-read.sh scan <slug>
 [--phase <phase>]` prints open/resolved/pending counts + last sign-off state per review file, so
 you target the files worth reading at all (a standalone agent without the bundle greps
 `[OPEN]`/`[PENDING]` instead). Then, before reading the artifact end-to-end, check the review
@@ -108,6 +113,24 @@ repeating.
 
 ## The gate — advisory vs. auto
 
+**Pass entry — `start` — comes after real findings, never before.** Record your pass with:
+
+```sh
+tooling/scripts/entities/pw-review.sh start <slug> <review-rel-path> --phase <phase> \
+  --provider <actual-provider> --model <actual-model>   # identity as the RUNTIME reports it
+```
+
+It appends `changes-requested` (attributed `pw-reviewer (<mode>; provider=…; model=…)`) only once
+the pass has actually persisted eligible findings. A pass that starts with no items and finds
+nothing files **no** row and leaves Sign-off untouched — its verdict lives in `REVIEWER-NOTES.md`
+alone. A pass that finds real issues persists the items first (that write is what invalidates a
+stale approval), then records the row. The provider/model you pass must be the identity your run
+ACTUALLY executed with — routing fallback included — never the configured spawn-lane pin, the
+spawning session's model, or the artifact author's; if the runtime cannot confirm it, omit the
+flags and the row records `unknown`. An unconfirmed identity grants no approval authority. If the
+artifact belongs to a phase EARLIER than the project's current one, its repair/reopen requires
+the human's explicit confirmation (`--confirm-earlier`); otherwise leave the gate alone.
+
 This project's AI Review mode for your phase controls what you're allowed to do:
 
 ```sh
@@ -117,17 +140,23 @@ tooling/scripts/entities/pw-config.sh ai-review <slug> <phase> <mode>      # off
 
 - **`off`**: you shouldn't be running at all — if you find yourself invoked anyway, say so and stop.
 - **`advisory`**: file your items/questions, then **stop**. A human reads them and writes the
-  Sign-off row themselves, exactly as if a human had raised those items. This is the default
-  expectation whenever you're unsure.
+  Sign-off row themselves, exactly as if a human had raised those items — approval stays with the
+  human even when every finding is resolved, and a clean advisory pass adds no row and changes no
+  existing approval. This is the default expectation whenever you're unsure.
 - **`auto`**: same filing step, but if — and only if — your pass leaves **zero** [OPEN] items and
   **zero** [PENDING] questions, you may call:
   ```sh
-  tooling/scripts/entities/pw-review.sh auto-signoff <slug> <review-rel-path> <phase>
+  tooling/scripts/entities/pw-review.sh auto-signoff <slug> <review-rel-path> <phase> \
+    --provider <actual-provider> --model <actual-model>
   ```
-  This is the ONLY way a gate advances without a human touching it, and the tool independently
-  re-checks both conditions (genuinely `auto` mode + genuinely nothing open) — it isn't taking your
-  word for it. A refusal means one of those two isn't actually true; don't retry the same call
-  expecting a different answer, fix the actual condition or leave it for a human.
+  A clean auto pass may approve **directly** through this call — never after first fabricating a
+  `changes-requested` row. This is the ONLY way a gate advances without a human touching it, and
+  the tool independently re-checks every condition (genuinely `auto` mode + genuinely nothing open
+  in THAT file + the artifact actually belonging to this review lane + no standing explicit human
+  `changes-requested` — a human rejection survives until a human withdraws or replaces it; new
+  operational rows never erase it) — it isn't taking your word for any of them. A refusal means
+  one of those isn't actually true; don't retry the same call expecting a different answer, fix
+  the actual condition or leave it for a human.
 
 If you're a foreign agent without access to this bundle's `tooling/scripts/` (handed just the
 artifact + this skill, no checkout), you can still do the `advisory` half by hand — file items
@@ -144,15 +173,19 @@ narrative one — what you checked and why you decided what you decided. Always 
 tooling/scripts/entities/pw-review.sh note-init <slug>   # idempotent — creates the file with its header if missing
 ```
 
+Record your actual run identity in the Verdict bullet (`unknown` when the runtime cannot confirm
+it) so notes, rows, and the run record stay consistent. Do not substitute the spawning agent's
+model or the requested routing pin. Keep the identity consistent with any rows your pass wrote.
+
 Then append your own dated section directly (free-form prose doesn't fit a CLI-args shape). Keep
 every field a **short bullet, never a paragraph** — this file gets read cold, sometimes months
 later, and a wall of prose defeats the point of a "notes" file. Close every entry with a `---` rule
 so consecutive passes stay visually separated:
 
 ```markdown
-## <YYYY-MM-DD HH:MM> · <phase> · <artifact-rel-path> · mode=<advisory|auto>
+## <DD Month YYYY HH.mm WIB> · <phase> · <artifact-rel-path> · mode=<advisory|auto>
 - **Verdict:** <n items filed | clean pass — auto-approved | clean pass — awaiting human |
-  ESCALATED — §<anchor> recurred twice, needs a human>
+  ESCALATED — §<anchor> recurred twice, needs a human>; reviewer provider=<actual-provider|unknown>, model=<actual-model|unknown>
 - **Reasoning:** 2-4 short bullets, not a paragraph — one line per distinct point
   - <what you actually checked>
   - <what stood out, and why that verdict>
@@ -177,7 +210,9 @@ your own lineage, not the artifact-producer's self-justification.
 - Never write anywhere except the one `.review.md` you were handed and your own
   `REVIEWER-NOTES.md` section.
 - Never write the Sign-off row directly — only through the guarded `auto-signoff` call, only in
-  `auto` mode, only on a genuinely clean pass.
+  `auto` mode, only on a genuinely clean pass, only attributed to your run's actual identity.
+- Never write `changes-requested` for a pass with no eligible findings, and never let `start` or
+  any item write say `approved` — operational rows are bookkeeping, not approval.
 - Never fabricate a "clean pass" to get past a refusal — the tool checks the real file content.
 
 ## Full context

@@ -106,7 +106,12 @@ is normative.
   summary after the block, never instead of it.
 - **C4 — doctrine-restricted operators** (e.g. `review signoff` — "only a human clears a gate")
   are labeled **"human-triggered only, never on agent initiative"** in the command file, and a T0
-  anti-idiom static test asserts no agent file mentions them.
+  anti-idiom static test asserts no agent file mentions them. C4 restricts the human **approval**
+  operator specifically; agent-side **operational transitions** are a distinct, guarded surface —
+  the pass-entry writer may only record `changes-requested` (with validated eligible work) and the
+  item/answer writers their attributed `in-review` row, and neither can ever produce `approved`.
+  Keep both separations pinned: no agent file names the human operator, and no operational writer
+  path can grant approval.
 - **Reserved names.** `pw-maintainer` is reserved for the internal maintainer skill under
   `tooling/skill-internal/` (read-as-file, NOT provider-installed) — never reuse it for a `/pw-*`
   user command or a `tooling/skill/` user skill. This bullet is the durable registry of reserved

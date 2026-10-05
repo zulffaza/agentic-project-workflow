@@ -38,7 +38,7 @@ review → close**, driven by `/pw-*` slash commands. Work happens in scaffolded
 Side-loops: **`/pw-sync`** refreshes open MRs against a moved base · **`/pw-ship … comments`**
 services MR review threads · **`/pw-status`** shows where a project is · **`/pw-context`** edits
 the context docs deterministically (`req-init` · `add-input` · `add-repo`) · **`/pw-review`** also
-takes write operators (`init-all` · `item` · `answer` · `signoff`) so review-file blocks are never
+takes write operators (`init` · `init-all` · `item` · `answer` · `signoff`) so review-file blocks are never
 hand-copied. All **five** review points
 in this pipeline — analysis, plan (breakdown), a task's plan, a task's execution result, and MR/PR
 comments (not all shown as their own row above — per-task and MR reviews are optional/side-loop)

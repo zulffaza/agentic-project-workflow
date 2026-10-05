@@ -21,7 +21,7 @@ grep -qiE 't99' "$PW_PROJECTS_DIR/$RI/rfc/META.md" \
 # --- ported from pw-lib's inline selftest (plan 20 Phase 5) ---
 pl_rfc_selftest() {
   local tmp="$ROOT/pl-rfc"; rm -rf "$tmp"; mkdir -p "$tmp/demo" "$tmp/demo2"
-  printf -- '- **Status:** context\n- **One-liner:** <what this project is>\n' > "$tmp/demo/README.md"
+  printf -- '- **Status:** context\n- **One-liner:** <what this project is>\n- **Adopted:** fixture baseline\n' > "$tmp/demo/README.md"
   : > "$tmp/demo/LOG.md"
   printf -- '- **Status:** context\n- **One-liner:** <what this project is>\n' > "$tmp/demo2/README.md"
   : > "$tmp/demo2/LOG.md"
@@ -108,8 +108,8 @@ pl_rfc_selftest() {
 
 # (ship comment-seen asserts moved to scripts/entities/pw-ship.sh + tests/cases/pw-ship.t.sh — plan 20)
 
-  # rfc dashboard: inserted after Adopted: when one exists (demo already has one from the adopt
-  # tests above); inserted after One-liner when no Adopted: line exists (a fresh project); a 2nd
+  # rfc dashboard: demo explicitly includes Adopted; demo2 omits it. The RFC line follows
+  # Adopted when present, otherwise One-liner. A second
   # call replaces in place (still exactly one RFC: line either way).
   PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-rfc.sh)" dashboard demo "wave 1 published — https://example.com/doc/2" >/dev/null
   grep -q '^- \*\*RFC:\*\* wave 1 published' "$tmp/demo/README.md" || die "selftest FAIL: RFC line not inserted"
@@ -125,4 +125,4 @@ pl_rfc_selftest() {
   grep -A1 '^- \*\*One-liner:\*\*' "$tmp/demo2/README.md" | grep -q '^- \*\*RFC:\*\*' || die "selftest FAIL: RFC not anchored after One-liner when no Adopted: exists"
   rm -rf "$tmp"
 }
-pl_rfc
+pl_rfc_selftest

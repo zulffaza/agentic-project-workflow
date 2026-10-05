@@ -100,7 +100,7 @@ pl_status_selftest() {
     || die "selftest FAIL: failed dashboard-task-status still mutated the file"
   rm -rf "$tmp"
 }
-pl_status
+pl_status_selftest
 
 # --- provider-audit: Execute-with expected vs ledger/Actually-used, + availability verdicts ---
 # Owns a scratch project (not F2) so rows/log lines are exact; shim catalog + scoped fixture
@@ -223,3 +223,42 @@ PLAN
   pwtest_ok "plan-23 three-holder sync + placeholder fill + close gate (all asserts passed)"
 }
 p23_selftest
+
+# --- plan-31 Blockers parity: LATEST Sign-off row + actor, never a historical approved
+# grep, tokens verbatim (hyphenated + legacy-decorated), RFC excluded from approval
+# discovery but visible through its real open items. Clone-only mutations (F2 stays pristine). ---
+_rv_add_s() { awk -v a="$2" -v n="$3" 'BEGIN{done=0} {print; if(!done && index($0,a)>0){print n; done=1}}' "$1" > "$1.tmp" && mv "$1.tmp" "$1"; }
+_rv_set_s() { sedi "s@$2@$3@" "$1"; }
+_open_item_s() { awk -v h='### R9 · §Scope — [OPEN] (pwtest, 2026-10-05 12:00) <!-- pw-item-status: open -->' 'BEGIN{done=0} {print; if(!done && index($0,"## Items")==1){print ""; print h; done=1}}' "$1" > "$1.tmp" && mv "$1.tmp" "$1"; }
+SB=st-plan31; rm -rf "$PW_PROJECTS_DIR/$SB"; cp -a "$F2" "$PW_PROJECTS_DIR/$SB"
+STB="$(pwtest_script pw-status.sh)"
+ARV="$PW_PROJECTS_DIR/$SB/analysis/review/fixture.review.md"; PRV="$PW_PROJECTS_DIR/$SB/task/review/PLAN.review.md"
+# baseline: F2 (executing, both gates approved, zero real open) → no Unapproved blocker:
+pwtest_rc 0 "status clone rc0" "$STB" "$SB" --skip-cli-check
+if grep -q 'Unapproved' "$PWTEST_OUT"; then pwtest_bad "clean approved baseline" "false Unapproved on approved fixtures"; else pwtest_ok "clean approved → no Unapproved blocker"; fi
+# reopened history: auto-reopen in-review row AFTER the approved row — the old whole-file
+# grep kept reporting the file approved; the latest-row reader must flag it, with the actor:
+_rv_add_s "$ARV" '| pwtest | approved |' '| 2026-10-05 12:30 | pw-review (auto-reopen) | in-review |'
+pwtest_rc 0 "status after reopen" "$STB" "$SB" --skip-cli-check
+pwtest_re 'Unapproved analysis review: analysis/review/fixture\.review\.md \(in-review by pw-review \(auto-reopen\)\)' "stale approval flagged with latest decision AND actor"
+# hyphenated token + repair actor verbatim:
+_rv_set_s "$PRV" '| 2026-09-15 00:00 | pwtest | approved |' '| 2026-10-05 13:00 | pw-review (repair) | changes-requested |'
+pwtest_rc 0 "status after repair row" "$STB" "$SB" --skip-cli-check
+pwtest_re 'Unapproved PLAN review \(changes-requested by pw-review \(repair\)\)' "full hyphenated token + actor shown"
+# legacy decoration stays readable and satisfies the latest-row check:
+_rv_set_s "$PRV" '| 2026-10-05 13:00 | pw-review (repair) | changes-requested |' '| 2026-10-05 14:00 | you | approved ✅ |'
+pwtest_rc 0 "status legacy approved" "$STB" "$SB" --skip-cli-check
+if grep -q 'Unapproved PLAN' "$PWTEST_OUT"; then pwtest_bad "legacy approved readable" "approved ✅ blocked"; else pwtest_ok "legacy approved ✅ satisfies the latest-row check"; fi
+# placeholder row: decision shown, blank actor renders no 'by' (never invented):
+_rv_set_s "$PRV" '| 2026-10-05 14:00 | you | approved ✅ |' '| | | in-review |'
+pwtest_rc 0 "status placeholder" "$STB" "$SB" --skip-cli-check
+pwtest_re 'Unapproved PLAN review \(in-review\)' "placeholder row: decision shown, no invented actor"
+# RFC staging: template copy never appears as an unapproved analysis blocker…
+cp "$PWTEST_TEMPLATE_DIR/_REVIEW.template.md" "$PW_PROJECTS_DIR/$SB/analysis/review/RFC.review.md"
+pwtest_rc 0 "status with RFC staging" "$STB" "$SB" --skip-cli-check
+if grep -q 'Unapproved analysis review: analysis/review/RFC\.review\.md' "$PWTEST_OUT"; then pwtest_bad "RFC excluded" "RFC staging gated as unapproved"; else pwtest_ok "RFC staging excluded from approval discovery"; fi
+# …but its real open items still surface in the unresolved list (independent gate):
+_open_item_s "$PW_PROJECTS_DIR/$SB/analysis/review/RFC.review.md"
+pwtest_rc 0 "status RFC open item" "$STB" "$SB" --skip-cli-check
+pwtest_re 'analysis/review/RFC\.review\.md \([0-9]+ open\)' "RFC unresolved comment stays visible"
+rm -rf "$PW_PROJECTS_DIR/$SB"

@@ -135,4 +135,4 @@ pl_adopt_selftest() {
   grep -qE '^\|[^|]*ADOPTED\.md.*feat-a' "$IX" && die "selftest FAIL: provenance row enumerated a unit (should stay generic)"
   rm -rf "$tmp"
 }
-pl_adopt
+pl_adopt_selftest

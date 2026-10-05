@@ -6,9 +6,9 @@ Human feedback on any doc lives in a review file under a **`review/` subdir** be
 `task/T0n.md`→`task/review/T0n.review.md` (from `agentic-project-workflow/template/_REVIEW.template.md`).
 Rules you MUST follow:
 
-- **Orient with the scan script first:** `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh scan <slug>
-  [--phase <phase>]` prints one line per review file — open/resolved/pending counts + last
-  sign-off state — so you go straight to the files with live `[OPEN]` items instead of
+- **Orient with the scan script first:** `{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh scan <slug>
+  [--phase <phase>]` prints one line per review file — open/resolved/pending counts + the
+  latest Sign-off decision and its `By` actor — so you go straight to the files with live `[OPEN]` items instead of
   grep-walking `review/` (same scan `/pw-review` pre-flight and `pw-status.sh` use).
 - **Fixes are batched, per artifact, and ladder-routed (post-execution) / driver-inline (before execution).** All `[OPEN]` items on one artifact go as one fix pass holding every item for that
   artifact at once (human + `pw-reviewer` AI items + `dep-impact:T0n` items + verifier items all
@@ -27,7 +27,9 @@ Rules you MUST follow:
 - **Task review is OPTIONAL.** Only the PLAN sign-off gates execution; per-task `T0n.review.md`
   files exist whenever the human wants to send *any* feedback on a task — either **before**
   execution (critiquing the planned steps) or **after** (rejecting a result). If a task is flipped
-  to `verify-failed` but has **no** review file, create it deterministically (`pw-review.sh init`, or `pw-review.sh init-all <slug>` for every missing review file at once),
+  to `verify-failed` but has **no** review file, create it deterministically (`pw-review.sh
+  init-docs <slug> task/T0n.md`, or `pw-review.sh init-all <slug>` for every review file missing
+  in the CURRENT dashboard phase),
   write the human's chat feedback as items via `pw-review.sh add-item`, then apply it —
   don't silently do nothing (a frequent confusion). If there's no feedback anywhere, ask.
 - Before editing any doc, read its `.review.md` first — but only the item's own block + the
@@ -64,10 +66,22 @@ Rules you MUST follow:
 - **Opportunistically seed a configured memory tool** (skip silently if `PW_MEMORY=none`) when a
   fix is durable/generalizable — reuse the item's own `↳ agent:` reply (or, for an analysis fix,
   the §5.1 Decisions-log line) verbatim as the payload, never new authoring.
-- **Never** write the Sign-off row — only the human clears a gate (`approved`, date-time to the
-  minute). The human's own deterministic path is `/pw-review <slug> signoff <path> <decision>`
-  (`pw-review.sh signoff`) — **human-triggered only (C4): never invoke it on your own
-  initiative**, the agent-side path stays `pw-review.sh auto-signoff` (mode=auto only).
+- **Never** write an `approved` Sign-off row outside the guarded auto path — only the human
+  approves (date-time to the minute). The human's own deterministic path is
+  `/pw-review <slug> signoff <path> <decision>` — **human-triggered only (C4): never invoke it on
+  your own initiative**, never on a batched-fix pass's behalf, even when every item looks
+  resolved. Agents record **operational** rows only through the entity's transition writers: a
+  first real item/answer after an approval appends one attributed `in-review` row
+  (`pw-review (feedback)`, written by the item/answer writer itself), and `pw-review.sh start
+  <slug> <review-rel-path>` before a repair pass appends `changes-requested` attributed
+  `pw-review (repair)` — only when that file has genuinely eligible open work (stub-only,
+  resolved/archived-only, malformed-only, or waiting-human-only sets add NO row); no-op calls,
+  failed writes, and retries of the active pass never duplicate or toggle state, and later item
+  writes inside an active pass don't flip the operational state back. The writers can never say
+  `approved`, and an explicit human `changes-requested` stands until the human withdraws or
+  replaces it — operational rows never erase a human rejection. Repairing or reopening an
+  EARLIER phase's approved gate needs the human's explicit confirmation
+  (`pw-review.sh start … --confirm-earlier`).
 - Rejected execution result → the human adds items to `task/review/T0n.review.md` and sets the task
   `Status: verify-failed`; re-run it in its worktree and re-verify.
 - **Open questions (QnA):** when you can't resolve something during analysis, don't guess — list
@@ -140,8 +154,16 @@ operation — do not resurrect it under `/pw-review`). Delegate a phase's review
   <timestamp>)` instead of `(you, …)`. A human still writes the Sign-off row; process its items via
   the normal apply-comments flow above, no different from a human's.
 - `auto` — same filing, but if the pass leaves nothing `[OPEN]`/`[PENDING]`, `pw-reviewer` may call
-  `pw-review.sh auto-signoff <slug> <review-rel-path> <phase>` itself — the ONE tool-enforced
-  exception to "only a human clears a gate", re-checked by the tool, not taken on trust.
+  `pw-review.sh auto-signoff <slug> <review-rel-path> <phase> --provider <actual> --model <actual>`
+  itself — the ONE tool-enforced exception to "only a human clears a gate", re-checked by the tool
+  (mode, zero open items in that file, artifact/lane match, and no standing human rejection), not
+  taken on trust.
+  Pass entry for an independent AI pass is `pw-review.sh start <slug> <review-rel-path> --phase
+  <phase> --provider <actual-provider> --model <actual-model>`: it records `changes-requested`
+  (attributed `pw-reviewer (<mode>; provider=…; model=…)`) only after the pass has persisted real
+  findings — a pass that starts empty and finds nothing files notes only and leaves Sign-off
+  unchanged, a clean advisory pass never approves, and a clean auto pass approves directly through
+  the guards above without first fabricating a `changes-requested` row.
 `pw-reviewer` is spawned **fresh** (no shared context with whoever produced the artifact) and gets
 handed only the artifact + review file + phase + `REVIEWER-NOTES.md` — never this session's own
 reasoning about the artifact. **Loop prevention:** before filing, it checks the review file for an

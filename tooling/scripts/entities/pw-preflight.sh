@@ -5,17 +5,19 @@
 #   pw-preflight.sh analyze     <slug>
 #       phase legal + context/ inputs exist
 #   pw-preflight.sh execute     <slug>
-#       check PLAN review gate, phase, scope
+#       check PLAN review gate (latest approval, no real open items), phase, scope
 #   pw-preflight.sh breakdown   <slug>
-#       check analysis review gates, RFC
+#       check analysis review gates (latest approval, no real open items; RFC staging
+#       excluded from approval discovery — its own open-item gate stays), RFC
 #   pw-preflight.sh ship        <slug>
 #       check shippable tasks, verify
 #   pw-preflight.sh comments    <slug>
 #       check ≥1 task has a linked MR (comment push)
 #   pw-preflight.sh close       <slug>
 #       check all tasks accepted
-#   pw-preflight.sh review      <slug> [phase]
-#       check review files exist
+#   pw-preflight.sh review      <slug> [lane]
+#       check review files exist — lane: analysis|plan|task-plan|task-exec|ship
+#       (unknown lane words fail closed)
 #
 # Exit 0 + silent on success; exit 1 + message naming the concrete blocker
 # otherwise — the command files carry the recovery actions (every blocked step
@@ -28,6 +30,7 @@ if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/../../.." && pwd)"
 . "$HERE/../lib/pw-common.sh"
+. "$HERE/../lib/pw-mdlib.sh"
 # -h/--help before positional parsing: without this, "-h" would be taken as a slug/arg.
 case "${1:-}" in -h|--help) pw_usage ;; esac
 
@@ -41,6 +44,25 @@ die_fix() {
   exit 1
 }
 proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die_fix "no such project: $1 ($d)" "check the slug under $PROJECTS_DIR (scaffold a new one with: scaffold.sh $1)"; printf '%s' "$d"; }
+
+# _gate_review_approved <review-rel-path> — the approval gate a phase-consuming
+# command needs, via the shared mdlib file readers (this script never re-implements a
+# detector): `_review_approval_valid` is true ONLY when the LATEST real Sign-off row reads
+# approved (legacy "approved ✅" included), NO real unresolved item/question remains
+# (template stubs and worked examples never match), and no explicit human rejection is
+# still active — feedback applied after an approval, by any route including hand edits,
+# invalidates consumption even though the historical row stays in the file. Classification
+# for the message: approved-then-open is a STALE approval and needs a different fix than
+# "never approved" (an active human rejection reads as 11 — resolve/approve through
+# /pw-review, the human's decision to withdraw or re-approve is not this gate's call).
+# rc: 0 pass · 10 real open items remain · 11 no consumable approval (latest row not an
+# approval, an active human rejection, or no Sign-off rows at all — fail closed).
+_gate_review_approved() { # <review-rel-path> (resolved against $D — the caller's project)
+  local f="$D/$1"
+  _review_approval_valid "$f" && return 0
+  _review_has_open_marker "$f" && return 10
+  return 11
+}
 
 [ $# -ge 2 ] || die "usage: pw-preflight.sh <command> <slug> [args...]"
 
@@ -92,11 +114,17 @@ case "$COMMAND" in
   execute)
     phase_gate "breakdown executing review"
 
-    # Check PLAN review gate
+    # Check PLAN review gate — the approval must be the file's LATEST row AND the file
+    # must carry no real unresolved item: feedback applied after approval (or a hand
+    # reopen) makes a stale historical "approved" row unusable — consumers fail closed
+    # until re-approval, they never re-read history.
     if [ -f "$D/task/review/PLAN.review.md" ]; then
-      if ! "$HERE/pw-review.sh" gate "$SLUG" task/review/PLAN.review.md >/dev/null 2>&1; then
-        die_fix "PLAN review gate not approved" "approve it in $D/task/review/PLAN.review.md (## Sign-off row) or run /pw-review $SLUG"
-      fi
+      _grc=0
+      _gate_review_approved task/review/PLAN.review.md || _grc=$?
+      case "$_grc" in
+        10) die_fix "PLAN review has unresolved items — its approval no longer stands" "resolve them (/pw-review $SLUG), then have the Sign-off row re-approved" ;;
+        11) die_fix "PLAN review gate not approved" "approve it in $D/task/review/PLAN.review.md (## Sign-off row) or run /pw-review $SLUG" ;;
+      esac
     else
       die_fix "PLAN review file missing (task/review/PLAN.review.md)" "run /pw-breakdown $SLUG (it drafts the PLAN + its review file), then approve via /pw-review"
     fi
@@ -131,19 +159,29 @@ case "$COMMAND" in
   breakdown)
     phase_gate "analysis breakdown"
 
-    # Check analysis review gates
+    # Check analysis review gates — every analysis review must be approved as its LATEST
+    # row AND carry no real open item. RFC comment staging is EXCLUDED from this approval
+    # discovery (analysis/review/RFC.review.md has no Sign-off gate of its own — pulled
+    # comments are informational staging, never a unit a human approves); its unresolved
+    # items still block breakdown through the dedicated open-item check below.
     if [ -d "$D/analysis/review" ]; then
       for review_file in "$D/analysis/review"/*.review.md; do
         [ -f "$review_file" ] || continue
-        if ! "$HERE/pw-review.sh" gate "$SLUG" "analysis/review/$(basename "$review_file")" >/dev/null 2>&1; then
-          die_fix "analysis review gate not approved for $(basename "$review_file")" "approve it (## Sign-off row with 'approved') or run /pw-review $SLUG"
-        fi
+        _rb="$(basename "$review_file")"
+        [ "$_rb" = "RFC.review.md" ] && continue
+        _grc=0
+        _gate_review_approved "analysis/review/$_rb" || _grc=$?
+        case "$_grc" in
+          10) die_fix "analysis review $_rb has unresolved items — its approval no longer stands" "resolve them (/pw-review $SLUG), then have the Sign-off row re-approved" ;;
+          11) die_fix "analysis review gate not approved for $_rb" "approve it (## Sign-off row with 'approved') or run /pw-review $SLUG" ;;
+        esac
       done
     fi
 
-    # Check RFC open items (if RFC exists)
-    if [ -f "$D/rfc/META.md" ]; then
-      if "$HERE/pw-review.sh" has-open "$SLUG" "analysis/review/RFC.review.md" 2>/dev/null; then
+    # Check known RFC comments even if metadata is missing after a partial import. It
+    # needs no approval, but an unresolved pulled comment still blocks breakdown.
+    if [ -f "$D/analysis/review/RFC.review.md" ]; then
+      if "$HERE/pw-review-read.sh" has-open "$SLUG" "analysis/review/RFC.review.md" 2>/dev/null; then
         die_fix "RFC has open items" "resolve/close them in analysis/review/RFC.review.md (pw-item-status markers) before breakdown"
       fi
     fi
@@ -210,7 +248,11 @@ case "$COMMAND" in
   review)
     PHASE_FILTER="${1:-}"
 
-    # Check review files exist
+    # Check review files exist. The filter is a REVIEW LANE word — the /pw-review scope
+    # set (analysis|plan|task-plan|task-exec|ship), NOT a dashboard phase: task-plan and
+    # task-exec review the per-task artifacts through task/review/T0n.review.md, and the
+    # ship lane reviews the same mirrored task review files the MR comments fold back
+    # into. An unknown lane word fails closed instead of silently skipping the check.
     if [ -n "$PHASE_FILTER" ]; then
       case "$PHASE_FILTER" in
         analysis)
@@ -218,15 +260,23 @@ case "$COMMAND" in
             die_fix "no analysis review files found" "run /pw-review $SLUG (analysis phase) to create them"
           fi
           ;;
-        plan|task-plan)
+        plan)
           if [ ! -f "$D/task/review/PLAN.review.md" ]; then
             die_fix "PLAN review file missing" "run /pw-breakdown $SLUG then /pw-review $SLUG (plan)"
           fi
           ;;
-        task-exec)
+        task-plan|task-exec|ship)
+          _lane_fix="run /pw-review $SLUG (task-exec phase) for the shipped tasks"
+          case "$PHASE_FILTER" in
+            task-plan) _lane_fix="review the task plans through their own files: /pw-review $SLUG task-plan (creates task/review/T0n.review.md per task)" ;;
+            ship) _lane_fix="ship-lane reviews are the same task/review/T0n.review.md files MR comments mirror back into — push first (/pw-ship $SLUG), then /pw-ship $SLUG comments and /pw-review $SLUG" ;;
+          esac
           if [ ! -d "$D/task/review" ] || [ -z "$(ls -A "$D/task/review"/T*.review.md 2>/dev/null)" ]; then
-            die_fix "no task review files found" "run /pw-review $SLUG (task-exec phase) for the shipped tasks"
+            die_fix "no task review files found" "$_lane_fix"
           fi
+          ;;
+        *)
+          die_fix "unknown review phase-word '$PHASE_FILTER'" "expected one of: analysis|plan|task-plan|task-exec|ship (the /pw-review <slug> scope lanes — see /pw-help project $SLUG pw-review)"
           ;;
       esac
     else

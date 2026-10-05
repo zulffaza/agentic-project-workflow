@@ -72,3 +72,8 @@ batch-list F3	pw-ship.sh	mr-state-batch pwt-f3-hostile T02 T05	0	-
 unknown-project	pw-status.sh	nope-not-here	2	-
 help unknown-project	pw-help.sh	project nope-not-here	2	-
 unknown-arg	pw-doc.sh	lint bogus-mode pwt-f2-mid	2	-
+review-facet-scan F2	pw-review-read.sh	scan pwt-f2-mid	0	-
+review-facet-gate F2	pw-review-read.sh	gate pwt-f2-mid task/review/PLAN.review.md	0	-
+review-facet-count F2	pw-review-read.sh	count pwt-f2-mid task/review/PLAN.review.md	0	-
+review-facet-open F2	pw-review-read.sh	has-open pwt-f2-mid task/review/PLAN.review.md	1	-
+review-facet-eligible F2	pw-review-read.sh	eligible pwt-f2-mid task/review/PLAN.review.md	1	-

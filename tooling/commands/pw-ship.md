@@ -269,8 +269,8 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      first, and it goes stale fast once several review rounds have landed fixes the original
      description never mentioned.
    - Also mirror as usual: task `## Result`, a `[RESOLVED]` item in `task/review/T0n.review.md`'s
-     `## Items` section (create the file first via `pw-review.sh init` if it doesn't exist yet
-     — or `pw-review.sh init-all <slug>` for the whole project), and a `LOG.md` line via the
+     `## Items` section (create the file first via `pw-review.sh init-docs <slug> task/T0n.md`
+     if it doesn't exist yet — init-all only ever covers the current dashboard phase), and a `LOG.md` line via the
      helper. Write the mirrored item + its resolution deterministically via
      `pw-review.sh add-item … --actor pw-reviewer` then `pw-review.sh resolve …` — never
      a hand-copied heading block. The project dir stays the source of truth even for MR-driven

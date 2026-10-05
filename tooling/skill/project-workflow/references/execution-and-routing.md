@@ -7,7 +7,7 @@
 `pw-doc.sh lint task <slug> --all` (each `|| exit 1`). `/pw-execute` runs these itself — when you
 reach execution WITHOUT the command (direct orchestrator spawn, skill-only session), run the same
 three; a nonzero exit is a hard stop: relay its stderr line, don't reason onward. (These, plus
-`pw-worktree.sh create` / `pw-review.sh scan` / `pw-status.sh` below, are what keep the
+`pw-worktree.sh create` / `pw-review-read.sh scan` / `pw-status.sh` below, are what keep the
 scriptless legacy path from diverging — `tooling/docs/scripts/README.md`.) After the gates pass,
 run `pw-status.sh provider-audit <slug>` once as a **warning** pass (non-blocking here; it is
 blocking inside `/pw-ship`/`/pw-close`): `stale-provider`/`unbound` rows name exactly what to

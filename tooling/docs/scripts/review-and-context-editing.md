@@ -12,15 +12,55 @@ The review-doc entity: write side, `scan`, and the lifecycle/gate reads (`gate|c
  — all operators of `pw-review.sh`.
 
 ```bash
+$PW_HOME/tooling/scripts/entities/pw-review.sh init <slug> <review-rel> <doc-rel>    # legacy single-file triple (kept)
+$PW_HOME/tooling/scripts/entities/pw-review.sh init-docs <slug> <artifact-rel> [<artifact-rel>…]
+    # review files for EXACTLY the named artifacts (one is a valid list). The full list is
+    # VALIDATED FIRST — missing docs, template/README targets, unsupported artifacts, and
+    # out-of-project paths reject everything and create nothing; paths normalize + dedupe,
+    # quoted paths with spaces survive. No scan for extra targets: earlier- or later-phase
+    # reviews never appear as a side effect, and selecting an earlier-phase artifact creates
+    # ONLY its file (no gate reopen, no repair). Idempotent: a rerun finishes missing files
+    # without replacing existing review content or history; a later per-file write failure
+    # reports created / skipped / failed targets separately.
 $PW_HOME/tooling/scripts/entities/pw-review.sh init-all <slug>
-    # create every missing review file: analysis/<topic>.md, task/PLAN.md, each task/T0n.md
-    # → sibling review/<name>.review.md (via pw-review.sh init). Idempotent; exit 0 always.
+    # creates the missing review files for the project's ACTUAL CURRENT dashboard phase — read
+    # from the dashboard Status: at invocation, never inferred from which dirs hold files:
+    #   context    → nothing implicit (explain the context commands)
+    #   analysis   → analysis-topic artifacts only (RFC staging stays its own explicit side-loop)
+    #   breakdown  → PLAN + current task-plan artifacts, per the existing optional per-task policy
+    #   executing / review → current task-result artifacts; never analysis reviews here
+    #   done       → no implicit mutation; require an explicit artifact (init-docs) or a rewind
+    # No user phase override, no project-wide fallback: a missing/unknown dashboard phase
+    # stops with a command-based recovery hint. Never creates earlier/later-phase reviews and
+    # never deletes previously generated ones; existing files untouched.
 
+$PW_HOME/tooling/scripts/entities/pw-review.sh start <slug> <review-rel> [--phase <analysis|plan|task-plan|task-exec|ship>] [--provider <actual-provider>] [--model <actual-model>] [--confirm-earlier]
+    # pass-entry transition: appends ONE changes-requested row before the work set, and ONLY
+    # when this file genuinely has eligible work — a real actionable OPEN item, or an answered
+    # question awaiting incorporation. Template stubs, resolved/archived rows, settled
+    # questions, malformed-only entries, waiting-human-only pending questions, and out-of-scope
+    # asks append NOTHING (signoff state preserved; report what was skipped). Per artifact:
+    # working one selected file never changes another file's signoff. The work set is
+    # re-checked under the per-file lock immediately before publishing the row.
+    # No --phase        → normal repair pass, By pw-review (repair).
+    # With --phase      → independent AI pass under that lane's configured advisory|auto mode,
+    #                     By pw-reviewer (<mode>; provider=<actual>; model=<actual>) — identity
+    #                     read from the actual run metadata, never the config pin, the
+    #                     orchestrator, or the artifact author; unconfirmed identity is
+    #                     recorded as unknown, and a reviewer change on retry is a distinct
+    #                     attempt, not a reuse of the old attribution.
+    # Retry/resume of the same active pass appends no duplicate; later internal item writes
+    # inside an active pass never toggle the state back. If the artifact's phase is EARLIER
+    # than the current dashboard phase, --confirm-earlier is required: without it the gate is
+    # left untouched (the feedback itself can still be recorded; its open state blocks the
+    # next phase from consuming the stale approval). start can NEVER write approved.
 $PW_HOME/tooling/scripts/entities/pw-review.sh signoff <slug> <review-rel-path> <decision> [--by <name>]
     # append a Sign-off row: decision ∈ approved | changes-requested | in-review.
     # HUMAN-TRIGGERED ONLY (C4) — an agent runs this only verbatim on the user's explicit
-    # instruction, never on its own initiative; the agent-side path is
-    # pw-review.sh auto-signoff (mode=auto + zero open items only).
+    # instruction, never on its own initiative, and the row stays attributed to the human
+    # (--by only names the person the user asked for); the agent-side gate path is
+    # pw-review.sh auto-signoff and agent operational transitions are start / the item and
+    # answer writers — never this operator.
     # Append-only: existing rows are history and are never edited or deleted. The first
     # sign-off replaces the template's lone "| | | in-review |" placeholder row.
 
@@ -30,11 +70,18 @@ $PW_HOME/tooling/scripts/entities/pw-review.sh add-item <slug> <review-rel-path>
     # Fills the template's unfilled R-stub in place (no phantom duplicate R1).
     # Ids stay monotonic across archives (archived <!-- pw-archived:Rn --> markers counted).
     # --actor defaults to "you"; only pw-review/pw-reviewer surfaces pass --actor "pw-reviewer".
+    # A successful FIRST real item on a blank/changes-requested/approved file also appends one
+    # attributed `pw-review (feedback)` `in-review` row in the same validated per-file write —
+    # there is no visible interval with new feedback and a still-consumable stale approval.
+    # Repeated feedback inside an already-queued `in-review` cycle adds no row, and writes
+    # belonging to an active pass (the writer is the pass itself) never toggle its state.
 
 $PW_HOME/tooling/scripts/entities/pw-review.sh answer <slug> <review-rel-path> <Qid> (--text <answer…> | --stdin)
     # append your "> ↳ **you** (<now>): …" line under question Qid — same quoted block, blank
     # quoted ">" separator between consecutive ↳ lines. Refuses missing/[ANSWERED] questions.
     # Does NOT flip the status: the agent folds the answer into the doc and flips it (doctrine).
+    # A first answer after an approval triggers the same `pw-review (feedback)` `in-review` row
+    # a new item does; later answers in the queued cycle add none.
 
 $PW_HOME/tooling/scripts/entities/pw-review.sh add-question <slug> <review-rel-path> --section <§anchor> (--text <q…> | --stdin) [--actor <name>]
     # agent-side: append the next Qn block ([PENDING] + open marker) at the end of
@@ -60,37 +107,85 @@ heading-changing operator reindexes `## Contents` and appends a LOG.md line auto
 never re-run `pw-review.sh reindex` or `log` afterwards by hand.
 
 **Lifecycle + gate reads** (merged from the old `pw-lib.sh review *` block — same semantics,
-`review` prefix dropped): `init <slug> <review-rel> <doc-rel>` creates one review file
-verbatim from the template (idempotent — never clobbers); `note-init <slug>` the
-REVIEWER-NOTES.md header; `gate` prints the latest Sign-off decision (exit 0 iff approved);
-`has-open` yes/no; `count` `open=N resolved=M items=K` (the ONE detector every display reads);
-`reindex` rebuilds `## Contents`; `archive` moves fully-resolved blocks verbatim to the
-`.archive.md` sibling with pointer rows (gate-safe); `reopen` appends a fresh in-review row
-after a post-approval fix; `auto-signoff` is the mode=auto-only tool exception (re-checks the
-config itself + zero open items, tags `pw-reviewer (auto)`, never a human row).
+`review` prefix dropped): `init <slug> <review-rel> <doc-rel>` (legacy triple, kept for
+mechanical callers) and `init-docs <slug> <artifact-rel>…` (validated selected list) create
+review files verbatim from the template (idempotent — never clobbers); `init-all <slug>` does
+the current dashboard phase only; `note-init <slug>` the REVIEWER-NOTES.md header; `gate`
+prints the latest meaningful Sign-off decision (exit 0 iff that approval is CONSUMABLE: the latest
+row reads approved — either legacy decoration included — **and** no real unresolved item remains
+**and** no explicit human `changes-requested` is still standing; a blocked-but-approved state
+prints the reason on stderr and exits 1; an unknown or malformed table fails closed with a
+command-based repair hint — it is never treated as blank). Displays (scan/status/help) additionally
+show the decision's actor; `gate` itself prints the decision token; `has-open` yes/no; `count`
+`open=N resolved=M items=K` (the ONE detector every display reads); `reindex` rebuilds
+`## Contents`; `archive` moves fully-resolved blocks verbatim to the `.archive.md` sibling with
+pointer rows (gate-safe); `reopen` appends a workflow-attributed fresh in-review row when a fix
+lands on an approved file whose own queue has no startable work set (the cross-file case — an
+RFC-routed fix; the legacy `pw-review (auto-reopen)` rows stay readable); `start` is the
+pass-entry transition (above); `auto-signoff` is the mode=auto-only tool exception — it
+re-checks the config itself, zero open items in that file, artifact/lane match, and no standing
+explicit human rejection, tags `pw-reviewer (auto; provider=<actual>; model=<actual>)` from the
+actual run metadata (`unknown` when unconfirmed), never a human row, and honors
+`--confirm-earlier` for an earlier-phase gate like start does. Approval discovery never reads
+`analysis/review/RFC.review.md`'s table: the RFC staging file gates nothing on its own; its
+unresolved comments block the consuming command through `has-open` (a fix routed from RFC
+feedback acts on the analysis document's OWN review gate).
 
-## pw-review.sh scan
+**Sign-off actors (attribution contract).** One append-only table, five distinct `By` values —
+the actor names WHO decided, not what physically wrote the row:
+
+| Source of the row | `By` value | Decisions it may hold |
+|---|---|---|
+| Explicit human signoff request | `you`, or the named human | `in-review` · `changes-requested` · `approved` |
+| Automatic transition after human feedback | `pw-review (feedback)` | `in-review` |
+| Normal agent repair pass | `pw-review (repair)` | `changes-requested` (validated nonempty work only) |
+| Independent AI pass, advisory mode | `pw-reviewer (advisory; provider=<p>; model=<m>)` | `changes-requested` with real findings; NEVER `approved` |
+| Independent AI pass, auto mode | `pw-reviewer (auto; provider=<p>; model=<m>)` | `changes-requested` with real findings; `approved` only via the guarded auto-signoff |
+
+Gate evaluation reads the decision, the artifact role, and the configured approval policy — never
+a substring of the actor label. Readers must tell human rows from recognized automated actors
+when applying the human-rejection rule: an explicit human `changes-requested` is only cleared by
+an explicit human `in-review`/`approved`, never by an operational row. Legacy `you`, named-human,
+`pw-review (auto-reopen)`, and plain `pw-reviewer (auto)` rows stay valid history — readers parse
+the reviewer role + mode with or without identity fields, richer `By` values never break decision
+parsing, and idempotency suppresses duplicates only within the same attempt. Review timestamps:
+new rows stamp `5 October 2026 23.11 WIB` (day, month, year, dot-minutes); older date-time
+formats already in files are accepted unchanged, and the template's live
+`<YYYY-MM-DD HH:MM>`/`<§section>` stub placeholders are unchanged deliberately — every stub
+filter keeps recognizing those exact tokens. Status/help/scan displays all show the same latest
+decision together with its `By` actor, read through one shared latest-row reader.
+
+## pw-review-read.sh
 
 Structured summary of every review file's item counts and sign-off state.
+The read facet owns `gate`, `has-open`, `count`, `eligible`, and `scan`.
+Legacy `pw-review.sh` read calls forward here with their argument shapes preserved.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-review.sh scan <slug>                  # all review files
-$PW_HOME/tooling/scripts/entities/pw-review.sh scan <slug> --phase analysis # or: plan | task-plan | task-exec
+$PW_HOME/tooling/scripts/entities/pw-review-read.sh scan <slug>                  # all review files
+$PW_HOME/tooling/scripts/entities/pw-review-read.sh scan <slug> --phase analysis # or: plan | task-plan | task-exec | ship
 ```
+
+`--phase` names are **review lanes**, not dashboard phases: `task-plan` resolves to the task
+artifacts, `ship` to their mirrored task reviews, `plan` to PLAN files, `analysis` to
+analysis-topic reviews. RFC staging files are never surfaced as approval rows.
 
 **Output** — one line per review file, fields present only when non-zero:
 
 ```
-analysis/topic.review.md: 2 open, 3 resolved (in-review)
-task/review/PLAN.review.md: 5 resolved (approved)
-task/review/PLAN.review.md: 5 resolved (approved)
-task/review/T03.review.md: 1 open (in-review)
+analysis/topic.review.md: 2 open, 3 resolved (in-review · pw-review (feedback))
+task/review/PLAN.review.md: 5 resolved (approved · you)
+task/review/T03.review.md: 1 open (changes-requested · pw-review (repair))
 ```
 
-Trailing `(approved|in-review|changes-requested)` is the **last row of the file's Sign-off
-table**. `No review files found` + exit `0` is a valid empty state (project too early for reviews).
+The trailing pair is the **latest meaningful row of the file's Sign-off table** — decision and
+its `By` actor together — read through the shared latest-row reader, so a hyphenated decision
+(`changes-requested`) is never split at a dash and legacy rows (no identity fields, old date
+formats, `approved` with the legacy checkmark) display exactly as recorded. A blank/placeholder
+latest state shows as unapproved. `No review files found` + exit `0` is a valid empty state
+(project too early for reviews).
 
-Counts come from `pw-review.sh count <slug> <rel>` — the single heading-level detector the
+Counts come from `pw-review-read.sh count <slug> <rel>` — the single heading-level detector the
 gates use: template guidance text, worked examples inside comments, and UNFILLED `<…>` placeholder
 stubs can never inflate them (2026-09-16 fix).
 

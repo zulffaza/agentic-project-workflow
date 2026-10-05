@@ -135,9 +135,11 @@ Read [README.md](./README.md) — the full guide. The loop, once onboarded:
 ```
 
 `/pw-review` also takes write operators so you never hand-copy review-file blocks:
-`/pw-review <slug> init-all` (create every missing review file), `… item <path> §4 <ask>` (add an
-item), `… answer <path> Q2 <text>` (answer a question), `… signoff <path> approved` (your gate
-row) — see [docs/REVIEW.md](./docs/REVIEW.md).
+`/pw-review <slug> init <artifact-path> [<artifact-path> …]` (create review files for exactly the
+docs you name), `… init-all` (for the current dashboard phase's docs only), `… item <path> §4 <ask>`
+(add an item), `… answer <path> Q2 <text>` (answer a question), `… signoff <path> approved` (your
+gate row) — see [docs/REVIEW.md](./docs/REVIEW.md). Adding your first item after an approval
+automatically records a fresh `in-review` row for the cycle; you never type bookkeeping rows.
 
 Each phase is **gated by your review** — an agent stops and you sign off before the next phase.
 Only the **PLAN** sign-off is a hard gate for execution; per-task reviews are optional. `/pw-execute`

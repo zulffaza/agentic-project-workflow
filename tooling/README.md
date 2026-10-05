@@ -14,9 +14,10 @@ tooling/
 │   │   ├── pw-status.sh        project state: status report + dashboard/LOG setters
 │   │   │                       (log · status · oneliner · adopted · phase · dashboard-task-status · task-accept)
 │   │   ├── pw-preflight.sh     gate validation before expensive agent invocations
-│   │   ├── pw-review.sh        review-doc: init/init-all · signoff · add-item · answer ·
-│   │   │                       add-question · resolve · gate · has-open · count · scan ·
+│   │   ├── pw-review.sh        review writes: init/init-docs/init-all · start · signoff · add-item · answer ·
+│   │   │                       add-question · resolve ·
 │   │   │                       reindex · archive · reopen · note-init · auto-signoff
+│   │   ├── pw-review-read.sh   review reads: gate · has-open · count · eligible · scan
 │   │   ├── pw-context.sh       context-doc: req-init · add-input · add-repo · fetch ·
 │   │   │                       adopt-snapshot · adopt
 │   │   ├── pw-ship.sh          ship/MR: resolve · exec · monitor · mr-state · mr-state-batch ·
@@ -30,7 +31,8 @@ tooling/
 │   │                           workflow · find (read-only how-to map + search; --json)
 │   ├── lib/                  source-only libraries — invisible to callers (L2)
 │   │   ├── pw-common.sh        roots + config + provider hooks (every entity sources it)
-│   │   └── pw-mdlib.sh         pure markdown-document primitives
+│   │   ├── pw-mdlib.sh         pure markdown-document primitives
+│   │   └── pw-reviewlib.sh     review paths, eligible-work detection, and staged mutations
 │   └── toolchain/            bundle-maintenance scripts — the toolchain test: operand = the
 │                             bundle itself (L3); never in the automation registry
 │       ├── scaffold.sh         creates a new project from ../../template/

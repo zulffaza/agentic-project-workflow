@@ -50,6 +50,11 @@ battery_rows() {
   printf 'unknown-project\tpw-status.sh\tnope-not-here\n'
   printf 'help unknown-project\tpw-help.sh\tproject nope-not-here\n'
   printf 'unknown-arg\tpw-doc.sh\tlint bogus-mode %s\n' "$S2"
+  printf 'review-facet-scan F2\tpw-review-read.sh\tscan %s\n' "$S2"
+  printf 'review-facet-gate F2\tpw-review-read.sh\tgate %s task/review/PLAN.review.md\n' "$S2"
+  printf 'review-facet-count F2\tpw-review-read.sh\tcount %s task/review/PLAN.review.md\n' "$S2"
+  printf 'review-facet-open F2\tpw-review-read.sh\thas-open %s task/review/PLAN.review.md\n' "$S2"
+  printf 'review-facet-eligible F2\tpw-review-read.sh\teligible %s task/review/PLAN.review.md\n' "$S2"
 }
 
 gate_combos() {   # label only; the runner composes cmd from it: mode|phase|fixture
@@ -78,6 +83,7 @@ pw-doc|analysis task plan review dashboard all
 pw-preflight|analyze execute breakdown ship review comments close
 pw-config|model-check model-resolve project global
 pw-session|session-check
+pw-review-read|gate has-open count eligible scan
 pw-status|provider-audit"
 
 pwtest_is_crash() {  # file → 0 if output looks like a *script* defect (not a clean failure)
@@ -117,16 +123,21 @@ battery_t2() {
       printf '%s\t%s\t%s\t%s\t%s\n' "$label" "$script" "$args" "$B_RC" "-" >> "$TOOL/tests/expectations/battery.tsv"; continue
     fi
     IFS='	' read -r rc tok < <(awk -F'\t' -v l="$label" '$1==l{print $4"\t"$5; exit}' "$TOOL/tests/expectations/battery.tsv" 2>/dev/null) || true
+    # A false read predicate is normal output, not a usage/state error needing remediation.
+    local false_predicate=0
+    case "$script ${args%% *}:$B_RC" in
+      'pw-review-read.sh has-open:1'|'pw-review-read.sh eligible:1') false_predicate=1 ;;
+    esac
     if [ -z "${rc:-}" ]; then pwtest_bad "$label" "not pinned — run: $0 --capture T2"; continue; fi
     if pwtest_is_crash "$B_ERR"; then
       pwtest_bad "$label" "SCRIPT CRASH (was silent once): $(head -c140 "$B_ERR"|tr '\n' ' ')"
     elif [ "$B_RC" != "$rc" ]; then
       pwtest_bad "$label" "rc=$B_RC want=$rc; err: $(head -c140 "$B_ERR"|tr '\n' ' ')"
-    elif [ "$B_RC" != 0 ] && ! grep -qE 'fix|run |/pw-|scaffold|--help|usage|expected' "$ROOT/b.both"; then
+    elif [ "$B_RC" != 0 ] && [ "$false_predicate" = 0 ] && ! grep -qE 'fix|run |/pw-|scaffold|--help|usage|expected' "$ROOT/b.both"; then
       pwtest_bad "$label (→ fix: contract)" "rc=$B_RC bare stderr"
     else
       pwtest_ok "$label"
-      [ "$B_RC" != 0 ] && [ "$rc" != 0 ] && pwtest_ok "$label (remediation offered)" 
+      [ "$B_RC" != 0 ] && [ "$rc" != 0 ] && [ "$false_predicate" = 0 ] && pwtest_ok "$label (remediation offered)"
     fi
   done <<EOF
 $(battery_rows)

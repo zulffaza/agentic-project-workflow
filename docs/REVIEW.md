@@ -37,20 +37,25 @@ in a **`review/` subdir** beside it, which is the durable record of what you ask
 `/pw-analyze` and `/pw-breakdown` auto-create `analysis/review/<topic>.review.md` and
 `task/review/PLAN.review.md` (idempotently, from
 [`_REVIEW.template.md`](../template/_REVIEW.template.md)) as their last step, already in-review and
-empty. Missed one (a task doc whose review file was never created)? **`/pw-review <slug>
-init-all`** is the catch-up: it creates every missing review file in the project — each analysis
-doc, the PLAN, and every `T0n.md` — in one idempotent pass. The template ships with **worked
-examples**, a **decision-status legend**, and — permanently, even once items exist — a one-line
-**"how to add an item / answer a question" hint** right under each section heading, so the syntax
-is always there to copy from. Each item has an **ID + section anchor** (`R1 · §2`) and a status
-tag: `[OPEN]` / `[RESOLVED]` — plain bracket text, nothing to hunt down and copy-paste.
+empty. Missed one? **`/pw-review <slug> init <artifact-path> [<artifact-path> …]`** creates the
+review files for exactly the documents you name — one or many, and nothing else (a wrong entry
+rejects the whole list before anything is written; rerunning is safe and never overwrites history).
+**`/pw-review <slug> init-all`** is the catch-up for the project's **current dashboard phase**: in
+the `analysis` phase it creates analysis-doc reviews, in `breakdown` the PLAN + current task-plan
+reviews, while `executing`/`review` covers current task-result artifacts — it never creates
+earlier- or later-phase reviews, and `context`/`done` create none implicitly. The template ships
+with **worked examples**, a **decision-status legend**, and — permanently, even once items exist —
+a one-line **"how to add an item / answer a question" hint** right under each section heading, so
+the syntax is always there to copy from. Each item has an **ID + section anchor** (`R1 · §2`) and a
+status tag: `[OPEN]` / `[RESOLVED]` — plain bracket text, nothing to hunt down and copy-paste.
 
 **You don't hand-copy those blocks either.** The write side of a review file is deterministic —
 one `/pw-review` operator per kind of edit, each writing the exact house shape (heading, timestamp,
 machine marker, `---` rule, quoted `↳` line) and refreshing `## Contents` for you:
 
 ```
-/pw-review <slug> init-all                                          create every missing review file
+/pw-review <slug> init <artifact-path> [<artifact-path> …]          review files for exactly the docs you name
+/pw-review <slug> init-all                                          … for the CURRENT dashboard phase's docs only
 /pw-review <slug> item <path> §4 <your ask, spaces and all>         add the next Rn item
 /pw-review <slug> answer <path> Q2 <your answer>                    add your ↳ you: line under Q2
 /pw-review <slug> signoff <path> approved                           append your Sign-off row
@@ -68,6 +73,28 @@ it only when your message explicitly asks for that gate decision, never on its o
 **gate** in the Sign-off table (`in-review` / `changes-requested` / `approved`). Writing an item
 does **not** require you to set any status; you just leave it `[OPEN]` and run `/pw-review`.
 
+**Who writes which row.** The Sign-off table is append-only history, and every row names its
+author in the `By` column:
+
+| `By` value | When that row appears | Decisions it can hold |
+|---|---|---|
+| `you` (or a named human) | An explicit sign-off you asked for, filled by hand | `in-review` · `changes-requested` · `approved` |
+| `pw-review (feedback)` | Your first new item or answer queues a review cycle; a previous `approved` stops being the live decision | `in-review` |
+| `pw-review (repair)` | A `/pw-review` pass starts on real actionable work in that file | `changes-requested` |
+| `pw-reviewer (advisory; provider=…, model=…)` | An independent AI pass filed real findings | `changes-requested` |
+| `pw-reviewer (auto; provider=…, model=…)` | Same, plus the guarded `auto`-mode approval | `changes-requested` · `approved` |
+
+The operational rows are bookkeeping, not judgment: they never claim you rejected or approved
+anything, and feedback/repair rows never read `approved`. The provider/model in an AI row is the
+reviewer that **actually ran** the pass, not the configured pin, the orchestrator, or the artifact
+author; a fallback records the new identity as its own attempt, and a runtime that cannot confirm
+identity records `unknown`. A `changes-requested` you explicitly recorded stands until you
+record `in-review` or `approved` again; automatic rows never erase your rejection. Legacy rows
+(`pw-review (auto-reopen)`, plain `pw-reviewer (auto)`, rows without identity fields) stay valid
+history and remain readable. New review rows and item stamps read like
+`5 October 2026 23.11 WIB` (day, month, year, dot-minutes); files already using older date-time
+formats are accepted as-is, and both forms can sit in one table.
+
 **The contract:**
 - You write items. The agent **never edits or deletes your text** — it edits that item's SAME
   heading in place (flips `[OPEN]`→`[RESOLVED]`, never adding a second heading) and appends a quoted
@@ -83,11 +110,11 @@ does **not** require you to set any status; you just leave it `[OPEN]` and run `
   needs to read the whole file — and never the archived resolved history (below) — to apply a
   single new item.
 - Only **you** write an `approved` Sign-off row — an agent cannot self-approve a gate (the one
-  narrow, heavily-guarded exception is AI-assisted `auto` mode below). The tooling has one *other*
-  narrow exception in the opposite direction: on analysis's or the PLAN's own review file, `/pw-review`
-  auto-appends an `in-review` row (tagged `pw-review (auto-reopen)`) if a fix lands there after it
-  was already `approved` — this only ever *closes* a gate, never opens one, so it can't be used to
-  sneak a phase forward; see [docs/RFC.md](./RFC.md) for why this exists.
+  narrow, heavily-guarded exception is AI-assisted `auto` mode below). Agents *are* allowed to
+  record **operational rows** — workflow bookkeeping that only ever closes a gate, never opens
+  one, so it can't sneak a phase forward (see "Who writes which row" below). Your own decisions
+  and their bookkeeping stay visibly distinct by the `By` attribution; see
+  [docs/RFC.md](./RFC.md) for why the post-approval invalidation exists.
 - **Task review is optional, and created on demand.** Only the PLAN sign-off gates execution. To
   reject an **execution** result, flip that task's `Status: verify-failed` and either add items to
   `task/review/T0n.review.md` **or** just tell the agent what's wrong — `/pw-review <slug> T0n`
@@ -254,8 +281,8 @@ Each phase (`analysis` / `plan` / `task-plan` / `task-exec` / `ship`) is indepen
 | Mode | What happens |
 |---|---|
 | `off` | No AI reviewer involved. Identical to everything in sections 1–2 above. |
-| `advisory` | `pw-reviewer` files items into the normal `.review.md`, tagged `(pw-reviewer, <timestamp>)` so they're never confused with a human's. **A human still writes the Sign-off row** — this is a pre-filter, not a replacement. |
-| `auto` | Same filing, but if the pass leaves **nothing** [OPEN] or [PENDING], `pw-reviewer` may sign off itself, via a guarded tool call that independently re-checks both conditions. |
+| `advisory` | `pw-reviewer` files items into the normal `.review.md`, tagged `(pw-reviewer, <timestamp>)` so they're never confused with a human's. **A human still writes the Sign-off row** — this is a pre-filter, not a replacement, even when every finding has been resolved. |
+| `auto` | Same filing, but if the pass leaves **nothing** [OPEN] or [PENDING], `pw-reviewer` may sign off itself, via a guarded tool call that independently re-checks its conditions (mode, open counts, artifact/lane match, no standing human rejection). |
 
 **Run it** with `/pw-review <slug> ai [phase|Tid(s)|path]` — same scope resolution as the normal
 `/pw-review` (a list of task ids = one fresh reviewer pass per task). Under the hood this spawns the
@@ -265,17 +292,47 @@ yourself, if you want it run somewhere with zero shared context at all).
 
 **On `auto`'s self-approval** — this is the one place this feature changes an existing invariant
 ("only a human clears a gate"), so it's deliberately the most auditable part: the Sign-off row
-always reads `pw-reviewer (auto)` in the "By" column, never blended with a human "you" row, and the
-underlying tool (the auto-signoff step) refuses outright unless the project's mode for
-that phase is genuinely `auto` **and** the file has no real open item/question left — it doesn't
-take the reviewer's word for either. ("Real" means a *filled* heading: the template's never-used
+reads `pw-reviewer (auto; provider=<actual>; model=<actual>)` in the "By" column, never blended
+with a human "you" row, and the underlying tool (the auto-signoff step) refuses outright unless
+the project's mode for that phase is genuinely `auto`, **and** the file has no real open
+item/question left, **and** the artifact actually belongs to the lane being approved, **and** no
+explicit human `changes-requested` is still standing — it doesn't take the reviewer's word for
+any of them. ("Real" means a *filled* heading: the template's never-used
 R1/Q1 stubs — recognized by their live `<YYYY-MM-DD>`/`<§section>` placeholder text — are copies to
 fill, not items, so a clean pass over an untouched stub section auto-signs; a filled `[OPEN]`/
 `[PENDING]` heading or a stale `pw-item-status: open` marker does not.)
 
+**Reviewer identity on the rows.** The provider/model in an AI row comes from the run that actually
+performed the pass (its run metadata), not from the configured spawn-lane pin, not from the
+orchestrating session, and not from whatever model wrote the artifact. If routing fell back to
+another provider/model mid-run, the row names the actual reviewer and the audit log keeps the
+requested identity. A provider or model the runtime cannot confirm shows as `unknown` — never
+guessed — and missing identity grants no approval authority. A retry with a different reviewer is
+a distinct attempt with its own attribution; plain `pw-reviewer (auto)` rows written before this
+attribution shipped stay readable history, without invented provider/model values.
+
+**A clean pass changes nothing unless `auto` approves.** An AI pass may start with no items at all —
+reading an artifact does not invalidate an approval or record a row. If it finds real findings it
+persists them first (a first real item invalidates a stale approval exactly like feedback does), and
+only then records its `changes-requested` pass row; its later internal writes never toggle that
+state back. A clean `advisory` pass adds no row and leaves any existing approval alone — you still
+sign it off. A clean `auto` pass may approve straight through the guards above; it never first
+fabricates a `changes-requested` row. A normal repair pass (`/pw-review` without `ai`) records
+`pw-review (repair)` `changes-requested` only when the selected file genuinely has eligible work to
+process: a no-op call over stubs, resolved items, or a question merely waiting for your answer adds
+no row and is reported as skipped.
+
+**Earlier phases need your explicit go-ahead.** Feedback on an artifact from a phase the project has
+already moved past can still be recorded — its open status blocks the next phase from consuming the
+now-stale approval even while the historical `approved` row stays untouched. But the gate itself is
+not reopened and no repair runs there until you confirm; nothing rewinds the dashboard on its own.
+
 **How open counts are computed.** Every display surface (`pw-status`'s unresolved section,
 the review scan, the review lint) reads the same machine predicate as the gates —
-the count read → `open=N resolved=M items=K`. Never grep a review file
+the count read → `open=N resolved=M items=K` — and every surface that shows gate state (the
+scan's per-file tail, `pw-status`'s blockers, `/pw-help`'s next-steps lines) shows the same
+latest decision **and** its `By` actor, read through one shared latest-row reader (legacy rows
+included, hyphenated decisions never truncated at a dash). Never grep a review file
 raw for `pw-item-status`: the template's guidance line and worked examples contain the marker
 *text* as prose and will phantom-count — the shared detector every surface reads is the guard.
 

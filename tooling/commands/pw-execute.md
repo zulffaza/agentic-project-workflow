@@ -28,11 +28,11 @@ pass (non-blocking here): `stale-provider`/`unbound` rows name exactly what to r
 spawning. Never reason past a failed pre-flight. Output
 semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
 
-1. Read `<project>/task/PLAN.md` fully. **Gate:** `…/{{PW_HOME}}/tooling/scripts/entities/pw-review.sh gate
+1. Read `<project>/task/PLAN.md` fully. **Gate:** `…/{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh gate
    <slug> task/review/PLAN.review.md` — this is the file's CURRENT Sign-off decision only, never
    "was it ever approved"; if it exits non-zero (missing file, `in-review`, or `changes-requested`),
    STOP and ask, quoting what it printed. Checked on **every** invocation, including a resume — a
-   PLAN reopened after approval (e.g. by `/pw-review`'s auto-reopen, when a fix lands post-approval)
+   PLAN reopened after approval (e.g. by `/pw-review`'s workflow-attributed gate transitions, when a fix lands post-approval)
    must re-block execution here even mid-run, not just on the very first call. (Per-task review
    files are **optional** — their absence never blocks execution; they only matter when a task is
    being sent back.) Then: `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh status <slug> executing`.

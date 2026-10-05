@@ -1,7 +1,7 @@
 # Learn + close (`/pw-close`)
 
 **Pre-flight first:** `{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh close <slug>` +
-`{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint all <slug>` (each `|| exit 1`; add `pw-review.sh scan <slug>`
+`{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint all <slug>` (each `|| exit 1`; add `pw-review-read.sh scan <slug>`
 to show what's still open). `/pw-close` already runs the first two — reached without it, run them
 yourself; nonzero = STOP and relay stderr.
 

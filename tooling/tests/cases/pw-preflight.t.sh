@@ -64,3 +64,72 @@ open(f,"w").write(t)
 PYEOF
 pwtest_rc 0 "execute gate passes with every row resolvable" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" "$(pwtest_script pw-preflight.sh)" execute "$G"
 rm -rf "$PW_PROJECTS_DIR/$G"
+
+# --- plan-31 readers/gates: approval = latest row AND no real open items; RFC staging is
+# excluded from approval discovery (its own open-item gate stays); review lanes fail closed.
+# Clone etiquette (testing.md): only private clones are mutated, never $F2/$S2 themselves.
+STS="$(pwtest_script pw-status.sh)"; PF3="$(pwtest_script pw-preflight.sh)"
+_rv_add() { # <file> <anchor-substring> <line> — insert <line> right after the FIRST matching line
+  awk -v a="$2" -v n="$3" 'BEGIN{done=0} {print; if(!done && index($0,a)>0){print n; done=1}}' "$1" > "$1.tmp" && mv "$1.tmp" "$1"
+}
+_open_item() { # <file> — one REAL filled open heading right after ## Items
+  awk -v h='### R9 · §Scope — [OPEN] (pwtest, 2026-10-05 12:00) <!-- pw-item-status: open -->' 'BEGIN{done=0} {print; if(!done && index($0,"## Items")==1){print ""; print h; done=1}}' "$1" > "$1.tmp" && mv "$1.tmp" "$1"
+}
+P3=pre-plan31; rm -rf "$PW_PROJECTS_DIR/$P3"; cp -a "$F2" "$PW_PROJECTS_DIR/$P3"
+"$STS" status "$P3" breakdown --rewind >/dev/null 2>&1
+# 1) RFC staging has no Sign-off approval gate of its own — an unapproved RFC.review.md
+# must never block the analysis approval loop:
+cp "$PWTEST_TEMPLATE_DIR/_REVIEW.template.md" "$PW_PROJECTS_DIR/$P3/analysis/review/RFC.review.md"
+pwtest_rc 0 "breakdown: RFC staging excluded from approval discovery" "$PF3" breakdown "$P3"
+# 2) …but its unresolved comments still block breakdown through the independent gate:
+mkdir -p "$PW_PROJECTS_DIR/$P3/rfc"; : > "$PW_PROJECTS_DIR/$P3/rfc/META.md"
+_open_item "$PW_PROJECTS_DIR/$P3/analysis/review/RFC.review.md"
+pwtest_rc 1 "breakdown: real open RFC comment blocks" "$PF3" breakdown "$P3"
+pwtest_err "RFC has open items" "names the independent RFC gate"
+pwtest_fix "RFC gate refusal actionable"
+rm -f "$PW_PROJECTS_DIR/$P3/analysis/review/RFC.review.md" "$PW_PROJECTS_DIR/$P3/rfc/META.md"
+# 3) stale approval: latest row approved AND a REAL open item → the consumer refuses,
+# naming unresolved items (not a bogus "not approved"):
+_open_item "$PW_PROJECTS_DIR/$P3/task/review/PLAN.review.md"
+pwtest_rc 1 "execute: approved-but-open PLAN is stale approval" "$PF3" execute "$P3"
+pwtest_err "unresolved items" "stale approval named by its real cause"
+pwtest_fix "stale approval refusal actionable"
+rm -rf "$PW_PROJECTS_DIR/$P3"
+# 4) reopened history: an approved row superseded by the agent's auto-reopen row is NOT
+# consumable — a historical approval never satisfies the gate:
+P4=pre-reopen; rm -rf "$PW_PROJECTS_DIR/$P4"; cp -a "$F2" "$PW_PROJECTS_DIR/$P4"
+_rv_add "$PW_PROJECTS_DIR/$P4/task/review/PLAN.review.md" '| pwtest | approved |' '| 2026-10-05 12:10 | pw-review (auto-reopen) | in-review |'
+pwtest_rc 1 "execute: reopened review falls back to unapproved" "$PF3" execute "$P4"
+pwtest_err "not approved" "reopen reads as no current approval"
+pwtest_fix "reopen refusal actionable"
+rm -rf "$PW_PROJECTS_DIR/$P4"
+# 5) never-approved (plain changes-requested row) → refused fail-closed:
+P5=pre-never; rm -rf "$PW_PROJECTS_DIR/$P5"; cp -a "$F2" "$PW_PROJECTS_DIR/$P5"
+sedi 's@| 2026-09-15 00:00 | pwtest | approved |@| 2026-10-05 09:00 | you | changes-requested |@' "$PW_PROJECTS_DIR/$P5/task/review/PLAN.review.md"
+pwtest_rc 1 "execute: changes-requested PLAN never approved" "$PF3" execute "$P5"
+pwtest_err "not approved" "no current approval, never a history read"
+rm -rf "$PW_PROJECTS_DIR/$P5"
+# 6) active human rejection: the latest row reads approved (auto) but an explicit human
+# changes-requested was never withdrawn → refused (row kept, gate not reopened):
+P6=pre-reject; rm -rf "$PW_PROJECTS_DIR/$P6"; cp -a "$F2" "$PW_PROJECTS_DIR/$P6"
+_rv_add "$PW_PROJECTS_DIR/$P6/task/review/PLAN.review.md" '| pwtest | approved |' '| 2026-10-05 12:20 | pw-reviewer (auto; provider=kilotest; model=m1) | approved |'
+_rv_add "$PW_PROJECTS_DIR/$P6/task/review/PLAN.review.md" '| pwtest | approved |' '| 2026-10-05 12:15 | you | changes-requested |'
+pwtest_rc 1 "execute: auto-approved row over an active human rejection" "$PF3" execute "$P6"
+pwtest_err "not approved" "human rejection blocks consumption regardless of the newest row"
+rm -rf "$PW_PROJECTS_DIR/$P6"
+# 7) review lanes: task-plan and ship resolve to the task review artifacts; unknown
+# words fail closed instead of silently checking nothing:
+P7=pre-lanes; rm -rf "$PW_PROJECTS_DIR/$P7"; cp -a "$F2" "$PW_PROJECTS_DIR/$P7"
+pwtest_rc 0 "review lane task-plan finds task reviews" "$PF3" review "$P7" task-plan
+pwtest_rc 0 "review lane ship finds mirrored task reviews" "$PF3" review "$P7" ship
+pwtest_rc 1 "unknown review lane word fails closed" "$PF3" review "$P7" zzz-phase
+pwtest_err "unknown review phase-word" "refusal names the bad word"
+pwtest_err "analysis|plan|task-plan|task-exec|ship" "refusal lists every lane word"
+pwtest_fix "lane refusal actionable"
+rm -rf "$PW_PROJECTS_DIR/$P7"
+# a dashboard-phase word is NOT a lane word — executing must be refused, not checked:
+pwtest_rc 1 "review executing-word (phase, not lane) fails closed" "$PF3" review "$S1" executing
+# F1 fresh scaffold has no task reviews → both task lanes refuse with the real condition:
+pwtest_rc 1 "ship lane with no task reviews refuses (F1)" "$PF3" review "$S1" ship
+pwtest_err "no task review files" "ship lane reports the real condition"
+pwtest_rc 1 "task-plan lane with no task reviews refuses (F1)" "$PF3" review "$S1" task-plan
