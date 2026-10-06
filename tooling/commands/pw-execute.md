@@ -36,7 +36,11 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
    must re-block execution here even mid-run, not just on the very first call. (Per-task review
    files are **optional** — their absence never blocks execution; they only matter when a task is
    being sent back.) Then: `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh status <slug> executing`.
-2. **Resolve scope — this decides resume behavior, get it right:**
+2. **Reconcile execution state before resolving scope:** run
+   `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh sync <slug> --plan-only`.
+   Task files supply Status and Result fields; the helper preserves task links, routing, and
+   dependencies. If sync fails, STOP and relay the error. Never schedule from a stale PLAN table.
+   **Resolve scope — this decides resume behavior, get it right:**
    - **Arguments name specific task IDs** → scope = exactly those tasks (plus an optional `"with
      <model/agent>"` override). This is the deliberate "re-verify just this one" path — run only
      what's named, then stop, whether or not other tasks in the plan are still pending.
@@ -180,6 +184,11 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
      ask me; don't guess.
 5. Each executor works ONLY in its own worktree, runs the task's `## Verify`, reports real output,
    and fills the task's `## Result` block (time, log path, commit sha(s), verify outcome).
+   After each task starts or returns, and after each repair/re-verification changes its task file,
+   run `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh sync <slug> --plan-only`, then
+   `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh sync <slug> --dashboard-only`.
+   STOP on sync failure. Re-read the synchronized PLAN before scheduling dependents or reporting
+   completion. Never infer `accepted` from `done`.
    **`Verify outcome:` and `Notes:` are one distinct fact per (sub-)bullet, never a single run-on
    paragraph chaining several unrelated facts** (a real result + an unrelated environment hiccup +
    a mutation-test finding, say) — see `_TEMPLATE-task.md`'s own `## Result` for the exact shape.

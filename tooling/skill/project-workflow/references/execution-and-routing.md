@@ -13,6 +13,12 @@ run `pw-status.sh provider-audit <slug>` once as a **warning** pass (non-blockin
 blocking inside `/pw-ship`/`/pw-close`): `stale-provider`/`unbound` rows name exactly what to
 re-pin before spawning.
 
+Before resolving scope, after each task starts or returns, and after each repair/re-verification
+changes a task file, run `pw-doc.sh sync <slug> --plan-only`, then
+`pw-doc.sh sync <slug> --dashboard-only`. Stop on sync failure and re-read the PLAN before
+scheduling dependents or reporting completion. Task files supply execution Status/Time/Result;
+synchronization does not promote `done` to `accepted`.
+
 **Before routing, skim `REVIEWER-NOTES.md` if it exists** (project root) — anything a past
 `pw-reviewer` pass flagged as worth knowing (see `references/review.md`'s AI-assisted review
 section). Optional and best-effort: a missing file means no AI review has run yet, not a problem.

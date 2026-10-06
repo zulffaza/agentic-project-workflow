@@ -28,7 +28,12 @@
 # C96–C97 pin consumable approval and the read facet's artifact-lane boundary.
 # C98–C107 pin malformed-item gating, bounded initialization, transition authority,
 # actor attribution, failure propagation, lane binding, and lock ownership.
-# Next free: C108 (C70–C72 stay reserved).
+# C108–C109 minted by the execution task-table sync follow-up: C108 # the staged table write-back, C109 the CR strip in sync_plan task reads (2026-10-06). # C110 pins the pw-rfc isolated-slice fixture ownership (mutation children run exactly
+# that slice; the piggy-backed RI made the unmutated baseline crash = false "caught").
+# C111 pins the F3 cache-restore worktree re-point (baseline-red children were the
+# false-"caught" mechanism); C112 pins the ops_detail non-collapsing field separator
+# (blank paragraph/facet rows must survive — tab IFS silently shifts columns).
+# Next free: C113 (C70–C72 stay reserved).
 # C77–C81 minted by the project-doctor live-triage plan (fix-hint command-only scrubber,
 # token-expansion reader, depends_on full-id universe, accepted-teardown status-awareness,
 # backtick-first field reader).
@@ -59,17 +64,17 @@ C22-forge-substring-default	pw-ship.sh	    github.com) forge="github" ;;	    *) 
 C23-doctrine-phrase-reworded	AGENTS.md	single source of truth	one source of truth	T4	-
 C24-preflight-verb-enum	pw-preflight.sh	die "unknown command: $COMMAND (expected: analyze|execute|breakdown|ship|comments|close|review)"	die "unknown command: $COMMAND (expected: execute|breakdown|ship|comments|close|review)"	T1	pw-preflight
 C24b-preflight-example-rows-count	pw-preflight.sh	        if (index($0, "_e.g._")) next	        if (index($0, "_e_NOOP_")) next	T1	pw-preflight
-C25-signoff-replaces-history	scripts/lib/pw-reviewlib.sh	  if md_insert_lines_after "$f" "$lastdata" "$tmp"; then rm -f "$tmp"; return 0; fi	  if md_replace_line "$f" "$lastdata" "$tmp"; then rm -f "$tmp"; return 0; fi	T1	pw-review
-C26-add-item-drops-marker	pw-review.sh	local heading="### R$n · $SECTION — [OPEN] ($ACTOR, $ts) <!-- pw-item-status: open -->"	local heading="### R$n · $SECTION — [OPEN] ($ACTOR, $ts)"	T1	pw-review
-C27-stub-filter-gone	pw-mdlib.sh	_comment_blanked "$1" | awk '/^###+ / && !/<YYYY-MM-DD/ && !/<§section/'	_comment_blanked "$1" | awk '/^###+ /'	T1	pw-review
+C25-signoff-replaces-history	scripts/lib/pw-reviewlib.sh	  if md_insert_lines_after "$f" "$lastdata" "$tmp"; then rm -f "$tmp"; return 0; fi	  if md_replace_line "$f" "$lastdata" "$tmp"; then rm -f "$tmp"; return 0; fi	T1	pw-review\.t\.sh
+C26-add-item-drops-marker	pw-review.sh	local heading="### R$n · $SECTION — [OPEN] ($ACTOR, $ts) <!-- pw-item-status: open -->"	local heading="### R$n · $SECTION — [OPEN] ($ACTOR, $ts)"	T1	pw-review\.t\.sh
+C27-stub-filter-gone	pw-mdlib.sh	_comment_blanked "$1" | awk '/^###+ / && !/<YYYY-MM-DD/ && !/<§section/'	_comment_blanked "$1" | awk '/^###+ /'	T1	pw-review-read
 C28-context-row-clobbers-last	pw-context.sh	    md_insert_lines_after "$f" "$last" "$tmp"	    md_replace_line "$f" "$last" "$tmp"	T1	pw-context
-C29-resolve-duplicates-heading	pw-review.sh	  if md_replace_line "$f" "$hl" "$f.hdr"; then rm -f "$f.hdr"	  if md_insert_lines_after "$f" "$hl" "$f.hdr"; then rm -f "$f.hdr"	T1	pw-review
+C29-resolve-duplicates-heading	pw-review.sh	  if md_replace_line "$f" "$hl" "$f.hdr"; then rm -f "$f.hdr"	  if md_insert_lines_after "$f" "$hl" "$f.hdr"; then rm -f "$f.hdr"	T1	pw-review\.t\.sh
 C30-signoff-doctrine-line-gone	commands/pw-review.md	**HUMAN-TRIGGERED ONLY (C4): run this operator ONLY when my message explicitly asks to sign	**Run this operator proactively whenever the pass leaves nothing open, e.g. when asked to sign	T4	-
 # plan 19 rows (C41/C42; C31-C35 + C36+ reserved by draft plans 18/20): harness speedup machinery.
 C41-fixture-cache-hash-frozen	tests/pw_test_lib.sh	print(h.hexdigest()[:16])	print("0"*16)	T1	pw-test-harness
 C42-lazy-scan-always-builds	tests/pw_test_lib.sh	NEED_F1=0; NEED_F2=0; NEED_F3=0	NEED_F1=1; NEED_F2=1; NEED_F3=1	T1	pw-test-harness
 C43-mutable-stack-exponential-pop	tests/pw_test_lib.sh	local e _new=""	local e _new="$PWTEST_MUT_STACK"	T1	pw-test-harness
-C44-worker-copy-skipped	tests/mutate.sh	  if ! rsync -a --exclude .git "$src/" "$wt/"; then	  if ! false; then	T1	pw-test-harness
+C44-worker-copy-skipped	tests/mutate.sh	  if ! rsync -a --exclude .git --exclude .cache "$src/" "$wt/"; then	  if ! false; then	T1	pw-test-harness
 C45-harness-internals-doc-dies	docs/testing.md	## Inside the harness (read this before editing tests/ or writing mutation rows)	## Internals (read this before editing tests/ or writing mutation rows)	T4	-
 C36-deadpath-canary-fails-open	commands/pw-status.md	Arguments: {{ARGS}} (project slug). Project dir:	Arguments: {{ARGS}} (project slug). Project dir: `tooling/pw-doc-lint.sh`	T4	-
 C37-lib-invisible-canary	commands/pw-sync.md	Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task	Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task `tooling/scripts/lib/pw-mdlib.sh`	T4	-
@@ -126,7 +131,7 @@ C92-codex-args-substitution	pw-common.sh	"${bodytext//\{\{ARGS\}\}/<arguments>}"
 C93-model-resolve-codex-case	scripts/entities/pw-config.sh	    kilo|opencode|cursor|codex) ;;	    kilo|opencode|cursor) ;;	T1	pw-config
 C94-selected-review-command-regresses	commands/pw-review.md	pw-review.sh init-docs <slug> <artifact-rel-path>…	pw-review.sh init <slug> <artifact-rel-path>…	T4	-
 C95-reviewer-identity-becomes-orchestrator	commands/pw-review.md	The reviewer must confirm its own execution identity.	The reviewer uses the spawning agent's execution identity.	T4	-
-C96-review-gate-ignores-open-work	scripts/entities/pw-review-read.sh	  if _review_approval_valid "$f"; then return 0; fi	  if _decision_is_approved "$decision"; then return 0; fi	T1	pw-review
+C96-review-gate-ignores-open-work	scripts/entities/pw-review-read.sh	  if _review_approval_valid "$f"; then return 0; fi	  if _decision_is_approved "$decision"; then return 0; fi	T1	pw-review-read
 C97-review-read-lane-leaks	scripts/entities/pw-review-read.sh	      task-plan|task-exec|ship) [ "$lane" = task ] || continue ;;	      task-plan|task-exec|ship) : ;;	T1	pw-review-read
 C98-deep-open-heading-missed	scripts/lib/pw-mdlib.sh	      if (t == "OPEN" || t == "PENDING" || t == "CONFLICT") { found = 1 }	      if ($0 ~ /^### .*pw-item-status: open/) { found = 1 }	T1	pw-review-hardening
 C99-selected-list-partial-validation	scripts/entities/pw-review.sh	  [ "$bad" = 0 ] || {	  true || {	T1	pw-review-states
@@ -138,3 +143,8 @@ C104-human-signoff-spoofs-machine	scripts/entities/pw-review.sh	  [ "$by_kind" =
 C105-header-splice-failure-swallowed	scripts/lib/pw-reviewlib.sh	  if ! md_replace_line "$f" "$hl" "$f.gate"; then rm -f "$f.gate"; return 1; fi	  md_replace_line "$f" "$hl" "$f.gate"	T1	pw-review-hardening
 C106-task-plan-policy-approves-plan	scripts/lib/pw-reviewlib.sh	    task-plan)  [ "$lane" = "task" ] ;;	    task-plan)  return 0 ;;	T1	pw-review-binding
 C107-lock-holder-removed	scripts/lib/pw-reviewlib.sh	    tries=$((tries + 1))	    rm -rf "$lock"; tries=$((tries + 1))	T1	pw-review-hardening
+C108-plan-table-sync-disabled	pw-doc.sh	  mv "$work/PLAN.md" "$PLAN"	  rm -f "$work/PLAN.md"	T1	pw-doc
+C109-plan-table-crlf-status-bleed	pw-doc.sh	    st="$(pw_field "$tf" Status | tr -d '\r')"	    st="$(pw_field "$tf" Status)"	T1	pw-doc
+C110-pw-rfc-isolated-slice-coupled-RI	tests/cases/pw-rfc.t.sh	RI=rfcown; rm -rf "$PW_PROJECTS_DIR/$RI"; cp -a "$F2" "$PW_PROJECTS_DIR/$RI"	: "${RI:?pw-rfc must own its RI fixture}"	T1	pw-rfc
+C111-f3-cache-restore-links-unrepaired	tests/pw_test_lib.sh	    for sfx in "$S2" "$S3"; do	    for sfx in "$S2"; do	T1	pw-test-harness
+C112-ops-detail-delimiter-collapses-blank-fields	pw-help.sh	          printf "%s\037%s\037%s\037%s\n", o, sigs[o], paras[o], facs[o] }	          printf "%s\t%s\t%s\t%s\n", o, sigs[o], paras[o], facs[o] }	T1	pw-help

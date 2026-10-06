@@ -81,16 +81,17 @@ plus `repos/` + `seeds/`, plus `.done-<slug>` markers. `<hash>` = digest of the 
 (`pw-common.sh`, `pw-mdlib.sh`, …) are deliberately **excluded** — fixture bytes must not depend on
 them (see the catcher convention above; a mutation to a runtime file must therefore not change the
 cache key, which is what lets every sweep child share one warm cache). Restored `repos/` carry
-absolute paths in git metadata, so `_pwtest_cache_repair` re-points F2's worktrees
+absolute paths in git metadata, so `_pwtest_cache_repair` re-points F2's **and F3's** worktrees
 (`git worktree repair`) and the clones' push-URLs (at the child's own `seeds/`). F3's worktree
-copies are stale by design — identical to what a fresh build produces; don't "fix" them.
+CONTENT (branch names baked into its task files) stays stale by design — identical to what a
+fresh build produces; only the admin path links are repaired, never "fixed" further.
 
 **Sweep paths.** `pwtest_run_mutations` (mutate.sh) warms the cache once (a
 `PWTEST_WARM=1 PWTEST_FORCE_FIXTURES=1` child that exits right after materialization), then:
 
 - **parallel (default, >1 row):** one `_pwtest_mut_worker` per row behind a FIFO token semaphore
   (`PWTEST_MUT_JOBS`, auto = min(ncpu, 8)). Each worker `rsync`s a **disposable copy of the
-  bundle** (excluding `.git`, ~1.3 MB) and mutates only there — the live tree is never touched,
+  bundle** (excluding `.git` and the ignored `.cache` scratch; the tracked tree is ~1.3 MB) and mutates only there — the live tree is never touched,
   so workers can't cross-see reverts and same-file rows need no serialization. Rows write
   `<id>\t<status>\t<elapsed>` to `results.tsv`; the parent aggregates in original row order.
 - **serial (`PWTEST_MUT_JOBS=1`, or a single-row filter):** `_pwtest_run_row` against the live

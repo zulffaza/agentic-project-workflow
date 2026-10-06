@@ -10,8 +10,17 @@ _pwt_trio_ops() {
 
 TOOLDIR="${TOOL:-$PWTEST_TOOLING_DIR}"
 
+# Determinism evidence: every invocation EXECUTES; the byte-stream of a chosen first run
+# is stashed and compared (fresh cmp) against a later identical invocation. _det <file>
+# stashes the current PWTEST_OUT; _det_cmp <file> <label> asserts current == stash.
+_det() { cp "$PWTEST_OUT" "$PWTEST_ROOT/det.$1"; }
+_det_cmp() {
+  if cmp -s "$PWTEST_OUT" "$PWTEST_ROOT/det.$1"; then pwtest_ok "$2"; else pwtest_bad "$2" "same argv rendered differently"; fi
+}
+
 # 1) overview — runtime-derived completeness: every command file (independent recount)
 pwtest_rc 0 "overview exits 0" "$C" overview
+_det ov
 _cnt_files="$(ls "$TOOLDIR/commands/"*.md | wc -l | tr -d ' ')"
 _cnt_lines="$(grep -c '^  /pw-' "$PWTEST_OUT")"
 pwtest_eq "overview command-line count == command files (H1 double-derivation)" "$_cnt_files" "$_cnt_lines"
@@ -63,8 +72,10 @@ pwtest_re 'open=' "single-op deep-dive body"
 
 # BARE invocation (the documented default view) must render the overview with rc 0 —
 # regression: with $#=0 the dispatcher's shift tripped set -e (silent exit 1).
-"pwtest_rc" 0 "bare /pw-help exits 0" "$C"
+pwtest_rc 0 "bare /pw-help exits 0" "$C"
 "pwtest_re" 'commands [+] operators' "bare /pw-help renders the overview"
+# the bare path IS the overview render (op0 default): pin the two byte-identical.
+_det_cmp ov "bare output byte-identical to overview (independent runs)"
 # `review` IS an operator (pw-preflight.sh) — the multi-script operators view must show it too.
 pwtest_rc 0 "op resolves across the command's referenced scripts" "$C" operators pw-review review
 pwtest_re 'pw-preflight.sh :: review' "cross-script op attribution names the owning script"
@@ -93,13 +104,17 @@ pwtest_rc 0 "command with slug fills slots" "$C" command pw-context myproj
 pwtest_re '\$ /pw-context myproj req-init' "slug substitution in examples"
 # C4 doctrine echo (guard the bypass surface): the label must reach the command view verbatim.
 pwtest_rc 0 "command view of the gate command" "$C" command pw-review
+_det cmdrev
 grep -qF 'HUMAN-TRIGGERED ONLY (C4)' "$PWTEST_OUT" && pwtest_ok "C4 doctrine line present (C34 catcher)" || pwtest_bad "C4 doctrine line" "command pw-review lost the HUMAN-TRIGGERED ONLY (C4) echo"
 if grep -qE '\.sh|tooling|/Users/|state reader|usage[ -]header|frontmatter|pw-item-status|entities|script headers' "$PWTEST_OUT"; then pwtest_bad "user view clean" "internal tokens leaked: $(grep -oE '\.sh|tooling|state reader|frontmatter' "$PWTEST_OUT" | sort -u | head -3 | tr '\n' ' ')"; else pwtest_ok "user view: default command view exposes no internal terms"; fi
 pwtest_rc 0 "maintainer view of the review command" "$C" command pw-review --maintainer
+_det cmdrevm
 grep -qF 'auto-signoff' "$PWTEST_OUT" && pwtest_ok "SPECIAL path mentioned in the maintainer view" || pwtest_bad "SPECIAL path (maintainer)" "auto-signoff missing from --maintainer"
 pwtest_rc 0 "command view of the gate command again" "$C" command pw-review
+_det_cmp cmdrev "command view deterministic across fresh invocations"
 grep -qF 'HUMAN-TRIGGERED ONLY (C4)' "$PWTEST_OUT" && pwtest_ok "C4 doctrine line present" || pwtest_bad "C4 doctrine line" "command pw-review lost the HUMAN-TRIGGERED ONLY (C4) echo"
 pwtest_rc 0 "maintainer command view" "$C" command pw-review --maintainer
+_det_cmp cmdrevm "maintainer view deterministic across fresh invocations"
 pwtest_re 'entity script: tooling/scripts/entities/pw-review\.sh' "own script section (maintainer view)"
 pwtest_re '19 operators' "operator count in maintainer view (full name)"
 pwtest_rc 0 "command --full renders the file" "$C" command pw-context --full
@@ -215,6 +230,7 @@ FRRV="$PW_PROJECTS_DIR/$HPX/analysis/review/fixture.review.md"
 _hrv "$PLRV" '| pwtest | approved |' '| 2026-10-05 12:30 | pw-reviewer (auto; provider=kilotest; model=test-model) | changes-requested |'
 _hrv "$FRRV" '| pwtest | approved |' '| 2026-10-05 13:00 | pw-review (auto-reopen) | in-review |'
 pwtest_rc 0 "hpx project json parity" "$C" project "$HPX" --json
+_det hpxj
 python3 - "$PWTEST_OUT" <<'PY31' && pwtest_ok "json: latest decision + actor, token verbatim" || pwtest_bad "plan-31 json parity" "assertion failed"
 import json,sys
 d=json.load(open(sys.argv[1]))
@@ -234,6 +250,7 @@ if grep -qE '\.sh|tooling|/Users/' "$PWTEST_OUT"; then pwtest_bad "plan-31 view 
 # JSON negative: the decision token is NEVER truncated or bucketed (asserted on the parser
 # output — flowline wrap cannot hide a split, per the plan-31 required-cases rule):
 pwtest_rc 0 "hpx project json negative pass" "$C" project "$HPX" --json
+_det_cmp hpxj "project json deterministic across fresh invocations"
 python3 - "$PWTEST_OUT" <<'PY31n' && pwtest_ok "json negative: token neither split nor 'pending'" || pwtest_bad "json negative" "truncated/bucketed decision"
 import json,sys
 d=json.load(open(sys.argv[1]))
@@ -296,6 +313,7 @@ grep -qF '$ /pw-config global show' "$PWTEST_OUT" \
 if grep -qF '/pw-config <project-slug> global' "$PWTEST_OUT"; then pwtest_bad "global example" "slug-prefixed global form rendered"; else pwtest_ok "no slug-prefixed global form"; fi
 if grep -qF '/pw-config <project-slug> model-check' "$PWTEST_OUT"; then pwtest_bad "model-check example" "slug-prefixed model-check rendered"; else pwtest_ok "model-check example slug-free"; fi
 pwtest_rc 0 "command pw-review renders (ungrouped)" "$C" command pw-review
+_det_cmp cmdrev "ungrouped view deterministic (third fresh invocation)"
 if grep -qF 'WITHOUT a <project-slug>' "$PWTEST_OUT"; then pwtest_bad "pw-review ungrouped" "scope header leaked to an all-project command"; else pwtest_ok "pw-review ungrouped"; fi
 
 # 8d) find: bounded literal discovery + json contract + surface integrity (plan 18 H3/Q1)
@@ -316,6 +334,110 @@ assert d and all(set(r)=={"surface","path","line","text"} and isinstance(r["line
 assert all(not r["path"].endswith(".sh") for r in d)  # scripts are a maintainer surface (T3)
 PYF
 pwtest_rc 2 "find without term refuses" "$C" find
+
+# 8f) parser-replacement parity pins (plan-34 subprocess-overhead rewrite): the builtin
+# fmof/gist and the batched ops_detail MUST be byte-equal to the awk reference programs
+# they replaced — corpus-wide (commands x keys) and on crafted edge inputs.
+_pwt_extract() { awk -v fns="$*" '
+  BEGIN { n = split(fns, F, " "); for (i = 1; i <= n; i++) want[F[i]] = 1 }
+  {
+    if ($0 ~ /^[a-zA-Z_][a-zA-Z0-9_]*\(\) \{/) {
+      nm = $1; sub(/\(\).*/, "", nm); keep = (nm in want)
+      if (keep) { print; if ($0 ~ /\}$/) keep = 0 }   # one-line funcs end on the same line
+      next
+    }
+    if (keep) { print; if ($0 ~ /^\}/) keep = 0 }
+  }' "$C"; }
+eval "$(_pwt_extract _pwh_put fmof hdr_lines ops_of ops_detail sig_of para_of gist facets_map facet_of)"
+TABS="$(printf '\t')"   # eval'd helpers reference $TABS
+US="$(printf '\037')"   # …and the ops_detail non-collapsing field separator
+_fmof_ref() { awk -v k="$2" '
+    NR==1 && $0=="---" {infm=1; next}
+    infm && $0=="---" {exit}
+    infm { if ($0 ~ "^"k":") { sub("^"k":[ \t]*",""); print; exit } }
+  ' "$1" | sed -e "s/^[\"']//" -e "s/[\"']$//"; }
+_gist_ref() { printf '%s' "$1" | awk '{
+    s=$0
+    for (i=1; i<=length(s); i++)
+      if (substr(s,i,1)=="." && (i==length(s) || substr(s,i+1,1)==" ")) { print substr(s,1,i-1); exit }
+    print s }'; }
+for _pf in "$TOOLDIR"/commands/*.md; do
+  for _k in description args agent; do
+    pwtest_eq "fmof parity $(basename "$_pf" .md) [$_k]" "$(_fmof_ref "$_pf" "$_k")" "$(fmof "$_pf" "$_k")"
+  done
+  _d="$(fmof "$_pf" description)"
+  pwtest_eq "gist parity $(basename "$_pf" .md)" "$(_gist_ref "$_d")" "$(gist "$_d")"
+done
+_fx="$PWTEST_ROOT/fmof-edge.md"
+printf -- '---\ndescription: "Quoted desc"\nargs: [a | b]\nspaced:    value\nsq: '"'"'single'"'"'\nmixed: '"'"'start\ntrail: val"\nempty:\ntabbed:\tvalue\n---\ndescription: after-fence\n' > "$_fx"
+pwtest_eq "fmof strips double quotes"      "$(fmof "$_fx" description)" "Quoted desc"
+pwtest_eq "fmof keeps bracket value"       "$(fmof "$_fx" args)" "[a | b]"
+pwtest_eq "fmof trims leading blanks"      "$(fmof "$_fx" spaced)" "value"
+pwtest_eq "fmof strips single quotes"      "$(fmof "$_fx" sq)" "single"
+pwtest_eq "fmof strips leading single quote, no trailing strip" "$(fmof "$_fx" mixed)" "start"
+pwtest_eq "fmof strips trailing quote"     "$(fmof "$_fx" trail)" "val"
+pwtest_eq "fmof empty value"               "$(fmof "$_fx" empty)" ""
+pwtest_eq "fmof trims tab"                 "$(fmof "$_fx" tabbed)" "value"
+pwtest_eq "fmof unknown key -> empty"      "$(fmof "$_fx" nosuchkey)" ""
+pwtest_eq "fmof stops at closing fence"    "$(fmof "$_fx" description)" "Quoted desc"
+pwtest_eq "gist trailing-period cut"  "$(gist "INDEX.md's foo bar.")" "INDEX.md's foo bar"
+pwtest_eq "gist dot-in-word survives" "$(gist "See pw-rfc-comments.sh)")" "See pw-rfc-comments.sh)"
+pwtest_eq "gist first-space cut"      "$(gist "a. b. c")" "a"
+pwtest_eq "gist no-period passthrough" "$(gist "no dots here")" "no dots here"
+pwtest_eq "gist leading-dot empty"    "$(gist ". starts")" ""
+# ops_detail batch parity: per-op sig / joined paragraph / facet must equal the old
+# per-op awk machines on EVERY entity + toolchain header. Blank paragraphs and blank
+# facets are the discriminating shapes — a collapsing field separator breaks exactly
+# there; pw-ship.sh carries seven blank-para ops. Row-count parity proves non-vacuity.
+_pwh_ref_hdr() { awk '/^# =+$/{c++; next} c==1 {if (/^#/) {sub(/^# ?/,""); print}} c>=2{exit}' "$1"; }
+_ops_total=0
+for _sp in "$TOOLDIR"/scripts/entities/*.sh "$TOOLDIR"/scripts/toolchain/*.sh; do
+  _sn="$(basename "$_sp")"
+  _ops="$(_pwh_ref_hdr "$_sp" | awk '/^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*([ ]|$)/{print $2}')"
+  _opsn="$(printf '%s\n' "$_ops" | awk 'NF{n++} END{print n+0}')"
+  _ops_total=$((_ops_total+_opsn))
+  pwtest_eq "ops_detail row count $_sn" "$_opsn" "$(ops_detail "$_sp" | wc -l | tr -d ' ')"
+  for _op in $_ops; do
+    _npara="$(para_of "$_sp" "$_op")"
+    _rpara="$(_pwh_ref_hdr "$_sp" | awk -v op="$_op" '
+      function tryflush() {
+        if (buf=="") return
+        if (txt != "" && index(SUBSEP buf SUBSEP, SUBSEP op SUBSEP)) { printf "%s\n", txt; found=1; exit }
+      }
+      /^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*([ ]|$)/ {
+        tryflush()
+        if (txt != "") { buf=$2; txt="" } else buf = (buf=="" ? $2 : buf SUBSEP $2)
+        next }
+      NF==0 { if (buf!="" && txt!="") tryflush(); buf=""; txt=""; next }
+      { if (buf!="" && !found) { sub(/^[ ]+/,""); txt = (txt=="" ? $0 : txt " " $0) } }
+      END { tryflush() }' | awk 'NR==1')"
+    pwtest_eq "para parity $_sn:$_op" "$_rpara" "$_npara"
+    _nsig="$(sig_of "$_sp" "$_op")"
+    _rsig="$(_pwh_ref_hdr "$_sp" | awk -v op="$_op" '
+      $0 ~ "^  pw-[a-z0-9-]+\\.sh +"op"([ ]|$)" { sub(/^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*[ ]+/, ""); print; exit }')"
+    pwtest_eq "sig parity $_sn:$_op" "$_rsig" "$_nsig"
+    _nfac="$(facet_of "$_sp" "$_op")"
+    _rfac="$(_pwh_ref_hdr "$_sp" | awk '
+      /WRITE[ ]*=|READ[ ]*=|SPECIAL[ ]*=/ {
+        line=$0
+        if (line ~ /WRITE[ ]*=/) { facet="write"; sub(/^.*WRITE[ ]*=/,"",line) }
+        else if (line ~ /READ[ ]*=/) { facet="read"; sub(/^.*READ[ ]*=/,"",line) }
+        else { facet="special"; sub(/^.*SPECIAL[ ]*=/,"",line) }
+        gsub(/[,()]/," ",line)
+        n=split(line, a, /[ ]+/)
+        for (i=1;i<=n;i++) if (a[i] ~ /^[a-z][a-z0-9-]*$/) print facet "\t" a[i]
+      }' | awk -F'\t' -v op="$_op" '!v && $2==op{v=$1} END{if(v!="")print v}')"
+    pwtest_eq "facet parity $_sn:$_op" "$_rfac" "$_nfac"
+  done
+done
+if [ "$_ops_total" -ge 50 ]; then pwtest_ok "ops_detail parity coverage: $_ops_total header ops (>=50)"; else pwtest_bad "ops_detail parity coverage" "only $_ops_total ops seen"; fi
+_pwso="$(_pwh_ref_hdr "$TOOLDIR/scripts/entities/pw-ship.sh" | awk '/^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*([ ]|$)/{print $2}' | wc -l | tr -d ' ')"
+[ "$(ops_detail "$TOOLDIR/scripts/entities/pw-ship.sh" | wc -l | tr -d ' ')" = "$_pwso" ] \
+  && pwtest_ok "ops_detail covers pw-ship.sh ($_pwso ops incl blank-para+facet)" \
+  || pwtest_bad "ops_detail pw-ship coverage" "detail rows != $_pwso header ops"
+pwtest_eq "blank paragraph preserved (no delimiter collapse)" "" "$(para_of "$TOOLDIR/scripts/entities/pw-ship.sh" resolve)"
+pwtest_eq "facet survives after blank paragraph" "read" "$(facet_of "$TOOLDIR/scripts/entities/pw-ship.sh" resolve)"
+unset -f _pwt_extract _fmof_ref _gist_ref _pwh_ref_hdr fmof gist _pwh_put hdr_lines ops_of ops_detail sig_of para_of facets_map facet_of
 
 # 9) selftest / --help
 pwtest_rc 0 "--help prints usage, exit 0" "$C" --help

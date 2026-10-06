@@ -566,6 +566,44 @@ sync_plan() {
   echo "Syncing PLAN.md..."
   
   [ -f "$PLAN" ] || { echo "PLAN.md not found, skipping"; return 0; }
+
+  # Stage the whole table update so a missing row cannot leave a half-synced PLAN.
+  local work tf id st elapsed result mr columns col val
+  work="$(mktemp -d)"
+  cp "$PLAN" "$work/PLAN.md"
+  columns="$(awk -F'|' '/^## Task/{p=1;next} p && /^## /{exit} p && /^[ \t]*\|/ {
+    for(i=2;i<NF;i++){v=$i;gsub(/[ \t`*]/,"",v);print tolower(v)};exit
+  }' "$PLAN")"
+  case $'\n'"$columns"$'\n' in
+    *$'\nstatus\n'*) ;;
+    *) rm -rf "$work"; die "PLAN task table has no Status column → fix: add a Status column to the task table (see template/task/_TEMPLATE-orchestration-plan.md)" ;;
+  esac
+  for tf in "$D/task"/T*.md; do
+    [ -f "$tf" ] || continue
+    id="$(basename "$tf" .md)"; [[ "$id" =~ ^T[0-9]+$ ]] || continue
+    st="$(pw_field "$tf" Status | tr -d '\r')"
+    awk '/^## Result/{p=1;next} p && /^## /{exit} p{print}' "$tf" | tr -d '\r' > "$work/result"
+    elapsed="$(pw_field "$work/result" Time)"
+    mr="$(pw_task_mr_url "$tf")"
+    result="$(pw_field "$work/result" 'Commit(s)')"
+    case "$mr" in *://*) result="$mr" ;; esac
+    while IFS= read -r col; do
+      case "$col" in
+        status) val="$st" ;;
+        time) val="$elapsed" ;;
+        result) val="$result" ;;
+        *) continue ;;
+      esac
+      [ -n "$val" ] || continue
+      val="${val//|/&#124;}"
+      if ! _plan_cell_update "$work/PLAN.md" "$id" "$col" "$val"; then
+        rm -rf "$work"
+        die "could not sync PLAN task-table row for $id → fix: add the row for $id to the task table (sync never creates rows)"
+      fi
+    done <<< "$columns"
+  done
+  mv "$work/PLAN.md" "$PLAN"
+  rm -rf "$work"
   
   # Sync task count and SP totals
   TASK_COUNT="$(ls -1 "$D/task"/T*.md 2>/dev/null | wc -l | pw_trim)"

@@ -97,20 +97,55 @@ jstr() { local s="$1"; s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; s="${s//$'\t'/\\t}"
 TABS="$(printf '\t')"
 BT="$(printf '\140')"    # literal backtick — kept OUT of double quotes (there it starts command-sub)
 TF="$(printf '\047')"    # literal single quote, same reason
+US="$(printf '\037')"    # unit separator: NON-whitespace IFS for ops_detail rows — tab/newline
+                         # field-splitting collapses empty fields (blank paragraph/facet), US does not.
 
 # fmof <file> <key> — frontmatter value (same parse as gen-commands).
+# Builtin line-walk: byte-identical to the former awk|sed chain (open fence at line 1,
+# first "key:" row wins, leading spaces/tabs trimmed, one leading + one trailing
+# single/double quote removed), zero subprocesses.
 fmof() {
-  awk -v k="$2" '
-    NR==1 && $0=="---" {infm=1; next}
-    infm && $0=="---" {exit}
-    infm { if ($0 ~ "^"k":") { sub("^"k":[ \t]*",""); print; exit } }
-  ' "$1" | sed -e "s/^[\"']//" -e "s/[\"']$//"
+  local k="$2" line v nr=0
+  [ -f "$1" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    nr=$((nr+1))
+    if [ "$nr" = 1 ]; then
+      [ "$line" = "---" ] || return 0
+      continue
+    fi
+    [ "$line" = "---" ] && return 0
+    case "$line" in
+      "$k":*)
+        v="${line#"$k":}"
+        v="${v#"${v%%[! 	]*}"}"
+        case "$v" in '"'* | "'"*) v="${v#?}" ;; esac
+        case "$v" in *'"' | *"'" ) v="${v%?}" ;; esac
+        printf '%s\n' "$v"
+        return 0 ;;
+    esac
+  done < "$1"
+  return 0
 }
 
+# _pwh_put <varname> <value> — bash 3.2 has no associative arrays (T0 banned anyway),
+# so per-script parse caches live in indirect variables keyed by the sanitized path.
+_pwh_put() { printf -v "$1" '%s' "$2"; }
+
 # hdr_lines <script> — usage-header block (between the "# ====" rules), decommented
-# with leading spaces stripped so operator signatures anchor at column 1.
+# with leading spaces stripped so operator signatures anchor at column 1. Memoized per
+# script path: one awk parse per script per render instead of one per (script, op).
+# A trailing "X" sentinel rides in the cache variable so $( ) never eats the stream's
+# real trailing newlines (blank header lines are meaningful to the operators dump).
 hdr_lines() {
-  awk '/^# =+$/{c++; next} c==1 {if (/^#/) {sub(/^# ?/,""); print}} c>=2{exit}' "$1"
+  local key content var
+  key="${1//[^a-zA-Z0-9]/_}"
+  var="PWHELP_HDR_$key"
+  content="${!var:-}"
+  if [ -z "$content" ]; then
+    content="$( { awk '/^# =+$/{c++; next} c==1 {if (/^#/) {sub(/^# ?/,""); print}} c>=2{exit}' "$1"; printf 'X'; } )"
+    _pwh_put "$var" "$content"
+  fi
+  printf '%s' "${content%X}"
 }
 
 # ops_of <script> — operator names from "pw-<s>.sh <op>  <args>" usage-header signatures.
@@ -118,57 +153,121 @@ ops_of() {
   hdr_lines "$1" | awk '/^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*([ ]|$)/{print $2}'
 }
 
+# ops_detail <script> — memoized "op<TAB>sig<TAB>para<TAB>facet" rows in usage-header
+# signature order. One awk pass reproduces the three machines (sig_of first-line,
+# para_of first-flush, facets_map+facet_of first-token) for every op at once; sig_of/
+# para_of/facet_of and the overview/command hot loops then read it with builtin
+# while-read loops — zero exec per op.
+ops_detail() {
+  local key var content
+  key="${1//[^a-zA-Z0-9]/_}"
+  var="PWHELP_DETAIL_$key"
+  content="${!var:-}"
+  if [ -z "$content" ]; then
+    content="$(hdr_lines "$1" | awk '
+      function tryflush() {
+        if (buf == "" || txt == "") return
+        n2 = split(buf, toks, SUBSEP)
+        for (t = 1; t <= n2; t++) if (!(toks[t] in paras)) paras[toks[t]] = txt
+      }
+      /WRITE[ ]*=|READ[ ]*=|SPECIAL[ ]*=/ {
+        fline = $0
+        if (fline ~ /WRITE[ ]*=/) { facet = "write"; sub(/^.*WRITE[ ]*=/, "", fline) }
+        else if (fline ~ /READ[ ]*=/) { facet = "read"; sub(/^.*READ[ ]*=/, "", fline) }
+        else { facet = "special"; sub(/^.*SPECIAL[ ]*=/, "", fline) }
+        gsub(/[,()]/, " ", fline)
+        nf = split(fline, fa, /[ ]+/)
+        for (fi = 1; fi <= nf; fi++) if (fa[fi] ~ /^[a-z][a-z0-9-]*$/ && !(fa[fi] in facs)) facs[fa[fi]] = facet
+      }
+      /^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*([ ]|$)/ {
+        tryflush()
+        o = $2
+        oc++; olist[oc] = o
+        if (!(o in sigs)) { s = $0; sub(/^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*[ ]+/, "", s); sigs[o] = s }
+        if (txt != "") { buf = $2; txt = "" } else buf = (buf == "" ? $2 : buf SUBSEP $2)
+        next }
+      NF==0 { tryflush(); buf = ""; txt = ""; next }
+      { if (buf != "") { sub(/^[ ]+/, ""); txt = (txt == "" ? $0 : txt " " $0) } }
+      END {
+        tryflush()
+        for (oi = 1; oi <= oc; oi++) { o = olist[oi]
+          printf "%s\037%s\037%s\037%s\n", o, sigs[o], paras[o], facs[o] }
+      }')"
+    _pwh_put "$var" "$content"
+  fi
+  [ -n "$content" ] && printf '%s\n' "$content"
+  return 0
+}
+
 # sig_of <script> <op> — argument string from the operator's usage-header signature.
 sig_of() {
-  hdr_lines "$1" | awk -v op="$2" '
-    $0 ~ "^  pw-[a-z0-9-]+\\.sh +"op"([ ]|$)" { sub(/^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*[ ]+/, ""); print; exit }'
+  local d o a p f
+  d="$(ops_detail "$1")"
+  while IFS="$US" read -r o a p f; do
+    [ "$o" = "$2" ] || continue
+    printf '%s\n' "$a"
+    return 0
+  done <<< "$d"
+  return 0
 }
 
 # para_of <script> <op> — the operator\'s usage-header paragraph, joined to one line.
 para_of() {
-  hdr_lines "$1" | awk -v op="$2" '
-    function tryflush() {
-      if (buf=="") return
-      if (txt != "" && index(SUBSEP buf SUBSEP, SUBSEP op SUBSEP)) { printf "%s\n", txt; found=1; exit }
-    }
-    /^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*([ ]|$)/ {
-      tryflush()
-      if (txt != "") { buf=$2; txt="" } else buf = (buf=="" ? $2 : buf SUBSEP $2)
-      next }
-    NF==0 { if (buf!="" && txt!="") tryflush(); buf=""; txt=""; next }
-    { if (buf!="" && !found) { sub(/^[ ]+/,""); txt = (txt=="" ? $0 : txt " " $0) } }
-    END { tryflush() }' | awk 'NR==1'   # drain-safe first line: `head -1` would exit early and SIGPIPE the awk chain under pipefail (rc 141 abort)
+  local d o a p f
+  d="$(ops_detail "$1")"
+  while IFS="$US" read -r o a p f; do
+    [ "$o" = "$2" ] || continue
+    [ -n "$p" ] && printf '%s\n' "$p"
+    return 0
+  done <<< "$d"
+  return 0
 }
 
 # gist <text> — first sentence; a period is a boundary only before space/EOL
-# (so "INDEX.md\'s" and "pw-rfc-comments.sh)" survive).
+# (so "INDEX.md's" and "pw-rfc-comments.sh)" survive).
+# Builtin pattern walk: the first ". " wins (longest-suffix cut = earliest dot), else a
+# trailing "."; ASCII dots/spaces cannot occur inside UTF-8 sequences, so the cut is
+# byte-identical to the former per-character awk scan in every locale.
 gist() {
-  printf '%s' "$1" | awk '{
-    s=$0
-    for (i=1; i<=length(s); i++)
-      if (substr(s,i,1)=="." && (i==length(s) || substr(s,i+1,1)==" ")) { print substr(s,1,i-1); exit }
-    print s
-  }'
+  case "$1" in
+    *". "*) printf '%s\n' "${1%%. *}"; return 0 ;;
+    *".")   printf '%s\n' "${1%?}"; return 0 ;;
+  esac
+  printf '%s\n' "$1"
 }
 
-# facets_map <script> — "facet<TAB>op" lines from the S1b Facets block.
+# facets_map <script> — "facet<TAB>op" lines from the S1b Facets block. Memoized per
+# script (set-flag distinguishes "parsed, empty" from "not parsed yet").
 facets_map() {
-  hdr_lines "$1" | awk '
-    /WRITE[ ]*=|READ[ ]*=|SPECIAL[ ]*=/ {
-      line=$0
-      if (line ~ /WRITE[ ]*=/) { facet="write"; sub(/^.*WRITE[ ]*=/,"",line) }
-      else if (line ~ /READ[ ]*=/) { facet="read"; sub(/^.*READ[ ]*=/,"",line) }
-      else { facet="special"; sub(/^.*SPECIAL[ ]*=/,"",line) }
-      gsub(/[,()]/," ",line)
-      n=split(line, a, /[ ]+/)
-      for (i=1;i<=n;i++) if (a[i] ~ /^[a-z][a-z0-9-]*$/) print facet "\t" a[i]
-    }'
+  local key var flag
+  key="${1//[^a-zA-Z0-9]/_}"; var="PWHELP_FACETS_$key"; flag="PWHELP_FACETSET_$key"
+  if [ -z "${!flag:-}" ]; then
+    _pwh_put "$flag" 1
+    _pwh_put "$var" "$(hdr_lines "$1" | awk '
+      /WRITE[ ]*=|READ[ ]*=|SPECIAL[ ]*=/ {
+        line=$0
+        if (line ~ /WRITE[ ]*=/) { facet="write"; sub(/^.*WRITE[ ]*=/,"",line) }
+        else if (line ~ /READ[ ]*=/) { facet="read"; sub(/^.*READ[ ]*=/,"",line) }
+        else { facet="special"; sub(/^.*SPECIAL[ ]*=/,"",line) }
+        gsub(/[,()]/," ",line)
+        n=split(line, a, /[ ]+/)
+        for (i=1;i<=n;i++) if (a[i] ~ /^[a-z][a-z0-9-]*$/) print facet "\t" a[i]
+      }')"
+  fi
+  [ -n "${!var}" ] && printf '%s\n' "${!var}"
+  return 0
 }
 
 # facet_of <script> <op> — write | read | special, or empty when unlabelled.
-# Stop-flag over {exit}: an early exit SIGPIPEs the facets_map producer under pipefail (rc 141).
 facet_of() {
-  facets_map "$1" | awk -F'\t' -v op="$2" '!v && $2==op{v=$1} END{if(v!="")print v}'
+  local d o a p f
+  d="$(ops_detail "$1")"
+  while IFS="$US" read -r o a p f; do
+    [ "$o" = "$2" ] || continue
+    [ -n "$f" ] && printf '%s\n' "$f"
+    return 0
+  done <<< "$d"
+  return 0
 }
 
 # own_first <cmd> [scripts...] — order so the command\'s own entity script is checked first.
@@ -253,14 +352,10 @@ selector_tokens() {
 # Script-form lines are NOT surface proof — C3 mapping bodies name internal steps.
 has_shape() {
   local f="$CMDS/$1.md"
-  grep -qF "/$1 <slug> $2 " "$f" && return 0
-  grep -qF "/$1 <project-slug> $2 " "$f" && return 0
-  grep -qF "/$1 <slug> $2$BT" "$f" && return 0
-  grep -qF "/$1 <project-slug> $2$BT" "$f" && return 0
-  grep -qF "literally $TF$2$TF" "$f" && return 0
-  grep -qF "literally $BT$2$BT" "$f" && return 0
-  grep -qF "literally \"$2\"" "$f" && return 0
-  return 1
+  # one grep, same OR-of-literals semantics as the old seven grep -qF calls
+  grep -qF -e "/$1 <slug> $2 " -e "/$1 <project-slug> $2 " \
+    -e "/$1 <slug> $2$BT" -e "/$1 <project-slug> $2$BT" \
+    -e "literally $TF$2$TF" -e "literally $BT$2$BT" -e "literally \"$2\"" "$f"
 }
 
 # user_prose — scrub maintainer-domain terms from prose that reaches the DEFAULT
@@ -368,7 +463,7 @@ cmd_shape_line() {
         if (match($0, cmd" (<project-slug>|<slug>) ")) { print substr($0, RSTART+RLENGTH); exit }
         if (match($0, cmd" <slug> ")) { print substr($0, RSTART+RLENGTH); exit }
       }' "$CMDS/$1.md")"   # awk already exits after the one printed line; a trailing `head -1` could SIGPIPE under load
-  m="$(printf '%s' "$m" | cut -d"$TF" -f1 | cut -d"$BT" -f1 | sed -e 's/[ ]*$//')"
+  m="${m%%"$TF"*}"; m="${m%%"$BT"*}"; m="${m%"${m##*[! ]}"}"   # cut to first quote/backtick, trim trailing spaces
   printf '%s' "$m"
   return 0
 }
@@ -467,8 +562,9 @@ ov_emit() {
   local lbl="$1" tag="$2" args="$3" use="$4" line
   case "$tag" in write|read|special|lifecycle) tag="($tag)" ;; '(default)'|""|"(sugar)") : ;; *) tag="" ;; esac
   line="$(printf '  %-13s %-29s %-13s- %s\n' "$lbl" "$args" "${tag:+$tag }" "$use")"
-  if printf '%s' "$line" | awk -v n=98 'length($0)<=n{exit 0} {exit 1}' \
-     && printf '%s' "$args" | awk -v n=29 'length($0)<=n{exit 0} {exit 1}'; then
+  # one awk for both width probes (awk length = BYTES in every locale — bash ${#} is
+  # character-based under UTF-8 bash and would not be byte-identical here).
+  if printf '%s\n%s' "$line" "$args" | awk 'NR==1{l1=length($0)} NR==2{l2=length($0)} END{exit !(l1<=98 && l2<=29)}'; then
     printf '%s\n' "$line"
     return 0
   fi
@@ -483,20 +579,25 @@ ov_emit() {
 
 # ops_surfaced <cmd> — rendered operator lines: "name<TAB>args<TAB>use<TAB>facet".
 ops_surfaced() {
-  local cmd="$1" text script sp op seen="$TABS" tok ali ascript aop args use fac alias_use alias_fac alias_f first_arg_flow shape_ok
-  text="$(cat "$CMDS/$cmd.md")"
+  local cmd="$1" text script sp op seen="$TABS" tok ali ascript aop args use fac alias_use alias_fac alias_f first_arg_flow shape_ok d _dop a2 par
+  text="$(< "$CMDS/$cmd.md")"
   case "$(fmof "$CMDS/$cmd.md" args)" in \[*|\"[\"]*) first_arg_flow=1 ;; *) first_arg_flow="" ;; esac
   # R1: real script operators whose command-form span exists.
   for script in $(own_first "$cmd" $(scripts_of "$cmd")); do
     sp="$(script_path "$script" 2>/dev/null || true)" || continue
     [ -n "$sp" ] || continue
+    d="$(ops_detail "$sp")"
     for op in $(ops_of "$sp"); do
       case "$seen" in *"$TABS$op$TABS"*) continue ;; esac
       has_shape "$cmd" "$op" && : || { [ -n "$first_arg_flow" ] || continue
         case "$text" in *"/$cmd $op "*|*"/$cmd $op$BT"*) : ;; *) continue ;; esac; }
       seen="$seen$op$TABS"
+      _dop=""; a2=""; par=""; fac=""
+      while IFS="$US" read -r _dop a2 par fac; do
+        [ "$_dop" = "$op" ] && break
+      done <<< "$d"
       args="$(cmd_shape_line "$cmd" "$op")"
-      if [ -z "$args" ]; then sp3="$sp"; a2="$(sig_of "$sp3" "$op")"; args="$op"
+      if [ -z "$args" ]; then args="$op"
         [ -z "$a2" ] || args="$op $a2"
       fi
       # use text for USER surfaces comes from the command file's own bullet (after the
@@ -504,10 +605,9 @@ ops_surfaced() {
       # script paragraph still backs the --maintainer Does section + operators deep dive.
       # order: script usage-paragraph gist (terse op sentence) -> command-file bullet
       # clause -> token sugar clause -> honest pointer. All scrubbed at the printf below.
-      use="$(gist "$(para_of "$sp" "$op")")"
+      use="$(gist "$par")"
       [ -n "$use" ] || use="$(cmd_use_clause "$cmd" "$op")"
       [ -n "$use" ] || use="$(token_use_clause "$cmd" "$op" 2>/dev/null || true)"
-      fac="$(facet_of "$sp" "$op")"
       printf '%s\t%s\t%s\t%s\t%s\n' "$op" "$args" "$(printf '%s' "${use:-see: /pw-help operators $cmd}" | user_prose)" "$fac" "${script}"
     done
   done
@@ -786,7 +886,6 @@ E
     sp="$(script_path "$script" 2>/dev/null || true)"; [ -n "$sp" ] || continue
     nops="$(ops_of "$sp" | wc -l | tr -d ' ')"
     printf 'entity script: %s (%s operators - read all: /pw-help operators %s)\n' "${sp#$PW_HOME/}" "$nops" "${script%.sh}" | flowline 98
-    facets_map "$sp" | awk -F'\t' '{ facet_of[$2]=$1 } END { }' >/dev/null
     while IFS= read -r o; do
       [ -n "$o" ] || continue
       f="$(facet_of "$sp" "$o")"

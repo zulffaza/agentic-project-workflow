@@ -8,7 +8,10 @@ mkdir -p "$PW_PROJECTS_DIR/${S2}rfc-copy" 2>/dev/null; true
 pwtest_rc any "unknown backend rejected" env PW_RFC_BACKEND=nosuchbackend "$(pwtest_script pw-rfc.sh)" comments "$S2"
 [ "$PWTEST_RC" != 0 ] ; pwtest_fix "backend refusal actionable"
 
-# 4) rfc meta upserts + comment-seen
+# 4) rfc meta upserts + comment-seen — OWN private F2 clone: RI used to ride on the
+# variable another case (pw-ship.t.sh) set, so this slice crashed (`RI: unbound variable`)
+# when run in isolation — the mutation children run exactly that isolated slice.
+RI=rfcown; rm -rf "$PW_PROJECTS_DIR/$RI"; cp -a "$F2" "$PW_PROJECTS_DIR/$RI"
 "$(pwtest_script pw-rfc.sh)" init "$RI" markdown >/dev/null 2>&1 || true
 pwtest_rc 0 "rfc target" "$(pwtest_script pw-rfc.sh)" target "$RI" none-md-test
 grep -q 'none-md-test' "$PW_PROJECTS_DIR/$RI/rfc/META.md" && pwtest_ok "rfc target persists" || pwtest_bad "rfc target" "$(cat "$PW_PROJECTS_DIR/$RI/rfc/META.md" 2>/dev/null | head -3 | tr '\n' ';')"

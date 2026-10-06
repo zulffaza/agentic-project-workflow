@@ -361,14 +361,18 @@ _pwtest_cache_restore_root() { # repos+seeds once per run; rc 0 when root now pr
   mkdir -p "$PW_REPOS" "$PWTEST_ROOT/seeds"
   cp -a "$cd/repos/." "$PW_REPOS/" && cp -a "$cd/seeds/." "$PWTEST_ROOT/seeds/"
 }
-_pwtest_cache_repair() { # re-point F2's worktrees + clone push-URLs at THIS root (paths are absolute inside git metadata)
-  local r wt
+_pwtest_cache_repair() { # re-point F2/F3 worktrees + clone push-URLs at THIS root (paths are
+  # absolute inside git metadata). Stale CONTENT stays stale (branch names in F3's task files);
+  # only the admin links are repaired — the same distinction already documented for F2.
+  local r wt sfx
   for r in "$PW_REPOS"/*; do
     [ -d "$r/.git" ] || continue
     git -C "$r" remote set-url --push origin "$PWTEST_ROOT/seeds/$(basename "$r").git" >/dev/null 2>&1 || true
-    for wt in "$PW_PROJECTS_DIR/$S2/worktree/$(basename "$r")/"*; do
-      [ -d "$wt" ] || continue
-      git -C "$r" worktree repair "$wt" >/dev/null 2>&1 || true
+    for sfx in "$S2" "$S3"; do
+      for wt in "$PW_PROJECTS_DIR/$sfx/worktree/$(basename "$r")/"*; do
+        [ -d "$wt" ] || continue
+        git -C "$r" worktree repair "$wt" >/dev/null 2>&1 || true
+      done
     done
   done
 }
@@ -397,7 +401,7 @@ _pwtest_materialize() { # restore cached fixtures, build what is still missing, 
     cp -a "$_cd/projects/$S2" "$PW_PROJECTS_DIR/" && { _pwtest_cache_repair; F2="$PW_PROJECTS_DIR/$S2"; export F2 PWTEST_F2="$F2"; hit="$hit F2"; }
   fi
   if [ -n "$_cd" ] && [ "$NEED_F3" = 1 ] && [ -f "$_cd/.done-$S3" ] && _pwtest_cache_restore_root "$_cd"; then
-    cp -a "$_cd/projects/$S3" "$PW_PROJECTS_DIR/" && { F3="$PW_PROJECTS_DIR/$S3"; export F3; hit="$hit F3"; }
+    cp -a "$_cd/projects/$S3" "$PW_PROJECTS_DIR/" && { _pwtest_cache_repair; F3="$PW_PROJECTS_DIR/$S3"; export F3; hit="$hit F3"; }
   fi
   if { [ "$NEED_F1" = 1 ] && [ -z "${F1:-}" ]; } || { [ "$NEED_F2" = 1 ] && [ -z "${F2:-}" ]; } || { [ "$NEED_F3" = 1 ] && [ -z "${F3:-}" ]; }; then
     echo "TEST materializing fixtures from template/ …" >&2

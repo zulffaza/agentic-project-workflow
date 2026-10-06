@@ -10,7 +10,8 @@
 #   • one progress line per row: "MUT n/N <id> rc=<rc> <elapsed>s" (serial) / "MUT <id> …" (parallel).
 #   • non-blocking warning if the whole sweep exceeds 600 s.
 #   • PARALLEL (F5, PWTEST_MUT_JOBS>1, default auto): one WORKER per row, each operating on a
-#     disposable rsync copy of the bundle (excluding .git, ~1.3 MB). Mutations never touch the
+#     disposable rsync copy of the bundle (excluding .git and ignored .cache scratch).
+#     Mutations never touch the
 #     live tree, so workers cannot see each other's reverted files — the false-"caught" hazard
 #     of parallel-on-live — and same-file rows need no serialization because copies are
 #     independent. PWTEST_MUT_JOBS=1 keeps the original serial live-tree path (with the
@@ -86,7 +87,7 @@ _pwtest_mut_worker() {
   local src="$1" tsv="$2" rng="$3" base="$4" cache="$5" resdir="$6"
   local wt="$base/wt.$rng" id file old new tiers only n=0
   mkdir -p "$wt" "$resdir"
-  if ! rsync -a --exclude .git "$src/" "$wt/"; then
+  if ! rsync -a --exclude .git --exclude .cache "$src/" "$wt/"; then
     printf 'copyfail\t%s\n' "$rng" >> "$resdir/results.tsv"; return 1
   fi
   local start="${rng%-*}" end="${rng#*-}"

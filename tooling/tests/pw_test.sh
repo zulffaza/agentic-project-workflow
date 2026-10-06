@@ -54,8 +54,10 @@ trap '_pwtest_cleanup' EXIT
 pwtest_env_init "$ROOT"
 
 # per-section wall-clock timing (plan 19 Phase 0): TIME <section> <n>s on stderr.
-_PWT_LAST=0
-_pwtest_mark() { printf 'TIME %s %ss\n' "$1" $(( SECONDS - ${_PWT_LAST:-0} )) >&2; _PWT_LAST=$SECONDS; }
+# date +%s, not SECONDS: a case file sourced into this shell can clobber SECONDS and
+# silently skew every later tier total (T1 per-case attribution made this visible).
+_PWTIME_LAST="$(date +%s)"
+_pwtest_mark() { local _n; _n="$(date +%s)"; printf 'TIME %s %ss\n' "$1" $((_n - ${_PWTIME_LAST:-0})); _PWTIME_LAST=$_n; } >&2
 
 export TOOL
 S1=pwt-f1-scaffold; S2=pwt-f2-mid; S3=pwt-f3-hostile; export S1 S2 S3
@@ -95,11 +97,14 @@ for _pwt_t in "${_tlist[@]:-}"; do
   # note: case files are sourced and may clobber short vars (t/cf) — the runner uses _pwt_* only
   case "$_pwt_t" in
     T0) static_t0 ;;
-    T1) # per-script case files
+    T1) # per-script case files — each case gets its own TIME line (date-based: sourced
+        # case files may clobber SECONDS, so tier totals must not depend on it).
         for _pwt_cf in "$HERE"/cases/*.t.sh; do
           [ "$ONLY" ] && { printf '%s' "$(basename "$_pwt_cf")" | grep -q -- "$ONLY" || continue; }
           echo "TEST case $(basename "$_pwt_cf" .t.sh)"
+          _pwt_c0="$(date +%s)"
           . "$_pwt_cf"
+          printf 'TIME case %s %ss\n' "$(basename "$_pwt_cf" .t.sh)" $(( $(date +%s) - _pwt_c0 )) >&2
         done ;;
     T2) battery_t2 ;;
     T3) corpus_t3 "$CORPUS" ;;

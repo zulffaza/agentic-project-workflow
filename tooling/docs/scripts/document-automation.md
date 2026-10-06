@@ -94,6 +94,16 @@ Dashboard sync complete
 
 Missing inputs are skipped with a message (`PLAN.md not found, skipping`), not fatal.
 
+`--plan-only` copies each task file's Status into its existing PLAN row. It also copies Result
+section Time and Commit(s), with a recorded MR URL taking priority over commits in the Result cell.
+Absent or empty fields preserve existing cells. Older tables without Time/Result columns remain valid.
+The helper preserves links, dependencies, routing, and other columns. It stages the table update
+before replacing PLAN.md. A missing task row or failed cell update exits nonzero without changing
+the PLAN. It copies recorded status and never promotes `done` to `accepted`.
+
+Execution reconciles the PLAN before scope resolution and after task starts, returns, or repairs.
+Dashboard reconciliation follows each checkpoint. A failed sync stops scheduling.
+
 **When to use:** after manual/agent edits that updated a task file but not the README or PLAN;
 before `/pw-close` if dashboard lint failed. **Writes files** — unlike the two linting/summarizing
 scripts above, run it deliberately, and re-lint after (`pw-doc.sh lint all <slug>`).

@@ -11,9 +11,35 @@ pwtest_eq "T0 child exits 0" 0 "$_arc"
 grep -q 'TEST fixtures built: none' "$PWTEST_ROOT/$TH.a.out" && pwtest_ok "T0 child builds no fixtures" \
   || pwtest_bad "T0 child builds no fixtures" "expected 'built: none' in child output"
 
-# b) T4 child likewise
+# b) T4 child likewise. Its exit-0 assert includes the pw-doctor sync check, which
+# compares the tree against the provider installs under $HOME — those belong to the
+# PARENT bundle, so inside a disposable sweep copy (PWTEST_INNER) the check is about a
+# different tree by construction (pre-existing coupling, same one section f) skips for
+# "live tree untouched"). The lazy-fixtures assert stays universal; the sync assert
+# remains fully enforced in every real-tree run.
 _arc=0; bash "$PWTEST_TESTSDIR/pw_test.sh" --tier T4 </dev/null >"$PWTEST_ROOT/$TH.b.out" 2>&1 || _arc=$?
-pwtest_eq "T4 child exits 0" 0 "$_arc"
+_th_install_only() {
+  awk '/^  FAIL / { n++; if ($0 !~ /^  FAIL T4 pw-doctor reports in sync .*OUT OF SYNC/) bad=1 }
+       END { exit !(n == 1 && !bad) }'
+}
+printf '%s\n' '  FAIL T4 pw-doctor reports in sync — OUT OF SYNC' | _th_install_only \
+  && pwtest_ok "inner T4 allows only the expected install mismatch" \
+  || pwtest_bad "inner T4 install mismatch classifier" "expected sole sync failure was rejected"
+if printf '%s\n' '  FAIL T4 pw-doctor reports in sync — OUT OF SYNC' '  FAIL unrelated check' | _th_install_only; then
+  pwtest_bad "inner T4 rejects additional failures" "an unrelated failure was hidden by the sync mismatch"
+else
+  pwtest_ok "inner T4 rejects additional failures"
+fi
+if [ -n "${PWTEST_INNER:-}" ]; then
+  # serial single-row children run against the live tree (rc 0 expected); parallel
+  # workers run a bundle copy whose T4 must be red ONLY through the install-coupling.
+  if [ "$_arc" = 0 ]; then pwtest_ok "T4 child exits 0 (inner, live tree)"
+   elif [ "$_arc" = 1 ] && _th_install_only < "$PWTEST_ROOT/$TH.b.out"; then pwtest_ok "inner T4 child red is install-coupling only"
+  else pwtest_bad "inner T4 child red is install-coupling only" "rc=$_arc without the expected sync mismatch: $(grep -m1 FAIL "$PWTEST_ROOT/$TH.b.out")"
+  fi
+else
+  pwtest_eq "T4 child exits 0" 0 "$_arc"
+fi
 grep -q 'TEST fixtures built: none' "$PWTEST_ROOT/$TH.b.out" && pwtest_ok "T4 child builds no fixtures" \
   || pwtest_bad "T4 child builds no fixtures" "expected 'built: none' in child output"
 
@@ -79,3 +105,31 @@ if [ -n "${PWTEST_FIXTURE_CACHE:-}" ] && [ -z "${PWTEST_MUT_NESTED:-}" ]; then
     pwtest_skip "live tree untouched" "running from a bundle copy (no .git) — copies are disposable by construction"
   fi
 fi
+
+# g) F3 cache-restore re-points worktree links (C111 catcher). A cache built in another
+#    root carries stale absolute links; pw-ship's mr-state asserts read through F3's
+#    restored worktrees and every sweep child uses the cache — an un-repaired F3 link
+#    made those baseline-red, which mutate.sh's rc-classification would have silently
+#    counted as "caught". Craft build-root -> cache -> restore-root, then check the link.
+_FR="$PWTEST_ROOT/f3repair"; rm -rf "$_FR"; mkdir -p "$_FR/build/projects/pwt-f3-hostile/worktree/api" "$_FR/build/repos"
+git init -q --bare "$_FR/build/seed.git" 2>/dev/null
+git clone -q "$_FR/build/seed.git" "$_FR/build/repos/api" >/dev/null 2>&1
+( cd "$_FR/build/repos/api" && printf seed > seed.txt && git add -A \
+  && git -c user.email=t@t -c user.name=t commit -qm init >/dev/null 2>&1 \
+  && git branch wt1 >/dev/null 2>&1 \
+  && git worktree add "$_FR/build/projects/pwt-f3-hostile/worktree/api/T01-thing" wt1 >/dev/null 2>&1 )
+_FRH="$(_pwtest_recipe_hash)"; _FRC="$_FR/cache/$_FRH"; mkdir -p "$_FRC/projects"
+cp -a "$_FR/build/projects/pwt-f3-hostile" "$_FRC/projects/" 2>/dev/null
+cp -a "$_FR/build/repos" "$_FRC/repos" 2>/dev/null; mkdir -p "$_FRC/seeds"; cp -a "$_FR/build/seed.git" "$_FRC/seeds/api.git" 2>/dev/null
+: > "$_FRC/.done-pwt-f3-hostile"
+rm -rf "$_FR/build"                                   # stale links now point at a dead root
+_FR_R="$_FR/restore"; mkdir -p "$_FR_R/projects" "$_FR_R/repos" "$_FR_R/seeds"
+( export PWTEST_ROOT="$_FR_R" PW_PROJECTS_DIR="$_FR_R/projects" PW_REPOS="$_FR_R/repos" \
+      PWTEST_FIXTURE_CACHE="$_FR/cache" NEED_F1=0 NEED_F2=0 NEED_F3=1
+  _pwtest_materialize >/dev/null 2>&1 || true )
+if git -C "$_FR_R/projects/pwt-f3-hostile/worktree/api/T01-thing" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  pwtest_ok "F3 cache-restore repairs worktree links"
+else
+  pwtest_bad "F3 cache-restore repairs worktree links" "restored worktree cannot resolve its gitdir"
+fi
+rm -rf "$_FR"

@@ -41,6 +41,11 @@ Given a project under `{{PW_PROJECTS}}/<slug>/`:
   bounded to the batch's items); different provider → supervised headless, resuming the recorded
   id first iff `pw-session.sh session-check` reports it live. Never blind-resume, never
   fire-and-forget; the recorded seed is the cold fallback.
+- Before resolving scope, after each task starts or returns, and after each repair/re-verification
+  changes a task file, run `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh sync <slug> --plan-only`,
+  then `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh sync <slug> --dashboard-only`.
+  STOP on sync failure. Re-read the PLAN before scheduling dependents or reporting completion.
+  Task files supply execution Status/Time/Result; synchronization never auto-accepts a done task.
 - Walk the dependency DAG. Spawn ONE executor per task, only once its `depends_on` are all done.  Parallelize independent tasks up to the plan's max parallelism. **You are a driver, not an
   implementer** — when the phase calls for a researcher (Mode A answer / Mode B grounding), an
   analyst draft, or a task-doc writer, spawn that lane *seeded* (a §4.1-style executive summary +
