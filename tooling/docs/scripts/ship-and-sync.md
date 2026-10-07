@@ -4,6 +4,7 @@ The `/pw-ship` path lives in one entity script — `tooling/scripts/entities/pw-
 (facets per `../conventions.md` S1b): decide what ships (`resolve`), push + open MRs (`exec`),
 track MR/CI state (`mr-state`, `mr-state-batch`, `monitor`), and record comment/bookkeeping
 state (`comment-seen`, `dashboard-mr-state`).
+The `history` family manages project-owned review-attempt records and verified description delivery.
 
 ## pw-ship.sh resolve
 
@@ -53,6 +54,11 @@ CLI returned no MR URL, stderr carries the CLI's first error line + `MR creation
 itself succeeded — safe to re-run after fixing auth/context)` — report that state honestly
 (branch is public, no MR yet), fix auth/context, re-run. The forge CLI is picked from the repo's
 origin host (github → `gh`, else `glab`).
+
+A marked creation body is read back before its ownership snapshot is stored. Failure leaves the
+MR URL recorded and reports initial snapshot pending; retain the creation body for a safe retry.
+The marked body is also retained in the project record before readback. `history ... init <url>`
+can retry from that payload without the temporary source file. No review attempt is created.
 
 **Prerequisite it validates for you:** `Repo:`/`Branch:` set in the task file and the repo present
 locally — exit 2 messages name which is missing.
@@ -146,3 +152,59 @@ untouched). Used by the accept/merge flow; `exec` marks `open` on creation.
 ```bash
 $PW_HOME/tooling/scripts/entities/pw-ship.sh dashboard-mr-state <slug> <task-id> merged
 ```
+
+## pw-ship.sh history
+
+`history <slug> invocation` prints a call candidate ID; the caller retains it in its ledger.
+`history <slug> pending` lists unfinished records without a forge query, including delivered history
+whose main summary still needs repair. Discover these before merged/closed skips or worktree cleanup.
+
+```bash
+$PW_HOME/tooling/scripts/entities/pw-ship.sh history <slug> init <MR-url> --file <creation-body>
+$PW_HOME/tooling/scripts/entities/pw-ship.sh history <slug> begin <MR-url> --invocation <call-id>
+$PW_HOME/tooling/scripts/entities/pw-ship.sh history <slug> checkpoint <MR-url> --attempt <key> --file <JSON>
+$PW_HOME/tooling/scripts/entities/pw-ship.sh history <slug> freeze <MR-url> --attempt <key>
+$PW_HOME/tooling/scripts/entities/pw-ship.sh history <slug> deliver <MR-url> --attempt <key> --limit <n> --unit <utf8|chars> --limit-source <reference>
+```
+
+One invocation/MR produces one attempt. All intermediate fixes, commits, pipeline observations,
+and replies checkpoint under that identity. Freeze seals the Before/After/Summary bullet groups,
+commit bullets, and combined local/pipeline Verification. It does not create an MR, push, or reply.
+The JSON checkpoint fields are documented in the command protocol; supplied evidence remains an
+agent responsibility. Head binding and structural validation do not prove tests actually ran.
+
+State lives in `<project>/.ship-history/<identity-hash>.json`, not a task worktree. It contains
+versioned MR identity, full attempt archive, current ownership snapshot, ordering, pruning tombstones,
+and any tentative delivery. Atomic file replacement runs behind an MR-specific exclusive directory
+lock under the common projects root's `.ship-history-locks/`, so separate local projects cannot
+concurrently write the same MR. Owner PID/token prevents releasing another writer's lock; no age-based takeover.
+The library uses Python 3 stdlib, already used by bundle readers; no added package is required.
+
+Delivery uses explicit host/repo endpoint arguments and JSON stdin. It rechecks the current body
+before write, retries three observed read races, and verifies the landed body/head afterwards.
+Only configured forge hosts (or their matching public defaults) are accepted. A new target must
+be recorded in the project's task Result or MR table; verified existing archives remain recoverable
+after task/worktree cleanup. This prevents an unrelated URL from becoming a new project-owned target.
+The forge calls are not atomic conditional writes: a human can still race the final request.
+A mismatch remains pending. Remote success before local acknowledgement is recovered by matching
+owned-region snapshots, head, and retained history; it does not repeat pushes/replies or body writes.
+
+Owned summary markers include all five sections through Notes for the reviewer. History is last,
+newest first; retained frozen block bytes never change. Unknown ownership, malformed markers,
+external edits inside a summary, or changed frozen blocks stop conflicting writes. Outside text
+survives unchanged. A legacy unmarked summary permits history delivery only, explicitly summary pending.
+After explicit owner review of a repaired currently published body, `history init --file <body> --reviewed`
+can adopt its exact snapshot. This is human-triggered only, never an agent-initiative bypass. It rejects
+changed or removed retained history. Frozen attempt bytes remain immutable.
+
+Capacity is required per delivery: documented number, `utf8` bytes or Unicode `chars`, and source.
+There is no guessed universal default. The GitLab instance-limit documentation reports approximately
+1 million characters / 1 MB, not an exact cross-instance Unicode contract:
+https://docs.gitlab.com/administration/instance_limits/#size-of-comments-and-descriptions-of-issues-merge-requests-and-epics
+Resolve the actual instance policy before pruning. Unknown capacity fails safely without a write.
+Remove only complete oldest blocks, retain the newest and all protected text, and keep the local
+archive/tombstones. A newest block too large to fit remains pending; retries cannot resurrect pruned history.
+
+Exit 0 means the requested operation completed; `history delivered; summary refresh pending` is
+partial delivery and never a fully current-description claim. Exit 2 is an actionable validation,
+ownership, locking, capacity, forge, or readback failure. Existing thread-tracking rows stay independent.

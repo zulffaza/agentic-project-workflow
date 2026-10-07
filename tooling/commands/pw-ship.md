@@ -106,14 +106,15 @@ task; here we push branches and open MRs.
 
 ### MR description template (make it genuinely useful — this is what a reviewer reads first)
 ```
+<!-- pw-mr-summary:start -->
 ## What & why
-<1–3 sentences: the change and the reason. Link the task: task/T0n.md.>
+<1–3 sentences: the change and the reason. Use accessible repository/ticket links, not private project-plan paths.>
 
-## High-level changes        ← the behavior, NOT the files (≤3 bullets, no file paths)
+## High-level changes
 - <one bullet per observable behavior change a reviewer should understand — e.g. "partner sync now
   advances a CDC watermark instead of full re-scans", "the endpoint is now idempotent by cursor">
 
-## Low-level changes         ← the concrete diff, anchored to real files (1 line per file/module)
+## Low-level changes
 - <file or module>: <what precisely changed — function/endpoint/class names>
 - …
 
@@ -129,14 +130,72 @@ counts, etc. Note any pre-existing/environmental failures and that they reproduc
 - **Landing unit:** <only if this MR must merge as part of a set — the unit name + sibling MRs, so
   reviewers review them together and don't mistake an interdependent MR for an independent one>
 
-Part of project `<slug>` (task T0n).
+<!-- pw-mr-summary:end -->
 ```
+Keep the five headings exact and ordered. Notes for the reviewer belongs inside the summary region.
+Do not create an empty Review changes section on initial shipment. `exec` verifies and stores
+the marked creation body's ownership snapshot after readback; a snapshot failure is partial delivery,
+even if MR creation succeeded. Preserve its source file for recovery.
 Fill every section from the task file + its `## Result` + the actual diff — don't ship a bare
 "updates X" description. Derive **High-level changes** from the task's goal/intent (behavioral,
 no paths — that forces real abstraction); derive **Low-level changes** by diffing the branch against
 its base (`git diff origin/<base>...<branch>`), grouped per file/module with real identifiers.
 
 ## MR-comment mode  (`/pw-ship <slug> [task-ids] comments`)
+### Invocation and pending delivery
+Before MR-state skips, cleanup, or the no-open-comments shortcut, run
+`{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh history <slug> pending`.
+Recover frozen pending description writes without repeating completed pushes, tests, or replies.
+Closed/merged MRs keep their project-owned records and receive no description write.
+Do not remove pending records when accepting tasks or removing worktrees.
+
+Generate one call ID with `pw-ship.sh history <slug> invocation` and retain it in the run ledger.
+After discovering actual review work, group tasks by resolved forge/host/repository/MR identity.
+For each distinct MR, run `pw-ship.sh history <slug> begin <MR-url> --invocation <call-id>` once.
+Retain its returned attempt key, start timestamp, before head, and body snapshot. Reuse them through
+all comments, commits, pushes, CI repairs, and any resumed interrupted invocation. An empty sweep
+creates no attempt; delivery-only recovery does not create a new one.
+
+Before handling work, checkpoint the planned evidence with current published head and explicit
+not-yet-run verification. Update the checkpoint after each fix/push/verification and before
+acknowledging replies with `comment-seen`. If persistence fails, stop further acknowledgement
+and description delivery. Author text from actual code/diff/results; the helper does not invent it.
+
+Use `pw-ship.sh history <slug> checkpoint <MR-url> --attempt <key> --file <JSON-file>`.
+The JSON object contains `before`, `after`, `summary` string-bullet lists, a `commits` list
+of `{sha, subject, published}` objects, `verification` objects `{head, text}`, actual published
+`head`, and `summary_body` (only the complete marked current-state summary). Optional `tasks`
+and namespaced `comments` retain local traceability and never appear as comment-reference lists.
+Use full recorded SHAs in checkpoints, including intermediate CI failures and local-only commits.
+
+At the end of this invocation's MR work, freeze one consolidated block with
+`pw-ship.sh history <slug> freeze <MR-url> --attempt <key>`.
+Never split that call into one block per comment, task, fixer pass, or CI repair.
+Publish with `pw-ship.sh history <slug> deliver <MR-url> --attempt <key>
+--limit <documented-number> --unit <utf8|chars> --limit-source <reference>`.
+Resolve the forge/instance's documented capacity and measurement unit first; unknown capacity
+must be reported as pending, not guessed or inferred from a rejected write. Pass argv quote-safe.
+The helper uses explicit forge host/repo API calls, JSON stdin, and readback. It never pushes or replies.
+
+Visible blocks contain Changes with Before/After/Summary bullet groups, a flat Commits list,
+and Verification with both local and pipeline/check outcomes. No Request field, comment IDs/URLs,
+or separate CI section. Refresh the main description to the actual latest published whole-MR diff,
+replacing obsolete statements instead of accumulating bullets. Local-only work is labeled as such.
+Review changes is the final section, after reviewer notes and preserved outside text; attempts
+are newest-first and previously frozen blocks remain byte-identical. Only complete oldest blocks
+can be pruned at capacity; the full local archive and pruned-key metadata survive retries.
+Late pipeline evidence from a later call belongs to a new verification-only attempt, never an edit
+to a previous block. No new evidence/work means no new block or timestamp-only description write.
+Ownership conflicts, malformed markers, capacity failure, or failed readback remain pending.
+Unmarked legacy summaries are preserved; report `summary refresh pending` and obtain a reviewed
+ownership repair rather than claiming the description is fully current.
+Only after explicit owner approval of a repaired, currently published marked body, use
+`pw-ship.sh history <slug> init <MR-url> --file <reviewed-current-body> --reviewed`.
+This ownership repair is **human-triggered only, never on agent initiative**. It verifies exact
+readback and retained history before adopting the summary snapshot; it is not permission to edit history.
+An initial snapshot failure retains its creation body locally; retry `history ... init <MR-url>`
+from the retained payload before starting new review work.
+
 Handle review comments left on the **MR itself** — **all open threads on one task arrive as ONE fixer pass** for that task's worktree (a batched `seed-review-batch`, per-thread replies mirrored
 into `task/review/T0n.review.md`; the pass is routed by the §routing ladder —
 `references/execution-and-routing.md` — not by blind resume: same-provider single task → you fix
@@ -220,11 +279,18 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      underlying line changes (a later push can silently flip `resolved` with no explicit API call)
      — but that auto-resolve does **not** happen for a resolvable *general* (no diff position)
      thread, so don't assume pushing a fix closed it out; you must explicitly resolve it (below).
-   - A task whose MR has no open/unrecorded threads at all is skipped (note it in the recap).
-2. **One fixer pass per task, not one spawn per comment** (the §4.8 batch): apply *all* the   open thread fixes in that task's **worktree**, re-run its `## Verify` once for the batch, and
-   push. Fan-out per the ladder: **≥2 tasks with open threads → one fixer per task, run in
+    - A task whose MR has no open/unrecorded threads is skipped only after pending-description
+      recovery and any newly observed matching-head verification evidence (note it in the recap).
+2. **One fixer pass per distinct MR, not per comment or shared-branch task:** apply all open
+    thread fixes once in that MR's shared **worktree**, re-run its `## Verify` once for the batch, and
+    push. For tasks sharing one MR, use the union of their comment-tracking tables, reply once per
+    thread, and mirror the result/tracking into every contributing task.
+    If those tasks have incompatible execution pins, serialize bounded owner work orders under
+    their recorded pins; never edit the shared branch concurrently or invent a replacement pin.
+    Aggregate all such passes under the same invocation/MR attempt.
+    Fan-out per the ladder: **≥2 distinct MRs with open threads → one fixer per MR, run in
    parallel** (independent worktrees; each routed by the ladder — same provider → in-process
-   sub-agent, `Route: headless`/cross-provider → supervised headless); **exactly one task, same
+    sub-agent, `Route: headless`/cross-provider → supervised headless); **exactly one MR, same
    provider, `Route: auto|subagent` → you fix it inline** (bounded exception to the no-source-edit
    rule: listed items only, run its `## Verify`, commit, reply per item); `Route: headless` single
    task → resume-try iff `pw-session.sh session-check <slug> <task-id>` exits 0, dead/failed →
@@ -257,17 +323,10 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      `task/review/T0n.review.md`'s `## MR comment tracking` table keyed by thread ID, which step 1
      reads back on the next run. Without this call, an unresolvable comment (which the forge can
      never mark resolved) either gets silently skipped forever or re-processed every single run.
-   - **Refresh the MR description too — every round, not just the first.** Re-fetch the current
-     description (`glab mr view <iid>` / `gh pr view <number> --json body`), then update it (`glab
-     mr update <iid> --description '<updated body>'` / `gh pr edit <number> --body '<updated
-     body>'`) so it still matches the MR's real, current state: add a bullet under `## Low-level
-     changes` for what this round changed on disk (and under `## High-level changes` only if an
-     observable behavior actually changed), refresh `## Verification`'s output if it changed, and
-     add/adjust `## Notes for the reviewer` if the fix introduced a new pinned-as-is/risk/follow-up.
-     Do this even
-     if the reply-on-thread already explains it — the description is what a reviewer (or you) reads
-     first, and it goes stale fast once several review rounds have landed fixes the original
-     description never mentioned.
+    - **Checkpoint and deliver the description through `history`, never ad-hoc forge body edits.**
+      Retain the invocation/MR key, aggregate all comment and CI work, freeze once, and deliver
+      using the protocol above. Preserve older blocks and external edits. Readback and the
+      helper's `summary refresh pending` result determine the delivery recap, not an API exit alone.
    - Also mirror as usual: task `## Result`, a `[RESOLVED]` item in `task/review/T0n.review.md`'s
      `## Items` section (create the file first via `pw-review.sh init-docs <slug> task/T0n.md`
      if it doesn't exist yet — init-all only ever covers the current dashboard phase), and a `LOG.md` line via the
@@ -277,7 +336,8 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      changes.
 4. **Recap** a table — one row per task in the set: Task · Repo · MR · state (open/merged/closed) ·
    threads addressed (note how many were general/no-diff-position) · verify (green/failed) ·
-   pushed? · build result (or "skipped" if `--skip-build-check` was passed). Flag any task whose
+    pushed? · build result (or "skipped" if `--skip-build-check` was passed) · description delivery
+    (verified / pending / history delivered but summary pending). Flag any task whose
    verify failed after the fix (leave it for review) and any thread you couldn't resolve without a
    decision. For `merged` tasks, note that the worktree was removed and docs updated.
 

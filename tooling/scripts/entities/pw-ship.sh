@@ -9,6 +9,7 @@
 #   pw-ship.sh mr-state-batch     <slug> [task-ids...]
 #   pw-ship.sh comment-seen       <slug> <task-id> <thread-id> <kind:resolvable|unresolvable> <replied:yes|no> [note...]
 #   pw-ship.sh dashboard-mr-state <slug> <task-id> <state>
+#   pw-ship.sh history            <slug> <invocation|pending|init|begin|checkpoint|freeze|deliver> [MR-url] [options]
 #
 # Facets (S1b): READ  = resolve, mr-state, mr-state-batch, monitor
 #               WRITE = exec, comment-seen, dashboard-mr-state
@@ -37,6 +38,16 @@
 #   "## MR comment tracking" table (keyed hidden marker; idempotent reruns; the
 #   local authority for unresolvable threads the forge can never report resolved).
 # dashboard-mr-state — set one task's State cell in the dashboard MR table.
+# history — project-owned invocation/MR attempt records and owned description delivery.
+#   invocation prints a call ID; pending lists unfinished records without querying a forge.
+#   init --file <creation-body> verifies/snapshots a new marked MR; begin --invocation <id>
+#   checkpoints its before state.
+#   checkpoint --attempt <key> --file <JSON> accepts authored evidence; freeze seals it.
+#   deliver --attempt <key> --limit <documented-number> --unit <utf8|chars>
+#   --limit-source <reference> performs bounded read/write/readback, oldest-block pruning,
+#   and immutable newest-first history. No pushes or thread replies are performed here.
+#   init --reviewed is human-triggered only, never on agent initiative: it snapshots an
+#   explicitly reviewed current body without rewriting any retained frozen attempt.
 # ============================================================================
 set -euo pipefail
 
@@ -46,6 +57,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/../../.." && pwd)"
 . "$HERE/../lib/pw-common.sh"
 . "$HERE/../lib/pw-mdlib.sh"
+. "$HERE/../lib/pw-shiplib.sh"
 ST="$HERE/pw-status.sh"
 # -h/--help before positional parsing: without this, "-h" would be taken as a slug/arg.
 case "${1:-}" in -h|--help) pw_usage ;; esac
@@ -57,6 +69,39 @@ die() { echo "pw-ship: $*" >&2; exit 2; }
 proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scripts/toolchain/scaffold.sh $1)"; printf '%s' "$d"; }
 
 # ================= READ facet =================================================
+
+cmd_history() {
+  [ $# -ge 2 ] || die "usage: history <slug> <operation> [MR-url] [options] → fix: see --help"
+  local slug="$1"; shift
+  [[ "$slug" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "unsafe project slug → fix: use a project name, not a path"
+  local d ts="" mappings="" registered=no taskfile url; d="$(proj_dir "$slug")"
+  if [ "$1" = begin ]; then
+    ts="$(pw_now_wib)" || die "cannot format history timestamp → fix: check the date command"
+  fi
+  if [ -n "${PW_FORGE_HOSTS[0]:-}" ]; then mappings="$(printf '%s\n' "${PW_FORGE_HOSTS[@]}")"; fi
+  case "$1" in
+    init|begin)
+      for taskfile in "$d"/task/T*.md; do
+        [ -f "$taskfile" ] || continue
+        url="$(pw_task_mr_url "$taskfile")"
+        [ "$url" != "${2:-}" ] || { registered=yes; break; }
+      done
+      if [ "$registered" = no ] && [ -f "$d/README.md" ]; then
+        # Legacy dashboards can own the URL when a task Result has no MR field.
+        while IFS= read -r url; do
+          [ "$url" != "${2:-}" ] || { registered=yes; break; }
+        done < <(awk -F'|' '
+          /^\|/ {
+            candidate=0
+            for (i=2;i<NF;i++) { c=$i; gsub(/[*`]/,"",c); gsub(/^[[:space:]]+|[[:space:]]+$/,"",c); if(c=="MR") candidate=i }
+            if($0 ~ /^\|[-| :]+\|[[:space:]]*$/) {m=header; header=0; next}
+            header=candidate
+            if(m && $m ~ /https?:/) print $m
+          }' "$d/README.md" | grep -oE 'https?://[^ )>|"`]+' || true)
+      fi ;;
+  esac
+  pw_ship_history "$d" "$ts" "$mappings" "$registered" "$@"
+}
 
 cmd_resolve() {
   [ $# -eq 1 ] || die "usage: resolve <slug>"
@@ -596,7 +641,9 @@ cmd_exec() {
     fi
 
     # Read description
-    DESCRIPTION="$(cat "$DESC_FILE")"
+    DESCRIPTION="$(cat "$DESC_FILE" && printf '.')" \
+      || die "cannot read MR creation body → fix: restore the generated description file before retrying"
+    DESCRIPTION="${DESCRIPTION%.}"
 
     # Create MR
     # Run from inside the repo so both CLIs resolve their project/host context (see forges.md).
@@ -634,6 +681,10 @@ cmd_exec() {
       else
         # Add Result section
         printf '\n## Result\n\n- MR: %s\n' "$MR_URL" >> "$TASK_FILE"
+      fi
+      if grep -q '<!-- pw-mr-summary:start -->' "$DESC_FILE"; then
+        cmd_history "$SLUG" init "$MR_URL" --file "$DESC_FILE" \
+          || die "MR created but initial ownership snapshot is pending → fix: retain the creation body and retry its history init after fixing readback"
       fi
     else
       # No URL back = no MR exists; do not let a partial ship pass as success, and never mark
@@ -746,6 +797,7 @@ cmd_dashboard_mr_state() {
 }
 
 case "${1:-}" in
+  history)            shift; cmd_history "$@" ;;
   resolve)            shift; cmd_resolve "$@" ;;
   exec)               shift; cmd_exec "$@" ;;
   monitor)            shift; cmd_monitor "$@" ;;
@@ -753,5 +805,5 @@ case "${1:-}" in
   mr-state-batch)     shift; cmd_mr_state_batch "$@" ;;
   comment-seen)       shift; cmd_comment_seen "$@" ;;
   dashboard-mr-state) shift; cmd_dashboard_mr_state "$@" ;;
-  *) die "usage: pw-ship.sh <resolve|exec|monitor|mr-state|mr-state-batch|comment-seen|dashboard-mr-state> … (see --help)" ;;
+   *) die "usage: pw-ship.sh <resolve|exec|monitor|mr-state|mr-state-batch|comment-seen|dashboard-mr-state|history> … (see --help)" ;;
 esac

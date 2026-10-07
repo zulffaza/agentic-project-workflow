@@ -96,6 +96,10 @@ result), and after ship (comments on the MR/PR itself). See
 default, but can optionally be delegated to a fresh AI review pass instead (per project, per phase)
 — see that same doc's "AI-assisted review" section.
 
+MR comment runs also keep one durable review-attempt record per invocation and MR. The MR
+description retains the current summary plus an immutable newest-first history of changes and
+verification. See [docs/REVIEW.md](./docs/REVIEW.md) for recovery, capacity, and ownership rules.
+
 Keeping open MRs fresh as their base moves is a side-loop: **`/pw-sync`**. Another optional
 side-loop, **`/pw-rfc`**, publishes approved analysis/plan content to an RFC doc (any configured
 platform, or a local-only doc by default) — see **[docs/RFC.md](./docs/RFC.md)**. Full detail →

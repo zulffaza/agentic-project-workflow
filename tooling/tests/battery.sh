@@ -55,6 +55,7 @@ battery_rows() {
   printf 'review-facet-count F2\tpw-review-read.sh\tcount %s task/review/PLAN.review.md\n' "$S2"
   printf 'review-facet-open F2\tpw-review-read.sh\thas-open %s task/review/PLAN.review.md\n' "$S2"
   printf 'review-facet-eligible F2\tpw-review-read.sh\teligible %s task/review/PLAN.review.md\n' "$S2"
+  printf 'history-pending F1\tpw-ship.sh\thistory %s pending\n' "$S1"
 }
 
 gate_combos() {   # label only; the runner composes cmd from it: mode|phase|fixture
@@ -84,7 +85,8 @@ pw-preflight|analyze execute breakdown ship review comments close
 pw-config|model-check model-resolve project global
 pw-session|session-check
 pw-review-read|gate has-open count eligible scan
-pw-status|provider-audit"
+pw-status|provider-audit
+pw-ship|history"
 
 pwtest_is_crash() {  # file → 0 if output looks like a *script* defect (not a clean failure)
   grep -qE "^(pw-[a-z-]+\.sh|.*\.sh): line [0-9]+:|unbound variable|syntax error near|command not found|Traceback|glab-shim: unexpected|gh-shim: unexpected" "$1"

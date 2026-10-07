@@ -1,4 +1,5 @@
 selftest: pw-status.sh --selftest	pw-status.sh	--selftest	0	-
+history-pending F1	pw-ship.sh	history pwt-f1-scaffold pending	0	-
 status pwt-f1-scaffold	pw-status.sh	pwt-f1-scaffold --skip-cli-check	0	-
 review-scan pwt-f1-scaffold	pw-review.sh	scan pwt-f1-scaffold	0	-
 lint-all pwt-f1-scaffold	pw-doc.sh	lint all pwt-f1-scaffold	0	-

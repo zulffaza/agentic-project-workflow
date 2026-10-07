@@ -6,6 +6,9 @@
 set -u
 [ -n "${PWTEST_FORGE_LOG:-}" ] && printf '%s %s\n' "glab $*" >>"$PWTEST_FORGE_LOG"
 if [ -n "${PWTEST_FORGE_FAIL:-}" ]; then echo "glab-shim: forced query failure" >&2; exit 1; fi
+if [ -n "${PWTEST_HISTORY_FORGE_DIR:-}" ] && { [ "${1:-}" = api ] || { [ "${1:-}" = mr ] && [ "${2:-}" = create ]; }; }; then
+  exec python3 "$(dirname "$0")/forge-history.py" glab "$@"
+fi
 _state_json() {
   local iid="$1" st="opened" tgt="${PWTEST_MR_TARGET:-master}"
   if [ -n "${PWTEST_FORGE_STATE_FILE:-}" ] && [ -f "$PWTEST_FORGE_STATE_FILE" ]; then

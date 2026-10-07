@@ -34,7 +34,8 @@
 # false-"caught" mechanism); C112 pins the ops_detail non-collapsing field separator
 # (blank paragraph/facet rows must survive — tab IFS silently shifts columns).
 # C113-C121 cover WIB writers, mixed-format parsing, stub compatibility, and failure safety.
-# Next free: C122 (C70–C72 stay reserved).
+# C122-C135 cover invocation/MR history, immutable projection, delivery and recovery safety.
+# Next free: C136 (C70–C72 stay reserved).
 # C77–C81 minted by the project-doctor live-triage plan (fix-hint command-only scrubber,
 # token-expansion reader, depends_on full-id universe, accepted-teardown status-awareness,
 # backtick-first field reader).
@@ -158,3 +159,17 @@ C118-wib-stub-filter-missing	pw-mdlib.sh	!/<DD MMMM YYYY/ && !/<§section/'	!/<�
 C119-empty-formatter-published	pw-mdlib.sh	  [ -n "$t" ] || return 1	  :	T1	^pw-datetime\.t\.sh$
 C120-context-writer-date-only	pw-context.sh	| $ts | $(_esc "$TRUST")	| $(date '+%F') | $(_esc "$TRUST")	T1	^pw-datetime\.t\.sh$
 C121-scaffold-created-local	scaffold.sh	s|<CREATED>|$created|	s|<CREATED>|$(date '+%F %H:%M')|	T1	^pw-datetime\.t\.sh$
+C122-frozen-attempt-overwrite	pw-shiplib.sh	need(not selected['frozen'] or data == selected['checkpoint'],	need(True,	T1	^pw-ship-history\.t\.sh$
+C123-duplicate-invocation	pw-shiplib.sh	            if existing:	            if False and existing:	T1	^pw-ship-history\.t\.sh$
+C124-history-oldest-first	pw-shiplib.sh	reverse=True)	reverse=False)	T1	^pw-ship-history\.t\.sh$
+C125-stale-main-summary	pw-shiplib.sh	body = body[:summary_span[0]] + candidate_summary + body[summary_span[1]:]	body = body	T1	^pw-ship-history\.t\.sh$
+C126-unverified-description-ack	pw-shiplib.sh	landed['body'] == proposed and landed['head'] == remote['head']	True	T1	^pw-ship-history\.t\.sh$
+C127-outside-text-loss	pw-shiplib.sh	outside = body[:history[0]] + body[history[1]:] if history else body	outside = body[:history[0]] if history else body	T1	^pw-ship-history\.t\.sh$
+C128-retention-drops-newest	pw-shiplib.sh	pruned.append(attempts.pop()['key'])	pruned.append(attempts.pop(0)['key'])	T1	^pw-ship-history\.t\.sh$
+C129-pruned-recovery-loses-tombstones	pw-shiplib.sh	state['pruned'] = list(dict.fromkeys(state['pruned'] + planned['pruned']))	state['pruned'] = state['pruned']	T1	^pw-ship-history\.t\.sh$
+C130-owned-summary-human-edit-overwritten	pw-shiplib.sh	need(observed in approved,	need(True,	T1	^pw-ship-history\.t\.sh$
+C131-concurrent-invocation	pw-shiplib.sh	need(not any(not a['frozen'] for a in state['attempts']),	need(True,	T1	^pw-ship-history\.t\.sh$
+C132-repository-traversal-accepted	pw-shiplib.sh	part not in ('.', '..')	True	T1	^pw-ship-history\.t\.sh$
+C133-unrelated-verification-head	pw-shiplib.sh	need(all(check['head'] in allowed_heads for check in data['verification']),	need(True,	T1	^pw-ship-history\.t\.sh$
+C134-head-advanced-ack	pw-shiplib.sh	landed['head'] == remote['head']	True	T1	^pw-ship-history\.t\.sh$
+C135-creation-body-newlines-stripped	pw-ship.sh	DESCRIPTION="$(cat "$DESC_FILE" && printf '.')"	DESCRIPTION="$(cat "$DESC_FILE")"	T1	^pw-ship-history\.t\.sh$

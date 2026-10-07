@@ -165,7 +165,11 @@ them means going back into the task's worktree and pushing, which is ship-side w
 so you don't have to invoke it per task. It processes them serially (each is a real
 edit → verify → push) and recaps a per-task table at the end.
 
-**MR state is checked first, per task** (the ship flow queries the forge directly):
+**Pending description delivery is checked before MR-state skips.** A rerun recovers saved attempts
+without repeating completed pushes or replies. Closed/merged MRs retain pending project records
+without another body write; worktree cleanup does not erase that evidence.
+
+**MR state is then checked per task** (the ship flow queries the forge directly):
 `merged` → the MR was already merged downstream — accept the task, update the dashboard, remove the
 worktree, and skip it (never process comments on a merged MR); `closed` → note it and skip; `unknown`
 (the forge query failed or couldn't resolve the MR) → note it as `mr-state-unknown` and skip. Only
@@ -179,7 +183,7 @@ reviewer leaves a comment on MR !123 (thread on file X, line N — OR a general/
         ▼
 /pw-ship <slug> T03 comments
         │
-        ├─ 0. CHECK MR state   per-task forge query — merged/closed/unknown ⇒
+        ├─ 0. RECOVER pending description delivery, then CHECK MR state — merged/closed/unknown ⇒
         │                      accept/update dashboard/remove worktree + skip; only open MRs proceed
         │
         ├─ 1. FETCH open threads   GitHub: gh pr view --comments + gh api …/pulls/<n>/comments (BOTH
@@ -194,8 +198,8 @@ reviewer leaves a comment on MR !123 (thread on file X, line N — OR a general/
         │                          --skip-build-check was passed)
         ├─ 3. REPLY on each thread  summarising the fix (never a bare "done") — general comments too;
         │                          explicitly resolve a resolvable-but-general thread (no auto-resolve)
-        ├─ 4. REFRESH the MR description  every round, not just the first — add what this round
-        │                          fixed, update the verification output, adjust reviewer notes
+        ├─ 4. REFRESH the current MR summary and DELIVER one frozen attempt for this invocation
+        │                          — preserve prior attempts, reviewer text, and actual verification
         └─ 5. MIRROR into the project dir  ← the important bit
                  • task/T03.md  ## Result   (what changed + verify output + build-check result)
                  • task/review/T03.review.md  (create it if missing — a [RESOLVED] item per thread,
@@ -208,6 +212,30 @@ reviewer leaves a comment on MR !123 (thread on file X, line N — OR a general/
 first — if it still only describes the original diff after three rounds of review fixes, it's
 actively misleading. Refreshing it is as mandatory as replying on the thread, just easy to forget
 since the forge doesn't prompt for it the way an unresolved thread does.
+
+### Description and review-attempt history
+
+One `/pw-ship … comments` invocation creates at most one attempt per MR, even when it handles
+many comments, commits, and CI repairs. Tasks sharing one adopted branch/MR share that attempt.
+An empty sweep creates none. Thread IDs and reply links remain in the local record, not a noisy
+request list in the description.
+
+The main description stays current: What & why, High-level changes, Low-level changes,
+Verification, and Notes for the reviewer are inside one owned summary region. Obsolete claims
+are replaced rather than accumulated. Review changes is last and shows newest attempts first.
+Each attempt contains Changes with Before/After/Summary bullet lists, Commits as individual
+bullets, and Verification combining local checks and pipeline results, each tied to its head.
+
+Completed attempt blocks never change. Later pipeline evidence belongs to the later invocation,
+not an edit to earlier history. A delivery-only retry reuses the saved block and original order.
+If a documented body limit requires space, only complete oldest blocks are removed; their full
+local archive remains. Reviewer text, the newest block, and required evidence are never truncated.
+
+The recap reports description delivery separately from push, replies, tests, and pipeline state.
+`description update pending` means the body did not verify after delivery. `summary refresh pending`
+means history can be present while an ambiguous legacy or newer-head summary still needs repair.
+Do not treat either outcome as a fully current description. Resolve the reported ownership or
+capacity issue, then rerun `/pw-ship … comments`; failed delivery remains recoverable locally.
 
 **Build check runs by default, in both modes:** polls the MR's pipeline/checks to a terminal state
 (green/red/still-running) and shows the result in the recap and the task's `## Result` — meaning a

@@ -3,6 +3,9 @@
 set -u
 [ -n "${PWTEST_FORGE_LOG:-}" ] && printf '%s\n' "gh $*" >>"$PWTEST_FORGE_LOG"
 if [ -n "${PWTEST_FORGE_FAIL:-}" ]; then echo "gh-shim: forced query failure" >&2; exit 1; fi
+if [ -n "${PWTEST_HISTORY_FORGE_DIR:-}" ] && { [ "${1:-}" = api ] || { [ "${1:-}" = pr ] && [ "${2:-}" = create ]; }; }; then
+  exec python3 "$(dirname "$0")/forge-history.py" gh "$@"
+fi
 _json() {
   local iid="$1" st="OPEN" tgt="${PWTEST_MR_TARGET:-main}"
   if [ -n "${PWTEST_FORGE_STATE_FILE:-}" ] && [ -f "$PWTEST_FORGE_STATE_FILE" ]; then
