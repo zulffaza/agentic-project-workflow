@@ -82,6 +82,54 @@
 # the ORIGINAL file — callers that splice content back in at an exact original line (head/tail)
 # depend on this. A same-line, self-contained `<!-- ... -->` comment is left fully unstripped,
 # since every real live heading carries exactly one of those.
+# Workflow event timestamps. Source dates, timers, and persisted history stay unchanged.
+pw_now_wib() {
+  local t
+  t="$(TZ=Asia/Jakarta LC_ALL=C date '+%e %B %Y %H.%M')" || return 1
+  [ -n "$t" ] || return 1
+  printf '%s WIB\n' "${t# }"
+}
+
+# Only complete date-times participate in LOG arithmetic. Round-trip validation
+# rejects date's calendar normalization; legacy timezone-free values stay local.
+pw_timestamp_epoch() (
+  local stamp="$1" iso month epoch roundtrip offset hours minutes adjustment=0
+  if [[ "$stamp" =~ ^([0-9]{1,2})\ ([A-Za-z]+)\ ([0-9]{4})\ ([0-9]{2})\.([0-9]{2})\ WIB$ ]]; then
+    case "${BASH_REMATCH[2]}" in
+      January) month=01 ;; February) month=02 ;; March) month=03 ;;
+      April) month=04 ;; May) month=05 ;; June) month=06 ;;
+      July) month=07 ;; August) month=08 ;; September) month=09 ;;
+      October) month=10 ;; November) month=11 ;; December) month=12 ;;
+      *) return 1 ;;
+    esac
+    printf -v iso '%s-%s-%02d %s:%s:00' "${BASH_REMATCH[3]}" "$month" "$((10#${BASH_REMATCH[1]}))" "${BASH_REMATCH[4]}" "${BASH_REMATCH[5]}"
+    export TZ=Asia/Jakarta
+  elif [[ "$stamp" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}$ ]]; then
+    iso="$stamp:00"
+  elif [[ "$stamp" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2})[T\ ]([0-9]{2}:[0-9]{2})(:[0-9]{2})?(Z|[+-][0-9]{2}:?[0-9]{2})$ ]]; then
+    iso="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}${BASH_REMATCH[3]:-:00}"
+    offset="${BASH_REMATCH[4]}"
+    if [ "$offset" != Z ]; then
+      hours="${offset:1:2}"; minutes="${offset:3}"; minutes="${minutes#:}"
+      [ "$((10#$hours))" -le 23 ] && [ "$((10#$minutes))" -le 59 ] || return 1
+      adjustment=$((10#$hours * 3600 + 10#$minutes * 60))
+      case "$offset" in -*) adjustment=$((-adjustment)) ;; esac
+    fi
+    export TZ=UTC
+  else
+    return 1
+  fi
+  export LC_ALL=C
+  if epoch="$(date -j -f '%Y-%m-%d %H:%M:%S' "$iso" '+%s' 2>/dev/null)"; then
+    roundtrip="$(date -r "$epoch" '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" || return 1
+  else
+    epoch="$(date -d "$iso" '+%s' 2>/dev/null)" || return 1
+    roundtrip="$(date -d "@$epoch" '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" || return 1
+  fi
+  [[ "$epoch" =~ ^-?[0-9]+$ ]] && [ "$roundtrip" = "$iso" ] || return 1
+  printf '%s\n' "$((epoch - adjustment))"
+)
+
 _comment_blanked() {
   awk '
     BEGIN { in_comment = 0 }
@@ -106,7 +154,7 @@ _comment_blanked() {
 _review_item_headings() {
   # stub signatures: the template's two unfilled heading tokens. The timestamp one alone is not
   # enough — a half-cleaned stub can lose `(agent, <YYYY…>)` but still carry `<§section>`.
-  _comment_blanked "$1" | awk '/^###+ / && !/<YYYY-MM-DD/ && !/<§section/'
+  _comment_blanked "$1" | awk '/^###+ / && !/<YYYY-MM-DD/ && !/<DD MMMM YYYY/ && !/<§section/'
 }
 
 # The ONE status classifier every heading parser shares (awk source, embedded by
@@ -312,7 +360,7 @@ _review_eligible_counts() {
     }
     /^###+ / {
       flush(); id = ""; kind = ""; status = ""; body = 0; answered = 0
-      if ($0 ~ /^### [RQ][0-9]+ · / && $0 !~ /<YYYY-MM-DD/ && $0 !~ /<§section/) {
+      if ($0 ~ /^### [RQ][0-9]+ · / && $0 !~ /<YYYY-MM-DD/ && $0 !~ /<DD MMMM YYYY/ && $0 !~ /<§section/) {
         id = $0; sub(/^### /, "", id); sub(/ ·.*/, "", id)
         kind = substr(id, 1, 1)
         t = sttag($0, id)
@@ -350,7 +398,7 @@ _review_eligible_counts() {
 # still blocks on them. Shared by reindex and archive so both agree on what is a real item.
 _review_items_tsv() {
   _comment_blanked "$1" | awk "$_MD_STTAG"'
-    /^### [RQ][0-9]+ · / && index($0, "<YYYY-MM-DD") == 0 && index($0, "<§section") == 0 {
+    /^### [RQ][0-9]+ · / && index($0, "<YYYY-MM-DD") == 0 && index($0, "<DD MMMM YYYY") == 0 && index($0, "<§section") == 0 {
       id = $0; sub(/^### /, "", id); sub(/ ·.*/, "", id)
       rest = $0; sub(/^### [RQ][0-9]+ · /, "", rest)
       anchor = rest; sub(/ — \[[A-Z]+\].*/, "", anchor)
@@ -595,7 +643,7 @@ _index_provenance_ensure() {
   local f="$1"
   [ -f "$f" ] || return 0
   grep -qE '^\|[^|]*ADOPTED\.md' "$f" && return 0     # a row already references ADOPTED.md → leave it
-  local today; today="$(date +%F)"
+  local today; today="$(pw_now_wib)" || return 1
   local row="| \`ADOPTED.md\` | Adoption record — all continuation units (one section per unit; see the file) | git state snapshot, gathered by /pw-adopt | $today | authoritative — live repo state |"
   # Insert right after the FIRST table's separator (the provenance table, above "## Repos in
   # scope"); drop that table's single empty placeholder row if present.

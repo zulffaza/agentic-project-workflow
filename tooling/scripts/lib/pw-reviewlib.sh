@@ -8,7 +8,7 @@
 # Pure document primitives (sign-off reads, detectors, splices) live in
 # pw-mdlib.sh; THIS library holds the operational mechanics a review state
 # machine needs that are not document parsing:
-#   pw_now_wib              explicit WIB date-time for review writers ONLY
+#   pw_now_wib              shared event formatter from pw-mdlib.sh
 #   pw_meta_check           table-cell metadata validation (injection guard)
 #   pw_heading_meta_check   reserved-syntax guard for heading metadata
 #                           (status tags, HTML comments, machine markers, stub tokens)
@@ -31,18 +31,6 @@
 # stub tokens — nothing historical is rewritten (standalone scope rule).
 # bash 3.2 compatible (macOS default).
 # ============================================================================
-
-# --- timestamps (review writers only) ----------------------------------------
-
-# pw_now_wib — "5 October 2026 18.42 WIB": full WIB date-time to the minute, the one
-# review timestamp writers stamp (item headings, sign-off rows, archive pointers).
-# TZ=Asia/Jakarta makes it timezone-independent of the host clock; LC_ALL=C
-# pins English month names on any locale. %e space-pads the day — trimmed.
-pw_now_wib() {
-  local t
-  t="$(TZ=Asia/Jakarta LC_ALL=C date '+%e %B %Y %H.%M')" || return 1
-  printf '%s WIB\n' "$(printf '%s' "$t" | sed 's/^ *//')"
-}
 
 # --- metadata injection guard -------------------------------------------------
 
@@ -84,8 +72,8 @@ pw_heading_meta_check() {
     *"↳"*)
       echo "$label: must not contain the ↳ reply-line marker" >&2
       return 1 ;;
-    *"<YYYY-MM-DD"*|*"<§section"*)
-      echo "$label: must not contain the template stub tokens <YYYY-MM-DD or <§section — they would hide the item from every reader" >&2
+    *"<YYYY-MM-DD"*|*"<DD MMMM YYYY"*|*"<§section"*)
+      echo "$label: must not contain template stub tokens — they would hide the item from every reader" >&2
       return 1 ;;
     *"🔴 open"*|*"⏳ awaiting answer"*)
       echo "$label: must not contain the legacy emoji status tags" >&2

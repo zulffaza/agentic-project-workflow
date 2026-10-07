@@ -141,8 +141,9 @@ cmd_add_input() {
   local d; d="$(proj_dir "$slug")"
   local f="$d/context/INDEX.md"
   [ -f "$f" ] || die "no context/INDEX.md in $slug → fix: restore it from $PW_HOME/template/context/INDEX.md"
-  local row
-  row="| $(_esc "$FILEV") | $(_esc "$WHAT") | $(_esc "$SOURCE") | $(date '+%F') | $(_esc "$TRUST") |"
+  local row ts
+  ts="$(pw_now_wib)" || die "add-input: cannot format event timestamp → fix: check the date command and retry"
+  row="| $(_esc "$FILEV") | $(_esc "$WHAT") | $(_esc "$SOURCE") | $ts | $(_esc "$TRUST") |"
   _append_or_replace_row "$f" '| File / link |' "$row"
   _log "$slug" you "added context input to INDEX.md: $FILEV"
   echo "$slug: context/INDEX.md → input row added: $FILEV"
@@ -414,7 +415,7 @@ cmd_adopt() {
       printf '### Remaining work\n🧑 <!-- pw-adopt %s remaining: fill with what to change on top of this branch -->\n' "$uid"
     } >> "$f"
   fi
-  _index_provenance_ensure "$cdir/INDEX.md"
+  _index_provenance_ensure "$cdir/INDEX.md" || die "adopt: cannot stamp provenance → fix: check the date command and retry"
   _scope_upsert "$cdir/INDEX.md" "$repo" "$branch" "$base" "$mr"
   local count; count="$(grep -cE '^## A[0-9]+ · ' "$f" 2>/dev/null || true)"; : "${count:=0}"
   "$ST" adopted "$slug" "$count unit(s) — continuation; see context/ADOPTED.md" >/dev/null

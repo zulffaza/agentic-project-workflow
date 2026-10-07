@@ -3,6 +3,9 @@ name: pw-review
 description: Give a fresh, isolated second-opinion review of ONE project-workflow artifact (an analysis doc, task/PLAN.md, a task file, an execution diff, or an MR/PR) and file the result into its .review.md — for the agentic-project-workflow pipeline's optional AI-assisted review points. Use when asked to review/critique a project-workflow artifact as a delegated reviewer, when spawned as the pw-reviewer agent, or when handed a .review.md + the doc it reviews and told to give an independent opinion. NOT for general code review (see this environment's own code-review/security-review tools) — this is specifically the project-workflow pipeline's review-file schema and gate discipline.
 ---
 
+New review and reviewer-note event dates use `DD MMMM YYYY HH.mm WIB` with `TZ=Asia/Jakarta LC_ALL=C`.
+Preserve existing date-only and local date-time history; never rewrite it or invent missing times.
+
 # pw-review (fresh-session artifact review)
 
 Portable, provider-agnostic method for delegating ONE review point in the
@@ -51,7 +54,7 @@ tooling/scripts/entities/pw-review.sh add-question <slug> <review-rel-path> \
 EOF
 ```
 
-- `## Items`: each item is `### Rn · <§anchor> — [OPEN] (pw-reviewer, <YYYY-MM-DD HH:MM>)` + the
+- `## Items`: each item is `### Rn · <§anchor> — [OPEN] (pw-reviewer, <DD MMMM YYYY HH.mm WIB>)` + the
   ask. **Use `--actor pw-reviewer`, never the default `you`** — a human's items and yours must
   stay visually distinguishable in the file's history.
 - `## Sign-off`: **never write this by hand, and the human gate operator is C4-restricted and
@@ -68,7 +71,7 @@ EOF
   the human's `↳ you:` line already exists).
 
 **Fallback — a foreign agent with no bundle checkout** files items by hand, matching the exact
-template syntax: heading `### Rn · <§anchor> — [OPEN] (pw-reviewer, <YYYY-MM-DD HH:MM>)
+template syntax: heading `### Rn · <§anchor> — [OPEN] (pw-reviewer, <DD MMMM YYYY HH.mm WIB>)
 <!-- pw-item-status: open -->`, ask on the next line(s), blank line, `---` rule; next free Rn/Qn
 by scanning existing headings (including the `## Archived items` pointer rows). Keep the trailing
 marker — tooling keys off it, not the tag text.

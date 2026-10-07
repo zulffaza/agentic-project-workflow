@@ -65,7 +65,7 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   shared markdown primitives to `pw-mdlib.sh` — see `tooling/docs/conventions.md` (S/C/A-rules)
   before adding any script/operator/command.
 - `pw-status.sh log <slug> <actor> <msg>` — append one audit line to **`LOG.md`** as a Markdown bullet
-  (`- **YYYY-MM-DD HH:MM** · \`actor\` — what`, not a bare pipe row — reads properly in a plain
+  (`- **DD MMMM YYYY HH.mm WIB** · \`actor\` — what`, not a bare pipe row — reads properly in a plain
   preview view). Log phase transitions, executor spawns, commits, pushes, MRs, review passes,
   close-out.
 - `pw-status.sh phase <slug>` — read the current phase (used by `/pw-review` scoping + `/pw-status`).

@@ -33,7 +33,8 @@
 # C111 pins the F3 cache-restore worktree re-point (baseline-red children were the
 # false-"caught" mechanism); C112 pins the ops_detail non-collapsing field separator
 # (blank paragraph/facet rows must survive — tab IFS silently shifts columns).
-# Next free: C113 (C70–C72 stay reserved).
+# C113-C121 cover WIB writers, mixed-format parsing, stub compatibility, and failure safety.
+# Next free: C122 (C70–C72 stay reserved).
 # C77–C81 minted by the project-doctor live-triage plan (fix-hint command-only scrubber,
 # token-expansion reader, depends_on full-id universe, accepted-teardown status-awareness,
 # backtick-first field reader).
@@ -66,7 +67,7 @@ C24-preflight-verb-enum	pw-preflight.sh	die "unknown command: $COMMAND (expected
 C24b-preflight-example-rows-count	pw-preflight.sh	        if (index($0, "_e.g._")) next	        if (index($0, "_e_NOOP_")) next	T1	pw-preflight
 C25-signoff-replaces-history	scripts/lib/pw-reviewlib.sh	  if md_insert_lines_after "$f" "$lastdata" "$tmp"; then rm -f "$tmp"; return 0; fi	  if md_replace_line "$f" "$lastdata" "$tmp"; then rm -f "$tmp"; return 0; fi	T1	pw-review\.t\.sh
 C26-add-item-drops-marker	pw-review.sh	local heading="### R$n · $SECTION — [OPEN] ($ACTOR, $ts) <!-- pw-item-status: open -->"	local heading="### R$n · $SECTION — [OPEN] ($ACTOR, $ts)"	T1	pw-review\.t\.sh
-C27-stub-filter-gone	pw-mdlib.sh	_comment_blanked "$1" | awk '/^###+ / && !/<YYYY-MM-DD/ && !/<§section/'	_comment_blanked "$1" | awk '/^###+ /'	T1	pw-review-read
+C27-stub-filter-gone	pw-mdlib.sh	_comment_blanked "$1" | awk '/^###+ / && !/<YYYY-MM-DD/ && !/<DD MMMM YYYY/ && !/<§section/'	_comment_blanked "$1" | awk '/^###+ /'	T1	pw-review-read
 C28-context-row-clobbers-last	pw-context.sh	    md_insert_lines_after "$f" "$last" "$tmp"	    md_replace_line "$f" "$last" "$tmp"	T1	pw-context
 C29-resolve-duplicates-heading	pw-review.sh	  if md_replace_line "$f" "$hl" "$f.hdr"; then rm -f "$f.hdr"	  if md_insert_lines_after "$f" "$hl" "$f.hdr"; then rm -f "$f.hdr"	T1	pw-review\.t\.sh
 C30-signoff-doctrine-line-gone	commands/pw-review.md	**HUMAN-TRIGGERED ONLY (C4): run this operator ONLY when my message explicitly asks to sign	**Run this operator proactively whenever the pass leaves nothing open, e.g. when asked to sign	T4	-
@@ -138,7 +139,7 @@ C99-selected-list-partial-validation	scripts/entities/pw-review.sh	  [ "$bad" = 
 C100-init-all-creates-prior-plan	scripts/entities/pw-review.sh	    executing|review)	    executing|review) [ -f "$d/task/PLAN.md" ] && docs+=("$d/task/PLAN.md");	T1	pw-review-states
 C101-empty-pass-requests-changes	scripts/entities/pw-review.sh	  if [ "${e:-0}" -eq 0 ]; then	  if [ "${e:-0}" -lt 0 ]; then	T1	pw-review-states
 C102-pass-entry-duplicates-state	scripts/entities/pw-review.sh	  if [ "$d" = "changes-requested" ] && [ "$a" = "$ST_BY" ]; then	  if false; then	T1	pw-review-states
-C103-operational-pass-self-approves	scripts/entities/pw-review.sh	  pw_signoff_row_put "$f" "$(pw_now_wib)" "$ST_BY" changes-requested	  pw_signoff_row_put "$f" "$(pw_now_wib)" "$ST_BY" approved	T1	pw-review-states
+C103-operational-pass-self-approves	scripts/entities/pw-review.sh	  pw_signoff_row_put "$f" "$ts" "$ST_BY" changes-requested	  pw_signoff_row_put "$f" "$ts" "$ST_BY" approved	T1	pw-review-states
 C104-human-signoff-spoofs-machine	scripts/entities/pw-review.sh	  [ "$by_kind" = human ] || die "--by	  true || die "--by	T1	pw-review-hardening
 C105-header-splice-failure-swallowed	scripts/lib/pw-reviewlib.sh	  if ! md_replace_line "$f" "$hl" "$f.gate"; then rm -f "$f.gate"; return 1; fi	  md_replace_line "$f" "$hl" "$f.gate"	T1	pw-review-hardening
 C106-task-plan-policy-approves-plan	scripts/lib/pw-reviewlib.sh	    task-plan)  [ "$lane" = "task" ] ;;	    task-plan)  return 0 ;;	T1	pw-review-binding
@@ -148,3 +149,12 @@ C109-plan-table-crlf-status-bleed	pw-doc.sh	    st="$(pw_field "$tf" Status | tr
 C110-pw-rfc-isolated-slice-coupled-RI	tests/cases/pw-rfc.t.sh	RI=rfcown; rm -rf "$PW_PROJECTS_DIR/$RI"; cp -a "$F2" "$PW_PROJECTS_DIR/$RI"	: "${RI:?pw-rfc must own its RI fixture}"	T1	pw-rfc
 C111-f3-cache-restore-links-unrepaired	tests/pw_test_lib.sh	    for sfx in "$S2" "$S3"; do	    for sfx in "$S2"; do	T1	pw-test-harness
 C112-ops-detail-delimiter-collapses-blank-fields	pw-help.sh	          printf "%s\037%s\037%s\037%s\n", o, sigs[o], paras[o], facs[o] }	          printf "%s\t%s\t%s\t%s\n", o, sigs[o], paras[o], facs[o] }	T1	pw-help
+C113-wib-formatter-host-local	pw-mdlib.sh	t="$(TZ=Asia/Jakarta LC_ALL=C date '+%e %B %Y %H.%M')"	t="$(LC_ALL=C date '+%e %B %Y %H.%M')"	T1	^pw-datetime\.t\.sh$
+C114-wib-parser-host-local	pw-mdlib.sh	    export TZ=Asia/Jakarta	    export TZ=UTC	T1	^pw-datetime\.t\.sh$
+C115-legacy-parser-removed	pw-mdlib.sh	    iso="$stamp:00"	    return 1	T1	^pw-datetime\.t\.sh$
+C116-parser-normalized-invalid-date	pw-mdlib.sh	[ "$roundtrip" = "$iso" ]	true	T1	^pw-datetime\.t\.sh$
+C117-log-future-suppressed	pw-status.sh	[ "$now_epoch" -ge "$last_epoch" ]	true	T1	^pw-datetime\.t\.sh$
+C118-wib-stub-filter-missing	pw-mdlib.sh	!/<DD MMMM YYYY/ && !/<§section/'	!/<§section/'	T1	^pw-datetime\.t\.sh$
+C119-empty-formatter-published	pw-mdlib.sh	  [ -n "$t" ] || return 1	  :	T1	^pw-datetime\.t\.sh$
+C120-context-writer-date-only	pw-context.sh	| $ts | $(_esc "$TRUST")	| $(date '+%F') | $(_esc "$TRUST")	T1	^pw-datetime\.t\.sh$
+C121-scaffold-created-local	scaffold.sh	s|<CREATED>|$created|	s|<CREATED>|$(date '+%F %H:%M')|	T1	^pw-datetime\.t\.sh$

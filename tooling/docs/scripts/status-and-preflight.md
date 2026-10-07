@@ -7,6 +7,8 @@ read-only — they never modify a project.
 ## pw-status.sh
 
 One deterministic project-status report, in place of an agent reading five files by hand.
+The `log` writer stamps English WIB date-times. Its last-entry duplicate guard accepts WIB and legacy local date-times.
+Invalid, date-only, or future timestamps never suppress a new entry. Existing history is not rewritten.
 
 ```bash
 $PW_HOME/tooling/scripts/entities/pw-status.sh <slug>                  # full report

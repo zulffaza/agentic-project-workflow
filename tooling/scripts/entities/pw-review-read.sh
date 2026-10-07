@@ -82,7 +82,7 @@ cmd_count() {
   items="$(printf '%s\n' "$stripped" | awk '
     /^## Items/ {p=1; next}
     p && /^## / {p=0}
-    p && /^###+ / && !/<YYYY-MM-DD/ && !/<§section/ {n++}
+    p && /^###+ / && !/<YYYY-MM-DD/ && !/<DD MMMM YYYY/ && !/<§section/ {n++}
     END {print n+0}')"
   echo "$counts items=${items:-0}"
 }

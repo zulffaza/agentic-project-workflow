@@ -240,7 +240,7 @@ For each `[OPEN]` item in the resolved files:
   It edits that SAME `### Rn · …` heading in place — flips `[OPEN]` → `[RESOLVED]` and its trailing
   `pw-item-status` marker together (**never a second heading** for the same item — that's what
   makes consecutive items in the file visually run together), appends the quoted
-  `> ↳ **agent** (<YYYY-MM-DD HH:MM>): …` reply directly below my ask (one blank line between),
+  `> ↳ **agent** (<DD MMMM YYYY HH.mm WIB>): …` reply directly below my ask (one blank line between),
   keeps the `---` rule, and reindexes `## Contents`. **R-items never get a `↳ you:` line** — my ask
   is already sitting right there as the item's own body text. (Hand-syntax fallback if the script
   is unavailable: the template's "Add an item" hint block documents the exact shape.)

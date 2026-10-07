@@ -150,9 +150,9 @@ an explicit human `in-review`/`approved`, never by an operational row. Legacy `y
 the reviewer role + mode with or without identity fields, richer `By` values never break decision
 parsing, and idempotency suppresses duplicates only within the same attempt. Review timestamps:
 new rows stamp `5 October 2026 23.11 WIB` (day, month, year, dot-minutes); older date-time
-formats already in files are accepted unchanged, and the template's live
-`<YYYY-MM-DD HH:MM>`/`<§section>` stub placeholders are unchanged deliberately — every stub
-filter keeps recognizing those exact tokens. Status/help/scan displays all show the same latest
+formats already in files are accepted unchanged. New template stubs use
+`<DD MMMM YYYY HH.mm WIB>`; every stub filter accepts both that token and legacy
+`<YYYY-MM-DD HH:MM>`/`<§section>` tokens. Status/help/scan displays all show the same latest
 decision together with its `By` actor, read through one shared latest-row reader.
 
 ## pw-review-read.sh
@@ -357,7 +357,7 @@ the built-in mitigation, and a date — nothing shortened in the move.
   correct — the display was just a fourth, un-blessed parser.
 - **Mitigation (built in):** one detector serves everything: the review count read prints
   `open=N resolved=M items=K` off `_review_item_headings` (comment-blanked, `^###`-anchored,
-  stubs filtered by their live `<YYYY-MM-DD`/`<§section>` placeholder tokens — BOTH tokens
+  stubs filtered by their live `<DD MMMM YYYY`, legacy `<YYYY-MM-DD`, and `<§section>` placeholder tokens — timestamp and section tokens
   needed: live usage produced a half-cleaned stub that dropped only its timestamp). The review
   scan, the status report and the doc lint consume it; raw marker greps are banned;
   `auto-signoff` inherits the stub exemption (a clean pass must succeed).

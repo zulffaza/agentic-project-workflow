@@ -352,10 +352,11 @@ cmd_init_all() {
 SIGNOFF_BY="" SIGNOFF_DECISION="" SIGNOFF_REL=""
 _signoff_body() {
   local f="$1"
+  local ts; ts="$(now_ts)" || return 1
   # the shared row placer appends after the current latest DATA row (a placeholder left
   # unreplaced above real rows never becomes the anchor) and propagates every splice or
   # publish failure — a signoff that did not land must abort the staged write, not pass.
-  pw_signoff_row_put "$f" "$(now_ts)" "$SIGNOFF_BY" "$SIGNOFF_DECISION" \
+  pw_signoff_row_put "$f" "$ts" "$SIGNOFF_BY" "$SIGNOFF_DECISION" \
     || { echo "pw-review: no Sign-off table rows found in $SIGNOFF_REL → fix: the table lost its rows; restore the '| Date-time | By | Decision |' header + separator from template/_REVIEW.template.md" >&2; return 1; }
   pw_review_gate_refresh "$f" \
     || { echo "pw-review: FAILED to refresh the Gate header in $SIGNOFF_REL — sign-off aborted, nothing published → fix: check the file is writable and retry" >&2; return 1; }
@@ -465,7 +466,7 @@ _write_block() {
 # recognizable forever (readers accept BOTH placeholder generations).
 _stub_range() {
   awk -v p="$2" -v s="$3" -v e="$4" '
-    NR>=s && NR<=e && index($0, "### " p) == 1 && index($0, "<YYYY-MM-DD") > 0 {st=NR}
+    NR>=s && NR<=e && index($0, "### " p) == 1 && (index($0, "<YYYY-MM-DD") > 0 || index($0, "<DD MMMM YYYY") > 0) {st=NR}
     st && NR>=st && $0=="---" {print st, NR; exit}
   ' "$1"
 }
@@ -511,7 +512,7 @@ _feedback_transition() {
     echo "pw-review: NOTE: dashboard phase is missing or non-canonical — feedback recorded, state transition skipped fail-closed → fix: repair the README Status line (pw-status.sh status)" >&2
     return 0
   fi
-  local ts; ts="$(pw_now_wib)"
+  local ts; ts="$(pw_now_wib)" || return 1
   pw_signoff_row_put "$f" "$ts" "pw-review (feedback)" "in-review" \
     || { echo "pw-review: FAILED to place the feedback-cycle row in $_FT_REL (table lost its rows or the splice failed) — the whole staged write is aborted, nothing published → fix: repair the table from template/_REVIEW.template.md and retry" >&2; return 1; }
   _FT_QUEUED=1
@@ -527,7 +528,7 @@ _add_item_body() {
   local oq; oq="$(_section_line "$blanked" '^## Open questions')"
   [ "$oq" -gt 0 ] || { rm -f "$blanked"; echo "pw-review: $AI_REL has no '## Open questions' heading — not a valid review file → fix: recreate from template/_REVIEW.template.md" >&2; return 1; }
   local n; n="$(_next_id "$f" R)"
-  local ts; ts="$(now_ts)"
+  local ts; ts="$(now_ts)" || return 1
   local heading="### R$n · $SECTION — [OPEN] ($ACTOR, $ts) <!-- pw-item-status: open -->"
   local block; block="$(mktemp)"; _write_block "$block" "$heading" "$AI_TEXT"
   local items_start stub
@@ -593,7 +594,7 @@ ANS_REL="" ANS_TEXT=""
 # and the gate auto-approved). CONFLICT: answer/resolve refuse it; the gate blocks it.
 _find_item_line() {
   awk -v id="$2" "$_MD_STTAG"'
-    /^### [RQ][0-9]+ · / && index($0, "<YYYY-MM-DD") == 0 {
+    /^### [RQ][0-9]+ · / && index($0, "<YYYY-MM-DD") == 0 && index($0, "<DD MMMM YYYY") == 0 {
       h = $0; sub(/^### /, "", h); sub(/ ·.*/, "", h)
       if (h == id) { printf "%d\t%s\n", NR, sttag($0, h); exit }
     }' "$1"
@@ -617,11 +618,12 @@ _answer_body() {
   ins="$(awk -v s="$hl" -v e="$bend" 'NR>=s && NR<=e && $0=="---" {n=NR} END{print n+0}' "$blanked")"
   if [ "$ins" -gt 0 ]; then ins=$((ins-1)); else ins="$bend"; fi
   while [ "$ins" -gt "$hl" ] && [ -z "$(sed -n "${ins}p" "$blanked" | tr -d '[:space:]')" ]; do ins=$((ins-1)); done
+  local ts; ts="$(now_ts)" || { rm -f "$blanked"; return 1; }
   local quoted; quoted="$(mktemp)"
   {
     local prev; prev="$(sed -n "${ins}p" "$blanked" | sed 's/[[:space:]]*$//')"
     case "$prev" in '>'*) printf '>\n' ;; *) printf '\n' ;; esac
-    printf '%s\n' "$ANS_TEXT" | sed 's/^/> /; s/^> $/>/' | sed "1s|^> |> ↳ **you** ($(now_ts)): |"
+    printf '%s\n' "$ANS_TEXT" | sed 's/^/> /; s/^> $/>/' | sed "1s|^> |> ↳ **you** ($ts): |"
   } > "$quoted"
   md_insert_lines_after "$f" "$ins" "$quoted" \
     || { rm -f "$quoted" "$blanked"; echo "pw-review: FAILED to splice the answer into $ANS_REL — nothing published → fix: check the file is writable and retry" >&2; return 1; }
@@ -660,7 +662,7 @@ _add_question_body() {
   send="$(awk -v s="$oq" 'NR>s && /^## / {print NR; exit} END{}' "$blanked" | head -1)"
   [ -n "$send" ] || send="$(wc -l < "$blanked" | tr -d ' ')"
   local n; n="$(_next_id "$f" Q)"
-  local ts; ts="$(now_ts)"
+  local ts; ts="$(now_ts)" || return 1
   local heading="### Q$n · $AQ_SECTION — [PENDING] ($AQ_ACTOR, $ts) <!-- pw-item-status: open -->"
   local block; block="$(mktemp)"; _write_block "$block" "$heading" "$AQ_TEXT"
   local stub
@@ -717,6 +719,7 @@ _resolve_body() {
     awk -v s="$hl" -v e="$bend" 'NR>=s && NR<=e' "$blanked" | grep -q '↳ \*\*you\*\*' \
       || { rm -f "$blanked"; echo "pw-review: $id has no '↳ **you**' answer yet → fix: the human answers first (pw-review.sh answer <slug> <review-path> <Qid> --text …); the agent only folds + flips afterwards" >&2; return 1; }
   fi
+  local ts; ts="$(now_ts)" || { rm -f "$blanked"; return 1; }
   local hline newtag newmark
   hline="$(sed -n "${hl}p" "$f")"
   case "$tag" in
@@ -737,7 +740,7 @@ _resolve_body() {
   {
     local prev; prev="$(sed -n "${ins}p" "$blanked" | sed 's/[[:space:]]*$//')"
     case "$prev" in '>'*) printf '>\n' ;; *) printf '\n' ;; esac
-    printf '%s\n' "$RS_TEXT" | sed 's/^/> /; s/^> $/>/' | sed "1s|^> |> ↳ **agent** ($(now_ts)): |"
+    printf '%s\n' "$RS_TEXT" | sed 's/^/> /; s/^> $/>/' | sed "1s|^> |> ↳ **agent** ($ts): |"
   } > "$reply"
   md_insert_lines_after "$f" "$ins" "$reply" \
     || { rm -f "$reply" "$blanked"; echo "pw-review: FAILED to splice the agent reply for $id — nothing published → fix: check the file is writable and retry" >&2; return 1; }
@@ -790,7 +793,7 @@ cmd_resolve() {
 REOPEN_REL=""
 _reopen_body() {
   local f="$1"
-  local ts; ts="$(pw_now_wib)"
+  local ts; ts="$(pw_now_wib)" || return 1
   pw_signoff_row_put "$f" "$ts" "pw-review (auto-reopen)" "in-review" \
     || { echo "pw-review: no Sign-off table rows found in $REOPEN_REL → fix: the table lost its rows; restore them from template/_REVIEW.template.md" >&2; return 1; }
   pw_review_gate_refresh "$f" \
@@ -841,7 +844,8 @@ _auto_signoff_body() {
   local f="$1"
   _review_has_open_marker "$f" && { echo "pw-review: refusing auto-signoff: $AS_REL still has an unresolved [OPEN] item or [PENDING] question" >&2; return 1; }
   _signoff_human_rejection_active "$f" && { echo "pw-review: refusing auto-signoff: an explicit human changes-requested is still active in $AS_REL → fix: only the human withdraws it (pw-review.sh signoff <slug> $AS_REL in-review --by <name>, on explicit instruction)" >&2; return 1; }
-  pw_signoff_row_put "$f" "$(pw_now_wib)" "$AS_BY" approved \
+  local ts; ts="$(pw_now_wib)" || return 1
+  pw_signoff_row_put "$f" "$ts" "$AS_BY" approved \
     || { echo "pw-review: no Sign-off table rows found in $AS_REL → fix: restore the table from template/_REVIEW.template.md" >&2; return 1; }
   pw_review_gate_refresh "$f" \
     || { echo "pw-review: FAILED to refresh the Gate header in $AS_REL — auto-signoff aborted, nothing published → fix: check the file is writable and retry" >&2; return 1; }
@@ -976,6 +980,7 @@ _archive_body() {
     return 0
   fi
   [ -L "$af" ] && { echo "pw-review: refusing to append through a symlinked archive sibling: $archrel → fix: remove the symlink" >&2; return 1; }
+  local i today; today="$(pw_now_wib)" || return 1
 
   if ! grep -q '^## Archived items' "$f"; then
     local secfile; secfile="$(mktemp)"
@@ -1012,7 +1017,6 @@ _archive_body() {
     fi
   fi
 
-  local i today; today="$(pw_now_wib)"
   for i in "${!rstarts[@]}"; do
     local s="${rstarts[$i]}" e="${rends[$i]}" id="${rids[$i]}"
     local blocktxt; blocktxt="$(sed -n "${s},${e}p" "$f")"
@@ -1104,7 +1108,8 @@ _start_body() {
     printf '__resume__ %s\n' "$counts" > "$_START_REPORT"
     return 0
   fi
-  pw_signoff_row_put "$f" "$(pw_now_wib)" "$ST_BY" changes-requested \
+  local ts; ts="$(pw_now_wib)" || return 1
+  pw_signoff_row_put "$f" "$ts" "$ST_BY" changes-requested \
     || { echo "pw-review: no Sign-off table rows found in $ST_REL mid-write — nothing published → fix: restore the table from template/_REVIEW.template.md" >&2; return 1; }
   pw_review_gate_refresh "$f" || return 1
   printf '__entered__ %s\n' "$counts" > "$_START_REPORT"

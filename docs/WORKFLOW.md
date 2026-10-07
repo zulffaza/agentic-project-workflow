@@ -196,8 +196,11 @@ transition, sub-agent spawn, commit, push, MR, review pass, close-out), newest a
 entry is a Markdown bullet, so it stays readable in a plain preview view (a bare pipe row with no
 table header doesn't render as a table — it's just one long unwrapped line):
 ```
-- **YYYY-MM-DD HH:MM** · `<phase/actor>` — <what happened>
+- **DD MMMM YYYY HH.mm WIB** · `<phase/actor>` — <what happened>
 ```
+
+New workflow events use English month names and explicit WIB (UTC+7), including document metadata and review notes.
+Existing date-only and timezone-free date-times remain readable. Keep source dates, API timestamps, and recorded history unchanged.
 The `/pw-*` commands append to it via a deterministic log step; you can add
 manual notes the same way. It answers "what did the agents actually do, and when?" without
 reconstructing it from chat.

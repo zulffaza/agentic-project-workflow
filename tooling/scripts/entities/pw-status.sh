@@ -102,17 +102,18 @@ cmd_log() {
     if [ -n "$ltag" ] && [ "$ltail" = "$newtail" ]; then
       local now_epoch last_epoch
       now_epoch="$(date '+%s')"
-      last_epoch="$(date -j -f '%Y-%m-%d %H:%M' "$ltag" '+%s' 2>/dev/null || date -d "$ltag" '+%s' 2>/dev/null || echo '')"
+      last_epoch="$(pw_timestamp_epoch "$ltag" 2>/dev/null)" || last_epoch=""
       if [ -n "$last_epoch" ]; then
         local diff_min=$(( (now_epoch - last_epoch) / 60 ))
-        if [ "$diff_min" -ge 0 ] && [ "$diff_min" -lt "$window" ]; then
+        if [ "$now_epoch" -ge "$last_epoch" ] && [ "$diff_min" -lt "$window" ]; then
           echo "pw-status: skipped duplicate log entry for $slug (same actor+message ${diff_min}m ago, within ${window}m window)" >&2
           return 0
         fi
       fi
     fi
   fi
-  printf -- '- **%s** · `%s` — %s\n' "$(date '+%F %H:%M')" "$actor" "$msg" >> "$f"
+  local ts; ts="$(pw_now_wib)" || die "log: cannot format event timestamp → fix: check the date command and retry"
+  printf -- '- **%s** · `%s` — %s\n' "$ts" "$actor" "$msg" >> "$f"
 }
 
 cmd_status() {

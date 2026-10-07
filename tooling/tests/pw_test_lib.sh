@@ -239,6 +239,7 @@ if hdr:
     t = t[:hdr.start()] + rows + t[(hdr.end()+tail.end()) if tail else hdr.end():]
 t = (t.replace("<project-slug>", slug).replace("<provider>", "kilotest")
        .replace("<YYYY-MM-DD HH:MM>", "2026-09-15 00:00")
+       .replace("<DD MMMM YYYY HH.mm WIB>", "15 September 2026 00.00 WIB")
        .replace("<link to analysis/*.md that is approved>", "[fixture](../analysis/fixture.md)")
        .replace("api-service","api").replace("hera","api").replace("valas","api").replace("spring3","master"))
 t = re.sub(r'^- \*\*Status:\*\* [^\n]*', '- **Status:** approved-for-execution', t, flags=re.M, count=1)

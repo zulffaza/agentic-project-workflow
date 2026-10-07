@@ -15,6 +15,7 @@ PW_REPOS="${PW_REPOS:-$(cd "$PW_PROJECTS/.." && pwd)}"
 # PW_AI_REVIEW_DEFAULT below always reflects the same config bootstrap.sh/gen-commands.sh/
 # pw-doctor.sh see, never a second, drifting copy of that fallback logic.
 . "$HERE/../lib/pw-common.sh"
+. "$HERE/../lib/pw-mdlib.sh"
 AI_REVIEW_PHASES="analysis plan task-plan task-exec ship"
 ai_review_default_line=""
 for p in $AI_REVIEW_PHASES; do ai_review_default_line="$ai_review_default_line $p=${PW_AI_REVIEW_DEFAULT:-off}"; done
@@ -48,6 +49,9 @@ if [[ -e "$dest" ]]; then
   exit 1
 fi
 
+# Format before creating anything; Created and LOG describe the same event.
+created="$(pw_now_wib)" || { echo "scaffold: cannot format event timestamp → fix: check the date command and retry" >&2; exit 1; }
+
 # Copy the template tree (dashboard template is rendered separately, below).
 mkdir -p "$dest"
 rsync -a \
@@ -56,7 +60,7 @@ rsync -a \
   "$TEMPLATE_DIR"/ "$dest"/
 
 # Render the project dashboard as the project's README.md.
-sed "s/<PROJECT_NAME>/$slug/g; s|<CREATED>|$(date '+%F %H:%M')|; s|<AI_REVIEW_DEFAULT>|$ai_review_default_line|; s|<AI_MODELS_DEFAULT>|$ai_model_default_line|" \
+sed "s/<PROJECT_NAME>/$slug/g; s|<CREATED>|$created|; s|<AI_REVIEW_DEFAULT>|$ai_review_default_line|; s|<AI_MODELS_DEFAULT>|$ai_model_default_line|" \
   "$TEMPLATE_DIR/PROJECT.template.md" > "$dest/README.md"
 
 # Stamp {{PW_*}} tokens (absolute paths) into every copied markdown file.
@@ -79,9 +83,9 @@ commits, pushes, MRs, review passes, close-out. Newest at the bottom. The /pw-* 
 here automatically (via pw-status.sh log — never hand-edit); add manual notes the same way, or as
 another Markdown bullet, so it reads consistently in preview.
 
-Format: a bullet per entry — "- **YYYY-MM-DD HH:MM** · \`<phase/actor>\` — <what happened>"
+Format: a bullet per entry — "- **DD MMMM YYYY HH.mm WIB** · \`<phase/actor>\` — <what happened>"
 
-- **$(date "+%Y-%m-%d %H:%M")** · \`scaffold\` — project created
+- **$created** · \`scaffold\` — project created
 LOGEOF
 
 cat <<EOF

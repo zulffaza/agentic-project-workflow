@@ -69,8 +69,8 @@ You never set an item/question's own status — just leave items `[OPEN]` and ru
 > reindexes `## Contents` for you; a first new item after an `approved` row also records one
 > `pw-review (feedback)` `in-review` row, so the old approval stops being the live decision).
 > By hand instead: start a
-> new heading `### Rn · <§section or anchor> — [OPEN] (you, <YYYY-MM-DD
-> HH:MM>) <!-- pw-item-status: open -->`, then write your ask on the line(s) below it, followed by
+> new heading `### Rn · <§section or anchor> — [OPEN] (you, <DD MMMM YYYY HH.mm WIB>)
+> <!-- pw-item-status: open -->`, then write your ask on the line(s) below it, followed by
 > a `---` rule before the next item. **Keep the trailing `<!-- pw-item-status: … -->` marker** —
 > that's what the gate checks actually read, the `[OPEN]`/`[RESOLVED]` tag is for
 > humans. To resolve it, an agent edits this SAME heading in place — flips `[OPEN]`→`[RESOLVED]`
@@ -83,15 +83,15 @@ You never set an item/question's own status — just leave items `[OPEN]` and ru
 > `(pw-reviewer, <timestamp>)` in place of `(you, …)`.
 
 <!-- ↓↓ WORKED EXAMPLE (delete this block once you get the idea) ↓↓
-### R1 · §3 Affected repos — [RESOLVED] (you, 2026-08-06 10:20) [marker: pw-item-status resolved]
+### R1 · §3 Affected repos — [RESOLVED] (you, 6 August 2026 10.20 WIB) [marker: pw-item-status resolved]
 You listed `hera` as touched, but the Kafka toggle also lives in `common-config`. Add it to the
 repo table and say whether it needs its own task.
 
-> ↳ **agent** (2026-08-06 11:05): §3 — added a `common-config` row (config-only change).
+> ↳ **agent** (6 August 2026 11.05 WIB): §3 — added a `common-config` row (config-only change).
 > §7 — split the "rough shape" bullet into two chunks so breakdown can give it its own task.
 
 ---
-Before it's resolved, this is the SAME heading reading `[OPEN] (you, 2026-08-06 10:20) [marker:
+Before it's resolved, this is the SAME heading reading `[OPEN] (you, 6 August 2026 10.20 WIB) [marker:
 pw-item-status open]`, ending right after your ask — no reply yet. The agent edits this exact
 heading in place once it resolves the item (flips the tag + marker, appends the reply below); it
 never creates a second heading for the same item.
@@ -99,7 +99,7 @@ never creates a second heading for the same item.
 <!-- `[marker: ...]` above is a bracket stand-in, not real comment syntax — HTML comments can't
 nest inside this wrapping one. Live headings below use the real syntax. -->
 
-### R1 · <§section or anchor> — [OPEN] (you, <YYYY-MM-DD HH:MM>) <!-- pw-item-status: open -->
+### R1 · <§section or anchor> — [OPEN] (you, <DD MMMM YYYY HH.mm WIB>) <!-- pw-item-status: open -->
 <what needs to change, and why. One concrete ask per item — split unrelated asks into R2, R3…>
 
 ---
@@ -112,33 +112,33 @@ flips the row to `[ANSWERED]`. This is the QnA channel — don't answer inside t
 > **Answer a question:** easiest is `/pw-review <slug> answer <this-file> Qn <your answer>`
 > (it writes the styled `↳ you:` line under the question; a first answer after an `approved` row
 > records the same `pw-review (feedback)` `in-review` row as a new item).
-> By hand instead: under the `Qn` heading, add a quoted line `> ↳ **you** (<YYYY-MM-DD
-> HH:MM>): <your decision/answer>`. The agent folds it into the doc on the next pass, appends its
+> By hand instead: under the `Qn` heading, add a quoted line `> ↳ **you** (<DD MMMM YYYY HH.mm WIB>):
+> <your decision/answer>`. The agent folds it into the doc on the next pass, appends its
 > own `> ↳ **agent** (<timestamp>): …` line right after yours (same quoted block, one blank quoted
 > line between the two), adds a `---` rule, and flips this SAME heading to `[ANSWERED]` — never a
 > second heading. (Permanent hint — stays even with no open questions.)
 
 <!-- ↓↓ WORKED EXAMPLE ↓↓
-### Q1 · §4 Approach — [ANSWERED] (agent, 2026-08-06 09:50) [marker: pw-item-status resolved]
+### Q1 · §4 Approach — [ANSWERED] (agent, 6 August 2026 09.50 WIB) [marker: pw-item-status resolved]
 Toggle default: should the flag ship **off** (opt-in, safest) or **on** (parity with today)?
 
-> ↳ **you** (2026-08-06 10:20): ship it OFF by default; we'll enable per-service after canary.
+> ↳ **you** (6 August 2026 10.20 WIB): ship it OFF by default; we'll enable per-service after canary.
 >
-> ↳ **agent** (2026-08-06 11:05): folded into §4 — default flag value = off; added a canary note
+> ↳ **agent** (6 August 2026 11.05 WIB): folded into §4 — default flag value = off; added a canary note
 > to §5.
 
 ---
-Before you answer, this is the SAME heading reading `[PENDING] (agent, 2026-08-06 09:50) [marker:
+Before you answer, this is the SAME heading reading `[PENDING] (agent, 6 August 2026 09.50 WIB) [marker:
 pw-item-status open]` with just the question — no `↳` lines yet. You add your `↳ you:` line under
 it (still `[PENDING]`); the agent later folds it in, appends its own `↳ agent:` line right after
 yours, and flips this exact heading to `[ANSWERED]` — never a second heading.
 ↑↑ END EXAMPLE ↑↑ -->
 <!-- Same bracket-notation reason as the R-item example above. -->
 
-### Q1 · <§section> — [PENDING] (agent, <YYYY-MM-DD HH:MM>) <!-- pw-item-status: open -->
+### Q1 · <§section> — [PENDING] (agent, <DD MMMM YYYY HH.mm WIB>) <!-- pw-item-status: open -->
 <the agent's question>
 <!-- You answer by adding, under the question:
-> ↳ **you** (<YYYY-MM-DD HH:MM>): <your decision/answer>   -->
+> ↳ **you** (<DD MMMM YYYY HH.mm WIB>): <your decision/answer>   -->
 
 ---
 

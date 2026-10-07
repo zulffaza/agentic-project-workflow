@@ -28,7 +28,7 @@ pwtest_grep_file '^### R1 · §3 Repos — \[OPEN\] \(you, [0-9]{1,2} [A-Za-z]+ 
   "add-item wrote a real R1 heading with marker (WIB timestamp)" "$P/$RV"
 pwtest_grep_file 'pw-review \(feedback\) \| in-review \|$' "add-item queued the feedback-cycle row in the Sign-off table" "$P/$RV"
 pwtest_grep_file 'the toggle also lives in common-config' "add-item body verbatim (spaces preserved)" "$P/$RV"
-if grep -q '<YYYY-MM-DD' "$P/$RV" && ! awk '/^## Items/,/^## Open questions/' "$P/$RV" | grep -q '^### R1 · <§section'; then
+if grep -q '<DD MMMM YYYY' "$P/$RV" && ! awk '/^## Items/,/^## Open questions/' "$P/$RV" | grep -q '^### R1 · <§section'; then
   pwtest_ok "R-stub was filled, not duplicated"
 else pwtest_bad "R-stub handling" "stub still live under ## Items or lost"; fi
 pwtest_grep_file '\| R1 \| §3 Repos \| \[OPEN\] \|' "reindex picked R1 into ## Contents" "$P/$RV"

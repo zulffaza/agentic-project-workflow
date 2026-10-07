@@ -37,7 +37,7 @@
      (docs/EXECUTION.md) compares to. -->
 - **Provider:** <provider id>
 - **Model:** <provider:model>
-- **Date:** <YYYY-MM-DD HH:MM>  <!-- timestamp ONLY — never a changelog; a round's summary is a
+- **Date:** <DD MMMM YYYY HH.mm WIB>  <!-- timestamp ONLY — never a changelog; a round's summary is a
      Decisions-log line (§5.1), not a Date-field essay -->
 - **Context used:** <list the context/ files & INDEX rows this is based on — for any bare external
      URL (not a local copy), this means its FETCHED content, not just the citation; see §1's note>

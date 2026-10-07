@@ -298,7 +298,7 @@ the project's mode for that phase is genuinely `auto`, **and** the file has no r
 item/question left, **and** the artifact actually belongs to the lane being approved, **and** no
 explicit human `changes-requested` is still standing — it doesn't take the reviewer's word for
 any of them. ("Real" means a *filled* heading: the template's never-used
-R1/Q1 stubs — recognized by their live `<YYYY-MM-DD>`/`<§section>` placeholder text — are copies to
+R1/Q1 stubs — recognized by their live timestamp/section placeholders, including legacy `<YYYY-MM-DD>` — are copies to
 fill, not items, so a clean pass over an untouched stub section auto-signs; a filled `[OPEN]`/
 `[PENDING]` heading or a stale `pw-item-status: open` marker does not.)
 

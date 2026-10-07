@@ -56,7 +56,7 @@ history rewrite). Pushing is **outward-facing**, so confirm before anything goes
        the existing MR branch).
    - On a successful push, log it: `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log <slug> sync "T0n merged
      origin/<base>; verify green; pushed"`, and add a one-line note to the task's `## Result`
-     (`Synced with <base> @ <short-sha> on <date>`). The MR updates itself — no new MR is opened.
+     (`Synced with <base> @ <short-sha> on <DD MMMM YYYY HH.mm WIB>`). The MR updates itself — no new MR is opened.
    - Then settle the CI the push triggered: `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh monitor <slug> T0n`
      (exit 0 green — or neutral `SKIPPED`, no jobs ran — / 1 red / 2 still running; it records the task's `## Result → Build check:` line).
      Red → report it prominently in the recap; don't undo the sync. Still running → say so, don't
