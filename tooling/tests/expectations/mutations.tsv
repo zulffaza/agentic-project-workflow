@@ -37,6 +37,8 @@
 # C122-C135 cover invocation/MR history, immutable projection, delivery and recovery safety (plan 33).
 # C175 pins the JSON content-type header on history description writes (live GitLab 415 gap;
 # the strict fixture refuses a header-less write).
+# C176-C178 extend the guidance repair set to the legacy review-hint families and the
+# analysis/review allowlist (live-project drift found after plan 30).
 # C136–C150 cover the stacked-MR lifecycle (plan 35): parent-in-depends_on validation,
 # effective-target landed skip, exact local parent fork, effective target in ship exec, pending-op
 # done classification, squash-promotion block, comment-sweep debt gate, PLAN mirror detection,
@@ -48,7 +50,7 @@
 # parent-head binding, the retarget head-move guard, and worktree rehydration. C163 guards the
 # preview-vs-strict freshness split (a done/accepted task without its binding must never get the
 # unverified exemption). Catcher case: pw-stack.t.sh.
-# Next free: C176 (C70–C72 stay reserved).
+# Next free: C179 (C70–C72 stay reserved).
 # C77–C81 minted by the project-doctor live-triage plan (fix-hint command-only scrubber,
 # token-expansion reader, depends_on full-id universe, accepted-teardown status-awareness,
 # backtick-first field reader).
@@ -226,3 +228,6 @@ C172-preflight-accept-leak	pw-preflight.sh	die_fix "not all tasks are accepted:$
 C173-relay-clause-revert	commands/pw-context.md	and the recovery as a `/pw-*` action — quote the raw error line too when it carries evidence.	and the recovery as a script rerun — quote the raw error line too when it carries evidence.	T4	-
 C174-phasefix-close-leak	pw-preflight.sh	close) PHASE_FIX="close runs after acceptance (/pw-ship handles MRs; accept each done task — tell the agent to record it)"	close) PHASE_FIX="close runs after acceptance (/pw-ship handles MRs; accepted tasks then pw-status.sh status $SLUG done)"	T1	^pw-guidance\.t\.sh$
 C175-history-write-ctype-dropped	pw-shiplib.sh	['--method', 'PATCH' if github else 'PUT', '--input', '-', '-H', 'Content-Type: application/json']	['--method', 'PATCH' if github else 'PUT', '--input', '-']	T1	^pw-ship-history\.t\.sh$
+C176-guidance-rewind-rule-revert	pw-project-doctor.sh	`/pw-status <slug> rewind <phase>`	`pw-status.sh status <slug> <phase> --rewind`	T1	^pw-guidance\.t\.sh$
+C177-guidance-allowlist-review-globs	pw-project-doctor.sh	*/review/*.review.md */review/*.archive.md	task/review/*.review.md task/review/*.archive.md	T1	^pw-guidance\.t\.sh$
+C178-guidance-answer-rule-revert	pw-project-doctor.sh	> (it writes the styled `↳ you:` line under the question).	> (script: `pw-review.sh answer` — writes the styled `↳ you:` line under the question).	T1	^pw-guidance\.t\.sh$
