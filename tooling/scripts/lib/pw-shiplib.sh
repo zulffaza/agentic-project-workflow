@@ -92,7 +92,7 @@ def api(mr, body=None):
     command = ['gh' if github else 'glab', 'api', endpoint, '--hostname', mr['host']]
     incoming = None
     if body is not None:
-        command += ['--method', 'PATCH' if github else 'PUT', '--input', '-']
+        command += ['--method', 'PATCH' if github else 'PUT', '--input', '-', '-H', 'Content-Type: application/json']
         incoming = json.dumps({'body' if github else 'description': body}, ensure_ascii=False)
     result = subprocess.run(command, input=incoming, text=True, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, timeout=90)

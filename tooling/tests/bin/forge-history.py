@@ -23,11 +23,12 @@ try:
         else:
             print(state['creation_url'])
         sys.exit(0)
-    if len(args) not in (4, 8) or args[0] != 'api' or args[2] != '--hostname':
+    if len(args) not in (4, 8, 10) or args[0] != 'api' or args[2] != '--hostname':
         raise ValueError('unexpected arguments')
     endpoint, host = args[1], args[3]
-    writing = len(args) == 8
-    if writing and args[4:] != ['--method', 'PUT' if forge == 'glab' else 'PATCH', '--input', '-']:
+    writing = len(args) != 4
+    if writing and args[4:] != ['--method', 'PUT' if forge == 'glab' else 'PATCH', '--input', '-',
+                                '-H', 'Content-Type: application/json']:
         raise ValueError('unexpected write arguments')
     root = Path(os.environ['PWTEST_HISTORY_FORGE_DIR'])
     key = hashlib.sha256((forge + '|' + host + '|' + endpoint).encode()).hexdigest()
