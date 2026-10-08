@@ -156,6 +156,34 @@ which hit a conflict, and which fail verify after the merge. Each MR is pre-chec
 skip; `closed`/`unknown` → note and skip. Review comments left on an MR are a
 different loop — see the [MR review flow](./REVIEW.md#2-the-mr-review-flow-post-ship).
 
+### Stacked MRs (when one task needs another's code)
+
+Sometimes task B genuinely needs task A's committed code in the same repository (not just A to
+finish first). Then B is **stacked on** A: B's branch starts from A's exact verified commit and B's
+MR targets **A's branch** so reviewers see only B's own changes. The approved plan records this:
+each such task carries `Stacked on: A`, and PLAN shows the stacks and the merge order. A scheduling
+dependency or a cross-repository dependency is **not** a stack.
+
+- `/pw-ship <slug> stack` is a **read-only preview** of the inferred parents, targets, and health —
+  it writes nothing. If you already have manually stacked MRs, `/pw-ship <slug> stack adopt` previews
+  the import (matching each MR's real target to a task branch) and only writes after you confirm with
+  `--apply`.
+- Ship **parent-first**: A's branch must be published before B's MR opens. Merge order is A, then B.
+  After A's MR lands, B is promoted to the next open ancestor (or the ultimate base) and its existing
+  MR is retargeted in place — never closed and recreated. A squash/rebase landing leaves ancestry
+  unprovable, so that promotion stays **blocked** for an explicit, separately approved restack.
+- An upstream fix on A must reach **every affected descendant**, including ones with no review
+  comments: `/pw-ship … comments` and `/pw-sync` update each descendant in parent-first order, merge
+  the updated parent, re-run that task's own `Verify`, and record the inherited update. A changed
+  descendant is marked **stale** until its fresh verification passes — stale work cannot ship or
+  close. Conflicts and failed verification **block only the affected subtree**; unrelated stacks
+  continue. Real MR merging stays your decision.
+- Inherited updates are recorded as such — the descendant's description is refreshed as an
+  **inherited-update round**, never as a fabricated reviewer request — and the cascade's `describe`
+  stage stays pending until that description delivery completes. A retarget that published on the
+  forge but failed locally resumes with `--apply` and finishes the local mirror without a second
+  forge write.
+
 ## Step 8 — Review results
 `done` (committed + verified) isn't the same as `accepted` — that's a separate decision you make
 after actually looking at what an executor produced. Two outcomes:

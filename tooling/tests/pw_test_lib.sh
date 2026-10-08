@@ -122,6 +122,15 @@ pwtest_repo() {   # <name> [branch:<br>]… — create-once seed, clone, idempot
       # no network is ever contacted.
       git remote set-url origin    "https://gitlab.example.com/pwtest/$name.git"
       git remote set-url --push origin "$seed"
+      # Offline fetch too: rewrite the forge-plausible fetch URL to the local bare seed (git
+      # insteadOf applies at transport time, so `git fetch origin` never touches the network while
+      # `remote get-url origin` still yields the forge host for resolution).
+      git config "url.$seed.insteadOf" "https://gitlab.example.com/pwtest/$name.git"
+      # Disable any ambient external git hooks (e.g. a managed security scanner injected via
+      # core.hooksPath/init.templateDir): they add seconds per commit and make commit-heavy
+      # cases (pw-stack) unreliable under parallel sweep contention. Fixtures need no hooks.
+      mkdir -p "$PWTEST_ROOT/nohooks"
+      git -C "$work" config core.hooksPath "$PWTEST_ROOT/nohooks"
       git push -q -u origin master ) >/dev/null 2>&1
   fi
   for spec in "$@"; do

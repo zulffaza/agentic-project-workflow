@@ -34,8 +34,19 @@
 # false-"caught" mechanism); C112 pins the ops_detail non-collapsing field separator
 # (blank paragraph/facet rows must survive — tab IFS silently shifts columns).
 # C113-C121 cover WIB writers, mixed-format parsing, stub compatibility, and failure safety.
-# C122-C135 cover invocation/MR history, immutable projection, delivery and recovery safety.
-# Next free: C136 (C70–C72 stay reserved).
+# C122-C135 cover invocation/MR history, immutable projection, delivery and recovery safety (plan 33).
+# C136–C150 cover the stacked-MR lifecycle (plan 35): parent-in-depends_on validation,
+# effective-target landed skip, exact local parent fork, effective target in ship exec, pending-op
+# done classification, squash-promotion block, comment-sweep debt gate, PLAN mirror detection,
+# transitive descendant BFS, stale parent-head verification binding, landing proof, tuple staleness,
+# record refusal, and symlink guard. C151–C157 (pass 2) cover exec after a fully landed parent
+# (ultimate-base path), retarget no-op resume / raced readback, inherited-bullet dedupe, the
+# old-target CI guard, the retained landing ref, and fail-closed locking. C158–C162 recheck the
+# op expected column (BWK awk builtin collision), unstarted-descendant skipping, the reattach
+# parent-head binding, the retarget head-move guard, and worktree rehydration. C163 guards the
+# preview-vs-strict freshness split (a done/accepted task without its binding must never get the
+# unverified exemption). Catcher case: pw-stack.t.sh.
+# Next free: C164 (C70–C72 stay reserved).
 # C77–C81 minted by the project-doctor live-triage plan (fix-hint command-only scrubber,
 # token-expansion reader, depends_on full-id universe, accepted-teardown status-awareness,
 # backtick-first field reader).
@@ -173,3 +184,31 @@ C132-repository-traversal-accepted	pw-shiplib.sh	part not in ('.', '..')	True	T1
 C133-unrelated-verification-head	pw-shiplib.sh	need(all(check['head'] in allowed_heads for check in data['verification']),	need(True,	T1	^pw-ship-history\.t\.sh$
 C134-head-advanced-ack	pw-shiplib.sh	landed['head'] == remote['head']	True	T1	^pw-ship-history\.t\.sh$
 C135-creation-body-newlines-stripped	pw-ship.sh	DESCRIPTION="$(cat "$DESC_FILE" && printf '.')"	DESCRIPTION="$(cat "$DESC_FILE")"	T1	^pw-ship-history\.t\.sh$
+C136-stack-parent-in-depends	pw-ship.sh	    _pw_deps_has "$deps" "$p" || { echo "pw-ship stack-validate: $t stacks on $p but $p is not in depends_on → fix: add $p to the task's depends_on field" >&2; bad=1; }	    : || { echo "pw-ship stack-validate: $t stacks on $p but $p is not in depends_on → fix: add $p to the task's depends_on field" >&2; bad=1; }	T1	^pw-stack\.t\.sh$
+C137-eff-target-landed	pw-common.sh	    if [ "$landed" != "yes" ]; then	    if true; then	T1	^pw-stack\.t\.sh$
+C138-fork-exact-parent	pw-worktree.sh	  git -C "$REPO_DIR" worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME" "$PARENT_SHA" || die "failed to create worktree"	  git -C "$REPO_DIR" worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME" "origin/$BASE_BRANCH" || die "failed to create worktree"	T1	^pw-stack\.t\.sh$
+C139-exec-effective-target	pw-ship.sh	        --target-branch "$TARGET_BRANCH" \	        --target-branch "$BASE" \	T1	^pw-stack\.t\.sh$
+C140-debt-done-skip	pw-ship.sh	    [ "$state" = "done" ] && continue	    :	T1	^pw-stack\.t\.sh$
+C141-promote-squash-block	pw-ship.sh	      squash|rebase) echo "block|parent $cur landed via $kind — ancestry/content not provable; explicit restack approval + --force-with-lease required"; return 1 ;;	      squash|rebase) : ;;	T1	^pw-stack\.t\.sh$
+C142-comments-debt-gate	pw-preflight.sh	      && die_fix "pending stack operation(s) block a new comment sweep"	      && true	T1	^pw-stack\.t\.sh$
+C143-doctor-plan-mirror	pw-project-doctor.sh	      [ "$fv" = "$pv" ] || mir="$mir$mt(field=${fv:-—},plan=${pv:-—}) "	      [ "$fv" = "$pv" ] || true	T1	^pw-stack\.t\.sh$
+C144-descendants-transitive	pw-common.sh	  while [ -n "$frontier" ]; do	  while [ -n "$frontier" ] && [ -z "$out" ]; do	T1	^pw-stack\.t\.sh$
+C145-stale-parent-binding	pw-worktree.sh	  [ "$VPARENT" = "$PARENT_HEAD" ] \	  true \	T1	^pw-stack\.t\.sh$
+C146-landing-git-proof	pw-ship.sh	git -C "$rd" merge-base --is-ancestor "$vh" "$ref" 2>/dev/null \	true \	T1	^pw-stack\.t\.sh$
+C147-tuple-head-stale	pw-ship.sh	[ -n "$cur_head" ] && [ "$vh" != "$cur_head" ] && return 0	:	T1	^pw-stack\.t\.sh$
+C148-transitive-stale	pw-ship.sh	_stack_stale "$d" "$_a" && return 0	:	T1	^pw-stack\.t\.sh$
+C149-record-refuse-verify	pw-ship.sh	verified_head|verified_parent|verified_target|verified_at|verified_evidence|freshness|ci_sha|ci_target|landed|landed_into)	__no_cols_refused__)	T1	^pw-stack\.t\.sh$
+C150-writer-symlink-guard	pw-common.sh	  [ -L "$f" ] && { echo "pw-stack-state: refusing to read through a symlink: $f" >&2; return 1; }	  :	T1	^pw-stack\.t\.sh$
+C151-exec-ultimate-base	pw-ship.sh	    if [ "$TARGET_BRANCH" = "$BASE" ]; then	    if false; then	T1	^pw-stack\.t\.sh$
+C152-retarget-noop-republish	pw-ship.sh	  if [ "$tg_before" != "$target" ]; then	  if true; then	T1	^pw-stack\.t\.sh$
+C153-retarget-raced-readback	pw-ship.sh	  [ "$tg_after" = "$target" ] \	  : \	T1	^pw-stack\.t\.sh$
+C154-inherited-bullet-dupe	pw-ship.sh	  if grep -qF -- "$key" "$tf"; then	  if false; then	T1	^pw-stack\.t\.sh$
+C155-ci-old-target-green	pw-ship.sh	  [ -n "$ct" ] && [ "$ct" != "$vt_cur" ] && return 0	  :	T1	^pw-stack\.t\.sh$
+C156-landed-ref-lost	pw-ship.sh	    git -C "$rd" update-ref "refs/pw-stack-landed/$(basename "$d")/$t" "$vh" \	    true \	T1	^pw-stack\.t\.sh$
+C157-lock-stale-reclaim	pw-common.sh	      return 1	      rm -rf "$ld" 2>/dev/null || true; continue	T1	^pw-stack\.t\.sh$
+C158-op-expected-expv	pw-ship.sh	-v ev="$ev" -v expv="$expected"	-v ev="$ev" -v exp="$expected"	T1	^pw-stack\.t\.sh$
+C159-cascade-unstarted-die	pw-ship.sh	      echo "stack-cascade: $D is unstarted (no branch) — recorded prerequisite $pd @ $(printf '%s' "$psha" | cut -c1-12); it consumes that head at spawn" >&2	      die "stack-cascade: $D is unstarted (no branch) → fix: execute $D first"	T1	^pw-stack\.t\.sh$
+C160-attach-parent-tip	pw-worktree.sh	    git -C "$REPO_DIR" merge-base --is-ancestor "$VPARENT" "$BRANCH_NAME" 2>/dev/null \	    true \	T1	^pw-stack\.t\.sh$
+C161-retarget-head-guard	pw-ship.sh	  [ "$head_after" = "$head_before" ] \	  : \	T1	^pw-stack\.t\.sh$
+C162-rehydrate-worktree	pw-ship.sh	        git -C "$rd" worktree add "$wtpath" "$dbranch" >/dev/null 2>&1 \	        git -C "$rd" checkout -q "$dbranch" >/dev/null 2>&1 \	T1	^pw-stack\.t\.sh$
+C163-preview-done-unbound-stale	pw-ship.sh	    *) printf 'stale'; return 0 ;;	    *) : ;;	T1	^pw-stack\.t\.sh$

@@ -2,8 +2,10 @@
 
 The `/pw-ship` path lives in one entity script — `tooling/scripts/entities/pw-ship.sh`
 (facets per `../conventions.md` S1b): decide what ships (`resolve`), push + open MRs (`exec`),
-track MR/CI state (`mr-state`, `mr-state-batch`, `monitor`), and record comment/bookkeeping
-state (`comment-seen`, `dashboard-mr-state`).
+track MR/CI state (`mr-state`, `mr-state-batch`, `monitor`), record comment/bookkeeping
+state (`comment-seen`, `dashboard-mr-state`), and the ship-owned **stack** lifecycle
+(`stack`, `stack-validate`, `stack-plan`, `stack-record`, `stack-verify`, `stack-fresh`, `stack-stale`,
+`stack-land`, `stack-promote`, `stack-retarget`, `stack-op`, `stack-debt`, `stack-adopt`).
 The `history` family manages project-owned review-attempt records and verified description delivery.
 
 ## pw-ship.sh resolve
@@ -208,3 +210,61 @@ archive/tombstones. A newest block too large to fit remains pending; retries can
 Exit 0 means the requested operation completed; `history delivered; summary refresh pending` is
 partial delivery and never a fully current-description claim. Exit 2 is an actionable validation,
 ownership, locking, capacity, forge, or readback failure. Existing thread-tracking rows stay independent.
+## Stack lifecycle (branch inheritance)
+
+A task with a `Stacked on:` field inherits a same-repo parent's verified commit; its MR targets the
+parent's branch until the parent lands. The `Stacked on:` field + ancestry/effective-target readers
+live in `scripts/lib/pw-common.sh` (a library — callers never source it directly); these operators
+are the deterministic surface. `stack`, `stack-plan`, and `stack-promote` read live Git ancestry;
+`stack-land`, `stack-retarget`, and `exec` also read the forge (MR state/target) through the same
+resolver as `mr-state`; the rest are offline.
+
+```bash
+S=$PW_HOME/tooling/scripts/entities/pw-ship.sh
+$S stack <slug>                 # read-only topology + health: task|parent|target|branch|base|landed|freshness|debt
+$S stack-validate <slug>        # fail-closed topology check (cycle, unknown/cross-repo parent, base drift, shared branch, missing depends_on); exit 1 on any finding
+$S stack-plan <slug> [ids…]     # root-first publication order: task|repo|branch|target|parent|ready|reason (a stacked child is ready only once its target exists on origin)
+$S stack-record <slug> <T0n> col=value…   # upsert binding columns (fork_sha, consumed_parent_sha, target, …); verification/landing columns are refused
+$S stack-verify <slug> <T0n> <evidence> [--head <sha>] [--ci-sha <sha|skipped|pending|failed|unknown>] [--ci-target <branch>]
+                                            # bind the verification tuple (current head + parent + effective target + evidence + CI disposition) in one atomic write after ## Verify
+$S stack-fresh|stack-stale <slug> <T0n>    # force/clear the freshness flag (the tuple is always compared live, so the flag alone cannot certify)
+$S stack-land <slug> <T0n> <merge-sha|-> <landed-into> [merge|ff|squash|rebase|closed|unknown]
+                                            # verify + record a landing: merge/ff proven against a FETCHED origin ref + observed forge target; retains refs/pw-stack-landed/<slug>/<task>
+$S stack-promote <slug> <T0n>   # promote|<target> | noop|<target> | block|<reason> (fetches first; the target must be published on origin)
+$S stack-retarget <slug> <T0n> [--apply]   # move the MR base to the promoted target via the forge (dry-run; --apply: pending row first, state/target/head readback, loud local mirrors, no-op retry)
+$S stack-op <slug> list|create|set|clear …   # pending-operation recovery rows (stages)
+$S stack-debt <slug> [ids…]     # exit 1 + the pending ops touching the set (gates ship/comment/sync/close)
+$S stack-adopt <slug> [--apply] [ids…]       # infer edges from real MR targets (dry-run; --apply writes)
+$S stack-inherited <slug> <T0n> <parent> <sha>   # record one inherited update (Result bullet + LOG; never a reviewer comment)
+$S stack-cascade <slug> <T0n> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>]
+                                            # parent-first descendant propagation: integrate → verify-bind → record → push (shipped only, --push required); stages persist and resume
+```
+
+`stack-verify` writes the tuple (head, parent, target, evidence, CI disposition) in one atomic
+record write, so a half-written binding can never certify anything; `skipped`/`pending` stay
+explicit and a green bound to an old head or old target never carries across a retarget.
+`stack-retarget` records its pending row before any forge write, checks the destination against
+freshly fetched refs plus the MR's state/target/head, reads back target and head, and leaves the row
+pending on any local failure — re-running resumes from the observed forge state without a duplicate
+write. `stack-land` proves merge/ff landings only against fetched `origin` refs, corroborates the
+forge MR target when the URL lets the forge answer, and retains the parent's verified tip as
+`refs/pw-stack-landed/<slug>/<task>` so promotion survives source-branch deletion. `stack-cascade`
+persists per-descendant stages (`integrate|verify|record|push|describe`) and resumes idempotently,
+with its expected column recording the exact upstream commit sha; a shipped descendant's `describe`
+stage clears only after its `history` delivery completes. An unstarted descendant (no branch
+anywhere) gets its prerequisite head recorded and every stage skipped (terminal) — never a branch,
+worktree, push, or Verify; an existing branch without a mounted worktree is integrated in a
+worktree rehydrated at the approved task-worktree location, never by checking out the shared clone.
+Stack writes take a PID/token lock with no automatic stale reclamation, and a state/op record whose
+version header or row shape drifted is rejected before it can steer an operation.
+
+The state files are `task/stack.tsv` (one row per affected task; machine TSV, never hand-edited)
+and `task/stack-ops.tsv` (pending recovery rows). The `stack` preview distinguishes `unverified`
+from `stale`: a never-started task with no tuple and no branch reads `unverified` (it must bind
+before its own publication, but it does not block an ancestor's incremental ship), while a drifted
+tuple, an explicit stale flag, a started task without a tuple, or a done/accepted task without its
+binding reads `stale` and blocks. `_stack_stale` itself stays the strict execution gate. `exec`
+uses the resolved effective target and
+refuses a child whose target branch is not yet published on origin; once every ancestor has landed,
+the effective target is the ultimate base and `exec` requires the base to be published instead of
+matching an ancestor branch.

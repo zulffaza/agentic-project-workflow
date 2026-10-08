@@ -74,18 +74,31 @@ unit:
   description names the unit + sibling MRs.
 - <none — every MR stands alone>   ← keep it this way wherever the repos allow one task per change
 
+## Stacks (branch-inheritance trees)  [🤖 agent — only when present]
+A **stack** is a same-repo code dependency: task B needs task A's committed code, so B's branch
+forks A's verified commit and B's MR targets A's branch until A lands. This is separate from
+`depends_on` (the full execution prerequisite set, incl. cross-repo order). Set each task's
+`Stacked on:` field to its immediate parent and list the trees + root-first merge order here —
+do NOT stack tasks merely because their IDs are consecutive or their files overlap; a scheduling
+dependency alone is not a stack. Show ultimate destinations, immediate parents, branch names, and
+the merge order before approval:
+- `T03 → T02 → master` (T03 stacked on T02; root-first merge: T02, then T03)
+- <none — every task independent>   ← keep it this way unless the code truly must be inherited
+
 ## Task table
 **Filled by:** [🤖 agent] at breakdown; `Status`/`Time`/`Result` [🤖 agent] during execution,
 except `Status: accepted`/`verify-failed` which are [🧑 you]. IDs link to the task file. `SP` =
 story points (manual-effort estimate, set at breakdown). `Time` = actual wall-clock the executor
-took; `Result` = commit short-sha / MR ref / `zero-change`.
+took; `Result` = commit short-sha / MR ref / `zero-change`. `Stacked on` mirrors each task file's
+`Stacked on:` field (the immediate code-inheritance parent, or `—` for independent) — never a
+second independently edited authority; the owning writer reconciles it.
 
-| ID | Title | Repo | depends_on | Group | Execute with | SP | Status | Time | Result |
-|----|-------|------|-----------|-------|--------------|----|--------|------|--------|
-| [T01](./T01.md) | … | hera | — | G1 | sonnet | 2 | todo | — | — |
-| [T02](./T02.md) | … | valas-service | — | G1 | kilo:command_code/MiniMaxAI/MiniMax-M3 | 1 | todo | — | — |
-| [T03](./T03.md) | … | hera | T01, T02 | G2 | opus | 3 | todo | — | — |
-| [T04](./T04.md) | … | hera | T03 | G3 | kilo:command_code/<model> | 2 | todo | — | — |
+| ID | Title | Repo | depends_on | Stacked on | Group | Execute with | SP | Status | Time | Result |
+|----|-------|------|-----------|------------|-------|--------------|----|--------|------|--------|
+| [T01](./T01.md) | … | hera | — | — | G1 | sonnet | 2 | todo | — | — |
+| [T02](./T02.md) | … | valas-service | — | — | G1 | kilo:command_code/MiniMaxAI/MiniMax-M3 | 1 | todo | — | — |
+| [T03](./T03.md) | … | hera | T01, T02 | T01 | G2 | opus | 3 | todo | — | — |
+| [T04](./T04.md) | … | hera | T03 | T03 | G3 | kilo:command_code/<model> | 2 | todo | — | — |
 
 _Status values: todo → in-progress → verify-failed / done → accepted._
 _Time/Result: leave `—` until executed. Token/cost are NOT captured here — a running agent can't

@@ -45,12 +45,37 @@ REPO_DIR="$REPOS_DIR/$REPO"
 
 # Construct branch name
 BRANCH_NAME="agent/$SLUG/$TASK_ID-$SLUG"
-
-# Construct worktree path
 WORKTREE_PATH="$D/worktree/$REPO/$TASK_ID-$SLUG"
-
-# Create worktree directory
 mkdir -p "$(dirname "$WORKTREE_PATH")"
+
+# --- branch-inheritance parent (plan 35) ------------------------------------------------
+# A `Stacked on:` field means this branch forks the parent's EXACT locally verified commit — no
+# execution-time push of the parent, no reliance on a stale origin/<parent> ref. The parent must
+# be verified (its recorded verified_head must equal its current local branch head) and in the
+# same repository.
+TASK_FILE="$D/task/$TASK_ID.md"
+STACK_PARENT=""
+[ -f "$TASK_FILE" ] && STACK_PARENT="$(pw_stack_parent "$TASK_FILE")"
+PARENT_SHA=""
+CONSUMED_PARENT_BRANCH=""
+
+if [ -n "$STACK_PARENT" ]; then
+  PARENT_FILE="$D/task/$STACK_PARENT.md"
+  [ -f "$PARENT_FILE" ] || die "stack parent $STACK_PARENT has no task file → fix: correct the 'Stacked on:' field in task/$TASK_ID.md"
+  PARENT_REPO="$(pw_field "$PARENT_FILE" Repo 2>/dev/null || true)"
+  [ "$PARENT_REPO" = "$REPO" ] || die "stack parent $STACK_PARENT is in repo '${PARENT_REPO:-?}', not '$REPO' → fix: a stack inherits branches only within one repository; use depends_on for cross-repo prerequisites"
+  CONSUMED_PARENT_BRANCH="$(pw_field "$PARENT_FILE" Branch 2>/dev/null || true)"; CONSUMED_PARENT_BRANCH="${CONSUMED_PARENT_BRANCH//\`/}"; CONSUMED_PARENT_BRANCH="${CONSUMED_PARENT_BRANCH%%[[:space:]]*}"
+  [ -n "$CONSUMED_PARENT_BRANCH" ] || die "stack parent $STACK_PARENT has no Branch field → fix: complete the parent task file first"
+  [ "$CONSUMED_PARENT_BRANCH" != "$BRANCH_NAME" ] || die "task $TASK_ID cannot stack on itself (same branch) → fix: correct the 'Stacked on:' field"
+  git -C "$REPO_DIR" rev-parse --verify "$CONSUMED_PARENT_BRANCH" >/dev/null 2>&1 \
+    || die "parent branch '$CONSUMED_PARENT_BRANCH' ($STACK_PARENT) not found locally in $REPO → fix: execute the parent first (/pw-execute $SLUG $STACK_PARENT)"
+  PARENT_HEAD="$(git -C "$REPO_DIR" rev-parse "$CONSUMED_PARENT_BRANCH" 2>/dev/null || true)"
+  VPARENT="$(pw_stack_state_get "$D" "$STACK_PARENT" verified_head 2>/dev/null || true)"
+  [ -n "$VPARENT" ] || die "parent $STACK_PARENT has no verified commit binding → fix: execute + verify the parent first (/pw-execute $SLUG $STACK_PARENT)"
+  [ "$VPARENT" = "$PARENT_HEAD" ] \
+    || die "parent $STACK_PARENT head changed after verification (verified ${VPARENT:0:8}, now ${PARENT_HEAD:0:8}) → fix: re-verify the parent (/pw-execute $SLUG $STACK_PARENT)"
+  PARENT_SHA="$VPARENT"
+fi
 
 # Check if worktree already exists
 if [ -d "$WORKTREE_PATH" ]; then
@@ -59,13 +84,34 @@ if [ -d "$WORKTREE_PATH" ]; then
   exit 0
 fi
 
-# Check if branch already exists
 if git -C "$REPO_DIR" rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
-  # Branch exists, attach to it
+  # Branch exists, attach to it. Attachment alone is not readiness: a stacked branch must carry a
+  # recorded consumption/verification identity AND contain the parent's CURRENT verified head. An
+  # empty binding fails closed (a stacked branch is never attached unbound), and a parent advanced
+  # past the child's fork must go through the descendant update procedure (/pw-sync).
   echo "Branch $BRANCH_NAME already exists, attaching..."
+  if [ -n "$STACK_PARENT" ]; then
+    RECORDED="$(pw_stack_state_get "$D" "$TASK_ID" consumed_parent_sha 2>/dev/null || true)"
+    [ -n "$RECORDED" ] || RECORDED="$(pw_stack_state_get "$D" "$TASK_ID" fork_sha 2>/dev/null || true)"
+    [ -n "$RECORDED" ] \
+      || die "stacked branch $BRANCH_NAME has no recorded parent binding → fix: re-create it (/pw-execute $SLUG $TASK_ID after verifying $STACK_PARENT); a stacked branch is never attached without its verification identity"
+    git -C "$REPO_DIR" merge-base --is-ancestor "$RECORDED" "$BRANCH_NAME" 2>/dev/null \
+      || die "stacked branch $BRANCH_NAME is stale — it does not contain its recorded parent commit ${RECORDED:0:8} → fix: /pw-sync $SLUG $TASK_ID (merge the updated parent, re-verify, push)"
+    git -C "$REPO_DIR" merge-base --is-ancestor "$VPARENT" "$BRANCH_NAME" 2>/dev/null \
+      || die "stacked branch $BRANCH_NAME predates $STACK_PARENT's current verified head ${VPARENT:0:8} → fix: /pw-sync $SLUG $TASK_ID (merge the updated parent, re-verify, push)"
+  fi
   git -C "$REPO_DIR" worktree add "$WORKTREE_PATH" "$BRANCH_NAME" || die "failed to attach worktree"
+elif [ -n "$STACK_PARENT" ]; then
+  echo "Creating worktree with new branch $BRANCH_NAME from $STACK_PARENT's verified commit ${PARENT_SHA:0:8}..."
+  git -C "$REPO_DIR" worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME" "$PARENT_SHA" || die "failed to create worktree"
+  pw_stack_state_upsert "$D" "$TASK_ID" \
+    parent="$STACK_PARENT" branch="$BRANCH_NAME" base="$BASE_BRANCH" \
+    fork_sha="$PARENT_SHA" consumed_parent_sha="$PARENT_SHA" \
+    consumed_parent_branch="$CONSUMED_PARENT_BRANCH" target="$CONSUMED_PARENT_BRANCH" \
+    freshness=fresh || die "failed to record the stack fork binding"
+  "$ST" log "$SLUG" execute "$TASK_ID: forked from $STACK_PARENT @ ${PARENT_SHA:0:8} (stacked on $CONSUMED_PARENT_BRANCH)" >/dev/null 2>&1 || true
 else
-  # Create new branch from base
+  # Create new branch from base (legacy independent behavior)
   echo "Creating worktree with new branch $BRANCH_NAME from origin/$BASE_BRANCH..."
   git -C "$REPO_DIR" worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME" "origin/$BASE_BRANCH" || die "failed to create worktree"
 fi

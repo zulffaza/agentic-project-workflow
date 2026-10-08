@@ -106,7 +106,8 @@ discovery bullet below).
   run the task anyway.
 - **Lane/role spawn costs:** in-process same-provider spawns reuse the provider's cached layer +  launch cheaply; cross-provider headless is cold (new session, non-cached tokens) — bounded runs
    only, never looped, and always supervised to a terminal state (§Headless supervision). Review
-   fixes batch (one spawn per artifact; ≥2 artifacts fan out in parallel, one task may run
+   fixes batch (one spawn per artifact; ≥2 independent artifacts fan out in parallel, stacked
+   ancestors/descendants run parent-first, one task may run
    driver-inline — §The spawn ledger + the routing ladder); a warm resume is decided by
    `pw-session.sh session-check`, never by attempting the resume and reading error text; a lane's
    `AI Models:` row binds its model (§Spawning phase work in docs/EXECUTION.md — headless
@@ -201,7 +202,9 @@ Values: auto | subagent | headless.
               session-check rule). Supervised per §Headless supervision below.
 3. Repair-batch seeding unchanged: batched seed-review-batch, one pass per artifact, per-item
    `↳ agent:` replies — the seed, not the session, carries the context. Fan-out: §Fixer routing
-   (review.md) — ≥2 artifacts → one fixer per task in parallel; exactly one task, same provider,
+   (review.md) — ≥2 artifacts → one fixer per task in parallel, but stacked ancestors and
+   descendants run parent-first and never concurrently (see the stacks bullet below); exactly one
+   task, same provider,
    Route auto/subagent → driver fixes INLINE in that worktree (bounded exception to "never edit
    repo source as orchestrator": listed items only, run its `## Verify`, commit, reply per item);
    Route headless single-task → resume-try, and on dead/failed resume → inline fallback with
@@ -238,6 +241,25 @@ It's how a later **fix** routes per the ladder rather than re-derives:
   reviewer-style pass that *files items* (`dep-impact:T0n`) into that dependent's review queue —
   never a direct edit, never editing the dependency backward, never a second auto pass. Not-yet-run
   dependents need nothing (they fork the fixed branch at spawn).
+- **Stacks are branch inheritance, not scheduling.** A task with `Stacked on: <parent>` (same
+  repo) forked the parent's verified commit and its MR targets the parent's branch until the parent
+  lands; `depends_on` remains the full prerequisite set (a scheduling or cross-repo dependency is
+  never a stack). Ancestry + effective-target readers live in `pw-common.sh`; the ship-owned
+  operators (`pw-ship.sh stack|stack-plan|stack-record|stack-verify|stack-stale|stack-land|stack-promote|stack-retarget|stack-op|stack-debt|stack-adopt|stack-inherited|stack-cascade`)
+  are the surface. The deterministic cascade operator (`stack-cascade`) drives descendant
+  integration, verify-binding, inherited-update recording, and authorized normal pushes with
+  persisted, resumable stages (`stack-inherited` records inherited evidence without fabricating a
+  reviewer comment). Propagation is **transitive and parent-first**: an upstream fix updates every
+  affected descendant (including descendants with no comments) even without file overlap —
+  merge each descendant's immediate parent's recorded updated head, run its own `## Verify`, and
+  record inherited updates with upstream links (no fabricated reviewer replies). A descendant whose
+  verification tuple no longer covers its head/parent/target is **stale** and must not ship, close,
+  or reuse the old green result. This is the same "integration + verification" the logical
+  dependency cascade (above) demands of same-repo dependents; deduplicate tasks reached through both
+  paths. Cross-repo dependents still need their own artifact/API impact assessment, never a Git
+  merge between repositories.
+  Squash/rebase landing leaves ancestry unprovable → promotion **blocks** for an approved restack,
+  never a blind `rebase --onto` or a plain force-push.
 - Session ids are **machine-local** pointers — never into MR text; PLAN/dashboard/worktrees stay
   the durable cross-machine state, and the recorded seed is the cold-spawn fallback. Liveness of
   any id is `pw-session.sh session-check`'s answer, never a guess.
@@ -290,6 +312,14 @@ git -C $PW_REPOS/<repo> worktree add \
 ```
 
 (The repo manifest in `PLAN.md` lists each `(repo, base)` pair; a repo may appear on multiple rows.)
+
+For a **stacked** task (`Stacked on:` set), the script forks the branch from the parent's exact
+locally verified commit instead of `origin/<base>` — the raw equivalent is
+`git -C $PW_REPOS/<repo> worktree add <path> -b <branch> <parent-verified-sha>`. It refuses when
+the parent has no verified binding or its head moved after verification; bind the parent's
+verification with the ship `stack-verify` operator (run it after the parent's `## Verify` passes),
+which records the head + consumed parent + effective target as a live tuple. Do not set those
+columns with the generic `stack-record` — it refuses them, so no manual flag can certify unverified work.
 
 ## Cross-provider gotchas (verified)
 

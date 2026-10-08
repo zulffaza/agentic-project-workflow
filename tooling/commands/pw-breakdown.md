@@ -86,8 +86,8 @@ Then produce, from `{{PW_HOME}}/template/task/`:
    nothing stamps them):
    - Replace every literal `PW_HOME`/`PW_PROJECTS`/`PW_REPOS` brace-token copied from the template
      with its real absolute path before saving (same render scaffold applies to copied files).
-   - Machine fields (`Repo:`, `Base branch:`, `Branch:`, `Worktree:`, `depends_on:`, `Status:`,
-     `Execute with:`) carry a single value only — no prose after it; the reasoning belongs in
+   - Machine fields (`Repo:`, `Base branch:`, `Branch:`, `Worktree:`, `depends_on:`, `Stacked on:`,
+     `Status:`, `Execute with:`) carry a single value only — no prose after it; the reasoning belongs in
      `Why:` or an HTML comment. `Worktree:` stays project-relative exactly as the template shows
      (`worktree/<repo>/<T0n>-<slug>/`); absolute paths appear only inside `## Steps` commands.
    with its **`Repo:` + `Base branch:`** set (the base the task forks from — two tasks in the same
@@ -167,6 +167,22 @@ otherwise can't share one worktree — an explicitly-marked **landing unit** (be
   - Each task's MR description carries "**Landing unit:** <name> — MRs …, merge as a set" so
     reviewers treat them as one unit (see `/pw-ship`). A set whose members are only coherent when
     ALL land is still a smell — prefer shrinking to one task where the repos allow it.
+
+- **Stacked tasks (same-repo inherited code):** classify **why** each dependency exists — inherited
+  code, an external artifact/version, or pure execution order. Only a **same-repo inherited-code**
+  dependency becomes a stack: give the child `Stacked on: <immediate-parent-task>` (and mirror it in
+  PLAN's `Stacked on` column — the mirror is reconciled by the owning writer, never a second
+  authority). The parent must be in that child's `depends_on`, in the same repo, share one ultimate
+  `Base branch`, and have a distinct branch. Do **not** stack tasks merely because their IDs are
+  consecutive or their files overlap — a scheduling dependency alone is not a stack. Show ultimate
+  destinations, immediate parents, branch names, and the **root-first merge order** under PLAN's
+  `## Stacks` section before I approve:
+  - `T03 → T02 → master` means T03's branch forks T02's verified commit and T03's MR targets T02
+    until T02 lands; merge order is T02, then T03.
+  - With multiple code prerequisites, choose the deepest parent only when its ancestry demonstrably
+    includes the other prerequisite commits; otherwise **stop and ask for a reviewed sequencing or
+    an integration-task decision** — never invent a temporary integration branch. Independent
+    prerequisites in other repositories stay ordinary `depends_on` edges (no branch spans repos).
 
 Size each task as one worktree / one reviewable unit.
 

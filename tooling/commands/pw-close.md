@@ -31,6 +31,10 @@ moment to skip a lint. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
    folder still open in your editor first. It reports removed / skipped (current dir) / skipped
    (dirty); re-run after `cd`-ing out, or pass `--yes` only when you've confirmed a dirty worktree
    is safe to discard. It never deletes branches or the project dir.
+2b. **Stack debt.** `pw-preflight.sh close` also rejects unresolved stack debt — a task whose
+   verification tuple is **stale** (merge the updated parent, re-verify, push to clear it) or a
+   pending stack operation. Clear it before closing; do **not** delete stack branches or recovery
+   refs automatically — preserve enough evidence to repair still-open children after teardown.
 3. **Learn — seed memory (only IF a memory tool is configured;** see
    `{{PW_HOME}}/tooling/docs/memory.md` / `PW_MEMORY`): distil durable, *workflow-level* learnings into
    your memory tool, mark superseded facts `[SUPERSEDED]`, and don't save what the repos/commits

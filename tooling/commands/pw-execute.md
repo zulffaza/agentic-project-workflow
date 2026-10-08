@@ -75,8 +75,22 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
        `worktree/<repo>/<task-id>-<slug>/` and prints the path on its last line; pass that path to
        the spawn. Two tasks in one repo may declare different bases (e.g. `master` and `spring3`) —
        fine: different `-b` args, separate branches + worktrees + MRs, parallel. If the branch
-       already exists the script attaches instead of dying; re-running is idempotent.
-     - **Adopted task** (`Branch:` is an existing in-progress branch from `context/ADOPTED.md`) → do
+already exists the script attaches instead of dying; re-running is idempotent.
+      - **Stacked task** (`Stacked on: <parent-task>` in the task file): the same `create` call forks
+        the child from the parent's **exact locally verified commit** (the parent's recorded
+        `verified_head`), not `origin/<base-branch>` and never a stale `origin/<parent>` ref — so a
+        child starts before the parent is pushed. If the parent has no verified binding, or its
+        branch head moved after verification, the script **refuses**; execute and verify the parent
+        first. Verify the child against the inherited code (compare environmental failures to the
+        parent snapshot, not an unrelated base), and after its `## Verify` passes, bind the verification
+        so its own descendants can fork from it:
+        `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-verify <slug> <T0n> <captured-verify-output>`
+        (run it right after the child's `## Verify` passes; it binds the CURRENT head, the consumed
+        parent commit, and the effective target, and refuses when the parent's committed code is absent
+        from the child — a manual `stack-record` flag can never certify unverified work).
+        If the parent changes after the child started, the child's binding is invalid — mark it stale
+        (`pw-ship.sh stack-stale <slug> <T0n>`) and re-run it.
+      - **Adopted task** (`Branch:` is an existing in-progress branch from `context/ADOPTED.md`) → do
        NOT create an `agent/…` branch: run the same script with the **adopted branch** as `<T0n>`'s
        task id kept, and it attaches the existing branch at the convention path — but only after
        you replace the task's `Branch:` check: the script builds `agent/<slug>/<T0n>-<slug>`, so for

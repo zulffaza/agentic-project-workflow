@@ -126,6 +126,30 @@ which is why this bundle reads `/notes` as the primary source. If a hand-rolled 
 this bundle misses a comment, check both: don't filter on `individual_note`, and query `/notes`
 rather than `/discussions`.
 
+## "A stacked task won't start, ship, or close"
+
+A **stacked** task (one whose task file carries `Stacked on:`) inherits another task's code, so its
+start, ship, and close depend on that parent:
+
+- **Won't start:** the parent has no verified commit yet, or its branch moved after verification.
+  Run and verify the parent first, then start the child. Starting a child never pushes the parent.
+- **Won't ship:** a stacked child's MR targets the parent's branch, so the parent's branch must be
+  published first — ship the parent, then the child. Merge order is parent, then child.
+- **Won't close / shows "stale":** an upstream parent changed after the child was verified (or a
+  stack update is still in progress). Run `/pw-sync <slug> <child>` to merge the updated parent,
+  re-verify, and push — that clears the debt. A squash/rebase parent landing keeps the child
+  promotion blocked on purpose until you approve an explicit restack; a blind rebase can lose work.
+  A not-yet-started stacked child shows **unverified** (not stale): it does not block shipping its
+  parent, but it must bind before its own ship — a done or accepted task without that binding still
+  blocks.
+- **"Published but the local mirror is pending" after a retarget:** the forge is already correct;
+  re-run the retarget with `--apply` to finish the local state and dashboard. It resumes the pending
+  recovery row and does **not** write to the forge again. Never delete a pending recovery row by
+  hand; `stack-debt` blocks shipping until it resolves.
+- **Preview anything first:** `/pw-ship <slug> stack` shows the parents, targets, freshness, and any
+  pending update without changing a thing. `/pw-doctor --project <slug>` reports stack topology and
+  PLAN/field mismatches (and `--fix` re-syncs the PLAN `Stacked on` cell).
+
 ## "I don't know what state a project is in, or what to run next"
 
 `/pw-status <slug>` — it's built for exactly this question (phase, dashboard `Status:`, what's

@@ -531,6 +531,309 @@ _pw_url_from_line() {  # $1=line from a Result MR: bullet -> plain URL (falls ba
   printf '%s' "$1" | sed -E "s/^[-*[:space:]]*[*]*MR[*]*:[[:space:]]*//; s/^[*_[:space:]]+//; s/[[:space:]]+$//"
 }
 
+# --- stacked-MR readers (plan 35) ----------------------------------------------
+# The task field `Stacked on:` holds exactly one parent task id (T0n) or `none`. An absent or
+# `none` value means legacy independent behavior; a reader NEVER infers a stack from `depends_on`
+# (a scheduling dependency is not branch inheritance). `Base branch:` keeps the ULTIMATE
+# destination; the effective review target is derived (nearest unmerged ancestor's branch, else
+# base) and lives in the ship-owned state record, never by rewriting the task field.
+
+# pw_stack_parent <taskfile> -> parent task id, or empty for none/absent/invalid.
+pw_stack_parent() {
+  [ -f "$1" ] || return 0
+  local v
+  v="$(pw_field "$1" 'Stacked on' 2>/dev/null || true)"
+  v="${v//\`/}"
+  v="${v%%[[:space:]]*}"          # first token only; trailing annotation prose is ignored
+  case "$v" in
+    ""|none|None|NONE|—|-|"<"*) return 0 ;;
+  esac
+  case "$v" in T[0-9]*) printf '%s\n' "$v" ;; esac
+}
+
+# pw_plan_col <plan> <normalized-col-name> -> "T0n|value" per data row of the ## Task table.
+# Column-NAME driven (both PLAN generations); empty when the column is absent (legacy projects
+# carry no `Stacked on` column and must stay independent). Never positional.
+pw_plan_col() {
+  awk -F'|' -v want="$2" '
+    /^## Task/ { p=1; next }
+    p && /^## / { exit }
+    p && /^[ \t]*\|/ && !($0 ~ /^[ \t]*\|[ \t:|+-]*\|[ \t]*$/) {
+      n = split($0, c, "|")
+      if (!hdr) {
+        for (i = 1; i <= n; i++) { v = c[i]; gsub(/[ \t`*]/, "", v); V = tolower(v)
+          if (V == "id" || V == "task") idi = i; if (V == want) ti = i }
+        hdr = 1; next
+      }
+      if (ti > 0 && idi > 0) {
+        id = c[idi]; gsub(/[ \t]/, "", id)
+        if (match(id, /T[0-9]+/)) id = substr(id, RSTART, RLENGTH); else id = ""
+        val = c[ti]; gsub(/^[ \t]+/, "", val); gsub(/[ \t]+$/, "", val)
+        if (id != "") print id "|" val
+      }
+    }' "$1"
+}
+pw_plan_stacked() { pw_plan_col "$1" stackedon; }
+
+# Validate a task id at a trust boundary (never build paths/refs from an unchecked token).
+pw_task_id_ok() { case "${1:-}" in T[0-9]*) case "$1" in *[!A-Za-z0-9]*) return 1 ;; esac; return 0 ;; *) return 1 ;; esac; }
+
+# --- stack state record (task/stack.tsv) ---------------------------------------
+# ONE minimal ship-owned state row per affected branch/MR: bindings, observed targets, verification
+# tuple, freshness debt, and navigation. Machine TSV (header row); comments start with '#'. Writes
+# happen ONLY through pw_stack_state_upsert (a shared primitive) — never a hand edit.
+PW_STACK_COLS="task parent branch base fork_sha consumed_parent_sha consumed_parent_branch target head_sha landed landed_into parent_mr child_mrs verified_head verified_parent verified_target verified_at ci_sha ci_target freshness verified_evidence"
+pw_stack_state_file() { printf '%s/task/stack.tsv' "$1"; }
+pw_stack_state_col() {  # <colname> -> 1-based column index
+  local c i=1
+  for c in $PW_STACK_COLS; do [ "$c" = "$1" ] && { printf '%s' "$i"; return 0; }; i=$((i+1)); done
+  return 1
+}
+_pw_stack_ncol() { local n=0 c; for c in $PW_STACK_COLS; do n=$((n+1)); done; printf '%s' "$n"; }
+_pw_stack_tab=$(printf '\t')
+_stack_val_bad() {  # rc 0 when a value carries a reserved character (pipe, TAB, newline)
+  case "$1" in *"|"*|*"$_pw_stack_tab"*|*"$IFS_NL"*) return 0 ;; esac
+  return 1
+}
+IFS_NL='
+'
+
+# pw_path_within <dir> <path> — rc 0 when <path> resolves physically inside <dir> (no symlink
+# escape). Used to refuse a stack write that would land outside the project tree.
+pw_path_within() {
+  local dir="$1" path="$2" rdir pdir
+  [ -n "$dir" ] && [ -n "$path" ] || return 1
+  rdir="$(cd "$dir" 2>/dev/null && pwd -P)" || return 1
+  pdir="$(cd "$(dirname "$path")" 2>/dev/null && pwd -P)" || return 1
+  case "$pdir/" in "$rdir/"*) return 0 ;; esac
+  return 1
+}
+
+# pw_lock <lockdir> [tries] — exclusive advisory lock via atomic `mkdir` (macOS/Bash 3.2 has no
+# flock). The shipped history lock's contract (pw-shiplib.sh) mirrored in shell: the holder writes
+# a PID/token record, release validates the token, and a stale lock is NEVER auto-reclaimed — a
+# dead-pid `rm -rf` race could delete a replacement lock out from under a live writer, so a bounded
+# wait fails closed instead and names the holder. Remove a stale lock by hand only after
+# confirming no writer is active. rc 0 = acquired (release with pw_unlock), 1 = timed out.
+pw_lock() {
+  local ld="$1" tries="${2:-100}" i=0 pid tok key
+  while ! mkdir "$ld" 2>/dev/null; do
+    i=$((i+1))
+    if [ "$i" -ge "$tries" ]; then
+      pid="$(cat "$ld/pid" 2>/dev/null || true)"
+      echo "pw_lock: could not acquire $ld${pid:+ (held by pid $pid)} → fix: retry after the writer exits; a crashed writer can leave a stale lock — remove that directory by hand only after confirming no writer is active (it is never auto-reclaimed)" >&2
+      return 1
+    fi
+    sleep 0.1 2>/dev/null || sleep 1
+  done
+  tok="$$.$(date +%s 2>/dev/null || printf '0').$RANDOM$RANDOM"
+  printf '%s\n' "$$" > "$ld/pid" 2>/dev/null || true
+  printf '%s\n' "$tok" > "$ld/token" 2>/dev/null || true
+  key="_PW_LOCK_TOK_$(printf '%s' "$ld" | cksum | tr -dc '0-9')"
+  eval "$key=\"\$tok\""
+  return 0
+}
+pw_unlock() {  # remove the lock ONLY when this process holds its token (never another writer's)
+  local ld="$1" key tok cur
+  key="_PW_LOCK_TOK_$(printf '%s' "$ld" | cksum | tr -dc '0-9')"
+  eval "tok=\${$key:-}"
+  cur="$(cat "$ld/token" 2>/dev/null || true)"
+  if [ -n "$tok" ] && [ "$tok" = "$cur" ] && [ "$(cat "$ld/pid" 2>/dev/null || true)" = "$$" ]; then
+    rm -rf "$ld" 2>/dev/null || true
+  fi
+  eval "unset $key" 2>/dev/null || true
+}
+
+# pw_tmpfile <dir> — a UNIQUE temp path inside <dir> (never a fixed .tmp; concurrent writers can
+# never clobber each other's staged file).
+pw_tmpfile() { mktemp "$1/.pwtmp.XXXXXX" 2>/dev/null || printf '%s' "$1/.pwtmp.$$.$RANDOM"; }
+
+# pw_stack_state_get <projdir> <task> <col> -> value or empty (missing file/row/col = empty).
+pw_stack_state_get() {
+  local f ci; f="$(pw_stack_state_file "$1")"; [ -f "$f" ] || return 0
+  ci="$(pw_stack_state_col "$3")" || return 0
+  awk -F'\t' -v t="$2" -v c="$ci" '$1 == t { print $c; exit }' "$f" 2>/dev/null || true
+}
+pw_stack_state_has() { [ -f "$(pw_stack_state_file "$1")" ] && [ -n "$(pw_stack_state_get "$1" "$2" task)" ]; }
+
+# pw_stack_state_validate <projdir> — schema/version gate for task/stack.tsv before any read or
+# write that matters. rc 0 = absent or valid; rc 1 = malformed (loud reason). A state file whose
+# version tag, column header, or row shapes drifted is rejected instead of being half-read into a
+# gate decision (refs/targets from a malformed row could point anywhere).
+pw_stack_state_validate() {
+  local f; f="$(pw_stack_state_file "$1")"
+  [ -e "$f" ] || return 0
+  [ -L "$f" ] && { echo "pw-stack-state: refusing to read through a symlink: $f" >&2; return 1; }
+  [ -f "$f" ] || { echo "pw-stack-state: not a regular file: $f → fix: repair task/stack.tsv (machine-owned)" >&2; return 1; }
+  local line1 line2 ncol
+  line1="$(sed -n '1p' "$f" 2>/dev/null || true)"
+  case "$line1" in
+    '# pw-stack-state v1'*) : ;;
+    *) echo "pw-stack-state: unsupported state version in $f (want a '# pw-stack-state v1 …' first line) → fix: restore or rebuild the record; it is machine-owned" >&2; return 1 ;;
+  esac
+  line2="$(sed -n '2p' "$f" 2>/dev/null || true)"
+  ncol="$(_pw_stack_ncol)"
+  [ "$line2" = "$(printf '%s' "$PW_STACK_COLS" | tr ' ' '\t')" ] \
+    || { echo "pw-stack-state: column header mismatch in $f → fix: restore task/stack.tsv from its writer (never hand-edit the columns)" >&2; return 1; }
+  awk -F'\t' -v n="$ncol" 'NR>2 && NF>0 && (NF!=n || $1 !~ /^T[0-9]/) {bad=1} END{exit bad}' "$f" \
+    || { echo "pw-stack-state: malformed row(s) in $f (field-count/task-id) → fix: repair via the stack writers; malformed records are rejected before any operation" >&2; return 1; }
+  return 0
+}
+
+# pw_stack_state_upsert <projdir> <task> <col=value>… — create/update one row in place. Column
+# names are validated; an unknown one is a usage error. The assignments travel to awk as a
+# `|`-joined `index:value` list (no embedded newlines — BSD awk rejects -v values with newlines).
+pw_stack_state_upsert() {
+  [ $# -ge 3 ] || { echo "pw_stack_state_upsert: usage: <projdir> <task> <col=value>…" >&2; return 2; }
+  local proj="$1" task="$2"; shift 2
+  pw_task_id_ok "$task" || { echo "pw_stack_state_upsert: invalid task id '$task'" >&2; return 2; }
+  local dir="$proj/task" f; f="$dir/stack.tsv"; mkdir -p "$dir"
+  # Containment: never write through a symlink or outside the project tree. The symlink/version/
+  # row-shape refusal lives in pw_stack_state_validate (called below, before the lock), so reads and
+  # writes share exactly one guard.
+  pw_path_within "$proj" "$f" || { echo "pw_stack_state_upsert: refusing to write outside $proj ($f)" >&2; return 2; }
+  pw_stack_state_validate "$proj" || return 2
+  local assign="" kv col v ci
+  for kv in "$@"; do
+    col="${kv%%=*}"; v="${kv#*=}"
+    ci="$(pw_stack_state_col "$col")" || { echo "pw_stack_state_upsert: unknown column '$col' → fix: see pw-ship.sh --help" >&2; return 2; }
+    _stack_val_bad "$v" && { echo "pw_stack_state_upsert: value for '$col' contains a reserved character (pipe/TAB/newline)" >&2; return 2; }
+    assign="$assign${assign:+|}${ci}:${v}"
+  done
+  local ncol tmp ld="$dir/.stack.tsv.lock"
+  ncol="$(_pw_stack_ncol)"
+  pw_lock "$ld" || { echo "pw_stack_state_upsert: could not acquire $ld (another writer active)" >&2; return 2; }
+  if [ ! -f "$f" ]; then
+    { printf '# pw-stack-state v1 — machine-owned; edit via pw-ship.sh stack-* operators\n'
+      printf '%s\n' "$(printf '%s' "$PW_STACK_COLS" | tr ' ' '\t')"; } > "$f" || { pw_unlock "$ld"; return 2; }
+  fi
+  tmp="$(pw_tmpfile "$dir")"
+  awk -F'\t' -v task="$task" -v ncol="$ncol" -v assigns="$assign" '
+    BEGIN { n = split(assigns, A, "|"); for (i = 1; i <= n; i++) { if (A[i] == "") continue; p = index(A[i], ":"); C[substr(A[i], 1, p - 1)] = substr(A[i], p + 1) } found = 0 }
+    /^#/ { print; next }
+    !hdr { hdr = 1; print; next }
+    {
+      if ($1 == task) { found = 1; for (i = 1; i <= ncol; i++) row[i] = $i }
+      else print
+    }
+    END {
+      row[1] = task
+      for (i in C) row[i + 0] = C[i]
+      line = ""
+      for (i = 1; i <= ncol; i++) line = line (i > 1 ? "\t" : "") (row[i] == "" ? "" : row[i])
+      print line
+    }' "$f" > "$tmp" 2>/dev/null || { rm -f "$tmp"; pw_unlock "$ld"; echo "pw_stack_state_upsert: rewrite failed" >&2; return 2; }
+  if ! awk -F'\t' -v ncol="$ncol" 'NR>1 && NF>0 && NF!=ncol{bad=1} END{exit bad}' "$tmp"; then
+    rm -f "$tmp"; pw_unlock "$ld"; echo "pw_stack_state_upsert: refusing to install a malformed row (field-count mismatch)" >&2; return 2
+  fi
+  mv "$tmp" "$f" || { rm -f "$tmp"; pw_unlock "$ld"; return 2; }
+  pw_unlock "$ld"
+}
+
+# pw_stack_parent_id <projdir> <task> — parent task id from the task file (empty = none).
+pw_stack_parent_id() { pw_stack_parent "$1/task/$2.md"; }
+
+# pw_stack_chain <projdir> <task> — ancestors NEAREST-FIRST (immediate parent first), one per
+# line. Returns non-zero and prints nothing on a cycle.
+pw_stack_chain() {
+  local proj="$1" cur seen=" "
+  cur="$(pw_stack_parent_id "$proj" "$2")"
+  while [ -n "$cur" ]; do
+    case "$seen" in *" $cur "*) return 1 ;; esac
+    seen="$seen$cur "
+    printf '%s\n' "$cur"
+    cur="$(pw_stack_parent_id "$proj" "$cur")"
+  done
+  return 0
+}
+
+# pw_stack_ancestors <projdir> <task> — ancestors ROOT-FIRST (outermost first), one per line.
+pw_stack_ancestors() {
+  local chain; chain="$(pw_stack_chain "$1" "$2")" || return 1
+  [ -n "$chain" ] || return 0
+  printf '%s\n' "$chain" | sed '1!G;h;$!d'
+}
+
+# pw_stack_descendants <projdir> <task> — transitive stack descendants, PARENT-FIRST (BFS), one
+# per line, excluding the task itself. Cycle-safe via a seen set.
+pw_stack_descendants() {
+  local proj="$1" frontier="$2" next out="" seen=" " n f cur
+  while [ -n "$frontier" ]; do
+    next=""
+    for n in $frontier; do
+      for f in "$proj"/task/T*.md; do
+        [ -f "$f" ] || continue
+        cur="$(basename "$f" .md)"
+        [ "$(pw_stack_parent "$f")" = "$n" ] || continue
+        case "$seen" in *" $cur "*) continue ;; esac
+        seen="$seen$cur "; out="$out$cur
+"; next="$next $cur"
+      done
+    done
+    frontier="$next"
+  done
+  [ -n "$out" ] && printf '%s' "$out"
+  return 0
+}
+
+# pw_stack_cycle <projdir> — the id that re-enters a cycle (stack edges only), or empty.
+pw_stack_cycle() {
+  local proj="$1" f cur seen
+  for f in "$proj"/task/T*.md; do
+    [ -f "$f" ] || continue
+    cur="$(basename "$f" .md)"; seen=" "
+    while [ -n "$cur" ]; do
+      case "$seen" in *" $cur "*) printf '%s\n' "$cur"; return 0 ;; esac
+      seen="$seen$cur "
+      cur="$(pw_stack_parent_id "$proj" "$cur")"
+    done
+  done
+  return 1
+}
+
+# pw_stack_effective_target <projdir> <task> <base> — the derived review target: the nearest
+# ancestor that has NOT landed, else the ultimate base. A landed ancestor's recorded destination is
+# honored: a merge into the ultimate base keeps scanning outward, a merge into another OPEN ancestor
+# branch targets that branch, and any other or unverifiable destination FAILS CLOSED (rc 1, no
+# output) so a caller never promotes a child to a base that does not carry the inherited code.
+pw_stack_effective_target() {
+  local proj="$1" base="$3" cur landed li kind dest br a abr alanded
+  local chain; chain="$(pw_stack_chain "$proj" "$2" 2>/dev/null || true)"
+  [ -n "$chain" ] || { printf '%s\n' "$base"; return 0; }
+  while IFS= read -r cur; do
+    [ -n "$cur" ] || continue
+    landed="$(pw_stack_state_get "$proj" "$cur" landed 2>/dev/null || true)"
+    if [ "$landed" != "yes" ]; then
+      br="$(pw_field "$proj/task/$cur.md" Branch 2>/dev/null || true)"
+      br="${br//\`/}"; br="${br%%[[:space:]]*}"
+      [ -n "$br" ] || return 1                 # fail closed: an open ancestor with no Branch
+      printf '%s\n' "$br"; return 0
+    fi
+    li="$(pw_stack_state_get "$proj" "$cur" landed_into 2>/dev/null || true)"
+    kind="${li%%:*}"; dest="${li#*:}"
+    case "$kind" in
+      merge|ff|fast-forward) : ;;
+      *) return 1 ;;                           # squash/rebase/closed/unknown: ancestry unprovable
+    esac
+    [ -n "$dest" ] || return 1
+    if [ "$dest" = "$base" ]; then continue; fi # merged into the ultimate destination; outer ancestor governs
+    a=""
+    for a in $chain; do
+      abr="$(pw_field "$proj/task/$a.md" Branch 2>/dev/null || true)"; abr="${abr//\`/}"; abr="${abr%%[[:space:]]*}"
+      if [ "$abr" = "$dest" ]; then
+        alanded="$(pw_stack_state_get "$proj" "$a" landed 2>/dev/null || true)"
+        [ "$alanded" != "yes" ] && { printf '%s\n' "$dest"; return 0; }
+        a="__landed__"; break
+      fi
+    done
+    [ "$a" = "__landed__" ] && continue
+    return 1                                    # destination is neither the base nor an open ancestor
+  done <<EOF
+$chain
+EOF
+  printf '%s\n' "$base"
+}
+
 pw_task_mr_url() {  # $1 = task file -> MR URL (or sentinel text like `(none)`) scoped to ## Result;
   # empty when there is no Result section or nothing URL-like in it (caller decides the fallback).
   # Resolution order INSIDE the `## Result` block:

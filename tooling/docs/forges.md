@@ -37,6 +37,24 @@ resolved **per repo, from that repo's own `origin` remote**, never assumed globa
 | `gitlab` | `glab` | anything not `github.com` (default), or an exact `PW_FORGE_HOSTS` match | `GITLAB_HOST=<resolved-host> glab mr create` (run from inside the worktree) | **Primary (discovery):** `GITLAB_HOST=<resolved-host> glab api projects/:id/merge_requests/<iid>/notes?sort=desc&order_by=updated_at` — always up-to-date, no indexing lag. **Secondary (reply/resolve only):** `GITLAB_HOST=<resolved-host> glab api projects/:id/merge_requests/<iid>/discussions` — use only when you need a `discussion_id` to reply in-thread or resolve. If the note isn't in `/discussions` yet (lag), reply with a plain top-level note. See "Use `/notes` as the primary source" below. | `GITLAB_HOST=<resolved-host> glab api projects/:id/merge_requests/<iid>/pipelines` → take the newest entry's `id`, then poll `GITLAB_HOST=<resolved-host> glab api projects/:id/pipelines/<id>` for `.status` (see § Build/CI status below) | `<resolved-host>` = `gitlab.com` when auto-detected with no override, or the matched `PW_FORGE_HOSTS` host for a self-hosted instance. **Never hardcode a literal host in a command file** — that's the exact bug this registry fixes. |
 | _`<future>`_ | _`<cli>`_ | _`<host signal>`_ | _`<invocation>`_ | _`<invocation>`_ | _`<invocation>`_ | Maintainer adds a row — no code change needed, but see "Adding a forge" below. |
 
+## Retargeting an MR (base/target change)
+
+Stacked MRs retarget when a parent lands: change the existing MR's target rather than closing and
+recreating it. Both CLIs support an in-place base change — verified against local `--help`:
+
+```bash
+# GitHub (base change; -B is the documented short form)
+gh pr edit <number> --base <branch>
+# GitLab (target-branch change)
+GITLAB_HOST=<resolved-host> glab mr update <iid> --target-branch <branch>
+```
+
+Resolve the forge/CLI per this doc's Registry (never hardcode a host). After retargeting, **re-fetch
+the MR's state/target/head** before recording success, and re-observe the CI for the new target
+context — a same-head result from the old target does not certify the promoted MR. Confirm the
+installed CLI's exact target-update syntax and API behavior before relying on it live; neither local
+`--help` nor the offline shims prove live retargeting, approval retention, or pipeline behavior.
+
 ## Standalone vs diff-anchored comments (both forges — read before writing a fetch-comments step)
 
 > **⚠️ Corrected 2026-08-10.** An earlier version of this section claimed GitLab's `individual_note`

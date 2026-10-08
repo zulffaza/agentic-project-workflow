@@ -186,8 +186,10 @@ fix pass per artifact (not one spawn per comment; N spawns → 1). *Who* runs th
 - **Task artifact, single task, `Route: headless`** → resume-try iff
   `pw-session.sh session-check` reports the recorded `Session:` id live; dead/failed resume →
   **inline fallback** with `resume-failed→inline` + `model-degraded` in the ledger.
-- **Task artifact, ≥2 tasks carrying items** → one fixer **per task, in parallel** (independent
-  worktrees), each routed by the §routing ladder; supervised per its headless rules.
+- **Task artifact, ≥2 tasks carrying items** → one fixer **per task, in parallel** only when the
+  tasks are independent (separate worktrees), each routed by the §routing ladder; supervised per
+  its headless rules. A stacked ancestor and its descendant are **not** independent: fix
+  parent-first and never concurrently (see `execution-and-routing.md`'s stacks bullet).
 - **Doc artifact (analysis / PLAN / task doc — pre-execution)** → the **driver edits inline**,
   review file as the seed. No producer-session resume (that clause retired): the doc is the
   context, the human re-reads the doc anyway.

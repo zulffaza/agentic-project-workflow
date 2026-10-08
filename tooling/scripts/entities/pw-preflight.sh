@@ -213,6 +213,18 @@ case "$COMMAND" in
     if [ -z "$SHIPPABLE" ]; then
       die_fix "no shippable tasks (PLAN task table shows no Status 'done')$([ -n "$NOTDONE" ] && printf ' — not yet done:%s' "$NOTDONE")" "complete the tasks (/pw-execute $SLUG) — 'done' means executed+verified; a pushed-comment sweep uses 'pw-preflight.sh comments $SLUG' instead"
     fi
+
+    # Stacked tasks (plan 35): the topology must be valid, every stacked shippable task must be
+    # freshness-clean, and its parent target must exist before publishing. No-op for legacy
+    # independent projects (no `Stacked on:` edges).
+    STACKROWS="$("$HERE/pw-ship.sh" stack "$SLUG" 2>/dev/null | awk -F'|' 'NR>1 && $1 ~ /^T[0-9]/ {n++} END{print n+0}')"
+    if [ "${STACKROWS:-0}" -gt 0 ]; then
+      "$HERE/pw-ship.sh" stack-validate "$SLUG" >/dev/null 2>&1 \
+        || die_fix "stack topology is invalid" "/pw-ship $SLUG stack previews it, then fix the named 'Stacked on:' / depends_on fields (a stack needs a known same-repo parent in depends_on, one ultimate destination, and distinct branches)"
+      STALE_STACK="$("$HERE/pw-ship.sh" stack "$SLUG" 2>/dev/null | awk -F'|' 'NR>1 && $7=="stale" {print $1}' | tr '\n' ' ')"
+      [ -z "$STALE_STACK" ] \
+        || die_fix "stack task(s) carry stale verification:$STALE_STACK" "re-verify each (merge its updated parent, run '## Verify', push) — a fresh green result cannot reuse an older parent/target tuple; then /pw-ship $SLUG <T0n>"
+    fi
     ;;
 
   comments)
@@ -228,6 +240,11 @@ case "$COMMAND" in
     if [ "$LINKED" -eq 0 ]; then
       die_fix "no task has a linked MR to comment on" "push first: /pw-ship $SLUG (push mode) creates the MRs and records '- **MR:**' in each task file"
     fi
+
+    # A half-finished stack cascade must be resumed, never restarted — its pending-operation rows
+    # gate the sweep so a resumed run cannot duplicate pushes, replies, or inherited updates.
+    [ -f "$D/task/stack-ops.tsv" ] && ! "$HERE/pw-ship.sh" stack-debt "$SLUG" >/dev/null 2>&1 \
+      && die_fix "pending stack operation(s) block a new comment sweep" "/pw-ship $SLUG stack shows the debt; resume it (the recorded stages) before starting a new pass — never replay a cascade from the top"
     ;;
 
   close)
@@ -243,6 +260,15 @@ case "$COMMAND" in
     if [ -n "$UNACCEPTED" ]; then
       die_fix "not all tasks are accepted:$UNACCEPTED" "a human accepts each shipped task — the mechanical way to set all three holders at once is: pw-status.sh task-accept $SLUG <T0n> (task file + PLAN row + dashboard; the decision to accept stays human)"
     fi
+
+    # Close rejects unresolved stack debt: stale verification or a pending promotion/cascade
+    # operation means children are still owed an update (plan 35). Accepted open MRs may remain
+    # open — this guard is about the stack record, not about merging.
+    STALE_CLOSE="$("$HERE/pw-ship.sh" stack "$SLUG" 2>/dev/null | awk -F'|' 'NR>1 && $7=="stale" {print $1}' | tr '\n' ' ')"
+    [ -z "$STALE_CLOSE" ] \
+      || die_fix "stack task(s) still carry freshness debt:$STALE_CLOSE" "/pw-sync $SLUG <T0n> (merge the updated parent, re-verify, push) clears the debt before close"
+    [ -f "$D/task/stack-ops.tsv" ] && ! "$HERE/pw-ship.sh" stack-debt "$SLUG" >/dev/null 2>&1 \
+      && die_fix "unresolved stack operation(s) at close" "/pw-ship $SLUG stack shows the pending stages; finish or record the recovery outcome before close (do not delete stack branches/recovery refs automatically)"
     ;;
 
   review)

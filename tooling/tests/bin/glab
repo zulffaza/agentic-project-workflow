@@ -10,11 +10,19 @@ if [ -n "${PWTEST_HISTORY_FORGE_DIR:-}" ] && { [ "${1:-}" = api ] || { [ "${1:-}
   exec python3 "$(dirname "$0")/forge-history.py" glab "$@"
 fi
 _state_json() {
-  local iid="$1" st="opened" tgt="${PWTEST_MR_TARGET:-master}"
+  local iid="$1" st="opened" tgt="${PWTEST_MR_TARGET:-master}" t hd="dead000f" h
   if [ -n "${PWTEST_FORGE_STATE_FILE:-}" ] && [ -f "$PWTEST_FORGE_STATE_FILE" ]; then
     st="$(awk -v k="$iid" '$1==k{print $2; exit}' "$PWTEST_FORGE_STATE_FILE")"; st="${st:-opened}"
   fi
-  printf '{"iid":"%s","state":"%s","sha":"dead000f","target_branch":"%s","web_url":"https://gitlab.example.com/pwtest/api/-/merge_requests/%s"}\n' "$iid" "$st" "$tgt" "$iid"
+  # Per-MR target map (stack tests): "<iid> <target>" lines override the single default.
+  if [ -n "${PWTEST_MR_TARGETS_FILE:-}" ] && [ -f "$PWTEST_MR_TARGETS_FILE" ]; then
+    t="$(awk -v k="$iid" '$1==k{print $2; exit}' "$PWTEST_MR_TARGETS_FILE")"; [ -n "$t" ] && tgt="$t"
+  fi
+  # Per-MR head map (head-move guard tests): "<iid> <sha>" lines override dead000f.
+  if [ -n "${PWTEST_MR_HEAD_FILE:-}" ] && [ -f "$PWTEST_MR_HEAD_FILE" ]; then
+    h="$(awk -v k="$iid" '$1==k{print $2; exit}' "$PWTEST_MR_HEAD_FILE")"; [ -n "$h" ] && hd="$h"
+  fi
+  printf '{"iid":"%s","state":"%s","sha":"%s","target_branch":"%s","web_url":"https://gitlab.example.com/pwtest/api/-/merge_requests/%s"}\n' "$iid" "$st" "$hd" "$tgt" "$iid"
 }
 case "${1:-}" in
   mr)
@@ -24,6 +32,24 @@ case "${1:-}" in
                 echo "glab-shim: creation returned no URL (forced)" >&2; exit 1; fi
               n=$(( $(cat "${PWTEST_FORGE_STATE_FILE:-/dev/null}" 2>/dev/null | grep -cm 'merge_requests ' ) + 42 ))
               _state_json "$n" ;;
+      update) _iid="$(printf %s "${3:-}" | awk -F/ "{print \$NF}" | tr -dc 0-9)"
+              _tb=""; _prev=""
+              for _a in "$@"; do [ "$_prev" = "--target-branch" ] && _tb="$_a"; _prev="$_a"; done
+              if [ -n "$_tb" ] && [ -n "${PWTEST_MR_TARGETS_FILE:-}" ]; then
+                awk -v k="$_iid" -v b="$_tb" 'BEGIN{done=0} $1==k{print k" "b; done=1; next} {print} END{if(!done) print k" "b}' \
+                  "$PWTEST_MR_TARGETS_FILE" > "$PWTEST_MR_TARGETS_FILE.tmp" 2>/dev/null && mv "$PWTEST_MR_TARGETS_FILE.tmp" "$PWTEST_MR_TARGETS_FILE"
+              fi
+              # Race injection: an external change lands right AFTER our write (readback must catch it).
+              if [ -n "${PWTEST_MR_SABOTAGE_TARGET:-}" ] && [ -n "${PWTEST_MR_TARGETS_FILE:-}" ] && [ -f "$PWTEST_MR_TARGETS_FILE" ]; then
+                awk -v k="$_iid" -v b="$PWTEST_MR_SABOTAGE_TARGET" 'BEGIN{done=0} $1==k{print k" "b; done=1; next} {print} END{if(!done) print k" "b}' \
+                  "$PWTEST_MR_TARGETS_FILE" > "$PWTEST_MR_TARGETS_FILE.tmp" 2>/dev/null && mv "$PWTEST_MR_TARGETS_FILE.tmp" "$PWTEST_MR_TARGETS_FILE"
+              fi
+              # Head-move injection: an external PUSH races the retarget (readback must see it).
+              if [ -n "${PWTEST_MR_HEAD_SABOTAGE:-}" ] && [ -n "${PWTEST_MR_HEAD_FILE:-}" ]; then
+                awk -v k="$_iid" -v b="$PWTEST_MR_HEAD_SABOTAGE" 'BEGIN{done=0} $1==k{print k" "b; done=1; next} {print} END{if(!done) print k" "b}' \
+                  "$PWTEST_MR_HEAD_FILE" > "$PWTEST_MR_HEAD_FILE.tmp" 2>/dev/null && mv "$PWTEST_MR_HEAD_FILE.tmp" "$PWTEST_MR_HEAD_FILE"
+              fi
+              _state_json "${_iid:-${3:-0}}" ;;
       *) printf 'glab-shim: unexpected mr sub: %s\n' "$2" >&2; exit 42 ;;
     esac ;;
   api)

@@ -14,6 +14,10 @@ summary-task pwt-f1-scaffold	pw-doc.sh	summary task pwt-f1-scaffold T01	2	-
 summary-analysis pwt-f1-scaffold	pw-doc.sh	summary analysis pwt-f1-scaffold	2	-
 resolve pwt-f1-scaffold	pw-ship.sh	resolve pwt-f1-scaffold	2	-
 batch pwt-f1-scaffold	pw-ship.sh	mr-state-batch pwt-f1-scaffold	2	-
+stack-preview pwt-f1-scaffold	pw-ship.sh	stack pwt-f1-scaffold	0	-
+stack-validate pwt-f1-scaffold	pw-ship.sh	stack-validate pwt-f1-scaffold	0	-
+stack-plan pwt-f1-scaffold	pw-ship.sh	stack-plan pwt-f1-scaffold	0	-
+stack-report pwt-f1-scaffold	pw-status.sh	stack pwt-f1-scaffold	0	-
 rfc pwt-f1-scaffold	pw-rfc.sh	comments pwt-f1-scaffold	2	-
 adopt pwt-f1-scaffold	pw-context.sh	adopt-snapshot pwt-f1-scaffold api agent/pwt-f1-scaffold/T01-thing	2	-
 help project pwt-f1-scaffold	pw-help.sh	project pwt-f1-scaffold	0	-
@@ -33,6 +37,10 @@ summary-task pwt-f2-mid	pw-doc.sh	summary task pwt-f2-mid T01	0	-
 summary-analysis pwt-f2-mid	pw-doc.sh	summary analysis pwt-f2-mid	2	-
 resolve pwt-f2-mid	pw-ship.sh	resolve pwt-f2-mid	0	-
 batch pwt-f2-mid	pw-ship.sh	mr-state-batch pwt-f2-mid	0	-
+stack-preview pwt-f2-mid	pw-ship.sh	stack pwt-f2-mid	0	-
+stack-validate pwt-f2-mid	pw-ship.sh	stack-validate pwt-f2-mid	0	-
+stack-plan pwt-f2-mid	pw-ship.sh	stack-plan pwt-f2-mid	0	-
+stack-report pwt-f2-mid	pw-status.sh	stack pwt-f2-mid	0	-
 rfc pwt-f2-mid	pw-rfc.sh	comments pwt-f2-mid	2	-
 adopt pwt-f2-mid	pw-context.sh	adopt-snapshot pwt-f2-mid api agent/pwt-f2-mid/T01-thing	0	-
 help project pwt-f2-mid	pw-help.sh	project pwt-f2-mid	0	-
@@ -52,6 +60,10 @@ summary-task pwt-f3-hostile	pw-doc.sh	summary task pwt-f3-hostile T01	0	-
 summary-analysis pwt-f3-hostile	pw-doc.sh	summary analysis pwt-f3-hostile	2	-
 resolve pwt-f3-hostile	pw-ship.sh	resolve pwt-f3-hostile	0	-
 batch pwt-f3-hostile	pw-ship.sh	mr-state-batch pwt-f3-hostile	0	-
+stack-preview pwt-f3-hostile	pw-ship.sh	stack pwt-f3-hostile	0	-
+stack-validate pwt-f3-hostile	pw-ship.sh	stack-validate pwt-f3-hostile	0	-
+stack-plan pwt-f3-hostile	pw-ship.sh	stack-plan pwt-f3-hostile	0	-
+stack-report pwt-f3-hostile	pw-status.sh	stack pwt-f3-hostile	0	-
 rfc pwt-f3-hostile	pw-rfc.sh	comments pwt-f3-hostile	2	-
 adopt pwt-f3-hostile	pw-context.sh	adopt-snapshot pwt-f3-hostile api agent/pwt-f3-hostile/T01-thing	0	-
 help project pwt-f3-hostile	pw-help.sh	project pwt-f3-hostile	0	-

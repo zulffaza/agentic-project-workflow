@@ -11,6 +11,8 @@
 #   adopted <slug> <text...> · phase <slug> · dashboard-task-status <slug> <task-id> <status>
 #   task-accept <slug> <task-id>   (one call sets all three acceptance holders: task file +
 #                                   PLAN row + dashboard row; best-effort dashboard; one LOG line)
+#   stack <slug>   read-only stacked-MR topology/health report (parent|target|landed|freshness
+#                  per stack task, plus stale/pending counts); "no stacks" for legacy projects.
 #
 #   provider-audit <slug> [task-ids…]
 #       REPORT-ONLY consistency audit of `Execute with:` rows vs. what actually ran:
@@ -351,6 +353,22 @@ EOF
   [ "$bad" = 0 ]
 }
 
+# stack <slug> — read-only stack report (plan 35): the topology/health rows from the ship entity
+# plus stale/debt counts. No stacks = legacy independent behavior. Mutates nothing.
+cmd_stack() {
+  [ $# -eq 1 ] || die "usage: stack <slug>"
+  local slug="$1" d; d="$(proj_dir "$slug")"
+  local rows; rows="$("$HERE/pw-ship.sh" stack "$slug" 2>/dev/null || true)"
+  local n; n="$(printf '%s\n' "$rows" | awk -F'|' 'NR>1 && $1 ~ /^T[0-9]/ {c++} END{print c+0}')"
+  if [ "${n:-0}" -eq 0 ]; then echo "$slug: no stacks (legacy independent behavior)"; return 0; fi
+  printf '%s\n' "$rows"
+  local stale unv debt
+  stale="$(printf '%s\n' "$rows" | awk -F'|' '$7=="stale" {c++} END{print c+0}')"
+  unv="$(printf '%s\n' "$rows" | awk -F'|' '$7=="unverified" {c++} END{print c+0}')"
+  debt="$(printf '%s\n' "$rows" | awk -F'|' '$8+0 > 0 {c++} END{print c+0}')"
+  echo "stacks: ${n} task(s), ${stale} stale, ${unv} unverified (not started), ${debt} with pending operations"
+}
+
 case "${1:-}" in
   log)                   shift; cmd_log "$@"; exit $? ;;
   status)                shift; cmd_status "$@"; exit $? ;;
@@ -360,6 +378,7 @@ case "${1:-}" in
   dashboard-task-status) shift; cmd_dashboard_task_status "$@"; exit $? ;;
   task-accept)           shift; cmd_task_accept "$@"; exit $? ;;
   provider-audit)        shift; cmd_provider_audit "$@"; exit $? ;;
+  stack)                 shift; cmd_stack "$@"; exit $? ;;
 esac
 
 SKIP_CLI_CHECK=0

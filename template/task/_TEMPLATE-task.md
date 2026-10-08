@@ -14,6 +14,13 @@
 - **Branch:** `agent/<project-slug>/<T0n>-<slug>`
 - **Worktree:** `worktree/<repo>/<T0n>-<slug>/`
 - **depends_on:** <T-ids or none>
+<!-- Stacked on: OPTIONAL — the immediate PARENT TASK this branch inherits code from (a same-repo
+     code dependency), or `none` for an independent task. `depends_on` stays the full execution
+     prerequisite set; `Stacked on` is the one branch-inheritance edge and must be a member of it.
+     Set it only when this task needs the parent's committed code (not merely its completion), and
+     only after the parent's verified commit exists. `Base branch:` keeps the ULTIMATE destination;
+     do NOT replace it with the transient parent branch — the effective review target is derived. -->
+- **Stacked on:** <T-id or none>
 - **Parallel group:** <Gn or none>
 <!-- Landing unit: OPTIONAL — only when this task's MR must merge as a set with other tasks'
      MRs (one logical change split by repo, not independently shippable). Every task in the set

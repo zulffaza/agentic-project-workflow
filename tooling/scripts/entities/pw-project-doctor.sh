@@ -372,6 +372,84 @@ if not missing and not cycle:
   fi
 fi
 
+# --- C13: stacked-MR topology + state (plan 35) -----------------------------------
+# The `Stacked on:` field is authoritative; its PLAN `Stacked on` cell is a mirror the owning
+# writer reconciles. A stack must be a same-repo, single-destination, acyclic tree; its ship-owned
+# state file must be well-formed. Freshness/pending debt is a live-work warning (·), never a
+# release blocker here — the ship/sync/close gates enforce it.
+stacks_present=0
+if ls "$D"/task/T*.md >/dev/null 2>&1; then
+  for f in "$D"/task/T*.md; do
+    [ -f "$f" ] || continue
+    [ -n "$(pw_stack_parent "$f")" ] && { stacks_present=1; break; }
+  done
+fi
+if [ "$stacks_present" = 1 ]; then
+  if sv_out="$("$HERE/pw-ship.sh" stack-validate "$SLUG" 2>&1)"; then
+    ok "stack topology valid (same-repo parents, single destination, acyclic, depends_on present)"
+  else
+    bad "stack topology invalid: $(printf '%s' "$sv_out" | head -1)"
+    echo "      → fix: /pw-ship $SLUG stack previews the inferred edges, then fix the named 'Stacked on:' / depends_on fields"
+  fi
+  # field ↔ PLAN mirror agreement (PLAN column absent on legacy projects = tolerated)
+  if [ -f "$PLAN" ] && [ -n "$(pw_plan_stacked "$PLAN")" ]; then
+    _pstack_map="$(mktemp)"; pw_plan_stacked "$PLAN" > "$_pstack_map"
+    mir=""
+    for f in "$D"/task/T*.md; do
+      [ -f "$f" ] || continue
+      mt="$(basename "$f" .md)"; fv="$(pw_stack_parent "$f")"
+      pv="$(awk -F'|' -v id="$mt" '$1==id{v=$2} END{print v}' "$_pstack_map")"
+      pv="$(printf '%s' "$pv" | pw_trim)"; case "$pv" in —|-) pv="" ;; esac
+      [ "$fv" = "$pv" ] || mir="$mir$mt(field=${fv:-—},plan=${pv:-—}) "
+    done
+    rm -f "$_pstack_map"
+    if [ -n "${mir// /}" ]; then
+      if [ "$FIX" = 1 ]; then
+        for f in "$D"/task/T*.md; do
+          [ -f "$f" ] || continue
+          mt="$(basename "$f" .md)"; fv="$(pw_stack_parent "$f")"
+          _plan_cell_update "$PLAN" "$mt" stackedon "${fv:-—}" >/dev/null 2>&1 || true
+        done
+        # re-measure — a repair must not leave a stale ✗ behind
+        _pstack_map="$(mktemp)"; pw_plan_stacked "$PLAN" > "$_pstack_map"; mir2=""
+        for f in "$D"/task/T*.md; do
+          [ -f "$f" ] || continue
+          mt="$(basename "$f" .md)"; fv="$(pw_stack_parent "$f")"
+          pv="$(awk -F'|' -v id="$mt" '$1==id{v=$2} END{print v}' "$_pstack_map")"
+          pv="$(printf '%s' "$pv" | pw_trim)"; case "$pv" in —|-) pv="" ;; esac
+          [ "$fv" = "$pv" ] || mir2="$mir2$mt "
+        done
+        rm -f "$_pstack_map"
+        if [ -z "${mir2// /}" ]; then fixed "PLAN 'Stacked on' cells re-synced from the task fields"
+        else bad "PLAN 'Stacked on' mirror still disagrees after --fix: $mir2"; fi
+      else
+        bad "PLAN 'Stacked on' mirror disagrees with the task fields: $mir"
+        echo "      → fix: /pw-doctor --project $SLUG --fix re-syncs the PLAN cell from the task field"
+      fi
+    else
+      ok "PLAN 'Stacked on' column mirrors the task fields"
+    fi
+  fi
+  # state file well-formed
+  SF="$D/task/stack.tsv"
+  if [ -f "$SF" ]; then
+    exp="$(_pw_stack_ncol)"
+    hdr="$(awk -F'\t' '!/^#/ && !h {print; exit}' "$SF")"
+    ncols="$(printf '%s' "$hdr" | awk -F'\t' '{print NF}')"
+    if [ "$ncols" != "$exp" ]; then
+      bad "task/stack.tsv header has $ncols columns (expected $exp) — a hand-edited or stale state file"
+      echo "      → fix: /pw-ship $SLUG stack and re-record the affected rows; never hand-edit the state file"
+    else
+      ok "stack state file is well-formed ($exp columns)"
+    fi
+  fi
+  stale_n="$("$HERE/pw-ship.sh" stack "$SLUG" 2>/dev/null | awk -F'|' '$7=="stale" {c++} END{print c+0}')"
+  [ "${stale_n:-0}" -gt 0 ] && note "$stale_n stack task(s) carry freshness debt — clear it with /pw-sync before shipping or closing"
+  if [ -f "$D/task/stack-ops.tsv" ] && ! "$HERE/pw-ship.sh" stack-debt "$SLUG" >/dev/null 2>&1; then
+    note "pending stack operation(s) recorded — resume them (/pw-ship $SLUG stack) before outward work"
+  fi
+fi
+
 # --- C6: config validity + sync with the CURRENT global config --------------------
 echo "[4/8] Configuration"
 # dashboard lines: present + legal (explicit-line doctrine: absence is a defect, not silence)

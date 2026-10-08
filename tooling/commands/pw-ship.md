@@ -44,6 +44,38 @@ Publishing is **outward-facing** — this is the explicit "make it public" step,
 `/pw-execute` so nothing pushes until you run it. `/pw-execute` already committed + verified each
 task; here we push branches and open MRs.
 
+## Stacked MRs
+
+Some tasks **inherit code** from another task in the same repository: the task file carries
+`Stacked on: <parent-task>` (with PLAN's `Stacked on` column as a mirror). Its branch forked the
+parent's verified commit, so its MR targets the **parent's branch**, not the ultimate base, until
+the parent lands. `depends_on` stays the full prerequisite set; `Stacked on` is the one
+branch-inheritance edge (a scheduling dependency alone is not a stack).
+
+Two read-only/import operators on this command (no new user script):
+
+```bash
+{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack <slug>          # topology + health preview
+{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-plan <slug> [task-ids…]   # root-first ship plan
+{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-adopt <slug> [task-ids…]  # dry-run
+{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-adopt <slug> --apply [task-ids…]
+```
+
+- `/pw-ship <slug> stack` is the **read-only topology and health preview** (parent, effective
+  target, branch, base, landed, freshness, pending operations). It writes nothing.
+- `/pw-ship <slug> stack adopt [task-ids]` imports an **existing** manually stacked set: preview
+  first (no writes), then a confirmation re-run with `--apply`. It reads each open MR's actual
+  target branch and records an edge only when the target provably matches another task's branch;
+  when fork boundaries or inherited commits cannot be proven it retains ambiguity and blocks
+  automatic restacking. If importing would change the approved dependency graph, re-run
+  `/pw-breakdown` and get PLAN re-approved before dependent execution or publication. Fresh,
+  approved stacks need **no** adopt call.
+- **Parent-first:** publish each MR against its **effective target** (nearest unmerged ancestor's
+  branch, else the ultimate base). A parent's target branch must exist remotely at its verified
+  head before a child's MR is created; `pw-ship.sh exec` refuses otherwise. An explicit child
+  selection does not silently publish unpublished ancestors — show the added ancestors and get
+  confirmation; if declined, report the child blocked. Never open an MR for a zero-change parent.
+
 ## Ship mode (default)
 1. **Task-format gate, then candidates.** First
    `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint task <slug> --all || exit 1` — push mechanics read exactly
@@ -78,7 +110,10 @@ task; here we push branches and open MRs.
 3. For each confirmed task, from its worktree
    (`{{PW_PROJECTS}}/<slug>/worktree/<repo>/<T0n>-<slug>`):
    - Push the branch to origin.
-    - Open an MR **targeting the task's Base branch** with a rich description (template below), title
+    - Open an MR **targeting the task's effective target** (`pw-ship.sh stack` prints it): the
+      **Base branch** for an independent task, or the **parent's verified-head branch** for a
+      stacked task (that branch must already exist on origin; `pw-ship.sh exec` refuses otherwise),
+      with a rich description (template below), title
       per the ticket convention above. **Resolve the forge + CLI per `tooling/docs/forges.md`** (host
       from this repo's own `origin` remote → `PW_FORGE_HOSTS` override, else auto-detect) — GitLab:
       `glab` run from inside the worktree with `GITLAB_HOST=<resolved-host>`; GitHub: `gh pr create`.
@@ -129,6 +164,9 @@ counts, etc. Note any pre-existing/environmental failures and that they reproduc
 - **What to review first:** <the 1–2 riskiest spots to eyeball>
 - **Landing unit:** <only if this MR must merge as part of a set — the unit name + sibling MRs, so
   reviewers review them together and don't mistake an interdependent MR for an independent one>
+- **Stacked on:** <only for a stacked task — the immediate parent MR (!n / URL), the ultimate
+  destination after ancestors land, and the direct child MR(s) when known; show the root-first
+  merge order, e.g. "T02 !1 → master; T03 !2 targets T02; merge order T02, T03">
 
 <!-- pw-mr-summary:end -->
 ```
@@ -136,10 +174,16 @@ Keep the five headings exact and ordered. Notes for the reviewer belongs inside 
 Do not create an empty Review changes section on initial shipment. `exec` verifies and stores
 the marked creation body's ownership snapshot after readback; a snapshot failure is partial delivery,
 even if MR creation succeeded. Preserve its source file for recovery.
+For a stacked task, derive **High-level/Low-level changes** and the reviewer diff against the
+**effective parent target**, not the ultimate destination (`git diff origin/<parent-branch>...<branch>`),
+so the reviewer sees only this task's own changes. When a child MR URL becomes available, update the
+parent MR's navigation (its description) to name the child, preserving reviewer-authored text.
 Fill every section from the task file + its `## Result` + the actual diff — don't ship a bare
 "updates X" description. Derive **High-level changes** from the task's goal/intent (behavioral,
 no paths — that forces real abstraction); derive **Low-level changes** by diffing the branch against
-its base (`git diff origin/<base>...<branch>`), grouped per file/module with real identifiers.
+its **effective target**: the base (`git diff origin/<base>...<branch>`) for an independent task, or
+the parent's target (`git diff origin/<parent-branch>...<branch>`) for a **stacked** task, so the
+reviewer sees only this task's own changes. Group per file/module with real identifiers.
 
 ## MR-comment mode  (`/pw-ship <slug> [task-ids] comments`)
 ### Invocation and pending delivery
@@ -205,7 +249,7 @@ run per comment. And when a fix *lands* on a task whose dependents
 already ran, apply the **§3.6 fan** exactly once: merge the fixed branch → re-run each already-run
 dependent's own `## Verify` (clean → stays `done`; conflict/regression → that dependent's own flip,
 driver-side) + ≤1 `dep-impact:T0n` review-style pass where their files/landing units actually
-overlap — filed as items for the dependent's batch, never a direct edit into it. **Scope:** with task IDs, only those; **with no
+overlap — filed as items for the dependent's batch, never a direct edit into it. **Scope:** with task IDs, only those, plus (for a selected **stacked** task) its transitive stack descendants, per the cascade section below; **with no
 task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, state open) — so
 `/pw-ship <slug> comments` clears review comments across all of the project's MRs in one run.
 
@@ -223,8 +267,13 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
          PLAN task-table cell the close gate reads, and the dashboard task row; the dashboard is
          best-effort): `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh task-accept <slug> <task-id>`
       2. Update dashboard MR table: `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh dashboard-mr-state <slug> <task-id> merged`
-      3. Remove worktree: `{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh remove <slug> <task-id>`
-      4. **Skip this task** — do NOT attempt to fetch/process comments.
+      3. If the task is **stacked** or a stacked **parent**, settle the stack before removing
+         anything: record its landing (`stack-land`) and each open child's promotion debt
+         (`stack-promote`), per "Comment fixes on a stack (cascade)" below. The recovery refs and
+         child debt must exist **before** the removal in the next step. An independent task skips
+         this.
+      4. Remove worktree: `{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh remove <slug> <task-id>`
+      5. **Skip this task** — do NOT attempt to fetch/process comments.
    - **If `closed`**: The MR was closed without merging. Note it in the recap and skip.
    - **If `open`**: Proceed with comment processing (steps 1–3).
    - **If it prints `unknown`** (no MR URL/worktree/origin, or the forge query failed or returned
@@ -280,7 +329,9 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      — but that auto-resolve does **not** happen for a resolvable *general* (no diff position)
      thread, so don't assume pushing a fix closed it out; you must explicitly resolve it (below).
     - A task whose MR has no open/unrecorded threads is skipped only after pending-description
-      recovery and any newly observed matching-head verification evidence (note it in the recap).
+      recovery and any newly observed matching-head verification evidence (note it in the recap),
+      **unless** it is a stacked descendant pulled in by the cascade: its inherited code changed, so
+      it still gets its inherited update and its own `## Verify` (see the cascade section below).
 2. **One fixer pass per distinct MR, not per comment or shared-branch task:** apply all open
     thread fixes once in that MR's shared **worktree**, re-run its `## Verify` once for the batch, and
     push. For tasks sharing one MR, use the union of their comment-tracking tables, reply once per
@@ -289,8 +340,10 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
     their recorded pins; never edit the shared branch concurrently or invent a replacement pin.
     Aggregate all such passes under the same invocation/MR attempt.
     Fan-out per the ladder: **≥2 distinct MRs with open threads → one fixer per MR, run in
-   parallel** (independent worktrees; each routed by the ladder — same provider → in-process
-    sub-agent, `Route: headless`/cross-provider → supervised headless); **exactly one MR, same
+   parallel only when they are independent** (independent worktrees; each routed by the ladder —
+    same provider → in-process sub-agent, `Route: headless`/cross-provider → supervised headless).
+    A stacked ancestor and its descendant are **never** fixed concurrently, and run parent-first
+    per the cascade section below; **exactly one MR, same
    provider, `Route: auto|subagent` → you fix it inline** (bounded exception to the no-source-edit
    rule: listed items only, run its `## Verify`, commit, reply per item); `Route: headless` single
    task → resume-try iff `pw-session.sh session-check <slug> <task-id>` exits 0, dead/failed →
@@ -344,6 +397,64 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
 Process the set **serially by default** (each is a real edit-verify-push in a worktree); parallelize
 only independent repos if you're confident. Never merge an MR as part of this command — merging is a
 human decision downstream.
+
+### Comment fixes on a stack (cascade)
+
+When a selected task is stacked (or has stacked descendants), an upstream fix must reach **every
+affected descendant** with fresh verification and an explicit publication result:
+
+- Selecting `A` expands to A's transitive stack descendants (`pw-ship.sh stack`/`stack-plan` show
+  the set and order). Descendant MRs with **no comments** are still updated — inherited code changed.
+- **Order is parent-first.** Fix and settle `A` first (batch its comments, run its `## Verify`, bind
+  it with `pw-ship.sh stack-verify <slug> A <captured-verify-output>`), then drive the mechanical
+  propagation with the deterministic operator (one per invocation):
+  `pw-ship.sh stack-cascade <slug> A --verify-cmd '<descendant Verify command>' [--evidence-dir <dir>] [--push]`.
+  It walks descendants root-first and, per descendant, integrates the immediate parent's recorded
+  verified head (normal merge; no merge when already contained), runs your Verify command, binds the
+  tuple through `stack-verify --head`, records the inherited update, and — only with `--push` (the
+  publication authorization) — normal-pushes already-shipped MRs. An **unstarted** descendant (its
+  branch exists nowhere) is recorded with the new prerequisite head and every stage is skipped
+  (terminal): no branch, worktree, push, or Verify is created for it, and independent siblings still
+  run. An existing branch without a mounted worktree is integrated in a rehydrated worktree at the
+  approved task-worktree location — the shared clone's checkout is never touched. Fixes stay with the
+  fixer ladder: run each descendant's comment batch before its Verify. Coalesce all known upstream
+  changes into **one** descendant update for the invocation. Never run concurrent ancestor and
+  descendant fixers; independent stack components and settled siblings may run in parallel.
+- **Publication is separate from fixing.** Already-run unpublished descendants get local integration
+  and verification but stay unpublished unless separately selected and authorized. Unstarted
+  descendants just record the new prerequisite head and consume it at spawn.
+- **Reply only where a reviewer asked.** Post the outcome on A's original threads; do **not**
+  fabricate replies on descendants that received only inherited updates. `stack-cascade` records the
+  inherited update deterministically (`stack-inherited`: a `- **Inherited:**` bullet + LOG line with
+  the upstream commit); no reviewer-comment text is invented. Refresh each shipped descendant's MR
+  description through the `history` protocol as an inherited-update round (never a fake reviewer
+  request), and keep its `describe` stage pending until that delivery lands.
+- **Before outward writes**, show the selected comment tasks, affected descendants, publication
+  actions, and blocked ancestors. If expanded publication lacks approval, run without `--push`: the
+  pending push/describe stages keep the stack blocked and the run reports it incomplete.
+
+**Failure and freshness:** if A fails verification, do not publish or advance descendants. If a
+child conflicts, `stack-cascade` aborts that merge and blocks that child's subtree (independent
+stacks continue). If a child fails verification, keep its local commit, do not push, and block later
+descendants. A descendant whose recorded tuple no longer covers its current head, parent, or target
+is **stale** automatically (`stack`/`stack-plan` derive this from live Git); `pw-ship.sh stack-stale`
+forces the flag when a local change has not yet been re-verified. A never-started descendant (no
+tuple, no branch, still todo) reads **unverified** in the read-only preview — it must bind before
+its own publication, but it never blocks an ancestor's incremental ship; a done/accepted task
+without its binding is stale, not unverified, and always blocks. Stale debt blocks execution,
+shipping, acceptance consumption, and close readiness until `stack-verify` re-binds the tuple —
+`stack-verify` writes the whole tuple (including the CI disposition) in one atomic record write, so a
+half-written binding cannot certify anything. Bind CI explicitly with
+`--ci-sha <sha|skipped|pending>`: an old-target or old-head green never carries across a retarget,
+and `failed` blocks until replaced. A merged parent promotes its children only when the promotion
+target is published on the freshly fetched origin; move the MR base with `stack-retarget --apply`,
+which writes its pending recovery row first, verifies state/target/head before and after the forge
+write, and resumes without a duplicate write when a previous attempt published remotely but failed
+locally. Every cascade persists stages (`stack-op`) keyed by the upstream commit, so a rerun
+**resumes** pending stages instead of duplicating merges, pushes, replies, or inherited-update
+records; a pending `retarget:<task>` row is resumed before any noop shortcut, and the description
+(`describe`) stage clears only after the history delivery is done
+(`stack-op set <key> '<T0n>:describe=done'`).
 
 ## Build check (on by default — `--skip-build-check` to opt out, either mode)
 Runs automatically, in both modes: after the MR is opened/updated (ship mode) or after each fix is

@@ -245,6 +245,39 @@ static_t4() {
     || pwtest_bad "T4 D-rules/backlog" "conventions.md lost its D-rules section, tooling/docs/known-issues.md is missing or lost its tooling/README.md link, or the backlog lost its TROUBLESHOOTING routing row"
 
 
+  # (k) stacked-policy branches at the ship/sync decision points: the canonical command prose must
+  # carry the stacked branch where the old wording was independent-only (selection, target, diff,
+  # merged-parent settle-before-remove, no-comment cascade, fixer ordering) — a regression there
+  # would re-describe policy the scripts no longer follow.
+  grep -qF 'transitive stack descendants' "$TOOL/commands/pw-ship.md" \
+    && grep -qF 'effective target' "$TOOL/commands/pw-ship.md" \
+    && grep -qF 'never** fixed concurrently' "$TOOL/commands/pw-ship.md" \
+    && grep -qF 'transitive stack descendants' "$TOOL/commands/pw-sync.md" \
+    && grep -qF 'settle the stack before removing' "$TOOL/commands/pw-sync.md" \
+    && grep -qF 'effective target' "$TOOL/commands/pw-sync.md" \
+    && grep -qF 'never concurrently' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
+    && pwtest_ok "T4 canary: ship/sync commands carry the stacked-policy branches" \
+    || pwtest_bad "T4 canary: ship/sync stacked-policy branches" "a stacked branch died from pw-ship.md/pw-sync.md or the routing ladder — the command prose fell back to independent-only instructions the scripts no longer match"
+
+  # (l) the commands bind verification/landing through the deterministic operators: stack-verify is
+  # the only verification writer the execution path names, promotion uses stack-retarget, and no
+  # command asks the generic stack-record to certify a verified_head.
+  grep -qF 'stack-verify <slug> <T0n>' "$TOOL/commands/pw-execute.md" \
+    && grep -qF 'stack-retarget' "$TOOL/commands/pw-sync.md" \
+    && ! grep -qE 'stack-record [^`]*verified_head=' "$TOOL/commands/pw-execute.md" \
+    && pwtest_ok "T4 canary: commands bind verification via stack-verify and promote via stack-retarget" \
+    || pwtest_bad "T4 canary: stack verification wiring" "pw-execute.md must call stack-verify (not stack-record verified_head=) and pw-sync.md must call stack-retarget"
+
+  # (m) the cascade/history interop stays wired in prose: the command protocol names the
+  # deterministic cascade + inherited-update writers (descendants update without fabricated
+  # reviewer requests, as a distinct inherited round) and the maintainer doc lists the cascade.
+  grep -qF 'stack-cascade' "$TOOL/commands/pw-ship.md" \
+    && grep -qF 'stack-inherited' "$TOOL/commands/pw-ship.md" \
+    && grep -qF 'inherited-update round' "$TOOL/commands/pw-ship.md" \
+    && grep -qF 'stack-cascade' "$TOOL/docs/scripts/ship-and-sync.md" \
+    && pwtest_ok "T4 canary: stack cascade + inherited-update writers named in command and maintainer docs" \
+    || pwtest_bad "T4 canary: stack cascade wiring" "pw-ship.md must name stack-cascade/stack-inherited (distinct inherited-update round) and ship-and-sync.md must list stack-cascade"
+
   # 5) shared plumbing used, not reinvented
   for f in $PWTEST_AUTOMATION; do
     grep -q 'pw-common\.sh' "$(pwtest_script "$f")" && pwtest_ok "T4: $f sources pw-common" || pwtest_bad "T4: $f sources pw-common" "P2 violation (readers re-implemented)"
