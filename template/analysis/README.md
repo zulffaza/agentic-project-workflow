@@ -16,6 +16,15 @@ approved **before** any task breakdown. Files starting with `_` are templates, n
 **Review:** feedback lives in `review/<topic>.review.md` (a `review/` subdir here, from
 `../_REVIEW.template.md`), not inline — the agent rewrites this doc when applying fixes. The agent
 reads the review file first, replies with `↳ agent:` and flips `[OPEN]`→`[RESOLVED]`, and never edits your comment
-text. Only you approve: agents may record attributed `in-review`/`changes-requested` bookkeeping
-rows as your feedback queues a cycle, but an `approved` row stays yours (guarded AI `auto` mode
-aside). See `../README.md` → "Review & feedback".
+text. Only you approve (guarded AI `auto` mode aside). See `../README.md` → "Review & feedback".
+
+**Common actions**
+
+| You want to… | Use |
+|---|---|
+| Start a review for this doc | `/pw-review <slug> init analysis/<topic>.md` |
+| Add feedback | `/pw-review <slug> item analysis/review/<topic>.review.md §<section> <your comment>` |
+| Answer the agent's questions | `/pw-review <slug> answer analysis/review/<topic>.review.md Q<n> <your answer>` |
+| Have the agent apply approved fixes | `/pw-review <slug> analysis/review/<topic>.review.md` |
+| Ask for an independent AI pass | `/pw-review <slug> ai analysis` |
+| Approve (human-only) | `/pw-review <slug> signoff analysis/review/<topic>.review.md approved` |

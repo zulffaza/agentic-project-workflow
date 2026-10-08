@@ -92,8 +92,14 @@ recipe rule, watchdog, fixture-pollution etiquette: clone `$F2`, never mutate it
 - User-facing docs live at the bundle root `docs/` + `../README.md` + `../AGENTS.md` — they describe
   behavior, never mechanics: the automation scripts (tooling/tests/static.sh registry) must not be
   named there (T4 greps; the one
-  allowed human reference is the `pw-env.sh`/`pw-doctor.sh`-level convenience and the entity scripts for
-  state edits where docs/REVIEW.md already names it).
+  allowed human reference is the `pw-env.sh`/`pw-doctor.sh`-level convenience).
+- **Command-only user guidance (owner policy):** project operations are stated as `/pw-*` commands
+  in user docs, templates, generated headers, and the fix hints users see — a plain entity-script
+  name or path is not a user instruction, including hidden template comments an agent may relay.
+  Internal script calls stay in agent-facing instructions (command files, agents, skill) and
+  maintainer docs; `docs/TOOLING.md` pins where the machinery lives, not how to operate it.
+  The T4 boundary greps cover templates, rendered-output cases, and the TOOLING deep-link guard —
+  keep them biting when you touch guidance.
 - Internal plan numbers / session history never appear in shipped files (T4 greps).
 - T3 corpus results: never commit real project slugs; waivers stay in `~/.pw/test-issues.tsv`.
 

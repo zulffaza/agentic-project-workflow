@@ -166,8 +166,34 @@ decision hints are phrased for the **user surface**: `/pw-*` commands or the hum
 `pw.config.sh`, never raw script paths (a T4 canary greps the hint literals to prove it).
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-project-doctor.sh <slug> [--fix]
+$PW_HOME/tooling/scripts/entities/pw-project-doctor.sh <slug> [--fix | --guidance [--apply]]
 ```
+
+### --guidance: scoped workflow-guidance prose repair
+
+Separate from the health walk (the two never run together; `--guidance --fix` refuses). Older
+projects carry workflow-authored guidance naming internal scripts where a `/pw-*` command exists
+(early templates taught manual file copying; generated headers named their maintaining script).
+A fixed rule table maps each known leak to its command-only replacement:
+
+- **Preview (default):** prints each rule's target file, match count, and the exact old→new hunk;
+  skips rules whose old text is absent (already repaired), customized (changed by a human), or
+  whose file is not present. **Writes nothing.**
+- **`--apply`:** re-reads every target immediately before writing and replaces all exact
+  occurrences of the old text via tmp-file + atomic rename — bytes outside the matched fragments
+  are preserved verbatim (provenance rows, review items/sign-off history, custom sections, MR
+  comment-tracking tables, `task/stack.tsv` / `stack-ops.tsv` / landing records / verification
+  bindings are never touched). Idempotent: a second apply reports nothing to repair.
+- Targets are allowlisted project-relative paths (context/README, context/INDEX, analysis/README,
+  PROJECT.md, rfc/README, rfc/META, ADOPTED.md, task/PLAN.md, task/review/*.review.md,
+  task/review/*.archive.md); a rule outside the allowlist refuses the run. Symlinked targets are
+  refused. No forge access, no stack operations, no phase reads, no health-walk writers.
+- `--apply` is the operator's explicit request for that project (the `/pw-doctor` command doc
+  tells the agent to ask first); the preview is safe anywhere.
+
+Old-guidance bytes in the rule table must stay byte-exact with what the retired templates and
+generators wrote — if a leak class changes shape, add the new shape as a rule rather than
+loosening matching.
 
 Output is grouped in 8 human-labelled sections (internal IDs stay stable in the script header):
 

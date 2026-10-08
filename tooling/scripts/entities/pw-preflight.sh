@@ -43,7 +43,7 @@ die_fix() {
   if [ $# -ge 2 ] && [ -n "$2" ]; then echo "  → fix: $2" >&2; fi
   exit 1
 }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die_fix "no such project: $1 ($d)" "check the slug under $PROJECTS_DIR (scaffold a new one with: scaffold.sh $1)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die_fix "no such project: $1 ($d)" "check the slug under $PROJECTS_DIR (scaffold a new one with: /pw-new $1)"; printf '%s' "$d"; }
 
 # _gate_review_approved <review-rel-path> — the approval gate a phase-consuming
 # command needs, via the shared mdlib file readers (this script never re-implements a
@@ -75,11 +75,11 @@ PHASE_RAW="$("$HERE/pw-status.sh" phase "$SLUG" 2>/dev/null || true)"
 PHASE="$(pw_phase_token "${PHASE_RAW:-missing}")"
 PHASE_FIX=""
 case "$COMMAND" in
-  analyze) PHASE_FIX="if you are (re-)analyzing a project that moved on: pw-status.sh status $SLUG analysis --rewind" ;;
-  ship) PHASE_FIX="finish execution first (each task '- **Status:** done'), or if the project IS further along: pw-status.sh status $SLUG <phase>" ;;
-  execute) PHASE_FIX="set the phase with: pw-status.sh status $SLUG executing (or run /pw-breakdown to create the PLAN)" ;;
-  breakdown) PHASE_FIX="get to an analysis/breakdown phase first (/pw-analyze), or pw-status.sh status $SLUG breakdown" ;;
-  close) PHASE_FIX="close runs after acceptance (/pw-ship handles MRs; accepted tasks then pw-status.sh status $SLUG done)" ;;
+  analyze) PHASE_FIX="if you are (re-)analyzing a project that moved on: /pw-status $SLUG rewind analysis" ;;
+  ship) PHASE_FIX="finish execution first (each task '- **Status:** done'), or if the project IS further along: /pw-status $SLUG rewind <phase>" ;;
+  execute) PHASE_FIX="move to executing via the flow (/pw-breakdown creates the PLAN and the flow advances the phase; /pw-status $SLUG rewind <phase> from a later one)" ;;
+  breakdown) PHASE_FIX="get to an analysis/breakdown phase first (/pw-analyze), or /pw-status $SLUG rewind breakdown" ;;
+  close) PHASE_FIX="close runs after acceptance (/pw-ship handles MRs; accept each done task — tell the agent to record it)" ;;
   comments) PHASE_FIX="comments push to MRs, which exist only after a ship — run /pw-ship $SLUG (push mode) first" ;;
 esac
 if ! pw_phase_valid "$PHASE"; then
@@ -211,7 +211,7 @@ case "$COMMAND" in
       fi
     done < <(pw_plan_pairs "$D/task/PLAN.md")
     if [ -z "$SHIPPABLE" ]; then
-      die_fix "no shippable tasks (PLAN task table shows no Status 'done')$([ -n "$NOTDONE" ] && printf ' — not yet done:%s' "$NOTDONE")" "complete the tasks (/pw-execute $SLUG) — 'done' means executed+verified; a pushed-comment sweep uses 'pw-preflight.sh comments $SLUG' instead"
+      die_fix "no shippable tasks (PLAN task table shows no Status 'done')$([ -n "$NOTDONE" ] && printf ' — not yet done:%s' "$NOTDONE")" "complete the tasks (/pw-execute $SLUG) — 'done' means executed+verified; a pushed-comment sweep uses /pw-ship $SLUG comments instead"
     fi
 
     # Stacked tasks (plan 35): the topology must be valid, every stacked shippable task must be
@@ -258,7 +258,7 @@ case "$COMMAND" in
       [ "$status" = "accepted" ] || UNACCEPTED="$UNACCEPTED $task_id($status)"
     done < <(pw_plan_pairs "$D/task/PLAN.md")
     if [ -n "$UNACCEPTED" ]; then
-      die_fix "not all tasks are accepted:$UNACCEPTED" "a human accepts each shipped task — the mechanical way to set all three holders at once is: pw-status.sh task-accept $SLUG <T0n> (task file + PLAN row + dashboard; the decision to accept stays human)"
+      die_fix "not all tasks are accepted:$UNACCEPTED" "acceptance is a human decision — tell your agent to \"accept $SLUG <T0n>\" (one step records the task file + PLAN row + dashboard), then re-run /pw-close"
     fi
 
     # Close rejects unresolved stack debt: stale verification or a pending promotion/cascade

@@ -114,7 +114,7 @@ cmd_session_check() {
     claude)   _sc_claude "$id" ;;
     cursor)   _sc_cursor "$id" ;;
     codex)    _sc_codex "$id"  ;;
-    opencode) echo "session-check: opencode:$id — unverifiable (no checked liveness surface) → fix: probe \`opencode\` on a machine that has it and implement it in pw-session.sh, not in callers; until then treat as not-resumable" >&2; rc=2 ;;
+    opencode) echo "session-check: opencode:$id — unverifiable (no checked liveness surface) → fix: probe \`opencode\` on a machine that has it and implement the check here (session-check), not in callers; until then treat as not-resumable" >&2; rc=2 ;;
     *)        echo "session-check: $prov:$id — unverifiable (unknown provider '$prov') → fix: run --help for the supported providers" >&2; rc=2 ;;
   esac
   return $rc

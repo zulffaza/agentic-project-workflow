@@ -30,7 +30,7 @@ PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 ST="$HERE/pw-status.sh"
 
 die() { echo "pw-rfc: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scripts/toolchain/scaffold.sh $1)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new $1)"; printf '%s' "$d"; }
 
 # --- RFC side-loop (see tooling/docs/rfc.md + tooling/docs/rfc-backends.md) ------------
 # Deterministic helpers for the optional /pw-rfc publish loop — never touches the dashboard
@@ -67,7 +67,7 @@ _rfc_meta_ensure() {
   [ -f "$f" ] && return 0
   mkdir -p "$(dirname "$f")"
   {
-    printf '# RFC metadata — %s   [🤖-owned — never hand-edit; see `pw-rfc.sh target|state`]\n\n' "$slug"
+    printf '# RFC metadata — %s   [🤖-owned — never hand-edit; maintained via /pw-rfc]\n\n' "$slug"
     printf -- '- **Backend:** %s\n' "$backend"
     printf -- '- **Target:** \n'
     printf -- '- **Last revision pushed:** \n'
@@ -83,7 +83,7 @@ _rfc_comment_section_ensure() {
   local f="$1"
   grep -q '^## Comment tracking' "$f" 2>/dev/null && return 0
   {
-    printf '\n## Comment tracking   [🤖-owned — never hand-edit; see `pw-rfc.sh comment-seen`]\n\n'
+    printf '\n## Comment tracking   [🤖-owned — never hand-edit; maintained via /pw-rfc]\n\n'
     printf '| Thread | Replies seen | Solved |\n'
     printf '|--------|--------------|--------|\n'
   } >> "$f"

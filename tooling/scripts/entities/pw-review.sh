@@ -151,7 +151,7 @@ proj_dir() {
     ''|.|..|*/*|*$'\n'*|*$'\r'*|*$'\t'*)
       die "invalid project slug: '$slug' → fix: use exactly one project directory name (no paths, no traversal)" ;;
   esac
-  [ -d "$PROJECTS_DIR/$slug" ] || die "no such project: $1 ($PROJECTS_DIR/$slug) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scripts/toolchain/scaffold.sh $1)"
+  [ -d "$PROJECTS_DIR/$slug" ] || die "no such project: $1 ($PROJECTS_DIR/$slug) → fix: check the slug under the projects dir (new project? create it with: /pw-new $1)"
   base="$(cd "$PROJECTS_DIR" 2>/dev/null && pwd -P)" || die "cannot resolve the projects directory: $PROJECTS_DIR → fix: check PW_PROJECTS_DIR exists"
   d="$(cd "$PROJECTS_DIR/$slug" && pwd -P)" || die "cannot resolve project directory: $slug"
   case "$d/" in
@@ -201,9 +201,9 @@ review_file() {
   pw_review_contain "$d" "$2" >/dev/null || die "invalid review path: $2 → fix: use a project-relative path inside the project"
   local f="$d/$2"
   [ -L "$f" ] && die "refusing symlinked review file: $2 → fix: operate on the real file (symlinks can silently redirect writes outside the project)"
-  [ -f "$f" ] || die "no such review file: $2 → fix: create it with: pw-review.sh init-all $1 (or pw-review.sh init-docs $1 <artifact-path>)"
+  [ -f "$f" ] || die "no such review file: $2 → fix: create it with: /pw-review $1 init-all (or /pw-review $1 init <artifact-path>)"
   grep -q '^## Sign-off' "$f" || grep -q '^## Items' "$f" \
-    || die "$2 has neither '## Items' nor '## Sign-off' — not a valid review file → fix: recreate from template/_REVIEW.template.md via pw-review.sh init"
+    || die "$2 has neither '## Items' nor '## Sign-off' — not a valid review file → fix: move the invalid copy aside, then recreate it with /pw-review $1 init"
   printf '%s' "$f"
 }
 
@@ -213,7 +213,7 @@ cmd_init() {
   local slug="$1" rel="$2" docrel="$3"
   local d; d="$(proj_dir "$slug")" || return 2
   pw_review_contain "$d" "$rel" >/dev/null || die "invalid review path: $rel → fix: keep it project-relative (review files live under analysis/review/ or task/review/)"
-  _init_one "$slug" "$d" "$rel" "$docrel" || die "init failed for $rel (see stderr) → fix: re-run pw-review.sh init $slug $rel $docrel after checking the project dir and template/"
+  _init_one "$slug" "$d" "$rel" "$docrel" || die "init failed for $rel (see stderr) → fix: re-run /pw-review $slug init $docrel after checking the project dir"
 }
 
 # _init_one <slug> <projdir> <reviewrel> <docrel> → rc-only worker shared by
@@ -304,7 +304,7 @@ cmd_init_all() {
       echo "$slug: phase 'context' — no review files to initialize yet (/pw-analyze $slug produces the first reviewable analysis)"
       return 0 ;;
     done)
-      echo "$slug: phase 'done' — init-all creates nothing here → fix: select explicitly (pw-review.sh init-docs $slug <artifact-path>) or rewind the dashboard first (pw-status.sh status $slug <phase> --rewind)"
+        echo "$slug: phase 'done' — init-all creates nothing here → fix: select explicitly (/pw-review $slug init <artifact-path>) or rewind the dashboard first (/pw-status $slug rewind <phase>)"
       return 0 ;;
   esac
   local -a docs=()
@@ -345,7 +345,7 @@ cmd_init_all() {
     fi
   done
   echo "$slug: init-all (phase $tok) — $created created, $present already present, $failed failed"
-  [ "$failed" -eq 0 ] || die "init-all: $failed target(s) failed → fix: re-run pw-review.sh init-all $slug or init the file directly and read the FAILED lines above"
+  [ "$failed" -eq 0 ] || die "init-all: $failed target(s) failed → fix: re-run /pw-review $slug init-all or init the file directly and read the FAILED lines above"
 }
 
 # ---------------------------------------------------------------- signoff (human-triggered, C4)
@@ -501,7 +501,7 @@ _feedback_transition() {
     approved|approved✅|approved\ ✅)
       if [ "$_FT_EARLIER" = 1 ]; then
         _FT_PENDING=1
-        echo "pw-review: NOTE: $_FT_REL is approved and its phase was already consumed by a later dashboard phase — the feedback is recorded, the approval row is preserved, and every approval consumer stays blocked while this item is open → fix: confirm the reopen explicitly (pw-review.sh start <slug> <review-path> --confirm-earlier)" >&2
+        echo "pw-review: NOTE: $_FT_REL is approved and its phase was already consumed by a later dashboard phase — the feedback is recorded, the approval row is preserved, and every approval consumer stays blocked while this item is open → fix: this reopen needs the human's explicit confirmation — ask, then re-run with --confirm-earlier" >&2
         return 0
       fi ;;
     *)
@@ -509,7 +509,7 @@ _feedback_transition() {
       return 0 ;;
   esac
   if [ "$_FT_UNKNOWN" = 1 ]; then
-    echo "pw-review: NOTE: dashboard phase is missing or non-canonical — feedback recorded, state transition skipped fail-closed → fix: repair the README Status line (pw-status.sh status)" >&2
+    echo "pw-review: NOTE: dashboard phase is missing or non-canonical — feedback recorded, state transition skipped fail-closed → fix: repair the dashboard Status line (/pw-status $slug shows the current phase)" >&2
     return 0
   fi
   local ts; ts="$(pw_now_wib)" || return 1
@@ -611,7 +611,7 @@ _answer_body() {
   hit="$(_find_item_line "$blanked" "$qid")"
   [ -n "$hit" ] || { rm -f "$blanked"; echo "pw-review: no real question heading '$qid' in $ANS_REL → fix: check the '## Contents' table or grep '^### Q' for the live ids" >&2; return 1; }
   hl="${hit%%$'\t'*}"; tag="${hit#*$'\t'}"
-  [ "$tag" = "ANSWERED" ] && { rm -f "$blanked"; echo "pw-review: $qid in $ANS_REL is already [ANSWERED] → fix: open a NEW question (pw-review.sh add-question) if this is a fresh ask; never re-answer a settled one" >&2; return 1; }
+  [ "$tag" = "ANSWERED" ] && { rm -f "$blanked"; echo "pw-review: $qid in $ANS_REL is already [ANSWERED] → fix: open a NEW question instead if this is a fresh ask; never re-answer a settled one" >&2; return 1; }
   [ "$tag" = "CONFLICT" ] && { rm -f "$blanked"; echo "pw-review: $qid in $ANS_REL carries disagreeing status marker/tag — answer refused until the heading is repaired → fix: make the [PENDING]/[ANSWERED] tag and the pw-item-status marker agree (see docs/REVIEW.md)" >&2; return 1; }
   local bend; bend="$(_block_end "$blanked" "$hl")"
   local ins
@@ -717,7 +717,7 @@ _resolve_body() {
   local bend; bend="$(_block_end "$blanked" "$hl")"
   if [ "${id#Q}" != "$id" ]; then
     awk -v s="$hl" -v e="$bend" 'NR>=s && NR<=e' "$blanked" | grep -q '↳ \*\*you\*\*' \
-      || { rm -f "$blanked"; echo "pw-review: $id has no '↳ **you**' answer yet → fix: the human answers first (pw-review.sh answer <slug> <review-path> <Qid> --text …); the agent only folds + flips afterwards" >&2; return 1; }
+      || { rm -f "$blanked"; echo "pw-review: $id has no '↳ **you**' answer yet → fix: the human answers first (/pw-review <slug> answer <review-path> <Qid> <answer>); the agent only folds + flips afterwards" >&2; return 1; }
   fi
   local ts; ts="$(now_ts)" || { rm -f "$blanked"; return 1; }
   local hline newtag newmark
@@ -813,7 +813,7 @@ cmd_reopen() {
   pw_review_contain "$d" "$rel" >/dev/null || die "invalid review path: $rel → fix: keep it project-relative"
   local f="$d/$rel"
   [ -L "$f" ] && die "refusing symlinked review file: $rel → fix: operate on the real file (symlinks can silently redirect writes outside the project)"
-  [ -f "$f" ] || die "no such review file: $rel → fix: create it with: pw-review.sh init-docs $slug <artifact-path>"
+  [ -f "$f" ] || die "no such review file: $rel → fix: create it with: /pw-review $slug init <artifact-path>"
   local decision; decision="$(_signoff_latest_decision "$f")" \
     || die "no Sign-off table rows found in $rel — not a valid review file → fix: restore the table from template/_REVIEW.template.md"
   if ! _decision_is_approved "$decision"; then
@@ -821,8 +821,8 @@ cmd_reopen() {
     return 0
   fi
   local st; st="$(_dash_lane_state "$slug" "$rel")"
-  [ "$st" = unknown ] && die "dashboard phase is missing or non-canonical — cannot judge whether this approval was already consumed → fix: repair the README Status line (pw-status.sh status $slug <phase>)"
-  [ "$st" = earlier ] && [ "$confirm" != 1 ] && die "$rel is approved and its phase was consumed by a LATER dashboard phase — reopening it rewinds a gate work already depends on → fix: get the human's confirmation, then rerun: pw-review.sh reopen $slug $rel --confirm-earlier"
+  [ "$st" = unknown ] && die "dashboard phase is missing or non-canonical — cannot judge whether this approval was already consumed → fix: repair the dashboard Status line (/pw-status $slug shows the current phase)"
+  [ "$st" = earlier ] && [ "$confirm" != 1 ] && die "$rel is approved and its phase was consumed by a LATER dashboard phase — reopening it rewinds a gate work already depends on → fix: get the human's explicit confirmation, then re-run with --confirm-earlier"
   REOPEN_REL="$rel"
   staged_or_die "$f" _reopen_body
   _log "$slug" pw-review "AUTO-REOPENED $rel — a fix was applied after it was already approved (new row: in-review); re-approve once settled"
@@ -843,7 +843,7 @@ AS_BY=""; AS_REL=""
 _auto_signoff_body() {
   local f="$1"
   _review_has_open_marker "$f" && { echo "pw-review: refusing auto-signoff: $AS_REL still has an unresolved [OPEN] item or [PENDING] question" >&2; return 1; }
-  _signoff_human_rejection_active "$f" && { echo "pw-review: refusing auto-signoff: an explicit human changes-requested is still active in $AS_REL → fix: only the human withdraws it (pw-review.sh signoff <slug> $AS_REL in-review --by <name>, on explicit instruction)" >&2; return 1; }
+  _signoff_human_rejection_active "$f" && { echo "pw-review: refusing auto-signoff: an explicit human changes-requested is still active in $AS_REL → fix: only the human withdraws it (/pw-review <slug> signoff <review-path> in-review --by <name>, on explicit instruction)" >&2; return 1; }
   local ts; ts="$(pw_now_wib)" || return 1
   pw_signoff_row_put "$f" "$ts" "$AS_BY" approved \
     || { echo "pw-review: no Sign-off table rows found in $AS_REL → fix: restore the table from template/_REVIEW.template.md" >&2; return 1; }
@@ -878,7 +878,7 @@ cmd_auto_signoff() {
   local mode; mode="$(_ai_review_mode_of "$slug" "$phase")"
   [ "$mode" = "auto" ] || die "refusing auto-signoff: this project's AI Review mode for '$phase' is '$mode', not 'auto' (pw-config.sh ai-review $slug $phase auto to enable)"
   local st; st="$(_dash_lane_state "$slug" "$rel")"
-  [ "$st" = unknown ] && die "dashboard phase is missing or non-canonical → fix: repair the README Status line (pw-status.sh status $slug <phase>)"
+  [ "$st" = unknown ] && die "dashboard phase is missing or non-canonical → fix: repair the dashboard Status line (/pw-status $slug shows the current phase)"
   [ "$st" = earlier ] && [ "$confirm" != 1 ] && die "$rel's phase was already consumed by a later dashboard phase — an auto approval here would silently rewind a used gate → fix: get the human's confirmation, then rerun with --confirm-earlier"
   local ident prov mdl; ident="$(_ai_identity "$provider" "$model")"
   prov="${ident%%$'\t'*}"; mdl="${ident#*$'\t'}"
@@ -1008,8 +1008,7 @@ _archive_body() {
     local htmp="$af.tmp"
     {
       printf '# Archived review items — %s\n\n' "$(basename "${rel%.review.md}")"
-      printf 'Items/questions moved out of `%s` once fully [RESOLVED]/[ANSWERED], by `pw-review.sh\n' "$rel"
-      printf 'archive` — text preserved verbatim, never edited. See that file'"'"'s "## Archived items"\n'
+      printf 'Items/questions moved out of `%s` once fully [RESOLVED]/[ANSWERED] — text preserved verbatim, never edited. See that file'"'"'s "## Archived items"\n' "$rel"
       printf 'table for one pointer row per entry moved here.\n'
     } > "$htmp" || { rm -f "$htmp"; echo "pw-review: FAILED to render the archive sibling header for $archrel → fix: check the review dir is writable and retry" >&2; return 1; }
     if ! mv "$htmp" "$af"; then
@@ -1143,7 +1142,7 @@ cmd_start() {
       || die "lane mismatch: $rel belongs to the '$lane' lane, not '$phase' → fix: select the phase that owns this artifact (analysis↔analysis topics, plan↔PLAN, task-plan↔task plans, task-exec/ship↔task results)"
     mode="$(_ai_review_mode_of "$slug" "$phase")"
     [ "$mode" = advisory ] || [ "$mode" = auto ] \
-      || die "AI Review mode for '$phase' is '$mode' — an independent AI pass needs advisory or auto → fix: run without --phase for the normal repair pass, or configure: pw-config.sh ai-review $slug $phase advisory"
+      || die "AI Review mode for '$phase' is '$mode' — an independent AI pass needs advisory or auto → fix: run without --phase for the normal repair pass, or configure: /pw-config $slug set ai-review $phase=advisory"
     local ident; ident="$(_ai_identity "$provider" "$model")"
     prov="${ident%%$'\t'*}"; mdl="${ident#*$'\t'}"
     ST_BY="pw-reviewer ($mode; provider=$prov; model=$mdl)"
@@ -1151,8 +1150,8 @@ cmd_start() {
     ST_BY="pw-review (repair)"
   fi
   local st; st="$(_dash_lane_state "$slug" "$rel")"
-  [ "$st" = unknown ] && die "dashboard phase is missing or non-canonical — cannot judge consumed-phase safety → fix: repair the README Status line (pw-status.sh status $slug <phase>)"
-  [ "$st" = earlier ] && [ "$confirm" != 1 ] && die "$rel's phase was already consumed by a later dashboard phase — a repair pass here may invalidate work that depends on the gate → fix: get the human's confirmation, then rerun: pw-review.sh start $slug $rel --confirm-earlier"
+  [ "$st" = unknown ] && die "dashboard phase is missing or non-canonical — cannot judge consumed-phase safety → fix: repair the dashboard Status line (/pw-status $slug shows the current phase)"
+  [ "$st" = earlier ] && [ "$confirm" != 1 ] && die "$rel's phase was already consumed by a later dashboard phase — a repair pass here may invalidate work that depends on the gate → fix: get the human's explicit confirmation, then re-run with --confirm-earlier"
   ST_REL="$rel"
   _START_REPORT="$(mktemp)" || die "cannot create pass report → fix: check the temporary directory"
   local start_rc=0

@@ -26,5 +26,7 @@ The 2nd argument is the operator:
   pass the rest of my line through verbatim). Appends one row to the "Repos in scope" table.
   Never touches `/pw-adopt`'s marker rows.
 
-If an operator's script call fails, report its stderr line verbatim (it carries the `→ fix:`
-hint) — do not retry by hand-editing the tables.
+If an operator's script call fails: keep its stderr verbatim in your working context (the
+`→ fix:` line names the recovery), and make your final reply state the cause, the affected file,
+and the recovery as a `/pw-*` action — quote the raw error line too when it carries evidence.
+Do not retry by hand-editing the tables, and never present a failed run as success.

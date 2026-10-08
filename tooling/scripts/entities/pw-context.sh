@@ -53,7 +53,7 @@ REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
 ST="$HERE/pw-status.sh"
 
 die() { echo "pw-context: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scripts/toolchain/scaffold.sh $1)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new $1)"; printf '%s' "$d"; }
 _log() { PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" log "$1" "$2" "$3" >/dev/null; }
 
 # Pipe-escape a table cell value.
@@ -97,7 +97,7 @@ cmd_req_init() {
   cp "$tmpl" "$f"
   _log "$slug" you "created context/REQUIREMENTS.md from template"
   echo "$slug: created context/REQUIREMENTS.md — fill it in, then add its provenance row:"
-  echo "  pw-context.sh add-input $slug --file REQUIREMENTS.md --what 'project brief' --source 'written by you' --trust 'owner brief'"
+  echo "  /pw-context $slug add-input --file REQUIREMENTS.md --what 'project brief' --source 'written by you' --trust 'owner brief'"
 }
 
 # ---------------------------------------------------------------- add-input
@@ -387,7 +387,7 @@ cmd_adopt() {
       printf '# Adopted work — %s   (CONTINUATION workflow)\n\n' "$slug"
       printf 'Builds on existing in-progress branches. Serialization is PER-BRANCH: tasks on the same\n'
       printf 'branch run serially in its shared worktree; tasks on different branches run in parallel.\n'
-      printf 'Unit headings/IDs + the Base/MR lines are managed by `pw-context.sh adopt` — do NOT hand-edit\n'
+      printf 'Unit headings/IDs + the Base/MR lines are managed by `/pw-adopt` — do NOT hand-edit\n'
       printf 'them or the dashboard; fill the prose under each unit. [🤖🧑 both]\n'
     } > "$f"
   fi

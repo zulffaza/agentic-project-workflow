@@ -152,7 +152,8 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
 - Max parallelism: <n> concurrent executors.
 - **Results acceptance:** <manual — the human flips `accepted` at review (default, matches
   `/pw-review`'s gate discipline) | auto — at the end of a clean run the driver flips every task
-  that is `done`, green on `## Verify`, and with zero open review items via `pw-status.sh task-accept`;
+  that is `done`, green on `## Verify`, and with zero open review items — acceptance stays your
+  call; tell the agent to record it (one step syncs the task file + PLAN row + dashboard);
   anything else stays visible for the human. `--acceptance` overrides per invocation — but the
   PLAN line is what the next reader assumes (a hidden run flag is how a project drifts).
 - **AI execution limit:** <n> (default 3 — `PW_MAX_SELF_REPAIR`) self-repair rounds an executor may

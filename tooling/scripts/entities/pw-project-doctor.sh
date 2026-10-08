@@ -13,6 +13,13 @@
 #
 #   pw-project-doctor.sh <slug>            check only (exit 1 on any ✗)
 #   pw-project-doctor.sh <slug> --fix      apply the deterministic repairs
+#   pw-project-doctor.sh <slug> --guidance [--apply]
+#                                          scoped workflow-guidance prose repair (plan 30):
+#                                          exact-byte replacement of known script-name leaks in
+#                                          project copies with their /pw-* command forms.
+#                                          Preview (default) writes nothing; --apply writes
+#                                          atomically and is idempotent. Never runs the health
+#                                          walk, forge, or stack writers; --guidance --fix refuses.
 #
 # Output sections (human labels; internal check IDs stay in this header for docs/tests):
 #   [1/8] Documentation & template lint
@@ -60,20 +67,258 @@ bad()  { printf '  ✗ %s\n' "$*"; FAILS=$((FAILS+1)); }
 note() { printf '  · %s\n' "$*"; NOTES=$((NOTES+1)); }
 fixed(){ printf '      fixed: %s\n' "$*"; FIXES=$((FIXES+1)); }
 
-SLUG=""; FIX=0
+SLUG=""; FIX=0; GUIDANCE=0; APPLY=0
 for a in "$@"; do
   case "$a" in
     --fix) FIX=1 ;;
+    --guidance) GUIDANCE=1 ;;
+    --apply) APPLY=1 ;;
     -h|--help) pw_usage ;;
-    *) [ -z "$SLUG" ] || { echo "pw-project-doctor: extra argument '$a' (usage: <slug> [--fix] — see --help)" >&2; exit 2; }
+    *) [ -z "$SLUG" ] || { echo "pw-project-doctor: extra argument '$a' (usage: <slug> [--fix | --guidance [--apply]] — see --help)" >&2; exit 2; }
        SLUG="$a" ;;
   esac
 done
-[ -n "$SLUG" ] || { echo "usage: pw-project-doctor.sh <slug> [--fix]" >&2; exit 2; }
+[ -n "$SLUG" ] || { echo "usage: pw-project-doctor.sh <slug> [--fix | --guidance [--apply]]" >&2; exit 2; }
+[ "$APPLY" -eq 0 ] || [ "$GUIDANCE" -eq 1 ] || { echo "pw-project-doctor: --apply requires --guidance (it has no meaning for the health walk)" >&2; exit 2; }
+[ "$GUIDANCE" -eq 0 ] || [ "$FIX" -eq 0 ] || { echo "pw-project-doctor: --guidance and --fix are separate mutation scopes — run them one at a time" >&2; exit 2; }
 D="$PROJECTS_DIR/$SLUG"
 [ -d "$D" ] || { echo "pw-project-doctor: no such project: $SLUG ($D) → fix: check the slug under $PROJECTS_DIR" >&2; exit 2; }
 README="$D/README.md"
 PLAN="$D/task/PLAN.md"
+
+# --- guidance repair engine (plan 30) -----------------------------------------
+# Exact-byte replacement of known workflow-authored guidance leaks in project copies. Rules are
+# byte-exact (old → new) and allowlist-bound; anything else in the file is preserved verbatim.
+# This is deliberately NOT the health walk: no forge access, no stack operations, no phase reads,
+# and no --fix writers run here. Preview writes nothing; --apply re-reads each target immediately
+# before writing (tmp file + atomic rename) and is idempotent.
+PW_GUIDANCE_ALLOW='context/README.md context/INDEX.md context/ADOPTED.md analysis/README.md PROJECT.md rfc/README.md rfc/META.md task/PLAN.md task/review/*.review.md task/review/*.archive.md'
+
+pw_guidance_allowed() { # <relpath> → 0 if the rule path is allowlisted
+  local p="$1" a
+  for a in $PW_GUIDANCE_ALLOW; do
+    case "$p" in $a) return 0 ;; esac
+  done
+  return 1
+}
+
+pw_guidance_rules() {
+  cat <<'GUIDANCE_RULES'
+>>>FILE context/ADOPTED.md
+>>>OLD
+managed by `pw-context.sh adopt` — do NOT hand-edit
+>>>NEW
+managed by `/pw-adopt` — do NOT hand-edit
+<<<RULE
+>>>FILE context/INDEX.md
+>>>OLD
+> **Adopted (continuation) projects:** `/pw-adopt` maintains this table for you — it upserts one
+> row per adopted `(repo, base)` deterministically (via `pw-context.sh adopt`, keyed by a hidden
+> `<!-- pw-adopt-scope:… -->` marker). **Don't hand-edit those marker rows** — that's what let a
+> later adoption clobber earlier ones. You may still add your own un-marked guess rows above/below.
+>>>NEW
+> **Adopted (continuation) projects:** `/pw-adopt` maintains this table for you — it upserts one
+> row per adopted `(repo, base)` deterministically, keyed by a hidden `<!-- pw-adopt-scope:… -->`
+> marker. **Don't hand-edit those marker rows** — that's what let a later adoption clobber earlier
+> ones. You may still add your own un-marked guess rows above/below.
+<<<RULE
+>>>FILE context/README.md
+>>>OLD
+**Optional — a one-page brief.** If the raw inputs don't clearly state *what you want and why*,
+start a short brief: `cp _REQUIREMENTS.template.md REQUIREMENTS.md` and fill it (problem, goal,
+scope, constraints, success criteria). It's optional — the pipeline never requires it — but it
+sharpens the analysis phase. Add a row for it in [`INDEX.md`](./INDEX.md) like any other input.
+>>>NEW
+**Optional — a one-page brief.** If the raw inputs don't clearly state *what you want and why*,
+run `/pw-context <slug> req-init` to create `REQUIREMENTS.md` from its template, then fill it in
+(problem, goal, scope, constraints, success criteria) and register it:
+`/pw-context <slug> add-input --file REQUIREMENTS.md --what <one line> --source <where it came from>`.
+It's optional — the pipeline never requires it — but it sharpens the analysis phase.
+<<<RULE
+>>>FILE analysis/README.md
+>>>OLD
+**Review:** feedback lives in `review/<topic>.review.md` (a `review/` subdir here, from
+`../_REVIEW.template.md`), not inline — the agent rewrites this doc when applying fixes. The agent
+reads the review file first, replies with `↳ agent:` and flips `[OPEN]`→`[RESOLVED]`, and never edits your comment
+text. Only you approve: agents may record attributed `in-review`/`changes-requested` bookkeeping
+rows as your feedback queues a cycle, but an `approved` row stays yours (guarded AI `auto` mode
+aside). See `../README.md` → "Review & feedback".
+>>>NEW
+**Review:** feedback lives in `review/<topic>.review.md` (a `review/` subdir here, from
+`../_REVIEW.template.md`), not inline — the agent rewrites this doc when applying fixes. The agent
+reads the review file first, replies with `↳ agent:` and flips `[OPEN]`→`[RESOLVED]`, and never edits your comment
+text. Only you approve (guarded AI `auto` mode aside). See `../README.md` → "Review & feedback".
+
+**Common actions**
+
+| You want to… | Use |
+|---|---|
+| Start a review for this doc | `/pw-review <slug> init analysis/<topic>.md` |
+| Add feedback | `/pw-review <slug> item analysis/review/<topic>.review.md §<section> <your comment>` |
+| Answer the agent's questions | `/pw-review <slug> answer analysis/review/<topic>.review.md Q<n> <your answer>` |
+| Have the agent apply approved fixes | `/pw-review <slug> analysis/review/<topic>.review.md` |
+| Ask for an independent AI pass | `/pw-review <slug> ai analysis` |
+| Approve (human-only) | `/pw-review <slug> signoff analysis/review/<topic>.review.md approved` |
+<<<RULE
+>>>FILE PROJECT.md
+>>>OLD
+set via `/pw-config <slug> ai-model <role> <provider:model>` — one row per spawn
+>>>NEW
+set via `/pw-config <slug> set ai-model <role>=<provider:model>` — one row per spawn
+<<<RULE
+>>>FILE PROJECT.md
+>>>OLD
+See docs/EXECUTION.md §Spawning phase work + `pw-config.sh project ai-model`.
+>>>NEW
+See docs/EXECUTION.md §Spawning phase work; set rows with `/pw-config <slug> set ai-model <role>=<provider:model>`.
+<<<RULE
+>>>FILE PROJECT.md
+>>>OLD
+set via `/pw-config <slug> ai-review <phase> <mode>` — one mode per review phase
+>>>NEW
+set via `/pw-config <slug> set ai-review <phase>=<mode>` — one mode per review phase
+<<<RULE
+>>>FILE rfc/README.md
+>>>OLD
+🤖-owned via `pw-rfc.sh target|state` — never hand-edit
+>>>NEW
+🤖-owned via `/pw-rfc` — never hand-edit
+<<<RULE
+>>>FILE rfc/META.md
+>>>OLD
+never hand-edit; see `pw-rfc.sh target|state`]
+>>>NEW
+never hand-edit; maintained via /pw-rfc]
+<<<RULE
+>>>FILE rfc/META.md
+>>>OLD
+never hand-edit; see `pw-rfc.sh comment-seen`]
+>>>NEW
+never hand-edit; maintained via /pw-rfc]
+<<<RULE
+>>>FILE task/PLAN.md
+>>>OLD
+zero open review items via `pw-status.sh task-accept`;
+>>>NEW
+zero open review items — acceptance stays your call; tell the agent to record it;
+<<<RULE
+>>>FILE task/review/*.review.md
+>>>OLD
+never hand-edit; see `pw-ship.sh comment-seen`]
+>>>NEW
+never hand-edit; maintained by /pw-ship comments]
+<<<RULE
+>>>FILE task/review/*.archive.md
+>>>OLD
+, by `pw-review.sh
+archive`
+>>>NEW
+<<<RULE
+GUIDANCE_RULES
+}
+
+pw_guidance_count() { # <content-var-name> <old> → sets PW_G_N (occurrence count)
+  local rest="${!1}" n=0
+  while :; do
+    case "$rest" in
+      *"$2"*) n=$((n+1)); rest="${rest#*"$2"}" ;;
+      *) break ;;
+    esac
+  done
+  PW_G_N="$n"
+}
+
+pw_guidance_first_line() { printf '%s' "$1" | head -1; }
+
+pw_guidance_engine() { # $1 = 1 apply / 0 preview
+  local apply="$1" mode="" path="" old="" new="" line
+  local G_AVAIL=0 G_CHANGES=0 G_FILES=0 G_SKIPPED=0 G_TARGETS=0
+  if [ "$apply" -eq 1 ]; then
+    echo "pw-guidance — $SLUG (--apply: scoped workflow-guidance prose repair, applied at the operator's explicit request)"
+  else
+    echo "pw-guidance — $SLUG (preview: nothing is written; re-run with --apply to write)"
+  fi
+  while IFS= read -r line; do
+    case "$line" in
+      '>>>FILE '*) path="${line#>>>FILE }"; mode="await-old" ;;
+      '>>>OLD') old=""; mode="old" ;;
+      '>>>NEW') new=""; mode="new" ;;
+      '<<<RULE')
+        # blocks are stored newline-terminated; strip the final one to get exact bytes
+        old="${old%$'\n'}"; new="${new%$'\n'}"
+        if [ -z "$old" ]; then
+          echo "pw-guidance: internal rule error: empty OLD block for '$path' — refusing the run" >&2
+          exit 2
+        fi
+        if pw_guidance_allowed "$path"; then
+          local matched_any=0 full rel
+          for full in "$D"/$path; do
+            [ -e "$full" ] || continue
+            matched_any=1; G_TARGETS=$((G_TARGETS+1))
+            rel="${full#"$D"/}"
+            if [ -L "$full" ]; then
+              echo "pw-guidance: refusing symlinked target: $rel" >&2; exit 2
+            fi
+            [ -f "$full" ] || { echo "  skipped $rel: not a regular file"; G_SKIPPED=$((G_SKIPPED+1)); continue; }
+            local content="" out="" r=""
+            IFS= read -r -d '' content < "$full" || true
+            pw_guidance_count content "$old"; local n="$PW_G_N"
+            if [ "$n" -eq 0 ]; then
+              echo "  skipped $rel: already repaired or customized"
+              G_SKIPPED=$((G_SKIPPED+1))
+              continue
+            fi
+            if [ "$apply" -eq 0 ]; then
+              echo "  would repair $rel: $n occurrence(s)"
+              echo "    - $(pw_guidance_first_line "$old")"
+              echo "    + $(pw_guidance_first_line "$new")"
+              G_AVAIL=$((G_AVAIL+n))
+              continue
+            fi
+            r="$content"
+            while :; do
+              case "$r" in
+                *"$old"*) out="$out${r%%"$old"*}$new"; r="${r#*"$old"}" ;;
+                *) break ;;
+              esac
+            done
+            out="$out$r"
+            local tmp="$full.pwguidance.$$"
+            cp -p "$full" "$tmp" && printf '%s' "$out" > "$tmp" && mv -f "$tmp" "$full" \
+              || { rm -f "$tmp"; echo "pw-guidance: FAILED to write $rel — nothing changed" >&2; exit 2; }
+            echo "  repaired $rel: $n occurrence(s)"
+            G_CHANGES=$((G_CHANGES+n)); G_FILES=$((G_FILES+1))
+          done
+          [ "$matched_any" -eq 1 ] || { echo "  skipped $path: not present in this project"; G_SKIPPED=$((G_SKIPPED+1)); }
+        else
+          echo "pw-guidance: rule targets non-allowlisted path '$path' — refusing the run" >&2
+          exit 2
+        fi
+        path=""; old=""; new=""; mode="" ;;
+      *)
+        case "$mode" in
+          old) old="$old$line
+" ;;
+          new) new="$new$line
+" ;;
+        esac ;;
+    esac
+  done <<RULES
+$(pw_guidance_rules)
+RULES
+  echo
+  if [ "$apply" -eq 1 ]; then
+    echo "guidance repair: $G_CHANGES occurrence(s) replaced across $G_FILES file(s); $G_SKIPPED skipped"
+    echo "re-run without --apply to confirm nothing remains (idempotent)."
+  else
+    echo "guidance preview: $G_AVAIL occurrence(s) repairable across the project; $G_SKIPPED skipped; $G_TARGETS target file(s) scanned"
+  fi
+  exit 0
+}
+
+if [ "$GUIDANCE" -eq 1 ]; then
+  pw_guidance_engine "$APPLY"
+fi
 
 echo "pw-project-doctor — $SLUG ($(pw_field "$README" Status 2>/dev/null || printf '?'))"
 

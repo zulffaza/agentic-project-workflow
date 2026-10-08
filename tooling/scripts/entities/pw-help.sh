@@ -698,7 +698,7 @@ render_overview() {
     [ "$json" = 1 ] || echo "  $bucket"
     for cmd in ${entry#*|}; do
       file="$CMDS/$cmd.md"
-      [ -f "$file" ] || die "BUG: the phase map names $cmd but $CMDS/$cmd.md is missing → fix: update pw-help.sh's HELP_PHASE_MAP in the same commit as the command"
+      [ -f "$file" ] || die "BUG: the phase map names $cmd but $CMDS/$cmd.md is missing → fix: update HELP_PHASE_MAP in this script in the same commit as the command"
       desc="$(fmof "$file" description)"; args="$(fmof "$file" args)"
       ops_lines="$(ops_surfaced "$cmd")"
         jop=""; jonsep=""

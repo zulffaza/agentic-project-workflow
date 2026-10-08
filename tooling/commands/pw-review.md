@@ -10,6 +10,8 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 deterministic review-WRITE operation — mechanical mapping only (C3): parse the arguments per the
 A-rules below, run the script verbatim, show its output. No judgment, no doc reading, no
 "improving" or retyping my text — it is handed over VERBATIM via a `--stdin` heredoc (A3).**
+Command-only replies: the final reply states what was written (file, item/gate) in `/pw-*` terms;
+keep raw script diagnostics in your working context and quote them only when they carry evidence.
 Everything else below (apply-comments / `ai` / `config`) does NOT run for these operators.
 
 - **`/pw-review <slug> init <artifact-path> [<artifact-path> …]`** →

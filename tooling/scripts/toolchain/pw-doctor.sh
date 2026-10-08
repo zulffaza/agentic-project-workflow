@@ -8,10 +8,11 @@
 #
 #   tooling/scripts/toolchain/pw-doctor.sh          check only (exit 1 if anything is out of sync)
 #   tooling/scripts/toolchain/pw-doctor.sh --fix    repair drift (re-install skill, regenerate commands)
-#   tooling/scripts/toolchain/pw-doctor.sh --project <slug> [--fix]
+#   tooling/scripts/toolchain/pw-doctor.sh --project <slug> [--fix | --guidance [--apply]]
 #       PROJECT side: is that project operated well and still consistent with the current global
 #       config? Dispatches to entities/pw-project-doctor.sh (checks the project's own docs/gates/
-#       config along its phases); install mode above stays its own code path.
+#       config along its phases); --guidance [--apply] runs the scoped workflow-guidance prose
+#       repair instead of the health walk. Install mode above stays its own code path.
 #
 # "In sync" = what bootstrap/gen-commands WOULD produce now equals what's installed.
 # It generates commands to a temp dir and diffs them, so it catches a moved bundle,

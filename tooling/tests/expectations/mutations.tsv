@@ -46,7 +46,7 @@
 # parent-head binding, the retarget head-move guard, and worktree rehydration. C163 guards the
 # preview-vs-strict freshness split (a done/accepted task without its binding must never get the
 # unverified exemption). Catcher case: pw-stack.t.sh.
-# Next free: C164 (C70–C72 stay reserved).
+# Next free: C175 (C70–C72 stay reserved).
 # C77–C81 minted by the project-doctor live-triage plan (fix-hint command-only scrubber,
 # token-expansion reader, depends_on full-id universe, accepted-teardown status-awareness,
 # backtick-first field reader).
@@ -212,3 +212,14 @@ C160-attach-parent-tip	pw-worktree.sh	    git -C "$REPO_DIR" merge-base --is-anc
 C161-retarget-head-guard	pw-ship.sh	  [ "$head_after" = "$head_before" ] \	  : \	T1	^pw-stack\.t\.sh$
 C162-rehydrate-worktree	pw-ship.sh	        git -C "$rd" worktree add "$wtpath" "$dbranch" >/dev/null 2>&1 \	        git -C "$rd" checkout -q "$dbranch" >/dev/null 2>&1 \	T1	^pw-stack\.t\.sh$
 C163-preview-done-unbound-stale	pw-ship.sh	    *) printf 'stale'; return 0 ;;	    *) : ;;	T1	^pw-stack\.t\.sh$
+C164-reqinit-hint-leak	pw-context.sh	echo "  /pw-context $slug add-input --file REQUIREMENTS.md --what 'project brief' --source 'written by you' --trust 'owner brief'"	echo "  pw-context.sh add-input $slug --file REQUIREMENTS.md --what 'project brief' --source 'written by you' --trust 'owner brief'"	T1	^pw-guidance\.t\.sh$
+C165-template-adopt-leak	../template/context/INDEX.md	> row per adopted `(repo, base)` deterministically, keyed by a hidden `<!-- pw-adopt-scope:… -->`	> row per adopted `(repo, base)` deterministically (via `pw-context.sh adopt`, keyed by a hidden	T4	-
+C166-archive-banner-leak	pw-review.sh	printf 'Items/questions moved out of `%s` once fully [RESOLVED]/[ANSWERED] — text preserved verbatim, never edited. See that file'"'"'s "## Archived items"\n' "$rel"	printf 'Items/questions moved out of `%s` once fully [RESOLVED]/[ANSWERED], by `pw-review.sh — text preserved verbatim, never edited.\n' "$rel"	T1	^pw-guidance\.t\.sh$
+C167-projdir-scaffold-leak	pw-context.sh	→ fix: check the slug under the projects dir (new project? create it with: /pw-new $1)	→ fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scripts/toolchain/scaffold.sh $1)	T4	-
+C168-mrtracking-header-leak	pw-ship.sh	printf '\n## MR comment tracking   [🤖-owned — never hand-edit; maintained by /pw-ship comments]\n\n'	printf '\n## MR comment tracking   [🤖-owned — never hand-edit; see `pw-ship.sh comment-seen`]\n\n'	T1	^pw-guidance\.t\.sh$
+C169-preview-writes	pw-project-doctor.sh	if [ "$apply" -eq 0 ]; then	if [ "$apply" -eq 1 ]; then	T1	^pw-guidance\.t\.sh$
+C170-guidance-count-nonzero	pw-project-doctor.sh	PW_G_N="$n"	PW_G_N="$n"; [ "$PW_G_N" -eq 0 ] && PW_G_N=1	T1	^pw-guidance\.t\.sh$
+C171-tooling-deep-link	../docs/TOOLING.md	- **Maintainer onboarding starts at `tooling/AGENTS.md`** in the bundle repo	- **Maintainer onboarding starts at [`tooling/AGENTS.md`](../tooling/AGENTS.md)** in the bundle repo	T4	-
+C172-preflight-accept-leak	pw-preflight.sh	die_fix "not all tasks are accepted:$UNACCEPTED" "acceptance is a human decision — tell your agent to \"accept $SLUG <T0n>\" (one step records the task file + PLAN row + dashboard), then re-run /pw-close"	die_fix "not all tasks are accepted:$UNACCEPTED" "a human accepts each shipped task — the mechanical way to set all three holders at once is: pw-status.sh task-accept $SLUG <T0n> (task file + PLAN row + dashboard; the decision to accept stays human)"	T4	-
+C173-relay-clause-revert	commands/pw-context.md	and the recovery as a `/pw-*` action — quote the raw error line too when it carries evidence.	and the recovery as a script rerun — quote the raw error line too when it carries evidence.	T4	-
+C174-phasefix-close-leak	pw-preflight.sh	close) PHASE_FIX="close runs after acceptance (/pw-ship handles MRs; accept each done task — tell the agent to record it)"	close) PHASE_FIX="close runs after acceptance (/pw-ship handles MRs; accepted tasks then pw-status.sh status $SLUG done)"	T1	^pw-guidance\.t\.sh$

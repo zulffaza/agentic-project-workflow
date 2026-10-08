@@ -71,6 +71,9 @@ help project-review pwt-f3-hostile	pw-help.sh	project pwt-f3-hostile pw-review	0
 provider-audit pwt-f3-hostile	pw-status.sh	provider-audit pwt-f3-hostile	0	-
 doctor-project F1	pw-project-doctor.sh	pwt-f1-scaffold	0	-
 doctor-project F3	pw-project-doctor.sh	pwt-f3-hostile	1	-
+doctor-guidance F1	pw-project-doctor.sh	pwt-f1-scaffold --guidance	0	-
+doctor-guidance F2	pw-project-doctor.sh	pwt-f2-mid --guidance	0	-
+doctor-guidance F3	pw-project-doctor.sh	pwt-f3-hostile --guidance	0	-
 project show F2	pw-config.sh	project show pwt-f2-mid	0	-
 global show	pw-config.sh	global show	0	-
 model-check allow	pw-config.sh	model-check claude opus	0	-

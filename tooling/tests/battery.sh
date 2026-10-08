@@ -39,6 +39,10 @@ battery_rows() {
   # PW_PROVIDERS) and owned by the T1 case with its deterministic f2 fixture config.
   printf 'doctor-project F1\tpw-project-doctor.sh\t%s\n' "$S1"
   printf 'doctor-project F3\tpw-project-doctor.sh\t%s\n' "$S3"
+  # guidance preview is read-only on every fixture (plan 30): fresh templates → nothing to repair
+  printf 'doctor-guidance F1\tpw-project-doctor.sh\t%s --guidance\n' "$S1"
+  printf 'doctor-guidance F2\tpw-project-doctor.sh\t%s --guidance\n' "$S2"
+  printf 'doctor-guidance F3\tpw-project-doctor.sh\t%s --guidance\n' "$S3"
   # config surface (read-only forms; per-fixture doctor covers the walk itself):
   printf 'project show F2\tpw-config.sh\tproject show %s\n' "$S2"
   printf 'global show\tpw-config.sh\tglobal show\n'

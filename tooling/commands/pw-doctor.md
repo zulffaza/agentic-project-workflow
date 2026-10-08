@@ -1,6 +1,6 @@
 ---
-description: Check health — installed commands + skill vs the bundle (global side), or one project's docs/config/gates consistency (--project <slug>); --fix repairs what has a deterministic writer
-args: "[--fix | --project <slug> [--fix]]"
+description: Check health — installed commands + skill vs the bundle (global side), or one project's docs/config/gates consistency (--project <slug>); --fix repairs what has a deterministic writer; --project <slug> --guidance previews or applies scoped workflow-guidance prose repairs
+args: "[--fix | --project <slug> [--fix | --guidance [--apply]]]"
 ---
 Arguments: {{ARGS}}.
 
@@ -25,7 +25,7 @@ moved/renamed bundle, edited command sources, or a stale skill.
 ## Project side (`--project <slug>`) — is THIS project operated well
 
 ```bash
-{{PW_HOME}}/tooling/scripts/toolchain/pw-doctor.sh --project <slug> [--fix]
+{{PW_HOME}}/tooling/scripts/toolchain/pw-doctor.sh --project <slug> [--fix | --guidance [--apply]]
 ```
 (behind it: the deterministic project walk in `tooling/scripts/entities/pw-project-doctor.sh`).
 The report is grouped into 8 human-labelled sections — Documentation & template lint, RFC data
@@ -47,5 +47,24 @@ Present the ✓/✗/· report as-is (· lines are informational and never fail).
   printing its fix command. Report what changed and re-run the check to confirm.
 
 Per-project *configuration values* (not this check) live on `/pw-config`.
+
+## Project guidance repair (`--project <slug> --guidance`) — fix workflow-authored prose leaks
+
+Older projects can carry workflow-authored guidance that names internal scripts where a `/pw-*`
+command exists (an early template taught manual file copying; generated headers named their
+maintaining script). `--guidance` repairs exactly that prose — nothing else:
+
+- **Preview (default, no `--apply`):** shows each matched file, the exact replacement hunk, and
+  anything skipped (already repaired, customized, or not present). Writes nothing — safe anywhere.
+- **`--apply`:** writes the same replacements atomically (bytes outside the matched guidance are
+  preserved exactly — provenance rows, review items, sign-off history, custom sections, stack
+  state, and MR records are never touched). Only run it when I explicitly ask for THIS project.
+- Re-running after an apply reports "nothing to repair" (idempotent).
+- It never runs the health walk, never touches forge/remote state, stack topology, verification
+  bindings, or dashboard phase — and it refuses to combine with `--fix`.
+
+Present the preview as-is; on `--apply`, report what changed and show a re-run preview confirming
+nothing remains. If a skip reason says "customized", leave that text alone and tell me — it is
+not a defect.
 
 Never hand-edit the generated command files — regeneration via the script is the fix.

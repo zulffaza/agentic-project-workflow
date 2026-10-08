@@ -43,9 +43,9 @@ branch) and may add, drop, or correct rows. Do not treat this table as final; th
 branch** (e.g. `master` and `spring3`), give it **one row per base**.
 
 > **Adopted (continuation) projects:** `/pw-adopt` maintains this table for you — it upserts one
-> row per adopted `(repo, base)` deterministically (via `pw-context.sh adopt`, keyed by a hidden
-> `<!-- pw-adopt-scope:… -->` marker). **Don't hand-edit those marker rows** — that's what let a
-> later adoption clobber earlier ones. You may still add your own un-marked guess rows above/below.
+> row per adopted `(repo, base)` deterministically, keyed by a hidden `<!-- pw-adopt-scope:… -->`
+> marker. **Don't hand-edit those marker rows** — that's what let a later adoption clobber earlier
+> ones. You may still add your own un-marked guess rows above/below.
 
 | Repo (in `{{PW_REPOS}}/`) | Base branch (guess) | Why it's in scope |
 |----------------------------|---------------------|-------------------|

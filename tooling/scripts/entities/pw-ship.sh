@@ -82,7 +82,7 @@ PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
 
 die() { echo "pw-ship: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: $PW_HOME/tooling/scripts/toolchain/scaffold.sh $1)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new $1)"; printf '%s' "$d"; }
 
 # ================= READ facet =================================================
 
@@ -660,7 +660,7 @@ cmd_exec() {
         _matched=1
         _av="$(pw_stack_state_get "$D" "$_anc" verified_head)"
         [ -n "$_av" ] \
-          || die "parent $_anc has no verified binding for target '$TARGET_BRANCH' → fix: run pw-ship.sh stack-verify $_anc <evidence> after its ## Verify (or re-run /pw-ship $SLUG $_anc)"
+          || die "parent $_anc has no verified binding for target '$TARGET_BRANCH' → fix: re-run /pw-ship $SLUG $_anc so the parent ships with a verified binding before this child"
         _ohead="$(git -C "$REPO_DIR" rev-parse "origin/$TARGET_BRANCH" 2>/dev/null || true)"
         [ "$_ohead" = "$_av" ] \
           || die "parent target '$TARGET_BRANCH' on origin is not at $_anc's verified head (${_av:0:8}) → fix: push the verified parent first (/pw-ship $SLUG $_anc)"
@@ -804,7 +804,7 @@ _ship_comment_section_ensure() {
   # head/tail/cat sidestep both — no shell-quote gymnastics, no awk variable involved at all.
   local sectionfile; sectionfile="$(mktemp)"
   {
-    printf '\n## MR comment tracking   [🤖-owned — never hand-edit; see `pw-ship.sh comment-seen`]\n\n'
+    printf '\n## MR comment tracking   [🤖-owned — never hand-edit; maintained by /pw-ship comments]\n\n'
     printf "A discussion's \`resolvable\` flag (NOT whether it's diff-anchored vs general — see\n"
     printf "tooling/docs/forges.md) decides whether the forge can ever report it resolved. A \`resolvable: false\`\n"
     printf 'thread (a plain one-off comment) can never report resolved=true via the forge API, no matter how\n'
@@ -839,7 +839,7 @@ cmd_comment_seen() {
   case "$replied" in yes|no) ;; *) die "replied must be 'yes' or 'no' (got '$replied')" ;; esac
   local d; d="$(proj_dir "$slug")"
   local f="$d/task/review/$task.review.md"
-  [ -f "$f" ] || die "no review file: task/review/$task.review.md (run 'pw-review.sh init $slug task/review/$task.review.md task/$task.md' first)"
+  [ -f "$f" ] || die "no review file: task/review/$task.review.md (run '/pw-review $slug init task/$task.md' first)"
   _ship_comment_section_ensure "$f"
   local marker="<!-- pw-mr-comment:$thread -->"
   local shortid="${thread:0:8}"
@@ -1279,10 +1279,10 @@ cmd_stack_record() {
     c="${kv%%=*}"
     case "$c" in
       verified_head|verified_parent|verified_target|verified_at|verified_evidence|freshness|ci_sha|ci_target|landed|landed_into)
-        die "stack-record cannot set '$c' → fix: bind verification with stack-verify (after ## Verify) and observe landing with stack-land (after proof); no unverified/guessed state is accepted";;
+        die "stack-record cannot set '$c' → fix: bind verification with the execute/ship flow (verification after ## Verify, landing after proof); no unverified/guessed state is accepted";;
     esac
   done
-  pw_stack_state_upsert "$d" "$t" "$@" || die "stack-record failed → fix: check the column names (see pw-common.sh PW_STACK_COLS)"
+  pw_stack_state_upsert "$d" "$t" "$@" || die "stack-record failed → fix: check the column names against the stack-state column registry (PW_STACK_COLS)"
   echo "$slug: stack state recorded for $t"
 }
 
@@ -1323,7 +1323,7 @@ cmd_stack_verify() {
   parent_task="$(pw_stack_parent_id "$d" "$t")"
   if [ -n "$parent_task" ]; then
     vp="$(pw_stack_state_get "$d" "$parent_task" verified_head 2>/dev/null || true)"
-    [ -n "$vp" ] || die "parent $parent_task has no verification binding → fix: run pw-ship.sh stack-verify for $parent_task after its ## Verify (execute the parent first)"
+    [ -n "$vp" ] || die "parent $parent_task has no verification binding → fix: execute and ship the parent first (/pw-execute $SLUG $parent_task, then /pw-ship $SLUG $parent_task) — its verified binding must exist before this record"
     git -C "$rd" merge-base --is-ancestor "$vp" "$branch" 2>/dev/null \
       || die "branch $branch does not contain parent $parent_task's verified commit ${vp:0:12} → fix: /pw-sync $slug $t (integrate the updated parent) before binding"
   fi

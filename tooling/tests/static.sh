@@ -56,17 +56,16 @@ static_t4() {
   echo "== T4 consistency & boundaries ==" >&2
   local n hits f hintline
 
-  # 0) fix hints are user-command-only (plan 27 F1; rev i widened): hint/decision literals in
-  # entities/pw-project-doctor.sh AND the add_error remediations the doctor embeds verbatim from
-  # entities/pw-doc.sh must name /pw-* commands or the human-owned pw.config.sh —
-  # never raw scripts ($CFG expansions, tool script names). Comments stay exempt (maintainer prose).
-  hintline="$(awk '!/^[[:space:]]*#/' "$TOOL/scripts/entities/pw-project-doctor.sh" \
-    | grep -E 'echo .*(→ (fix|decision)|decision \(|re-pin)' \
+  # 0) fix hints are user-command-only (plan 27 F1; rev i widened; plan 30 widened to ALL entities):
+  # hint/decision literals in EVERY entity script — echo/→fix lines, die_fix remediations, and the
+  # add_error texts pw-doc.sh embeds — must name /pw-* commands or the human-owned pw.config.sh,
+  # never raw scripts ($CFG expansions, tool script names). Comments stay exempt (maintainer prose);
+  # usage strings without a → fix are the script's own --help surface (agent-facing) and are exempt.
+  hintline="$(awk '!/^[[:space:]]*#/' "$TOOL"/scripts/entities/*.sh \
+    | grep -E '→ (fix|decision)|die_fix|add_error|PHASE_FIX=' \
     | grep -E 'pw-[a-z-]*\.sh|\$CFG|\$\{CFG\}|scaffold\.sh' || true)"
-  lintfix="$(awk '!/^[[:space:]]*#/' "$TOOL/scripts/entities/pw-doc.sh" \
-    | grep -E 'add_error' | grep -E 'pw-[a-z-]*\.sh|\$HERE|scaffold\.sh' || true)"
-  if [ -z "$hintline$lintfix" ]; then pwtest_ok "T4 canary: doctor + doc-lint fix hints are script-free"
-  else pwtest_bad "T4 canary: doctor + doc-lint fix hints are script-free" "$(printf '%s\n%s' "$hintline" "$lintfix" | grep . | head -2 | cut -c1-110 | tr '\n' '|')"; fi
+  if [ -z "$hintline" ]; then pwtest_ok "T4 canary: entity fix hints are script-free (plan 30: all entities)"
+  else pwtest_bad "T4 canary: entity fix hints are script-free" "$(printf '%s' "$hintline" | grep . | head -2 | cut -c1-110 | tr '\n' '|')"; fi
 
   # 1) providers in sync (doctor compares generated vs installed; run before any regen)
   # real PATH during the real-install check: the forge shims change `command -v` answers and
@@ -110,6 +109,34 @@ static_t4() {
   done
   [ -z "$hits" ] && pwtest_ok "T4 user layer free of machinery refs (TOOLING.md hub exempt)" \
     || pwtest_bad "T4 user layer free of machinery refs" "$hits"
+
+  # 3c) templates carry command-only guidance (plan 30): a bare registry script name in any
+  # template is a user-facing leak the D3 path-scan above cannot see (it only greps "tooling/"
+  # paths; `pw-review.sh` in a template slipped through that way).
+  hits=""
+  for f in "$TOOL/../template/"*.md "$TOOL/../template/"*/*.md; do
+    [ -f "$f" ] || continue
+    for n in $PWTEST_AUTOMATION; do
+      grep -qF "$n" "$f" && hits="$hits $n@${f#"$TOOL/../template/"}"
+    done
+  done
+  [ -z "$hits" ] && pwtest_ok "T4 templates free of automation-script names (command-only)" \
+    || pwtest_bad "T4 templates free of automation-script names" "$hits"
+
+  # 3d) the TOOLING hub pins the tree, it does not deep-link it (plan 30): markdown links into
+  # ../tooling/ from the one user-layer exemption are maintainer navigation that belongs in
+  # tooling/AGENTS.md. Prose naming the tree stays allowed (that is the hub's whole job).
+  hits="$(grep -nE '\]\(\.\.?/tooling/' "$TOOL/../docs/TOOLING.md" 2>/dev/null | head -2 | tr '\n' ' ')"
+  [ -z "$hits" ] && pwtest_ok "T4 TOOLING.md carries no maintainer deep links" \
+    || pwtest_bad "T4 TOOLING.md deep links" "found: $hits — the hub names the tree; tooling/AGENTS.md navigates it"
+
+  # 3e) the command relay clauses pin the command-only final-reply contract (plan 30): raw script
+  # diagnostics stay in the agent's working context; the user reply carries cause + /pw-* recovery.
+  grep -qF 'final reply' "$TOOL/commands/pw-context.md" \
+    && grep -qF '/pw-*` action' "$TOOL/commands/pw-context.md" \
+    && grep -qF 'final reply' "$TOOL/commands/pw-review.md" \
+    && pwtest_ok "T4 canary: command relay clauses pin the command-only final reply" \
+    || pwtest_bad "T4 command reply boundary" "pw-context.md/pw-review.md lost the final-reply relay contract"
 
   # 3b) internal plan numbers / issue-record labels never reach published prose — scope now covers
   # root *.md, template/, and tooling/docs (tooling/skill-internal is maintainer-facing, unshipped).
