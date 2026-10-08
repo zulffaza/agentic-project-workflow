@@ -155,6 +155,72 @@ pw_api_filter() {  # stdin catalog lines -> keep those in scope for <agent-provi
   return 0
 }
 
+# --- YAML frontmatter safety (strict-parser regression, 2026-10-08) ----------
+# Kilo 7.8.8 (js-yaml) made a bad command frontmatter FATAL: a plain (unquoted) value that
+# starts with `[` or `{` is parsed as a flow collection — two bracket groups are a parse
+# error ("failed to load command"), one bracket group silently becomes an array. Generated
+# `argument-hint:` values are exactly that shape, so render hooks MUST quote them; canonical
+# `args:` values stay readable unquoted and are quoted here on the way out.
+pw_yaml_quote() {  # <value> -> value as a safe single-line YAML scalar (quotes only when needed)
+  local v="$1" first needs=0
+  case "$v" in
+    \"*\"|\'*\') printf '%s' "$v"; return 0 ;;   # already quoted by the canonical author — trust as-is
+  esac
+  [ -n "$v" ] || { printf '""'; return 0; }
+  first="${v:0:1}"
+  case "$first" in
+    "["|"{"|"&"|"*"|"!"|"%"|"@"|"|"|">"|","|"]"|"}"|"'"|'"'|"#"|"-"|"?"|":") needs=1 ;;
+  esac
+  case "$v" in
+    " "*|*" ") needs=1 ;;
+    *": "*|*" #"*) needs=1 ;;
+    true|false|yes|no|on|off|null|~|True|False|Yes|No|On|Off|NULL|Null) needs=1 ;;
+    *[!0-9.]*) ;;                     # contains a non-numeric char — not a number
+    *) needs=1 ;;                     # digits/dots only — parses as a number; keep it a string
+  esac
+  if [ "$needs" -eq 1 ]; then
+    v="${v//\\/\\\\}"; v="${v//\"/\\\"}"
+    printf '"%s"' "$v"
+  else
+    printf '%s' "$v"
+  fi
+}
+
+pw_frontmatter_error() {  # <file> -> prints the first strict-YAML frontmatter problem (empty = ok)
+  # Minimal, dependency-free detector for the classes strict parsers (kilo 7.8.8 js-yaml)
+  # reject in flat command frontmatter:
+  #   - a plain value starting with a flow indicator `[` / `{` (parse error or array)
+  #   - a plain `key: value: rest` (colon-space inside an unquoted value)
+  #   - frontmatter opened with `---` but never closed
+  # Single-line `key: value` shapes only — that is what the hub/pw generators emit.
+  awk '
+    BEGIN { started=0; closed=0; pending=0; err="" }
+    NR==1 {
+      if ($0 != "---") exit
+      started=1; next
+    }
+    started && !closed && $0=="---" { closed=1; exit }
+    started && !closed {
+      v=$0
+      if (v ~ /^[ \t]*$/) next
+      if (v ~ /^[ \t]*#/) { pending=0; next }
+      if (v ~ /^[ \t]/) {                       # indented continuation of a pending key value
+        if (pending && v ~ /^[ \t]*[[{]/) { err="line " NR ": flow indicator on an own-line value (quote it)"; exit }
+        pending=0; next
+      }
+      if (v !~ /^[A-Za-z_][A-Za-z0-9_-]*:/) { pending=0; next }
+      val=v; sub(/^[A-Za-z_][A-Za-z0-9_-]*:[ \t]*/, "", val)
+      if (val=="") { pending=1; next }
+      pending=0
+      head=substr(val,1,1)
+      if (head=="\"" || head=="\047") next      # quoted — fine
+      if (head=="[" || head=="{") { err="line " NR ": plain value starts with a flow indicator (quote it): " val; exit }
+      if (val ~ /: / || val ~ /:$/) { err="line " NR ": colon-space in an unquoted value (quote it): " val; exit }
+    }
+    END { if (err!="") print err; else if (started && !closed) print "frontmatter opened with --- but never closed" }
+  ' "$1"
+}
+
 # --- built-in provider hooks (a function defined in pw.config.sh overrides these) ---
 # Each Agent Provider needs the four REQUIRED hooks (bin/skilldir/commanddir/
 # render_*_command; cursor adds cursor_* to the family), plus the optional agent-seeding
@@ -168,15 +234,15 @@ declare -f claude_agentdir   >/dev/null 2>&1 || claude_agentdir()   { echo "$HOM
 # render_<prov>_command: gen-commands.sh sets $desc $args $agent $bodytext (from the canonical
 # tooling/commands/*.md file) before calling this — print the finished command file to stdout.
 declare -f render_claude_command >/dev/null 2>&1 || render_claude_command() {
-  printf -- '---\ndescription: %s\n' "$desc"
-  [ -n "$args" ] && printf -- 'argument-hint: %s\n' "$args"
+  printf -- '---\ndescription: %s\n' "$(pw_yaml_quote "$desc")"
+  [ -n "$args" ] && printf -- 'argument-hint: %s\n' "$(pw_yaml_quote "$args")"
   printf -- '---\n%s' "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
 }
 # render_<prov>_agent: gen-agents.sh sets $agentname (basename) $desc $displayName $role
 # $claude_tools $model $bodytext (from the canonical tooling/agents/*.md file) before calling
 # this — print the finished agent file to stdout, wrapping $bodytext in this provider's frontmatter.
 declare -f render_claude_agent >/dev/null 2>&1 || render_claude_agent() {
-  printf -- '---\nname: %s\ndescription: %s\n' "$agentname" "$desc"
+  printf -- '---\nname: %s\ndescription: %s\n' "$agentname" "$(pw_yaml_quote "$desc")"
   [ -n "$claude_tools" ] && printf -- 'tools: %s\n' "$claude_tools"
   [ -n "$model" ] && printf -- 'model: %s\n' "$model"
   printf -- '---\n%s' "$bodytext"
@@ -200,12 +266,12 @@ declare -f kilo_skilldir   >/dev/null 2>&1 || kilo_skilldir()   { echo "$HOME/.k
 declare -f kilo_commanddir >/dev/null 2>&1 || kilo_commanddir() { echo "$HOME/.config/kilo/command"; }
 declare -f kilo_agentdir   >/dev/null 2>&1 || kilo_agentdir()   { echo "$HOME/.config/kilo/agent"; }
 declare -f render_kilo_command >/dev/null 2>&1 || render_kilo_command() {
-  printf -- '---\ndescription: %s\n' "$desc"
+  printf -- '---\ndescription: %s\n' "$(pw_yaml_quote "$desc")"
   [ -n "$agent" ] && printf -- 'agent: %s\n' "$agent"
   printf -- '---\n%s' "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
 }
 declare -f render_kilo_agent >/dev/null 2>&1 || render_kilo_agent() {  local mode="subagent"; [ "$role" = "orchestrator" ] && mode="primary"
-  printf -- '---\nmode: %s\ndescription: %s\n' "$mode" "$desc"
+  printf -- '---\nmode: %s\ndescription: %s\n' "$mode" "$(pw_yaml_quote "$desc")"
   # A canonical `model:` now renders through to kilo as well (verified 2026-09-04 with a probe md:
   # an `agent/*.md` file with `mode:`+`options:` registers without any kilo.jsonc map block, and a
   # `model:` line in that md binds the agent — outranking a map block for the same name if both
@@ -240,13 +306,13 @@ declare -f opencode_skilldir   >/dev/null 2>&1 || opencode_skilldir()   { echo "
 declare -f opencode_commanddir >/dev/null 2>&1 || opencode_commanddir() { echo "$HOME/.config/opencode/commands"; }
 declare -f opencode_agentdir   >/dev/null 2>&1 || opencode_agentdir()   { echo "$HOME/.config/opencode/agents"; }
 declare -f render_opencode_command >/dev/null 2>&1 || render_opencode_command() {
-  printf -- '---\ndescription: %s\n' "$desc"
+  printf -- '---\ndescription: %s\n' "$(pw_yaml_quote "$desc")"
   [ -n "$agent" ] && printf -- 'agent: %s\n' "$agent"
   printf -- '---\n%s' "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
 }
 declare -f render_opencode_agent >/dev/null 2>&1 || render_opencode_agent() {
   local mode="subagent"; [ "$role" = "orchestrator" ] && mode="primary"
-  printf -- '---\ndescription: %s\nmode: %s\n' "$desc" "$mode"
+  printf -- '---\ndescription: %s\nmode: %s\n' "$(pw_yaml_quote "$desc")" "$mode"
   [ -n "$model" ] && printf -- 'model: %s\n' "$model"
   # Same defensive stance as render_kilo_agent: never deny the orchestrator worktree edits.
   # Unconfirmed whether OpenCode propagates session permissions to spawned sub-agents the way
@@ -278,8 +344,10 @@ declare -f render_cursor_command >/dev/null 2>&1 || render_cursor_command() {
   # Command name derives from the FILENAME (pw-status.md -> /pw-status); `agent:` is Kilo-only
   # sugar and has no cursor equivalent — omitted (inline lane-persona bodies self-execute).
   # $ARGUMENTS + positional $1..$n expansion and `argument-hint` verified in the CLI bundle.
-  printf -- '---\ndescription: %s\n' "$desc"
-  [ -n "$args" ] && printf -- 'argument-hint: %s\n' "$args"
+  # Values go through pw_yaml_quote: an unquoted `[...] [...]` argument-hint is a strict-YAML
+  # parse error (kilo 7.8.8 regression) / array instead of string.
+  printf -- '---\ndescription: %s\n' "$(pw_yaml_quote "$desc")"
+  [ -n "$args" ] && printf -- 'argument-hint: %s\n' "$(pw_yaml_quote "$args")"
   printf -- '---\n%s' "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
 }
 declare -f render_cursor_agent >/dev/null 2>&1 || render_cursor_agent() {
@@ -288,7 +356,7 @@ declare -f render_cursor_agent >/dev/null 2>&1 || render_cursor_agent() {
   # $claude_tools intentionally ignored here. `model:` passes through when set (verified
   # accepted + nested spawn still works 2026-09-09); canonical defs ship it unset (false-pin
   # rule — docs/EXECUTION.md §Spawning phase work).
-  printf -- '---\nname: %s\ndescription: %s\n' "$agentname" "$desc"
+  printf -- '---\nname: %s\ndescription: %s\n' "$agentname" "$(pw_yaml_quote "$desc")"
   [ -n "$model" ] && printf -- 'model: %s\n' "$model"
   printf -- '---\n%s' "$bodytext"
 }
@@ -329,7 +397,7 @@ declare -f render_codex_command >/dev/null 2>&1 || render_codex_command() {
   # {{ARGS}} → `<arguments>`: codex skills have NO argument-expansion token — arguments arrive as
   # the user's invocation text and `<arguments>` is self-describing to the model (canonical bodies
   # already say "Arguments: … (first token = project slug …)").
-  printf -- '---\nname: %s\ndescription: %s\n---\n%s' "$name" "$desc" "${bodytext//\{\{ARGS\}\}/<arguments>}"
+  printf -- '---\nname: %s\ndescription: %s\n---\n%s' "$name" "$(pw_yaml_quote "$desc")" "${bodytext//\{\{ARGS\}\}/<arguments>}"
 }
 declare -f render_codex_skill_policy >/dev/null 2>&1 || render_codex_skill_policy() {
   # agents/openai.yaml — product policy read by the harness, not the model (spec: the built-in

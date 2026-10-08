@@ -1,6 +1,6 @@
 ---
 description: Check health — installed commands + skill vs the bundle (global side), or one project's docs/config/gates consistency (--project <slug>); --fix repairs what has a deterministic writer
-args: [--fix | --project <slug> [--fix]]
+args: "[--fix | --project <slug> [--fix]]"
 ---
 Arguments: {{ARGS}}.
 

@@ -174,6 +174,27 @@ _pw_doctor_model_catalog() {
   return 0
 }
 
+# --- canonical command sources (strict-YAML frontmatter) -------------------------------------
+# Kilo 7.8.8 made a bad command frontmatter FATAL (js-yaml parse): a plain (unquoted) value
+# starting with `[` parses as a flow collection — TWO bracket groups kill the command
+# ("failed to load command"), one bracket group silently becomes an array instead of a string.
+# Rendered copies are quoted by the render hooks (pw_yaml_quote); the CANONICAL sources are
+# human-authored and this doctor never rewrites them, so flag them for a manual fix — and keep
+# the verdict failing even under --fix, because --fix cannot repair them.
+manual_issues=0
+for cf in "$PW_HOME"/tooling/commands/*.md "$PW_HOME"/tooling/agents/*.md; do
+  [ -f "$cf" ] || continue
+  cf_err="$(pw_frontmatter_error "$cf")"
+  if [ -n "$cf_err" ]; then
+    echo "  ✗ canonical ${cf#"$PW_HOME"/}: $cf_err"
+    manual_issues=$((manual_issues+1))
+  fi
+done
+if [ "$manual_issues" -eq 0 ]; then
+  echo "  ✓ canonical command/agent frontmatter strict-YAML clean (tooling/{commands,agents})"
+fi
+echo
+
 # --- per provider ------------------------------------------------------------
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 for p in "${PW_PROVIDERS[@]}"; do
@@ -254,6 +275,29 @@ for p in "${PW_PROVIDERS[@]}"; do
   # compared as whole trees, so drift in the policy file counts too.
   odir="$("${p}_commanddir")"
   "$HERE/gen-commands.sh" --outdir "$tmp" "$p" >/dev/null
+  # strict-YAML frontmatter of the freshly rendered copies — never trust the render hooks alone;
+  # this is the same code path that installs them (kilo 7.8.8 made bad frontmatter fatal).
+  fw_bad=0
+  if [ "$cmdstyle" = "skill" ]; then
+    for exp in "$tmp/$p"/*/SKILL.md; do
+      [ -e "$exp" ] || continue
+      fw_err="$(pw_frontmatter_error "$exp")"
+      if [ -n "$fw_err" ]; then
+        echo "    ✗ rendered $(basename "$(dirname "$exp")")/SKILL.md frontmatter invalid: $fw_err"; fw_bad=$((fw_bad+1))
+      fi
+    done
+  else
+    for exp in "$tmp/$p"/*.md; do
+      [ -e "$exp" ] || continue
+      fw_err="$(pw_frontmatter_error "$exp")"
+      if [ -n "$fw_err" ]; then
+        echo "    ✗ rendered $(basename "$exp") frontmatter invalid: $fw_err"; fw_bad=$((fw_bad+1))
+      fi
+    done
+  fi
+  if [ "$fw_bad" -gt 0 ]; then
+    echo "    ✗ $fw_bad rendered command file(s) with invalid frontmatter — fix the render_${p}_command hook / pw_yaml_quote"; issues=$((issues+1))
+  fi
   drift=0; missing=0
   if [ "$cmdstyle" = "skill" ]; then
     for exp in "$tmp/$p"/*/; do
@@ -334,6 +378,18 @@ for p in "${PW_PROVIDERS[@]}"; do
   if pw_provider_has_agent_hooks "$p"; then
     adir="$("${p}_agentdir")"
     "$HERE/gen-agents.sh" --outdir "$tmp/agents" "$p" >/dev/null 2>&1
+    # strict-YAML frontmatter of the freshly rendered agents (same guard as the commands check)
+    afw_bad=0
+    for exp in "$tmp/agents/$p"/*.md; do
+      [ -e "$exp" ] || continue
+      fw_err="$(pw_frontmatter_error "$exp")"
+      if [ -n "$fw_err" ]; then
+        echo "    ✗ rendered $(basename "$exp") frontmatter invalid: $fw_err"; afw_bad=$((afw_bad+1))
+      fi
+    done
+    if [ "$afw_bad" -gt 0 ]; then
+      echo "    ✗ $afw_bad rendered agent file(s) with invalid frontmatter — fix render_${p}_agent / pw_yaml_quote"; issues=$((issues+1))
+    fi
     adrift=0; amissing=0
     for exp in "$tmp/agents/$p"/*.md; do
       n="$(basename "$exp")"
@@ -455,13 +511,17 @@ if printf '%s\n' "${PW_PROVIDERS[@]:-}" | grep -qx cursor; then
 fi
 
 # --- verdict -----------------------------------------------------------------
-if [ "$issues" -eq 0 ]; then
+if [ "$issues" -eq 0 ] && [ "$manual_issues" -eq 0 ]; then
   echo "All synced ✓"
   exit 0
 fi
-if [ "$FIX" -eq 1 ]; then
+if [ "$FIX" -eq 1 ] && [ "$manual_issues" -eq 0 ]; then
   echo "$issues issue(s) — fixes applied above. Re-run pw-doctor.sh to confirm."
   exit 0
 fi
-echo "$issues issue(s) out of sync. Fix with:  /pw-doctor --fix   (or ./bootstrap.sh after a bundle update)"
+manual_note=""
+if [ "$manual_issues" -gt 0 ]; then
+  manual_note=" $manual_issues canonical source issue(s) need a hand fix (see above)."
+fi
+echo "$issues issue(s) out of sync.$manual_note Fix with:  /pw-doctor --fix   (or ./bootstrap.sh after a bundle update)"
 exit 1

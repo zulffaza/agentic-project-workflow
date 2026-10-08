@@ -71,4 +71,19 @@ rm -rf "$FH/.agents/skills/project-workflow"
 cp -R "$PW/tooling/skill/project-workflow" "$FH/.agents/skills/project-workflow"
 pwtest_rc 0 "identical foreign copy passes (only staleness is a defect)" env HOME="$FH" bash "$DOCTOR"
 
+# 6) strict-YAML frontmatter guard (kilo 7.8.8 regression): a canonical source with an
+# unquoted flow-leading `args:` is NAMED (manual fix) and --fix must NOT report success —
+# the doctor never rewrites canonical sources. Restoring the source returns to clean.
+sed -i '' 's#^args: .*#args: [--fix | --project <slug> [--fix]]#' "$PW/tooling/commands/pw-doctor.md"
+pwtest_rc 1 "canonical flow-leading args fails the check" env HOME="$FH" bash "$DOCTOR"
+grep -q "canonical tooling/commands/pw-doctor.md" "$PWTEST_BOTH" && grep -q "quote it" "$PWTEST_BOTH" \
+  && pwtest_ok "canonical frontmatter issue is named with the fix" \
+  || pwtest_bad "canonical frontmatter issue named" "$(grep '✗' "$PWTEST_BOTH" | tr '\n' ' ')"
+pwtest_rc 1 "doctor --fix cannot silently clear a canonical issue" env HOME="$FH" bash "$DOCTOR" --fix
+grep -q "need a hand fix" "$PWTEST_BOTH" \
+  && pwtest_ok "--fix output points at the manual canonical fix" \
+  || pwtest_bad "--fix manual note" "$(tail -2 "$PWTEST_BOTH" | tr '\n' ' ')"
+cp "$TOOL/commands/pw-doctor.md" "$PW/tooling/commands/pw-doctor.md"
+pwtest_rc 0 "restored canonical source returns to clean" env HOME="$FH" bash "$DOCTOR" --fix
+
 rm -rf "$DOCDIR"

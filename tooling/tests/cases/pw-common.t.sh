@@ -75,3 +75,69 @@ fi
   && pwtest_ok "flat providers still generate <name>.md (no regression)" \
   || pwtest_bad "flat layout regression" "cursor output shape changed under $GD/cursor"
 rm -rf "$GD"
+
+# --- strict-YAML frontmatter safety (2026-10-08): Kilo 7.8.8 made a command frontmatter with
+# an unquoted `[`-leading value FATAL (js-yaml flow collection; two bracket groups = parse
+# error, one = array). pw_yaml_quote must guard every generated argument-hint, and
+# pw_frontmatter_error must detect the class in canonical sources / rendered copies. ---
+pwtest_eq "pw_yaml_quote quotes a flow-leading hint" \
+  "$(pw_yaml_quote '[--fix | --project <slug> [--fix]]')" '"[--fix | --project <slug> [--fix]]"'
+pwtest_eq "pw_yaml_quote leaves plain text alone" "$(pw_yaml_quote 'plain desc')" 'plain desc'
+pwtest_eq "pw_yaml_quote leaves pre-quoted values alone" "$(pw_yaml_quote '"[--fix]"')" '"[--fix]"'
+pwtest_eq "pw_yaml_quote quotes bool lookalikes" "$(pw_yaml_quote 'yes')" '"yes"'
+pwtest_eq "pw_yaml_quote quotes number lookalikes" "$(pw_yaml_quote '2026')" '"2026"'
+
+tf="$PWTEST_ROOT/fm-two.md"
+printf -- '---\ndescription: d\nargument-hint: [--project x] [--apply]\n---\nbody\n' > "$tf"
+[ -n "$(pw_frontmatter_error "$tf")" ] && pwtest_ok "frontmatter error: two flow groups" \
+  || pwtest_bad "frontmatter error: two flow groups" "not detected in $tf"
+printf -- '---\ndescription: d\nargument-hint: [--fix]\n---\nbody\n' > "$tf"
+[ -n "$(pw_frontmatter_error "$tf")" ] && pwtest_ok "frontmatter error: single flow group (array)" \
+  || pwtest_bad "frontmatter error: single flow group" "not detected in $tf"
+printf -- '---\ndescription: d\nargument-hint: "[--fix]"\n---\nbody\n' > "$tf"
+[ -z "$(pw_frontmatter_error "$tf")" ] && pwtest_ok "frontmatter ok: quoted flow value" \
+  || pwtest_bad "frontmatter ok: quoted flow value" "$(pw_frontmatter_error "$tf")"
+printf -- '---\ndescription: Bad: colon\n---\nbody\n' > "$tf"
+[ -n "$(pw_frontmatter_error "$tf")" ] && pwtest_ok "frontmatter error: colon-space" \
+  || pwtest_bad "frontmatter error: colon-space" "not detected in $tf"
+printf -- '---\ndescription: fine\n---\nbody\n' > "$tf"
+[ -z "$(pw_frontmatter_error "$tf")" ] && pwtest_ok "frontmatter ok: plain description" \
+  || pwtest_bad "frontmatter ok: plain description" "$(pw_frontmatter_error "$tf")"
+printf -- '---\ndescription: d\nnever closed\n' > "$tf"
+[ -n "$(pw_frontmatter_error "$tf")" ] && pwtest_ok "frontmatter error: unclosed" \
+  || pwtest_bad "frontmatter error: unclosed" "not detected in $tf"
+printf -- '# no frontmatter\n' > "$tf"
+[ -z "$(pw_frontmatter_error "$tf")" ] && pwtest_ok "frontmatter ok: absent frontmatter tolerated" \
+  || pwtest_bad "frontmatter ok: absent frontmatter" "$(pw_frontmatter_error "$tf")"
+
+# every live canonical source must be clean (the doctor reports these by hand)
+_canon_bad=""
+for _cf in "$TOOL"/commands/*.md "$TOOL"/agents/*.md; do
+  [ -f "$_cf" ] || continue
+  [ -z "$(pw_frontmatter_error "$_cf")" ] || _canon_bad="$_canon_bad $(basename "$_cf")"
+done
+[ -z "$_canon_bad" ] && pwtest_ok "canonical command/agent frontmatter all strict-YAML clean" \
+  || pwtest_bad "canonical command/agent frontmatter" "invalid:$_canon_bad"
+
+# render hooks must quote: render a claude command from a hostile $args and strict-check it
+desc='d'; args='[--fix | --project <slug> [--fix]]'; agent=''; bodytext='Arguments: {{ARGS}}.'
+rf="$PWTEST_ROOT/fm-render.md"
+render_claude_command > "$rf"
+[ -z "$(pw_frontmatter_error "$rf")" ] && pwtest_ok "claude render quotes argument-hint (strict-YAML valid)" \
+  || pwtest_bad "claude render quoting" "$(pw_frontmatter_error "$rf"); file: $(cat "$rf")"
+grep -q '^argument-hint: "\[' "$rf" && pwtest_ok "claude render emits the quoted hint verbatim" \
+  || pwtest_bad "claude render hint shape" "$(grep '^argument-hint' "$rf")"
+render_cursor_command > "$rf"
+[ -z "$(pw_frontmatter_error "$rf")" ] && pwtest_ok "cursor render quotes argument-hint (strict-YAML valid)" \
+  || pwtest_bad "cursor render quoting" "$(pw_frontmatter_error "$rf"); file: $(cat "$rf")"
+
+# agent render hooks share the guard (a flow-leading description must come out quoted)
+desc='[flow-leading] agent description'; args=''; agent=''; bodytext='body'
+agentname='pw-testagent'; displayName='Test Agent'; role='executor'; claude_tools=''; model=''
+af="$PWTEST_ROOT/fm-render-agent.md"
+render_claude_agent > "$af"
+[ -z "$(pw_frontmatter_error "$af")" ] && pwtest_ok "claude agent render quotes description (strict-YAML valid)" \
+  || pwtest_bad "claude agent render quoting" "$(pw_frontmatter_error "$af"); file: $(cat "$af")"
+render_kilo_agent > "$af"
+[ -z "$(pw_frontmatter_error "$af")" ] && pwtest_ok "kilo agent render quotes description (strict-YAML valid)" \
+  || pwtest_bad "kilo agent render quoting" "$(pw_frontmatter_error "$af"); file: $(cat "$af")"
