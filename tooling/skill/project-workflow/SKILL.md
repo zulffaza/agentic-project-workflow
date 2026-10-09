@@ -1,6 +1,6 @@
 ---
 name: project-workflow
-description: Run a multi-repo change through the phased AI-agent pipeline for a scaffolded project directory (context/, analysis/, task/, worktree/) — context → analysis → task breakdown → parallel worktree execution → review → learn. Use whenever working inside a project's own scaffolded directory (context/, analysis/, task/, worktree/), when asked to analyze context, break analysis into tasks, write or read an orchestration PLAN.md, spawn executor sub-agents against git worktrees, or scaffold a new project from the bundle. Also use when the user mentions the "project workflow", "task breakdown", "orchestration plan", or multi-repo agentic execution.
+description: Run a multi-repo change through the phased AI-agent pipeline for a scaffolded project directory (context/, analysis/, task/, worktree/) — context → analysis → task breakdown → parallel worktree execution → review → learn. Use whenever working inside a project's own scaffolded directory (context/, analysis/, task/, worktree/), when asked to prepare project context or draft requirements, when asked to analyze context, break analysis into tasks, write or read an orchestration PLAN.md, spawn executor sub-agents against git worktrees, or scaffold a new project from the bundle. Also use when the user mentions the "project workflow", "task breakdown", "orchestration plan", or multi-repo agentic execution.
 ---
 
 # Project Workflow (multi-repo agentic pipeline)
@@ -26,6 +26,7 @@ phase runs. Don't skip a gate.
 
 | You're asked to... | Load |
 |---|---|
+| prepare `context/` from the user's intent (`/pw-context <slug> prepare`) | [`references/context.md`](references/context.md) |
 | analyze `context/` | [`references/analysis.md`](references/analysis.md) |
 | break approved analysis into tasks | [`references/breakdown.md`](references/breakdown.md) |
 | execute `task/PLAN.md`, or pick a model/provider for a task | [`references/execution-and-routing.md`](references/execution-and-routing.md) |
@@ -54,7 +55,8 @@ phase runs. Don't skip a gate.
   `pw-context.sh adopt-snapshot`, `pw-doc.sh sync`. Deterministic document writes (never hand-copy
   template blocks): `pw-review.sh` (`init|init-docs|init-all|start|add-item|answer|add-question|resolve`;
   `init-all` is current-phase-only, `signoff` is human-triggered only — C4 — and `start` can only
-  ever write `changes-requested`, never approval) and `pw-context.sh` (`req-init|add-input|add-repo`).
+  ever write `changes-requested`, never approval) and `pw-context.sh` (`req-init|add-input|add-repo`
+  plus preparation's keyed `ensure-input|ensure-repo`).
   The `/pw-*` commands already invoke their share; when
   you reach a phase **without** the command (direct spawn, skill-only session), run the same calls
   yourself — identical behavior whichever path triggers the work is the point.

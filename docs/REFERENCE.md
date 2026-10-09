@@ -20,6 +20,7 @@ Task IDs are `T01`, `T02`, etc. Multiple task IDs use spaces.
 |---|---|
 | `/pw-new <slug>` | Create a fresh project |
 | `/pw-adopt <slug> <repo> <branch> [mr-url] [review]` | Continue existing work; trailing `review` requires an MR |
+| `/pw-context <slug> prepare [brief]` | Let the agent draft the context from your intent: requirements brief, inputs, repository guesses; stops before analysis |
 | `/pw-context <slug> req-init` | Create an optional requirements brief, preserving an existing file |
 | `/pw-context <slug> add-input --file <f> --what <description> --source <source> [--trust <notes>]` | Register one input's provenance |
 | `/pw-context <slug> add-repo <repo> <base> <why>` | Register repository scope |

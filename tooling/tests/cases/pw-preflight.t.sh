@@ -17,6 +17,16 @@ A=ana-f1; rm -rf "$PW_PROJECTS_DIR/$A"; cp -a "$F1" "$PW_PROJECTS_DIR/$A"
 printf -- '| REQUIREMENTS.md | the brief | hand | 2026-01-01 | seed |\n' >> "$PW_PROJECTS_DIR/$A/context/INDEX.md"
 pwtest_rc 0 "analyze passes with one REAL context row" "$(pwtest_script pw-preflight.sh)" analyze "$A"
 rm -rf "$PW_PROJECTS_DIR/$A"
+# prepare gate (assisted context preparation): phase context only, and an EMPTY scaffolded
+# context is exactly the accepted starting point (contrast: analyze above refuses F1's
+# example-only INDEX) — while analysis keeps its own empty-input gate.
+pwtest_rc 0 "prepare gate accepts an empty scaffolded context (F1)" "$(pwtest_script pw-preflight.sh)" prepare "$S1"
+pwtest_rc 1 "prepare gate refuses a later phase (F2 = executing)" "$(pwtest_script pw-preflight.sh)" prepare "$S2"
+pwtest_err "cannot prepare in phase 'executing'" "prepare refusal names the phase"
+pwtest_err "rewind context" "prepare refusal carries the rewind recovery"
+pwtest_fix "prepare refusal actionable"
+pwtest_rc 1 "prepare gate refuses unknown project" "$(pwtest_script pw-preflight.sh)" prepare nope-not-here
+pwtest_fix "unknown-project refusal actionable"
 pwtest_rc 1 "analyze after phase moved on names --rewind" "$(pwtest_script pw-preflight.sh)" analyze "$S2"
 pwtest_err "analysis --rewind|must be: context analysis" "phase refusal carries the rewind repair"
 # ship gate: unshipped shippable exists (T01) → ready

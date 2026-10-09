@@ -1,15 +1,39 @@
 ---
-description: Deterministically edit the project's context docs — create the REQUIREMENTS.md brief from its template, add a provenance row to the context/INDEX.md inputs table, or add a repo to the "Repos in scope" table
-args: <project-slug> <req-init | add-input | add-repo> …
+description: Deterministically edit the project's context docs — create the REQUIREMENTS.md brief, add a provenance row or repo row — or let the agent prepare reviewable context from your stated intent
+args: <project-slug> <req-init | add-input | add-repo | prepare> …
 ---
 Arguments: {{ARGS}}. Project dir: `{{PW_PROJECTS}}/<slug>`.
 
-**This command is a mechanical mapping (C3): parse the arguments per the A-rules
-(`{{PW_HOME}}/tooling/docs/conventions.md`), run the script verbatim, show its output. No
-judgment, no doc reading, never hand-edit `context/INDEX.md` / `REQUIREMENTS.md` instead — the
-script keeps the table shapes, dates, escaping, and `/pw-adopt` marker rows safe.**
+**Operator split — get this right.** The row operators are a mechanical mapping (C3).
+`req-init`, `add-input`, and `add-repo` parse the arguments per the A-rules
+(`{{PW_HOME}}/tooling/docs/conventions.md`), run the script verbatim, and show its output — no
+judgment, no doc reading, never hand-edit `context/INDEX.md` / `REQUIREMENTS.md` instead; the
+script keeps the table shapes, dates, escaping, and `/pw-adopt` marker rows safe. **`prepare` is
+the one reasoning operator on this command**: it loads the `project-workflow` skill's
+`references/context.md` and follows that contract; it still writes every table and workflow-state
+change through the entity helpers, and it stops before analysis.
 
 The 2nd argument is the operator:
+
+- **`/pw-context <slug> prepare [free-form brief]`** — assisted preparation for an existing
+  project: turn my request into reviewable context (requirements draft, traceable inputs,
+  evidence-backed repository guesses). In order:
+  1. **Phase gate first — before any write.** Run
+     `{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh prepare <slug>`; non-zero = STOP and
+     relay its `→ fix:` (a project that moved on needs `/pw-status <slug> rewind context`, with
+     the affected analysis/PLAN reviews reopened first). Change nothing before the gate passes.
+  2. Load the `project-workflow` skill's `references/context.md` and run its preparation flow:
+     read the dashboard, context index, existing brief, and relevant inputs; draft the existing
+     requirements sections — separate my stated requirements, source-backed constraints, and
+     agent suggestions; gather sources once; record supported repository guesses.
+  3. Save through the entity helpers only — `req-init` (missing brief), `ensure-input` /
+     `ensure-repo` (keyed: a repeat run updates rows in place and never duplicates them), and one
+     preparation record via the status/log helper. Preserve user edits and `/pw-adopt` records.
+  4. Verify the saved context, then reply with the brief + index links, the unresolved decisions,
+     source gaps, and the next action (`/pw-analyze <slug>` when the draft is usable). **Stop
+     before analysis** — no analysis, no approval, no automatic `/pw-analyze`.
+  An omitted brief means resume from the saved context and this conversation; if both are empty,
+  ask me for the intended outcome before constructing requirements.
 
 - **`/pw-context <slug> req-init`** → `{{PW_HOME}}/tooling/scripts/entities/pw-context.sh req-init <slug>` —
   creates `context/REQUIREMENTS.md` from its template (idempotent; an existing brief is never

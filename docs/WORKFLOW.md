@@ -22,11 +22,15 @@ For concrete commands at every checkpoint, follow the [walkthrough](WALKTHROUGH.
 
 Create a project with `/pw-new <slug>`. It appears at `$PW_PROJECTS/<slug>/`.
 Provide requirements, tickets, document excerpts, relevant code references, or logs in `context/`.
-Register each source with `/pw-context <slug> add-input` and each repository with `add-repo`.
+The assisted path drafts that context for you: state the outcome and constraints, then
+`/pw-context <slug> prepare <brief>` writes a requirements draft, registers inputs, and proposes
+repository rows with evidence. Review and correct the files before analysis.
+The manual path stays available: write the brief yourself and register each source with
+`/pw-context <slug> add-input` and each repository with `add-repo`.
 Include the real base branch for each repository.
 
-Use `/pw-context <slug> req-init` for an optional requirements brief. Fill it before analysis.
-Initialization creates a template copy; source registration records provenance. Neither supplies your requirements.
+Manual brief creation uses `/pw-context <slug> req-init`. Fill it before analysis.
+Initialization creates a template copy; source registration records provenance; neither supplies your requirements.
 See [context recipes](RECIPES.md#add-context-or-continue-existing-work) for full argument examples.
 
 Check that `context/INDEX.md` contains useful inputs and repository scope before analysis.

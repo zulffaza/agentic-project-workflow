@@ -80,6 +80,65 @@ PY
 grep -q 'added context input' "$P/LOG.md" && pwtest_ok "add-input logged" || pwtest_bad "add-input LOG" "nothing recorded"
 grep -q 'added repo' "$P/LOG.md" && pwtest_ok "add-repo logged" || pwtest_bad "add-repo LOG" "nothing recorded"
 
+# 6) ensure-input/ensure-repo (assisted preparation's keyed upserts, plan 38): phase context
+# only, idempotent reruns, in-place updates preserving the original date/user edits, separate
+# bases, adopt-marker safety, duplicate conflicts refuse without writing. Private F1 clone
+# (context phase); the F2 clone above ($CX, executing) owns the phase-guard check.
+EN=ctx-ensure; rm -rf "$PW_PROJECTS_DIR/$EN"; cp -a "$F1" "$PW_PROJECTS_DIR/$EN"
+PE="$PW_PROJECTS_DIR/$EN"; IDXE="$PE/context/INDEX.md"
+pwtest_rc 0 "ensure-input adds (fresh context phase)" "$C" ensure-input "$EN" --file REQUIREMENTS.md --what "project brief" --source "user instruction, 9 Oct 2026" --trust "owner brief"
+pwtest_grep_file '^\| REQUIREMENTS.md \| project brief \| user instruction, 9 Oct 2026 \| [0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\.[0-9]{2} WIB \| owner brief \|$' \
+  "ensure-input row shape + dashed date" "$IDXE"
+_ens_sha="$(shasum "$IDXE" | awk '{print $1}')"
+pwtest_rc 0 "ensure-input rerun identical" "$C" ensure-input "$EN" --file REQUIREMENTS.md --what "project brief" --source "user instruction, 9 Oct 2026" --trust "owner brief"
+pwtest_re 'already present \(unchanged\)' "rerun reports unchanged"
+[ "$(shasum "$IDXE" | awk '{print $1}')" = "$_ens_sha" ] && pwtest_ok "rerun is a byte no-op" || pwtest_bad "rerun no-op" "INDEX.md bytes changed"
+pwtest_rc 0 "ensure-input update in place (trust change)" "$C" ensure-input "$EN" --file REQUIREMENTS.md --what "project brief" --source "user instruction, 9 Oct 2026" --trust "owner brief, reviewed"
+pwtest_re 'input row updated' "update reported"
+pwtest_grep_file '^\| REQUIREMENTS.md \| project brief \| user instruction, 9 Oct 2026 \| [0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\.[0-9]{2} WIB \| owner brief, reviewed \|$' "update keeps the original date" "$IDXE"
+[ "$(awk '/^\| File \/ link \|/{f=1} f && /^## /{exit} f && /^\| REQUIREMENTS\.md \|/' "$IDXE" | awk 'NF{n++} END{print n+0}')" = 1 ] \
+  && pwtest_ok "update did not duplicate the row" || pwtest_bad "ensure-input dedupe" "row count != 1"
+pwtest_rc 0 "ensure-input escapes pipes" "$C" ensure-input "$EN" --file notes.md --what 'my notes | draft' --source PROJ-123
+pwtest_grep_file '^\| notes.md \| my notes \\\| draft \| PROJ-123 \|' "pipe escaped in ensure row" "$IDXE"
+pwtest_rc 0 "ensure-input URL keeps query params" "$C" ensure-input "$EN" --file 'https://x.example/doc?a=1&b=2' --what spec --source web
+pwtest_rc 0 "ensure-input same URL again" "$C" ensure-input "$EN" --file 'https://x.example/doc?a=1&b=2' --what spec --source web
+[ "$(grep -c 'doc?a=1&b=2' "$IDXE")" = 1 ] && pwtest_ok "URL query preserved, not duplicated" || pwtest_bad "URL identity" "URL row count != 1"
+python3 - "$IDXE" <<'PY'
+import sys
+f = sys.argv[1]; t = open(f).read()
+dup = "| REQUIREMENTS.md | other what | other source | 1 January 2026 | x |\n"
+assert "\n## Repos in scope" in t
+open(f, "w").write(t.replace("\n## Repos in scope", "\n" + dup + "\n## Repos in scope", 1))
+PY
+_dup_sha="$(shasum "$IDXE" | awk '{print $1}')"
+pwtest_rc 2 "ensure-input duplicate conflict refuses" "$C" ensure-input "$EN" --file REQUIREMENTS.md --what new --source new
+pwtest_err 'duplicate input rows' "conflict names the duplicates"
+pwtest_fix "conflict recovery actionable"
+[ "$(shasum "$IDXE" | awk '{print $1}')" = "$_dup_sha" ] && pwtest_ok "conflict wrote nothing" || pwtest_bad "conflict wrote nothing" "INDEX.md changed"
+pwtest_rc 0 "ensure-repo adds" "$C" ensure-repo "$EN" storefront main Collect and display the note
+pwtest_grep_file '^\| `storefront` \| `main` \| Collect and display the note \|$' "repo row shape" "$IDXE"
+pwtest_rc 0 "ensure-repo rerun identical" "$C" ensure-repo "$EN" storefront main Collect and display the note
+pwtest_rc 0 "ensure-repo same repo on a second base" "$C" ensure-repo "$EN" storefront spring3 Backport the note
+[ "$(grep -c '^| `storefront` |' "$IDXE")" = 2 ] && pwtest_ok "repo identity is (repo, base): two rows" || pwtest_bad "repo base identity" "expected 2 rows"
+pwtest_rc 0 "ensure-repo updates why in place" "$C" ensure-repo "$EN" storefront main Collect, display, and validate the note
+[ "$(grep -c '^| `storefront` |' "$IDXE")" = 2 ] && pwtest_ok "repo update did not duplicate" || pwtest_bad "repo update dedupe" "row count != 2"
+python3 - "$IDXE" <<'PY'
+import sys
+f = sys.argv[1]; t = open(f).read()
+marker = "| `ar` | `main` | continuation — adopted branch `feat` <!-- pw-adopt-scope:ar@feat --> |"
+lines = t.split("\n")
+i = next(idx for idx, l in enumerate(lines) if l.startswith("| Repo (in"))
+lines.insert(i + 2, marker)   # a real data row: header, separator, marker, …
+open(f, "w").write("\n".join(lines))
+PY
+pwtest_rc 0 "ensure-repo beside a matching adopt marker row" "$C" ensure-repo "$EN" ar main Fresh guess for the same repo name
+[ "$(grep -c 'pw-adopt-scope:ar@feat' "$IDXE")" = 1 ] && pwtest_ok "adopt marker row untouched" || pwtest_bad "adopt marker" "marker row lost or changed"
+pwtest_grep_file '^\| `ar` \| `main` \| Fresh guess for the same repo name \|$' "ensure-repo row added beside the marker" "$IDXE"
+pwtest_rc 2 "ensure-input outside phase context refuses" "$C" ensure-input "$CX" --file extra.md --what w --source s
+pwtest_fix "phase refusal actionable"
+grep -q 'extra\.md' "$IDX" && pwtest_bad "phase refusal wrote nothing" "row leaked into INDEX" || pwtest_ok "phase refusal wrote nothing"
+rm -rf "$PW_PROJECTS_DIR/$EN"
+
 rm -rf "$PW_PROJECTS_DIR/$CX"
 
 # --- fetch (merged from pw-context-fetch.t.sh, plan 20) ---

@@ -32,7 +32,22 @@ Status shows the phase, task progress, and blockers. Both only read state.
 
 ## Add context or continue existing work
 
-Create a requirements brief, fill it, then register its source:
+For an existing project, let the agent draft the context from one brief paragraph:
+
+```text
+/pw-context delivery-note prepare Customers can save and view an optional delivery note on an order. Existing orders must remain valid. storefront and order-service are likely related. Changing order status and payment behavior is out of scope.
+```
+
+Prerequisites: the project exists and is still in the context phase.
+The agent drafts `context/REQUIREMENTS.md`, registers inputs, and proposes repository rows from your intent.
+It asks before resolving a consequential ambiguity, marks suggestions as proposals, and stops before analysis.
+Expected files: `context/REQUIREMENTS.md`, one provenance row per input, and the "Repos in scope" rows.
+Open questions stay listed in the brief; answer them and run `prepare` again to refine it.
+When the draft is usable, continue with `/pw-analyze delivery-note`.
+Running `prepare` again updates its own rows in place; it never duplicates them.
+
+The manual path builds the same files by hand. `req-init` preserves an existing brief.
+`add-input` records provenance; it does not write the source file:
 
 ```text
 /pw-context delivery-note req-init
@@ -40,7 +55,8 @@ Create a requirements brief, fill it, then register its source:
 /pw-context delivery-note add-repo order-service main Store the optional delivery note
 ```
 
-`req-init` preserves an existing brief. `add-input` records provenance; it does not write the source file.
+Either path reaches analysis. Registration alone creates a table row; preparation creates or edits the brief and any saved source excerpts.
+
 For a project research pass before analysis:
 
 ```text
@@ -263,6 +279,17 @@ To revisit an earlier approach:
 ```
 
 Follow the prompted review and reapproval steps. Downstream artifacts remain on disk.
+
+To redo requirements and context:
+
+```text
+/pw-status delivery-note rewind context
+```
+
+Context has no review file of its own. First record the reason on the existing analysis review, and on the PLAN review when one exists.
+Those entries reopen the affected approvals through the normal review flow.
+After the rewind, redo the context (`/pw-context delivery-note prepare <brief>` or the manual row operators), then run `/pw-analyze delivery-note` again.
+Revised work continues only after the analysis and plan approvals are recorded again.
 See [troubleshooting](TROUBLESHOOTING.md) for failures, stalled runs, and stack blockers.
 
 ## Refresh old project guidance after a workflow update
@@ -277,7 +304,7 @@ Preview recognized guidance changes for the project you choose:
 ```
 
 The preview writes nothing. It lists matching files, before/after text, and skipped targets.
-For example, an old requirements paragraph can change from manual copying to `/pw-context <slug> req-init`.
+For example, an old requirements paragraph can change from manual copying to `/pw-context <slug> prepare <brief>`.
 The repair also recognizes legacy hints in `analysis/review/` and `task/review/`, plus archive banners in matching review directories.
 Examples of the updated guidance:
 

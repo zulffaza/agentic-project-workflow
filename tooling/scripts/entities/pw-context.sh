@@ -20,6 +20,21 @@
 #       <base> is the why. NEVER touches /pw-adopt's `<!-- pw-adopt-scope:… -->`
 #       marker rows (append-only below them); same placeholder-row handling.
 #
+#   pw-context.sh ensure-input <slug> --file <f> --what <w> --source <s> [--trust <t>]
+#       Keyed upsert for the inputs table (assisted preparation's repeat-run path):
+#       identity = the normalized "File / link" cell (trim + one backtick pair +
+#       \| unescape + space collapse; URL query parameters and case preserved).
+#       No row → append (add-input shape); one row → update its what/source/trust
+#       cells in place, keeping the original date; identical content → no write at
+#       all. Duplicate rows for the key that do not all agree stop with a conflict
+#       report (never deleted, nothing written). Phase context only.
+#
+#   pw-context.sh ensure-repo <slug> <repo> <base> <why...>
+#       Keyed upsert for the "Repos in scope" table: identity = normalized
+#       (repo, base). No row → append; one row → update its why in place; identical
+#       → no write. Same repo on DIFFERENT bases stays two rows. NEVER touches
+#       /pw-adopt's marker rows. Duplicates stop with a conflict. Phase context only.
+#
 #   pw-context.sh fetch    <slug> [--ignore-errors]
 #       Fetch the CLI-handleable URLs (jira/gh/glab) in INDEX.md's provenance table;
 #       Web/Lark rows print as agent-handled. (was pw-context-fetch.sh)
@@ -100,13 +115,55 @@ cmd_req_init() {
   echo "  /pw-context $slug add-input --file REQUIREMENTS.md --what 'project brief' --source 'written by you' --trust 'owner brief'"
 }
 
-# ---------------------------------------------------------------- add-input
-# A2 flag-segment parsing is implemented NATIVELY here (each value runs until the
-# next --flag token), so the script behaves identically whether the agent hands it
+# Preparation writes context only (pw-preflight.sh prepare mirrors this gate). The manual
+# row operators (add-input/add-repo) deliberately stay phase-free — they predate assisted
+# preparation and keep their contract.
+_require_context_phase() {
+  local slug="$1" raw tok
+  raw="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" phase "$slug" 2>/dev/null || true)"
+  tok="$(pw_phase_token "${raw:-missing}")"
+  [ "$tok" = "context" ] || die "preparation writes context only — the README says: ${raw:-none} → fix: if you really mean to redo this project's context, reopen its analysis and PLAN reviews first with /pw-review, then run: /pw-status $slug rewind context, then re-run preparation"
+}
+
+# Conservative identity normalization for table-cell keys: trim, drop one surrounding
+# backtick pair, unescape \| → |, collapse whitespace runs to one space. URL query
+# parameters, case, and path shape are preserved (never merge distinct documents).
+_norm_key() {
+  local v="$1"
+  v="$(printf '%s' "$v" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  case "$v" in
+    \`*\`) v="${v#\`}"; v="${v%\`}" ;;
+  esac
+  printf '%s' "$v" | sed -e 's/\\|/|/g' -e 's/[[:space:]][[:space:]]*/ /g'
+}
+
+# _table_data_rows <file> <header-prefix>
+# One TAB-separated line per data row of the table whose header line starts with
+# <header-prefix>: "NR<TAB>cell1<TAB>cell2<TAB>…". Escaped pipes (\|) never split
+# cells (placeholder sentinel). Scan stops at the next "## " heading. Separator rows
+# are skipped; blank placeholder rows are emitted (their cells normalize to "").
+_table_data_rows() {
+  awk -v hdr="$2" '
+    index($0, hdr) == 1 { inT = 1; next }
+    inT && /^## / { exit }
+    inT && /^\|/ {
+      if ($0 ~ /^\|[ \t:|+-]*\|[ \t]*$/) next
+      line = $0; gsub(/\\\|/, "\001", line)
+      n = split(line, c, "|")
+      out = NR
+      for (i = 2; i < n; i++) { gsub("\001", "|", c[i]); out = out "\t" c[i] }
+      print out
+    }' "$1"
+}
+
+# A2 flag-segment parsing shared by add-input/ensure-input: each value runs until the
+# next --flag token, so the script behaves identically whether the agent hands it
 # pre-quoted argv or a human types the slash-command shape verbatim in a shell.
-cmd_add_input() {
-  local slug="$1"; shift
-  local FILEV="" WHAT="" SOURCE="" TRUST="" flag val
+# _parse_input_flags <op> "$@" → sets FILEV/WHAT/SOURCE/TRUST.
+_parse_input_flags() {
+  local _op="$1"; shift
+  local flag val
+  FILEV=""; WHAT=""; SOURCE=""; TRUST=""
   while [ $# -gt 0 ]; do
     flag="$1"; shift
     val=""
@@ -119,13 +176,13 @@ cmd_add_input() {
           case "$1" in --*) break ;; esac
           val="${val:+$val }$1"; shift
         done
-        [ -n "$val" ] || die "add-input: $flag requires a value → fix: --file <f> --what <w> --source <s> [--trust <t>], each value runs until the next --flag"
+        [ -n "$val" ] || die "$_op: $flag requires a value → fix: --file <f> --what <w> --source <s> [--trust <t>], each value runs until the next --flag"
         ;;
       --file=*)   val="${flag#--file=}";   flag="--file" ;;
       --what=*)   val="${flag#--what=}";   flag="--what" ;;
       --source=*) val="${flag#--source=}"; flag="--source" ;;
       --trust=*)  val="${flag#--trust=}";  flag="--trust" ;;
-      *) die "add-input: unknown option: $flag → fix: expected --file <f> --what <w> --source <s> [--trust <t>]" ;;
+      *) die "$_op: unknown option: $flag → fix: expected --file <f> --what <w> --source <s> [--trust <t>]" ;;
     esac
     case "$flag" in
       --file)   FILEV="$val" ;;
@@ -134,10 +191,16 @@ cmd_add_input() {
       --trust)  TRUST="$val" ;;
     esac
   done
-  [ -n "$FILEV" ]  || die "add-input: --file is required → fix: the artifact's filename in context/ (or a bare URL)"
-  [ -n "$WHAT" ]    || die "add-input: --what is required → fix: one phrase saying what the input is"
-  [ -n "$SOURCE" ]  || die "add-input: --source is required → fix: where it came from (ticket key / URL / person)"
+  [ -n "$FILEV" ]  || die "$_op: --file is required → fix: the artifact's filename in context/ (or a bare URL)"
+  [ -n "$WHAT" ]    || die "$_op: --what is required → fix: one phrase saying what the input is"
+  [ -n "$SOURCE" ]  || die "$_op: --source is required → fix: where it came from (ticket key / URL / person)"
   [ -n "$TRUST" ]   || TRUST="—"
+}
+
+# ---------------------------------------------------------------- add-input
+cmd_add_input() {
+  local slug="$1"; shift
+  _parse_input_flags add-input "$@"
   local d; d="$(proj_dir "$slug")"
   local f="$d/context/INDEX.md"
   [ -f "$f" ] || die "no context/INDEX.md in $slug → fix: restore it from $PW_HOME/template/context/INDEX.md"
@@ -147,6 +210,60 @@ cmd_add_input() {
   _append_or_replace_row "$f" '| File / link |' "$row"
   _log "$slug" you "added context input to INDEX.md: $FILEV"
   echo "$slug: context/INDEX.md → input row added: $FILEV"
+}
+
+# ---------------------------------------------------------------- ensure-input
+# Keyed upsert so a preparation rerun neither duplicates a provenance row nor clobbers
+# user corrections: match on the normalized File / link cell; update that row's
+# what/source/trust in place (original date preserved) only when the content changed.
+cmd_ensure_input() {
+  local slug="$1"; shift
+  _parse_input_flags ensure-input "$@"
+  local d; d="$(proj_dir "$slug")"
+  _require_context_phase "$slug"
+  local f="$d/context/INDEX.md"
+  [ -f "$f" ] || die "no context/INDEX.md in $slug → fix: restore it from $PW_HOME/template/context/INDEX.md"
+  local key; key="$(_norm_key "$FILEV")"
+  local rows; rows="$(_table_data_rows "$f" '| File / link |')"
+  local n=0 line cfile cwhat csrc cdate ctrust
+  local first_line="" first_date="" all_in=1 all_eq=1 fwhat="" fsrc="" ftrust="" where=""
+  while IFS=$'\t' read -r line cfile cwhat csrc cdate ctrust; do
+    [ -n "$line" ] || continue
+    [ "$(_norm_key "$cfile")" = "$key" ] || continue
+    n=$((n+1)); where="$where $line"
+    [ "$(_norm_key "$cwhat")" = "$(_norm_key "$WHAT")" ] \
+      && [ "$(_norm_key "$csrc")" = "$(_norm_key "$SOURCE")" ] \
+      && [ "$(_norm_key "$ctrust")" = "$(_norm_key "$TRUST")" ] || all_in=0
+    if [ "$n" -eq 1 ]; then
+      first_line="$line"
+      first_date="$(printf '%s' "$cdate" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      fwhat="$(_norm_key "$cwhat")"; fsrc="$(_norm_key "$csrc")"; ftrust="$(_norm_key "$ctrust")"
+    else
+      { [ "$(_norm_key "$cwhat")" = "$fwhat" ] && [ "$(_norm_key "$csrc")" = "$fsrc" ] \
+        && [ "$(_norm_key "$ctrust")" = "$ftrust" ]; } || all_eq=0
+    fi
+  done <<< "$rows"
+  if [ "$n" -gt 1 ] && [ "$all_in$all_eq" != "11" ]; then
+    die "duplicate input rows for '$FILEV' disagree (line(s):$where) → fix: resolve the duplicates by hand in context/INDEX.md, then re-run preparation"
+  fi
+  if [ "$n" -ge 1 ] && [ "$all_in" = 1 ]; then
+    echo "$slug: context/INDEX.md → input row already present (unchanged): $FILEV"
+    return 0
+  fi
+  local row ts
+  ts="$(pw_now_wib)" || die "ensure-input: cannot format event timestamp → fix: check the date command and retry"
+  if [ "$n" -eq 0 ]; then
+    row="| $(_esc "$FILEV") | $(_esc "$WHAT") | $(_esc "$SOURCE") | $ts | $(_esc "$TRUST") |"
+    _append_or_replace_row "$f" '| File / link |' "$row"
+    _log "$slug" prepare "registered context input in INDEX.md: $FILEV"
+    echo "$slug: context/INDEX.md → input row added: $FILEV"
+  else
+    row="| $(_esc "$FILEV") | $(_esc "$WHAT") | $(_esc "$SOURCE") | $first_date | $(_esc "$TRUST") |"
+    local tmp; tmp="$(mktemp)"; printf '%s\n' "$row" > "$tmp"
+    md_replace_line "$f" "$first_line" "$tmp"; rm -f "$tmp"
+    _log "$slug" prepare "updated context input in INDEX.md: $FILEV"
+    echo "$slug: context/INDEX.md → input row updated: $FILEV"
+  fi
 }
 
 # ---------------------------------------------------------------- add-repo
@@ -163,6 +280,58 @@ cmd_add_repo() {
   _append_or_replace_row "$f" '| Repo (in' "$row"
   _log "$slug" you "added repo to INDEX.md scope table: $repo@$base"
   echo "$slug: context/INDEX.md → repos-in-scope row added: $repo (base: $base)"
+}
+
+# ---------------------------------------------------------------- ensure-repo
+# Keyed upsert (identity = normalized (repo, base)) so preparation reruns neither duplicate
+# a guess nor clobber user edits: a changed why updates that row in place; the same repo on
+# a DIFFERENT base stays a separate row. /pw-adopt's marker rows are never touched.
+cmd_ensure_repo() {
+  [ $# -ge 4 ] || die "usage: ensure-repo <slug> <repo> <base> <why...>   (why is rest-of-line, unquoted)"
+  local slug="$1" repo="$2" base="$3"; shift 3
+  local why="$*"
+  [ -n "$repo" ] && [ -n "$base" ] || die "ensure-repo: <repo> and <base> must not be empty → fix: pass the repo dir name and its likely base branch"
+  [ -n "$(printf '%s' "$why" | tr -d '[:space:]')" ] || die "ensure-repo: <why> is empty → fix: say why the repo is in scope (rest of the line after <base>)"
+  local d; d="$(proj_dir "$slug")"
+  _require_context_phase "$slug"
+  local f="$d/context/INDEX.md"
+  [ -f "$f" ] || die "no context/INDEX.md in $slug → fix: restore it from $PW_HOME/template/context/INDEX.md"
+  local rkey bkey; rkey="$(_norm_key "$repo")"; bkey="$(_norm_key "$base")"
+  local rows; rows="$(_table_data_rows "$f" '| Repo (in')"
+  local n=0 line crow cbase cwhy
+  local first_line="" all_in=1 all_eq=1 fwhy="" where=""
+  while IFS=$'\t' read -r line crow cbase cwhy; do
+    [ -n "$line" ] || continue
+    case "$cwhy" in *"pw-adopt-scope:"*) continue ;; esac
+    [ "$(_norm_key "$crow")" = "$rkey" ] || continue
+    [ "$(_norm_key "$cbase")" = "$bkey" ] || continue
+    n=$((n+1)); where="$where $line"
+    [ "$(_norm_key "$cwhy")" = "$(_norm_key "$why")" ] || all_in=0
+    if [ "$n" -eq 1 ]; then
+      first_line="$line"; fwhy="$(_norm_key "$cwhy")"
+    else
+      [ "$(_norm_key "$cwhy")" = "$fwhy" ] || all_eq=0
+    fi
+  done <<< "$rows"
+  if [ "$n" -gt 1 ] && [ "$all_in$all_eq" != "11" ]; then
+    die "duplicate (repo, base) rows for '$repo' on '$base' disagree (line(s):$where) → fix: resolve the duplicates by hand in context/INDEX.md, then re-run preparation"
+  fi
+  if [ "$n" -ge 1 ] && [ "$all_in" = 1 ]; then
+    echo "$slug: context/INDEX.md → repos-in-scope row already present (unchanged): $repo (base: $base)"
+    return 0
+  fi
+  local row
+  row="| \`$(_esc "$repo")\` | \`$(_esc "$base")\` | $(_esc "$why") |"
+  if [ "$n" -eq 0 ]; then
+    _append_or_replace_row "$f" '| Repo (in' "$row"
+    _log "$slug" prepare "registered repo in INDEX.md scope table: $repo@$base"
+    echo "$slug: context/INDEX.md → repos-in-scope row added: $repo (base: $base)"
+  else
+    local tmp; tmp="$(mktemp)"; printf '%s\n' "$row" > "$tmp"
+    md_replace_line "$f" "$first_line" "$tmp"; rm -f "$tmp"
+    _log "$slug" prepare "updated repo in INDEX.md scope table: $repo@$base"
+    echo "$slug: context/INDEX.md → repos-in-scope row updated: $repo (base: $base)"
+  fi
 }
 
 
@@ -430,10 +599,12 @@ OP="$1"; shift
 case "$OP" in
   req-init)  cmd_req_init "$@" ;;
   add-input) cmd_add_input "$@" ;;
+  ensure-input) cmd_ensure_input "$@" ;;
+  ensure-repo)  cmd_ensure_repo "$@" ;;
   fetch)          cmd_fetch "$@" ;;
   adopt-snapshot) cmd_adopt_snapshot "$@" ;;
   adopt)          cmd_adopt "$@" ;;
   add-repo)  cmd_add_repo "$@" ;;
   -h|--help) pw_usage ;;
-  *) die "unknown operator: $OP → fix: see --help (req-init, add-input, add-repo, fetch, adopt-snapshot, adopt)" ;;
+  *) die "unknown operator: $OP → fix: see --help (req-init, add-input, ensure-input, add-repo, ensure-repo, fetch, adopt-snapshot, adopt)" ;;
 esac

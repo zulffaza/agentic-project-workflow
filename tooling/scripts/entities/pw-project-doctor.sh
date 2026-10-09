@@ -122,6 +122,18 @@ managed by `/pw-adopt` — do NOT hand-edit
 > marker. **Don't hand-edit those marker rows** — that's what let a later adoption clobber earlier
 > ones. You may still add your own un-marked guess rows above/below.
 <<<RULE
+>>>FILE context/INDEX.md
+>>>OLD
+**Filled by:** [🧑 you] — both tables below. Agents only READ what you write here. **Easiest
+path:** the deterministic operators — `/pw-context <slug> add-input --file <f> --what <prose…>
+--source <prose…> [--trust <prose…>]` and `/pw-context <slug> add-repo <repo> <base> <why…>`
+>>>NEW
+**Filled by:** [🧑 you] — both tables below — or agent-assisted preparation:
+`/pw-context <slug> prepare <brief>` drafts the brief, proposes input rows, and records supported
+repository guesses from your stated intent; review and correct them before analysis. **Easiest
+manual path:** the deterministic row operators — `/pw-context <slug> add-input --file <f> --what <prose…>
+--source <prose…> [--trust <prose…>]` and `/pw-context <slug> add-repo <repo> <base> <why…>`
+<<<RULE
 >>>FILE context/README.md
 >>>OLD
 **Optional — a one-page brief.** If the raw inputs don't clearly state *what you want and why*,
@@ -132,6 +144,21 @@ sharpens the analysis phase. Add a row for it in [`INDEX.md`](./INDEX.md) like a
 **Optional — a one-page brief.** If the raw inputs don't clearly state *what you want and why*,
 run `/pw-context <slug> req-init` to create `REQUIREMENTS.md` from its template, then fill it in
 (problem, goal, scope, constraints, success criteria) and register it:
+`/pw-context <slug> add-input --file REQUIREMENTS.md --what <one line> --source <where it came from>`.
+It's optional — the pipeline never requires it — but it sharpens the analysis phase.
+<<<RULE
+>>>FILE context/README.md
+>>>OLD
+**Optional — a one-page brief.** If the raw inputs don't clearly state *what you want and why*,
+run `/pw-context <slug> req-init` to create `REQUIREMENTS.md` from its template, then fill it in
+(problem, goal, scope, constraints, success criteria) and register it:
+`/pw-context <slug> add-input --file REQUIREMENTS.md --what <one line> --source <where it came from>`.
+It's optional — the pipeline never requires it — but it sharpens the analysis phase.
+>>>NEW
+**Optional — a one-page brief.** If the raw inputs don't clearly state *what you want and why*,
+run `/pw-context <slug> prepare <your brief>` and let the agent draft the brief with traceable
+inputs, or write it yourself: run `/pw-context <slug> req-init`, fill it in (problem, goal, scope,
+constraints, success criteria), and register it:
 `/pw-context <slug> add-input --file REQUIREMENTS.md --what <one line> --source <where it came from>`.
 It's optional — the pipeline never requires it — but it sharpens the analysis phase.
 <<<RULE

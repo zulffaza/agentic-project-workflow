@@ -6,8 +6,9 @@ Everything the agent needs to reason well, and nothing it can re-derive from cod
 specific code paths, screenshots.
 
 **Optional — a one-page brief.** If the raw inputs don't clearly state *what you want and why*,
-run `/pw-context <slug> req-init` to create `REQUIREMENTS.md` from its template, then fill it in
-(problem, goal, scope, constraints, success criteria) and register it:
+run `/pw-context <slug> prepare <your brief>` and let the agent draft the brief with traceable
+inputs, or write it yourself: run `/pw-context <slug> req-init`, fill it in (problem, goal, scope,
+constraints, success criteria), and register it:
 `/pw-context <slug> add-input --file REQUIREMENTS.md --what <one line> --source <where it came from>`.
 It's optional — the pipeline never requires it — but it sharpens the analysis phase.
 

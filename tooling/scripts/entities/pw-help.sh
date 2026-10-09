@@ -905,7 +905,17 @@ EO
   done <<EDOC
 $dpaths
 EDOC
-  grep -qF 'mechanical mapping (C3)' "$file" && { echo "doctrine: mechanical mapping (C3) - the script is the single judgment point."; } | flowline 98
+  # doctrine echo (C3): a pure mechanical command renders the single-judgment-point line; a
+  # mixed command (mechanical row operators + a reasoning operator that loads a skill reference)
+  # renders the split so help never calls the whole command mechanical — prepare is the
+  # reasoning operator (/pw-context), pinned by the command file's own wording.
+  if grep -qF 'mechanical mapping (C3)' "$file"; then
+    if grep -qF 'reasoning operator' "$file"; then
+      echo "doctrine: operator split - req-init/add-input/add-repo are mechanical mappings (C3) run verbatim; prepare is a reasoning operator (loads the context reference, stops before analysis)." | flowline 98
+    else
+      echo "doctrine: mechanical mapping (C3) - the script is the single judgment point." | flowline 98
+    fi
+  fi
   stamp
 }
 
@@ -962,7 +972,7 @@ render_workflow() {
   [ "$json" = 1 ] && printf '{"phases":['
   for phase in $PW_VALID_PHASES; do
     case "$phase" in
-      context)   line="/pw-new · /pw-adopt · fill context/ (+ /pw-context add-input rows)" ; gate="" ;;
+      context)   line="/pw-new · /pw-adopt · /pw-context prepare <brief> (or fill context/ + add-input rows)" ; gate="" ;;
       analysis)  line="/pw-research (optional) · /pw-analyze" ; gate="analysis/review/<topic>.review.md sign-off" ;;
       breakdown) line="/pw-breakdown" ; gate="THE hard gate: task/review/PLAN.review.md (+ per-task reviews)" ;;
       executing) line="/pw-execute · /pw-verify · /pw-sync" ; gate="worktree sub-agents, verified commits" ;;
@@ -1110,7 +1120,8 @@ render_project_next() {
   local lines l first=1 a
   case "$phase" in
     context)
-      lines="/pw-context $slug req-init                            (then fill it + register provenance rows)
+      lines="/pw-context $slug prepare <your brief>              assisted: draft the brief + register inputs/repos from what you say
+/pw-context $slug req-init                           manual: create the brief, fill it, then register rows with add-input/add-repo
 /pw-analyze $slug                                      create analysis/<topic>.md (+ its review sibling)" ;;
     analysis)
       lines="/pw-review $slug ...                                   item/answer/sign-off your analysis reviews (targets above)
@@ -1237,7 +1248,7 @@ render_project() {
   echo "most likely next:"
   render_project_next "$slug" "$tok" "$plan" "$planrev" "$d" plain
   echo "any-time for this project:"
-  echo "  /pw-status $slug  ·  /pw-context $slug add-input --file ... --what ... --source ..."
+  echo "  /pw-status $slug  ·  /pw-context $slug prepare <brief> (or add-input/add-repo rows)"
   echo "targets found on disk:"
   local trow printed=0
   trow() { split_state "$3"

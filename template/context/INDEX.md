@@ -5,8 +5,10 @@ logs, chat threads. **Purpose of this index:** record *what each input is* and *
 from*, so later phases (and future-you) know what to trust and can trace a claim back to its
 source. Fill one row per input. Prefer links + short excerpts over dumping huge files.
 
-**Filled by:** [🧑 you] — both tables below. Agents only READ what you write here. **Easiest
-path:** the deterministic operators — `/pw-context <slug> add-input --file <f> --what <prose…>
+**Filled by:** [🧑 you] — both tables below — or agent-assisted preparation:
+`/pw-context <slug> prepare <brief>` drafts the brief, proposes input rows, and records supported
+repository guesses from your stated intent; review and correct them before analysis. **Easiest
+manual path:** the deterministic row operators — `/pw-context <slug> add-input --file <f> --what <prose…>
 --source <prose…> [--trust <prose…>]` and `/pw-context <slug> add-repo <repo> <base> <why…>`
 (stamp the date, escape pipes, replace the empty placeholder row, never touch the `_e.g._` or
 adopt-marker rows). Hand-editing stays legal. **Exception:**

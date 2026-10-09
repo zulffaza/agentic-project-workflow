@@ -187,7 +187,7 @@ Follow the [walkthrough](docs/WALKTHROUGH.md) for the complete sequence.
 | Command | When to use it |
 |---|---|
 | `/pw-new <slug>` | Scaffold a project |
-| `/pw-context <slug> <operator> …` | [Add requirements, inputs, and repositories](docs/RECIPES.md#add-context-or-continue-existing-work) |
+| `/pw-context <slug> <operator> …` | [Prepare requirements and context, or add inputs and repositories](docs/RECIPES.md#add-context-or-continue-existing-work) |
 | `/pw-analyze <slug>` | Turn context into an analysis |
 | `/pw-review <slug>` | Apply recorded feedback for the current phase |
 | `/pw-breakdown <slug>` | Turn approved analysis into PLAN and tasks |

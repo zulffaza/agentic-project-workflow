@@ -5,11 +5,14 @@
 # builds nothing for this case — keeps its own --only child fast and proves skip.
 TH=pwtest-harness
 
-# a) T0 child builds no fixtures at all
+# a) T0 child builds no fixtures at all — and must not MATERIALIZE any either (a cache-hit
+# line proves the lazy scan selected fixtures even though nothing was built; this is what
+# keeps the C42 mutation "scan always sets NEED flags" detectable in a warm-cache sweep)
 _arc=0; bash "$PWTEST_TESTSDIR/pw_test.sh" --tier T0 </dev/null >"$PWTEST_ROOT/$TH.a.out" 2>&1 || _arc=$?
 pwtest_eq "T0 child exits 0" 0 "$_arc"
-grep -q 'TEST fixtures built: none' "$PWTEST_ROOT/$TH.a.out" && pwtest_ok "T0 child builds no fixtures" \
-  || pwtest_bad "T0 child builds no fixtures" "expected 'built: none' in child output"
+grep -q 'TEST fixtures built: none' "$PWTEST_ROOT/$TH.a.out" && ! grep -q 'fixtures cache-hit' "$PWTEST_ROOT/$TH.a.out" \
+  && pwtest_ok "T0 child builds no fixtures" \
+  || pwtest_bad "T0 child builds no fixtures" "expected 'built: none' with no fixture materialization in child output"
 
 # b) T4 child likewise. Its exit-0 assert includes the pw-doctor sync check, which
 # compares the tree against the provider installs under $HOME — those belong to the
@@ -40,8 +43,9 @@ if [ -n "${PWTEST_INNER:-}" ]; then
 else
   pwtest_eq "T4 child exits 0" 0 "$_arc"
 fi
-grep -q 'TEST fixtures built: none' "$PWTEST_ROOT/$TH.b.out" && pwtest_ok "T4 child builds no fixtures" \
-  || pwtest_bad "T4 child builds no fixtures" "expected 'built: none' in child output"
+grep -q 'TEST fixtures built: none' "$PWTEST_ROOT/$TH.b.out" && ! grep -q 'fixtures cache-hit' "$PWTEST_ROOT/$TH.b.out" \
+  && pwtest_ok "T4 child builds no fixtures" \
+  || pwtest_bad "T4 child builds no fixtures" "expected 'built: none' with no fixture materialization in child output"
 
 # c) recipe hash: deterministic, and sensitive to the template tree
 _h1="$(_pwtest_recipe_hash)"; _h2="$(_pwtest_recipe_hash)"
@@ -73,10 +77,13 @@ if [ -d "$PW_PROJECTS_DIR/pwt-f1-scaffold" ] && [ -d "$PW_PROJECTS_DIR/pwt-f2-mi
   [ -f "$_cd/.done-pwt-f2-mid" ] && [ -d "$_cd/projects/pwt-f2-mid" ] && [ -d "$_cd/repos/api" ] \
     && pwtest_ok "cache stores fixtures + root under recipe hash" \
     || pwtest_bad "cache stores fixtures + root under recipe hash" "no $_cd/.done-pwt-f2-mid"
-  # a child pointed at the cache must hit it (F2) instead of building (~seconds, not ~45)
+  # a child pointed at the cache must hit it (F2) instead of building (~seconds, not ~45).
+  # The family list grows with the case's fixture refs (F1 joined when pw-context gained its
+  # context-phase ensure block), so assert containment — F2 restored FROM CACHE — not the
+  # exact string.
   PWTEST_FIXTURE_CACHE="$_tc" bash "$PWTEST_TESTSDIR/pw_test.sh" --tier T1 --only pw-context </dev/null >"$PWTEST_ROOT/$TH.d.out" 2>&1
   _drc=$?
-  grep -q 'TEST fixtures cache-hit: F2' "$PWTEST_ROOT/$TH.d.out" && [ "$_drc" = 0 ] \
+  grep -qE 'TEST fixtures cache-hit: .*F2' "$PWTEST_ROOT/$TH.d.out" && [ "$_drc" = 0 ] \
     && pwtest_ok "cache-hit child restores F2 and passes" \
     || pwtest_bad "cache-hit child restores F2 and passes" "rc=$_drc; $(grep -E 'fixtures|FAIL' "$PWTEST_ROOT/$TH.d.out" | head -2 | tr '\n' ' ')"
   # cached fixture must stay pristine despite the child's mutating cases

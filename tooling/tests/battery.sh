@@ -73,7 +73,7 @@ battery_rows() {
 gate_combos() {   # label only; the runner composes cmd from it: mode|phase|fixture
   local s m
   for s in "$S1" "$S2" "$S3"; do
-    for m in analyze execute breakdown ship comments close review-plan review-task; do
+    for m in analyze prepare execute breakdown ship comments close review-plan review-task; do
       printf 'gate %s %s\n' "$m" "$s"
     done
   done
@@ -93,7 +93,7 @@ _gate_cmd() {     # "<mode> <fixture>" → echo preflight args (review-plan → 
 # removed from battery_rows; the T1 pw-doc case owns sync coverage).
 PWTEST_MODES="pw-doc|lint summary
 pw-doc|analysis task plan review dashboard all
-pw-preflight|analyze execute breakdown ship review comments close
+pw-preflight|analyze prepare execute breakdown ship review comments close
 pw-config|model-check model-resolve project global
 pw-session|session-check
 pw-review-read|gate has-open count eligible scan

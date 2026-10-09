@@ -7,7 +7,7 @@ DOCDIR="$(mktemp -d "${TMPDIR:-/tmp}/pwdoc.XXXXXX")"
 REAL="$TOOL/.."
 PW="$DOCDIR/bundle"; FH="$DOCDIR/home"
 mkdir -p "$PW/tooling" "$FH"
-cp -R "$TOOL/scripts" "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" "$PW/tooling/"
+cp -R "$TOOL/scripts" "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" "$TOOL/templates" "$PW/tooling/"
 cp "$REAL/pw.config.sh" "$PW/pw.config.sh"
 cat >> "$PW/pw.config.sh" <<CFG
 # --- test overrides: single provider, all dirs under \$FH ---

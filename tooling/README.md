@@ -18,8 +18,8 @@ tooling/
 │   │   │                       add-question · resolve ·
 │   │   │                       reindex · archive · reopen · note-init · auto-signoff
 │   │   ├── pw-review-read.sh   review reads: gate · has-open · count · eligible · scan
-│   │   ├── pw-context.sh       context-doc: req-init · add-input · add-repo · fetch ·
-│   │   │                       adopt-snapshot · adopt
+│   │   ├── pw-context.sh       context-doc: req-init · add-input · ensure-input · add-repo ·
+│   │   │                       ensure-repo · fetch · adopt-snapshot · adopt
 │   │   ├── pw-ship.sh          ship/MR: resolve · exec · monitor · mr-state · mr-state-batch ·
 │   │   │                       comment-seen · dashboard-mr-state
 │   │   ├── pw-rfc.sh           rfc-doc: init · target · state · comment-seen · dashboard · comments

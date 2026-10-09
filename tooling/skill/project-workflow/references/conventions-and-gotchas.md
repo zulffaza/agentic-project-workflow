@@ -60,7 +60,9 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
 - `pw-context.sh` — **deterministic context-doc writes** (human entry: `/pw-context <slug> …`):
   `req-init` (REQUIREMENTS.md from template, idempotent), `add-input` (INDEX.md inputs row —
   native A2 flag-segments, auto date, pipe escaping, placeholder-row replacement), `add-repo`
-  (Repos-in-scope row, rest-of-line why; never touches `pw-adopt-scope` marker rows).
+  (Repos-in-scope row, rest-of-line why; never touches `pw-adopt-scope` marker rows), plus
+  preparation's keyed `ensure-input`/`ensure-repo` (same shapes; a repeat run updates its own
+  row in place instead of duplicating, context phase only — see `references/context.md`).
 - The old frozen legacy catch-all script was fully dissolved; there is no second catch-all (S2),
   shared markdown primitives to `pw-mdlib.sh` — see `tooling/docs/conventions.md` (S/C/A-rules)
   before adding any script/operator/command.

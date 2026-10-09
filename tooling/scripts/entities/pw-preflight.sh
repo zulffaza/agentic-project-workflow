@@ -4,6 +4,9 @@
 #
 #   pw-preflight.sh analyze     <slug>
 #       phase legal + context/ inputs exist
+#   pw-preflight.sh prepare     <slug>
+#       phase context (assisted preparation writes context only; empty scaffolded
+#       context is accepted — unlike analyze, no input rows are required)
 #   pw-preflight.sh execute     <slug>
 #       check PLAN review gate (latest approval, no real open items), phase, scope
 #   pw-preflight.sh breakdown   <slug>
@@ -76,6 +79,7 @@ PHASE="$(pw_phase_token "${PHASE_RAW:-missing}")"
 PHASE_FIX=""
 case "$COMMAND" in
   analyze) PHASE_FIX="if you are (re-)analyzing a project that moved on: /pw-status $SLUG rewind analysis" ;;
+  prepare) PHASE_FIX="preparation writes context only; if you really mean to redo this project's context: reopen its analysis and PLAN reviews first with /pw-review (their stale approvals must not be consumed), then /pw-status $SLUG rewind context, then re-run preparation" ;;
   ship) PHASE_FIX="finish execution first (each task '- **Status:** done'), or if the project IS further along: /pw-status $SLUG rewind <phase>" ;;
   execute) PHASE_FIX="move to executing via the flow (/pw-breakdown creates the PLAN and the flow advances the phase; /pw-status $SLUG rewind <phase> from a later one)" ;;
   breakdown) PHASE_FIX="get to an analysis/breakdown phase first (/pw-analyze), or /pw-status $SLUG rewind breakdown" ;;
@@ -89,6 +93,13 @@ fi
 phase_gate() { case " $1 " in *" $PHASE "*) return 0 ;; *) die_fix "cannot $COMMAND in phase '$PHASE' (must be: $1)" "${PHASE_FIX}";; esac; }
 
 case "$COMMAND" in
+  prepare)
+    # Assisted preparation (/pw-context <slug> prepare): reads the dashboard/context, then
+    # writes the brief and INDEX rows through the context entity. Empty scaffolded context is
+    # the normal starting point — only the phase is gated (analyze keeps its input-row gate).
+    phase_gate "context"
+    ;;
+
   analyze)
     phase_gate "context analysis"
 
@@ -314,7 +325,7 @@ case "$COMMAND" in
     ;;
 
   *)
-    die "unknown command: $COMMAND (expected: analyze|execute|breakdown|ship|comments|close|review)"
+    die "unknown command: $COMMAND (expected: analyze|prepare|execute|breakdown|ship|comments|close|review)"
     ;;
 esac
 

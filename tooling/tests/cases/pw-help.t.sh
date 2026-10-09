@@ -42,6 +42,7 @@ sec_rev(){ sed -n "/\/pw-review /,/\/pw-breakdown/p" "$PWTEST_OUT"; }
 # (bounded section greps: ops surface under their command even in block-wrapped render)
 sec_ctx | grep -q 'req-init' && pwtest_ok "req-init under pw-context" || pwtest_bad "req-init under pw-context" "missing"
 sec_ctx | grep -q 'add-repo' && pwtest_ok "add-repo under pw-context" || pwtest_bad "add-repo under pw-context" "missing"
+sec_ctx | grep -q 'prepare' && pwtest_ok "prepare (reasoning operator) surfaces under pw-context" || pwtest_bad "prepare under pw-context" "missing"
 sec_rev | grep -qE 'item <' && pwtest_ok "sugar op item surfaces under pw-review" || pwtest_bad "sugar op item" "missing"
 sec_rev | grep -q "configuration domain" && pwtest_ok "config sugar op carries the command-file definition" || pwtest_bad "config op use-clause" "missing"
 sec_rev | grep -q '(write)' && pwtest_ok "facet labels render (S1b)" || pwtest_bad "facet labels" "no (write) under pw-review"
@@ -98,6 +99,11 @@ pwtest_rc 0 "command how-to renders" "$C" command pw-context
 pwtest_re 'Does:' "per-op Does lines"
 grep -A4 'req-init' "$PWTEST_OUT" | grep -q 'Does:' && pwtest_ok "req-init block carries command-file prose" || pwtest_bad "Does for req-init" "missing"
 grep -qE '^    \$ /pw-context <project-slug> add-input' "$PWTEST_OUT" && pwtest_ok "runnable example line, full canonical name" || pwtest_bad "example line" "$(grep -E '^    \$' "$PWTEST_OUT" | head -2)"
+grep -qE '\$ /pw-context <project-slug> prepare' "$PWTEST_OUT" && pwtest_ok "prepare example line renders" || pwtest_bad "prepare example" "missing"
+# mixed doctrine: the command-wide mechanical line must NOT claim the whole command is a
+# mechanical mapping — prepare is a reasoning operator (owner: help must distinguish them).
+grep -qF 'operator split' "$PWTEST_OUT" && pwtest_ok "mixed-operator doctrine line renders" || pwtest_bad "operator-split doctrine" "help still calls all of pw-context mechanical"
+grep -qF 'reasoning operator' "$PWTEST_OUT" && pwtest_ok "prepare named as the reasoning operator" || pwtest_bad "reasoning operator" "missing"
 grep -qE '\$ /[^p]' "$PWTEST_OUT" && pwtest_bad "full-name rendering" "short-form example leaked: $(grep -oE '\$ /[^ ]*' "$PWTEST_OUT"|head -1)" || pwtest_ok "full-name rendering (examples never short-form)"
 grep -q '{{PW_' "$PWTEST_OUT" && pwtest_bad "no {{PW_ leak (command)" "found" || pwtest_ok "no {{PW_ leak (command)"
 pwtest_rc 0 "command with slug fills slots" "$C" command pw-context myproj
@@ -129,7 +135,7 @@ import json,sys
 d=json.load(open(sys.argv[1]))
 assert d["cmd"]=="pw-context"
 names={o["name"] for o in d["ops"]}
-assert {"req-init","add-input","add-repo"} <= names
+assert {"req-init","add-input","add-repo","prepare"} <= names
 assert all({"name","args","use","facet"} <= set(o) for o in d["ops"])
 assert "pw-context.sh" in d["scripts"]
 PYJ
@@ -142,7 +148,7 @@ d=json.load(open(sys.argv[1]))
 assert isinstance(d,list) and len(d)==17, len(d)
 ctx=next(c for c in d if c["cmd"]=="pw-context")
 names={o["name"] for o in ctx["ops"]}
-assert {"req-init","add-input","add-repo"} <= names, names
+assert {"req-init","add-input","add-repo","prepare"} <= names, names
 rv=next(c for c in d if c["cmd"]=="pw-review")
 assert rv["facets"] and "signoff" in rv["facets"]["write"] and "gate" in rv["facets"]["read"]
 assert set(rv) >= {"cmd","args","summary","agent","scripts","facets","phase","ops"}
@@ -218,6 +224,17 @@ pwtest_err 'project not found under' "S8-style refusal"
 pwtest_fix "project refusal has fix hint"
 pwtest_rc 2 "project unknown command slot" "$C" project "$CX2" frobnicate
 pwtest_err 'no such command: pw-frobnicate' "canonical echo in project slot"
+
+# 8b-3) context-phase next-actions recommend assisted preparation with real targets (plan 38),
+# while the manual path stays visible; the workflow spine names it too.
+CX3=hpctx; rm -rf "$PW_PROJECTS_DIR/$CX3"; cp -a "$F1" "$PW_PROJECTS_DIR/$CX3"
+pwtest_rc 0 "project view on a fresh context-phase scaffold" "$C" project "$CX3"
+pwtest_re "/pw-context $CX3 prepare" "context next-actions name the assisted path"
+pwtest_re "/pw-context $CX3 req-init" "manual path still offered"
+pwtest_re "/pw-context $CX3 prepare <brief>" "any-time line names prepare"
+pwtest_rc 0 "workflow view" "$C" workflow
+pwtest_re "/pw-context prepare" "workflow context phase names prepare"
+rm -rf "$PW_PROJECTS_DIR/$CX3"
 
 # 8e) plan-31 latest-state + actor display parity (JSON-first parser asserts): decisions
 # read from the LATEST Sign-off row verbatim (never the old pw_phase_token hyphen split,

@@ -32,14 +32,30 @@ Run commands one at a time. Inspect the result and resolve any blocker before co
 
 ## Drop context
 
-Create the project and an optional requirements brief:
+Create the project:
 
 ```text
 /pw-new delivery-note
-/pw-context delivery-note req-init
 ```
 
 The project appears at `$PW_PROJECTS/delivery-note/`.
+Then let the agent draft the context from one paragraph of intent:
+
+```text
+/pw-context delivery-note prepare Customers can save and view an optional delivery note on an order. Existing orders must remain valid. storefront and order-service are likely related. Changing order status and payment behavior is out of scope.
+```
+
+The agent reads the project, drafts `context/REQUIREMENTS.md`, registers an input row, and records
+supported repository guesses. It marks suggestions as proposals and stops before analysis.
+Open the brief and correct anything; answer its open questions and run `prepare` again to refine it.
+Running `prepare` again updates its own rows in place instead of duplicating them.
+
+The manual path works the same way. Create and fill the brief yourself, then register it:
+
+```text
+/pw-context delivery-note req-init
+```
+
 `req-init` creates `context/REQUIREMENTS.md`; it does not fill your requirements.
 Open that file and write the goal, behavior, exclusions, and completion checks. For example:
 
@@ -59,6 +75,8 @@ The file name below is relative to `context/`. Registering a row does not create
 /pw-context delivery-note add-repo order-service main Store and return the optional note
 ```
 
+Registration only adds a table row; preparation creates or edits the brief and any saved excerpts.
+Use either path to reach analysis, and do not repeat source registration when you switch.
 Expected result: `context/INDEX.md` lists the requirements file and both repositories.
 Use actual source details when you add a ticket, document link, or log.
 

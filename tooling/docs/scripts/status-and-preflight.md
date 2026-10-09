@@ -45,6 +45,7 @@ Checks **all** gates for one command and fails fast — run it before invoking t
 
 ```bash
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh analyze      <slug>   # phase context|analysis + context/INDEX.md exists with ≥1 filled input row
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh prepare      <slug>   # phase context only — assisted preparation accepts an EMPTY scaffolded context (no input rows required; analyze keeps its gate)
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh execute      <slug>   # PLAN approved, phase valid, scope/model resolvable (allowlist + availability gate)
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh breakdown    <slug>   # analysis reviews approved (approval discovery excludes RFC staging — only its Sign-off-bearing files), RFC open items resolved
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh ship         <slug>   # shippable tasks exist, verify passed
@@ -64,8 +65,9 @@ pw-preflight: PLAN review gate not approved
 **Reading failures:** every message is terminal for that command — do the named action, re-run.
 Unknown command argument → usage line, also exit 1.
 
-**When to use:** first step of `/pw-execute`, `/pw-breakdown`, `/pw-ship`, `/pw-close`,
-`/pw-review`. Any agent invoked *without* a command re-runs the same pre-flight itself.
+**When to use:** first step of `/pw-analyze`, `/pw-context <slug> prepare`, `/pw-execute`,
+`/pw-breakdown`, `/pw-ship`, `/pw-close`, `/pw-review`. Any agent invoked *without* a command
+re-runs the same pre-flight itself.
 
 ## pw-status.sh — project-state setters
 

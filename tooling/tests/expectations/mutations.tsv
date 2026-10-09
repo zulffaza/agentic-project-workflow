@@ -79,7 +79,7 @@ C20-phase-line-contract-canary	../template/PROJECT.template.md	- **Status:** con
 C21-mr-scope-to-wholefile	pw-ship.sh	  sec="$(awk '/^## Result/{p=1; next} /^## /{p=0} p' "$1" 2>/dev/null)" || return 0	  sec="$(cat "$1" 2>/dev/null)" || return 0	T1	pw-ship
 C22-forge-substring-default	pw-ship.sh	    github.com) forge="github" ;;	    *) forge="github" ;;	T1	pw-ship
 C23-doctrine-phrase-reworded	AGENTS.md	single source of truth	one source of truth	T4	-
-C24-preflight-verb-enum	pw-preflight.sh	die "unknown command: $COMMAND (expected: analyze|execute|breakdown|ship|comments|close|review)"	die "unknown command: $COMMAND (expected: execute|breakdown|ship|comments|close|review)"	T1	pw-preflight
+C24-preflight-verb-enum	pw-preflight.sh	die "unknown command: $COMMAND (expected: analyze|prepare|execute|breakdown|ship|comments|close|review)"	die "unknown command: $COMMAND (expected: execute|breakdown|ship|comments|close|review)"	T1	pw-preflight
 C24b-preflight-example-rows-count	pw-preflight.sh	        if (index($0, "_e.g._")) next	        if (index($0, "_e_NOOP_")) next	T1	pw-preflight
 C25-signoff-replaces-history	scripts/lib/pw-reviewlib.sh	  if md_insert_lines_after "$f" "$lastdata" "$tmp"; then rm -f "$tmp"; return 0; fi	  if md_replace_line "$f" "$lastdata" "$tmp"; then rm -f "$tmp"; return 0; fi	T1	pw-review\.t\.sh
 C26-add-item-drops-marker	pw-review.sh	local heading="### R$n · $SECTION — [OPEN] ($ACTOR, $ts) <!-- pw-item-status: open -->"	local heading="### R$n · $SECTION — [OPEN] ($ACTOR, $ts)"	T1	pw-review\.t\.sh
@@ -245,3 +245,11 @@ C189-rr-label-dash	pw-shiplib.sh	        return match.group(1) + ' - ' + match.g
 C190-rr-legacy-parse	pw-shiplib.sh	        elif inner.startswith('### '):	        elif False and inner.startswith('### '):	T1	^pw-ship-history\.t\.sh$
 C191-rr-draft-marker	pw-shiplib.sh	            lines.append('  - Draft : early feedback requested')	            pass	T1	^pw-ship-review-request\.t\.sh$
 C192-rr-command-routing	commands/pw-ship.md	returns BEFORE the pre-flight block	then run the pre-flight block	T4	-
+C193-ensure-input-conflict-guard	pw-context.sh	die "duplicate input rows for '$FILEV' disagree	: "duplicate input rows for '$FILEV' disagree	T1	^pw-context\.t\.sh$
+C194-ensure-key-backticks	pw-context.sh	    \`*\`) v="${v#\`}"; v="${v%\`}" ;;	    __never__) : ;;	T1	^pw-context\.t\.sh$
+C195-ensure-repo-marker-skip	pw-context.sh	    case "$cwhy" in *"pw-adopt-scope:"*) continue ;; esac	    :	T1	^pw-context\.t\.sh$
+C196-ensure-phase-guard	pw-context.sh	  [ "$tok" = "context" ] || die "preparation writes context only	  [ "$tok" = "context" ] || : "preparation writes context only	T1	^pw-context\.t\.sh$
+C197-prepare-phase-gate	pw-preflight.sh	    phase_gate "context"	    phase_gate "context analysis breakdown executing review done"	T1	^pw-preflight\.t\.sh$
+C198-help-split-doctrine	pw-help.sh	    if grep -qF 'reasoning operator' "$file"; then	    if false; then	T1	^pw-help\.t\.sh$
+C199-guidance-index-rule-revert	pw-project-doctor.sh	**Filled by:** [🧑 you] — both tables below. Agents only READ what you write here. **Easiest	**Filled by:** [🧑 you] — both tables below. Agents only READ.* **Easiest	T1	^pw-guidance\.t\.sh$
+C200-ensure-repo-base-identity	pw-context.sh	    [ "$(_norm_key "$cbase")" = "$bkey" ] || continue	    :	T1	^pw-context\.t\.sh$

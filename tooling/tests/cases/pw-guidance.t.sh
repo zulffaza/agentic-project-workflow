@@ -71,15 +71,29 @@ def repl(path, old, new):
     s = open(f, encoding="utf-8").read()
     assert old in s, "seed anchor missing in " + path
     open(f, "w", encoding="utf-8").write(s.replace(old, new, 1))
-# context/README.md: new brief paragraph → legacy manual-copy paragraph
+# context/README.md: newest brief paragraph → legacy manual-copy paragraph (exercises BOTH
+# chained rules: manual-copy → req-init → prepare wording in one apply pass)
 repl("context/README.md",
-     "run `/pw-context <slug> req-init` to create `REQUIREMENTS.md` from its template, then fill it in\n"
-     "(problem, goal, scope, constraints, success criteria) and register it:\n"
+     "**Optional — a one-page brief.** If the raw inputs don't clearly state *what you want and why*,\n"
+     "run `/pw-context <slug> prepare <your brief>` and let the agent draft the brief with traceable\n"
+     "inputs, or write it yourself: run `/pw-context <slug> req-init`, fill it in (problem, goal, scope,\n"
+     "constraints, success criteria), and register it:\n"
      "`/pw-context <slug> add-input --file REQUIREMENTS.md --what <one line> --source <where it came from>`.\n"
      "It's optional — the pipeline never requires it — but it sharpens the analysis phase.",
+     "**Optional — a one-page brief.** If the raw inputs don't clearly state *what you want and why*,\n"
      "start a short brief: `cp _REQUIREMENTS.template.md REQUIREMENTS.md` and fill it (problem, goal,\n"
      "scope, constraints, success criteria). It's optional — the pipeline never requires it — but it\n"
      "sharpens the analysis phase. Add a row for it in [`INDEX.md`](./INDEX.md) like any other input.")
+# context/INDEX.md: newest "Filled by" hint → legacy wording (one rule, exact bytes)
+repl("context/INDEX.md",
+     "**Filled by:** [🧑 you] — both tables below — or agent-assisted preparation:\n"
+     "`/pw-context <slug> prepare <brief>` drafts the brief, proposes input rows, and records supported\n"
+     "repository guesses from your stated intent; review and correct them before analysis. **Easiest\n"
+     "manual path:** the deterministic row operators — `/pw-context <slug> add-input --file <f> --what <prose…>\n"
+     "--source <prose…> [--trust <prose…>]` and `/pw-context <slug> add-repo <repo> <base> <why…>`",
+     "**Filled by:** [🧑 you] — both tables below. Agents only READ what you write here. **Easiest\n"
+     "path:** the deterministic operators — `/pw-context <slug> add-input --file <f> --what <prose…>\n"
+     "--source <prose…> [--trust <prose…>]` and `/pw-context <slug> add-repo <repo> <base> <why…>`")
 # task/PLAN.md: legacy task-accept hint (the template's acceptance bullet wraps across two lines —
 # seed the legacy single-line form the engine rule actually matches)
 repl("task/PLAN.md",
@@ -174,6 +188,7 @@ for s in gh glab; do printf '#!/bin/sh\necho "%s-shim: forge called during guida
 pwtest_rc 0 "guidance preview rc" env PATH="$STUB:$PATH" "$E" "$G3" --guidance
 pwtest_re 'would repair context/ADOPTED.md' "preview lists ADOPTED.md"
 pwtest_re 'would repair context/README.md' "preview lists context/README.md"
+pwtest_re 'would repair context/INDEX.md' "preview lists context/INDEX.md"
 pwtest_re 'would repair task/review/T01.review.md' "preview lists the review file"
 pwtest_re 'would repair analysis/review/topic.review.md' "preview lists the analysis review"
 pwtest_re 'would repair task/review/T01.archive.md' "preview lists the archive banner"
@@ -213,6 +228,12 @@ if grep -qF 'pw-rfc.sh' "$P3/rfc/META.md"; then pwtest_bad "META leak gone" "old
 else pwtest_ok "META leak gone"; fi
 pwtest_grep_file 'maintained via /pw-rfc' "META replacement present" "$P3/rfc/META.md"
 pwtest_grep_file 'keep me exactly' "custom section preserved" "$P3/context/README.md"
+# plan-38 rules: the INDEX filled-by hint is repaired, and the two README rules CHAIN
+# (manual-copy → req-init → prepare wording) in one apply pass.
+pwtest_grep_file 'or agent-assisted preparation' "INDEX filled-by hint repaired" "$P3/context/INDEX.md"
+if grep -qF 'Agents only READ' "$P3/context/INDEX.md"; then pwtest_bad "INDEX legacy wording gone" "old bytes remain"; else pwtest_ok "INDEX legacy wording gone"; fi
+pwtest_grep_file 'prepare <your brief>' "README brief hint reaches the prepare wording" "$P3/context/README.md"
+if grep -qF 'cp _REQUIREMENTS.template.md' "$P3/context/README.md"; then pwtest_bad "README legacy chain completed" "manual-copy wording remains"; else pwtest_ok "README legacy chain completed"; fi
 pwtest_grep_file '## Sign-off' "review sign-off table preserved" "$P3/task/review/T01.review.md"
 pwtest_grep_file '\| you \| approved \|' "sign-off row preserved verbatim" "$P3/task/review/T01.review.md"
 if grep -qE 'forge called during guidance' "$PWTEST_BOTH"; then pwtest_bad "no forge access" "a forge stub was invoked"

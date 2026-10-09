@@ -214,10 +214,26 @@ $PW_HOME/tooling/scripts/entities/pw-context.sh add-repo <slug> <repo> <base> <w
     # append one row to the "Repos in scope" table: | `<repo>` | `<base>` | <why> |.
     # A1 rest-of-line: everything after <base> is the why, unquoted.
     # NEVER touches /pw-adopt's <!-- pw-adopt-scope:… --> marker rows — appends below them.
+
+$PW_HOME/tooling/scripts/entities/pw-context.sh ensure-input <slug> --file <f> --what <w> --source <s> [--trust <t>]
+    # keyed upsert for the inputs table — assisted preparation's repeat-run path (/pw-context
+    # <slug> prepare): identity = the normalized "File / link" cell (trim, one surrounding
+    # backtick pair, \| unescape, whitespace collapse — URL query parameters and case
+    # preserved). No row → append; one row → update what/source/trust in place keeping the
+    # original date; identical content → no write at all; duplicate rows that disagree →
+    # conflict report, nothing written. Phase context only.
+
+$PW_HOME/tooling/scripts/entities/pw-context.sh ensure-repo <slug> <repo> <base> <why…>
+    # keyed upsert for the "Repos in scope" table: identity = normalized (repo, base). No row
+    # → append; one row → update the why in place; identical → no write. The same repo on a
+    # DIFFERENT base stays a separate row; /pw-adopt marker rows are never touched. Duplicate
+    # disagreement stops with a conflict. Phase context only.
 ```
 
-**Output:** one confirmation line per write. Errors: stderr `pw-context:` + `→ fix:` hint, exit
-`2` (missing flag value, missing INDEX.md, unknown operator). Rows are logged to LOG.md.
+**Output:** one confirmation line per write (`added` / `updated` / `already present
+(unchanged)`). Errors: stderr `pw-context:` + `→ fix:` hint, exit
+`2` (missing flag value, missing INDEX.md, unknown operator, preparation outside phase context,
+duplicate-row conflict). Rows are logged to LOG.md.
 
 ## pw-context.sh fetch
 

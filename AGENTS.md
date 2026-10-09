@@ -26,7 +26,7 @@ review → close**, driven by `/pw-*` slash commands. Work happens in scaffolded
 
 | Phase | Command | Produces | Gate before moving on |
 |---|---|---|---|
-| Context | `/pw-new` (fresh) · `/pw-adopt` (continuation) · `/pw-context` (edit `INDEX.md` rows / `REQUIREMENTS.md`) | `context/` inputs + `INDEX.md` | — |
+| Context | `/pw-new` (fresh) · `/pw-adopt` (continuation) · `/pw-context` (prepare a draft, or edit `INDEX.md` rows / `REQUIREMENTS.md`) | `context/` inputs + `INDEX.md` | — |
 | Analysis | `/pw-analyze` → `/pw-review` | `analysis/<topic>.md` | you approve the analysis |
 | Breakdown | `/pw-breakdown` → `/pw-review` | `task/PLAN.md` + `T0n.md` | **PLAN approved — the only hard gate** |
 | Execution | `/pw-execute` | commits in `worktree/*` (committed **+ verified**) | per-task Definition of Done |
@@ -36,8 +36,9 @@ review → close**, driven by `/pw-*` slash commands. Work happens in scaffolded
 | Any-time | `/pw-status` · `/pw-help` · `/pw-doctor` · `/pw-config` | state report · live how-to (commands/operators/project next-steps) · install + `--project` consistency · validated per-project config | — |
 
 Side-loops: **`/pw-sync`** refreshes open MRs against a moved base · **`/pw-ship … comments`**
-services MR review threads · **`/pw-status`** shows where a project is · **`/pw-context`** edits
-the context docs deterministically (`req-init` · `add-input` · `add-repo`) · **`/pw-review`** also
+services MR review threads · **`/pw-status`** shows where a project is · **`/pw-context`** prepares
+the context docs from your intent (`prepare`) or edits them deterministically (`req-init` ·
+`add-input` · `add-repo`) · **`/pw-review`** also
 takes write operators (`init` · `init-all` · `item` · `answer` · `signoff`) so review-file blocks are never
 hand-copied. All **five** review points
 in this pipeline — analysis, plan (breakdown), a task's plan, a task's execution result, and MR/PR
