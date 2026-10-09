@@ -468,13 +468,15 @@ for p in "${PW_PROVIDERS[@]}"; do
   echo
 done
 
-# --- request-review frame file (independent of provider sync) --------------------------------
-# /pw-ship <slug> request-review reads the effective frame on every invocation. Check its
-# presence/readability/placeholders even when every provider is synchronized — a healthy
-# install must not hide a missing frame. --fix seeds ONLY the absent DEFAULT file from the
-# shipped seed: an existing (possibly customized) file is never overwritten, and an explicitly
+# --- request-review frame + generation prompts (independent of provider sync) ------------------
+# /pw-ship <slug> request-review reads the effective frame and (for the enabled AI flags) the
+# effective generation prompts on every invocation. Check them even when every provider is
+# synchronized — a healthy install must not hide a missing user file. --fix seeds ONLY absent
+# DEFAULT files (the legacy template migrates byte-for-byte first; prompts come from the tracked
+# seeds): an existing (possibly customized) file is never overwritten, and an explicitly
 # configured custom path is reported, never silently replaced or redirected.
 frame_manual=0
+prompt_manual=0
 frame="$(pw_review_template_path)"
 frame_source="$(pw_review_template_source)"
 frame_err="$(pw_review_template_error "$frame")"
@@ -485,14 +487,14 @@ else
   issues=$((issues+1))
   if [ "$frame_source" = "default" ] && [ ! -e "$frame" ]; then
     if [ "$FIX" -eq 1 ]; then
-      if pw_review_template_seed "$frame"; then
-        echo "      fixed: seeded the default review frame from the shipped seed"
+      if pw_review_template_migrate "$frame" "$(pw_review_template_legacy_path)"; then
+        echo "      fixed: seeded/migrated the default review frame (legacy user-templates/ copy preserved when present)"
       else
-        echo "      manual: could not seed $frame — create it from the bundle's tooling/templates/review-request.md"
+        echo "      manual: could not seed/migrate $frame — see the migration problem above"
         frame_manual=1
       fi
     else
-      echo "      → fix: run /pw-doctor --fix (seeds the missing default frame)"
+      echo "      → fix: run /pw-doctor --fix (seeds or migrates the missing default frame)"
     fi
   else
     frame_manual=1
@@ -503,6 +505,37 @@ else
     fi
   fi
 fi
+for _pkind in summary note; do
+  _ppath="$(pw_review_prompt_path "$_pkind")"
+  _psrc="$(pw_review_prompt_source "$_pkind")"
+  _perr="$(pw_review_prompt_error "$_ppath")"
+  if [ -z "$_perr" ]; then
+    echo "  ✓ review prompt ($_pkind): $_ppath ($_psrc)"
+  else
+    echo "  ✗ review prompt ($_pkind): $_perr ($_ppath, $_psrc)"
+    issues=$((issues+1))
+    if [ "$_psrc" = "default" ] && [ ! -e "$_ppath" ]; then
+      if [ "$FIX" -eq 1 ]; then
+        if pw_review_prompt_seed "$_pkind" "$_ppath"; then
+          echo "      fixed: seeded the default $_pkind prompt from the shipped seed"
+        else
+          echo "      manual: could not seed $_ppath — create it from the bundle's tooling/prompts/"
+          prompt_manual=1
+        fi
+      else
+        echo "      → fix: run /pw-doctor --fix (seeds the missing default $_pkind prompt)"
+      fi
+    else
+      prompt_manual=1
+      if [ "$_psrc" = "custom" ] && [ ! -e "$_ppath" ]; then
+        _pvar="PW_REVIEW_REQUEST_$(printf '%s' "$_pkind" | tr '[:lower:]' '[:upper:]')_PROMPT_FILE"
+        echo "      manual: configured prompt path is missing — create the file or correct $_pvar in pw.config.sh (never auto-created)"
+      else
+        echo "      manual: edit the prompt file (or restore it from the shipped seed); an existing/customized prompt is never overwritten"
+      fi
+    fi
+  fi
+done
 echo
 
 # --- foreign skill roots --------------------------------------------------------------------
@@ -549,11 +582,11 @@ if printf '%s\n' "${PW_PROVIDERS[@]:-}" | grep -qx cursor; then
 fi
 
 # --- verdict -----------------------------------------------------------------
-if [ "$issues" -eq 0 ] && [ "$manual_issues" -eq 0 ] && [ "$frame_manual" -eq 0 ]; then
+if [ "$issues" -eq 0 ] && [ "$manual_issues" -eq 0 ] && [ "$frame_manual" -eq 0 ] && [ "$prompt_manual" -eq 0 ]; then
   echo "All synced ✓"
   exit 0
 fi
-if [ "$FIX" -eq 1 ] && [ "$manual_issues" -eq 0 ] && [ "$frame_manual" -eq 0 ]; then
+if [ "$FIX" -eq 1 ] && [ "$manual_issues" -eq 0 ] && [ "$frame_manual" -eq 0 ] && [ "$prompt_manual" -eq 0 ]; then
   echo "$issues issue(s) — fixes applied above. Re-run pw-doctor.sh to confirm."
   exit 0
 fi
@@ -563,6 +596,9 @@ if [ "$manual_issues" -gt 0 ]; then
 fi
 if [ "$frame_manual" -gt 0 ]; then
   manual_note="$manual_note The review frame needs a hand fix (see above)."
+fi
+if [ "$prompt_manual" -gt 0 ]; then
+  manual_note="$manual_note A review prompt needs a hand fix (see above)."
 fi
 echo "$issues issue(s) out of sync.$manual_note Fix with:  /pw-doctor --fix   (or ./bootstrap.sh after a bundle update)"
 exit 1

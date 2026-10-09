@@ -16,11 +16,15 @@ Run the project-workflow sync check and show its output:
 It verifies, per enabled provider (from `pw.config.sh`), that the installed `project-workflow`
 skill and the generated `/pw-*` command files match what this bundle would produce now — catching a
 moved/renamed bundle, edited command sources, or a stale skill. It also checks the
-**request-review frame file** independently of provider sync: the effective
-`user-templates/review-request.md` (or the `PW_REVIEW_REQUEST_TEMPLATE_FILE` path) must exist and
-carry each block placeholder exactly once. `--fix` seeds ONLY a missing default file from the
-shipped seed; an existing (customized) frame is never overwritten, and a missing explicitly
-configured custom path is reported for you to create or correct — never auto-created.
+**request-review frame and generation prompts** independently of provider sync: the effective
+`user/templates/review-request.md` (or the `PW_REVIEW_REQUEST_TEMPLATE_FILE` path) must exist and
+carry each block placeholder exactly once, and the effective `user/prompts/review-request-summary.md`
+/ `review-request-note.md` (or the `PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE` /
+`PW_REVIEW_REQUEST_NOTE_PROMPT_FILE` paths) must be readable, nonempty UTF-8 text at most 16 KiB.
+`--fix` seeds ONLY missing default files — the frame migrates a legacy `user-templates/` copy
+byte-for-byte first, the prompts come from the shipped seeds. An existing (customized) file is
+never overwritten, and a missing explicitly configured custom path is reported for you to create
+or correct — never auto-created.
 
 - If everything is in sync, say so and stop.
 - If anything is out of sync and `--fix` was **not** passed, summarize exactly what drifted (which

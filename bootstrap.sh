@@ -81,12 +81,24 @@ if [ "${#DETECTED[@]}" -eq 0 ]; then
 fi
 
 if [ "$MODE" = "check" ]; then
-  # report-only frame health: never create directories or files in check mode
-  if [ -f "$PW_HOME/user-templates/review-request.md" ]; then
-    echo "  frame:    user-templates/review-request.md present"
+  # report-only user-file health: never create directories or files in check mode
+  frame_new="$PW_HOME/user/templates/review-request.md"
+  frame_legacy="$PW_HOME/user-templates/review-request.md"
+  if [ -f "$frame_new" ]; then
+    echo "  frame:    user/templates/review-request.md present"
+  elif [ -f "$frame_legacy" ]; then
+    echo "  frame:    user/templates/review-request.md MISSING — legacy user-templates/ copy migrates on install (/pw-doctor --fix also repairs)"
   else
-    echo "  frame:    user-templates/review-request.md MISSING (install run seeds it; /pw-doctor --fix repairs)"
+    echo "  frame:    user/templates/review-request.md MISSING (install run seeds it; /pw-doctor --fix repairs)"
   fi
+  for spec in summary note; do
+    pfile="$PW_HOME/user/prompts/review-request-$spec.md"
+    if [ -f "$pfile" ]; then
+      echo "  prompt:   user/prompts/review-request-$spec.md present"
+    else
+      echo "  prompt:   user/prompts/review-request-$spec.md MISSING (install run seeds it; /pw-doctor --fix repairs)"
+    fi
+  done
   echo "[--check] detection only; no changes made."
   exit 0
 fi
@@ -159,19 +171,37 @@ EOF
 echo "  wrote $ENV_FILE"
 echo
 
-# --- 5b. seed the request-review frame (create-only; user customization lives here) -----------
-# One editable Markdown file the user owns: /pw-ship <slug> request-review reads it implicitly on
-# every invocation. NEVER overwrite an existing file (install, --force, or rerun): a customized
-# valid frame is healthy, not drift. The tracked seed stays under tooling/templates/.
-FRAME_DIR="$PW_HOME/user-templates"
-FRAME_FILE="$FRAME_DIR/review-request.md"
+# --- 5b. seed the request-review frame + generation prompts (create-only; user customization
+# lives here) ---------------------------------------------------------------------------------
+# Editable Markdown files the user owns: /pw-ship <slug> request-review reads the frame and (for
+# the optional AI prose) the two generation prompts implicitly on every invocation. NEVER
+# overwrite an existing file (install, --force, or rerun): a customized valid file is healthy,
+# not drift. The tracked seeds stay under tooling/templates/ and tooling/prompts/.
+FRAME_FILE="$PW_HOME/user/templates/review-request.md"
+FRAME_LEGACY="$PW_HOME/user-templates/review-request.md"
 if [ -f "$FRAME_FILE" ]; then
   echo "  frame:    $FRAME_FILE already present (leaving as-is)"
+elif [ -f "$FRAME_LEGACY" ]; then
+  if pw_review_template_migrate "$FRAME_FILE" "$FRAME_LEGACY"; then
+    echo "  frame:    migrated the legacy user-templates/ copy to $FRAME_FILE (legacy kept for rollback)"
+  else
+    echo "  frame:    could not migrate $FRAME_LEGACY — see /pw-doctor (the legacy file is never overwritten)"
+  fi
 elif pw_review_template_seed "$FRAME_FILE"; then
   echo "  frame:    seeded $FRAME_FILE (edit it to change the request frame)"
 else
   echo "  frame:    could not seed $FRAME_FILE — create it from the bundle's tooling/templates/review-request.md"
 fi
+for spec in summary note; do
+  PROMPT_FILE="$PW_HOME/user/prompts/review-request-$spec.md"
+  if [ -f "$PROMPT_FILE" ]; then
+    echo "  prompt:   $PROMPT_FILE already present (leaving as-is)"
+  elif pw_review_prompt_seed "$spec" "$PROMPT_FILE"; then
+    echo "  prompt:   seeded $PROMPT_FILE (edit it to change the $spec writing instructions)"
+  else
+    echo "  prompt:   could not seed $PROMPT_FILE — create it from the bundle's tooling/prompts/review-request-$spec.md"
+  fi
+done
 echo
 
 # --- verify + next steps -----------------------------------------------------

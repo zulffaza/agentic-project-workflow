@@ -282,6 +282,9 @@ LOGN="$(grep -c '^- ' "$PRJ/LOG.md")"; READMEB="$(cat "$PRJ/README.md")"
 pwtest_rc 0 "global show" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" global show
 pwtest_re 'providers[[:space:]]+: kilo claude cursor' "global show lists providers"
 pwtest_re 'route-default' "global show lists the route floor"
+pwtest_re 'review-frame[[:space:]]+: .*review-request\.md \((custom|default); placeholders validated on use\)' "global show reports the effective frame path and source"
+pwtest_re 'review-summary-prompt: .*user/prompts/review-request-summary\.md \(default' "global show reports the summary prompt path and source"
+pwtest_re 'review-note-prompt[[:space:]]+: .*user/prompts/review-request-note\.md \(default' "global show reports the note prompt path and source"
 [ "$(grep -c '^- ' "$PRJ/LOG.md")" = "$LOGN" ] && [ "$READMEB" = "$(cat "$PRJ/README.md")" ] \
   && pwtest_ok "global show mutates nothing (read-only floor view)" || pwtest_bad "global show mutated" "LOG/README changed"
 # deprecated shims still work but announce the pointer on stderr.

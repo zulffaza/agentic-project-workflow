@@ -253,3 +253,13 @@ C197-prepare-phase-gate	pw-preflight.sh	    phase_gate "context"	    phase_gate 
 C198-help-split-doctrine	pw-help.sh	    if grep -qF 'reasoning operator' "$file"; then	    if false; then	T1	^pw-help\.t\.sh$
 C199-guidance-index-rule-revert	pw-project-doctor.sh	**Filled by:** [🧑 you] — both tables below. Agents only READ what you write here. **Easiest	**Filled by:** [🧑 you] — both tables below. Agents only READ.* **Easiest	T1	^pw-guidance\.t\.sh$
 C200-ensure-repo-base-identity	pw-context.sh	    [ "$(_norm_key "$cbase")" = "$bkey" ] || continue	    :	T1	^pw-context\.t\.sh$
+C201-rr-summary-prompt-gate	pw-shiplib.sh	            if want['summary'] or want['mr_summary']:	            if False:	T1	^pw-ship-review-request\.t\.sh$
+C202-rr-prompt-size-limit	pw-shiplib.sh	    if len(raw) > PROMPT_MAX_BYTES:	    if False:	T1	^pw-ship-review-request\.t\.sh$
+C203-rr-prompt-utf8-check	pw-shiplib.sh	        text = raw.decode('utf-8')	        text = raw.decode('utf-8', errors='replace')	T1	^pw-ship-review-request\.t\.sh$
+C204-rr-prompt-disabled-read	pw-shiplib.sh	            if want['note']:	            if True:	T1	^pw-ship-review-request\.t\.sh$
+C205-rr-template-default-moved	pw-common.sh	    "") printf '%s\n' "$PW_HOME/user/templates/review-request.md" ;;	    "") printf '%s\n' "$PW_HOME/user-templates/review-request.md" ;;	T1	^pw-ship-review-request\.t\.sh$
+C206-rr-migrate-bytes-preserved	pw-common.sh	( set -o noclobber; cat "$legacy" > "$dest" ) 2>/dev/null || return 1	( set -o noclobber; cat "$PW_HOME/tooling/templates/review-request.md" > "$dest" ) 2>/dev/null || return 1	T1	^pw-ship-review-request\.t\.sh$
+C207-rr-note-only-description	pw-shiplib.sh	        parts.append(shown)	        parts.append('(unavailable)')	T1	^pw-ship-review-request\.t\.sh$
+C208-rr-observed-heads	pw-shiplib.sh	    heads_line = 'observed heads: ' + '; '.join(	    heads_line = 'observed heads: ' + ''	T1	^pw-ship-review-request\.t\.sh$
+C209-rr-diff-evidence-gate	pw-shiplib.sh	        if not description and entry['target'] and entry['head']:	        if False:	T1	^pw-ship-review-request\.t\.sh$
+C210-rr-doctor-prompt-check	pw-doctor.sh	  _perr="$(pw_review_prompt_error "$_ppath")"	  _perr=""	T1	^pw-doctor\.t\.sh$

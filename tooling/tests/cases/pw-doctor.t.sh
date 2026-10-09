@@ -2,12 +2,13 @@
 # cases/pw-doctor.t.sh — doctor's BIDIRECTIONAL sync: orphan detection (commands/agents/skills)
 # and stale foreign skill-root copies (plan 20 follow-up: a stale ~/.agents/skills real-dir copy
 # shadowed the fresh bundle symlink while doctor said "All synced"). Runs against a copied
-# tooling skeleton + fake HOME — never the real provider installs.
+# tooling skeleton + fake HOME — never the real provider installs. Also covers the request-review
+# user-file checks (frame + generation prompts) and the legacy template migration.
 DOCDIR="$(mktemp -d "${TMPDIR:-/tmp}/pwdoc.XXXXXX")"
 REAL="$TOOL/.."
 PW="$DOCDIR/bundle"; FH="$DOCDIR/home"
 mkdir -p "$PW/tooling" "$FH"
-cp -R "$TOOL/scripts" "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" "$TOOL/templates" "$PW/tooling/"
+cp -R "$TOOL/scripts" "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" "$TOOL/templates" "$TOOL/prompts" "$PW/tooling/"
 cp "$REAL/pw.config.sh" "$PW/pw.config.sh"
 cat >> "$PW/pw.config.sh" <<CFG
 # --- test overrides: single provider, all dirs under \$FH ---
@@ -85,5 +86,50 @@ grep -q "need a hand fix" "$PWTEST_BOTH" \
   || pwtest_bad "--fix manual note" "$(tail -2 "$PWTEST_BOTH" | tr '\n' ' ')"
 cp "$TOOL/commands/pw-doctor.md" "$PW/tooling/commands/pw-doctor.md"
 pwtest_rc 0 "restored canonical source returns to clean" env HOME="$FH" bash "$DOCTOR" --fix
+
+# 7) request-review user files: --fix seeds the new default frame + both prompts; a
+# customized file is never overwritten; custom paths are reported, never created. The harness
+# exports a custom template path, so these runs clear the review-request settings to default.
+doctordef() { env HOME="$FH" PW_REVIEW_REQUEST_TEMPLATE_FILE= PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE= \
+  PW_REVIEW_REQUEST_NOTE_PROMPT_FILE= bash "$DOCTOR" "$@"; }
+pwtest_rc 0 "--fix seeds the default frame and prompts" doctordef --fix
+[ -f "$PW/user/templates/review-request.md" ] && pwtest_ok "--fix seeded the default frame under user/templates/" \
+  || pwtest_bad "--fix seeded the default frame" "missing $PW/user/templates/review-request.md"
+[ -f "$PW/user/prompts/review-request-summary.md" ] && pwtest_ok "--fix seeded the default summary prompt" \
+  || pwtest_bad "--fix seeded the summary prompt" "missing $PW/user/prompts/review-request-summary.md"
+[ -f "$PW/user/prompts/review-request-note.md" ] && pwtest_ok "--fix seeded the default note prompt" \
+  || pwtest_bad "--fix seeded the note prompt" "missing $PW/user/prompts/review-request-note.md"
+printf 'customized summary prompt\n' > "$PW/user/prompts/review-request-summary.md"
+pwtest_rc 0 "a customized prompt passes the health check" doctordef
+pwtest_eq "doctor never overwrites a customized prompt" 'customized summary prompt' \
+  "$(cat "$PW/user/prompts/review-request-summary.md")"
+
+# 8) legacy template migration: when the new default is absent, a readable legacy copy migrates
+# byte-for-byte; an invalid (empty) new frame is a manual finding (never reseeded over).
+rm -f "$PW/user/templates/review-request.md"
+mkdir -p "$PW/user-templates"
+printf 'legacy frame with my layout\n' > "$PW/user-templates/review-request.md"
+pwtest_rc 1 "missing new default with a readable legacy file fails the check (pending migration)" doctordef
+pwtest_rc 0 "--fix migrates the legacy frame byte-for-byte" doctordef --fix
+pwtest_eq "migrated frame keeps the legacy customization" 'legacy frame with my layout' \
+  "$(cat "$PW/user/templates/review-request.md")"
+[ -f "$PW/user-templates/review-request.md" ] && pwtest_ok "legacy file is kept for rollback" \
+  || pwtest_bad "legacy file kept" "legacy file gone"
+printf '' > "$PW/user/templates/review-request.md"
+pwtest_rc 1 "an invalid default frame is a manual finding (never reseeded over)" doctordef --fix
+pwtest_eq "--fix preserves an existing invalid frame" '' "$(cat "$PW/user/templates/review-request.md")"
+rm -f "$PW/user/templates/review-request.md"
+pwtest_rc 1 "check-only reports a missing custom prompt path without creating it" \
+  env HOME="$FH" PW_REVIEW_REQUEST_TEMPLATE_FILE= PW_REVIEW_REQUEST_NOTE_PROMPT_FILE="$FH/custom-note.md" bash "$DOCTOR"
+grep -q 'review prompt (note)' "$PWTEST_BOTH" && pwtest_ok "doctor names the missing custom note prompt" \
+  || pwtest_bad "doctor names the custom note prompt" "$(grep '✗' "$PWTEST_BOTH" | tr '\n' ' ')"
+[ ! -e "$FH/custom-note.md" ] && pwtest_ok "doctor never creates a custom prompt path" \
+  || pwtest_bad "doctor never creates a custom prompt path" "file created"
+pwtest_rc 0 "doctor --fix re-migrates the frame for a clean final check" doctordef --fix
+cp "$TOOL/templates/review-request.md" "$PW/user/templates/review-request.md"
+pwtest_rc 0 "doctor checks prompt health even when providers are synchronized" \
+  env HOME="$FH" PW_REVIEW_REQUEST_TEMPLATE_FILE= PW_REVIEW_REQUEST_NOTE_PROMPT_FILE="$PW/user/prompts/review-request-note.md" bash "$DOCTOR"
+grep -q 'review prompt (summary)' "$PWTEST_BOTH" && pwtest_ok "doctor reports both effective prompt paths" \
+  || pwtest_bad "doctor reports both effective prompt paths" "$(grep 'review prompt' "$PWTEST_BOTH" | tr '\n' ' ')"
 
 rm -rf "$DOCDIR"

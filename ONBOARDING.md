@@ -124,7 +124,9 @@ Use `/pw-help project <slug>` whenever you need the next command for an existing
 | `/pw-*` commands or command skills | The workflow interface for each enabled, detected provider |
 | Seeded agents, where supported | Orchestrator, executor, reviewer, researcher, analyst, and task writer roles |
 | `pw-env.sh` | Paths for the bundle, projects, and repositories |
-| `user-templates/review-request.md` | The editable message frame `/pw-ship … request-review` reads implicitly (seeded once; never overwritten) |
+| `user/templates/review-request.md` | The editable message layout `/pw-ship … request-review` reads implicitly (seeded once; never overwritten) |
+| `user/prompts/review-request-summary.md` | The editable writing instructions for the optional `--summary` / `--mr-summary` prose |
+| `user/prompts/review-request-note.md` | The editable writing instructions for the optional `--note` prose |
 
 The paths are:
 
@@ -135,11 +137,16 @@ The paths are:
 Re-run `./bootstrap.sh` after changing providers or updating the bundle.
 Use `--check` to inspect provider detection without writing files. Use `--force` to replace existing workflow skill installs.
 
-The review-request frame is created only when absent — bootstrap, `--force`, `/pw-doctor --fix`,
-and bundle updates never overwrite an existing (possibly customized) frame. If it goes missing,
-`/pw-doctor` reports it and `/pw-doctor --fix` seeds it again from the shipped default. To review a
-different file, set `PW_REVIEW_REQUEST_TEMPLATE_FILE` in `pw.config.sh`; the tool never creates that
-custom path for you.
+The review-request files are created only when absent — bootstrap, `--force`, `/pw-doctor --fix`,
+and bundle updates never overwrite an existing (possibly customized) file. The frame migrated from
+the older `user-templates/` location when you first install this version: the previous file is
+copied as-is and kept for rollback. If a default file goes missing, `/pw-doctor` reports it and
+`/pw-doctor --fix` seeds it again from the shipped default. To use a different file, set
+`PW_REVIEW_REQUEST_TEMPLATE_FILE`, `PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE`, or
+`PW_REVIEW_REQUEST_NOTE_PROMPT_FILE` in `pw.config.sh`; the tool never creates a custom path for you.
+See [the review-request file settings](docs/REFERENCE.md#review-request-files-machine-settings-in-pwconfigsh).
+Everything under `user/` is git-ignored, so your local customizations stay out of ordinary
+commits and pushes (already tracked files are not affected by that ignore rule).
 
 ## Troubleshooting — `pw-doctor`
 

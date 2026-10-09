@@ -50,5 +50,8 @@ pw-env.sh
 # your local config (created from pw.config.example.sh)
 pw.config.sh
 
-# per-user editable files (bootstrap seeds these from tooling/templates/; user-owned, never tracked)
+# per-user editable files (bootstrap seeds these from tooling/templates/ and tooling/prompts/;
+# user-owned, never tracked). /user/ covers templates, prompts, and future user resources.
+# The legacy user-templates/ rule stays while migrated customizations remain there.
+/user/
 user-templates/

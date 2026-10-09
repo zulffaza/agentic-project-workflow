@@ -53,11 +53,13 @@
 #   open recorded project MR (or a selected task set). Queries each unique MR once through the
 #   configured forge (title/state/draft/target/reviewers/head build status; no polling, no
 #   writes), renders the built-in title-led blocks through the effective frame file
-#   (PW_REVIEW_REQUEST_TEMPLATE_FILE, default user-templates/review-request.md), and prints the
+#   (PW_REVIEW_REQUEST_TEMPLATE_FILE, default user/templates/review-request.md), and prints the
 #   selection recap plus the fenced message. --summary / --mr-summary / --note request optional
 #   AI prose; the deterministic renderer validates caller-supplied prose (membership, presence,
 #   sentence/word limits) before insertion, and a run without --prose still emits the
-#   deterministic message with the pending-section diagnostics.
+#   deterministic message with the pending-section diagnostics. The optional prose follows the
+#   effective generation prompts (user/prompts/review-request-summary.md and -note.md by default),
+#   read only when the matching flag is enabled and this run authors prose.
 #
 # Facet: STACK (plan 35) — branch-inheritance lifecycle. The `Stacked on:` field and
 # ancestry/target readers live in pw-common.sh; these operators are the ship-owned read/write
@@ -263,8 +265,19 @@ cmd_request_review() {
   local mappings=""
   if [ -n "${PW_FORGE_HOSTS[0]:-}" ]; then mappings="$(printf '%s\n' "${PW_FORGE_HOSTS[@]}")"; fi
 
+  # Effective generation prompts (read by the helper only when the matching AI flag is enabled
+  # and this run authors prose — never for a direct --prose supply). Resolution matches the
+  # frame contract: absolute stays put, relative resolves under PW_HOME, unset selects the
+  # editable default under user/prompts/.
+  local sum_prompt note_prompt sum_src note_src
+  sum_prompt="$(pw_review_prompt_path summary)"
+  note_prompt="$(pw_review_prompt_path note)"
+  sum_src="$(pw_review_prompt_source summary)"
+  note_src="$(pw_review_prompt_source note)"
+
   pw_ship_request_review "$d" "$frame" "$tmp" "$mode" "$ids" "$to_names" \
-    "$summary" "$mr_summary" "$note" "$no_reviewers" "${prose:--}" "$mappings"
+    "$summary" "$mr_summary" "$note" "$no_reviewers" "${prose:--}" "$mappings" \
+    "$sum_prompt" "$note_prompt" "$sum_src" "$note_src"
 }
 
 cmd_resolve() {

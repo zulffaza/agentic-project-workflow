@@ -619,6 +619,8 @@ cmd_global() {
   echo "  max-self-repair  : $PW_MAX_SELF_REPAIR"
   echo "  rfc-backend      : ${PW_RFC_BACKEND:-markdown}"
   echo "  review-frame     : $(pw_review_template_path) ($(pw_review_template_source); placeholders validated on use)"
+  echo "  review-summary-prompt: $(pw_review_prompt_path summary) ($(pw_review_prompt_source summary); read when --summary/--mr-summary is enabled)"
+  echo "  review-note-prompt   : $(pw_review_prompt_path note) ($(pw_review_prompt_source note); read when --note is enabled)"
   echo "  forge-hosts      : ${#PW_FORGE_HOSTS[@]} override(s) (else auto-detect)"
   echo "  memory           : ${PW_MEMORY:-none}"
   echo "  projects-dir     : $PW_PROJECTS"

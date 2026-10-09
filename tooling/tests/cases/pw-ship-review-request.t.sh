@@ -4,7 +4,10 @@
 # no shared fixture is touched.
 
 RR_SHIP="$(pwtest_script pw-ship.sh)"
-RR_FRAME="$PW_REVIEW_REQUEST_TEMPLATE_FILE"                 # harness-seeded default frame (temp root)
+# The harness seeds a frame at $PWTEST_ROOT/user-templates/review-request.md and exports its
+# path; an earlier case that sources pw-common can reset the export to empty, so fall back to
+# the harness seed location directly instead of trusting the clobbered variable.
+RR_FRAME="${PW_REVIEW_REQUEST_TEMPLATE_FILE:-$PWTEST_ROOT/user-templates/review-request.md}"
 RR_ROOT="$ROOT/review-request"; mkdir -p "$RR_ROOT/forges"
 
 cat > "$ROOT/rr-forge-config.sh" <<'CONFIG'
@@ -55,7 +58,7 @@ printf -- '- **Landing unit:** checkout-wave\n' >> "$PW_PROJECTS_DIR/rr-review/t
 rr_task rr-review T12 "Propagate adapter move"              "https://gitlab.example.com/pwtest/api/-/merge_requests/23"
 printf -- '- **Stacked on:** T11\n- **Landing unit:** checkout-wave\n' >> "$PW_PROJECTS_DIR/rr-review/task/T12.md"
 
-# Conflict + failure + empty projects reuse the same PLAN shape.
+# Conflict + failure + empty + diff/budget projects reuse the same PLAN shape.
 rr_project rr-conflict
 rr_task rr-conflict T01 "Conflicting links" "https://gitlab.example.com/pwtest/api/-/merge_requests/11"
 cat > "$PW_PROJECTS_DIR/rr-conflict/README.md" <<'README'
@@ -69,6 +72,14 @@ rr_project rr-fail
 rr_task rr-fail T01 "Lookup fails" "https://gitlab.example.com/pwtest/api/-/merge_requests/19"
 rr_project rr-empty
 rr_task rr-empty T01 "No MR yet" "(none)"
+rr_project rr-diff
+rr_task rr-diff T01 "Undescribed change" "https://gitlab.example.com/pwtest/api/-/merge_requests/24"
+rr_project rr-ghdiff
+rr_task rr-ghdiff T01 "Undescribed PR" "https://github.com/octo/app/pull/25"
+rr_project rr-budget
+for _n in 1 2 3 4 5; do
+  rr_task rr-budget "T0$_n" "Budget change $_n" "https://gitlab.example.com/pwtest/api/-/merge_requests/3$_n"
+done
 
 python3 - "$RR_ROOT/forges" <<'PY'
 import hashlib, json, sys
@@ -112,11 +123,46 @@ fix('gh', 'github.com', 'repos/octo/app/pulls/21', {'title': 'Rate-limit partner
 fix('gh', 'github.com', 'repos/octo/app/commits/21212121/check-runs',
     {'check_runs': [{'status': 'completed', 'conclusion': 'failure'},
                     {'status': 'completed', 'conclusion': 'success'}]})
+# diff-retrieval fixtures: undescribed MRs whose target...head delta explains the change
+fix('glab', gl, api + '24', {'title': 'Undescribed change', 'state': 'opened', 'draft': False,
+    'target_branch': 'main', 'sha': '24242424', 'reviewers': []})
+fix('glab', gl, 'projects/pwtest%2Fapi/repository/compare?from=main&to=24242424',
+    {'diffs': [{'old_path': 'checkout/handler.py', 'new_path': 'checkout/handler.py', 'new_file': False,
+                'deleted_file': False, 'renamed_file': False,
+                'diff': '@@ -1,2 +1,2 @@\n-def handle(events):\n+def handle(events):\n+    events = dedupe(events)\n'}]})
+fix('gh', 'github.com', 'repos/octo/app/pulls/25', {'title': 'Undescribed PR', 'state': 'open',
+    'draft': False, 'base': {'ref': 'main'}, 'head': {'sha': '25252525'}, 'requested_reviewers': []})
+fix('gh', 'github.com', 'repos/octo/app/compare/main...25252525',
+    {'files': [{'filename': 'rate/token_bucket.py', 'status': 'modified', 'additions': 2, 'deletions': 1,
+                'patch': '@@ -1,2 +1,3 @@\n-def refill(now):\n+def refill(now):\n+    now = monotonic(now)\n'}]})
+# budget fixtures: undescribed MRs with oversized diffs exercise the per-MR and aggregate caps
+def bigdiff():
+    files = []
+    for i in range(12):
+        lines = []
+        for j in range(14):
+            lines.append('+    %s  # file %d line %d' % ('x' * 72, i, j))
+        files.append({'old_path': 'f%d.py' % i, 'new_path': 'f%d.py' % i, 'new_file': False,
+                      'deleted_file': False, 'renamed_file': False, 'diff': '\n'.join(lines)})
+    return {'diffs': files}
+for n in range(1, 6):
+    num = str(n)
+    fix('glab', gl, api + '3' + num, {'title': 'Budget change ' + num, 'state': 'opened', 'draft': False,
+        'target_branch': 'main', 'sha': '3030303' + num, 'reviewers': []})
+    fix('glab', gl, 'projects/pwtest%2Fapi/repository/compare?from=main&to=3030303' + num, bigdiff())
 PY
 
 RR_ENV=( "PATH=$PWTEST_TESTSDIR/bin:$PATH" "PW_PROJECTS_DIR=$PW_PROJECTS_DIR" "PW_REPOS=$PW_REPOS"
          "PW_CONFIG_FILE=$ROOT/rr-forge-config.sh" "PW_REVIEW_REQUEST_TEMPLATE_FILE=$RR_FRAME"
+         "PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE=$RR_ROOT/prompt-summary.md"
+         "PW_REVIEW_REQUEST_NOTE_PROMPT_FILE=$RR_ROOT/prompt-note.md"
          "PWTEST_REVIEW_FORGE_DIR=$RR_ROOT/forges" )
+cat > "$RR_ROOT/prompt-summary.md" <<'PROMPT'
+Write a summary from the evidence. (test summary prompt)
+PROMPT
+cat > "$RR_ROOT/prompt-note.md" <<'PROMPT'
+Write reviewer hints from the evidence. (test note prompt)
+PROMPT
 rr() {  # <want-rc> <label> <slug> [args…]
   local want="$1" label="$2" slug="$3"; shift 3
   pwtest_rc "$want" "$label" env "${RR_ENV[@]}" bash "$RR_SHIP" request-review "$slug" "$@"
@@ -232,7 +278,20 @@ pwtest_re 'prose requested but not supplied: summary, note' 'pending sections ar
 pwtest_re 'pw-review-evidence' 'bounded evidence packet is emitted for the prose pass'
 pwtest_re 'description \(truncated\)' 'evidence includes the current MR description'
 pwtest_re 'task T01 result' 'evidence includes task/result excerpts'
+pwtest_re 'pw-generation-prompt: summary \(path: .*prompt-summary\.md; source: custom\)' 'summary prompt context names its path and source'
+pwtest_re 'test summary prompt' 'summary prompt text is emitted outside the message'
+pwtest_re 'pw-generation-prompt: note \(path: .*prompt-note\.md; source: custom\)' 'note prompt context names its path and source'
+pwtest_re 'test note prompt' 'note prompt text is emitted outside the message'
+pwtest_re 'observed heads: https://gitlab.example.com/pwtest/api/-/merge_requests/11 aaaa1111' 'first call exposes observed heads'
 grep -q '^\*\*Summary:\*\*' "$PWTEST_OUT" && pwtest_bad 'summary not faked without prose' 'summary rendered without prose' || pwtest_ok 'summary not faked without prose'
+rr 0 'per-MR summary mode shares the summary prompt' rr-review T01 --mr-summary
+pwtest_re 'pw-generation-prompt: summary' 'per-MR summary mode uses the shared summary prompt'
+grep -q 'pw-generation-prompt: note' "$PWTEST_OUT" && pwtest_bad 'disabled note prompt is not read' 'note context leaked' || pwtest_ok 'disabled note prompt is not read'
+rr 0 'note-only reads only the note prompt and still gets descriptions' rr-review T01 --note
+pwtest_re 'pw-generation-prompt: note' 'note context present for the note flag'
+grep -q 'pw-generation-prompt: summary' "$PWTEST_OUT" && pwtest_bad 'disabled summary prompt is not read' 'summary context leaked' || pwtest_ok 'disabled summary prompt is not read'
+pwtest_re 'description \(truncated\)' 'note-only evidence includes the current description'
+pwtest_re 'Rejects repeated checkout requests and bounds the retry queue\.' 'note-only evidence carries the actual description text'
 
 cat > "$RR_ROOT/prose-ok.json" <<'JSON'
 {"summary": "Checkout hardening and retry work waits for review. The changes are small and independent.",
@@ -244,6 +303,8 @@ pwtest_re '^\*\*Summary:\*\* Checkout hardening' 'global summary section inserte
 pwtest_re 'Summary : Rejects repeated checkout requests' 'per-MR summary stays inside its MR block'
 pwtest_re '^\*\*Review hints:\*\*' 'reviewer-hint heading inserted'
 pwtest_re 'prose included: summary, mr_summary, note' 'inclusion diagnostic stays outside the message'
+pwtest_re 'observed heads: https://gitlab.example.com/pwtest/api/-/merge_requests/11 aaaa1111' 'prose run exposes observed heads for the second call'
+grep -q 'pw-generation-prompt' "$PWTEST_OUT" && pwtest_bad 'direct prose supply triggers no prompt reads' 'prompt context leaked into a prose run' || pwtest_ok 'direct prose supply triggers no prompt reads'
 rr_ordered 'global summary before MR blocks, hints after them' '**Summary:**' '**Review hints:**'
 
 cat > "$RR_ROOT/prose-long.json" <<'JSON'
@@ -262,6 +323,83 @@ JSON
 rr 0 'explicit omit survives with an outside diagnostic' rr-review T01 --summary --prose "$RR_ROOT/prose-omit.json"
 pwtest_re 'prose omitted by the prose pass: summary' 'omit is reported outside the message'
 grep -q '^\*\*Summary:\*\*' "$PWTEST_OUT" && pwtest_bad 'omitted section leaves no heading' 'heading still rendered' || pwtest_ok 'omitted section leaves no heading'
+
+# --- prompt health: invalid enabled prompts omit their sections, never stop the message ------
+: > "$RR_ROOT/prompt-empty.md"
+rr_env_prompt() {  # <var-name> <file> <slug> [args…]
+  local var="$1" file="$2" slug="$3"; shift 3
+  pwtest_rc 0 "prompt health: ${var##*_}" env "${RR_ENV[@]}" "$var=$file" \
+    bash "$RR_SHIP" request-review "$slug" "$@"
+}
+rr_env_prompt PW_REVIEW_REQUEST_NOTE_PROMPT_FILE "$RR_ROOT/prompt-empty.md" rr-review T01 --note
+pwtest_re 'prose section note omitted: note prompt file is empty' 'empty prompt omits only its section'
+grep -q '^\*\*Review hints:\*\*' "$PWTEST_OUT" && pwtest_bad 'omitted note leaves no heading' 'hint heading rendered' || pwtest_ok 'omitted note leaves no heading'
+python3 -c "open('$RR_ROOT/prompt-big.md', 'w').write('x' * 20000)"
+rr_env_prompt PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE "$RR_ROOT/prompt-big.md" rr-review T01 --summary
+pwtest_re 'prose section summary omitted: summary prompt file exceeds the 16384-byte prompt limit' 'oversized prompt omits its section with the size limit'
+printf '\xff\xfe\x00\x01not utf8\n' > "$RR_ROOT/prompt-utf8.md"
+rr_env_prompt PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE "$RR_ROOT/prompt-utf8.md" rr-review T01 --summary
+pwtest_re 'not valid UTF-8 text' 'invalid UTF-8 prompt omits its section'
+rr_env_prompt PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE "$RR_ROOT/absent-custom-prompt.md" rr-review T01 --summary
+pwtest_re "prose section summary omitted: summary prompt file not found: $RR_ROOT/absent-custom-prompt.md \(.*, custom\)" 'missing custom prompt is named with its correction'
+[ ! -e "$RR_ROOT/absent-custom-prompt.md" ] && pwtest_ok 'request-review never creates a prompt file' || pwtest_bad 'request-review never creates a prompt file' 'file was created'
+rr_env_prompt PW_REVIEW_REQUEST_NOTE_PROMPT_FILE "$RR_ROOT/absent-custom-prompt.md" rr-review T01 --summary
+grep -q 'note prompt' "$PWTEST_OUT" && pwtest_bad 'disabled note prompt is not read even when missing' 'note diagnostic leaked' || pwtest_ok 'disabled note prompt is not read even when missing'
+# a summary-prompt failure affects both summary modes
+rr_env_prompt PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE "$RR_ROOT/prompt-empty.md" rr-review T01 --summary --mr-summary
+pwtest_re 'prose section summary omitted' 'both summary modes omit on the shared prompt failure'
+pwtest_re 'prose section mr_summary omitted' 'per-MR summary omitted by the summary prompt failure'
+grep -q 'pw-generation-prompt: summary' "$PWTEST_OUT" && pwtest_bad 'invalid prompt emits no context' 'prompt context leaked' || pwtest_ok 'invalid prompt emits no generation context'
+
+# --- missing defaults resolve under the bundle's user/ and direct the user to doctor ----------
+RR_BARE="$RR_ROOT/bare-bundle"; mkdir -p "$RR_BARE/tooling"
+cp -R "$TOOL/scripts" "$TOOL/templates" "$TOOL/prompts" "$RR_BARE/tooling/"
+RR_BARE_SHIP="$RR_BARE/tooling/scripts/entities/pw-ship.sh"
+rr_bare() {  # <want-rc> <label> <slug> [args…] — bare bundle: no user/ defaults exist
+  local want="$1" label="$2" slug="$3"; shift 3
+  pwtest_rc "$want" "$label" env "${RR_ENV[@]}" \
+    "PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE=" "PW_REVIEW_REQUEST_NOTE_PROMPT_FILE=" \
+    bash "$RR_BARE_SHIP" request-review "$slug" "$@"
+}
+rr_bare 0 'missing default prompts omit with a doctor fix line' rr-review T01 --summary --note
+pwtest_re 'prose section summary omitted: summary prompt file not found: .*user/prompts/review-request-summary\.md \(.*, default\)' 'missing default summary prompt names its path'
+pwtest_re '→ fix: run /pw-doctor --fix' 'missing default prompt directs to doctor repair'
+pwtest_re 'prose section note omitted: note prompt file not found' 'missing default note prompt named'
+grep -q 'copyable message' "$PWTEST_OUT" && pwtest_ok 'deterministic message survives prompt failures' || pwtest_bad 'deterministic message survives prompt failures' 'no message rendered'
+
+# --- supplementary evidence: conditional diffs and budgets -----------------------------------
+rr 0 'diff excerpt fills an unavailable description' rr-diff T01 --summary
+pwtest_re 'description \(truncated\)' 'evidence still labels the unavailable description'
+pwtest_re '\(unavailable\)' 'unavailable description is a labeled limitation'
+pwtest_re 'diff excerpt \(target -> head, truncated\)' 'diff excerpt rendered for a description gap'
+pwtest_re 'checkout/handler\.py' 'gitlab diff names the changed file'
+pwtest_re 'def handle\(events\)' 'gitlab diff carries patch content'
+rr 0 'github compare excerpt fills a missing body' rr-ghdiff T01 --summary
+pwtest_re 'rate/token_bucket\.py \+2/-1' 'github diff names the file with counts'
+grep -q 'diff excerpt' "$PWTEST_OUT" && pwtest_ok 'github compare endpoint resolved through the same reader' || pwtest_bad 'github compare endpoint resolved' 'no diff excerpt'
+rr 0 'supplementary evidence stays within the per-MR and aggregate budgets' rr-budget all --note
+pwtest_re 'per-MR supplementary evidence budget reached' 'per-MR budget is labeled when hit'
+pwtest_re 'aggregate evidence budget reached' 'aggregate budget is labeled when hit'
+pwtest_re '^MR: https://gitlab.example.com/pwtest/api/-/merge_requests/31' 'first MR identity survives budget trimming'
+: > "$RR_ROOT/forges/calls.log"
+rr 0 'a described MR triggers no diff retrieval' rr-review T01 --summary
+grep -q 'diff excerpt' "$PWTEST_OUT" && pwtest_bad 'no diff read when the description explains the change' 'diff excerpt present' || pwtest_ok 'no diff read when the description explains the change'
+grep -q 'repository/compare' "$RR_ROOT/forges/calls.log" && pwtest_bad 'no compare call when the description explains the change' 'compare endpoint called' || pwtest_ok 'no compare call when the description explains the change'
+
+# --- prompt text stays text (never sourced/executed) and disabled reads stay absent -----------
+cat > "$RR_ROOT/prompt-shell.md" <<'PROMPT'
+$(touch $ROOT/pwned) `echo hi` $((1+1)) summary prompt with shell syntax
+PROMPT
+rr_env_prompt PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE "$RR_ROOT/prompt-shell.md" rr-review T01 --summary
+pwtest_re 'shell syntax' 'prompt text with shell syntax renders literally'
+[ ! -e "$RR_ROOT/pwned" ] && pwtest_ok 'prompt text is never executed' || pwtest_bad 'prompt text is never executed' 'command executed from prompt'
+
+# --- head comparison support: both calls expose the same per-MR heads ------------------------
+rr 0 'head comparison: first call heads' rr-review T01 --summary
+head_one="$(grep -o 'observed heads: .*' "$PWTEST_OUT" | head -1)"
+rr 0 'head comparison: prose call heads' rr-review T01 --summary --prose "$RR_ROOT/prose-ok.json"
+head_two="$(grep -o 'observed heads: .*' "$PWTEST_OUT" | head -1)"
+pwtest_eq 'both calls expose identical observed heads' "$head_one" "$head_two"
 
 # --- stop conditions -------------------------------------------------------------------------
 rr 2 'merged MR stops an explicit selection' rr-review T04
@@ -377,3 +515,49 @@ pwtest_rc 1 'doctor reports a missing custom frame' \
   env "${RR_ENV[@]}" "PW_REVIEW_REQUEST_TEMPLATE_FILE=$RR_ROOT/absent-doctor.md" bash "$RR_DOCTOR"
 pwtest_re 'review frame' 'doctor names the review-frame finding'
 [ ! -e "$RR_ROOT/absent-doctor.md" ] && pwtest_ok 'doctor never creates a custom frame path' || pwtest_bad 'doctor never creates a custom frame path' 'file was created'
+
+# --- prompt seeds, migration, and path resolution ---------------------------------------------
+RR_LIB="$PW_HOME/tooling/scripts/lib/pw-common.sh"
+pwtest_rc 0 'prompt seeding creates the summary default' \
+  env PW_HOME="$PW_HOME" bash -c '. "$1"; pw_review_prompt_seed summary "$2"' _ "$RR_LIB" "$RR_ROOT/pseeded-summary.md"
+pwtest_grep_file 'length limit' 'seeded summary prompt carries its contract' "$RR_ROOT/pseeded-summary.md"
+printf 'my summary style\n' > "$RR_ROOT/pseeded-summary.md"
+pwtest_rc 1 'prompt seeding refuses an existing destination' \
+  env PW_HOME="$PW_HOME" bash -c '. "$1"; pw_review_prompt_seed summary "$2"' _ "$RR_LIB" "$RR_ROOT/pseeded-summary.md"
+pwtest_eq 'customized prompt bytes survive a reseed attempt' 'my summary style' "$(cat "$RR_ROOT/pseeded-summary.md")"
+pwtest_rc 0 'prompt health rejects an empty file' \
+  env PW_HOME="$PW_HOME" bash -c '. "$1"; [ -n "$(pw_review_prompt_error "$2")" ]' _ "$RR_LIB" "$RR_ROOT/prompt-empty.md"
+pwtest_rc 0 'prompt health rejects an oversized file' \
+  env PW_HOME="$PW_HOME" bash -c '. "$1"; [ -n "$(pw_review_prompt_error "$2")" ]' _ "$RR_LIB" "$RR_ROOT/prompt-big.md"
+# default resolution: unset/empty selects user/templates + user/prompts under PW_HOME
+rr_defaults() { PW_HOME="$RR_BARE" bash -c 'unset PW_REVIEW_REQUEST_TEMPLATE_FILE PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE PW_REVIEW_REQUEST_NOTE_PROMPT_FILE
+. "$1"; printf "%s|%s\n" "$(pw_review_template_path)" "$(pw_review_prompt_path summary)"' _ "$RR_LIB"; }
+pwtest_eq 'unset settings resolve to the editable defaults' \
+  "$RR_BARE/user/templates/review-request.md|$RR_BARE/user/prompts/review-request-summary.md" "$(rr_defaults)"
+rr_rels() { env PW_HOME="$RR_BARE" PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE="user/prompts/team.md" \
+  PW_REVIEW_REQUEST_NOTE_PROMPT_FILE="prompts/team-notes.md" PW_REVIEW_REQUEST_TEMPLATE_FILE="user/templates/team-frame.md" \
+  bash -c '. "$1"; printf "%s|%s|%s\n" "$(pw_review_template_path)" "$(pw_review_prompt_path summary)" "$(pw_review_prompt_path note)"' _ "$RR_LIB"; }
+pwtest_eq 'relative configured paths resolve under PW_HOME' \
+  "$RR_BARE/user/templates/team-frame.md|$RR_BARE/user/prompts/team.md|$RR_BARE/prompts/team-notes.md" "$(rr_rels)"
+# migration: legacy content survives byte-for-byte; the new default wins when both exist
+RR_MIG_NEW="$RR_ROOT/migrated/templates/review-request.md"
+RR_MIG_LEG="$RR_ROOT/legacy/review-request.md"
+mkdir -p "$RR_ROOT/migrated/templates" "$RR_ROOT/legacy"
+printf 'legacy customized frame bytes\n' > "$RR_MIG_LEG"
+pwtest_rc 0 'legacy template migrates byte-for-byte' \
+  env PW_HOME="$PW_HOME" bash -c '. "$1"; pw_review_template_migrate "$2" "$3"' _ "$RR_LIB" "$RR_MIG_NEW" "$RR_MIG_LEG"
+pwtest_eq 'migrated frame keeps the legacy customization' 'legacy customized frame bytes' "$(cat "$RR_MIG_NEW")"
+[ -f "$RR_MIG_LEG" ] && pwtest_ok 'legacy file is kept for rollback' || pwtest_bad 'legacy file is kept for rollback' 'legacy deleted'
+printf 'new default wins\n' > "$RR_MIG_NEW"
+pwtest_rc 0 'an existing new default wins without overwrites' \
+  env PW_HOME="$PW_HOME" bash -c '. "$1"; pw_review_template_migrate "$2" "$3"' _ "$RR_LIB" "$RR_MIG_NEW" "$RR_MIG_LEG"
+pwtest_eq 'new default preserved when both files exist' 'new default wins' "$(cat "$RR_MIG_NEW")"
+pwtest_eq 'legacy preserved when both files exist' 'legacy customized frame bytes' "$(cat "$RR_MIG_LEG")"
+mkdir -p "$RR_ROOT/unreadable"; printf 'x\n' > "$RR_ROOT/unreadable/legacy.md"; chmod 000 "$RR_ROOT/unreadable/legacy.md"
+pwtest_rc 1 'an unreadable legacy file is a reported migration problem' \
+  env PW_HOME="$PW_HOME" bash -c '. "$1"; pw_review_template_migrate "$2" "$3"' _ "$RR_LIB" "$RR_ROOT/unreadable/new.md" "$RR_ROOT/unreadable/legacy.md"
+[ ! -e "$RR_ROOT/unreadable/new.md" ] && pwtest_ok 'migration problem never seeds over the legacy file' || pwtest_bad 'migration problem never seeds over the legacy file' 'new default created'
+chmod 644 "$RR_ROOT/unreadable/legacy.md"
+pwtest_rc 0 'check-only migration report writes nothing' \
+  env PW_HOME="$PW_HOME" bash -c '. "$1"; pw_review_template_migrate "$2" "$3" --report' _ "$RR_LIB" "$RR_ROOT/unreadable/new.md" "$RR_ROOT/unreadable/legacy.md"
+[ ! -e "$RR_ROOT/unreadable/new.md" ] && pwtest_ok 'report mode creates nothing' || pwtest_bad 'report mode creates nothing' 'file appeared'

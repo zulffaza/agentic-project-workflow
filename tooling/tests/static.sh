@@ -239,6 +239,25 @@ static_t4() {
     && grep -qF -- '--prose <file>' "$TOOL/commands/pw-ship.md" \
     && pwtest_ok "T4 canary: pw-ship request-review routing text" \
     || pwtest_bad "T4 canary: pw-ship request-review routing" "the read-only request-review mode (selector mapping, pre-flight ordering, --prose flow) died from the command file"
+  # generation-prompt wiring: the two-call prose flow must name the editable prompt files and the
+  # observed-head comparison — losing either re-opens ungrounded prose generation.
+  grep -qF 'user/prompts/review-request-summary.md' "$TOOL/commands/pw-ship.md" \
+    && grep -qF 'PW_REVIEW_REQUEST_NOTE_PROMPT_FILE' "$TOOL/commands/pw-ship.md" \
+    && grep -qF 'Compare `observed heads`' "$TOOL/commands/pw-ship.md" \
+    && pwtest_ok "T4 canary: pw-ship generation-prompt wiring text" \
+    || pwtest_bad "T4 canary: pw-ship generation-prompt wiring" "the editable prompt files or the observed-head comparison died from the command file"
+  # /user/ ignore coverage: representative frame, prompt, and scratch files must be ignored, the
+  # legacy location stays ignored during migration, and no user-owned customization may be tracked.
+  _giterr=""
+  for _u in user/templates/review-request.md user/prompts/review-request-summary.md \
+            user/prompts/review-request-note.md user/scratch.txt user-templates/legacy.md; do
+    git -C "$TOOL/.." check-ignore -q "$_u" 2>/dev/null || _giterr="$_giterr $_u"
+  done
+  [ -z "$_giterr" ] && pwtest_ok "T4 canary: /user/ gitignore covers frame, prompts, and scratch files" \
+    || pwtest_bad "T4 canary: /user/ gitignore coverage" "not ignored:$_giterr"
+  _tracked="$(git -C "$TOOL/.." ls-files 'user/**' 'user-templates/**' 2>/dev/null)"
+  [ -z "$_tracked" ] && pwtest_ok "T4 canary: no user-owned customization is tracked" \
+    || pwtest_bad "T4 canary: no tracked user customization" "tracked: $_tracked — untrack it with git rm --cached (the local file stays)"
   # …and the RETIRED repair-routing policy text never creeps back (resume-first default, the `!`
   # shorthand, the dropped global flag, the merged fourth Route value, the producer-resume clause).
   hits="$(grep -rlE 'Execute with!|PW_STRICT_MODELS|Route: resume|resume that producer|batched, resume-first|batched \+ resume-first' "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" "$TOOL/docs" 2>/dev/null | tr '\n' ' ')"

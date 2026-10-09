@@ -133,6 +133,31 @@ For `ai-review`, `ai-model`, and `pin`, a batch validates every pair before writ
 `show` also lists facts owned by other commands. `set` cannot change project status, adopted work, base branches, or landing units.
 Change machine settings in `pw.config.sh`. See [onboarding](../ONBOARDING.md) and [recipes](RECIPES.md#change-models-or-concurrency).
 
+### Review-request files (machine settings in `pw.config.sh`)
+
+Three optional settings point the review-request message at your files:
+
+| What you put in config | Which file is used |
+|---|---|
+| No setting | The editable default file under `user/` in your workflow install. |
+| Empty string `""` | The same editable default file. This does not disable the feature. |
+| A real file path | That file. Absolute paths stay absolute; relative paths start at the install root. |
+
+| Setting | Default file |
+|---|---|
+| `PW_REVIEW_REQUEST_TEMPLATE_FILE` | `user/templates/review-request.md` — the message layout |
+| `PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE` | `user/prompts/review-request-summary.md` — writing instructions for `--summary` and `--mr-summary` |
+| `PW_REVIEW_REQUEST_NOTE_PROMPT_FILE` | `user/prompts/review-request-note.md` — writing instructions for `--note` |
+
+You can edit a default file in place, or set a path to use another file. The shipped seed supplies
+the initial content; upgrades and repair preserve existing user files. The AI flags
+(`--summary`, `--mr-summary`, `--note`) enable prose generation independently of these settings.
+The prompts are read as plain text on each generation pass, so edits take effect on the next run.
+An invalid template path stops the message with an error; an invalid prompt path omits that
+section from the generated prose and reports the path outside the message. `/pw-doctor` checks all
+three effective files, and `/pw-doctor --fix` seeds only missing defaults. See the
+[ask-for-review recipe](RECIPES.md#ask-teammates-to-review-the-open-mrs) for customization.
+
 ## Project anatomy (a scaffolded `<slug>/`)
 
 The project lives at `$PW_PROJECTS/<slug>/`.

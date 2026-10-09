@@ -31,9 +31,18 @@ declare -p PW_FORGE_HOSTS >/dev/null 2>&1 || PW_FORGE_HOSTS=()
 
 # Request-review frame file (see tooling/docs/scripts/ship-and-sync.md): the human-owned
 # outer message frame for /pw-ship <slug> request-review. Unset resolves the default under
-# $PW_HOME/user-templates/; a relative configured path resolves against $PW_HOME so the
-# effective file never depends on the current working directory. Never source the file.
+# $PW_HOME/user/templates/ (the pre-2026-10 legacy location user-templates/ migrates through
+# the doctor); a relative configured path resolves against $PW_HOME so the effective file
+# never depends on the current working directory. Never source the file.
 : "${PW_REVIEW_REQUEST_TEMPLATE_FILE:=}"
+
+# Request-review generation prompts (see tooling/docs/scripts/ship-and-sync.md): editable
+# writing instructions for the optional --summary/--mr-summary and --note prose. Unset or
+# empty resolves the default under $PW_HOME/user/prompts/; a relative configured path
+# resolves against $PW_HOME. Read as UTF-8 text on every generation pass; never sourced,
+# executed, or shell-expanded. AI flags enable generation independently of these settings.
+: "${PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE:=}"
+: "${PW_REVIEW_REQUEST_NOTE_PROMPT_FILE:=}"
 
 # Self-repair cap for the §3.5 in-run executor loop (opt-in clean mode): how many fix-and-
 # re-verify rounds an executor may take on its own regression before declaring verify-failed.
@@ -548,10 +557,14 @@ pw_trim() { sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
 # Effective frame path: PW_REVIEW_REQUEST_TEMPLATE_FILE when set (absolute stays put,
 # relative resolves under PW_HOME), else the default user file. The file is plain
 # Markdown, never sourced or executed.
+# The implicit default moved from user-templates/ to user/templates/ (2026-10): the
+# legacy file migrates byte-for-byte through pw_review_template_migrate when the new
+# default is absent; an explicit configured path is never migrated or rewritten.
+PW_REVIEW_REQUEST_TEMPLATE_LEGACY="$PW_HOME/user-templates/review-request.md"
 pw_review_template_path() {
   local p="${PW_REVIEW_REQUEST_TEMPLATE_FILE:-}"
   case "$p" in
-    "") printf '%s\n' "$PW_HOME/user-templates/review-request.md" ;;
+    "") printf '%s\n' "$PW_HOME/user/templates/review-request.md" ;;
     /*) printf '%s\n' "$p" ;;
     *)  printf '%s\n' "$PW_HOME/$p" ;;
   esac
@@ -559,19 +572,65 @@ pw_review_template_path() {
 pw_review_template_source() {  # default | custom
   if [ -n "${PW_REVIEW_REQUEST_TEMPLATE_FILE:-}" ]; then printf 'custom\n'; else printf 'default\n'; fi
 }
+pw_review_template_legacy_path() { printf '%s\n' "$PW_REVIEW_REQUEST_TEMPLATE_LEGACY"; }
 
-# pw_review_template_seed <dest> — create-only copy of the tracked seed to <dest>. The one
+# pw_review_template_migrate <new-default> <legacy-file> [--report] — the preservation-first
+# legacy template migration. When <new-default> is absent: a readable legacy file is copied
+# byte-for-byte (create-only; existing customization included, validated later by the normal
+# frame checks); an unreadable legacy file is a reported migration problem, never a reason to
+# seed over it; no legacy file means seed from the tracked template. When the new default
+# already exists it wins and both files are preserved. rc 0 = nothing left to do (migrated,
+# seeded, or already present); rc 1 = migration problem left for the caller to report.
+# --report prints one status line without writing; bootstrap --check and doctor check-only use it.
+pw_review_template_migrate() {
+  local dest="${1:-}" legacy="${2:-}" report=0
+  [ "${3:-}" = "--report" ] && report=1
+  [ -n "$dest" ] || return 1
+  if [ "$report" = 1 ]; then
+    if [ -e "$dest" ]; then
+      printf 'new default present (both files preserved)\n'
+    elif [ -e "$legacy" ]; then
+      if [ -r "$legacy" ] && [ -f "$legacy" ]; then
+        printf 'pending migration: legacy default %s would move to %s\n' "$legacy" "$dest"
+      else
+        printf 'migration problem: legacy default %s exists but cannot be read\n' "$legacy"
+      fi
+    else
+      printf 'missing default: would seed %s from the tracked template\n' "$dest"
+    fi
+    return 0
+  fi
+  [ -e "$dest" ] && return 0
+  if [ -e "$legacy" ]; then
+    if [ -r "$legacy" ] && [ -f "$legacy" ]; then
+      mkdir -p "$(dirname "$dest")" 2>/dev/null || return 1
+      ( set -o noclobber; cat "$legacy" > "$dest" ) 2>/dev/null || return 1
+      printf 'migrated %s -> %s (legacy file kept for rollback)\n' "$legacy" "$dest"
+      return 0
+    fi
+    printf 'migration problem: legacy default %s exists but cannot be read — fix the file, then re-run\n' "$legacy"
+    return 1
+  fi
+  pw_review_template_seed "$dest" >/dev/null 2>&1 || return 1
+  printf 'seeded %s from the tracked template\n' "$dest"
+  return 0
+}
+
+# pw_user_file_seed <dest> <seed> — create-only copy of a tracked seed to <dest>. The one
 # seeding primitive bootstrap/doctor share: rc 0 = created, 1 = destination already exists
 # (never overwritten, including a concurrent creation), 2 = could not create. Only ever called
-# for the DEFAULT destination — a custom configured path is reported, never materialized.
-pw_review_template_seed() {
-  local dest="${1:-}" seed="$PW_HOME/tooling/templates/review-request.md"
-  [ -n "$dest" ] || return 2
+# for a DEFAULT destination — a custom configured path is reported, never materialized.
+pw_user_file_seed() {
+  local dest="${1:-}" seed="${2:-}"
+  [ -n "$dest" ] && [ -n "$seed" ] || return 2
   [ -e "$dest" ] && return 1
   [ -f "$seed" ] || return 2
   mkdir -p "$(dirname "$dest")" 2>/dev/null || return 2
   ( set -o noclobber; cat "$seed" > "$dest" ) 2>/dev/null || return 2
   return 0
+}
+pw_review_template_seed() {  # <dest> — template flavor (legacy callers, shared seed path)
+  pw_user_file_seed "${1:-}" "$PW_HOME/tooling/templates/review-request.md"
 }
 
 # pw_review_template_error <file> — the first frame problem as one line (empty output = valid).
@@ -611,6 +670,61 @@ EOF
   done
   c="$(printf '%s\n' "$tokens" | grep -c '^{{PROJECT}}$' 2>/dev/null || true)"
   [ "$c" -le 1 ] 2>/dev/null || { printf 'placeholder {{PROJECT}} must appear at most once (found %s)\n' "$c"; return 0; }
+  return 0
+}
+
+# --- request-review generation prompts (shared by pw-ship.sh and pw-doctor.sh) --
+# Effective prompt path: PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE / PW_REVIEW_REQUEST_NOTE_PROMPT_FILE
+# when set (absolute stays put, relative resolves under PW_HOME), else the editable default under
+# $PW_HOME/user/prompts/. Read as UTF-8 text per generation pass; never sourced or executed.
+pw_review_prompt_path() {  # <summary|note>
+  local p=""
+  case "$1" in
+    summary) p="${PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE:-}" ;;
+    note)    p="${PW_REVIEW_REQUEST_NOTE_PROMPT_FILE:-}" ;;
+    *) return 1 ;;
+  esac
+  case "$p" in
+    "") printf '%s\n' "$PW_HOME/user/prompts/review-request-$1.md" ;;
+    /*) printf '%s\n' "$p" ;;
+    *)  printf '%s\n' "$PW_HOME/$p" ;;
+  esac
+  return 0
+}
+pw_review_prompt_source() {  # <summary|note> -> default | custom
+  case "$1" in
+    summary) [ -n "${PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE:-}" ] && printf 'custom\n' || printf 'default\n' ;;
+    note)    [ -n "${PW_REVIEW_REQUEST_NOTE_PROMPT_FILE:-}" ] && printf 'custom\n' || printf 'default\n' ;;
+    *) return 1 ;;
+  esac
+  return 0
+}
+pw_review_prompt_seed() {  # <summary|note> <dest> — create-only copy of that prompt's tracked seed
+  case "$1" in
+    summary) pw_user_file_seed "${2:-}" "$PW_HOME/tooling/prompts/review-request-summary.md" ;;
+    note)    pw_user_file_seed "${2:-}" "$PW_HOME/tooling/prompts/review-request-note.md" ;;
+    *) return 2 ;;
+  esac
+}
+
+# pw_review_prompt_error <file> — the first generation-prompt problem as one line (empty = valid).
+# A valid prompt is a readable, nonempty UTF-8 text file at most 16 KiB — file health only, never
+# a semantic judgment about custom instructions. The single implementation both the read-only
+# generator and the doctor validate against.
+PW_REVIEW_PROMPT_MAX_BYTES=16384
+pw_review_prompt_error() {
+  local f="${1:-}" sz
+  [ -n "$f" ] || { printf 'prompt path is empty\n'; return 0; }
+  [ -e "$f" ] || { printf 'file not found: %s\n' "$f"; return 0; }
+  [ -f "$f" ] || { printf 'not a regular file: %s\n' "$f"; return 0; }
+  [ -r "$f" ] || { printf 'not readable: %s\n' "$f"; return 0; }
+  [ -s "$f" ] || { printf 'file is empty: %s\n' "$f"; return 0; }
+  if ! iconv -f UTF-8 -t UTF-8 "$f" >/dev/null 2>&1; then
+    printf 'not valid UTF-8 text: %s\n' "$f"; return 0
+  fi
+  sz="$(wc -c < "$f" 2>/dev/null | pw_trim || printf '0')"
+  [ "${sz:-0}" -le "$PW_REVIEW_PROMPT_MAX_BYTES" ] 2>/dev/null \
+    || { printf 'file exceeds the %s-byte prompt limit (%s bytes): %s\n' "$PW_REVIEW_PROMPT_MAX_BYTES" "$sz" "$f"; return 0; }
   return 0
 }
 

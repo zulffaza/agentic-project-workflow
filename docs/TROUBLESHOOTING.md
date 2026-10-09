@@ -178,23 +178,27 @@ See [description and review-attempt history](REVIEW.md#description-and-review-at
 
 ## "The review-request message looks wrong, or the frame file is missing"
 
-`/pw-ship <slug> request-review` renders its message through one editable frame file:
-`user-templates/review-request.md` inside your workflow install, unless you point
-`PW_REVIEW_REQUEST_TEMPLATE_FILE` at a different file (a relative path resolves under the install
-root). The frame must keep each of `{{TO_BLOCK}}`, `{{SUMMARY_BLOCK}}`, `{{MR_BLOCKS}}`,
-`{{NOTE_BLOCK}}` exactly once; `{{PROJECT}}` is optional.
+`/pw-ship <slug> request-review` renders its message through one editable frame file and writes
+the optional prose under two editable prompts. The defaults live under `user/` in your workflow
+install: `user/templates/review-request.md` (layout), `user/prompts/review-request-summary.md`
+(`--summary` / `--mr-summary`), and `user/prompts/review-request-note.md` (`--note`). Each of the
+three settings in `pw.config.sh` can point at a different file (a relative path resolves under
+the install root). The frame must keep each of `{{TO_BLOCK}}`, `{{SUMMARY_BLOCK}}`,
+`{{MR_BLOCKS}}`, `{{NOTE_BLOCK}}` exactly once; `{{PROJECT}}` is optional. The prompts are plain
+text read fresh on every generation pass, at most 16 KiB each.
 
 | Symptom | What to do |
 |---|---|
-| "review-frame template missing" (default path) | The install predates the frame or the file was deleted — run `/pw-doctor --fix` to seed it again |
+| "review-frame template missing" (default path) | The install predates the frame or the file was deleted — run `/pw-doctor --fix` to seed it again. On upgrade from an older install, `/pw-doctor --fix` (or `./bootstrap.sh`) migrates your old `user-templates/review-request.md` to `user/templates/review-request.md` byte-for-byte and keeps the old file for rollback |
 | "configured review-frame template missing" | The path in `PW_REVIEW_REQUEST_TEMPLATE_FILE` is wrong or the file is gone — create it or correct the setting in `pw.config.sh`; a custom path is never auto-created |
 | "template invalid … exactly once" | Edit the frame file: keep each block placeholder exactly once (order is yours) and remove unknown `{{…}}` tokens; your own static text is fine and never overwritten |
-| Message text is fine but you want different wording | Edit the frame file — the frame is the whole outer message, and it is read fresh on every run |
+| A prompt section is omitted and the run names a prompt file | The enabled prompt is missing, unreadable, empty, not UTF-8 text, or over 16 KiB. A missing default → run `/pw-doctor --fix` to seed it; a custom path → create the file or correct the setting. The deterministic message still prints; request-review never creates or repairs prompt files itself |
+| Message text is fine but you want different wording | Edit the frame or the prompts — they are read fresh on every run, so no reinstall or provider regeneration is needed |
 
 Nothing else is configurable inside the message: per-MR fields and summaries use built-in formats.
-Run `/pw-config global show` to see the effective frame path and whether it is the default or a
-custom setting. The frame is plain Markdown and is never executed — but only you should edit it
-(and the same care applies as with any file an agent reads).
+Run `/pw-config global show` to see the effective frame and prompt paths and whether each is the
+default or a custom setting. The files are plain Markdown and are never executed — but only you
+should edit them (and the same care applies as with any file an agent reads).
 
 ## "A stacked task won't start, ship, or close"
 

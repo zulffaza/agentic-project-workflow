@@ -152,13 +152,23 @@ PW_MODEL_ALLOWLIST_CODEX=""
 #   PW_AI_REVIEW_DEFAULT="off"   # "off" (default) | "advisory" | "auto"
 PW_AI_REVIEW_DEFAULT="off"
 
-# --- Review-request frame (OPTIONAL — a default file is seeded at install) --------------------
+# --- Review-request frame and generation prompts (OPTIONAL — defaults are seeded at install) --
 # /pw-ship <slug> request-review renders its copyable message through one editable Markdown
-# frame: $PW_HOME/user-templates/review-request.md by default (seeded by bootstrap.sh / repaired
-# by /pw-doctor --fix). Set this only to use a DIFFERENT file; a relative path resolves under
-# PW_HOME. The file is read on every invocation and is never sourced or executed.
+# frame — $PW_HOME/user/templates/review-request.md by default (seeded by bootstrap.sh / repaired
+# by /pw-doctor --fix; the pre-2026-10 legacy user-templates/review-request.md migrates to the
+# new default when the new one is absent). The optional AI prose (--summary/--mr-summary/--note)
+# follows editable writing prompts — $PW_HOME/user/prompts/review-request-summary.md and
+# review-request-note.md by default. Set any of these only to use a DIFFERENT file; a relative
+# path resolves under PW_HOME. An unset or empty value selects the editable default (it never
+# disables the feature — the AI flags alone control whether prose is generated). Files are read
+# on every invocation and are never sourced or executed. Upgrade/repair preserves existing user
+# files; a missing custom path is reported, never auto-created.
 #   PW_REVIEW_REQUEST_TEMPLATE_FILE="/Users/me/templates/review-request.md"
+#   PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE="/Users/me/prompts/mr-summary.md"
+#   PW_REVIEW_REQUEST_NOTE_PROMPT_FILE="user/prompts/team-review-hints.md"
 PW_REVIEW_REQUEST_TEMPLATE_FILE=""
+PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE=""
+PW_REVIEW_REQUEST_NOTE_PROMPT_FILE=""
 
 # --- Git forge host overrides (OPTIONAL — auto-detect covers github.com/gitlab.com) ---------
 # /pw-ship and /pw-adopt resolve which CLI (gh/glab) talks to a repo from its OWN origin remote

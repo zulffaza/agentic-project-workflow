@@ -227,10 +227,20 @@ a missing, merged, closed, or conflicting MR link then stops the run so you can 
 Options add writing help: `--to <names>` sets the greeting, `--summary` adds a short global
 summary, `--mr-summary` adds one short summary per MR, and `--note` adds up to three reviewer
 hints. With any of these on, the command first returns the deterministic message plus a short
-evidence packet; you then author the requested text (the wording is yours or your agent's, the
-facts always come from the evidence) and re-run with `--prose <file>` to get the final message.
+evidence packet and the effective writing prompts; you then author the requested text (the
+wording is yours or your agent's, the facts always come from the evidence) and re-run with
+`--prose <file>` to get the final message.
 If the text is too long or a section cannot be written, the deterministic message still stands.
-The message frame is editable — see [the request-review frame](TROUBLESHOOTING.md#the-review-request-message-looks-wrong-or-the-frame-file-is-missing).
+
+The message layout and the writing prompts are editable, no reinstall needed. The defaults live
+under `user/` in your workflow install: `user/templates/review-request.md` (layout),
+`user/prompts/review-request-summary.md` (summary prose), and
+`user/prompts/review-request-note.md` (note prose). Edit a default in place, or set one of the
+three path settings in `pw.config.sh` to use a different file — see the
+[review-request file settings](REFERENCE.md#review-request-files-machine-settings-in-pwconfigsh).
+`user/` is git-ignored, so local customizations stay out of ordinary commits and pushes.
+Recovery when a file is missing or the message looks wrong:
+[the review-request message](TROUBLESHOOTING.md#the-review-request-message-looks-wrong-or-the-frame-file-is-missing).
 
 ## Inspect stacked MRs
 

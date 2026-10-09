@@ -219,8 +219,8 @@ ownership, locking, capacity, forge, or readback failure. Existing thread-tracki
 
 Read-only: generates ONE copyable teammate review-request message for all (or a selected set of)
 open recorded project MRs. No forge writes, no project writes, no CI polling — it reads each
-unique MR once, applies the selection rules, validates the frame and any optional prose, and
-prints a selection recap plus one fenced message.
+unique MR once, applies the selection rules, validates the frame and any optional prose, reads
+only the enabled generation prompts, and prints a selection recap plus one fenced message.
 
 ```bash
 $PW_HOME/tooling/scripts/entities/pw-ship.sh request-review <slug> [all | task-ids…] \
@@ -234,23 +234,47 @@ $PW_HOME/tooling/scripts/entities/pw-ship.sh request-review <slug> [all | task-i
   any of those states stops instead. One entry per unique MR; several tasks sharing one MR emit
   one entry and are reported together.
 - **Metadata** per unique MR comes from one bounded read-only forge call each: title, state,
-  draft, target branch, assigned reviewers, and head-specific build status. CI status renders the
-  observed state (`passed`/`failed`/`running`/`pending`/`canceled`/`skipped`) or `unavailable`
+  draft, target branch, assigned reviewers, description (fetched when any prose flag is enabled,
+  including `--note` alone), and head-specific build status. CI status renders the observed
+  state (`passed`/`failed`/`running`/`pending`/`canceled`/`skipped`) or `unavailable`
   when that read fails or has no head-specific result — never a readiness claim. Unknown hosts go
   through the same registry/`PW_FORGE_HOSTS` resolution as `history`.
 - **Rendering** uses built-in title-led blocks (Link / Branch Target / CI Status / Assigned
   Reviewer / per-MR Summary / Draft / Landing unit / Stacked on) substituted into the frame file —
-  `user-templates/review-request.md` by default, or `PW_REVIEW_REQUEST_TEMPLATE_FILE` (a relative
-  path resolves under `$PW_HOME`). The frame is validated before any forge query: each of
-  `{{TO_BLOCK}}`, `{{SUMMARY_BLOCK}}`, `{{MR_BLOCKS}}`, `{{NOTE_BLOCK}}` exactly once,
+  `user/templates/review-request.md` by default, or `PW_REVIEW_REQUEST_TEMPLATE_FILE` (a relative
+  path resolves under `$PW_HOME`; the older implicit default `user-templates/review-request.md`
+  migrates byte-for-byte through the doctor). The frame is validated before any forge query: each
+  of `{{TO_BLOCK}}`, `{{SUMMARY_BLOCK}}`, `{{MR_BLOCKS}}`, `{{NOTE_BLOCK}}` exactly once,
   `{{PROJECT}}` at most once, no other token.
+- **Generation prompts**: `--summary`/`--mr-summary` share
+  `user/prompts/review-request-summary.md` (or `PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE`); `--note`
+  reads `user/prompts/review-request-note.md` (or `PW_REVIEW_REQUEST_NOTE_PROMPT_FILE`). Only
+  enabled prompts are read, once per pass, as UTF-8 text at most 16 KiB — never sourced or
+  executed, and a direct `--prose` supply reads none. An invalid enabled prompt omits its affected
+  sections (a summary-prompt failure affects both summary modes) with a diagnostic naming the
+  path, source, and correction; missing defaults point to `/pw-doctor --fix` and the helper never
+  creates or repairs prompt files. The effective path/source stays visible in the generation
+  diagnostics, outside the copyable message.
 - **AI prose** (`--summary`, `--mr-summary`, `--note`) is authored by the caller and supplied back
   through `--prose` as JSON — `{"summary": "…", "mr_summaries": {"<MR url>": "…"}, "note": ["…"],
   "omit": ["<section>"]}` — and validated for membership, presence, and sentence/word limits
   (summary 2 sentences/50 words; per-MR 2/35; note 3 bullets/60 words total) before insertion.
   Without `--prose`, the first run prints the deterministic message (requested sections absent),
-  a bounded evidence packet, and the pending-section diagnostics; the deterministic message
-  always survives AI failure or an explicit omit.
+  a bounded evidence packet (descriptions, task-result excerpts, and — only when a description
+  cannot explain the change and the MR records target + head — a read-only diff of that MR's own
+  target…head delta, so a stacked MR's inherited parent changes never enter), the enabled prompt
+  text, and the pending-section diagnostics; the deterministic message always survives AI failure
+  or an explicit omit.
+- **Evidence budgets**: 12,000 characters per selected MR (description, task excerpts, optional
+  diff, in that order) and 48,000 characters aggregate; identity/head lines always survive and
+  every trim is labeled. A truncated or unavailable description is a limitation, never proof that
+  no relevant detail exists. Diff retrieval is conditional on enabled prose and a concrete
+  evidence gap; ordinary runs make no extra forge calls.
+- **Observed heads** print in both calls' diagnostics (`observed heads: <url> <sha>; …`) so the
+  caller can compare them before relaying the final message: a newer head on the second call
+  discards the affected prose for one regeneration from current evidence; a second move omits the
+  affected section. This bounded check detects observed changes and does not claim to freeze
+  remote MRs.
 - Exit `2` = usage / missing project / missing PLAN / conflicting or failed lookup / invalid frame
   or prose; exit `0` also covers the explained empty selection (no message emitted). Read-only
   battery row: `request-review F1` pins the no-PLAN stop path.

@@ -528,12 +528,15 @@ PY
 
 
 # Request-review message generation — the read-only half of /pw-ship request-review. The shell
-# resolves the project's candidate tasks and the effective frame file; this helper queries each
-# unique MR's forge metadata once (read-only, bounded timeout), applies the selection rules,
-# validates optional caller-supplied prose, and renders the recap plus one copyable message
-# through the frame placeholders. Nothing here writes project state or performs forge writes.
+# resolves the project's candidate tasks, the effective frame file, and the effective generation
+# prompt files; this helper queries each unique MR's forge metadata once (read-only, bounded
+# timeout), applies the selection rules, reads + validates only the enabled prompts (when this
+# run authors prose, never for a direct --prose supply), validates optional caller-supplied
+# prose, and renders the recap plus one copyable message through the frame placeholders. Nothing
+# here writes project state or performs forge writes.
 # argv: <projectdir> <frame-file> <candidates-tsv> <all|explicit> <selector-ids> <to-names>
 #       <summary:0|1> <mr-summary:0|1> <note:0|1> <no-reviewers:0|1> <prose-file|-> <mappings>
+#       <summary-prompt-file|-> <note-prompt-file|-> <summary-prompt-source> <note-prompt-source>
 pw_ship_request_review() {
   python3 - "$@" <<'PY'
 import json
@@ -857,6 +860,94 @@ def recap(slug, entries, excluded):
         lines.append('  (no tasks with recorded MRs)')
     return '\n'.join(lines)
 
+# ---------------- generation prompts + supplementary evidence -----------------
+
+PROMPT_MAX_BYTES = 16384
+PER_MR_EVIDENCE_BUDGET = 12000
+AGGREGATE_EVIDENCE_BUDGET = 48000
+
+def read_prompt(path, kind):
+    # File-health validation only (mirrors pw_review_prompt_error): presence, regular readable
+    # file, nonempty, UTF-8, <= 16 KiB. Custom instructions are never judged semantically.
+    if not path or path == '-':
+        return None, 'prompt path is empty'
+    if not os.path.isfile(path):
+        return None, 'file not found: ' + path
+    if not os.access(path, os.R_OK):
+        return None, 'not readable: ' + path
+    try:
+        raw = Path(path).read_bytes()
+    except OSError as error:
+        return None, 'not readable (' + str(error) + '): ' + path
+    if not raw.strip():
+        return None, 'file is empty: ' + path
+    try:
+        text = raw.decode('utf-8')
+    except UnicodeDecodeError:
+        return None, 'not valid UTF-8 text: ' + path
+    if len(raw) > PROMPT_MAX_BYTES:
+        return None, ('file exceeds the ' + str(PROMPT_MAX_BYTES) + '-byte prompt limit ('
+                      + str(len(raw)) + ' bytes): ' + path)
+    return text, None
+
+def diff_excerpt(ident, base, head):
+    # Bounded read-only diff of the MR's own delta (target...head — for a stacked MR the target
+    # is the parent branch, so inherited parent changes never enter the excerpt). Only consulted
+    # when the description cannot explain the change; a failed read is a limitation, not a stop.
+    if ident['forge'] == 'github':
+        endpoint = 'repos/' + ident['repo'] + '/compare/' + quote(base, safe='') + '...' + head
+    else:
+        endpoint = ('projects/' + quote(ident['repo'], safe='') + '/repository/compare?from='
+                    + quote(base, safe='') + '&to=' + quote(head, safe=''))
+    data = forge_get(ident, endpoint)
+    if not isinstance(data, dict):
+        return None
+    files = []
+    if ident['forge'] == 'github':
+        raw = data.get('files')
+        if not isinstance(raw, list) or not raw:
+            return None
+        for item in raw[:12]:
+            if not isinstance(item, dict) or not isinstance(item.get('filename'), str):
+                continue
+            name = item['filename']
+            status = item.get('status') or ''
+            additions = item.get('additions')
+            deletions = item.get('deletions')
+            patch = item.get('patch') if isinstance(item.get('patch'), str) else ''
+            files.append((name, status, additions, deletions, '\n'.join(patch.splitlines()[:14])))
+    else:
+        raw = data.get('diffs')
+        if not isinstance(raw, list) or not raw:
+            return None
+        for item in raw[:12]:
+            if not isinstance(item, dict):
+                continue
+            name = item.get('new_path') or item.get('old_path')
+            if not isinstance(name, str):
+                continue
+            if item.get('new_file'):
+                status = 'new'
+            elif item.get('deleted_file'):
+                status = 'deleted'
+            elif item.get('renamed_file'):
+                status = 'renamed'
+            else:
+                status = 'modified'
+            patch = item.get('diff') if isinstance(item.get('diff'), str) else ''
+            files.append((name, status, None, None, '\n'.join(patch.splitlines()[:14])))
+    if not files:
+        return None
+    lines = ['diff excerpt (target -> head, truncated):']
+    for name, status, additions, deletions, patch in files:
+        label = name + (' (' + status + ')' if status and status != 'modified' else '')
+        if additions is not None:
+            label += ' +' + str(additions) + '/-' + str(deletions)
+        lines.append('--- ' + label)
+        if patch:
+            lines.append(patch)
+    return '\n'.join(lines)
+
 def build_message(slug, tonames, entries, prose, no_reviewers):
     counts = {}
     for entry in entries:
@@ -888,28 +979,74 @@ def build_message(slug, tonames, entries, prose, no_reviewers):
               'PROJECT': slug}
     return values
 
-def evidence_packet(project, entries, want_description):
-    lines = ['----- pw-review-evidence (for the optional prose pass; NOT part of the message) -----']
+def evidence_packet(project, entries):
+    # Supplementary evidence for the prose pass: current MR descriptions (any prose flag,
+    # including note-only), task-result excerpts, and — only when the description cannot
+    # explain the change and the MR records a target and head — a bounded diff of that MR's
+    # own delta. Budgets: 12,000 characters per MR (description + excerpts + diff, in that
+    # order) and 48,000 characters aggregate; identity/head lines always survive and every
+    # trim is labeled. A truncated or unavailable description is a limitation, never proof
+    # that no relevant detail exists.
+    chunks = []
     for entry in entries:
-        lines.append('MR: ' + entry['url'])
-        lines.append('title: ' + entry['title'])
-        lines.append('head: ' + (entry['head'] or 'unavailable'))
-        flags = 'state=' + entry['state'] + (' | draft' if entry['draft'] else '')
-        lines.append(flags)
-        if want_description:
-            description = entry['description'].strip().replace('\r', '')
-            lines.append('description (truncated):')
-            lines.append(description[:2000] if description else '(unavailable)')
+        head_lines = ['MR: ' + entry['url'],
+                      'title: ' + entry['title'],
+                      'head: ' + (entry['head'] or 'unavailable'),
+                      'state=' + entry['state'] + (' | draft' if entry['draft'] else '')]
+        parts = []
+        description = entry['description'].strip().replace('\r', '')
+        parts.append('description (truncated):')
+        if description:
+            shown = description[:2000] + ('…' if len(description) > 2000 else '')
+        else:
+            shown = '(unavailable)'
+        parts.append(shown)
         for task in entry['tasks']:
-            lines.append('task ' + task + ' result: ' + task_result_excerpt(project, task))
+            parts.append('task ' + task + ' result: ' + task_result_excerpt(project, task))
+        if not description and entry['target'] and entry['head']:
+            excerpt = diff_excerpt(entry['_ident'], entry['target'], entry['head'])
+            if excerpt:
+                parts.append(excerpt)
+        assembled = []
+        used = 0
+        budget_hit = False
+        for part in parts:
+            if used + len(part) > PER_MR_EVIDENCE_BUDGET:
+                remaining = PER_MR_EVIDENCE_BUDGET - used
+                if remaining > 40:
+                    assembled.append(part[:remaining] + '…(per-MR evidence budget reached)')
+                budget_hit = True
+                break
+            assembled.append(part)
+            used += len(part)
+        if budget_hit:
+            assembled.append('(per-MR supplementary evidence budget reached; remaining sources truncated)')
+        chunks.append('\n'.join(head_lines + assembled))
+    kept = []
+    total = 0
+    aggregate_hit = False
+    for chunk in chunks:
+        if total + len(chunk) > AGGREGATE_EVIDENCE_BUDGET:
+            remaining = AGGREGATE_EVIDENCE_BUDGET - total
+            if remaining > 80:
+                kept.append(chunk[:remaining] + '\n(aggregate evidence budget reached)')
+            aggregate_hit = True
+            break
+        kept.append(chunk)
+        total += len(chunk)
+    lines = ['----- pw-review-evidence (for the optional prose pass; NOT part of the message) -----']
+    lines.extend(kept)
+    if aggregate_hit:
+        lines.append('(aggregate evidence budget reached; remaining MRs truncated)')
     lines.append('----- end pw-review-evidence -----')
     return '\n'.join(lines)
 
 def run():
     argv = sys.argv[1:]
-    need(len(argv) == 12, 'internal usage: request-review helper needs 12 arguments')
+    need(len(argv) == 16, 'internal usage: request-review helper needs 16 arguments')
     (project, frame_path, candidates_path, mode, ids, tonames, summary_flag, mr_summary_flag,
-     note_flag, no_reviewers, prose_path, mappings) = argv
+     note_flag, no_reviewers, prose_path, mappings, summary_prompt, note_prompt,
+     summary_prompt_source, note_prompt_source) = argv
     project = os.path.abspath(project)
     want = {'summary': summary_flag == '1', 'mr_summary': mr_summary_flag == '1', 'note': note_flag == '1'}
     ai_requested = any(want.values())
@@ -1021,9 +1158,15 @@ def run():
     for entry in entries:
         entry['ci'] = build_status(entry['_ident'], entry['head'])
 
-    # Optional prose: validate before anything is rendered into the message.
+    # Optional prose: validate before anything is rendered into the message. A direct --prose
+    # supply triggers no prompt reads; the generation pass reads only the enabled prompts, once
+    # each, and treats an invalid prompt as an omission of its affected sections with a
+    # diagnostic outside the copyable message (the deterministic message always survives).
     prose = {'summary': '', 'mr_summaries': {}, 'note': [], 'omitted': []}
     prose_note = ''
+    generation = ''
+    heads_line = 'observed heads: ' + '; '.join(
+        e['url'] + ' ' + (e['head'] or 'unavailable') for e in entries)
     if ai_requested:
         if prose_path and prose_path != '-':
             prose = validate_prose(prose_path, [entry['url'] for entry in entries], want)
@@ -1032,13 +1175,53 @@ def run():
                 prose_note = 'prose included: ' + ', '.join(included_sections)
             if prose['omitted']:
                 prose_note += ('\n' if prose_note else '') + 'prose omitted by the prose pass: ' + ', '.join(prose['omitted'])
+            prose_note += ('\n' if prose_note else '') + heads_line
         else:
-            requested = ', '.join(s for s in ('summary', 'mr_summary', 'note') if want[s])
-            prose_note = ('prose requested but not supplied: ' + requested + '\n'
-                          'limits: summary <= 2 sentences/50 words; mr_summary <= 2 sentences/35 words per MR; note <= 3 bullets/60 words total\n'
-                          '→ next: author the requested sections from the evidence packet below, write JSON '
-                          '{"summary": "...", "mr_summaries": {"<MR url>": "..."}, "note": ["..."]}, and re-run with --prose <file>; '
-                          'declare a section omitted with "omit": ["..."] only after one failed shortening pass')
+            prompt_texts = {}
+            failures = []
+            if want['summary'] or want['mr_summary']:
+                text, err = read_prompt(summary_prompt, 'summary')
+                if err:
+                    for section in ('summary', 'mr_summary'):
+                        if want[section]:
+                            failures.append((section, 'summary', summary_prompt, summary_prompt_source, err))
+                else:
+                    prompt_texts['summary'] = (summary_prompt, summary_prompt_source, text)
+            if want['note']:
+                text, err = read_prompt(note_prompt, 'note')
+                if err:
+                    failures.append(('note', 'note', note_prompt, note_prompt_source, err))
+                else:
+                    prompt_texts['note'] = (note_prompt, note_prompt_source, text)
+            for section, kind, path, source, err in failures:
+                if source == 'default' and err.startswith('file not found'):
+                    fix = 'run /pw-doctor --fix (seeds the missing default ' + kind + ' prompt)'
+                else:
+                    fix = 'create the file or correct the setting in pw.config.sh'
+                prose_note += ((prose_note and prose_note + '\n') or '') + 'prose section ' + section \
+                    + ' omitted: ' + kind + ' prompt ' + err + ' (' + path + ', ' + source + ') → fix: ' + fix
+                prose['omitted'].append(section)
+            pending = [s for s in ('summary', 'mr_summary', 'note') if want[s] and s not in prose['omitted']]
+            if pending:
+                requested = ', '.join(pending)
+                prose_note += ((prose_note and prose_note + '\n') or '') \
+                    + ('prose requested but not supplied: ' + requested + '\n'
+                       'limits: summary <= 2 sentences/50 words; mr_summary <= 2 sentences/35 words per MR; note <= 3 bullets/60 words total\n'
+                       '→ next: author the requested sections from the evidence packet and prompt below, write JSON '
+                       '{"summary": "...", "mr_summaries": {"<MR url>": "..."}, "note": ["..."]}, and re-run with --prose <file>; '
+                       'declare a section omitted with "omit": ["..."] only after one failed shortening pass')
+                context = []
+                if 'summary' in prompt_texts:
+                    path, source, text = prompt_texts['summary']
+                    context.append('----- pw-generation-prompt: summary (path: ' + path + '; source: ' + source + ') -----')
+                    context.append(text.rstrip('\n'))
+                    context.append('----- end pw-generation-prompt -----')
+                if 'note' in prompt_texts:
+                    path, source, text = prompt_texts['note']
+                    context.append('----- pw-generation-prompt: note (path: ' + path + '; source: ' + source + ') -----')
+                    context.append(text.rstrip('\n'))
+                    context.append('----- end pw-generation-prompt -----')
+                generation = '\n'.join(context)
 
     print(recap(project.rsplit('/', 1)[-1], entries, excluded))
     if not entries:
@@ -1057,8 +1240,13 @@ def run():
         print()
         print(prose_note)
     if ai_requested and (not prose_path or prose_path == '-'):
+        if generation:
+            print()
+            print(evidence_packet(project, entries))
+            print()
+            print(generation)
         print()
-        print(evidence_packet(project, entries, want['mr_summary'] or want['summary']))
+        print(heads_line)
 
 try:
     run()
