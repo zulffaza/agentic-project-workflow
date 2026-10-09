@@ -125,9 +125,9 @@ C66-task-accept-plan-sync-reverted	pw-status.sh	  if [ "$plan_status" != "accept
 C67-dashboard-fill-reverted	pw-mdlib.sh	    if grep -q '^ERR: no row with' "$errfile" 2>/dev/null \	    if false && grep -q '^ERR: no row with' "$errfile" 2>/dev/null \	T1	pw-status
 C68-dashboard-call-fatal	pw-status.sh	      echo "pw-status: warning: dashboard row for $task not updated (no row and no fillable placeholder) — task file + PLAN are the gate truth" >&2	      die "dashboard row for $task not updated"	T1	pw-status
 C69-d-rules-retired	docs/conventions.md	## D-rules — doc layers & issue routing	## Doc placement notes	T4	-
-C73-user-layer-tooling-ref	../docs/EXECUTION.md	table: [TOOLING.md](./TOOLING.md)). The `AI Models` lane set is	table: [`tooling/docs/providers.md`](../tooling/docs/providers.md)). The `AI Models` lane set is	T4	-
+C73-user-layer-tooling-ref	../docs/EXECUTION.md	See [provider settings](REFERENCE.md#inspect-configure-and-recover) or run	See [provider settings](../tooling/docs/providers.md) or run	T4	-
 C74-jargon-scope-tooling-docs	docs/providers.md	**Cursor CLI, verified end-to-end 2026-09-09** (probes bundled with the Cursor onboarding;	**Cursor CLI, verified end-to-end 2026-09-09** (bundled probes for plan-12;	T4	-
-C75-onboarding-script-name-scope	../ONBOARDING.md	right now (the same check `/pw-doctor` uses) — anything you hand-edited, or a foreign file that	right now (the same check `pw-ship.sh` uses) — anything you hand-edited, or a foreign file that	T4	-
+C75-onboarding-script-name-scope	../ONBOARDING.md	| `/pw-doctor` | Report installation drift |	| `pw-ship.sh` | Report installation drift |	T4	-
 C76-user-entry-handoff-returns	../AGENTS.md	Human-facing overview: **[README.md](./README.md)**. Restated working rules on demand: the	Maintenance entry: `tooling/AGENTS.md`. Human-facing overview: **[README.md](./README.md)**. Restated working rules on demand: the	T4	-
 C77-doctor-fix-hint-command-only	scripts/entities/pw-project-doctor.sh	      echo "      → fix: /pw-config $SLUG project ensure   (inserts the missing config lines; Status/One-liner are owned by /pw-* flows)"	      echo "      → fix: $CFG project ensure $SLUG   (inserts the missing config lines; Status/One-liner are owned by /pw-* flows)"	T4	-
 C78-doctor-token-expansion	scripts/entities/pw-project-doctor.sh	  s="${s//"{{PW_PROJECTS}}"/$PROJECTS_DIR}"	  s="${s//"{{PW_PROJECTZZ}}"/$PROJECTS_DIR}"	T1	pw-project-doctor
@@ -165,7 +165,7 @@ C109-plan-table-crlf-status-bleed	pw-doc.sh	    st="$(pw_field "$tf" Status | tr
 C110-pw-rfc-isolated-slice-coupled-RI	tests/cases/pw-rfc.t.sh	RI=rfcown; rm -rf "$PW_PROJECTS_DIR/$RI"; cp -a "$F2" "$PW_PROJECTS_DIR/$RI"	: "${RI:?pw-rfc must own its RI fixture}"	T1	pw-rfc
 C111-f3-cache-restore-links-unrepaired	tests/pw_test_lib.sh	    for sfx in "$S2" "$S3"; do	    for sfx in "$S2"; do	T1	pw-test-harness
 C112-ops-detail-delimiter-collapses-blank-fields	pw-help.sh	          printf "%s\037%s\037%s\037%s\n", o, sigs[o], paras[o], facs[o] }	          printf "%s\t%s\t%s\t%s\n", o, sigs[o], paras[o], facs[o] }	T1	pw-help
-C113-wib-formatter-host-local	pw-mdlib.sh	t="$(TZ=Asia/Jakarta LC_ALL=C date '+%e %B %Y %H.%M')"	t="$(LC_ALL=C date '+%e %B %Y %H.%M')"	T1	^pw-datetime\.t\.sh$
+C113-wib-formatter-host-local	pw-mdlib.sh	t="$(TZ=Asia/Jakarta LC_ALL=C date '+%e %B %Y - %H.%M')"	t="$(LC_ALL=C date '+%e %B %Y - %H.%M')"	T1	^pw-datetime\.t\.sh$
 C114-wib-parser-host-local	pw-mdlib.sh	    export TZ=Asia/Jakarta	    export TZ=UTC	T1	^pw-datetime\.t\.sh$
 C115-legacy-parser-removed	pw-mdlib.sh	    iso="$stamp:00"	    return 1	T1	^pw-datetime\.t\.sh$
 C116-parser-normalized-invalid-date	pw-mdlib.sh	[ "$roundtrip" = "$iso" ]	true	T1	^pw-datetime\.t\.sh$
@@ -223,7 +223,7 @@ C167-projdir-scaffold-leak	pw-context.sh	→ fix: check the slug under the proje
 C168-mrtracking-header-leak	pw-ship.sh	printf '\n## MR comment tracking   [🤖-owned — never hand-edit; maintained by /pw-ship comments]\n\n'	printf '\n## MR comment tracking   [🤖-owned — never hand-edit; see `pw-ship.sh comment-seen`]\n\n'	T1	^pw-guidance\.t\.sh$
 C169-preview-writes	pw-project-doctor.sh	if [ "$apply" -eq 0 ]; then	if [ "$apply" -eq 1 ]; then	T1	^pw-guidance\.t\.sh$
 C170-guidance-count-nonzero	pw-project-doctor.sh	PW_G_N="$n"	PW_G_N="$n"; [ "$PW_G_N" -eq 0 ] && PW_G_N=1	T1	^pw-guidance\.t\.sh$
-C171-tooling-deep-link	../docs/TOOLING.md	- **Maintainer onboarding starts at `tooling/AGENTS.md`** in the bundle repo	- **Maintainer onboarding starts at [`tooling/AGENTS.md`](../tooling/AGENTS.md)** in the bundle repo	T4	-
+C171-tooling-deep-link	../docs/TOOLING.md	read [onboarding](../ONBOARDING.md).	read [onboarding](../tooling/AGENTS.md).	T4	-
 C172-preflight-accept-leak	pw-preflight.sh	die_fix "not all tasks are accepted:$UNACCEPTED" "acceptance is a human decision — tell your agent to \"accept $SLUG <T0n>\" (one step records the task file + PLAN row + dashboard), then re-run /pw-close"	die_fix "not all tasks are accepted:$UNACCEPTED" "a human accepts each shipped task — the mechanical way to set all three holders at once is: pw-status.sh task-accept $SLUG <T0n> (task file + PLAN row + dashboard; the decision to accept stays human)"	T4	-
 C173-relay-clause-revert	commands/pw-context.md	and the recovery as a `/pw-*` action — quote the raw error line too when it carries evidence.	and the recovery as a script rerun — quote the raw error line too when it carries evidence.	T4	-
 C174-phasefix-close-leak	pw-preflight.sh	close) PHASE_FIX="close runs after acceptance (/pw-ship handles MRs; accept each done task — tell the agent to record it)"	close) PHASE_FIX="close runs after acceptance (/pw-ship handles MRs; accepted tasks then pw-status.sh status $SLUG done)"	T1	^pw-guidance\.t\.sh$
@@ -231,3 +231,17 @@ C175-history-write-ctype-dropped	pw-shiplib.sh	['--method', 'PATCH' if github el
 C176-guidance-rewind-rule-revert	pw-project-doctor.sh	`/pw-status <slug> rewind <phase>`	`pw-status.sh status <slug> <phase> --rewind`	T1	^pw-guidance\.t\.sh$
 C177-guidance-allowlist-review-globs	pw-project-doctor.sh	*/review/*.review.md */review/*.archive.md	task/review/*.review.md task/review/*.archive.md	T1	^pw-guidance\.t\.sh$
 C178-guidance-answer-rule-revert	pw-project-doctor.sh	> (it writes the styled `↳ you:` line under the question).	> (script: `pw-review.sh answer` — writes the styled `↳ you:` line under the question).	T1	^pw-guidance\.t\.sh$
+C179-datetime-separator-dropped	pw-mdlib.sh	'+%e %B %Y - %H.%M'	'+%e %B %Y %H.%M'	T1	^pw-datetime\.t\.sh$
+C180-datetime-legacy-rejected	pw-mdlib.sh	([0-9]{4})(\ -\ |\ )([0-9]{2})	([0-9]{4})\ -\ ([0-9]{2})	T1	^pw-datetime\.t\.sh$
+C181-rr-conflict-skipped	pw-shiplib.sh	        need(not conflicts, 'recorded MR links conflict for: '	        need(True, 'recorded MR links conflict for: '	T1	^pw-ship-review-request\.t\.sh$
+C182-rr-merged-included	pw-shiplib.sh	        if entry['state'] in ('merged', 'closed'):	        if False and entry['state'] in ('merged', 'closed'):	T1	^pw-ship-review-request\.t\.sh$
+C183-rr-reviewer-optout	pw-shiplib.sh	        if entry['reviewers'] and not no_reviewers:	        if entry['reviewers']:	T1	^pw-ship-review-request\.t\.sh$
+C184-rr-prose-limit	pw-shiplib.sh	            need(len(sentences(text)) <= 2 and word_count(text) <= 50,	            need(True,	T1	^pw-ship-review-request\.t\.sh$
+C185-rr-evidence-gate	pw-shiplib.sh	    if ai_requested and (not prose_path or prose_path == '-'):	    if False:	T1	^pw-ship-review-request\.t\.sh$
+C186-rr-frame-validator	pw-common.sh	  [ -z "$unknown" ] || { printf 'unknown placeholder(s):%s\n' "$unknown"; return 0; }	  : "$unknown"	T1	^pw-ship-review-request\.t\.sh$
+C187-rr-dispatch	pw-ship.sh	  request-review)     shift; cmd_request_review "$@" ;;	  request-review)     shift; cmd_resolve "$@" ;;	T1	^pw-ship-review-request\.t\.sh$
+C188-rr-wrapper-close	pw-shiplib.sh	            + attempt['block'] + '</details>\n\n')	            + attempt['block'] + '\n')	T1	^pw-ship-history\.t\.sh$
+C189-rr-label-dash	pw-shiplib.sh	        return match.group(1) + ' - ' + match.group(2)	        return match.group(1) + ' ' + match.group(2)	T1	^pw-ship-history\.t\.sh$
+C190-rr-legacy-parse	pw-shiplib.sh	        elif inner.startswith('### '):	        elif False and inner.startswith('### '):	T1	^pw-ship-history\.t\.sh$
+C191-rr-draft-marker	pw-shiplib.sh	            lines.append('  - Draft : early feedback requested')	            pass	T1	^pw-ship-review-request\.t\.sh$
+C192-rr-command-routing	commands/pw-ship.md	returns BEFORE the pre-flight block	then run the pre-flight block	T4	-

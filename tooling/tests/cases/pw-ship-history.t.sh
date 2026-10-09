@@ -9,6 +9,7 @@ pwtest_rc 0 'history runtime scenarios execute with strict forge fixtures' pytho
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -52,8 +53,11 @@ for forge, host, url, endpoint in [
         if forge == 'glab': item['response']['sha'] = sha
         else: item['response']['head']['sha'] = sha
         fixture.write_text(json.dumps(item, ensure_ascii=False))
-    def call(op, *args, rc=0):
-        result = subprocess.run(['bash', script, 'history', project.name, op, *args], env=env,
+    def call(op, *args, rc=0, env_extra=None):
+        run_env = dict(env)
+        if env_extra:
+            run_env.update(env_extra)
+        result = subprocess.run(['bash', script, 'history', project.name, op, *args], env=run_env,
                                 text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd='/')
         if result.returncode != rc:
             print(result.stderr, file=sys.stderr)
@@ -105,6 +109,12 @@ for forge, host, url, endpoint in [
     check(forge + ' no request or comment references', 'Request:' not in body1 and 'inline:101' not in body1)
     check(forge + ' notes within summary and history last', body1.index('## Notes for the reviewer') < body1.index('<!-- pw-mr-summary:end -->') < body1.index('## Review changes') and body1.endswith('<!-- pw-review-changes:end -->'))
     check(forge + ' outside Unicode bytes preserved', outside in body1)
+    def display(ts):
+        parts = ts.rsplit(' WIB', 1)[0].split(' ')
+        return ts if ' - ' in ts else ' '.join(parts[:3]) + ' - ' + ' '.join(parts[3:]) + ' WIB'
+    label1 = archive()['attempts'][0]['timestamp']
+    check(forge + ' one collapsed wrapper per attempt with the persisted datetime', body1.count('<details>') == 1 and body1.count('</details>') == 1 and '<summary>Review attempt: ' + display(label1) + '</summary>' in body1)
+    check(forge + ' frozen block bytes stay inside the wrapper', '<summary>Review attempt: ' + display(label1) + '</summary>\n\n' + frozen1 + '</details>' in body1)
     writes = state()['writes']; deliver(key1)
     check(forge + ' completed retry makes no write', state()['writes'] == writes and state()['response'][field] == body1)
     changed = dict(data1, summary=['rewrite frozen attempt'])
@@ -118,6 +128,20 @@ for forge, host, url, endpoint in [
     check(forge + ' newest-first order', body2.index(key2) < body2.index(key1))
     check(forge + ' prior block byte immutable', frozen1 in body2)
     check(forge + ' current summary replaces obsolete behavior', 'Preserve valid ID bytes.' in body2.split('<!-- pw-mr-summary:end -->')[0] and 'Reject blank IDs.' not in body2.split('<!-- pw-mr-summary:end -->')[0])
+    # Legacy unwrapped presentation (both attempts, newest first) converts on the next
+    # authorized delivery without changing the enclosed frozen bytes; the wrapped retry is stable.
+    current = state()['response'][field]
+    start = '<!-- pw-review-changes:start -->'; end = '<!-- pw-review-changes:end -->'
+    legacy_region = start + '\n## Review changes\n' + archive()['attempts'][1]['block'] + frozen1 + end
+    item = state(); item['response'][field] = current[:current.index(start)] + legacy_region
+    fixture.write_text(json.dumps(item, ensure_ascii=False))
+    deliver(key2)
+    converted = state()['response'][field]
+    check(forge + ' legacy unwrapped history converts during authorized delivery', converted.count('<details>') == 2 and '<summary>Review attempt: ' + display(label1) + '</summary>\n\n' + frozen1 + '</details>' in converted)
+    labels = re.findall(r'<summary>Review attempt: ([^<]*)</summary>', converted)
+    check(forge + ' one wrapper per attempt with persisted labels', len(labels) == 2 and all(re.fullmatch(r'[0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\.[0-9]{2} WIB', label) for label in labels))
+    writes = state()['writes']; deliver(key2)
+    check(forge + ' wrapped history retry makes no write', state()['writes'] == writes)
     call('pending')
     check(forge + ' no pending after successful deliveries', not any(not a['delivered'] for a in archive()['attempts']))
 
@@ -143,7 +167,7 @@ for forge, host, url, endpoint in [
     key5 = begin('invocation-5'); put(key5, evidence('d444444', commits=[], text='Preserve valid ID bytes.'))
     call('freeze', url, '--attempt', key5)
     newest = archive()['attempts'][-1]['block']
-    limit = len(summary('d444444', 'Preserve valid ID bytes.').encode()) + len(outside.encode()) + len(newest.encode()) + 180
+    limit = len(summary('d444444', 'Preserve valid ID bytes.').encode()) + len(outside.encode()) + len(newest.encode()) + 400
     edit(mode='success-before-error'); deliver(key5, limit=limit, rc=2)
     writes = state()['writes']; deliver(key5, limit=limit)
     check(forge + ' pruning survives crash after remote success without rewrite', state()['writes'] == writes)
@@ -164,6 +188,24 @@ for forge, host, url, endpoint in [
     edit(mode='write-noop'); deliver(key6, rc=2)
     check(forge + ' ok response without landed text remains pending', not archive()['attempts'][-1]['delivered'])
     edit(mode=None); deliver(key6)
+
+    # A pre-upgrade attempt persists an undashed datetime: its frozen bytes stay untouched while
+    # the wrapper label displays the separator; the wrapped retry is byte-stable.
+    legacy_bin = scratch / 'legacy-bin'; legacy_bin.mkdir(exist_ok=True)
+    legacy_date = legacy_bin / 'date'
+    legacy_date.write_text('#!/usr/bin/env bash\nprintf \'7 October 2026 09.00\\n\'\n')
+    legacy_date.chmod(0o755)
+    legacy_key = json.loads(call('begin', url, '--invocation', 'invocation-legacy',
+                                 env_extra={'PATH': str(legacy_bin) + ':' + os.environ['PATH']}).stdout)['key']
+    put(legacy_key, evidence('e555555', text='Legacy undashed attempt.'))
+    call('freeze', url, '--attempt', legacy_key)
+    check(forge + ' legacy attempt persists its undashed timestamp', archive()['attempts'][-1]['timestamp'] == '7 October 2026 09.00 WIB')
+    deliver(legacy_key)
+    legacy_body = state()['response'][field]
+    check(forge + ' legacy frozen bytes keep the undashed heading', '### 7 October 2026 09.00 WIB' in legacy_body)
+    check(forge + ' legacy wrapper label displays the separator', '<summary>Review attempt: 7 October 2026 - 09.00 WIB</summary>' in legacy_body)
+    writes = state()['writes']; deliver(legacy_key)
+    check(forge + ' legacy wrapper retry is byte-stable', state()['writes'] == writes)
 
     # Closed MR and unknown API outcome never turn into a successful delivery.
     key7 = begin('invocation-7'); put(key7, evidence('d444444', commits=[], text='Preserve valid ID bytes.'))

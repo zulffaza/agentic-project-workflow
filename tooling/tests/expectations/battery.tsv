@@ -93,3 +93,4 @@ review-facet-gate F2	pw-review-read.sh	gate pwt-f2-mid task/review/PLAN.review.m
 review-facet-count F2	pw-review-read.sh	count pwt-f2-mid task/review/PLAN.review.md	0	-
 review-facet-open F2	pw-review-read.sh	has-open pwt-f2-mid task/review/PLAN.review.md	1	-
 review-facet-eligible F2	pw-review-read.sh	eligible pwt-f2-mid task/review/PLAN.review.md	1	-
+request-review F1	pw-ship.sh	request-review pwt-f1-scaffold	2	-

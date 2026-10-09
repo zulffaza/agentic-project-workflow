@@ -58,7 +58,8 @@ The operators:
 - **`/pw-config <slug> ensure`** → `…/pw-config.sh project ensure <slug>` — inserts any missing
   dashboard config lines (`AI Models:`, `AI Review:`) with explicit defaults; idempotent.
 - **`/pw-config global show`** → `…/pw-config.sh global show` — the effective machine floors
-  (providers, API-provider scopes, model allowlists, route default, repair budgets, RFC backend).
+  (providers, API-provider scopes, model allowlists, route default, repair budgets, RFC backend,
+  and the **request-review frame** — the effective path plus `default`/`custom` source).
   Read-only by design: `pw.config.sh` is the human-owned floor file — there is no `global set`.
 - **`/pw-config model-check <provider> <model-id>`** → `…/pw-config.sh model-check <provider> <model-id>` —
   the permission oracle (empty allowlist = all allowed); handy for probing a pin before setting it.

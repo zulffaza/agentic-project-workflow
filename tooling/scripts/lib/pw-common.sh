@@ -29,6 +29,12 @@ declare -p PW_FORGE_HOSTS >/dev/null 2>&1 || PW_FORGE_HOSTS=()
 # enough under set -u, but set it here too so every script sees the same resolved value.
 : "${PW_RFC_BACKEND:=markdown}"
 
+# Request-review frame file (see tooling/docs/scripts/ship-and-sync.md): the human-owned
+# outer message frame for /pw-ship <slug> request-review. Unset resolves the default under
+# $PW_HOME/user-templates/; a relative configured path resolves against $PW_HOME so the
+# effective file never depends on the current working directory. Never source the file.
+: "${PW_REVIEW_REQUEST_TEMPLATE_FILE:=}"
+
 # Self-repair cap for the §3.5 in-run executor loop (opt-in clean mode): how many fix-and-
 # re-verify rounds an executor may take on its own regression before declaring verify-failed.
 # Mirrors today's ship-loop constant (`docs/WORKFLOW.md`: build fixes "up to 3 rounds"). Only a
@@ -537,6 +543,76 @@ pw_phase_hint() { printf 'fix the Status line: it must start with one of %s (fre
 # xargs parses quotes, so a title/path containing an unbalanced apostrophe
 # ("adapter's Redis…") fails the trim outright (found via mm-spring-redis-sentinel T01).
 pw_trim() { sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+
+# --- request-review frame reader (shared by pw-ship.sh and pw-doctor.sh) --------
+# Effective frame path: PW_REVIEW_REQUEST_TEMPLATE_FILE when set (absolute stays put,
+# relative resolves under PW_HOME), else the default user file. The file is plain
+# Markdown, never sourced or executed.
+pw_review_template_path() {
+  local p="${PW_REVIEW_REQUEST_TEMPLATE_FILE:-}"
+  case "$p" in
+    "") printf '%s\n' "$PW_HOME/user-templates/review-request.md" ;;
+    /*) printf '%s\n' "$p" ;;
+    *)  printf '%s\n' "$PW_HOME/$p" ;;
+  esac
+}
+pw_review_template_source() {  # default | custom
+  if [ -n "${PW_REVIEW_REQUEST_TEMPLATE_FILE:-}" ]; then printf 'custom\n'; else printf 'default\n'; fi
+}
+
+# pw_review_template_seed <dest> — create-only copy of the tracked seed to <dest>. The one
+# seeding primitive bootstrap/doctor share: rc 0 = created, 1 = destination already exists
+# (never overwritten, including a concurrent creation), 2 = could not create. Only ever called
+# for the DEFAULT destination — a custom configured path is reported, never materialized.
+pw_review_template_seed() {
+  local dest="${1:-}" seed="$PW_HOME/tooling/templates/review-request.md"
+  [ -n "$dest" ] || return 2
+  [ -e "$dest" ] && return 1
+  [ -f "$seed" ] || return 2
+  mkdir -p "$(dirname "$dest")" 2>/dev/null || return 2
+  ( set -o noclobber; cat "$seed" > "$dest" ) 2>/dev/null || return 2
+  return 0
+}
+
+# pw_review_template_error <file> — the first frame problem as one line (empty output = valid).
+# A valid frame carries each system block placeholder exactly once, {{PROJECT}} at most once,
+# and no other {{…}} token; it is non-empty, readable UTF-8 text otherwise untouched. The
+# single implementation both the read-only generator and the doctor validate against.
+pw_review_template_error() {
+  local f="${1:-}" opens closes tokens t c unknown="" req
+  [ -n "$f" ] || { printf 'template path is empty\n'; return 0; }
+  [ -e "$f" ] || { printf 'file not found: %s\n' "$f"; return 0; }
+  [ -f "$f" ] || { printf 'not a regular file: %s\n' "$f"; return 0; }
+  [ -r "$f" ] || { printf 'not readable: %s\n' "$f"; return 0; }
+  [ -s "$f" ] || { printf 'file is empty: %s\n' "$f"; return 0; }
+  opens="$(grep -o '{{' "$f" 2>/dev/null | wc -l | pw_trim || true)"
+  closes="$(grep -o '}}' "$f" 2>/dev/null | wc -l | pw_trim || true)"
+  tokens="$(grep -oE '\{\{[A-Za-z0-9_]+\}\}' "$f" 2>/dev/null || true)"
+  c="$(printf '%s\n' "$tokens" | grep -c . 2>/dev/null || true)"
+  if [ "$opens" != "$closes" ] || [ "$opens" != "$c" ]; then
+    printf 'malformed {{…}} placeholder syntax (allowed: {{TO_BLOCK}} {{SUMMARY_BLOCK}} {{MR_BLOCKS}} {{NOTE_BLOCK}} {{PROJECT}})\n'
+    return 0
+  fi
+  if [ -n "$tokens" ]; then
+    while IFS= read -r t; do
+      [ -n "$t" ] || continue
+      case "$t" in
+        '{{TO_BLOCK}}'|'{{SUMMARY_BLOCK}}'|'{{MR_BLOCKS}}'|'{{NOTE_BLOCK}}'|'{{PROJECT}}') ;;
+        *) unknown="$unknown $t" ;;
+      esac
+    done <<EOF
+$tokens
+EOF
+  fi
+  [ -z "$unknown" ] || { printf 'unknown placeholder(s):%s\n' "$unknown"; return 0; }
+  for req in TO_BLOCK SUMMARY_BLOCK MR_BLOCKS NOTE_BLOCK; do
+    c="$(printf '%s\n' "$tokens" | grep -c "^{{$req}}$" 2>/dev/null || true)"
+    [ "$c" = "1" ] || { printf 'placeholder {{%s}} must appear exactly once (found %s)\n' "$req" "$c"; return 0; }
+  done
+  c="$(printf '%s\n' "$tokens" | grep -c '^{{PROJECT}}$' 2>/dev/null || true)"
+  [ "$c" -le 1 ] 2>/dev/null || { printf 'placeholder {{PROJECT}} must appear at most once (found %s)\n' "$c"; return 0; }
+  return 0
+}
 
 # --- PLAN.md task-table readers (column-NAME driven) ---------------------------
 # Two task-table generations exist: legacy (Task|Repo|Branch|SP|Execute with|

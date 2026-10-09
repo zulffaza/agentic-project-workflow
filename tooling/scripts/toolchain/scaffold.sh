@@ -83,7 +83,7 @@ commits, pushes, MRs, review passes, close-out. Newest at the bottom. The /pw-* 
 here automatically (via pw-status.sh log — never hand-edit); add manual notes the same way, or as
 another Markdown bullet, so it reads consistently in preview.
 
-Format: a bullet per entry — "- **DD MMMM YYYY HH.mm WIB** · \`<phase/actor>\` — <what happened>"
+Format: a bullet per entry — "- **DD MMMM YYYY - HH.mm WIB** · \`<phase/actor>\` — <what happened>"
 
 - **$created** · \`scaffold\` — project created
 LOGEOF

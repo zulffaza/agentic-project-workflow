@@ -468,6 +468,43 @@ for p in "${PW_PROVIDERS[@]}"; do
   echo
 done
 
+# --- request-review frame file (independent of provider sync) --------------------------------
+# /pw-ship <slug> request-review reads the effective frame on every invocation. Check its
+# presence/readability/placeholders even when every provider is synchronized — a healthy
+# install must not hide a missing frame. --fix seeds ONLY the absent DEFAULT file from the
+# shipped seed: an existing (possibly customized) file is never overwritten, and an explicitly
+# configured custom path is reported, never silently replaced or redirected.
+frame_manual=0
+frame="$(pw_review_template_path)"
+frame_source="$(pw_review_template_source)"
+frame_err="$(pw_review_template_error "$frame")"
+if [ -z "$frame_err" ]; then
+  echo "  ✓ review frame: $frame ($frame_source; placeholders valid)"
+else
+  echo "  ✗ review frame: $frame_err ($frame, $frame_source)"
+  issues=$((issues+1))
+  if [ "$frame_source" = "default" ] && [ ! -e "$frame" ]; then
+    if [ "$FIX" -eq 1 ]; then
+      if pw_review_template_seed "$frame"; then
+        echo "      fixed: seeded the default review frame from the shipped seed"
+      else
+        echo "      manual: could not seed $frame — create it from the bundle's tooling/templates/review-request.md"
+        frame_manual=1
+      fi
+    else
+      echo "      → fix: run /pw-doctor --fix (seeds the missing default frame)"
+    fi
+  else
+    frame_manual=1
+    if [ "$frame_source" = "custom" ] && [ ! -e "$frame" ]; then
+      echo "      manual: configured frame path is missing — create the file or correct PW_REVIEW_REQUEST_TEMPLATE_FILE in pw.config.sh (never auto-created)"
+    else
+      echo "      manual: edit the frame file (or restore it from the shipped seed); an existing/customized frame is never overwritten"
+    fi
+  fi
+fi
+echo
+
 # --- foreign skill roots --------------------------------------------------------------------
 # Other agent-read paths (e.g. ~/.agents/skills, which kilo loads via skills.paths) can hold
 # copies of bundle skills OUTSIDE the provider install surface the loop above checks — a stale
@@ -512,17 +549,20 @@ if printf '%s\n' "${PW_PROVIDERS[@]:-}" | grep -qx cursor; then
 fi
 
 # --- verdict -----------------------------------------------------------------
-if [ "$issues" -eq 0 ] && [ "$manual_issues" -eq 0 ]; then
+if [ "$issues" -eq 0 ] && [ "$manual_issues" -eq 0 ] && [ "$frame_manual" -eq 0 ]; then
   echo "All synced ✓"
   exit 0
 fi
-if [ "$FIX" -eq 1 ] && [ "$manual_issues" -eq 0 ]; then
+if [ "$FIX" -eq 1 ] && [ "$manual_issues" -eq 0 ] && [ "$frame_manual" -eq 0 ]; then
   echo "$issues issue(s) — fixes applied above. Re-run pw-doctor.sh to confirm."
   exit 0
 fi
 manual_note=""
 if [ "$manual_issues" -gt 0 ]; then
   manual_note=" $manual_issues canonical source issue(s) need a hand fix (see above)."
+fi
+if [ "$frame_manual" -gt 0 ]; then
+  manual_note="$manual_note The review frame needs a hand fix (see above)."
 fi
 echo "$issues issue(s) out of sync.$manual_note Fix with:  /pw-doctor --fix   (or ./bootstrap.sh after a bundle update)"
 exit 1

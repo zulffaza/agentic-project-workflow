@@ -124,6 +124,7 @@ Use `/pw-help project <slug>` whenever you need the next command for an existing
 | `/pw-*` commands or command skills | The workflow interface for each enabled, detected provider |
 | Seeded agents, where supported | Orchestrator, executor, reviewer, researcher, analyst, and task writer roles |
 | `pw-env.sh` | Paths for the bundle, projects, and repositories |
+| `user-templates/review-request.md` | The editable message frame `/pw-ship … request-review` reads implicitly (seeded once; never overwritten) |
 
 The paths are:
 
@@ -133,6 +134,12 @@ The paths are:
 
 Re-run `./bootstrap.sh` after changing providers or updating the bundle.
 Use `--check` to inspect provider detection without writing files. Use `--force` to replace existing workflow skill installs.
+
+The review-request frame is created only when absent — bootstrap, `--force`, `/pw-doctor --fix`,
+and bundle updates never overwrite an existing (possibly customized) frame. If it goes missing,
+`/pw-doctor` reports it and `/pw-doctor --fix` seeds it again from the shipped default. To review a
+different file, set `PW_REVIEW_REQUEST_TEMPLATE_FILE` in `pw.config.sh`; the tool never creates that
+custom path for you.
 
 ## Troubleshooting — `pw-doctor`
 

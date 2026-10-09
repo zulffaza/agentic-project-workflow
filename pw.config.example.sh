@@ -152,6 +152,14 @@ PW_MODEL_ALLOWLIST_CODEX=""
 #   PW_AI_REVIEW_DEFAULT="off"   # "off" (default) | "advisory" | "auto"
 PW_AI_REVIEW_DEFAULT="off"
 
+# --- Review-request frame (OPTIONAL — a default file is seeded at install) --------------------
+# /pw-ship <slug> request-review renders its copyable message through one editable Markdown
+# frame: $PW_HOME/user-templates/review-request.md by default (seeded by bootstrap.sh / repaired
+# by /pw-doctor --fix). Set this only to use a DIFFERENT file; a relative path resolves under
+# PW_HOME. The file is read on every invocation and is never sourced or executed.
+#   PW_REVIEW_REQUEST_TEMPLATE_FILE="/Users/me/templates/review-request.md"
+PW_REVIEW_REQUEST_TEMPLATE_FILE=""
+
 # --- Git forge host overrides (OPTIONAL — auto-detect covers github.com/gitlab.com) ---------
 # /pw-ship and /pw-adopt resolve which CLI (gh/glab) talks to a repo from its OWN origin remote
 # host — see tooling/docs/forges.md. Public github.com/gitlab.com need ZERO config. Only a self-hosted

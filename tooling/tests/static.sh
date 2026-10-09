@@ -232,6 +232,13 @@ static_t4() {
     && grep -qF 'model-resolve' "$TOOL/commands/pw-execute.md" \
     && pwtest_ok "T4 canary: entry paths reference the ladder (no per-command policy rewording)" \
     || pwtest_bad "T4 canary: entry-path ladder references" "pw-ship/pw-review lost the ladder reference, or pw-execute lost the availability gate"
+  # request-review routing: the read-only message mode must stay documented in /pw-ship and must
+  # stay positioned BEFORE the ship pre-flight (its tokens are a selector, not ship task IDs).
+  grep -qF 'pw-ship.sh request-review' "$TOOL/commands/pw-ship.md" \
+    && grep -qF 'returns BEFORE the pre-flight block' "$TOOL/commands/pw-ship.md" \
+    && grep -qF -- '--prose <file>' "$TOOL/commands/pw-ship.md" \
+    && pwtest_ok "T4 canary: pw-ship request-review routing text" \
+    || pwtest_bad "T4 canary: pw-ship request-review routing" "the read-only request-review mode (selector mapping, pre-flight ordering, --prose flow) died from the command file"
   # …and the RETIRED repair-routing policy text never creeps back (resume-first default, the `!`
   # shorthand, the dropped global flag, the merged fourth Route value, the producer-resume clause).
   hits="$(grep -rlE 'Execute with!|PW_STRICT_MODELS|Route: resume|resume that producer|batched, resume-first|batched \+ resume-first' "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" "$TOOL/docs" 2>/dev/null | tr '\n' ' ')"

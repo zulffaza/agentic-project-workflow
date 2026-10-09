@@ -83,18 +83,21 @@
 # depend on this. A same-line, self-contained `<!-- ... -->` comment is left fully unstripped,
 # since every real live heading carries exactly one of those.
 # Workflow event timestamps. Source dates, timers, and persisted history stay unchanged.
+# New events carry the date/time separator (`D MMMM YYYY - HH.mm WIB`); readers accept
+# both the dashed and the legacy undashed form.
 pw_now_wib() {
   local t
-  t="$(TZ=Asia/Jakarta LC_ALL=C date '+%e %B %Y %H.%M')" || return 1
+  t="$(TZ=Asia/Jakarta LC_ALL=C date '+%e %B %Y - %H.%M')" || return 1
   [ -n "$t" ] || return 1
   printf '%s WIB\n' "${t# }"
 }
 
 # Only complete date-times participate in LOG arithmetic. Round-trip validation
 # rejects date's calendar normalization; legacy timezone-free values stay local.
+# The dashed separator is optional on input so pre-upgrade records keep parsing.
 pw_timestamp_epoch() (
   local stamp="$1" iso month epoch roundtrip offset hours minutes adjustment=0
-  if [[ "$stamp" =~ ^([0-9]{1,2})\ ([A-Za-z]+)\ ([0-9]{4})\ ([0-9]{2})\.([0-9]{2})\ WIB$ ]]; then
+  if [[ "$stamp" =~ ^([0-9]{1,2})\ ([A-Za-z]+)\ ([0-9]{4})(\ -\ |\ )([0-9]{2})\.([0-9]{2})\ WIB$ ]]; then
     case "${BASH_REMATCH[2]}" in
       January) month=01 ;; February) month=02 ;; March) month=03 ;;
       April) month=04 ;; May) month=05 ;; June) month=06 ;;
@@ -102,7 +105,7 @@ pw_timestamp_epoch() (
       October) month=10 ;; November) month=11 ;; December) month=12 ;;
       *) return 1 ;;
     esac
-    printf -v iso '%s-%s-%02d %s:%s:00' "${BASH_REMATCH[3]}" "$month" "$((10#${BASH_REMATCH[1]}))" "${BASH_REMATCH[4]}" "${BASH_REMATCH[5]}"
+    printf -v iso '%s-%s-%02d %s:%s:00' "${BASH_REMATCH[3]}" "$month" "$((10#${BASH_REMATCH[1]}))" "${BASH_REMATCH[5]}" "${BASH_REMATCH[6]}"
     export TZ=Asia/Jakarta
   elif [[ "$stamp" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}$ ]]; then
     iso="$stamp:00"

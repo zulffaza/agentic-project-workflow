@@ -65,6 +65,7 @@ See [review](REVIEW.md) for scope, gate transitions, and AI approval safeguards.
 | `/pw-execute <slug> --then-ship` | Request shipping after execution, with push confirmation |
 | `/pw-ship <slug> [task-ids] [--skip-build-check]` | Push verified branches, open MRs, and monitor CI |
 | `/pw-ship <slug> [task-ids] comments [--skip-build-check]` | Handle MR feedback, including fixes, pushes, and replies |
+| `/pw-ship <slug> request-review [all\|task-ids] [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]` | Read-only: one copyable teammate review request for the open MRs |
 | `/pw-ship <slug> stack` | Preview stack topology and health without writes |
 | `/pw-ship <slug> stack adopt [task-ids] [--apply]` | Preview an existing stack import; `--apply` records it |
 | `/pw-sync <slug> [task-ids]` | Refresh open MR branches against changed targets, verify, and push |

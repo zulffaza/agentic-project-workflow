@@ -49,7 +49,8 @@ phase runs. Don't skip a gate.
   `pw-help.sh overview` / `pw-help.sh command <name>` / `pw-help.sh find <term>` — the live
   how-to map (`--json` machine modes; strictly read-only).
   Mechanics: `pw-ship.sh resolve`/`pw-ship.sh exec`, `pw-ship.sh mr-state-batch`,
-  `pw-ship.sh monitor`, `pw-worktree.sh create`, `pw-context.sh fetch`, `pw-rfc.sh comments`,
+  `pw-ship.sh monitor`, `pw-ship.sh request-review` (read-only review-request message),
+  `pw-worktree.sh create`, `pw-context.sh fetch`, `pw-rfc.sh comments`,
   `pw-context.sh adopt-snapshot`, `pw-doc.sh sync`. Deterministic document writes (never hand-copy
   template blocks): `pw-review.sh` (`init|init-docs|init-all|start|add-item|answer|add-question|resolve`;
   `init-all` is current-phase-only, `signoff` is human-triggered only — C4 — and `start` can only
@@ -81,7 +82,7 @@ phase runs. Don't skip a gate.
   `references/execution-and-routing.md`.
 - **Report faithfully.** "Done" only after the task's `## Verify` block actually ran and you pasted
   real output. A failing or skipped step is stated, never hidden.
-- **Workflow timestamps:** write new event metadata as `DD MMMM YYYY HH.mm WIB`, for example
+- **Workflow timestamps:** write new event metadata as `DD MMMM YYYY - HH.mm WIB`, for example
   `7 October 2026 04.10 WIB`. Use `TZ=Asia/Jakarta LC_ALL=C` when formatting. This applies to
   analysis/PLAN dates, task results, reviewer notes, RFC metadata, and review/ship/sync records.
   Preserve imported source dates, API timestamps, epoch timers, IDs, and existing history.

@@ -81,6 +81,12 @@ if [ "${#DETECTED[@]}" -eq 0 ]; then
 fi
 
 if [ "$MODE" = "check" ]; then
+  # report-only frame health: never create directories or files in check mode
+  if [ -f "$PW_HOME/user-templates/review-request.md" ]; then
+    echo "  frame:    user-templates/review-request.md present"
+  else
+    echo "  frame:    user-templates/review-request.md MISSING (install run seeds it; /pw-doctor --fix repairs)"
+  fi
   echo "[--check] detection only; no changes made."
   exit 0
 fi
@@ -151,6 +157,21 @@ export PW_PROJECTS="$PW_PROJECTS"
 export PW_REPOS="$PW_REPOS"
 EOF
 echo "  wrote $ENV_FILE"
+echo
+
+# --- 5b. seed the request-review frame (create-only; user customization lives here) -----------
+# One editable Markdown file the user owns: /pw-ship <slug> request-review reads it implicitly on
+# every invocation. NEVER overwrite an existing file (install, --force, or rerun): a customized
+# valid frame is healthy, not drift. The tracked seed stays under tooling/templates/.
+FRAME_DIR="$PW_HOME/user-templates"
+FRAME_FILE="$FRAME_DIR/review-request.md"
+if [ -f "$FRAME_FILE" ]; then
+  echo "  frame:    $FRAME_FILE already present (leaving as-is)"
+elif pw_review_template_seed "$FRAME_FILE"; then
+  echo "  frame:    seeded $FRAME_FILE (edit it to change the request frame)"
+else
+  echo "  frame:    could not seed $FRAME_FILE — create it from the bundle's tooling/templates/review-request.md"
+fi
 echo
 
 # --- verify + next steps -----------------------------------------------------

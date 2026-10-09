@@ -103,6 +103,11 @@ pwtest_env_init() {
   export PWTEST_FORGE_LOG="$PWTEST_ROOT/forge.log"; : > "$PWTEST_FORGE_LOG"
   PWTEST_ORIG_PATH="$PATH"; export PWTEST_ORIG_PATH
   export PATH="$PWTEST_TESTSDIR/bin:$PATH"     # fake CLIs win over the machine's
+  # request-review frame: model a healthy install with a temp user file (never the bundle tree).
+  # Cases exercising the missing/invalid/custom-path behavior override or unset this explicitly.
+  mkdir -p "$PWTEST_ROOT/user-templates"
+  cp "$TOOL/templates/review-request.md" "$PWTEST_ROOT/user-templates/review-request.md" 2>/dev/null || true
+  export PW_REVIEW_REQUEST_TEMPLATE_FILE="$PWTEST_ROOT/user-templates/review-request.md"
 }
 pwtest_mkrow() { printf '%s|%s\n' "$1" "$2"; }
 
@@ -249,6 +254,7 @@ if hdr:
 t = (t.replace("<project-slug>", slug).replace("<provider>", "kilotest")
        .replace("<YYYY-MM-DD HH:MM>", "2026-09-15 00:00")
        .replace("<DD MMMM YYYY HH.mm WIB>", "15 September 2026 00.00 WIB")
+       .replace("<DD MMMM YYYY - HH.mm WIB>", "15 September 2026 - 00.00 WIB")
        .replace("<link to analysis/*.md that is approved>", "[fixture](../analysis/fixture.md)")
        .replace("api-service","api").replace("hera","api").replace("valas","api").replace("spring3","master"))
 t = re.sub(r'^- \*\*Status:\*\* [^\n]*', '- **Status:** approved-for-execution', t, flags=re.M, count=1)

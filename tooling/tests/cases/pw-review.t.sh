@@ -20,11 +20,11 @@ pwtest_rc 0 "init-all rerun (idempotent)" "$E" init-all "$RE"
 pwtest_re "0 created, .* already present" "init-all rerun reports nothing created"
 
 # 2) add-item fills the template stub in place → R1 (not R2 — stubs don't consume ids)
-# Plan 31: item timestamps are explicit WIB date-time ("5 October 2026 18.42 WIB"), and the
+# Plan 31: item timestamps are explicit WIB date-time ("5 October 2026 - 18.42 WIB"), and the
 # first feedback write queues one attributed 'pw-review (feedback) | in-review' row in place
 # of the template's blank placeholder row.
 pwtest_rc 0 "add-item R1" "$E" add-item "$RE" "$RV" --section '§3 Repos' --text the toggle also lives in common-config, add a row
-pwtest_grep_file '^### R1 · §3 Repos — \[OPEN\] \(you, [0-9]{1,2} [A-Za-z]+ [0-9]{4} [0-9]{2}\.[0-9]{2} WIB\) <!-- pw-item-status: open -->' \
+pwtest_grep_file '^### R1 · §3 Repos — \[OPEN\] \(you, [0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\.[0-9]{2} WIB\) <!-- pw-item-status: open -->' \
   "add-item wrote a real R1 heading with marker (WIB timestamp)" "$P/$RV"
 pwtest_grep_file 'pw-review \(feedback\) \| in-review \|$' "add-item queued the feedback-cycle row in the Sign-off table" "$P/$RV"
 pwtest_grep_file 'the toggle also lives in common-config' "add-item body verbatim (spaces preserved)" "$P/$RV"
@@ -46,10 +46,10 @@ pwtest_rc 2 "add-item requires --section" "$E" add-item "$RE" "$RV" --text 'no a
 
 # 3) add-question fills the Q stub → Q1; answer appends ↳ you lines
 pwtest_rc 0 "add-question Q1" "$E" add-question "$RE" "$RV" --section '§4' --text 'ship the flag off or on?'
-pwtest_grep_file '^### Q1 · §4 — \[PENDING\] \(agent, [0-9]{1,2} [A-Za-z]+ [0-9]{4} [0-9]{2}\.[0-9]{2} WIB\) <!-- pw-item-status: open -->' \
+pwtest_grep_file '^### Q1 · §4 — \[PENDING\] \(agent, [0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\.[0-9]{2} WIB\) <!-- pw-item-status: open -->' \
   "add-question wrote a real Q1 heading with marker (WIB timestamp)" "$P/$RV"
 pwtest_rc 0 "answer Q1" "$E" answer "$RE" "$RV" Q1 --text ship it OFF by default
-pwtest_grep_file '^> ↳ \*\*you\*\* \([0-9]{1,2} [A-Za-z]+ [0-9]{4} [0-9]{2}\.[0-9]{2} WIB\): ship it OFF by default' "answer wrote the ↳ you line (WIB timestamp)" "$P/$RV"
+pwtest_grep_file '^> ↳ \*\*you\*\* \([0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\.[0-9]{2} WIB\): ship it OFF by default' "answer wrote the ↳ you line (WIB timestamp)" "$P/$RV"
 pwtest_rc 0 "answer Q1 again" "$E" answer "$RE" "$RV" Q1 --text correction, staging first
 # second answer joins the same quote block via a blank quoted '>' separator
 if awk '/^### Q1 ·/{f=1} f && /^---$/{exit} f' "$P/$RV" | grep -q '^>$'; then
@@ -67,7 +67,7 @@ pwtest_grep_file '^### R1 · §3 Repos — \[RESOLVED\] .*<!-- pw-item-status: r
   || pwtest_bad "resolve duplicate heading" "R1 heading appears twice"
 [ "$ASK_BEFORE" = "$(grep -F 'the toggle also lives in common-config' "$P/$RV")" ] \
   && pwtest_ok "human ask byte-identical after resolve" || pwtest_bad "resolve edited human text" "ask line changed"
-pwtest_grep_file '^> ↳ \*\*agent\*\* \([0-9]{1,2} [A-Za-z]+ [0-9]{4} [0-9]{2}\.[0-9]{2} WIB\): added a common-config row' "resolve appended the ↳ agent reply (WIB timestamp)" "$P/$RV"
+pwtest_grep_file '^> ↳ \*\*agent\*\* \([0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\.[0-9]{2} WIB\): added a common-config row' "resolve appended the ↳ agent reply (WIB timestamp)" "$P/$RV"
 pwtest_rc 2 "resolve refuses already-resolved" "$E" resolve "$RE" "$RV" R1 --reply again
 pwtest_rc 2 "resolve refuses empty reply" "$E" resolve "$RE" "$RV" R2 --reply '  '
 # Q resolve requires the human's answer first
@@ -86,8 +86,8 @@ pwtest_rc 1 "gate refuses approved-with-open-items (stale approval blocked)" "$(
 pwtest_err 'STALE' "stale-approval gate note explains the open-item block"
 pwtest_rc 0 "signoff changes-requested (--by)" "$E" signoff "$RE" "$RV" changes-requested --by faza
 pwtest_rc 1 "gate now reads changes-requested (latest row wins)" "$(pwtest_script pw-review.sh)" gate "$RE" "$RV"
-n1="$(grep -c '^| [0-9]* [A-Za-z]* [0-9]* [0-9]*.[0-9]* WIB | you | approved |$' "$P/$RV")"
-n2="$(grep -c '^| [0-9]* [A-Za-z]* [0-9]* [0-9]*.[0-9]* WIB | faza | changes-requested |$' "$P/$RV")"
+n1="$(grep -c '^| [0-9]* [A-Za-z]* [0-9]* - [0-9]*.[0-9]* WIB | you | approved |$' "$P/$RV")"
+n2="$(grep -c '^| [0-9]* [A-Za-z]* [0-9]* - [0-9]*.[0-9]* WIB | faza | changes-requested |$' "$P/$RV")"
 if [ "$n1" = 1 ] && [ "$n2" = 1 ]; then
   pwtest_ok "both sign-off rows preserved (append-only history)"
 else pwtest_bad "signoff history" "approved-rows=$n1 changes-requested-rows=$n2 (want 1/1; template comment rows must not match)"; fi

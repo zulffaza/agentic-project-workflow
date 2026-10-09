@@ -152,6 +152,9 @@ def clean_lines(value, label):
     for line in value:
         need('\n' not in line and '\r' not in line and '\x00' not in line and '<!--' not in line,
              'unsafe marker/multiline input in ' + label)
+        # The collapsible wrapper uses <details> as a structural delimiter; content that could
+        # forge one (or a close tag) would make the stored presentation ambiguous on readback.
+        need(not re.search(r'</?details', line), 'structural wrapper delimiters are not allowed in ' + label)
         need(not re.search(r'(?:#note_|discussion_r|/comments/)', line), 'comment references belong in local tracking, not the MR block')
     return value
 
@@ -201,7 +204,37 @@ def render(attempt):
     text += ''.join('- ' + check['text'] + ' (head `' + check['head'] + '`).\n' for check in data['verification'])
     return text + '\n'
 
-def old_blocks(region, state):
+# The wrapper is presentation-only: the attempt's persisted datetime is displayed with the
+# date/time separator (legacy undashed instants gain it in the label), while the enclosed
+# frozen block bytes never change. Escaping keeps the label safe as HTML text.
+def display_timestamp(timestamp):
+    match = re.fullmatch(r'([0-9]{1,2} [A-Za-z]+ [0-9]{4}) ([0-9]{2}\.[0-9]{2} WIB)', timestamp)
+    if match:
+        return match.group(1) + ' - ' + match.group(2)
+    return timestamp
+
+def wrapper_label(attempt):
+    label = display_timestamp(attempt['timestamp'])
+    return label.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+def wrapped(attempt):
+    return ('<details>\n<summary>Review attempt: ' + wrapper_label(attempt) + '</summary>\n\n'
+            + attempt['block'] + '</details>\n\n')
+
+def _entry_key(entry, block, state, message):
+    markers = re.findall(r'<!-- pw-review-attempt:([0-9a-f]{32}) -->', block)
+    need(len(markers) == 1, 'description conflict: duplicate/invalid attempt key')
+    attempt = next((a for a in state['attempts'] if a['key'] == markers[0]), None)
+    need(attempt and attempt['frozen'], 'description conflict: unknown or unfrozen attempt')
+    need(block == attempt['block'], message)
+    return markers[0], attempt
+
+# Ordered attempt keys present in the file's ## Review changes region. Accepts BOTH the legacy
+# unwrapped frozen blocks and the collapsible <details> wrappers during transition; each entry
+# must match a stored frozen attempt byte-exactly, one attempt per wrapper, with the wrapper
+# label equal to that attempt's displayed persisted datetime. Anything else — nested, duplicated,
+# malformed, unknown, or externally edited — is a conflict rather than a guessed boundary.
+def history_keys(region, state):
     if region is None:
         return []
     inner = region[2].split('-->', 1)[1].rsplit('<!--', 1)[0]
@@ -209,22 +242,36 @@ def old_blocks(region, state):
     inner = inner[len('\n## Review changes\n'):]
     if not inner.strip():
         return []
-    starts = list(re.finditer(r'^### ', inner, re.M))
-    need(starts and not inner[:starts[0].start()].strip(), 'description conflict: unrecognized history content')
-    blocks = []
-    for index, match in enumerate(starts):
-        block = inner[match.start():starts[index + 1].start() if index + 1 < len(starts) else len(inner)]
-        marker = re.findall(r'<!-- pw-review-attempt:([0-9a-f]{32}) -->', block)
-        need(len(marker) == 1 and marker[0] not in blocks, 'description conflict: duplicate/invalid attempt key')
-        attempt = next((a for a in state['attempts'] if a['key'] == marker[0]), None)
-        need(attempt and attempt['frozen'] and block == attempt['block'], 'description conflict: frozen attempt was edited or is unknown')
-        blocks.append(marker[0])
-    return blocks
+    keys = []
+    while True:
+        inner = inner.lstrip('\r\n')
+        if not inner:
+            return keys
+        if inner.startswith('<details>'):
+            end = inner.find('</details>')
+            need(end != -1, 'description conflict: unbalanced details wrapper')
+            entry = inner[:end + len('</details>')]
+            inner = inner[end + len('</details>'):]
+            wrapper = re.fullmatch(r'<details>\n<summary>Review attempt: ([^\r\n<]*)</summary>\n\n(.*)</details>',
+                                   entry, re.S)
+            need(wrapper is not None, 'description conflict: malformed details wrapper')
+            label, block = wrapper.groups()
+            key, attempt = _entry_key(entry, block, state, 'description conflict: frozen attempt was edited or is unknown')
+            need(label == wrapper_label(attempt), 'description conflict: wrapper label does not match the attempt datetime')
+            keys.append(key)
+        elif inner.startswith('### '):
+            nxt = inner.find('\n### ', 1)
+            entry = inner if nxt == -1 else inner[:nxt + 1]
+            inner = '' if nxt == -1 else inner[nxt + 1:]
+            key, _attempt = _entry_key(entry, entry, state, 'description conflict: frozen attempt was edited or is unknown')
+            keys.append(key)
+        else:
+            need(False, 'description conflict: unrecognized history content')
 
 def compose(remote, state, selected, limit, unit):
     body = remote['body']
     spans = regions(body)
-    existing = old_blocks(spans.get('review-changes'), state)
+    existing = history_keys(spans.get('review-changes'), state)
     need(not (set(existing) & set(state['pruned'])), 'description conflict: pruned attempt resurrected')
     expected = {a['key'] for a in state['attempts'] if a['delivered'] and a['key'] not in state['pruned']}
     need(expected <= set(existing), 'description conflict: retained delivered history was removed')
@@ -255,7 +302,7 @@ def compose(remote, state, selected, limit, unit):
     pruned = []
     def build():
         return outside + ('' if outside.endswith('\n\n') or not outside else '\n' if outside.endswith('\n') else '\n\n') + \
-               '<!-- pw-review-changes:start -->\n## Review changes\n' + ''.join(a['block'] for a in attempts) + '<!-- pw-review-changes:end -->'
+               '<!-- pw-review-changes:start -->\n## Review changes\n' + ''.join(wrapped(a) for a in attempts) + '<!-- pw-review-changes:end -->'
     proposed = build()
     size = lambda text: len(text.encode('utf-8')) if unit == 'utf8' else len(text)
     while size(proposed) > limit and len(attempts) > 1:
@@ -279,7 +326,7 @@ def validate_state(state, mr):
         need(isinstance(attempt.get('invocation'), str) and re.fullmatch(r'[A-Za-z0-9_-]{1,96}', attempt['invocation']), 'malformed invocation identity')
         filename = digest(json.dumps(mr, sort_keys=True))
         need(attempt['key'] == digest(attempt['invocation'] + '|' + filename)[:32], 'attempt key does not match invocation/MR identity')
-        need(isinstance(attempt.get('timestamp'), str) and re.fullmatch(r'[0-9]{1,2} [A-Za-z]+ [0-9]{4} [0-9]{2}\.[0-9]{2} WIB', attempt['timestamp']),
+        need(isinstance(attempt.get('timestamp'), str) and re.fullmatch(r'[0-9]{1,2} [A-Za-z]+ [0-9]{4}(?: -)? [0-9]{2}\.[0-9]{2} WIB', attempt['timestamp']),
              'malformed attempt timestamp')
         need(isinstance(attempt.get('before_head'), str) and re.fullmatch(r'[0-9a-f]{7,64}', attempt['before_head']) and isinstance(attempt.get('before_body'), str),
              'malformed before snapshot')
@@ -367,10 +414,10 @@ def run():
             spans = regions(remote['body'])
             need('mr-summary' in spans, 'initial ownership requires a marked summary')
             observed = spans['mr-summary'][2]
-            old_blocks(spans.get('review-changes'), state)
+            history_keys(spans.get('review-changes'), state)
             if args.reviewed:
                 expected = {a['key'] for a in state['attempts'] if a['delivered'] and a['key'] not in state['pruned']}
-                need(expected <= set(old_blocks(spans.get('review-changes'), state)), 'ownership repair cannot erase retained attempt history')
+                need(expected <= set(history_keys(spans.get('review-changes'), state)), 'ownership repair cannot erase retained attempt history')
             state['last_summary'] = observed
             state['last_summary_head'] = remote['head']
             state['initial_pending'] = False
@@ -389,7 +436,7 @@ def run():
             remote = api(mr)
             need(remote['state'] == 'open', 'MR is closed/merged; no new attempt')
             regions(remote['body'])
-            need(re.fullmatch(r'[0-9]{1,2} [A-Za-z]+ [0-9]{4} [0-9]{2}\.[0-9]{2} WIB', timestamp), 'missing valid WIB event timestamp')
+            need(re.fullmatch(r'[0-9]{1,2} [A-Za-z]+ [0-9]{4}(?: -)? [0-9]{2}\.[0-9]{2} WIB', timestamp), 'missing valid WIB event timestamp')
             existing = {'key': key, 'invocation': args.invocation, 'sequence': max([a['sequence'] for a in state['attempts']] or [0]) + 1,
                         'timestamp': timestamp, 'before_head': remote['head'], 'before_body': remote['body'],
                         'checkpoint': None, 'frozen': False, 'delivered': False, 'block': None}
@@ -475,6 +522,555 @@ try:
     run()
 except (HistoryError, OSError, ValueError, TypeError, KeyError, AttributeError, RecursionError, subprocess.SubprocessError) as error:
     print('pw-ship history: ' + str(error) + ' → fix: inspect the pending record/ownership or forge configuration, then retry safely', file=sys.stderr)
+    sys.exit(2)
+PY
+}
+
+
+# Request-review message generation — the read-only half of /pw-ship request-review. The shell
+# resolves the project's candidate tasks and the effective frame file; this helper queries each
+# unique MR's forge metadata once (read-only, bounded timeout), applies the selection rules,
+# validates optional caller-supplied prose, and renders the recap plus one copyable message
+# through the frame placeholders. Nothing here writes project state or performs forge writes.
+# argv: <projectdir> <frame-file> <candidates-tsv> <all|explicit> <selector-ids> <to-names>
+#       <summary:0|1> <mr-summary:0|1> <note:0|1> <no-reviewers:0|1> <prose-file|-> <mappings>
+pw_ship_request_review() {
+  python3 - "$@" <<'PY'
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+from urllib.parse import quote, unquote, urlsplit
+
+class ReviewError(Exception):
+    pass
+
+def need(condition, message):
+    if not condition:
+        raise ReviewError(message)
+
+# ---------------- forge identity + one-shot read-only queries ----------------
+
+def identity(url, mappings):
+    parsed = urlsplit(url)
+    need(parsed.scheme in ('http', 'https') and not parsed.username and not parsed.password,
+         'MR URL must be http(s) without credentials: ' + url)
+    host = parsed.netloc.lower()
+    need(re.fullmatch(r'[a-z0-9][a-z0-9.-]*(?::[0-9]+)?', host), 'invalid MR hostname in ' + url)
+    path = unquote(parsed.path).rstrip('/')
+    match = re.fullmatch(r'/(.+)/-/merge_requests/([1-9][0-9]*)', path)
+    forge = 'gitlab'
+    if not match:
+        match = re.fullmatch(r'/([^/]+/[^/]+)/pull/([1-9][0-9]*)', path)
+        forge = 'github'
+    need(match is not None, 'unrecognized MR/PR URL: ' + url)
+    repo, number = match.groups()
+    need(all(re.fullmatch(r'[A-Za-z0-9_.-]+', part) and part not in ('.', '..') for part in repo.split('/')),
+         'unsafe repository identity in ' + url)
+    if forge == 'github':
+        repo = repo.lower()
+    known = (host, forge) in (('github.com', 'github'), ('gitlab.com', 'gitlab'))
+    for mapping in mappings.splitlines():
+        if '=' in mapping:
+            configured_host, configured_forge = mapping.split('=', 1)
+            if configured_host.lower() == host:
+                need(configured_forge == forge, 'MR URL conflicts with the configured forge for ' + host)
+                known = True
+    need(known, 'MR host ' + host + ' has no matching configured forge registry entry')
+    return {'forge': forge, 'host': host, 'repo': repo, 'number': int(number)}
+
+def forge_get(mr, endpoint):
+    binary = 'gh' if mr['forge'] == 'github' else 'glab'
+    try:
+        result = subprocess.run([binary, 'api', endpoint, '--hostname', mr['host']],
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=90)
+    except subprocess.SubprocessError:
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        return json.loads(result.stdout)
+    except ValueError:
+        return None
+
+def metadata(mr, want_description):
+    if mr['forge'] == 'github':
+        endpoint = 'repos/' + mr['repo'] + '/pulls/' + str(mr['number'])
+    else:
+        endpoint = 'projects/' + quote(mr['repo'], safe='') + '/merge_requests/' + str(mr['number'])
+    data = forge_get(mr, endpoint)
+    if not isinstance(data, dict):
+        return None
+    if mr['forge'] == 'github':
+        raw_state = data.get('state')
+        if data.get('merged') is True:
+            state = 'merged'
+        elif raw_state == 'open':
+            state = 'open'
+        elif raw_state == 'closed':
+            state = 'closed'
+        else:
+            state = None
+        base = data.get('base') if isinstance(data.get('base'), dict) else {}
+        head_block = data.get('head') if isinstance(data.get('head'), dict) else {}
+        target = base.get('ref')
+        head = head_block.get('sha')
+        raw_reviewers = data.get('requested_reviewers') or []
+        reviewers = [r.get('login') for r in raw_reviewers if isinstance(r, dict) and r.get('login')]
+        description = data.get('body')
+    else:
+        raw_state = data.get('state')
+        if data.get('merged') is True or raw_state == 'merged':
+            state = 'merged'
+        elif raw_state in ('opened', 'open', ''):
+            state = 'open'
+        elif raw_state in ('closed', 'locked'):
+            state = 'closed'
+        else:
+            state = None
+        target = data.get('target_branch')
+        head = data.get('sha')
+        raw_reviewers = data.get('reviewers') or []
+        reviewers = [r.get('name') or r.get('username') for r in raw_reviewers if isinstance(r, dict) and (r.get('name') or r.get('username'))]
+        description = data.get('description')
+    if state is None:
+        return None
+    raw_title = data.get('title')
+    title = raw_title if isinstance(raw_title, str) else ''
+    draft = bool(data.get('draft') or data.get('work_in_progress')) or title.lower().startswith(('draft:', 'wip:'))
+    return {'title': title,
+            'state': state,
+            'draft': draft,
+            'target': target if isinstance(target, str) else '',
+            'head': head if isinstance(head, str) and re.fullmatch(r'[0-9a-f]{7,64}', head or '') else '',
+            'reviewers': [r for r in reviewers if r],
+            'description': description if isinstance(description, str) else ''}
+
+CI_MAP = {'success': 'passed', 'failed': 'failed', 'canceled': 'canceled', 'cancelled': 'canceled',
+          'skipped': 'skipped', 'running': 'running', 'created': 'pending', 'pending': 'pending',
+          'manual': 'pending', 'scheduled': 'pending', 'preparing': 'pending',
+          'waiting_for_resource': 'pending'}
+
+def build_status(mr, head):
+    if not head:
+        return 'unavailable'
+    if mr['forge'] == 'github':
+        data = forge_get(mr, 'repos/' + mr['repo'] + '/commits/' + head + '/check-runs')
+        runs = data.get('check_runs') if isinstance(data, dict) else None
+        if not isinstance(runs, list) or not runs:
+            return 'unavailable'
+        if any(not isinstance(r, dict) or r.get('status') != 'completed' for r in runs):
+            running = any(isinstance(r, dict) and r.get('status') == 'in_progress' for r in runs)
+            return 'running' if running else 'pending'
+        conclusions = [r.get('conclusion') or '' for r in runs if isinstance(r, dict)]
+        if any(c in ('failure', 'timed_out', 'action_required', 'startup_failure') for c in conclusions):
+            return 'failed'
+        if any(c == 'cancelled' for c in conclusions):
+            return 'canceled'
+        if any(c == 'success' for c in conclusions):
+            return 'passed'
+        if any(c in ('skipped', 'neutral') for c in conclusions):
+            return 'skipped'
+        return 'unknown'
+    endpoint = ('projects/' + quote(mr['repo'], safe='') + '/merge_requests/'
+                + str(mr['number']) + '/pipelines')
+    data = forge_get(mr, endpoint)
+    if not isinstance(data, list):
+        return 'unavailable'
+    statuses = [p.get('status') for p in data if isinstance(p, dict) and p.get('sha') == head and p.get('status')]
+    if not statuses:
+        return 'unavailable'
+    chosen = next((s for s in statuses if s != 'skipped'), 'skipped')
+    return CI_MAP.get(chosen, 'unknown')
+
+# ---------------- optional AI prose validation --------------------------------
+
+def sentences(text):
+    return [part for part in re.split(r'(?<=[.!?])\s+', text.strip()) if part]
+
+def word_count(text):
+    return len(text.split())
+
+def single_line(text, label):
+    need('\n' not in text and '\r' not in text, label + ' must be a single line')
+    return text.strip()
+
+def validate_prose(path, selected_urls, want):
+    resolved = os.path.abspath(path)
+    need(not os.path.islink(resolved) and os.path.isfile(resolved),
+         'prose file must be a plain existing file: ' + resolved)
+    try:
+        data = json.loads(Path(resolved).read_text(encoding='utf-8'))
+    except (OSError, ValueError) as error:
+        raise ReviewError('prose file is not valid JSON (' + str(error) + ')')
+    need(isinstance(data, dict), 'prose file must contain a JSON object')
+    fields = {'summary', 'mr_summaries', 'note', 'omit'}
+    need(set(data) <= fields, 'unknown prose field(s): ' + ', '.join(sorted(set(data) - fields)))
+    omit = data.get('omit', [])
+    need(isinstance(omit, list) and all(o in ('summary', 'mr_summary', 'note') for o in omit),
+         "omit must list 'summary', 'mr_summary' and/or 'note'")
+    result = {'summary': '', 'mr_summaries': {}, 'note': [], 'omitted': []}
+    if want['summary']:
+        if 'summary' in omit:
+            result['omitted'].append('summary')
+        else:
+            text = data.get('summary')
+            need(isinstance(text, str) and text.strip(), 'enabled --summary needs a nonempty "summary" string')
+            text = single_line(text, 'summary')
+            need(len(sentences(text)) <= 2 and word_count(text) <= 50,
+                 'summary exceeds its limit (2 sentences and 50 words max)')
+            result['summary'] = text
+    if want['mr_summary']:
+        if 'mr_summary' in omit:
+            result['omitted'].append('mr_summary')
+        else:
+            table = data.get('mr_summaries')
+            need(isinstance(table, dict), 'enabled --mr-summary needs an "mr_summaries" object keyed by MR URL')
+            need(set(table) == set(selected_urls),
+                 'mr_summaries keys must be exactly the selected MR URLs (got: '
+                 + ', '.join(sorted(table)) + ')')
+            for url in selected_urls:
+                text = table[url]
+                need(isinstance(text, str) and text.strip(), 'missing summary for ' + url)
+                text = single_line(text, 'summary for ' + url)
+                need(len(sentences(text)) <= 2 and word_count(text) <= 35,
+                     'summary for ' + url + ' exceeds its limit (2 sentences and 35 words max)')
+                result['mr_summaries'][url] = text
+    if want['note']:
+        if 'note' in omit:
+            result['omitted'].append('note')
+        else:
+            bullets = data.get('note')
+            need(isinstance(bullets, list) and bullets, 'enabled --note needs a nonempty "note" bullet list')
+            need(len(bullets) <= 3, 'note allows at most 3 bullets')
+            cleaned = []
+            total = 0
+            for bullet in bullets:
+                need(isinstance(bullet, str) and bullet.strip(), 'note bullets must be nonempty strings')
+                bullet = single_line(bullet, 'note bullet')
+                total += word_count(bullet)
+                cleaned.append(bullet)
+            need(total <= 60, 'note exceeds its limit (60 words max)')
+            result['note'] = cleaned
+    return result
+
+# ---------------- rendering ---------------------------------------------------
+
+TOKENS = ('{{TO_BLOCK}}', '{{SUMMARY_BLOCK}}', '{{MR_BLOCKS}}', '{{NOTE_BLOCK}}', '{{PROJECT}}')
+
+def render_frame(text, values):
+    for token in TOKENS[:4]:
+        need(text.count(token) == 1, 'frame must contain ' + token + ' exactly once')
+    need(text.count('{{PROJECT}}') <= 1, 'frame may use {{PROJECT}} at most once')
+    found = re.findall(r'\{\{[A-Za-z0-9_]+\}\}', text)
+    unknown = sorted(set(found) - set(TOKENS))
+    need(not unknown, 'unknown frame placeholder(s): ' + ', '.join(unknown))
+    need(text.count('{{') == len(found) and text.count('}}') == len(found),
+         'malformed {{…}} placeholder syntax in the frame')
+    sentinel = '\x00'
+    pattern = re.compile(r'\{\{(?:TO_BLOCK|SUMMARY_BLOCK|MR_BLOCKS|NOTE_BLOCK|PROJECT)\}\}')
+
+    def replace(match):
+        value = values[match.group(0)[2:-2]]
+        return value if value else sentinel
+
+    substituted = pattern.sub(replace, text)
+    lines = []
+    for line in substituted.split('\n'):
+        if sentinel in line and line.strip(' \t\r' + sentinel) == '':
+            continue
+        lines.append(line.replace(sentinel, ''))
+    collapsed = []
+    for line in lines:
+        if line.strip() == '' and collapsed and collapsed[-1].strip() == '':
+            continue
+        collapsed.append(line)
+    return '\n'.join(collapsed).strip('\n') + '\n'
+
+def order_entries(entries):
+    by_task = {}
+    for entry in entries:
+        for task in entry['tasks']:
+            by_task[task] = entry
+
+    def depth(entry, trail):
+        parent = by_task.get(entry['stack_parent'])
+        if parent is None or parent is entry or id(parent) in trail:
+            return 0
+        return 1 + depth(parent, trail | {id(entry)})
+
+    group_order = {}
+    ordered = sorted(entries, key=lambda e: e['order'])
+    for entry in ordered:
+        unit = entry['landing_unit']
+        if unit:
+            group = 'lu:' + unit
+        else:
+            root = entry
+            trail = {id(entry)}
+            while True:
+                parent = by_task.get(root['stack_parent'])
+                if parent is None or parent is root or id(parent) in trail:
+                    break
+                root = parent
+                trail.add(id(root))
+            group = ('chain:' + root['tasks'][0]) if root is not entry else ('task:' + entry['tasks'][0])
+        entry['_group'] = group
+        if group not in group_order:
+            group_order[group] = len(group_order)
+    return sorted(entries, key=lambda e: (group_order.get(e['_group'], 0), depth(e, frozenset()), e['order']))
+
+def fence_for(text):
+    longest = max((len(m.group(0)) for m in re.finditer(r'`+', text)), default=0)
+    return '`' * max(3, longest + 1)
+
+def task_result_excerpt(project, task, limit=800):
+    path = os.path.join(project, 'task', task + '.md')
+    try:
+        text = Path(path).read_text(encoding='utf-8', errors='replace')
+    except OSError:
+        return '(unavailable)'
+    match = re.search(r'^## Result\s*$([\s\S]*?)(?=^## |\Z)', text, re.M)
+    if not match:
+        return '(no Result section)'
+    excerpt = match.group(1).strip().replace('\r', '')
+    if not excerpt:
+        return '(empty Result section)'
+    return excerpt[:limit] + ('…' if len(excerpt) > limit else '')
+
+def recap(slug, entries, excluded):
+    tasks_selected = sum(len(e['tasks']) for e in entries)
+    lines = ['request-review ' + slug + ': ' + str(len(entries)) + ' unique open MR(s) for ' + str(tasks_selected) + ' task(s)',
+             'selection recap:']
+    for entry in entries:
+        extra = ''
+        if len(entry['tasks']) > 1:
+            extra += '; also ' + ', '.join(entry['tasks'][1:])
+        if entry['draft']:
+            extra += '; draft'
+        lines.append('  include ' + entry['tasks'][0] + ' -> ' + entry['url'] + ' (' + entry['state'] + extra + ')')
+    for task, reason in excluded:
+        lines.append('  exclude ' + task + ': ' + reason)
+    if not entries and not excluded:
+        lines.append('  (no tasks with recorded MRs)')
+    return '\n'.join(lines)
+
+def build_message(slug, tonames, entries, prose, no_reviewers):
+    counts = {}
+    for entry in entries:
+        counts[entry['title']] = counts.get(entry['title'], 0) + 1
+    mr_lines = []
+    for entry in entries:
+        title = entry['title']
+        if counts[title] > 1:
+            title += ' (' + entry['repo'] + ')'
+        lines = ['- ' + title,
+                 '  - Link : ' + entry['url'],
+                 '  - Branch Target : ' + (entry['target'] or 'unavailable'),
+                 '  - CI Status : ' + entry['ci']]
+        if entry['reviewers'] and not no_reviewers:
+            lines.append('  - Assigned Reviewer : ' + ', '.join(entry['reviewers']))
+        if prose['mr_summaries'].get(entry['url']):
+            lines.append('  - Summary : ' + prose['mr_summaries'][entry['url']])
+        if entry['draft']:
+            lines.append('  - Draft : early feedback requested')
+        if entry['landing_unit']:
+            lines.append('  - Landing unit : ' + entry['landing_unit'])
+        if entry['stack_parent']:
+            lines.append('  - Stacked on : ' + entry['stacked_on'])
+        mr_lines.append('\n'.join(lines))
+    values = {'TO_BLOCK': 'Hi ' + (tonames or 'team') + ',',
+              'SUMMARY_BLOCK': ('**Summary:** ' + prose['summary']) if prose['summary'] else '',
+              'MR_BLOCKS': '\n'.join(mr_lines),
+              'NOTE_BLOCK': ('**Review hints:**\n' + '\n'.join('- ' + b for b in prose['note'])) if prose['note'] else '',
+              'PROJECT': slug}
+    return values
+
+def evidence_packet(project, entries, want_description):
+    lines = ['----- pw-review-evidence (for the optional prose pass; NOT part of the message) -----']
+    for entry in entries:
+        lines.append('MR: ' + entry['url'])
+        lines.append('title: ' + entry['title'])
+        lines.append('head: ' + (entry['head'] or 'unavailable'))
+        flags = 'state=' + entry['state'] + (' | draft' if entry['draft'] else '')
+        lines.append(flags)
+        if want_description:
+            description = entry['description'].strip().replace('\r', '')
+            lines.append('description (truncated):')
+            lines.append(description[:2000] if description else '(unavailable)')
+        for task in entry['tasks']:
+            lines.append('task ' + task + ' result: ' + task_result_excerpt(project, task))
+    lines.append('----- end pw-review-evidence -----')
+    return '\n'.join(lines)
+
+def run():
+    argv = sys.argv[1:]
+    need(len(argv) == 12, 'internal usage: request-review helper needs 12 arguments')
+    (project, frame_path, candidates_path, mode, ids, tonames, summary_flag, mr_summary_flag,
+     note_flag, no_reviewers, prose_path, mappings) = argv
+    project = os.path.abspath(project)
+    want = {'summary': summary_flag == '1', 'mr_summary': mr_summary_flag == '1', 'note': note_flag == '1'}
+    ai_requested = any(want.values())
+    no_reviewers = no_reviewers == '1'
+
+    # Frame read (validated once per invocation; the shell already checked it, re-check here
+    # so a direct helper call cannot render a half-broken frame).
+    try:
+        frame_text = Path(frame_path).read_text(encoding='utf-8')
+    except OSError as error:
+        raise ReviewError('frame file is not readable (' + str(error) + ')')
+    need(frame_text.strip(), 'frame file is empty: ' + frame_path)
+    render_frame(frame_text, {token[2:-2]: 'x' for token in TOKENS})  # structural validation pass
+
+    # Candidate rows from the shell (PLAN order): task, url, conflict, title, landing_unit,
+    # stack_parent, parent_url, parent_branch.
+    columns = ('task', 'url', 'conflict', 'title', 'landing_unit', 'stack_parent', 'parent_url', 'parent_branch')
+    rows = []
+    try:
+        raw = Path(candidates_path).read_text(encoding='utf-8')
+    except OSError as error:
+        raise ReviewError('candidate list is not readable (' + str(error) + ')')
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        fields = line.split('\t')
+        need(len(fields) == len(columns), 'malformed candidate record')
+        rows.append(dict(zip(columns, fields)))
+
+    if mode == 'explicit':
+        wanted = ids.split()
+        need(wanted, 'explicit selection needs at least one task id')
+        by_task = {row['task']: row for row in rows}
+        selected = []
+        seen = set()
+        for task in wanted:
+            row = by_task.get(task)
+            need(row is not None, 'task ' + task + ' does not exist in this project plan → fix: check the task id (/pw-status shows the plan)')
+            need(not row['conflict'], 'recorded MR links conflict for ' + task
+                 + ' (task Result and dashboard disagree) → fix: correct the task Result or the dashboard row')
+            need(row['url'], 'task ' + task + ' has no recorded MR → fix: remove it from the selection or ship it first (/pw-ship)')
+            if task not in seen:
+                seen.add(task)
+                selected.append(row)
+    elif mode == 'all':
+        conflicts = [row['task'] for row in rows if row['conflict']]
+        need(not conflicts, 'recorded MR links conflict for: ' + ', '.join(conflicts)
+             + ' → fix: correct the task Result or the dashboard row, then re-run')
+        selected = [row for row in rows if row['url']]
+    else:
+        need(False, 'internal usage: unknown selection mode')
+
+    excluded = []
+    if mode == 'all':
+        for row in rows:
+            if not row['url']:
+                excluded.append((row['task'], 'no recorded MR'))
+    else:
+        # Nothing to exclude pre-metadata in explicit mode: a selected task without an MR has
+        # already stopped the run above.
+        pass
+
+    # Query each unique MR once; several tasks sharing one MR emit one entry.
+    failures = []
+    seen_ids = set()
+    entries = []
+    for row in selected:
+        ident = identity(row['url'], mappings)
+        key = ident['forge'] + '|' + ident['host'] + '|' + ident['repo'] + '|' + str(ident['number'])
+        if key in seen_ids:
+            next(e for e in entries if e['_key'] == key)['tasks'].append(row['task'])
+            continue
+        meta = metadata(ident, ai_requested)
+        if meta is None:
+            failures.append(row['task'] + ' (' + row['url'] + ')')
+            continue
+        seen_ids.add(key)
+        entry = {'_key': key, '_ident': ident, 'url': row['url'], 'repo': ident['repo'], 'tasks': [row['task']],
+                 'order': len(entries), 'landing_unit': row['landing_unit'],
+                 'stack_parent': row['stack_parent'], 'title': meta['title'] or row['title'],
+                 'state': meta['state'], 'draft': meta['draft'], 'target': meta['target'],
+                 'head': meta['head'], 'reviewers': meta['reviewers'],
+                 'description': meta['description']}
+        if row['stack_parent']:
+            if row['parent_url'].startswith('http'):
+                entry['stacked_on'] = row['parent_url']
+            elif row['parent_branch']:
+                entry['stacked_on'] = 'branch ' + row['parent_branch']
+            else:
+                entry['stacked_on'] = 'not recorded'
+        entries.append(entry)
+    need(not failures, 'MR lookup failed for: ' + '; '.join(failures)
+         + ' → fix: check the forge CLI authentication/host configuration and re-run')
+
+    included = []
+    for entry in entries:
+        if entry['state'] in ('merged', 'closed'):
+            if mode == 'explicit':
+                need(False, 'task(s) ' + ', '.join(entry['tasks']) + ': MR ' + entry['url'] + ' is '
+                     + entry['state'] + ' → fix: remove the task(s) from the selection')
+            for task in entry['tasks']:
+                excluded.append((task, 'MR ' + entry['state']))
+            continue
+        included.append(entry)
+    entries = included
+
+    # Stable order: landing-unit groups and stack chains (parent-first) in first-seen order.
+    entries = order_entries(entries)
+    for entry in entries:
+        entry['ci'] = build_status(entry['_ident'], entry['head'])
+
+    # Optional prose: validate before anything is rendered into the message.
+    prose = {'summary': '', 'mr_summaries': {}, 'note': [], 'omitted': []}
+    prose_note = ''
+    if ai_requested:
+        if prose_path and prose_path != '-':
+            prose = validate_prose(prose_path, [entry['url'] for entry in entries], want)
+            included_sections = [s for s in ('summary', 'mr_summary', 'note') if want[s] and s not in prose['omitted']]
+            if included_sections:
+                prose_note = 'prose included: ' + ', '.join(included_sections)
+            if prose['omitted']:
+                prose_note += ('\n' if prose_note else '') + 'prose omitted by the prose pass: ' + ', '.join(prose['omitted'])
+        else:
+            requested = ', '.join(s for s in ('summary', 'mr_summary', 'note') if want[s])
+            prose_note = ('prose requested but not supplied: ' + requested + '\n'
+                          'limits: summary <= 2 sentences/50 words; mr_summary <= 2 sentences/35 words per MR; note <= 3 bullets/60 words total\n'
+                          '→ next: author the requested sections from the evidence packet below, write JSON '
+                          '{"summary": "...", "mr_summaries": {"<MR url>": "..."}, "note": ["..."]}, and re-run with --prose <file>; '
+                          'declare a section omitted with "omit": ["..."] only after one failed shortening pass')
+
+    print(recap(project.rsplit('/', 1)[-1], entries, excluded))
+    if not entries:
+        print()
+        print('no open MRs remain in the selection — no review request generated')
+        return
+    values = build_message(project.rsplit('/', 1)[-1], tonames, entries, prose, no_reviewers)
+    message = render_frame(frame_text, values)
+    fence = fence_for(message)
+    print()
+    print('copyable message:')
+    print(fence + 'markdown')
+    sys.stdout.write(message if message.endswith('\n') else message + '\n')
+    print(fence)
+    if prose_note:
+        print()
+        print(prose_note)
+    if ai_requested and (not prose_path or prose_path == '-'):
+        print()
+        print(evidence_packet(project, entries, want['mr_summary'] or want['summary']))
+
+try:
+    run()
+except ReviewError as error:
+    message = str(error)
+    if '→ fix:' not in message:
+        message += ' → fix: re-run after correcting the reported selection, frame, or prose input'
+    print('pw-ship request-review: ' + message, file=sys.stderr)
+    sys.exit(2)
+except (OSError, ValueError, TypeError, KeyError) as error:
+    print('pw-ship request-review: ' + str(error)
+          + ' → fix: inspect the selection/evidence and re-run', file=sys.stderr)
     sys.exit(2)
 PY
 }

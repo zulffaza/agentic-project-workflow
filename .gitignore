@@ -49,3 +49,6 @@ pw-env.sh
 
 # your local config (created from pw.config.example.sh)
 pw.config.sh
+
+# per-user editable files (bootstrap seeds these from tooling/templates/; user-owned, never tracked)
+user-templates/

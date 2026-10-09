@@ -17,7 +17,7 @@ grep -q 'owner edits' "$P/context/REQUIREMENTS.md" && pwtest_ok "req-init preser
 
 # 2) add-input: replaces the empty placeholder row, A2 unquoted multi-word values, date auto
 pwtest_rc 0 "add-input (A2 segments, unquoted prose)" "$C" add-input "$CX" --file spring-rfc.md --what Migration RFC excerpt --source Lark doc docs/xxxx --trust Approved RFC
-pwtest_grep_file "^\| spring-rfc.md \| Migration RFC excerpt \| Lark doc docs/xxxx \| [0-9]{1,2} [A-Za-z]+ [0-9]{4} [0-9]{2}\\.[0-9]{2} WIB \| Approved RFC \|" \
+pwtest_grep_file "^\| spring-rfc.md \| Migration RFC excerpt \| Lark doc docs/xxxx \| [0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\\.[0-9]{2} WIB \| Approved RFC \|" \
   "input row shape + auto date" "$IDX"
 if grep -qE '^\|([[:space:]]*\|)+[[:space:]]*$' "$IDX"; then
   # the repos table still has its placeholder; the INPUTS table must not
@@ -26,7 +26,7 @@ if grep -qE '^\|([[:space:]]*\|)+[[:space:]]*$' "$IDX"; then
     || pwtest_ok "inputs placeholder replaced by first row"
 else pwtest_ok "inputs placeholder replaced by first row"; fi
 pwtest_rc 0 "add-input second (appends below)" "$C" add-input "$CX" --file notes.md --what 'my notes | draft' --source PROJ-123
-pwtest_grep_file '^\| notes.md \| my notes \\\| draft \| PROJ-123 \| [0-9]{1,2} [A-Za-z]+ [0-9]{4} [0-9]{2}\.[0-9]{2} WIB \| — \|$' \
+pwtest_grep_file '^\| notes.md \| my notes \\\| draft \| PROJ-123 \| [0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\.[0-9]{2} WIB \| — \|$' \
   "second row appends, pipe escaped, trust defaults to —" "$IDX"
 _n="$(awk '/^\| File \/ link \|/{f=1} f && /^## /{exit} f && /^\|/ && !/^\|[-| ]+\|$/ && !/_e\.g\._/ && !/^\| File \/ link/' "$IDX" | grep -c .)"
 if [ "$_n" = 2 ]; then

@@ -5,7 +5,7 @@
 <!-- Produced by: the provider the breakdown ran under — it is the default `Execute with:`
      provider for every task below (minimises agent-switching; see routing). [🤖 agent records] -->
 - **Produced by:** <provider>
-- **Date:** <DD MMMM YYYY HH.mm WIB>
+- **Date:** <DD MMMM YYYY - HH.mm WIB>
 
 > This is the entry point for the executor agent. Read this whole file before spawning anything.
 > Legend: 🤖 = AI-produced/maintained · 🧑 = you fill · 🤖🧑 = both.

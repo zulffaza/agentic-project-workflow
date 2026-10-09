@@ -226,6 +226,16 @@ This pushes eligible branches and opens MRs/PRs. It monitors CI by default.
 The recap includes links, branch targets, and check results.
 `--skip-build-check` skips CI monitoring; it still publishes changes. It is not a dry run.
 
+To ask teammates for review, build the ready-to-send message (read-only):
+
+```text
+/pw-ship delivery-note request-review
+```
+
+It lists every open MR with its link, target, current CI status, and assigned reviewers. Add
+`--summary`, `--mr-summary`, `--note`, or `--to "Andi, Sari"` for writing help; see
+[the recipe](RECIPES.md#ask-teammates-to-review-the-open-mrs).
+
 ## Review via MR/PR comments
 
 After a reviewer comments on T01's MR, run:

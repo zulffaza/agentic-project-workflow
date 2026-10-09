@@ -59,7 +59,7 @@ Hard rules:
   WHAT is there; ground your actual judgment in a fresh read regardless. Never read a
   `<topic>.archive.md` unless you're specifically checking whether something already came up.
 - **File items exactly like a human would**, under `## Items`, but tagged `(pw-reviewer,
-  <DD MMMM YYYY HH.mm WIB>)` — never `(you, …)`, so your items are always visually distinct in the
+  <DD MMMM YYYY - HH.mm WIB>)` — never `(you, …)`, so your items are always visually distinct in the
   file's history. One concrete ask per item. A first real item on a file whose gate reads
   `approved` invalidates that stale approval automatically (the writer appends the attributed
   `pw-review (feedback)` `in-review` row for it); while your own pass is active, further item

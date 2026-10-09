@@ -35,7 +35,7 @@ pl_status_selftest() {
   local got; got="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" phase demo)"
   [ "$got" = "analysis" ] || die "selftest FAIL: phase='$got' (expected analysis)"
   grep -q '<!-- comment stays -->' "$tmp/demo/README.md" || die "selftest FAIL: clobbered trailing comment"
-  grep -qE '^- \*\*[0-9]{1,2} [A-Za-z]+ [0-9]{4} [0-9]{2}\.[0-9]{2} WIB\*\* · `status` — Status -> analysis$' "$tmp/demo/LOG.md" || die "selftest FAIL: log line missing/wrong format"
+  grep -qE '^- \*\*[0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\.[0-9]{2} WIB\*\* · `status` — Status -> analysis$' "$tmp/demo/LOG.md" || die "selftest FAIL: log line missing/wrong format"
   # One-liner setter
   PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" oneliner demo "toggle kafka usage safely" >/dev/null
   grep -q '^- \*\*One-liner:\*\* toggle kafka usage safely$' "$tmp/demo/README.md" || die "selftest FAIL: one-liner not set"
@@ -52,7 +52,7 @@ pl_status_selftest() {
   PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" status demo analysis --rewind >/dev/null
   [ "$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" phase demo)" = "analysis" ] || die "selftest FAIL: --rewind did not apply"
   PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" log demo analyze "wrote analysis/x.md" >/dev/null
-  grep -qE '^- \*\*[0-9]{1,2} [A-Za-z]+ [0-9]{4} [0-9]{2}\.[0-9]{2} WIB\*\* · `analyze` — wrote analysis/x\.md$' "$tmp/demo/LOG.md" || die "selftest FAIL: custom log missing/wrong format"
+  grep -qE '^- \*\*[0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\.[0-9]{2} WIB\*\* · `analyze` — wrote analysis/x\.md$' "$tmp/demo/LOG.md" || die "selftest FAIL: custom log missing/wrong format"
   # Adopted pointer: inserted after One-liner when absent, then replaced in place (idempotent).
   grep -q '^- \*\*Adopted:\*\*' "$tmp/demo/README.md" && die "selftest FAIL: Adopted line present before adopt"
   PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" adopted demo "1 unit — see context/ADOPTED.md" >/dev/null

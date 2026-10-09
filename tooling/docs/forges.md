@@ -164,6 +164,12 @@ it fires in each mode, and how `--skip-build-check` disables it for a given run)
   `/pw-ship` run on one slow pipeline. This is a monitoring convenience, not a blocking gate — the
   push/MR-open/MR-update it's checking already happened before polling started.
 
+**Head-scoped one-shot reads (no polling):** `/pw-ship <slug> request-review` never polls. It reads
+the *current* head status once — GitLab: `glab api projects/:id/merge_requests/<iid>/pipelines`
+filtered to the MR head sha; GitHub: `gh api repos/:owner/:repo/commits/<sha>/check-runs`
+aggregated across runs. Unreadable, empty, or non-head-specific results render `unavailable` in
+the message — never a readiness claim.
+
 **What the command does with a terminal state** — this registry only defines the polling mechanics;
 the command-level contract lives in
 [`tooling/commands/pw-ship.md`](../commands/pw-ship.md)'s "Build-check fix loop":

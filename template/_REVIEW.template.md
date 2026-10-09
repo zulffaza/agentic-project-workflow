@@ -69,7 +69,7 @@ You never set an item/question's own status — just leave items `[OPEN]` and ru
 > reindexes `## Contents` for you; a first new item after an `approved` row also records one
 > `pw-review (feedback)` `in-review` row, so the old approval stops being the live decision).
 > By hand instead: start a
-> new heading `### Rn · <§section or anchor> — [OPEN] (you, <DD MMMM YYYY HH.mm WIB>)
+> new heading `### Rn · <§section or anchor> — [OPEN] (you, <DD MMMM YYYY - HH.mm WIB>)
 > <!-- pw-item-status: open -->`, then write your ask on the line(s) below it, followed by
 > a `---` rule before the next item. **Keep the trailing `<!-- pw-item-status: … -->` marker** —
 > that's what the gate checks actually read, the `[OPEN]`/`[RESOLVED]` tag is for
@@ -99,7 +99,7 @@ never creates a second heading for the same item.
 <!-- `[marker: ...]` above is a bracket stand-in, not real comment syntax — HTML comments can't
 nest inside this wrapping one. Live headings below use the real syntax. -->
 
-### R1 · <§section or anchor> — [OPEN] (you, <DD MMMM YYYY HH.mm WIB>) <!-- pw-item-status: open -->
+### R1 · <§section or anchor> — [OPEN] (you, <DD MMMM YYYY - HH.mm WIB>) <!-- pw-item-status: open -->
 <what needs to change, and why. One concrete ask per item — split unrelated asks into R2, R3…>
 
 ---
@@ -112,7 +112,7 @@ flips the row to `[ANSWERED]`. This is the QnA channel — don't answer inside t
 > **Answer a question:** easiest is `/pw-review <slug> answer <this-file> Qn <your answer>`
 > (it writes the styled `↳ you:` line under the question; a first answer after an `approved` row
 > records the same `pw-review (feedback)` `in-review` row as a new item).
-> By hand instead: under the `Qn` heading, add a quoted line `> ↳ **you** (<DD MMMM YYYY HH.mm WIB>):
+> By hand instead: under the `Qn` heading, add a quoted line `> ↳ **you** (<DD MMMM YYYY - HH.mm WIB>):
 > <your decision/answer>`. The agent folds it into the doc on the next pass, appends its
 > own `> ↳ **agent** (<timestamp>): …` line right after yours (same quoted block, one blank quoted
 > line between the two), adds a `---` rule, and flips this SAME heading to `[ANSWERED]` — never a
@@ -135,10 +135,10 @@ yours, and flips this exact heading to `[ANSWERED]` — never a second heading.
 ↑↑ END EXAMPLE ↑↑ -->
 <!-- Same bracket-notation reason as the R-item example above. -->
 
-### Q1 · <§section> — [PENDING] (agent, <DD MMMM YYYY HH.mm WIB>) <!-- pw-item-status: open -->
+### Q1 · <§section> — [PENDING] (agent, <DD MMMM YYYY - HH.mm WIB>) <!-- pw-item-status: open -->
 <the agent's question>
 <!-- You answer by adding, under the question:
-> ↳ **you** (<DD MMMM YYYY HH.mm WIB>): <your decision/answer>   -->
+> ↳ **you** (<DD MMMM YYYY - HH.mm WIB>): <your decision/answer>   -->
 
 ---
 

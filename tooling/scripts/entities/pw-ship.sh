@@ -10,8 +10,9 @@
 #   pw-ship.sh comment-seen       <slug> <task-id> <thread-id> <kind:resolvable|unresolvable> <replied:yes|no> [note...]
 #   pw-ship.sh dashboard-mr-state <slug> <task-id> <state>
 #   pw-ship.sh history            <slug> <invocation|pending|init|begin|checkpoint|freeze|deliver> [MR-url] [options]
+#   pw-ship.sh request-review     <slug> [all | task-ids…] [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]
 #
-# Facets (S1b): READ  = resolve, mr-state, mr-state-batch, monitor
+# Facets (S1b): READ  = resolve, mr-state, mr-state-batch, monitor, request-review
 #               WRITE = exec, comment-seen, dashboard-mr-state
 # Merged from pw-ship-resolve.sh, pw-ship-exec.sh, pw-mr-state-batch.sh,
 # pw-pipeline-monitor.sh and pw-lib's ship/mr-state block (entity consolidation;
@@ -48,6 +49,15 @@
 #   and immutable newest-first history. No pushes or thread replies are performed here.
 #   init --reviewed is human-triggered only, never on agent initiative: it snapshots an
 #   explicitly reviewed current body without rewriting any retained frozen attempt.
+# request-review — read-only generation of ONE copyable teammate review request for every
+#   open recorded project MR (or a selected task set). Queries each unique MR once through the
+#   configured forge (title/state/draft/target/reviewers/head build status; no polling, no
+#   writes), renders the built-in title-led blocks through the effective frame file
+#   (PW_REVIEW_REQUEST_TEMPLATE_FILE, default user-templates/review-request.md), and prints the
+#   selection recap plus the fenced message. --summary / --mr-summary / --note request optional
+#   AI prose; the deterministic renderer validates caller-supplied prose (membership, presence,
+#   sentence/word limits) before insertion, and a run without --prose still emits the
+#   deterministic message with the pending-section diagnostics.
 #
 # Facet: STACK (plan 35) — branch-inheritance lifecycle. The `Stacked on:` field and
 # ancestry/target readers live in pw-common.sh; these operators are the ship-owned read/write
@@ -117,6 +127,144 @@ cmd_history() {
       fi ;;
   esac
   pw_ship_history "$d" "$ts" "$mappings" "$registered" "$@"
+}
+
+# request-review — read-only: all or selected open project MRs -> one copyable review request.
+# Selection + metadata + template substitution are deterministic; only the optional --summary /
+# --mr-summary / --note prose is authored by the caller (via --prose) and validated before use.
+# Performs no forge writes and no project writes; a missing/conflicting MR evidence set stops
+# before the final message so the requested scope stays clear.
+cmd_request_review() {
+  [ $# -ge 1 ] || die "usage: request-review <slug> [all | task-ids…] [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]"
+  local slug="$1"; shift
+  [[ "$slug" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "request-review: unsafe project slug → fix: use a project name, not a path"
+  local d plan; d="$(proj_dir "$slug")"; plan="$d/task/PLAN.md"
+  [ -f "$plan" ] || die "request-review: PLAN.md not found ($plan) → fix: run /pw-breakdown $slug to produce it"
+
+  local selector_all=0 saw_flag=0; local -a sel_ids=()
+  local to_names="team" summary=0 mr_summary=0 note=0 no_reviewers=0 prose=""
+  local part tok seg sw
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --to)
+        [ "$to_names" = "team" ] || die "request-review: --to repeated → fix: pass --to once"
+        saw_flag=1; shift; seg=""
+        while [ $# -gt 0 ]; do
+          case "$1" in --*) break ;; esac
+          seg="$seg $1"; shift
+        done
+        to_names="$(printf '%s' "$seg" | pw_trim)"; [ -n "$to_names" ] || to_names="team"
+        ;;
+      --summary|--mr-summary|--note|--no-reviewers)
+        saw_flag=1
+        sw="$1"
+        case "$sw" in
+          --summary) [ "$summary" = 0 ] || die "request-review: --summary repeated → fix: pass each switch once"; summary=1 ;;
+          --mr-summary) [ "$mr_summary" = 0 ] || die "request-review: --mr-summary repeated → fix: pass each switch once"; mr_summary=1 ;;
+          --note) [ "$note" = 0 ] || die "request-review: --note repeated → fix: pass each switch once"; note=1 ;;
+          --no-reviewers) [ "$no_reviewers" = 0 ] || die "request-review: --no-reviewers repeated → fix: pass each switch once"; no_reviewers=1 ;;
+        esac
+        shift
+        case "${1:-}" in ""|--*) : ;; *) die "request-review: unexpected value after $sw → fix: switches take no argument (only --to and --prose do)" ;; esac
+        ;;
+      --prose)
+        [ -z "$prose" ] || die "request-review: --prose repeated → fix: pass --prose once"
+        shift; [ $# -gt 0 ] || die "request-review: --prose needs a JSON file path"
+        prose="$1"; shift ;;
+      --skip-build-check)
+        die "request-review: --skip-build-check is a ship-mode option → fix: message generation never polls CI; omit the flag" ;;
+      --*)
+        die "request-review: unknown option '$1' → fix: flags are --to, --summary, --mr-summary, --note, --no-reviewers, --prose" ;;
+      *)
+        [ "$saw_flag" = 0 ] || die "request-review: unexpected token '$1' after a flag → fix: keep the selector (all or task ids) before the flags"
+        case "$1" in
+          comments|stack|describe|sync) die "request-review: '$1' is a ship/comment operator → fix: use message flags only (this mode never pushes or comments)" ;;
+        esac
+        local oldifs="$IFS"; IFS=','
+        for part in $1; do
+          tok="$(printf '%s' "$part" | pw_trim)"
+          [ -n "$tok" ] || continue
+          case "$tok" in
+            all)
+              [ "$selector_all" = 0 ] || die "request-review: 'all' repeated → fix: pass one selector"
+              [ ${#sel_ids[@]} -eq 0 ] || die "request-review: cannot combine 'all' with task ids → fix: pass one selector form"
+              selector_all=1 ;;
+            T[0-9]*)
+              pw_task_id_ok "$tok" || die "request-review: invalid task id '$tok' → fix: task ids look like T01"
+              sel_ids[${#sel_ids[@]}]="$tok" ;;
+            *)
+              die "request-review: invalid selector '$tok' → fix: use 'all' or task ids like T01 T03" ;;
+          esac
+        done
+        IFS="$oldifs"
+        shift ;;
+    esac
+  done
+  if [ "$selector_all" = 1 ] && [ ${#sel_ids[@]} -gt 0 ]; then
+    die "request-review: cannot combine 'all' with task ids → fix: pass one selector form"
+  fi
+
+  # Effective frame file: resolved and validated in full before any forge query or AI work.
+  local frame err; frame="$(pw_review_template_path)"; err="$(pw_review_template_error "$frame")"
+  if [ -n "$err" ]; then
+    case "$err" in
+      "file not found"*)
+        if [ "$(pw_review_template_source)" = "default" ]; then
+          die "request-review: review-frame template missing: $frame → fix: run /pw-doctor --fix to seed the default frame"
+        fi
+        die "request-review: configured review-frame template missing: $frame → fix: create the file or correct PW_REVIEW_REQUEST_TEMPLATE_FILE in pw.config.sh" ;;
+      *)
+        die "request-review: review-frame template invalid ($frame): $err → fix: edit the frame file (the four block placeholders exactly once; {{PROJECT}} optional)" ;;
+    esac
+  fi
+
+  # Candidate rows in stable PLAN order. One line per task:
+  #   task | recorded MR (task Result first, dashboard fallback) | conflict | title |
+  #   landing unit | stack parent | parent MR | parent branch
+  # A task-file URL that disagrees with a dashboard URL is a recorded-links conflict.
+  local tmp; tmp="$(mktemp -t pw-review-request 2>/dev/null || printf '%s/pw-review-request.$$' "${TMPDIR:-/tmp}")"
+  : > "$tmp" || die "request-review: cannot create the candidate temp file → fix: check TMPDIR"
+  PW_RR_TMP="$tmp"
+  trap 'rm -f "${PW_RR_TMP:-}"' EXIT
+
+  local tid st tfile raw dash cfl title lu sp purl pbr
+  while IFS='|' read -r tid st; do
+    tid="$(printf '%s' "$tid" | pw_trim)"
+    [[ "$tid" =~ ^T[0-9]+$ ]] || continue
+    tfile="$d/task/$tid.md"
+    raw=""; dash=""; cfl=""; title="$tid"; lu=""; sp=""; purl=""; pbr=""
+    if [ -f "$tfile" ]; then
+      raw="$(pw_task_mr_url "$tfile")"
+      case "$raw" in http*) : ;; *) raw="" ;; esac
+      dash="$(grep -E "^\|[[:space:]]*\**$tid\**[[:space:]]*\|" "$d/README.md" 2>/dev/null | grep -oE "https?://[^ )>|\"\`]+" | head -1 || true)"
+      if [ -n "$raw" ] && [ -n "$dash" ] && [ "$raw" != "$dash" ]; then cfl="1"; fi
+      [ -n "$raw" ] || raw="$dash"
+      title="$(grep '^# ' "$tfile" 2>/dev/null | head -1 | sed 's/^# //; s/^T[0-9]*[: ]*//' | pw_trim)"
+      [ -n "$title" ] || title="$tid"
+      lu="$(pw_field "$tfile" 'Landing unit' 2>/dev/null || true)"
+      case "$lu" in none|None|NONE|—|-|""|"<"*) lu="" ;; esac
+      sp="$(pw_stack_parent "$tfile" 2>/dev/null || true)"
+      if [ -n "$sp" ] && [ -f "$d/task/$sp.md" ]; then
+        purl="$(pw_task_mr_url "$d/task/$sp.md")"; case "$purl" in http*) : ;; *) purl="" ;; esac
+        pbr="$(pw_field "$d/task/$sp.md" Branch 2>/dev/null || true)"; pbr="${pbr//\`/}"; pbr="${pbr%%[[:space:]]*}"
+      fi
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$tid" "$raw" "$cfl" "$(printf '%s' "$title" | tr '\t\r\n' '   ')" \
+      "$(printf '%s' "$lu" | tr '\t\r\n' '   ')" "$sp" \
+      "$(printf '%s' "$purl" | tr '\t\r\n' '   ')" "$(printf '%s' "$pbr" | tr '\t\r\n' '   ')" >> "$tmp"
+  done < <(pw_plan_pairs "$plan")
+
+  local mode="all" ids=""
+  if [ ${#sel_ids[@]} -gt 0 ]; then
+    mode="explicit"
+    ids="$(printf '%s\n' ${sel_ids[@]+"${sel_ids[@]}"} | tr '\n' ' ')"
+  fi
+  local mappings=""
+  if [ -n "${PW_FORGE_HOSTS[0]:-}" ]; then mappings="$(printf '%s\n' "${PW_FORGE_HOSTS[@]}")"; fi
+
+  pw_ship_request_review "$d" "$frame" "$tmp" "$mode" "$ids" "$to_names" \
+    "$summary" "$mr_summary" "$note" "$no_reviewers" "${prose:--}" "$mappings"
 }
 
 cmd_resolve() {
@@ -2057,6 +2205,7 @@ cmd_stack_cascade() {
 
 case "${1:-}" in
   history)            shift; cmd_history "$@" ;;
+  request-review)     shift; cmd_request_review "$@" ;;
   resolve)            shift; cmd_resolve "$@" ;;
   exec)               shift; cmd_exec "$@" ;;
   monitor)            shift; cmd_monitor "$@" ;;
@@ -2079,5 +2228,5 @@ case "${1:-}" in
   stack-adopt)        shift; cmd_stack_adopt "$@" ;;
   stack-inherited)    shift; cmd_stack_inherited "$@" ;;
   stack-cascade)      shift; cmd_stack_cascade "$@" ;;
-  *) die "usage: pw-ship.sh <resolve|exec|monitor|mr-state|mr-state-batch|comment-seen|dashboard-mr-state|history|stack|stack-validate|stack-plan|stack-record|stack-verify|stack-fresh|stack-stale|stack-land|stack-promote|stack-retarget|stack-op|stack-debt|stack-adopt|stack-inherited|stack-cascade> … (see --help)" ;;
+  *) die "usage: pw-ship.sh <resolve|exec|monitor|mr-state|mr-state-batch|comment-seen|dashboard-mr-state|history|request-review|stack|stack-validate|stack-plan|stack-record|stack-verify|stack-fresh|stack-stale|stack-land|stack-promote|stack-retarget|stack-op|stack-debt|stack-adopt|stack-inherited|stack-cascade> … (see --help)" ;;
 esac

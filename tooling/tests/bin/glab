@@ -9,6 +9,9 @@ if [ -n "${PWTEST_FORGE_FAIL:-}" ]; then echo "glab-shim: forced query failure" 
 if [ -n "${PWTEST_HISTORY_FORGE_DIR:-}" ] && { [ "${1:-}" = api ] || { [ "${1:-}" = mr ] && [ "${2:-}" = create ]; }; }; then
   exec python3 "$(dirname "$0")/forge-history.py" glab "$@"
 fi
+if [ -n "${PWTEST_REVIEW_FORGE_DIR:-}" ] && [ "${1:-}" = api ]; then
+  exec python3 "$(dirname "$0")/forge-review.py" glab "$@"
+fi
 _state_json() {
   local iid="$1" st="opened" tgt="${PWTEST_MR_TARGET:-master}" t hd="dead000f" h
   if [ -n "${PWTEST_FORGE_STATE_FILE:-}" ] && [ -f "$PWTEST_FORGE_STATE_FILE" ]; then

@@ -151,7 +151,7 @@ the reviewer role + mode with or without identity fields, richer `By` values nev
 parsing, and idempotency suppresses duplicates only within the same attempt. Review timestamps:
 new rows stamp `5 October 2026 23.11 WIB` (day, month, year, dot-minutes); older date-time
 formats already in files are accepted unchanged. New template stubs use
-`<DD MMMM YYYY HH.mm WIB>`; every stub filter accepts both that token and legacy
+`<DD MMMM YYYY - HH.mm WIB>`; every stub filter accepts both that token and legacy
 `<YYYY-MM-DD HH:MM>`/`<§section>` tokens. Status/help/scan displays all show the same latest
 decision together with its `By` actor, read through one shared latest-row reader.
 

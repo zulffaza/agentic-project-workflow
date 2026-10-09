@@ -3,7 +3,7 @@ name: pw-rfc
 description: Author or update the RFC doc for a project-workflow project — the section-by-section mapping from analysis/task content to the canonical RFC schema, written for a broader reader than the analysis doc, including the multi-solution-area case. Use when running /pw-rfc's Wave 1/Wave 2 fill step, or whenever handed an approved analysis doc (+ optionally task/PLAN.md) and told to write or refresh an RFC. Does NOT own publish mechanics (backend selection, target resolution, section-scoped external writes, doc hygiene) — see tooling/docs/rfc.md and tooling/docs/rfc-backends.md for those; this skill is the authoring guide layered on top.
 ---
 
-New RFC metadata event dates use `DD MMMM YYYY HH.mm WIB` with `TZ=Asia/Jakarta LC_ALL=C`.
+New RFC metadata event dates use `DD MMMM YYYY - HH.mm WIB` with `TZ=Asia/Jakarta LC_ALL=C`.
 Preserve imported source dates and existing metadata history, including legacy date-only values.
 
 # pw-rfc (RFC authoring guide)

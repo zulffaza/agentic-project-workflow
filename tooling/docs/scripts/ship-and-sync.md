@@ -6,7 +6,8 @@ track MR/CI state (`mr-state`, `mr-state-batch`, `monitor`), record comment/book
 state (`comment-seen`, `dashboard-mr-state`), and the ship-owned **stack** lifecycle
 (`stack`, `stack-validate`, `stack-plan`, `stack-record`, `stack-verify`, `stack-fresh`, `stack-stale`,
 `stack-land`, `stack-promote`, `stack-retarget`, `stack-op`, `stack-debt`, `stack-adopt`).
-The `history` family manages project-owned review-attempt records and verified description delivery.
+The `history` family manages project-owned review-attempt records and verified description delivery;
+`request-review` is the read-only review-request message generator.
 
 ## pw-ship.sh resolve
 
@@ -192,7 +193,11 @@ A mismatch remains pending. Remote success before local acknowledgement is recov
 owned-region snapshots, head, and retained history; it does not repeat pushes/replies or body writes.
 
 Owned summary markers include all five sections through Notes for the reviewer. History is last,
-newest first; retained frozen block bytes never change. Unknown ownership, malformed markers,
+newest first; each attempt is collapsed in its own `<details>` wrapper labeled
+`Review attempt: <D MMMM YYYY - HH.mm WIB>` (presentation only — the enclosed frozen bytes never
+change), and a legacy unwrapped attempt is recognized during transition and converts on the next
+authorized delivery. New event datetimes carry the dashed separator; readers still accept the
+legacy undashed form, and an already-frozen heading keeps its original bytes. Unknown ownership, malformed markers,
 external edits inside a summary, or changed frozen blocks stop conflicting writes. Outside text
 survives unchanged. A legacy unmarked summary permits history delivery only, explicitly summary pending.
 After explicit owner review of a repaired currently published body, `history init --file <body> --reviewed`
@@ -210,6 +215,46 @@ archive/tombstones. A newest block too large to fit remains pending; retries can
 Exit 0 means the requested operation completed; `history delivered; summary refresh pending` is
 partial delivery and never a fully current-description claim. Exit 2 is an actionable validation,
 ownership, locking, capacity, forge, or readback failure. Existing thread-tracking rows stay independent.
+## pw-ship.sh request-review
+
+Read-only: generates ONE copyable teammate review-request message for all (or a selected set of)
+open recorded project MRs. No forge writes, no project writes, no CI polling — it reads each
+unique MR once, applies the selection rules, validates the frame and any optional prose, and
+prints a selection recap plus one fenced message.
+
+```bash
+$PW_HOME/tooling/scripts/entities/pw-ship.sh request-review <slug> [all | task-ids…] \
+  [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]
+```
+
+- **Selection** follows stable PLAN order: the task-file `## Result → MR:` line first, with the
+  same dashboard fallback the other readers use; a task-file link that disagrees with the
+  dashboard is a recorded-links conflict that stops the run before any message. `all` reports
+  (and excludes) tasks without an MR and merged/closed MRs in the recap; an explicit task id in
+  any of those states stops instead. One entry per unique MR; several tasks sharing one MR emit
+  one entry and are reported together.
+- **Metadata** per unique MR comes from one bounded read-only forge call each: title, state,
+  draft, target branch, assigned reviewers, and head-specific build status. CI status renders the
+  observed state (`passed`/`failed`/`running`/`pending`/`canceled`/`skipped`) or `unavailable`
+  when that read fails or has no head-specific result — never a readiness claim. Unknown hosts go
+  through the same registry/`PW_FORGE_HOSTS` resolution as `history`.
+- **Rendering** uses built-in title-led blocks (Link / Branch Target / CI Status / Assigned
+  Reviewer / per-MR Summary / Draft / Landing unit / Stacked on) substituted into the frame file —
+  `user-templates/review-request.md` by default, or `PW_REVIEW_REQUEST_TEMPLATE_FILE` (a relative
+  path resolves under `$PW_HOME`). The frame is validated before any forge query: each of
+  `{{TO_BLOCK}}`, `{{SUMMARY_BLOCK}}`, `{{MR_BLOCKS}}`, `{{NOTE_BLOCK}}` exactly once,
+  `{{PROJECT}}` at most once, no other token.
+- **AI prose** (`--summary`, `--mr-summary`, `--note`) is authored by the caller and supplied back
+  through `--prose` as JSON — `{"summary": "…", "mr_summaries": {"<MR url>": "…"}, "note": ["…"],
+  "omit": ["<section>"]}` — and validated for membership, presence, and sentence/word limits
+  (summary 2 sentences/50 words; per-MR 2/35; note 3 bullets/60 words total) before insertion.
+  Without `--prose`, the first run prints the deterministic message (requested sections absent),
+  a bounded evidence packet, and the pending-section diagnostics; the deterministic message
+  always survives AI failure or an explicit omit.
+- Exit `2` = usage / missing project / missing PLAN / conflicting or failed lookup / invalid frame
+  or prose; exit `0` also covers the explained empty selection (no message emitted). Read-only
+  battery row: `request-review F1` pins the no-PLAN stop path.
+
 ## Stack lifecycle (branch inheritance)
 
 A task with a `Stacked on:` field inherits a same-repo parent's verified commit; its MR targets the

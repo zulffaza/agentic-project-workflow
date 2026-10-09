@@ -65,7 +65,7 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   shared markdown primitives to `pw-mdlib.sh` — see `tooling/docs/conventions.md` (S/C/A-rules)
   before adding any script/operator/command.
 - `pw-status.sh log <slug> <actor> <msg>` — append one audit line to **`LOG.md`** as a Markdown bullet
-  (`- **DD MMMM YYYY HH.mm WIB** · \`actor\` — what`, not a bare pipe row — reads properly in a plain
+  (`- **DD MMMM YYYY - HH.mm WIB** · \`actor\` — what`, not a bare pipe row — reads properly in a plain
   preview view). Log phase transitions, executor spawns, commits, pushes, MRs, review passes,
   close-out.
 - `pw-status.sh phase <slug>` — read the current phase (used by `/pw-review` scoping + `/pw-status`).
@@ -113,7 +113,9 @@ an adopted unit continues on that branch (serial per branch), every other task g
 `/pw-execute <slug> [task-ids | "with <model/agent>"]` (stops at committed + verified),
 `/pw-ship <slug> [task-ids] [comments] [--skip-build-check]` (push + open MRs; the outward-facing
 publish step; by default also monitors the MR's pipeline to a terminal state before returning —
-`--skip-build-check` opts out),
+`--skip-build-check` opts out), `/pw-ship <slug> request-review [all|task-ids] [--to …] [--summary]
+[--mr-summary] [--note] [--no-reviewers] [--prose <file>]` (read-only: one copyable teammate
+review request; never pushes or comments),
 `/pw-sync <slug> [task-ids]` (merge the moved base branch into each open MR branch, re-verify, push),
 `/pw-status <slug>`, `/pw-close <slug>`,
 `/pw-doctor [--fix]` (verify/repair that installed commands + agents + skill match the bundle),

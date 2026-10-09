@@ -14,7 +14,7 @@ In syntax descriptions, `<value>` means required and `[value]` means optional. D
 | Start or orient | [Next command](#find-what-to-do-next) · [Context or adoption](#add-context-or-continue-existing-work) |
 | Review or verify | [Feedback and approval](#record-feedback-answers-and-approval) · [AI review](#use-ai-review-with-human-approval) · [Independent verification](#get-an-independent-verification) |
 | Run tasks | [Resume or waves](#resume-or-limit-execution) · [Models and concurrency](#change-models-or-concurrency) |
-| Publish and maintain branches | [Ship, comments, sync](#publish-handle-comments-or-refresh-branches) · [Stacked MRs](#inspect-stacked-mrs) |
+| Publish and maintain branches | [Ship, comments, sync](#publish-handle-comments-or-refresh-branches) · [Ask for review](#ask-teammates-to-review-the-open-mrs) · [Stacked MRs](#inspect-stacked-mrs) |
 | Recover or finish | [Reopen a phase](#recover-or-reopen-a-phase) · [Update guidance](#refresh-old-project-guidance-after-a-workflow-update) · [Accept and close](#accept-and-close) |
 
 ## Find what to do next
@@ -191,6 +191,30 @@ Sync merges updated target branches into open MR branches, verifies the changes,
 These commands change remote state. CI monitoring runs by default.
 `--skip-build-check` skips monitoring during ship or comments mode; it is not a dry run.
 If a push succeeds but the description remains pending, follow [description recovery](TROUBLESHOOTING.md#changes-were-pushed-but-the-mr-description-update-is-pending).
+
+## Ask teammates to review the open MRs
+
+`request-review` is read-only. It never pushes, comments, or waits on CI. It builds one copyable
+message with one entry per unique open MR — title, link, target branch, current CI status, and the
+assigned reviewers — and prints it after a short selection recap.
+
+```text
+/pw-ship delivery-note request-review
+/pw-ship delivery-note request-review T01 T03 --to "Andi, Sari"
+/pw-ship delivery-note request-review T02 --no-reviewers
+```
+
+With no selector (or `all`), every unique open MR is included; tasks without an MR and
+merged/closed MRs appear as exclusions in the recap. Naming task IDs selects exactly those tasks —
+a missing, merged, closed, or conflicting MR link then stops the run so you can fix the scope.
+
+Options add writing help: `--to <names>` sets the greeting, `--summary` adds a short global
+summary, `--mr-summary` adds one short summary per MR, and `--note` adds up to three reviewer
+hints. With any of these on, the command first returns the deterministic message plus a short
+evidence packet; you then author the requested text (the wording is yours or your agent's, the
+facts always come from the evidence) and re-run with `--prose <file>` to get the final message.
+If the text is too long or a section cannot be written, the deterministic message still stands.
+The message frame is editable — see [the request-review frame](TROUBLESHOOTING.md#the-review-request-message-looks-wrong-or-the-frame-file-is-missing).
 
 ## Inspect stacked MRs
 

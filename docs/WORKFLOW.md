@@ -107,6 +107,11 @@ The command monitors CI by default and reports or repairs failures within its li
 When reviewers leave comments, `/pw-ship <slug> [task-ids] comments` reads them, applies justified fixes, verifies, pushes, and replies.
 Each attempt keeps a local record and MR description history. See [MR review](REVIEW.md#2-the-mr-review-flow-post-ship).
 
+To invite review, `/pw-ship <slug> request-review` builds one copyable message for the open MRs —
+read-only, no push, no comment, no CI wait. Optional writing help (`--summary`, `--mr-summary`,
+`--note`, `--to`) keeps the sender in control of the wording. See
+[the review-request recipe](RECIPES.md#ask-teammates-to-review-the-open-mrs).
+
 When an MR's target changes, `/pw-sync <slug> [task-ids]` merges the updated target into the branch, verifies, and pushes.
 Merged or closed MRs remain visible as leftovers rather than receiving ordinary comment fixes or sync updates.
 MR merging remains your decision.

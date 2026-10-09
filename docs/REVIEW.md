@@ -283,7 +283,12 @@ request list in the description.
 
 The main description stays current: What & why, High-level changes, Low-level changes,
 Verification, and Notes for the reviewer are inside one owned summary region. Obsolete claims
-are replaced rather than accumulated. Review changes is last and shows newest attempts first.
+are replaced rather than accumulated. Review changes is last and shows newest attempts first,
+each attempt collapsed under a `Review attempt: <date> - <time> WIB` heading so the list stays
+readable; your reviewer-facing text above it stays open. New event times carry the dashed
+`D MMMM YYYY - HH.mm WIB` separator; earlier records keep whatever they stored, and both forms
+mean the same instant.
+
 Each attempt contains Changes with Before/After/Summary bullet lists, Commits as individual
 bullets, and Verification combining local checks and pipeline results, each tied to its head.
 

@@ -618,6 +618,7 @@ cmd_global() {
   echo "  headless budgets : stall ${PW_HEADLESS_STALL}m / timeout ${PW_HEADLESS_TIMEOUT}m"
   echo "  max-self-repair  : $PW_MAX_SELF_REPAIR"
   echo "  rfc-backend      : ${PW_RFC_BACKEND:-markdown}"
+  echo "  review-frame     : $(pw_review_template_path) ($(pw_review_template_source); placeholders validated on use)"
   echo "  forge-hosts      : ${#PW_FORGE_HOSTS[@]} override(s) (else auto-detect)"
   echo "  memory           : ${PW_MEMORY:-none}"
   echo "  projects-dir     : $PW_PROJECTS"
