@@ -5,6 +5,9 @@ Canonical: the **D-rules** in
 and the information-boundary section of [`tooling/AGENTS.md`](../../../AGENTS.md). This page teaches the
 two most-missed rules and routes to the owners.
 
+For user-guide composition, examples, reading flow, and verification, load the [user documentation skill](../../pw-maintainer-user-documentation/SKILL.md).
+This reference remains the owner of boundary and issue-routing guidance.
+
 ## The information boundary (the T4-enforced floor)
 
 - **User layer** = bundle-root `docs/`, `README.md`, `AGENTS.md`, `CLAUDE.md`, `ONBOARDING.md`, and

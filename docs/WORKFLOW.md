@@ -1,257 +1,192 @@
 # The workflow, step by step
 
-← [back to README](../README.md) · related: [Adoption](./ADOPTION.md) ·
-[Review & feedback](./REVIEW.md) · [Execution & routing](./EXECUTION.md) · [Reference](./REFERENCE.md)
+[README](../README.md) · [Walkthrough](WALKTHROUGH.md) · [Recipes](RECIPES.md) · [Reference](REFERENCE.md)
 
-The pipeline has **6 core stages** (context → analyze → break down → execute → ship → close — see
-README's diagram); the table below numbers 9 rows because review gets its own row wherever it's a
-distinct action from the phase around it (e.g. "Analyze" and "Review analysis" are two rows, not
-one). Each phase writes to its own directory and stops at a **human sign-off gate** before the next
-begins — so you review one artifact type at a time, and a stalled run is resumable because all
-state lives on disk, not in an agent's head.
+Move a project through context, analysis, plan, execution, shipping, and close.
+The default workflow keeps human approval between analysis and breakdown, and requires current PLAN approval before execution.
+You can stop after any command and resume from the files on disk.
 
-| # | Step | Who | Produces | Gate | Command |
-|---|------|-----|----------|------|---------|
-| 1 | Drop context | You | files in `context/` + a row in `context/INDEX.md` | — | `/pw-new` · `/pw-context` (rows/brief) |
-| 2 | Analyze | any agent (optional lanes: `pw-researcher` Mode B grounds a thin/unverifiable context, `pw-analyst` drafts from its seed — either optional; the driver pre-flights/exit-checks, and owns the doc) | `analysis/<topic>.md` + dashboard one-liner | — | `/pw-analyze` |
-| 3 | Review analysis | You + agent | `analysis/review/<t>.review.md` + fixes | analysis approved | `/pw-review` |
-| 4 | Break down | any agent (lane: `pw-writer-task` drafts per-task docs from your decisions — independent docs batched under `- Max parallelism:`; DAG + every decision field stays yours) | `task/PLAN.md` + `task/T01…Tnn.md` | — | `/pw-breakdown` |
-| 5 | Review tasks | You | `task/review/PLAN.review.md` + fixes | **plan approved (only hard gate)** | `/pw-review` |
-| 6 | Execute | Orchestrator + executor sessions/lanes (one per ready task; `Execute with:` → same-provider def or `provider:model`; each spawn ledgered `session=<id>` in `LOG.md`+`## Result`) | commits/branches in `worktree/*` (committed + verified) | per-task DoD | `/pw-execute` — opt-in `- Results acceptance: auto` + `--acceptance`/`--then-ship` |
-| 7 | Ship | Executor agent (strong) | pushed branches + MRs (rich description) | you confirm the push | `/pw-ship` (`--then-ship` chains it after a run) |
-| 8 | Review results | You + agent (fixes return per the routing ladder — same-provider in-process fixer or driver-inline, cross-provider supervised headless; resume-by-id only when a liveness check says live; one batched pass per artifact; a landed fix fans the capped late-fix dependent recheck) | accepted tasks (optional `task/review/T0n`) | you accept each task — *the clean-execution option moves only green, item-free tasks, and remains human-reversible* | `/pw-review` |
-| 9 | Learn + close | You + agent | memory (if configured), worktrees torn down, Status→done | — | `/pw-close` |
-| — | Any time | You | `/pw-help` renders the live command/operator map (and `find` locates a concept across the surface); state via `/pw-status`; install health via `/pw-doctor` (a project's own consistency via `/pw-doctor --project`); per-project config via `/pw-config` | — | `/pw-help` · `/pw-status` · `/pw-doctor` · `/pw-config` |
+| Stage | Run | Inspect before continuing |
+|---|---|---|
+| Context | `/pw-new <slug>` and `/pw-context <slug> …` | Goals, source inputs, repository scope |
+| Analysis | `/pw-analyze <slug>` | Approach options, evidence, risks, questions |
+| Plan | `/pw-breakdown <slug>` | `task/PLAN.md`, task steps, dependencies, verification |
+| Execute | `/pw-execute <slug>` | Commits, diffs, actual verification output |
+| Ship | `/pw-ship <slug>` | MR links, targets, CI, reviewer feedback |
+| Close | `/pw-close <slug>` | Accepted task results and reported leftovers |
 
-Keeping an MR up to date after it's open is a side-loop, not a numbered step: **`/pw-sync`** (see
-step 7). Another side-loop, **`/pw-rfc`** (optional, any platform or none — see
-[docs/RFC.md](./RFC.md)), publishes approved analysis/plan content to an RFC doc; like `/pw-sync`
-it never touches the numbered steps or the dashboard `Status:`. And you can reopen an earlier phase
-any time — see [rewind](#going-back-a-phase-rewind).
-
----
+Use `/pw-review` to record and apply feedback. Use `signoff` to record your approval decision.
+For concrete commands at every checkpoint, follow the [walkthrough](WALKTHROUGH.md).
 
 ## Step 1 — Context
-Put anything the agent needs to reason well into `context/`: PRD/RFC excerpts, ticket text,
-relevant code paths, error logs, Slack/Lark threads. Record provenance in `context/INDEX.md` so
-later steps (and future-you) know what each file is and can trust it — one
-`/pw-context <slug> add-input --file <f> --what <prose…> --source <prose…> [--trust <prose…>]`
-per input (deterministic row: auto date, pipe-escaped, placeholder-aware); repos you expect to
-touch go in the "Repos in scope" table via `/pw-context <slug> add-repo <repo> <base> <why…>`.
-Prefer links + short excerpts over dumping huge files. Optionally start a one-page brief —
-`/pw-context <slug> req-init` copies
-[`context/_REQUIREMENTS.template.md`](../template/context/_REQUIREMENTS.template.md) to
-`REQUIREMENTS.md` (idempotent); it's optional and sharpens the analysis phase.
+
+Create a project with `/pw-new <slug>`. It appears at `$PW_PROJECTS/<slug>/`.
+Provide requirements, tickets, document excerpts, relevant code references, or logs in `context/`.
+Register each source with `/pw-context <slug> add-input` and each repository with `add-repo`.
+Include the real base branch for each repository.
+
+Use `/pw-context <slug> req-init` for an optional requirements brief. Fill it before analysis.
+Initialization creates a template copy; source registration records provenance. Neither supplies your requirements.
+See [context recipes](RECIPES.md#add-context-or-continue-existing-work) for full argument examples.
+
+Check that `context/INDEX.md` contains useful inputs and repository scope before analysis.
+For uncertain evidence, `/pw-research <slug> --context [focus]` checks sources and repository state.
 
 <a id="adopting-existing-in-progress-work"></a>
 ### Two ways to start: fresh vs. continuation
-There are **two entry workflows**, and they differ only at the front:
 
-- **Fresh start** (`/pw-new`) — empty `context/`, build from scratch in isolated `agent/…` branches.
-  The stages/steps above.
-- **Continuation** (`/pw-adopt`) — work is **already underway on real branches** (with or without an
-  MR); you finish it *through* the pipeline on the same branch(es). Everything from analysis onward
-  is identical — only the branch/worktree/ship mechanics differ.
-
-Continuation is a whole workflow of its own (two intents, adopting one branch or many, and folding a
-branch into an existing project) — it has its own guide: **[Adoption →](./ADOPTION.md)**.
+Use `/pw-new` for fresh work. Use `/pw-adopt` when a branch already contains the work.
+Adoption continues the same branch and records its existing state.
+Its default intent starts with context, then follows analysis and planning.
+Its trailing `review` intent requires an MR and enters review directly.
+See [adoption](ADOPTION.md) for multiple branches and mixed projects.
 
 ## Step 2–3 — Analysis
-Ask any agent to analyze against `context/`. Output goes to `analysis/` using
-[`analysis/_TEMPLATE.md`](../template/analysis/_TEMPLATE.md). Analysis answers *what needs to change
-and why*, surfaces unknowns/risks, and lists **confirmed** affected repos — it does **not** yet
-decide task boundaries. **§4 lays out real approach options, not one recommendation** — you pick
-via a `Q0` in the review file (same QnA mechanism as any other open question), and `/pw-breakdown`
-structurally can't proceed until a choice is recorded, even if the doc is otherwise `approved`.
-Iterate here until you approve; this is the cheapest place to fix misunderstandings. You review it
-via a `.review.md` file — see [Review & feedback](./REVIEW.md).
-If this analysis also goes through the optional [RFC side-loop](./RFC.md) (external stakeholders,
-often a days/weeks negotiation): publishing the draft (`/pw-rfc`'s Wave 1) only needs §4's chosen
-approach, **not** this Sign-off — negotiating with outside reviewers is normal *before* you decide
-this is final, not after. Once negotiated, a comment-driven fix applied after this row already
-reads `approved` **automatically records a workflow-attributed transition on this exact gate**
-(`in-review` / `changes-requested`, never attributed to you) — analysis-approved and RFC-approved
-are the same fact, by design, so `/pw-breakdown` keeps correctly refusing until the whole
-negotiation settles and you (re-)approve. Those automatic rows only cover comments already *folded
-in*, though — `/pw-breakdown` also hard-refuses outright if `analysis/review/RFC.review.md` has any
-comment still sitting [OPEN]/[PENDING] (pulled via `/pw-rfc … comments` but not yet folded
-in or resolved), even when this Sign-off already reads `approved` on its own. Fold it in via
-`/pw-review` or resolve it directly before re-running `/pw-breakdown`.
+
+Run `/pw-analyze <slug>`. Read the generated `analysis/<topic>.md` and matching review file.
+The analysis explains the problem, affected repositories, evidence, approaches, and open questions.
+It establishes what changes and why. Task boundaries come during breakdown.
+
+Answer questions with `/pw-review <slug> answer <review-path> <Qid> <answer>`.
+Request changes with `item`, then run `/pw-review <slug> analysis` to incorporate them.
+Choose the approach and resolve questions before recording approval through `signoff`.
+
+If you use an RFC, publishing its draft is an optional side loop.
+An unresolved RFC review item blocks breakdown. Use `/pw-rfc <slug> comments` to fetch feedback, then resolve it through local review.
+The [RFC guide](RFC.md) explains draft publication and later PLAN milestones.
 
 ## Step 4–5 — Task breakdown
-Ask any agent to turn approved analysis into a breakdown:
 
-- **`task/PLAN.md`** — the orchestration plan ([template](../template/task/_TEMPLATE-orchestration-plan.md)).
-  This is the artifact the executor reads first. It carries the **repo manifest**, **global rules**,
-  the **dependency DAG** (which tasks are parallel, which block which), and **Produced by** (the
-  provider that ran the breakdown = the default execution provider).
-- **`task/T01.md … Tnn.md`** — one file per task ([template](../template/task/_TEMPLATE-task.md)).
-  Each is **self-contained** — an agent handed only `T03.md` must be able to do the work: it names
-  the repo, branch, files, links to needed context, writes **detailed `## Steps`** (exact file,
-  exact change, exact command), and a **Verify / Definition of Done** block.
+Run `/pw-breakdown <slug>` after analysis approval.
+It produces `task/PLAN.md` and one task document per task ID.
+PLAN records repositories, dependencies, execution strategy, and model choices.
+Each task states its branch, detailed steps, verification commands, and expected results.
 
-The **PLAN sign-off is the only hard gate for execution**. Per-task reviews are optional.
+Read PLAN and inspect important task files. Request changes through `task/review/PLAN.review.md` or individual task reviews.
+Apply feedback with `/pw-review <slug> plan` or selected task IDs.
+Once satisfied, approve `task/review/PLAN.review.md` through `signoff`.
+
+Current PLAN approval is the hard gate for execution, including resumed runs.
+Individual task review files are optional. Their absence alone does not block execution.
+New feedback can reopen an existing approval; inspect the current decision before proceeding.
 
 ## Step 6 — Execution
-Hand `task/PLAN.md` to one **orchestrator** agent. It reads the DAG and spawns **executor**sessions/lanes — one per task, respecting dependencies. **Same-provider tasks run as native
-in-process sub-agents** (easy to monitor); a different-provider task is shelled out to that CLI with
-the task file as the work order (a *sub-agent* name never crosses a provider boundary — Kilo's
-`kilo run --agent` even refuses a `mode: subagent` def; see docs/EXECUTION.md). Either way the
-executor **tees its output to `worktree/<T0n>.log`** so you can `tail -f` a run in your own window.
-Each executor works in its **own worktree**, runs the task's `Verify` block (a same-changeregression may self-repair inside the run, bounded by `- AI execution limit:` /
-`PW_MAX_SELF_REPAIR`, before declaring `verify-failed`), reports the actual output, and fills the
-task file's `## Result`. **Every spawn is ledgered** — the LOG.md record carries `via=` +
-`session=<id>` + seed/outcome/**state**, and the task's `## Result → Session:` carries it. A later
-Row 8 repair follows the **same routing ladder as execution** (docs/EXECUTION.md §The per-spawn
-ledger): same-provider → an in-process fixer you can watch, different-provider → a supervised
-headless session that **resumes the executor's own session only when a deterministic liveness check
-says the id is still resumable** (never a blind resume), and a single same-provider task may be
-fixed inline by the driver. MR-comment fixes arrive as **one batched pass per artifact** (per-item
-replies preserved); ≥2 tasks fan out as parallel per-task fixers. Every headless run is supervised
-to a terminal `state` (`success`/`failed`/`stalled`) with the log + stall/timeout budgets enforced —
-a run never ends with a live child. When a landed fix
-followed a dependent that already ran, the driver fans one capped dependent recheck (mechanical
-re-`Verify` per dependent + ≤1 `dep-impact` review pass where files overlap, filed as items — no
-edit-backward into the dependency). **Execution stops at committed + verified** — it does
-*not* push or open MRs.
 
-Full detail on roles, model/agent choice, and cross-provider execution:
-[Execution & routing](./EXECUTION.md).
+Run `/pw-execute <slug>` to complete the remaining plan in dependency order.
+Each task runs in its own Git worktree. Independent tasks can run concurrently within the configured limit.
+The agent commits changes, runs each task's verification checks, and records output in its `## Result`.
 
-**Resuming a partial or failed run.** `/pw-execute <slug>` **with no task IDs is a resume of the
-whole plan**, not a one-task-at-a-time step: it processes every task not yet `accepted` (`todo`,
-`in-progress`, `verify-failed`) and walks the DAG through to the end of what's ready **in one
-invocation** — it should not stop just because it had to fix a previously-failed task first. A
-Verify failure confirmed pre-existing/environmental (fails the same way on the untouched base) still
-counts as `done` and doesn't block the DAG; only a genuine regression blocks *that task's own*
-dependents, and every other independent task still proceeds. `/pw-execute <slug> T0n` (a task ID
-given) is the different, deliberate "just re-verify this one" path.
+Choose the scope that fits your next checkpoint:
 
-**Rejecting a result** goes through the review loop: flip the task to `Status: verify-failed` and
-either add items to `task/review/T0n.review.md` or just tell the agent what's wrong (`/pw-review`
-creates the review file if it's missing), then `/pw-execute <slug> T0n` re-runs just that task. See
-[Review & feedback](./REVIEW.md).
+| Scope | Command | Stops after |
+|---|---|---|
+| Remaining plan | `/pw-execute <slug>` | Remaining work completes or reports blockers |
+| Current ready group | `/pw-execute <slug> --wave` | The tasks ready when this invocation starts |
+| Selected tasks | `/pw-execute <slug> T01 T03` | The named scope |
+
+A full resume leaves completed tasks complete and resumes unfinished or failed work.
+Explicit task IDs can re-run selected work. Failed prerequisites block their dependents; independent work can continue.
+If a session stops, rerun the appropriate scope and inspect the recovered state.
+
+Verification failures from the task's change can trigger bounded self-repair.
+Environmental or pre-existing failures remain reported caveats. Read the result and actual output before deciding to accept it.
+Execution stops at local commits and verification by default.
+
+For model pins, concurrency, and routing, use [recipes](RECIPES.md#change-models-or-concurrency) and [execution details](EXECUTION.md).
+Clean automatic acceptance and `--then-ship` require explicit opt-in; see [clean execution](EXECUTION.md#opt-in-clean-execution-pre-reviewed-plans).
 
 <a id="ship-and-sync"></a>
 ## Step 7 — Ship (`/pw-ship`), and keeping MRs fresh (`/pw-sync`)
-Publishing is a **separate, explicit** step so nothing goes outward until you ask. `/pw-ship <slug>
-[task-ids]` pushes each verified task's branch and opens an MR with a **rich description** (what &
-why, changes, verification output, pinned-version rationale, risk, follow-ups), titled `[<ticket>]
-<title>` when `context/INDEX.md` (or `ADOPTED.md`) names a ticket for that repo/task, then records
-the MR in the task's `## Result` and the dashboard's **Merge requests** table. It **confirms the
-push list with you first**. Zero-change tasks get no branch/MR. By default it also monitors each
-MR's pipeline to a terminal state and reports it — meaning the run waits on CI before finishing;
-pass `--skip-build-check` if you'd rather it return immediately, unchecked. A **red** pipeline means
-that task is **not done**: `/pw-ship` fixes the failing change in the worktree, re-verifies, pushes,
-and re-monitors until the build passes (up to 3 fix rounds, then it stops and surfaces the failure
-for you — `/pw-help command pw-ship` spells out the build-check fix loop). MRs already merged or
-closed downstream are detected up front (a per-task forge query) and skipped + cleaned up instead of
-being re-shipped or synced.
 
-Once MRs are open they drift out of date as their base branches move. **`/pw-sync <slug>
-[task-ids]`** brings them all back up to date in one sweep: it merges the latest base into each open
-MR's branch, re-runs each task's `Verify`, and pushes — reporting per-task which merged cleanly,
-which hit a conflict, and which fail verify after the merge. Each MR is pre-checked first
-(per-task forge state query): `merged` → accept the task, update the dashboard, remove the worktree, and
-skip; `closed`/`unknown` → note and skip. Review comments left on an MR are a
-different loop — see the [MR review flow](./REVIEW.md#2-the-mr-review-flow-post-ship).
+Run `/pw-ship <slug> [task-ids]` when you authorize publication of verified work.
+It pushes branches, opens MRs/PRs, and records their links.
+MR descriptions explain the changes and verification. Titles include a ticket when the input provenance supplies one.
+The command monitors CI by default and reports or repairs failures within its limits.
+`--skip-build-check` skips CI monitoring; it still pushes and opens MRs.
 
+When reviewers leave comments, `/pw-ship <slug> [task-ids] comments` reads them, applies justified fixes, verifies, pushes, and replies.
+Each attempt keeps a local record and MR description history. See [MR review](REVIEW.md#2-the-mr-review-flow-post-ship).
+
+When an MR's target changes, `/pw-sync <slug> [task-ids]` merges the updated target into the branch, verifies, and pushes.
+Merged or closed MRs remain visible as leftovers rather than receiving ordinary comment fixes or sync updates.
+MR merging remains your decision.
+
+<a id="stacked-mrs"></a>
 ### Stacked MRs (when one task needs another's code)
 
-Sometimes task B genuinely needs task A's committed code in the same repository (not just A to
-finish first). Then B is **stacked on** A: B's branch starts from A's exact verified commit and B's
-MR targets **A's branch** so reviewers see only B's own changes. The approved plan records this:
-each such task carries `Stacked on: A`, and PLAN shows the stacks and the merge order. A scheduling
-dependency or a cross-repository dependency is **not** a stack.
+A stack lets a task inherit another task's code in the same repository.
+PLAN and task files record `Stacked on: <parent-task>`.
+The child starts from the parent's verified commit and targets the parent's branch, so its MR shows the child's changes.
+A scheduling dependency or a cross-repository dependency alone does not create a stack.
 
-- `/pw-ship <slug> stack` is a **read-only preview** of the inferred parents, targets, and health —
-  it writes nothing. If you already have manually stacked MRs, `/pw-ship <slug> stack adopt` previews
-  the import (matching each MR's real target to a task branch) and only writes after you confirm with
-  `--apply`.
-- Ship **parent-first**: A's branch must be published before B's MR opens. Merge order is A, then B.
-  After A's MR lands, B is promoted to the next open ancestor (or the ultimate base) and its existing
-  MR is retargeted in place — never closed and recreated. A squash/rebase landing leaves ancestry
-  unprovable, so that promotion stays **blocked** for an explicit, separately approved restack.
-- An upstream fix on A must reach **every affected descendant**, including ones with no review
-  comments: `/pw-ship … comments` and `/pw-sync` update each descendant in parent-first order, merge
-  the updated parent, re-run that task's own `Verify`, and record the inherited update. A changed
-  descendant is marked **stale** until its fresh verification passes — stale work cannot ship or
-  close. Conflicts and failed verification **block only the affected subtree**; unrelated stacks
-  continue. Real MR merging stays your decision.
-- Inherited updates are recorded as such — the descendant's description is refreshed as an
-  **inherited-update round**, never as a fabricated reviewer request — and the cascade's `describe`
-  stage stays pending until that description delivery completes. A retarget that published on the
-  forge but failed locally resumes with `--apply` and finishes the local mirror without a second
-  forge write.
+Preview topology and health with `/pw-ship <slug> stack`.
+For existing manually stacked MRs, `stack adopt` previews the import and `stack adopt --apply` records it after confirmation.
+If an import changes the approved dependency graph, regenerate and reapprove PLAN before dependent execution or publication.
+
+Ship parents before children. A selected child cannot silently publish an unpublished ancestor.
+Merge the parent before the child. After the parent lands, the existing child MR can target the next open ancestor or ultimate base.
+Squash or rebase landing can make ancestry unprovable. Promotion then stays blocked for an explicitly approved restack.
+
+Parent fixes must reach affected descendants. Comments mode and sync update them in parent-first order and re-run each descendant's verification.
+Changed descendants remain stale until fresh checks pass. Stale tasks cannot ship or close.
+Conflicts and failed checks block the affected subtree; unrelated stacks can continue.
+Inherited updates receive their own description history. Interrupted remote or local updates remain pending for recovery.
+Use [stack troubleshooting](TROUBLESHOOTING.md) and project doctor to identify the pending action.
 
 ## Step 8 — Review results
-`done` (committed + verified) isn't the same as `accepted` — that's a separate decision you make
-after actually looking at what an executor produced. Two outcomes:
-- **You're satisfied** → flip the task's `Status: accepted`. This is the only status that is yours;  nothing else in the pipeline can self-approve it — **the one documented exception** is a project
-  that opted into clean execution (`PLAN.md → - Results acceptance: auto`, docs/EXECUTION.md): the
-  *driver* then flips only tasks that are `done`, green on `## Verify`, and free of open review/
-  `dep-impact` items, and a human can rewind any of them. Default `manual` = exactly today.
-- **You're not** → flip `Status: verify-failed` and either add items to `task/review/T0n.review.md`
-  or just tell the agent what's wrong (`/pw-review <slug> T0n` creates that file from your feedback
-  if it's missing). `/pw-execute <slug> T0n` then re-runs and re-verifies **just that task**, in its
-  existing worktree — every other task is untouched.
 
-Review comments can also arrive on the MR/PR itself, a genuinely different entry point from the
-local `.review.md` files above — see the [MR review flow](./REVIEW.md#2-the-mr-review-flow-post-ship).
+Read each task's diff and `## Result`. `done` records completion; `accepted` records your decision about that result.
+If you want a correction, add a task review item and run `/pw-review <slug> T01`.
+Task repair normally re-runs verification. Use `/pw-execute <slug> T01` when a selected result needs another run.
+Upstream fixes can also require checks on dependent tasks.
+
+When satisfied, explicitly ask the agent to accept the named task results and update project records.
+For example: `I reviewed T01 and T02 in delivery-note. Accept both results.`
+Use `/pw-status <slug>` to confirm acceptance. There is no separate public acceptance slash command.
+In clean execution's optional auto mode, only eligible verified tasks without open review or dependency-impact items become accepted.
 
 ## Step 9 — Learn + close (`/pw-close`)
-After the run, `/pw-close` verifies every task is `accepted`, **tears down the worktrees with the
-safe helper** (its safe teardown step — refuses to remove the worktree you're
-in or a dirty one), captures what changed about the *workflow itself* (not the code — the repos
-record that) into the project's "Decisions & learnings" section — and into your memory tool too, if
-`PW_MEMORY` names one — sets the dashboard Status → `done`, and summarizes MRs/leftovers.
-`accepted` ≠ merged: open/on-hold MRs don't block close-out. It does **not** delete branches or the
-project dir.
 
----
+Run `/pw-close <slug>` after all task results are accepted.
+It checks the records, captures workflow learnings, cleans eligible worktrees, and marks the project `done`.
+If memory is configured, it also records learnings there. Memory is optional.
+
+Close preserves branches and the project directory.
+It refuses unsafe cleanup of a dirty worktree or the worktree you occupy, and reports leftovers.
+Open or on-hold MRs can remain. Acceptance and project close do not merge them.
+Pending stack updates still require recovery before close.
+
+## Maintain an existing project after updating the workflow
+
+New templates improve new projects. Existing project copies keep their recorded content.
+Use `/pw-doctor --project <slug> --guidance` to preview recognized guidance updates.
+Review the replacements, add `--apply` for that project, then preview again.
+This repairs guidance without changing approvals, project phase, MR records, or stack state.
+Use project health doctor separately for consistency findings.
+See [the update recipe](RECIPES.md#refresh-old-project-guidance-after-a-workflow-update).
 
 ## Who owns the dashboard `Status:` field?
-The `/pw-*` commands do — each runs the dashboard `Status:` write as its **mandatory
-last step** (analyze→`analysis`, breakdown→`breakdown`, execute→`executing`/`review`, close→`done`).
-It is not something you maintain by hand (that's the "why is it still `planned`?" trap), and the
-helper validates the phase, **refuses accidental backward moves** (`--rewind` to intend one), and
-auto-logs the change to [`LOG.md`](#audit-log--logmd). `/pw-review` never touches Status.
+
+Workflow commands maintain the dashboard phase. Review updates feedback and gate decisions without changing that phase.
+Use `/pw-status <slug>` to inspect it and `rewind` for an intentional backward move.
+Project config values belong to `/pw-config`. Task acceptance remains an explicit decision about task results.
 
 <a id="audit-log--logmd"></a>
 ## Audit log — `LOG.md`
-Every project has a `LOG.md` — an append-only audit trail, one line per meaningful action (phase
-transition, sub-agent spawn, commit, push, MR, review pass, close-out), newest at the bottom. Each
-entry is a Markdown bullet, so it stays readable in a plain preview view (a bare pipe row with no
-table header doesn't render as a table — it's just one long unwrapped line):
-```
-- **DD MMMM YYYY HH.mm WIB** · `<phase/actor>` — <what happened>
-```
 
-New workflow events use English month names and explicit WIB (UTC+7), including document metadata and review notes.
-Existing date-only and timezone-free date-times remain readable. Keep source dates, API timestamps, and recorded history unchanged.
-The `/pw-*` commands append to it via a deterministic log step; you can add
-manual notes the same way. It answers "what did the agents actually do, and when?" without
-reconstructing it from chat.
+`LOG.md` records phase changes, agent runs, commits, pushes, MR work, and close actions.
+Read it when you need to recover what happened across sessions.
+New workflow timestamps use English month names and WIB (UTC+7).
+Existing history and source timestamps retain their original values.
 
 ## Going back a phase (rewind)
-Phases aren't one-way. To reopen an earlier phase after you've moved on (e.g. breakdown revealed the
-analysis was wrong), run **`/pw-status <slug> rewind <phase>`**. It walks you through the same three
-steps either way, but drives them through the command rather than hand-editing project state:
-1. Add a fresh `[OPEN]` item to that phase's review file (`analysis/review/…` or `task/review/…`)
-   describing what needs to change (`/pw-review <slug> item <path> <§anchor> <what needs to
-   change>`), and add a new `in-review` Sign-off row (`/pw-review <slug> signoff <path>
-   in-review` — leaves the old `approved` row in place; it's history).
-2. Set the dashboard `Status:` back to that phase **with the rewind flag** (under the hood,
-   the `status` write with `--rewind` — a plain status change refuses to move backward).
-3. Re-run the phase command (`/pw-analyze` / `/pw-breakdown`), then `/pw-review`, then re-approve.
-Downstream artifacts already produced stay on disk; regenerate them once the upstream phase is
-re-approved.
 
-**This is different from `/pw-review`'s automatic Sign-off transitions** (docs/RFC.md) — those fire
-the moment feedback or a repair pass touches a file whose gate was already approved: your first new
-item or answer records an `in-review` row (`pw-review (feedback)`), and the pass that works it
-records `changes-requested` (`pw-review (repair)`), each attributed to the workflow in the `By`
-column, never to you (older files may also hold a `pw-review (auto-reopen)` row — readable history).
-None of them touch the dashboard `Status:` line at all, and an EARLIER phase's gate is not reopened
-without your explicit confirmation. Reach for the manual `rewind` flow above only once `Status:` has
-genuinely moved on and you need to walk it backward on purpose.
+Run `/pw-status <slug> rewind <phase>` when an earlier approach or plan needs revision.
+Follow its prompts to record feedback, reopen the review gate, and move the dashboard back.
+Re-run the affected phase, apply feedback, and approve the revised artifact.
+Downstream files stay on disk; refresh them after upstream reapproval.
+
+Adding feedback to an approved artifact also changes its review decision.
+That review transition alone does not rewind the dashboard.
+An earlier-phase gate requires explicit confirmation before repair reopens it.
+See [review transitions](REVIEW.md#1-local-review-files-pre-ship) for attribution and safeguards.

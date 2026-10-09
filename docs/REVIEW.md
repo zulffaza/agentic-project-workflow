@@ -3,6 +3,21 @@
 ← [back to README](../README.md) · related: [Workflow](./WORKFLOW.md) ·
 [Adoption](./ADOPTION.md) · [Execution & routing](./EXECUTION.md)
 
+## Start with your review task
+
+Record feedback, apply it, inspect the revision, then approve it.
+Adding an item or answering a question does not apply the correction by itself.
+
+| You need… | Use |
+|---|---|
+| Copyable feedback and approval commands | [Review recipe](RECIPES.md#record-feedback-answers-and-approval) |
+| Review an analysis or PLAN | [Local review files](#1-local-review-files-pre-ship) |
+| Fix a reviewer's MR comment | `/pw-ship <slug> [task-ids] comments` and [MR review](#2-the-mr-review-flow-post-ship) |
+| An AI pass that keeps human approval | [Advisory recipe](RECIPES.md#use-ai-review-with-human-approval) |
+| Understand automatic approval safeguards | [AI-assisted review](#3-ai-assisted-review-optional-per-phase) |
+
+Use `/pw-help project <slug> pw-review` for paths and commands matched to your actual project.
+
 There are **two places** review happens, and they run at different times:
 
 | When | Where you comment | What you're reviewing | Command |
@@ -32,43 +47,80 @@ in a **`review/` subdir** beside it, which is the durable record of what you ask
 | `task/PLAN.md` | `task/review/PLAN.review.md` |
 | `task/T03.md` | `task/review/T03.review.md` |
 
-(The `review/` subdir keeps reviews from cluttering the result docs — `task/` can hold a dozen
-`T0n.md` files, so their reviews live under `task/review/`.) **You don't create these yourself** —
-`/pw-analyze` and `/pw-breakdown` auto-create `analysis/review/<topic>.review.md` and
-`task/review/PLAN.review.md` (idempotently, from
-[`_REVIEW.template.md`](../template/_REVIEW.template.md)) as their last step, already in-review and
-empty. Missed one? **`/pw-review <slug> init <artifact-path> [<artifact-path> …]`** creates the
-review files for exactly the documents you name — one or many, and nothing else (a wrong entry
-rejects the whole list before anything is written; rerunning is safe and never overwrites history).
-**`/pw-review <slug> init-all`** is the catch-up for the project's **current dashboard phase**: in
-the `analysis` phase it creates analysis-doc reviews, in `breakdown` the PLAN + current task-plan
-reviews, while `executing`/`review` covers current task-result artifacts — it never creates
-earlier- or later-phase reviews, and `context`/`done` create none implicitly. The template ships
-with **worked examples**, a **decision-status legend**, and — permanently, even once items exist —
-a one-line **"how to add an item / answer a question" hint** right under each section heading, so
-the syntax is always there to copy from. Each item has an **ID + section anchor** (`R1 · §2`) and a
-status tag: `[OPEN]` / `[RESOLVED]` — plain bracket text, nothing to hunt down and copy-paste.
+### Create or find a review file
 
-**You don't hand-copy those blocks either.** The write side of a review file is deterministic —
-one `/pw-review` operator per kind of edit, each writing the exact house shape (heading, timestamp,
-machine marker, `---` rule, quoted `↳` line) and refreshing `## Contents` for you:
+`/pw-analyze` creates the matching analysis review. `/pw-breakdown` creates PLAN's review.
+They start empty and in review. To create missing files:
 
-```
-/pw-review <slug> init <artifact-path> [<artifact-path> …]          review files for exactly the docs you name
-/pw-review <slug> init-all                                          … for the CURRENT dashboard phase's docs only
-/pw-review <slug> item <path> §4 <your ask, spaces and all>         add the next Rn item
-/pw-review <slug> answer <path> Q2 <your answer>                    add your ↳ you: line under Q2
-/pw-review <slug> signoff <path> approved                           append your Sign-off row
-                                    (or: changes-requested / in-review)
+| Command | Scope |
+|---|---|
+| `/pw-review <slug> init <artifact-path> [artifact-path…]` | Exactly the existing artifacts you name; one invalid entry rejects the whole list |
+| `/pw-review <slug> init-all` | Missing reviews for the current dashboard phase only |
+
+Rerunning either command preserves existing review content and history.
+`init-all` covers analysis docs during `analysis`, PLAN and current task plans during `breakdown`,
+and current task results during `executing`/`review`. It creates none implicitly during `context`/`done`.
+
+<a id="add-feedback-with-section-and-text"></a>
+### Add feedback with `--section` and `--text`
+
+Use this form when recording a change request, especially for a heading with spaces:
+
+```text
+/pw-review delivery-note item task/review/PLAN.review.md --section Execution strategy --text Run compatibility tests before storefront changes
 ```
 
-Free text is everything after the last fixed argument — no quoting needed. Hand-editing stays
-legal (the hints in the file teach the syntax), but the operators are the recommended path: they
-never forget the marker, the rule, or the reindex. **`signoff` is yours alone** — the agent runs
-it only when your message explicitly asks for that gate decision, never on its own initiative
-(the one guarded exception remains AI `auto` mode, below).
+| Argument | What to put there |
+|---|---|
+| `<slug>` | Project name, here `delivery-note` |
+| `item` | The action that records a new feedback item |
+| `<review-path>` | Project-relative review file; here `task/review/PLAN.review.md` |
+| `--section` | Heading or anchor in the reviewed artifact; here `Execution strategy` in `task/PLAN.md` |
+| `--text` | The requested change; here `Run compatibility tests before storefront changes` |
 
-**Two dials, don't confuse them:** the per-item tag (`[OPEN]`→`[RESOLVED]`) is flipped by the
+Both flags belong to `item`. Each value continues until the next `--flag` or the command ends.
+Multi-word values need no quotes. For a single section token, the shorter form also works:
+
+```text
+/pw-review delivery-note item task/review/PLAN.review.md §4 Add compatibility tests
+```
+
+The operator creates the next `Rn` item with its section, timestamp, and `[OPEN]` status.
+It also refreshes the review file's contents table. Your first new item after approval queues a fresh review cycle automatically.
+Recording the item does not apply the change yet.
+
+### Apply feedback to the scope you choose
+
+| Command | Reviews processed |
+|---|---|
+| `/pw-review <slug> analysis` | Files in `analysis/review/` |
+| `/pw-review <slug> plan` | Files in `task/review/`, including PLAN and individual task reviews; `task` is an alias |
+| `/pw-review <slug> task/review/PLAN.review.md` | Only PLAN's review file |
+| `/pw-review <slug> T01 T02` | The named tasks' review files |
+| `/pw-review <slug>` | Scope inferred from the current phase |
+
+`plan` is a scope word. The actual plan artifact is `task/PLAN.md`.
+For inferred scope, `analysis` uses analysis reviews, `breakdown` uses task reviews,
+and `executing`/`review` targets tasks currently marked `verify-failed`.
+
+### Answer questions and approve the revision
+
+| Action | Command |
+|---|---|
+| Answer an existing question | `/pw-review <slug> answer <review-path> Q2 <your answer>` |
+| Approve the reviewed artifact | `/pw-review <slug> signoff <review-path> approved` |
+| Request changes or leave the gate open | `/pw-review <slug> signoff <review-path> changes-requested` or `in-review` |
+
+`answer` records your response; the next apply pass incorporates it and resolves the question.
+Free text after `Q2` is your answer, including spaces.
+
+Read the revised artifact and replies before approving it. `signoff` runs only when you explicitly request that decision.
+Resolving items alone does not grant human approval. The guarded AI `auto` mode is described below.
+Hand-editing remains supported; the [review template](../template/_REVIEW.template.md) includes syntax hints.
+
+### Item status and gate history
+
+There are two statuses to read: the per-item tag (`[OPEN]`→`[RESOLVED]`) is flipped by the
 **agent** after it addresses your item — you never set it. The only status *you* decide is the
 **gate** in the Sign-off table (`in-review` / `changes-requested` / `approved`). Writing an item
 does **not** require you to set any status; you just leave it `[OPEN]` and run `/pw-review`.
@@ -78,22 +130,22 @@ author in the `By` column:
 
 | `By` value | When that row appears | Decisions it can hold |
 |---|---|---|
-| `you` (or a named human) | An explicit sign-off you asked for, filled by hand | `in-review` · `changes-requested` · `approved` |
+| `you` (or a named human) | An explicit sign-off you asked to record | `in-review` · `changes-requested` · `approved` |
 | `pw-review (feedback)` | Your first new item or answer queues a review cycle; a previous `approved` stops being the live decision | `in-review` |
 | `pw-review (repair)` | A `/pw-review` pass starts on real actionable work in that file | `changes-requested` |
 | `pw-reviewer (advisory; provider=…, model=…)` | An independent AI pass filed real findings | `changes-requested` |
 | `pw-reviewer (auto; provider=…, model=…)` | Same, plus the guarded `auto`-mode approval | `changes-requested` · `approved` |
 
-The operational rows are bookkeeping, not judgment: they never claim you rejected or approved
-anything, and feedback/repair rows never read `approved`. The provider/model in an AI row is the
-reviewer that **actually ran** the pass, not the configured pin, the orchestrator, or the artifact
-author; a fallback records the new identity as its own attempt, and a runtime that cannot confirm
-identity records `unknown`. A `changes-requested` you explicitly recorded stands until you
-record `in-review` or `approved` again; automatic rows never erase your rejection. Legacy rows
-(`pw-review (auto-reopen)`, plain `pw-reviewer (auto)`, rows without identity fields) stay valid
-history and remain readable. New review rows and item stamps read like
-`5 October 2026 23.11 WIB` (day, month, year, dot-minutes); files already using older date-time
-formats are accepted as-is, and both forms can sit in one table.
+Read the row's author alongside its decision:
+
+- Feedback and repair rows track workflow activity. They never record `approved` or claim you made a decision.
+- An AI row records the reviewer that actually ran, with `unknown` when runtime identity cannot be confirmed. A fallback records its own attempt.
+- Your explicit `changes-requested` remains in force until you record `in-review` or `approved` again. Automatic rows never erase your rejection.
+- Legacy rows remain valid history, including rows without identity fields.
+
+New timestamps use forms such as `5 October 2026 23.11 WIB`. Older formats remain accepted and can coexist in one table.
+
+### What to expect from the agent
 
 **The contract:**
 - You write items. The agent **never edits or deletes your text** — it edits that item's SAME
@@ -112,14 +164,12 @@ formats are accepted as-is, and both forms can sit in one table.
 - Only **you** write an `approved` Sign-off row — an agent cannot self-approve a gate (the one
   narrow, heavily-guarded exception is AI-assisted `auto` mode below). Agents *are* allowed to
   record **operational rows** — workflow bookkeeping that only ever closes a gate, never opens
-  one, so it can't sneak a phase forward (see "Who writes which row" below). Your own decisions
+  one, so it can't sneak a phase forward (see the `By` table above). Your own decisions
   and their bookkeeping stay visibly distinct by the `By` attribution; see
   [docs/RFC.md](./RFC.md) for why the post-approval invalidation exists.
-- **Task review is optional, and created on demand.** Only the PLAN sign-off gates execution. To
-  reject an **execution** result, flip that task's `Status: verify-failed` and either add items to
-  `task/review/T0n.review.md` **or** just tell the agent what's wrong — `/pw-review <slug> T0n`
-  creates the review file (same as above) if it doesn't exist, applies
-  the fix, then `/pw-execute <slug> T0n` re-runs just that task and re-verifies.
+- Task review is optional. Only PLAN approval gates execution. To reject a result, tell the agent what failed and ask it to record `verify-failed`.
+  Add feedback to the task review, or describe the correction in chat. `/pw-review <slug> T0n` creates a missing review for a `verify-failed` task and applies the repair.
+  Task repair normally re-runs `## Verify`. Use `/pw-execute <slug> T0n` if the repair remains unverified or checks still fail.
 - **Who applies a fix.** Pre-execution artifacts (analysis doc, PLAN, task doc) are edited
   **inline by the driver** — the review file is the work order; no separate session is spawned and
   what you re-read is the edited doc. Post-execution *task* fixes follow the **same routing ladder
@@ -129,27 +179,38 @@ formats are accepted as-is, and both forms can sit in one table.
   when a deterministic liveness check reports it resumable**; ≥2 tasks with open items fan out as
   parallel per-task fixers. One batched pass per artifact in every case — never one pass per item.
 
-List everything still needing work across a project:
-```bash
-grep -rln "pw-item-status: open" projects/<project-slug>/
+Find the current review files and their open-item counts:
+
+```text
+/pw-help project <slug> pw-review
 ```
+
+Open the named review file and use its contents table to jump to an item.
 
 Keep this separate from the dashboard's **decision log** (that's "why we chose X", durable
 rationale) — review files are the transient back-and-forth that empties out as items resolve.
 
-**A review file doesn't grow forever.** Two tools keep a long-lived one (many rounds, dozens of
-items) cheap to work with instead of turning every future round into "re-read the whole resolved
-history to apply one new item":
-- **reindex** (re)builds the `## Contents` table at the
-  top — ID, section/anchor, status — for every real item/question, so applying one means jumping
-  straight to it instead of scanning start-to-finish. Anchored by heading TEXT, never a line
-  number, so it never goes stale on a rewrite; safe to re-run any time.
-- **archive** moves every fully `[RESOLVED]`/`[ANSWERED]`
-  heading, verbatim, into a sibling `<topic>.archive.md` — leaving a one-line pointer row in a
-  `## Archived items` table. It **never** touches `[OPEN]`/`[PENDING]` headings or the `##
-  Sign-off` table, since the gate logic (gate read / reopen / auto-signoff) only
-  ever reads those two things — archiving is provably gate-safe. Run it once several items have
-  piled up resolved (a few, or the file getting long) rather than waiting for it to feel unwieldy.
+### Review-file maintenance is automatic
+
+Review commands keep the active file short and navigable:
+
+| Part of the file | What the workflow maintains |
+|---|---|
+| `## Contents` | Item IDs, anchors, and statuses, refreshed when a write adds or resolves a heading |
+| Resolved items and answered questions | Moved verbatim to a sibling archive during review maintenance, with pointers left in `## Archived items` |
+| Open items, pending questions, and `## Sign-off` | Kept in the active file; archiving preserves these records |
+
+Use the review commands to add feedback or answers. You do not need a separate reindex or archive command.
+The contents table uses heading anchors, so an item remains findable after the document changes.
+
+If an older review file asks you to run internal scripts, preview its recognized guidance updates with:
+
+```text
+/pw-doctor --project <slug> --guidance
+```
+
+Follow the [preview/apply/recheck recipe](RECIPES.md#refresh-old-project-guidance-after-a-workflow-update).
+This updates old instructions while preserving review items and decisions.
 
 ---
 
@@ -234,8 +295,8 @@ local archive remains. Reviewer text, the newest block, and required evidence ar
 The recap reports description delivery separately from push, replies, tests, and pipeline state.
 `description update pending` means the body did not verify after delivery. `summary refresh pending`
 means history can be present while an ambiguous legacy or newer-head summary still needs repair.
-Do not treat either outcome as a fully current description. Resolve the reported ownership or
-capacity issue, then rerun `/pw-ship … comments`; failed delivery remains recoverable locally.
+Do not treat either outcome as a fully current description. Resolve the reported ownership, capacity, or delivery error, then rerun `/pw-ship … comments`.
+Failed delivery remains recoverable locally. See [pending description recovery](TROUBLESHOOTING.md#changes-were-pushed-but-the-mr-description-update-is-pending) for retry steps and GitLab HTTP 415 failures.
 
 **Build check runs by default, in both modes:** polls the MR's pipeline/checks to a terminal state
 (green/red/still-running) and shows the result in the recap and the task's `## Result` — meaning a
@@ -254,9 +315,7 @@ filters by diff-position. And some comment types can never be marked "resolved" 
 matter what — for those, `/pw-ship … comments` checks the **local** `## MR comment tracking` table
 in `task/review/T0n.review.md` (written by the comments flow) instead of waiting on a
 forge-side flag that will never flip (the same pattern `/pw-rfc comments` uses for RFC-platform
-comments). The exact API fields this relies on, and why, live with the machinery —
-[TOOLING.md](./TOOLING.md) says where — only worth opening if you're implementing a new forge or
-debugging a missed comment.
+comments). If a comment is missing from the recap, follow [MR comment troubleshooting](TROUBLESHOOTING.md).
 
 ### Why the mirror matters (the reconciliation rule)
 An MR comment lives in your Git host, which the project dir doesn't automatically know about. If a
@@ -301,7 +360,7 @@ draft read it cold, rather than asking yourself "does this look right to me?"
 the config command (never a shell script, and not from `/pw-review` — reviewing is not configuring):
 ```
 /pw-config myproj show                # every axis incl. all 5 phases' modes, in plain language
-/pw-config myproj set ai-review plan auto    # e.g. let the plan-review gate run itself
+/pw-config myproj set ai-review plan=auto    # e.g. let the plan-review gate run itself
 ```
 Each phase (`analysis` / `plan` / `task-plan` / `task-exec` / `ship`) is independently `off`
 (default — nothing changes), `advisory`, or `auto`:

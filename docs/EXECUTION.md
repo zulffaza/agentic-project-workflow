@@ -5,6 +5,21 @@
 How tasks actually get run: the two roles, how a model/agent is chosen per task, cross-provider
 execution, and the multi-repo worktree mechanics.
 
+## Start with the execution scope
+
+Use `/pw-execute <slug>` to resume the remaining plan, `--wave` to stop after the current ready group, or task IDs to select work.
+Read task diffs and `## Result` after execution. By default, execution stops at local commits and verification.
+
+| You need… | Read |
+|---|---|
+| Copyable execution and model commands | [Recipes](RECIPES.md#resume-or-limit-execution) |
+| Full resume behavior | [Resume and waves](#full-resume-vs-one-wave-at-a-time) |
+| Automatic result acceptance or chained shipping | [Clean execution](#opt-in-clean-execution-pre-reviewed-plans) |
+| Routing and model selection | [Task model choices](#choosing-a-model--sub-agent-per-task) |
+| A failed or stalled run | [Troubleshooting](TROUBLESHOOTING.md) |
+
+The remaining sections explain advanced execution behavior. You can run a first project through the [walkthrough](WALKTHROUGH.md).
+
 ## Roles: orchestrator vs executor
 
 - **Orchestrator** — reads `task/PLAN.md`, owns the DAG, decides *what to spawn and when*, never
@@ -12,102 +27,131 @@ execution, and the multi-repo worktree mechanics.
 - **Executor** — handed one task file, owns one worktree, edits code, runs Verify, reports. Does
   **not** touch files outside its worktree or pick up work from other tasks.
 
-Six roles ship as **seedable agents** — `bootstrap.sh` installs `pw-orchestrator`, `pw-executor`,
-`pw-reviewer`, `pw-researcher`, `pw-analyst` and `pw-writer-task` into each provider's agent dir,
-(`pw-verifier`'s def activates with the independent-verification work in the next plan — it is
-already reachable today as `/pw-verify`),
-just like it installs the `/pw-*` commands. But execution can also **reuse whatever you
-already have**: a task's `Execute with:` names the model or a registered def, and the discipline
-(worktree isolation, running Verify, faithful reporting) comes from the `project-workflow` skill +
-the task file — not from a bespoke agent. So `pw-executor` is the *named* lane def when the
-orchestrator's provider shares it, and a plain `provider:model` (default = the plan's produced-by
-provider) runs a session with the task file as its work order — the **portable form**. The
-implementer concept is single on purpose: ad-hoc (non-pw) code work runs on the main agent (or a
-generic session), never a second executor agent def.
+The bundle supplies six seedable roles: `pw-orchestrator`, `pw-executor`, `pw-reviewer`,
+`pw-researcher`, `pw-analyst`, and `pw-writer-task`. Installation depends on the provider's agent support.
+Independent verification is available through `/pw-verify`.
+
+Tasks can use either:
+
+- A registered agent definition, such as `pw-executor`, on the same provider.
+- A `provider:model` choice, which runs a session with the task file as its work order. This is the portable form across providers.
+
+The task file and `project-workflow` skill supply the worktree, verification, and reporting rules.
+You can reuse an existing registered agent. Ad-hoc code work uses the main agent or a generic session.
 
 ## Full resume vs one wave at a time
 
-`/pw-execute <slug>` with no task IDs is a **resume of the whole run** — it walks every task not
-yet `accepted` to the end of what's currently ready, in one invocation. For a long plan, `/pw-execute
-<slug> --wave` instead runs **only the tasks immediately runnable right now** (every `depends_on`
-already `done`/`accepted`), then stops and reports rather than cascading into whatever it just
-unblocked — a checkpoint-sized chunk, so a misbehaving orchestrator or a lost session only costs one
-wave's blast radius, not the whole remaining DAG. Naming specific task IDs (`/pw-execute <slug>
-T03`) is a third, narrower mode: run exactly those tasks and stop, regardless of what else is
-pending. Full operator semantics: `/pw-help command pw-execute`.
+| Execution scope | Command | Where it stops |
+|---|---|---|
+| Remaining plan | `/pw-execute <slug>` | Continues through ready tasks and newly unblocked dependencies |
+| Current ready group | `/pw-execute <slug> --wave` | Runs tasks whose dependencies are already `done`/`accepted`, then reports a checkpoint |
+| Selected tasks | `/pw-execute <slug> T03` | Runs the named scope and stops |
 
-## Choosing a model / sub-agent per task — two axes, not one
-**The executor's model** is per-task and lives in the PLAN's task table (`Execute with:`) — it is
-*never* overridden by the dashboard (below), because a task file is the executor's contract.
-**The spawn lanes'** models are per-project and live on the dashboard's `- **AI Models:**` row
-(shown/set by `/pw-config <slug>`)
-— because a lane is spawned by a phase, not by a task file. Four rungs, highest wins; what a run
-actually used is *recorded*, so a pin silently failing becomes visible drift, not folklore:
-**(1)** run-time override this call → **(2)** the project's `AI Models:` row for that lane →
-**(3)** the registered def's own model (kilo map block/generated md, cursor seeded def's `model:`,
-**claude per-agent only via the def** — see §Providers & the registry; codex has no defs at all,
-so this rung doesn't exist there) → **(4)** the provider/session
-floor (`small_model`/`subagent_model` on kilo; session `/model` on claude; the `auto` router or
-`cli-config.json → selectedModel` on cursor; codex's own configured default on codex). On kilo —
-and likewise on cursor, whose named spawns
-carry no per-run model parameter — the in-process spawn can't
-carry a model at all, so a lane row there is served as a **headless session of that model over the
-same work order** (`kilo run --auto -m <api>/<model> … --dir <path>`); codex goes further — it has
-**no in-process sub-agent spawn at all**, so every lane/bulk run there is a headless `codex exec`
-session over the work order (ledger-recorded like any headless run) — a row that can't bind in an
-in-process spawn says so in the ledger instead of lying (docs: §Spawning phase work below; provider
-table: [TOOLING.md](./TOOLING.md)). The `AI Models` lane set is
-`researcher analyst writer-task reviewer verifier` — no executor row by design. `verify`-lane work is
-the pipeline's typed-verification surface: it *resolves* to the same binding question, so the row
-exists already and never grows a second model-source.
+Use full resume after an interrupted run. Use a wave when you want to inspect progress before the next group.
+Full operator semantics: `/pw-help command pw-execute`.
 
-## Choosing a model / sub-agent per task
+<a id="choosing-a-model--sub-agent-per-task--two-axes-not-one"></a>
+## Task executors and project roles
+### Task executors
 
-Every task records **how it should be run**, so the choice is documented and reviewable — not buried
-in an agent's head:
-- `Execute with:` — `<provider>:<model-or-agent>` (e.g. `claude:opus`,
-    `kilo:command_code/MiniMaxAI/MiniMax-M3`; or a same-provider def name like `pw-executor`). The    **provider** decides which
-  CLI runs it. Claude aliases (`opus`/`sonnet`/…) follow the *latest* version — **pin the full
-  name** (`claude-opus-4-8` vs `claude-opus-5`) when reproducibility matters.
-- `Effort:` / `Thinking:` — optional reasoning tuning (→ claude `--effort`, kilo
-  `--variant`/`--thinking`; cursor: nearest catalog-id variant (`…-thinking-xhigh`, `…-high-fast`) or
-  a `[effort=…]` bracket param; codex: a per-run reasoning-effort setting on the same slug — its
-  "Fast" tier is likewise a per-run setting, never part of an id — full mapping in
-  [TOOLING.md](./TOOLING.md)'s provider registry).
-- `Why:` — one line of rationale.
-- `Story points:` — manual-effort estimate (2 SP = 1 person-day).
-- `Actually used:` — what the orchestrator really ran it with (if it differed).
+Each task's `Execute with:` field selects its executor. The PLAN task table mirrors that choice.
+The dashboard's role settings never override this task contract.
+
+### Project roles
+
+The dashboard's `AI Models` row selects models for these project roles:
+`researcher`, `analyst`, `writer-task`, `reviewer`, and `verifier`.
+There is no executor row; executors use their task settings.
+Inspect or change role choices through `/pw-config <slug>`.
+
+### Model precedence for project roles
+
+The first available setting wins:
+
+1. **Run-time override:** a model explicitly requested for this invocation.
+
+2. **Project role setting:** the corresponding role on the dashboard's `AI Models` row.
+
+3. **Registered agent definition:** the model in that agent's definition. Claude uses per-agent definitions; Kilo and Cursor use their registered model fields. This rung is absent for Codex, which has no seeded definitions.
+
+4. **Provider or session default:** the model selected by the provider when the earlier settings do not apply.
+
+| Provider | Default model source |
+|---|---|
+| Kilo | `small_model` / `subagent_model` settings |
+| Claude | Session `/model` selection |
+| Cursor | `auto` routing or `selectedModel` in its CLI configuration |
+| Codex | Its configured default |
+
+### When the role needs a headless session
+
+A headless session runs the work order through the provider's CLI rather than an in-process agent.
+
+- Kilo and Cursor named spawns cannot carry a per-run model parameter. A project role pin uses a headless session to bind that model.
+- Codex workflow roles use headless `codex exec` sessions because this bundle has no in-process spawn surface there.
+- The run ledger records what actually ran. If a requested model cannot bind, the ledger reports that limitation.
+
+See [provider settings](REFERENCE.md#inspect-configure-and-recover) or run `/pw-config global show`.
+
+<a id="choosing-a-model--sub-agent-per-task"></a>
+## Task model fields and available choices
+
+Each task records its execution choices before it runs:
+
+| Field | What it tells you |
+|---|---|
+| `Execute with:` | Provider and model or registered agent, such as `claude:opus` or `pw-executor` |
+| `Effort:` / `Thinking:` | Optional reasoning settings supported by that provider |
+| `Why:` | Rationale for the execution choice |
+| `Story points:` | Estimated manual effort; the bundle uses 2 SP for one person-day |
+| `Actually used:` | The choice used during execution, including any difference from the request |
+
+Ask the agent to validate reasoning settings against the enabled provider before changing them.
 
 `PLAN.md`'s task table mirrors this in **Execute with** + **SP** columns. **By default a task runs
 under the same provider that produced the breakdown** (`PLAN.md → Produced by`), so you're not
 forced to switch agents mid-workflow — a task is routed elsewhere only with a stated `Why:`.
 
-| Choose | Provider | For |
-|--------|----------|-----|
-| `opus` | claude | complex reasoning, cross-cutting / ambiguous / high-risk work |
-| `sonnet` | claude | well-specified standard implementation (most tasks) |
-| `haiku` | claude | trivial mechanical bulk edits |
-| `kilo/<model>` | kilo | KiloCode's own built-in gateway — the **default** API Provider, no separate credential (proxies Claude/GPT/Gemini/etc. through KiloCode itself) |
-| `command_code/MiniMaxAI/MiniMax-M3`, `openrouter/<model>`, `kilo/alibaba-token-plan/<model>`, … | kilo | open-weight/third-party/BYOK models — each needs its own credential; routed via any *additional* KiloCode API Provider you've listed in `PW_KILO_API_PROVIDERS` (a BYOK registered *under* the gateway is addressed by its catalog path, e.g. `kilo/alibaba-token-plan/<model>`; entries are model-id **prefix filters**, so they may contain slashes — but you list the catalog with plain `kilo models`, not `kilo models <that-path>`, which errors) |
-| a same-provider def (`pw-executor`, etc.) | (that provider) | reuse a registered executor natively; across providers a **model + task file** is the portable form (sub-agent names don't cross — `kilo run --agent` takes **primary** defs only and silently continues on the default agent otherwise; claude `--agents '<json>'` injects session defs that carry only a model) |
-| `cursor:cursor-grok-4.5-high`, `cursor:claude-opus-5-thinking-xhigh[context=1m]` | cursor | Cursor's own single model gateway — no API-Provider axis; ids from `agent models`; effort/fast/thinking are **catalog-id variants** (or bracket params), not flags |
-| `codex:<slug>` | codex | Codex's own single gateway (ChatGPT login) — no API-Provider axis; ids are **bare slugs** from `codex debug models` (no effort/fast suffixes — both are per-run settings); hidden-visibility slugs run silently if invoked, so the allowlist is the real gate |
-| a custom role def | (its provider) | a genuinely new recurring role — same cross-provider caveat: a `mode: subagent` def is not addressable from the other CLI |
+| Task choice | Example syntax | Where the model comes from |
+|---|---|---|
+| Claude model | `claude:opus` or `claude:sonnet` | Configured Claude aliases or a full model ID |
+| Kilo model | `kilo:<catalog-id>` | Kilo's configured gateways/backends |
+| OpenCode model | `opencode:<catalog-id>` | OpenCode's configured backends |
+| Cursor model | `cursor:<catalog-id>` | Cursor's gateway catalog |
+| Codex model | `codex:<slug>` | Codex's gateway through your ChatGPT login |
+| Registered agent | `pw-executor` | A definition available on the same provider |
 
-**How the agent knows what's actually available:** claude's models are the fixed set in the table
-above — nothing to look up. kilo, opencode, cursor, and codex each have a real, changeable catalog,
-so `/pw-breakdown` is instructed to **query it live** (`kilo models` /
-`opencode models` / `agent models` / `codex debug models`) rather than recall an id from memory before writing a task's `Execute with:` —
-a plausible-looking id can simply not exist, or a display name can differ from the actual id
-(verified case: KiloCode's own credential list shows "Kilo Gateway," but the usable id is `kilo`,
-not `kilo_gateway`). A row's model is then resolved to its **canonical** catalog id (the exact line
-the catalog prints, matched **exact-first** — the agent-provider prefix is a *connection*
-distinction: `kilo:alibaba-token-plan/<model>` names a *direct* BYOK provider and binds
-`alibaba-token-plan/<model>` when the catalog lists it; it reaches the gateway-nested
-`kilo/alibaba-token-plan/<model>` line only as a fallback, announced on stderr. Write
-`kilo:kilo/alibaba-token-plan/<model>` to pin the gateway explicitly). That canonical id
-is what a headless `-m`/`--model` receives. This is a separate concern from the allowlist below — discovery is about
-*what exists*, the allowlist is about *what you'll permit*.
+Use the exact model ID from your enabled provider. Aliases can follow newer versions; use a full ID when reproducibility matters.
+Cursor effort/thinking variants can be catalog IDs or bracket parameters. Codex uses bare model slugs; effort and Fast are per-run settings.
+
+Agent definitions are provider-specific. For cross-provider work, use an explicit model and the task file as the work order.
+A custom definition is useful for a recurring role with distinct instructions. See [agents and sub-agents](#agents-vs-sub-agents-and-why-the-difference-matters-across-providers).
+
+### Check the model catalog before pinning
+
+During breakdown, the agent queries the live catalog for Kilo, OpenCode, Cursor, and Codex.
+Claude uses the configured alias set described above.
+
+| Provider | Catalog command |
+|---|---|
+| Kilo | `kilo models` |
+| OpenCode | `opencode models` |
+| Cursor | `agent models` |
+| Codex | `codex debug models` |
+
+Use the exact catalog ID when setting a pin. Display names can differ from usable IDs:
+for example, Kilo's credential label “Kilo Gateway” uses the ID `kilo`, not `kilo_gateway`.
+
+### Kilo connections with similar names
+
+A direct BYOK connection and one registered under the gateway can have different catalog paths:
+
+- `kilo:alibaba-token-plan/<model>` first matches the direct `alibaba-token-plan/<model>` catalog entry.
+- If that direct entry is absent, resolution can fall back to `kilo/alibaba-token-plan/<model>`, with a notice on stderr.
+- `kilo:kilo/alibaba-token-plan/<model>` explicitly pins the gateway connection.
+
+The resolved canonical ID is passed to the headless session's model argument.
+Catalog discovery checks availability. The allowlist separately checks which models you permit.
 
 ## Opt-in clean execution (pre-reviewed plans)
 
@@ -149,6 +193,11 @@ dependents branched from stale state. The driver fans **one capped pass** per ca
    delta?"), filed as `dep-impact:T0n` items in T0m's review queue — never a direct edit into
    another task's file. Surviving items become normal capped fix rounds like any other; nothing
    loops, nothing edits the dependency backward (that's a new DAG task/PLAN change).
+
+## Advanced routing and provider behavior
+
+The sections below explain how the workflow runs agents, binds model choices, and records sessions.
+For everyday execution, the scopes and model settings above are enough to start.
 
 ## Running the pipeline on a provider without a main-agent slot (Claude Code class)
 
@@ -223,7 +272,7 @@ These two words are **not** interchangeable — the distinction decides how a ta
 | | **Sub-agent** | **Agent** (primary / invocable) |
 |---|---|---|
 | What | spawned **in-process** by an orchestrator | a top-level agent invoked through a provider's **CLI** |
-| How | Claude's Task tool `subagent_type`; KiloCode `mode: subagent`; Cursor auto-delegation on def `description` (or explicit `/pw-<agent>` — and a **direct** cursor sub-agent can itself fan out one more level, verified 2026-09-09); **codex: none — no in-process spawn exists** (inline lane personas, or a headless `codex exec` session as the spawn) | that provider's CLI: `kilo run --agent <primary-agent>` / `claude -p` / cursor `agent -p --force --model <id>`+task file / codex `codex exec -m <slug>`+task file via stdin (a sub-agent def is NOT nameable from across the boundary; cursor has no CLI primary-agent slot at all; codex has no agent defs at all) |
+| How | Claude's Task tool `subagent_type`; KiloCode `mode: subagent`; Cursor auto-delegation on def `description` (or explicit `/pw-<agent>` — and a **direct** cursor sub-agent can itself fan out one more level, verified 2026-09-09); **codex: this bundle uses inline lanes or headless sessions** (inline lane personas, or a headless `codex exec` session as the spawn) | that provider's CLI: `kilo run --agent <primary-agent>` / `claude -p` / cursor `agent -p --force --model <id>`+task file / codex `codex exec -m <slug>`+task file via stdin (a sub-agent def is NOT nameable from across the boundary; cursor has no CLI primary-agent slot at all; codex has no agent defs at all) |
 | Boundary | **same provider only** — a provider can spawn only its *own* sub-agents | the **only** unit that crosses a provider boundary |
 | Here | `pw-executor` | `pw-orchestrator` |
 
@@ -275,7 +324,7 @@ driver inline) is the routing ladder's call — §The per-spawn ledger below.
 **Model lanes vs executor pins are different axes.** A task's `Execute with:` binds the EXECUTOR
 per unit (above). A *lane* spawns on the provider default unless the project's
 `- **AI Models:** researcher=… analyst=… writer-task=… verifier=… reviewer=…` row binds it
-(`/pw-config <slug> set ai-model <lane> <provider:model|—>`; unset = provider/session default;
+(`/pw-config <slug> set ai-model <lane>=<provider:model|—>`; unset = provider/session default;
 the `AI Models:` dashboard line — same anchored-line config idiom as `AI Review`). Per-provider honesty: **claude**
 can start a session per model and per-spawn override is real; **kilo**'s Task-tool has no model arg
 — its levers are a map-block pin (user's own config) or running the lane **headless**:
@@ -336,7 +385,7 @@ spawn and every later fix, so a repair is as monitorable as an execution:
 
 ## Providers & the registry
 
-Which CLI runs which model lives in the Agent Provider registry (see [TOOLING.md](./TOOLING.md)).
+Use `/pw-config global show` to inspect enabled providers and model restrictions.
 Claude models → Claude Code; open-weight models → KiloCode, which can connect to **several API
 Providers at once** (list them in `PW_KILO_API_PROVIDERS` — e.g. `command_code`, `openrouter`, …
 — and reference any as `kilo:<provider>/<model>`). A BYOK you register *under* the gateway is
@@ -369,47 +418,21 @@ Worktrees are `git worktree add` off the **real sibling repos** in `$PW_REPOS/` 
 The project's `worktree/` dir just holds the checked-out working trees, laid out per-repo/per-task
 (`worktree/<repo>/<task-id>-<slug>/`) so parallel agents never collide even within one repo.
 
-Create one for a task, **forking from the task's `Base branch:`** (`origin/<base>`) so the new
-branch starts from the right place — not from whatever the repo's HEAD happens to be (paths shown
-absolute for clarity):
-```bash
-REPO=hera; BASE=master
-PROJ=$PW_PROJECTS/spring-boot-3-upgrade
-git -C $PW_REPOS/$REPO fetch -q origin "$BASE"
-git -C $PW_REPOS/$REPO worktree add \
-  "$PROJ/worktree/$REPO/T03-bump-parent-pom" \
-  -b agent/spring-boot-3-upgrade/T03-bump-parent-pom "origin/$BASE"
-```
+The execution command creates fresh task worktrees from the declared base branch.
+For a stacked task, it starts from the parent's verified commit instead.
+For adopted work, it attaches the existing branch and serializes tasks that share that branch.
+Different adopted branches can run independently.
 
-**Multiple base branches in one repo is a normal case.** Two tasks can touch the *same* repo off
-*different* bases — e.g. a fix on `master` (`T03`) and its port on `spring3` (`T04`). Because each
-task forks from its own `Base branch:` into its own per-task branch and worktree, they never
-collide and each ships as its own MR (targeting its base). The `PLAN.md` repo manifest lists one row
-per `(repo, base)` pair, so the same repo can appear more than once.
+Use `/pw-execute <slug>` to create or resume the required worktrees.
+Use `/pw-status <slug>` to inspect task state and `/pw-doctor --project <slug>` for consistency problems.
+If Git reports that a branch is already checked out, follow [worktree troubleshooting](TROUBLESHOOTING.md).
 
-**Adopted / continuation project** (via [`/pw-adopt`](./ADOPTION.md)) — attach the **existing**
-branch instead of creating one (no `-b`), one shared worktree **per adopted branch**. Tasks sharing a branch commit onto it in sequence; different adopted branches run
-in parallel (each its own worktree):
-```bash
-git -C $PW_REPOS/$REPO worktree add \
-  "$PROJ/worktree/$REPO/my-feature" my-feature       # existing in-progress branch
-```
-A branch can be checked out in only one worktree at a time — if it's already checked out in the main
-repo, switch the main checkout to another branch first.
+One repository can have tasks against different base branches. PLAN records each `(repo, base)` pair.
+Each task keeps its own branch and worktree so those changes remain separate.
 
-Tear it down after the task is merged/abandoned — at close-out prefer the safe helper, which won't
-remove the worktree you're currently in (that's what once made an editor reload/close) or one with
-uncommitted changes:
-```bash
-# run /pw-close (it tears down all of a project's worktrees safely), or see
-# [TOOLING.md](./TOOLING.md) for the teardown helper when working from the bundle
-# or one, manually:
-git -C $PW_REPOS/$REPO worktree remove "$PROJ/worktree/$REPO/T03-bump-parent-pom"
-```
-
-**Run teardown from the bundle/project root, not from inside a worktree**, and close any worktree
-folder still open in your editor first. List/prune stragglers:
-`git -C $PW_REPOS/$REPO worktree list` / `... worktree prune`.
+Run `/pw-close <slug>` after accepting results to clean eligible worktrees.
+Run it from the bundle or project root, and close worktree folders in your editor first.
+Dirty worktrees and the worktree you occupy remain protected and appear as leftovers.
 
 > ⚠️ **KiloCode + worktrees:** the KiloCode JetBrains plugin's auto-approve can fail inside
 > worktrees because a worktree's `.git` is a *file*, not a directory, so some config loaders don't

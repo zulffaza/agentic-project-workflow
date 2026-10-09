@@ -1,138 +1,110 @@
-# 🛠️ Agentic Multi-Repo Project Workflow
+# Agentic Project Workflow
 
-Take a piece of work across many repos from a pile of context to reviewed, shipped MRs — driven by
-AI agents, **gated by you at every phase**. It's a set of `/pw-*` slash commands plus a handful of
-templates, portable across agent CLIs (Claude Code, KiloCode, …).
+Turn a change across repositories into a reviewed plan, verified commits, and merge requests.
+You provide the goal and review the decisions. AI agents analyze the code and execute each task in an isolated checkout.
 
-**The idea, plainly:** say you need to change something across several repos — an upgrade, a new
-field threaded through three services, whatever. Instead of doing the thinking yourself, you hand
-an agent the raw material and let it work in stages: first it explains *what* needs to change and
-*why* (you read that and correct it before anything else happens), then it turns your approved
-understanding into a concrete task list (you approve that too — the one hard gate), then it
-actually makes the changes, each in its own disposable copy of the repo so nothing collides — and
-nothing is pushed anywhere until you say so. You're never surprised by a change you didn't see
-coming, and you never wrote the boilerplate.
+Use this workflow for coordinated upgrades, features across services, or unfinished work on existing branches.
+Each project keeps its inputs, plans, review history, and results on disk, so you can resume in another session.
 
-**Terms used below:** a **worktree** is an isolated, disposable checkout of a repo (so parallel
-tasks never collide with each other or your own checkout) · **DAG** = the task dependency graph
-(which tasks must finish before others can start) · **MR** ("merge request", GitLab) = the same
-thing as a GitHub **PR** · an **agent** is the AI process you're driving; a **sub-agent** is one it
-spawns to do a single task in isolation (full definitions: [docs/EXECUTION.md](./docs/EXECUTION.md)).
+A worktree is an isolated Git checkout. An MR is a GitLab merge request, equivalent to a GitHub pull request (PR).
 
+```text
+Context → Analysis → Plan → Execute → Ship → Close
+          approve    approve  verify    MRs   accept + learn
 ```
- context  →  analyze  →  break down  →  execute  →  ship  →  close
-  drop      what & why    PLAN + tasks  worktrees   MRs    learn +
-  inputs    (you sign off) (you sign off) commit+verify    tear down
-```
-
-Every project lives in its own directory under `$PW_PROJECTS/<slug>/` (wherever you cloned this
-bundle — see [ONBOARDING.md](./ONBOARDING.md), not a fixed folder name) — a copy of this bundle's
-[`template/`](./template). One phase writes, you review, the next phase starts. Nothing goes
-outward (no push, no MR) until you explicitly run `/pw-ship`.
-
-**New here?** Read in this order: this Quick Start (2 min) → optionally
-[docs/WALKTHROUGH.md](./docs/WALKTHROUGH.md) to see one made-up project go through every phase with
-example output (5 min) → [ONBOARDING.md](./ONBOARDING.md) when you're ready to actually install it
-(10 min).
-
----
 
 ## Quick start
 
-```bash
-# 0. one-time: onboard this machine (installs the skill + /pw-* commands + sub-agents for your CLIs)
-./bootstrap.sh && source ./pw-env.sh
+1. [Install the workflow](ONBOARDING.md). It supports Claude Code, KiloCode, OpenCode, Cursor CLI, and Codex CLI.
+2. Follow the [first-project walkthrough](docs/WALKTHROUGH.md). It includes context, feedback, approval, and acceptance commands or requests.
+3. Use [command recipes](docs/RECIPES.md) when you return to an existing project.
 
-# 1. scaffold a project (in your agent CLI)
-/pw-new spring-boot-3-upgrade
+During [setup](ONBOARDING.md#setup-in-4-steps), select your provider in `pw.config.sh` before installing.
+The example config enables Claude only.
 
-# 2. drop context into projects/spring-boot-3-upgrade/context/, then in your agent CLI:
-/pw-analyze   spring-boot-3-upgrade     # → analysis/  (review it, then sign off)
-/pw-breakdown spring-boot-3-upgrade     # → task/PLAN.md + T0n.md  (review it, then sign off)
-/pw-execute   spring-boot-3-upgrade     # → runs tasks in worktrees; stops at committed + verified
-/pw-ship      spring-boot-3-upgrade     # → pushes branches + opens MRs (the explicit publish step)
-/pw-close     spring-boot-3-upgrade     # → tears down worktrees, captures learnings, Status → done
+Once installed, run workflow commands in your agent session. In Codex, select the installed `pw-*` skill for the corresponding command.
+Examples use the shared `/pw-*` names throughout these guides.
+
+```text
+/pw-new delivery-note
+/pw-help project delivery-note
 ```
 
-Long plan? A bare `/pw-execute <slug>` (above) resumes **everything** currently outstanding in one
-invocation. `/pw-execute <slug> --wave` instead runs just the tasks that are immediately ready right
-now, then stops and reports — a checkpoint-sized chunk instead of the whole remaining DAG, so a
-misbehaving run or a lost session only costs you one wave. Details: [docs/EXECUTION.md](./docs/EXECUTION.md).
+The first command creates a project. The second shows its phase, review state, and suggested commands.
+A project slug uses lowercase letters, digits, and hyphens, starting with a letter or digit. Use `delivery-note`, not a title with spaces.
+Next, [add your inputs and repositories](docs/WALKTHROUGH.md#drop-context), then request analysis.
 
 ### Already mid-development? Adopt it instead of starting fresh
 
-The Quick Start above is the greenfield path. If work is **already underway on a real branch**
-(with or without an MR), `/pw-adopt <slug> <repo> <branch> [mr-url]` snapshots it and continues
-*on that same branch* — nothing about analysis/breakdown/execute/ship changes once adopted. This
-is what makes continuation a first-class path here, not fresh-start-only: `/pw-adopt` (once per
-in-progress branch, for a multi-repo continuation) instead of `/pw-new`, then everything else is
-identical. Full guide → **[docs/ADOPTION.md](./docs/ADOPTION.md)**.
+If work exists on a branch, continue that branch through the workflow:
 
-New here or on a fresh machine? **[ONBOARDING.md](./ONBOARDING.md)** has the full setup, including
-adding your own agent CLI as a provider. Leaving/uninstalling? `./offboard.sh` is the exact inverse
-of `./bootstrap.sh` — see ONBOARDING.md's [Offboarding](./ONBOARDING.md#offboarding--uninstalling) section.
+```text
+/pw-adopt delivery-note storefront feature/delivery-note
+```
 
-> **Path variables used throughout the docs** (so nothing is tied to one machine/username):
-> `$PW_HOME` = this bundle's dir · `$PW_PROJECTS` = its parent (where `<slug>` projects go) ·
-> `$PW_REPOS` = the repos root (where your sibling git repos live). `./bootstrap.sh` exports these
-> and stamps the real paths into the generated commands.
+An optional MR URL connects existing review work. The trailing `review` intent handles an existing MR directly.
+See [adoption](docs/ADOPTION.md) for both paths and multiple branches.
 
 ## The 6 core stages at a glance
 
-| Stage | Produces | Command |
+| Stage | You do | The agent produces |
 |---|---|---|
-| Context | files in `context/` + `INDEX.md` row | `/pw-new` (or `/pw-adopt`) · `/pw-context` (row/brief edits) |
-| Analyze → review → approve | `analysis/<topic>.md` | `/pw-analyze` · `/pw-review` |
-| Break down → review → approve **(the only hard gate)** | `task/PLAN.md` + `T0n.md` | `/pw-breakdown` · `/pw-review` |
-| Execute → (optional) review a result | commits in `worktree/*` (committed + verified) | `/pw-execute` |
-| Ship → review via MR/PR comments | pushed branches + MRs | `/pw-ship` |
-| Learn + close | learnings, teardown, Status→done | `/pw-close` |
+| Context | Provide requirements, sources, and repositories | Registered inputs in `context/INDEX.md` |
+| Analysis | Answer questions and approve the approach | `analysis/<topic>.md` |
+| Plan | Review task boundaries, dependencies, and checks, then approve | `task/PLAN.md` and `task/T01.md`, etc. |
+| Execute | Run all tasks, selected tasks, or one ready wave | Commits and verification results in isolated worktrees |
+| Ship | Authorize publication with `/pw-ship` | Pushed branches and MRs/PRs |
+| Close | Accept task results, then run `/pw-close` | Recorded learnings and safe worktree cleanup |
 
-**Review recurs at several of these, not just once** — after analysis, after breakdown (the plan
-as a whole, and optionally any individual task's steps), after execution (per task, if you reject a
-result), and after ship (comments on the MR/PR itself). See
-**[docs/WALKTHROUGH.md](./docs/WALKTHROUGH.md)** for all of them walked through on one example, or
-**[docs/REVIEW.md](./docs/REVIEW.md)** for the mechanics of each. Every one of them is human-only by
-default, but can optionally be delegated to a fresh AI review pass instead (per project, per phase)
-— see that same doc's "AI-assisted review" section.
+PLAN approval is the hard gate before execution, including resumed runs.
+Analysis approval precedes breakdown. Individual task reviews are optional.
+With default settings, execution stops at committed and verified work. Publishing requires `/pw-ship`.
+Optional controls have separate purposes:
 
-MR comment runs also keep one durable review-attempt record per invocation and MR. The MR
-description retains the current summary plus an immutable newest-first history of changes and
-verification. See [docs/REVIEW.md](./docs/REVIEW.md) for recovery, capacity, and ownership rules.
+- [AI review](docs/RECIPES.md#use-ai-review-with-human-approval) can add an independent review pass.
+- [Automatic acceptance and chained shipping](docs/EXECUTION.md#opt-in-clean-execution-pre-reviewed-plans) can shorten a pre-reviewed execution run.
 
-Keeping open MRs fresh as their base moves is a side-loop: **`/pw-sync`**. Another optional
-side-loop, **`/pw-rfc`**, publishes approved analysis/plan content to an RFC doc (any configured
-platform, or a local-only doc by default) — see **[docs/RFC.md](./docs/RFC.md)**. Full detail →
-**[docs/WORKFLOW.md](./docs/WORKFLOW.md)**.
+## Find the command you need
+
+| Your question | Run in your agent session |
+|---|---|
+| What commands exist? | `/pw-help` |
+| What do I run next? | `/pw-help project delivery-note` |
+| What happened in this project? | `/pw-status delivery-note` |
+| How do I use one command? | `/pw-help command pw-review delivery-note` |
+| Where is a feature documented? | `/pw-help find acceptance` |
+
+Replace `delivery-note` with your project name. These help and status commands only read state.
 
 ## Dig deeper
 
-| Guide | What's in it |
-|-------|--------------|
-| 🧭 **[docs/WALKTHROUGH.md](./docs/WALKTHROUGH.md)** | One made-up project through every stage *and* every review point, with example output — read this first if you're new |
-| 📋 **[docs/WORKFLOW.md](./docs/WORKFLOW.md)** | Every step in detail · who owns `Status:` · the `LOG.md` audit trail · rewinding a phase |
-| 🔀 **[docs/ADOPTION.md](./docs/ADOPTION.md)** | The continuation workflow — adopt in-progress branches, the two intents, mixed projects |
-| 💬 **[docs/REVIEW.md](./docs/REVIEW.md)** | The two review entry points — local `.review.md` files **and** MR comments — how they reconcile, and the optional AI-assisted delegated review pass |
-| 📝 **[docs/RFC.md](./docs/RFC.md)** | Optional side-loop — publish approved analysis/plan content to an RFC doc, any platform or none |
-| 🧠 **[docs/MEMORY.md](./docs/MEMORY.md)** | Optional cross-project recall — what it's for, why bother, how to turn it on |
-| ⚙️ **[docs/EXECUTION.md](./docs/EXECUTION.md)** | Orchestrator vs executor · picking a model/agent per task · cross-provider execution · worktrees |
-| 📖 **[docs/REFERENCE.md](./docs/REFERENCE.md)** | Bundle layout · project anatomy · naming conventions · the full `/pw-*` command table + generator (live: `/pw-help`) |
-| 🚑 **[docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md)** | Symptom → what to do: stuck worktrees, crashed runs, allowlist refusals, missing MR comments, `/pw-doctor` drift |
-| 🚀 **[ONBOARDING.md](./ONBOARDING.md)** | Fresh-machine / teammate setup · registering a new provider · optional memory · offboarding/uninstalling |
+| You want to… | Read |
+|---|---|
+| Install, update, or uninstall | [Onboarding](ONBOARDING.md) |
+| Complete your first project | [Walkthrough](docs/WALKTHROUGH.md) |
+| Copy a command for a specific task | [Recipes](docs/RECIPES.md) |
+| Understand each stage and its gate | [Workflow](docs/WORKFLOW.md) |
+| Find syntax, config values, or project files | [Reference](docs/REFERENCE.md) |
+| Continue existing branches or MRs | [Adoption](docs/ADOPTION.md) |
+| Give feedback or enable AI review | [Review](docs/REVIEW.md) |
+| Control execution and model routing | [Execution](docs/EXECUTION.md) |
+| Recover from a problem | [Troubleshooting](docs/TROUBLESHOOTING.md) |
+| Refresh an older project's instructions | [Guidance update recipe](docs/RECIPES.md#refresh-old-project-guidance-after-a-workflow-update) |
+| Publish an optional RFC or use memory | [RFC](docs/RFC.md) · [Memory](docs/MEMORY.md) |
+
+## What to check before approving
+
+| Checkpoint | Inspect |
+|---|---|
+| Analysis approval | Scope, approach, compatibility risks, and answers to open questions |
+| PLAN approval | Repository/base branch, dependencies, task boundaries, and runnable verification checks |
+| Task acceptance | Actual diff, verification output, unresolved feedback, and publication/review status |
+
+Use `/pw-status <slug>` to find task and MR links. Ask the agent to show a task's local diff if it is not published yet.
 
 ## Why it's shaped this way
 
-- **Gated phases.** Each phase stops for a human sign-off, so mistakes get caught at the cheapest
-  point. The **PLAN sign-off is the only hard gate**; per-task reviews are optional.
-- **Nothing to memorize.** `/pw-help` renders the live command + operator map (with per-project
-  "what do I run now" lines and a `find` for anything by concept); `/pw-doctor` guards install
-  freshness — the docs list the commands, help shows exactly how to invoke them today.
-- **State on disk, not in a chat.** Every phase writes files, so a run is resumable and auditable
-  (`LOG.md`), and you review one artifact type at a time.
-- **Isolated worktrees.** Each task runs in its own `git worktree` off the real repo, so parallel
-  tasks never collide and nothing touches your working checkout.
-- **Portable & shareable.** One source of truth for commands/agents/skill, stamped per provider by
-  `bootstrap.sh`. Paths stay machine-independent via `{{PW_*}}` tokens. Clone it, run bootstrap,
-  go — see [ONBOARDING.md](./ONBOARDING.md).
-
-Invoke the `project-workflow` skill any time an agent needs these conventions restated.
+Review the approach before the agent edits repository code. Review the task plan before it executes.
+Each task records the checks it ran and the output, so you can assess the result.
+Worktrees let independent tasks run together while preserving your checkout.
+Existing branches can join through adoption, and open MRs can receive fixes through the same project record.

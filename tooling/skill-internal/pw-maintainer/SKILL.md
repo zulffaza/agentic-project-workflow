@@ -1,12 +1,12 @@
 ---
 name: pw-maintainer
-description: Maintainer cheat-sheet for changing the agentic-project-workflow bundle itself. Use when asked to change or maintain the bundle — edit anything under tooling/ or template/, add or rename a command / operator / script / agent / skill, write or re-pin a mutation row, run the test harness, decide where new capability goes, or diagnose "pw-doctor reports out of sync". Loads the sources-only doctrine, the change-and-test protocol, the S/L/C/A/D placement conventions, and the user-vs-maintainer doc boundary on demand. NOT for running a project through the /pw-* pipeline — that is the project-workflow skill.
+description: Maintainer cheat-sheet for changing the agentic-project-workflow bundle itself. Use when asked to change or maintain the bundle — edit anything under tooling/ or template/, add or rename a command / operator / script / agent / skill, write or refresh user documentation, write or re-pin a mutation row, run the test harness, decide where new capability goes, or diagnose "pw-doctor reports out of sync". Loads the sources-only doctrine, the change-and-test protocol, the S/L/C/A/D placement conventions, and the user-vs-maintainer doc boundary on demand. NOT for running a project through the /pw-* pipeline — that is the project-workflow skill.
 ---
 
 # pw-maintainer — changing the bundle
 
 You are about to **change the machinery**: anything under `tooling/` (scripts, commands, agents,
-skill sources, generators, docs, the test harness) or `template/`, or a generated provider surface.
+skill sources, generators, docs, the test harness), `template/`, or the user guides at the bundle root.
 This skill is the navigational front door — a thin map over the canonical maintainer docs so you
 load only the detail the current change needs. It owns **no** rules of its own: every rule lives in
 the doc it points to, so if a rule changes, the doc changes and this map stays valid.
@@ -51,6 +51,7 @@ that matches your task.
 | make any change and prove it's safe (the ordered loop) | [`references/change-protocol.md`](references/change-protocol.md) |
 | decide *where* a new script / command / operator / argument goes | [`references/conventions-nav.md`](references/conventions-nav.md) |
 | run the harness, pick test tiers, author or re-pin a mutation row | [`references/testing-harness.md`](references/testing-harness.md) |
+| write, review, or refresh user guides and user-facing guidance | [User documentation skill](../pw-maintainer-user-documentation/SKILL.md), then the boundary reference below |
 | check what may leak to users, or write / update docs & plan files | [`references/boundary-and-docs.md`](references/boundary-and-docs.md) |
 | need a script's exact operators, exit codes, and fix hints | [`tooling/docs/scripts/README.md`](../../docs/scripts/README.md) — the usage reference |
 | need the live command / operator map (read-only) | `pw-help.sh overview` · `command <name>` · `operators <name>` · `find <term>` |

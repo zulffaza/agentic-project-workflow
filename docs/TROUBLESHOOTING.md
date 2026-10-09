@@ -7,12 +7,29 @@ actually is) and `/pw-doctor` (whether your install is actually in sync) answer 
 this working" questions before you go digging further. Every entry below is self-contained: the
 action, plus the one-line cause where knowing it helps.
 
+## Start with the symptom
+
+| What you see | First action |
+|---|---|
+| Unsure what to run next | `/pw-help project <slug>` |
+| Command missing or stale | `/pw-doctor`; if unavailable, follow [setup recovery](../ONBOARDING.md#troubleshooting--pw-doctor) |
+| Execution stopped or session ended | `/pw-status <slug>`, then resume the appropriate task scope |
+| Approval blocks the next step | Read the named review file, apply feedback, and explicitly sign off after review |
+| Model unavailable or project records disagree | `/pw-doctor --project <slug>` and `/pw-config <slug> show` |
+
+Read the detailed symptom below for the cause and recovery action.
+`--fix` repairs supported deterministic findings. It does not supply approval or settle project decisions.
+
 ## "A `/pw-*` command isn't found / behaves like an old version"
 
-Run `/pw-doctor` (`/pw-doctor --fix` to repair). This is almost always an install-sync issue, not a
-bug in the command itself — full coverage of what it checks and when to reach for it is in
-ONBOARDING.md's [Troubleshooting — `pw-doctor`](../ONBOARDING.md#troubleshooting--pw-doctor)
-section; not duplicated here.
+If `/pw-doctor` is available, run it and use `/pw-doctor --fix` for supported installation drift.
+If all workflow commands are missing, use a terminal:
+
+1. Open the bundle's `pw.config.sh` and confirm that `PW_PROVIDERS` includes your CLI.
+2. Run `./bootstrap.sh` and check that it detects the enabled CLI.
+3. Return to the agent session and check `/pw-help`.
+
+See [setup](../ONBOARDING.md#setup-in-4-steps) for provider names and [installation recovery](../ONBOARDING.md#troubleshooting--pw-doctor) for drift.
 
 ## "git refuses to create a worktree — branch is already checked out"
 
@@ -46,13 +63,13 @@ happens in that same worktree (nothing is thrown away silently) — check `git -
 
 **Symptom:** the worktree teardown step reports `⚠ SKIP` for a worktree instead of removing it.
 
-**Cause:** it's a deliberate safety refusal, not a failure — the helper never removes (a) the
-worktree you're currently sitting in (removing your own cwd out from under you is what once caused
-an editor reload/crash), or (b) a worktree with uncommitted changes, unless you pass `--yes`.
+Close skips a worktree when you are inside it or it contains uncommitted changes.
 
-**Fix:** `cd` out of the worktree first if that's the reason; commit or stash the changes (or
-confirm you're fine discarding them and pass `--yes`) if that's the reason. Run teardown from the
-bundle/project root, never from inside a worktree.
+- If it is your current directory, move to the bundle or project root. Close terminals or editor tabs tied to that worktree.
+- If it is dirty, inspect the changes and commit or stash the work you need.
+- Re-run `/pw-close <slug>` from outside the worktree.
+
+If you want to discard dirty work, tell the agent explicitly. It must confirm before removing that worktree.
 
 ## "`/pw-execute` (or `/pw-breakdown`) refused a model — allowlist"
 
@@ -82,11 +99,22 @@ pins a model that doesn't exist right now, or a provider/api-provider that left 
 removed, auth dropped). The pipeline refuses instead of launching a detached run that would fail
 mid-flight.
 
-**Fix:** the refusal prints the candidates — re-pin the task's `Execute with:` to a real in-scope
-id, or restore the removed entry in `pw.config.sh`. To see every affected row at once, run the
-provider-consistency audit the `/pw-ship` comments flow and `/pw-close` recap perform (per-task
-`stale-provider`/`unbound` verdicts). Full contract:
-[docs/EXECUTION.md](./EXECUTION.md) §The per-spawn ledger.
+Inspect the current settings and all affected rows:
+
+```text
+/pw-config <slug> show
+/pw-doctor --project <slug>
+```
+
+Choose a real, in-scope model from the reported candidates, then update the pin:
+
+```text
+/pw-config <slug> set pin T02=<provider>:<model-id>
+```
+
+Use the affected task ID. This updates both the task and its PLAN row.
+Alternatively, restore the intended provider/backend in `pw.config.sh` and recheck availability.
+See [model catalog lookup](EXECUTION.md#check-the-model-catalog-before-pinning).
 
 ## "A headless run is stuck / a task flipped `verify-failed (headless-stall)`"
 
@@ -125,6 +153,28 @@ and — historically — GitLab's `/discussions` endpoint lagging the raw notes 
 which is why this bundle reads `/notes` as the primary source. If a hand-rolled fetch outside
 this bundle misses a comment, check both: don't filter on `individual_note`, and query `/notes`
 rather than `/discussions`.
+
+## "Changes were pushed, but the MR description update is pending"
+
+Push, replies, verification, and description delivery have separate outcomes.
+Read the recap to identify which step failed.
+
+| Reported outcome | What to do |
+|---|---|
+| `description update pending` | Read the delivery error; the description did not verify after the write |
+| `summary refresh pending` | Resolve the reported ownership or newer-head conflict before retrying |
+| GitLab returns HTTP 415 during description delivery | Update the workflow bundle; older versions can send a description write without the required JSON content type |
+
+After updating the bundle, run `/pw-doctor` and repair reported installation drift with `/pw-doctor --fix`.
+To retry a pending review-attempt delivery, use the affected task ID:
+
+```text
+/pw-ship <slug> T02 comments
+```
+
+The retry reuses the saved attempt block and its original order. It also processes any new actionable comments.
+Inspect the recap for successful description delivery; a successful push alone does not confirm it.
+See [description and review-attempt history](REVIEW.md#description-and-review-attempt-history).
 
 ## "A stacked task won't start, ship, or close"
 
@@ -165,3 +215,30 @@ their fix command; add `--fix` and it applies only the repairs that have a deter
 (e.g. inserting a missing `AI Review:` line with explicit `off` values — older projects started
 before that line was mandatory self-heal here). Exit non-zero on any `✗`, so you can gate CI on it.
 This never replaces `/pw-status` (report) or the phase gates themselves — it *reuses* them.
+
+## "My project still tells me to run internal scripts after an update"
+
+The installed commands and the guidance copied into a project are separate.
+`/pw-doctor --fix` refreshes the installed workflow. Existing project prose needs a project-scoped preview:
+
+```text
+/pw-doctor --project <slug> --guidance
+```
+
+Inspect the proposed replacements, then request application to that project:
+
+```text
+/pw-doctor --project <slug> --guidance --apply
+/pw-doctor --project <slug> --guidance
+```
+
+The final preview must show zero remaining recognized replacements. Customized text can remain skipped.
+
+Legacy instructions inside analysis and task review files are included, such as review creation, automatic contents refresh, archiving, and phase reopening.
+A skipped review file can already be current or contain wording that does not match a recognized rule.
+If it still gives outdated instructions, compare them with the [review guide](REVIEW.md) and [rewind recipe](RECIPES.md#recover-or-reopen-a-phase).
+Guidance repair does not rewrite custom wording or execute the review actions described in those instructions.
+This mode repairs known workflow-authored guidance, while preserving review history, provenance, MR records, stack state, and project phase.
+It does not run project health checks or publish changes.
+Use health doctor separately for consistency findings. Do not combine `--guidance` with `--fix`.
+See the [guidance recipe](RECIPES.md#refresh-old-project-guidance-after-a-workflow-update) for scope and expected output.

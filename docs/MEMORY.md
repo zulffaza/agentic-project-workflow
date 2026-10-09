@@ -65,7 +65,7 @@ read of the live doc.
 
 ## Going deeper
 
-The exact agent-facing contract (skip-silently rule, the two touch points above, spelled out for
-an agent reading it mid-phase) lives with the machinery — [TOOLING.md](./TOOLING.md) says where it
-lives. You shouldn't need it unless you're debugging why an agent isn't searching/seeding as
-expected.
+If memory search or capture is missing, inspect `PW_MEMORY` and `PW_MEMORY_NOTES` in your `pw.config.sh`.
+Ask the agent to check which memory tool is available and whether it ran the expected analysis or close step.
+With `PW_MEMORY=none`, the workflow skips external memory and keeps the project records on disk.
+For command discovery, use [Find workflow commands](TOOLING.md).

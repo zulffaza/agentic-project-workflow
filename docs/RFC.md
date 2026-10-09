@@ -29,8 +29,7 @@ nothing else notices.
 
 `/pw-rfc` always writes/updates `<project>/rfc/RFC.md` locally — the **Generate** step, and it
 needs **no external tool at all**. **Publish** — pushing those sections to a real doc platform
-(Lark today; Confluence/Google Docs/Notion documented but not yet implemented — backend registry in
-[TOOLING.md](./TOOLING.md)) — is a separate, optional step layered on
+(Lark today; Confluence/Google Docs/Notion documented but not yet implemented) — is a separate, optional step layered on
 top, controlled by `PW_RFC_BACKEND` in `pw.config.sh`. Leave it unset (or `"markdown"`) and you get
 a maintained local RFC doc with zero external dependency — that's the bundle-wide default, so a
 fresh clone (including an AI agent onboarding itself) can run `/pw-rfc` immediately.
@@ -73,40 +72,40 @@ you can set it per-project (via `--target` once) instead of a single global defa
 
 ## Walkthrough — one example, start to finish
 
-Continuing [docs/WALKTHROUGH.md](./WALKTHROUGH.md)'s own `spring-boot-3-upgrade` example: say this
-one's big enough that another team's lead wants visibility before you break it into tasks.
+Continuing the [first-project walkthrough](WALKTHROUGH.md), suppose another team needs visibility into
+`delivery-note` before you break it into tasks. This example assumes a configured Lark backend for publication.
 
 1. **Analysis reaches a chosen approach** (§4's `**Chosen approach:**` is filled in — via the
-   normal `Q0` answer in `analysis/review/spring-boot-3-upgrade.review.md`). **No Sign-off row
+   normal `Q0` answer in `analysis/review/delivery-note.review.md`). **No Sign-off row
    needed yet** — Wave 1 is exactly how you get the other lead's input *before* deciding this is
    final, not after.
 2. **Wave 1 publish:**
    ```
-   /pw-rfc spring-boot-3-upgrade --target <lark-doc-or-folder-ref>
+   /pw-rfc delivery-note --target <lark-doc-or-folder-ref>
    ```
    Generates/updates `rfc/RFC.md` locally, shows you the diff, and — since `--target` was given —
    pushes Background/Requirements/Solution/Dependencies into the configured backend (or stays
    purely local under the `markdown` default). You share the doc link with the other lead.
 3. **They leave a comment** on the RFC doc's "Solution" section: *"Have you considered the
-   Kafka client version skew with `notifications-worker`'s other consumers?"*
+   compatibility with consumers that receive orders without a delivery note?"*
 4. **Pull it in:**
    ```
-   /pw-rfc spring-boot-3-upgrade comments
+   /pw-rfc delivery-note comments
    ```
    Fetches that thread (read-only) and adds one [OPEN] item to its own dedicated review file,
-   `analysis/review/RFC.review.md` (separate from `spring-boot-3-upgrade.review.md` — created on
+   `analysis/review/RFC.review.md` (separate from `delivery-note.review.md` — created on
    demand if it doesn't exist yet), quoting the comment with a link back to the thread.
 5. **You decide it's worth addressing** — either answer it inline in the review file yourself, or
-   just tell the agent; run `/pw-review spring-boot-3-upgrade` to fold the answer into the analysis
+   just tell the agent; run `/pw-review delivery-note` to fold the answer into the analysis
    (its `↳ agent:` reply is the durable record of what changed). **You** reply to and resolve the
    actual thread on the platform — the agent never touches it. **This step also, automatically,
-   reopens `analysis/review/spring-boot-3-upgrade.review.md`'s own Sign-off** — even though the fix
+   reopens `analysis/review/delivery-note.review.md`'s own Sign-off** — even though the fix
    came in through `RFC.review.md`, it's the analysis doc's *own* review file that
    `/pw-breakdown` actually gates on, so that's the one that has to stop reading `approved`
    once the doc's changed out from under it. The invalidating row is recorded with the workflow's
    own `By` attribution (`pw-review (feedback)` / `pw-review (repair)`; files may also hold the older
    `pw-review (auto-reopen)` tag) so you can tell at a glance it wasn't your own decision.
-6. **Push the revision:** re-run `/pw-rfc spring-boot-3-upgrade` — it updates only the affected
+6. **Push the revision:** re-run `/pw-rfc delivery-note` — it updates only the affected
    section(s) in the external doc, never a whole-doc overwrite, so nothing else on that page (their
    comment thread included) gets disturbed. The RFC doc **only ever moves when you explicitly ask
    for this step** — nothing in the comment-pull or the analysis fix triggers a push on its own.
@@ -121,7 +120,7 @@ one's big enough that another team's lead wants visibility before you break it i
    ever arrived). You must fold the comment in (step 5) or resolve it in the review file yourself
    before breakdown will run.
 8. **Once the negotiation is genuinely done**, add a fresh `approved` row to
-   `analysis/review/spring-boot-3-upgrade.review.md`'s Sign-off yourself — often the **first**
+   `analysis/review/delivery-note.review.md`'s Sign-off yourself — often the **first**
    Sign-off row this doc ever gets, since nothing required one before Wave 1 published. **There's
    no separate "RFC approved" concept to set anywhere** — this one row is both, by construction: it
    only makes sense to add once every fold-in from the negotiation has already happened, so it
@@ -129,7 +128,7 @@ one's big enough that another team's lead wants visibility before you break it i
    re-approval after a later round. `/pw-breakdown` unblocks.
 9. **Later, once the PLAN is approved:**
    ```
-   /pw-rfc spring-boot-3-upgrade milestone
+   /pw-rfc delivery-note milestone
    ```
    fills in Milestone + Conclusion from the approved `task/PLAN.md`.
 
@@ -215,7 +214,7 @@ diagram is never a single point of failure for the whole push.
 ## Adding a backend
 
 `/pw-rfc` never hardcodes a platform — every backend implements the same 4-operation contract
-(`create_from_template` / `fetch_anchors` / `update_section` / `list_comments`; the backend
-registry lives with the machinery — see [TOOLING.md](./TOOLING.md)). The one non-negotiable rule for any
+(`create_from_template` / `fetch_anchors` / `update_section` / `list_comments`).
+Adding a platform requires a backend implementation. Ask the agent to inspect the backend contract before extending the bundle. The one non-negotiable rule for any
 backend: `update_section` must be scoped to that section's own anchor, **never** a whole-doc
 overwrite — that's what keeps a reviewer's comment from being silently orphaned.

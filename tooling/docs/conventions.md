@@ -112,8 +112,8 @@ is normative.
   item/answer writers their attributed `in-review` row, and neither can ever produce `approved`.
   Keep both separations pinned: no agent file names the human operator, and no operational writer
   path can grant approval.
-- **Reserved names.** `pw-maintainer` is reserved for the internal maintainer skill under
-  `tooling/skill-internal/` (read-as-file, NOT provider-installed) — never reuse it for a `/pw-*`
+- **Reserved names.** `pw-maintainer` and `pw-maintainer-user-documentation` are reserved for internal maintainer skills under
+  `tooling/skill-internal/` (read-as-file, NOT provider-installed) — never reuse these names for a `/pw-*`
   user command or a `tooling/skill/` user skill. This bullet is the durable registry of reserved
   names: check it before proposing a new command/skill name, and append any new reservation **here**
   (not only in the proposing plan — a plan is single-use, this doc is not).

@@ -11,6 +11,9 @@ bundle-root [`../AGENTS.md`](../AGENTS.md) covers them.
 > conventions, and the doc boundary, one reference at a time. Maintainer-only; **not**
 > provider-installed (it lives outside the generated `skill/` set).
 
+For writing or refreshing user-facing guides, load the internal [user documentation skill](skill-internal/pw-maintainer-user-documentation/SKILL.md) through pw-maintainer.
+It covers command examples, reading flow, and documentation verification; it is also outside the provider-installed skill set.
+
 Start here, in order: the doctrine below, then the change protocol
 ([`docs/testing.md`](./docs/testing.md)), then a script's usage contract
 ([`docs/scripts/README.md`](./docs/scripts/README.md)). Adding a script, command, or operator?

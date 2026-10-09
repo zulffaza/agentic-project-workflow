@@ -1,27 +1,48 @@
-# TOOLING.md — where the machinery lives
+# Find commands and understand the bundle
 
-← [back to README](../README.md) · related: [Reference](./REFERENCE.md) · [Execution](./EXECUTION.md)
+[README](../README.md) · [Recipes](RECIPES.md) · [Reference](REFERENCE.md)
 
-You never need this page to run projects — the `/pw-*` commands and the `project-workflow` skill
-are the interface. `/pw-help` (bare, or `/pw-help command <name>`) is the live discovery surface
-for every command, operator, and argument; `docs/REFERENCE.md` summarizes what you can update per
-project. Operations are command-only: if a guide or message seems to ask you to run an internal
-script, the equivalent `/pw-*` command is the supported way.
+Use the workflow through its installed commands and skills. For daily use, start with command discovery below.
+This page also gives contributors the bundle location, so existing links to this guide remain useful.
 
-This page exists for one purpose: pinning where the machinery lives. Everything the commands call
-underneath is the bundle's `tooling/` tree, next to this `docs/` directory — the `/pw-*` command
-sources, the sub-agent definitions, the shipped skills, the maintainer reference docs, and the
-regression harness that guards all of it.
+## Find a command or feature
 
-Three facts worth knowing before you poke around:
+| You need… | Run in your agent session |
+|---|---|
+| A list of available commands | `/pw-help` |
+| Arguments and examples for review | `/pw-help command pw-review` |
+| Next steps for your project | `/pw-help project <slug>` |
+| The phase sequence and gates | `/pw-help workflow` |
+| Documentation for a concept | `/pw-help find <term>` |
 
-- **Sources-only.** Everything under `tooling/` is the single source of truth; the copies in
-  `~/.claude/`, `~/.cursor/`, `~/.config/kilo/`, … are generated. A fix made only in a generated
-  copy is destroyed by the next `/pw-doctor --fix` — move it into the source and regenerate.
-- **The harness guards the boundary.** Doctrine like command-only guidance is mechanically tested:
-  user docs, templates, and generated output stay behavioral and name `/pw-*` commands; maintainer
-  docs stay mechanism-side; published files carry no internal planning references.
-- **Maintainer onboarding starts at `tooling/AGENTS.md`** in the bundle repo — the per-directory
-  convention file, which points into the maintainer reference tree. This page deliberately carries
-  no deep links: curious users get one address, and maintainers stop being users the moment they
-  open it.
+Help reads current command sources. Use it when an example does not match your installed version.
+For copyable examples with expected outcomes, read [recipes](RECIPES.md).
+Operations use `/pw-*` commands. If older project guidance names internal scripts, preview its supported updates with guidance doctor.
+
+## Choose the right check or repair
+
+| Scope | Inspect | Repair |
+|---|---|---|
+| Installed commands, skills, and agent definitions | `/pw-doctor` | `/pw-doctor --fix` |
+| Project documents, config, and state consistency | `/pw-doctor --project <slug>` | `/pw-doctor --project <slug> --fix` |
+| Recognized outdated project guidance | `/pw-doctor --project <slug> --guidance` | `/pw-doctor --project <slug> --guidance --apply` |
+
+Guidance preview writes nothing. Review it before applying changes to the selected project, then preview again.
+Health repair and guidance repair are separate modes. Customized guidance stays untouched outside recognized matches.
+See [the guidance recipe](RECIPES.md#refresh-old-project-guidance-after-a-workflow-update) for skipped text and expected results.
+
+## Change settings
+
+Use `/pw-config <slug> show` for project settings and `/pw-config global show` for machine settings.
+Change project values through `/pw-config <slug> set <key> <value>`.
+The [reference](REFERENCE.md#what-you-can-update-per-project-pw-config) lists supported keys and values.
+For setup, provider configuration, and uninstall instructions, read [onboarding](../ONBOARDING.md).
+
+## Where contributors start
+
+The bundle's `tooling/` tree contains command sources, agent definitions, skills, maintainer references, and regression checks.
+Contributor instructions start at `tooling/AGENTS.md`. That file directs contributors to the relevant internal references.
+
+Installed provider files are generated from the bundle's single source of truth.
+Repair their drift through `/pw-doctor --fix`. A change made only in a generated copy disappears during regeneration.
+The workflow checks the boundary between command-based user guidance and implementation references.

@@ -1,341 +1,264 @@
-# Walkthrough — one made-up project, start to finish
+# Walkthrough: your first project
 
-← [back to README](../README.md) · related: [Workflow](./WORKFLOW.md) · [Review](./REVIEW.md) ·
-[Reference](./REFERENCE.md)
+[README](../README.md) · [Recipes](RECIPES.md) · [Workflow](WORKFLOW.md)
 
-This doc doesn't teach anything new — every rule here is documented properly elsewhere. Its only
-job is to make the pipeline **concrete** before you try it: one fictional project, with every point
-where you can act on it, showing roughly what each artifact actually looks like. No setup required
-to read this; nothing here is real output. Review isn't one step here — it recurs at several
-points, each shown as its own section below rather than folded into the phase around it.
-
-> Excerpts below are illustrative and paraphrased, not literal template dumps — the real templates
-> (`template/analysis/_TEMPLATE.md`, `template/task/_TEMPLATE-*.md`, `template/_REVIEW.template.md`)
-> are the source of truth for exact syntax.
+This fictional example adds an optional delivery note across two repositories.
+Commands match the workflow interface. File names, task IDs, and outcomes below are illustrative.
+Substitute your actual repositories, base branches, and generated artifact names.
 
 ## The scenario
 
-You need to bump Spring Boot 2 → 3 across three services: `payments-api`, `orders-api`, and
-`notifications-worker`. It's the same slug used in the README's own Quick Start
-(`spring-boot-3-upgrade`) — that's intentional, so the two docs read as one continuous example.
+Project `delivery-note` changes `storefront` and `order-service`.
+Use a slug with lowercase letters, digits, and hyphens, starting with a letter or digit.
+The goal is to save and display a delivery note. Orders without a note must keep working.
+Both repositories already exist under your configured repository root, and their base branch is `main`.
+
+[Install first](../ONBOARDING.md) if the commands are unavailable.
+Use a terminal for setup and files. Use your agent session for every `/pw-*` command.
+In Codex, select the corresponding installed `pw-*` skill.
+
+## Follow the main path
+
+| Checkpoint | Next section |
+|---|---|
+| Describe the change | [Drop context](#drop-context) |
+| Approve the approach | [Analyze](#analyze) · [Review analysis](#review-the-analysis) |
+| Approve the task plan | [Break down](#break-down) · [Review PLAN](#review-the-plan-the-hard-gate) |
+| Build and publish | [Execute](#execute) · [Ship](#ship) |
+| Finish the project | [Accept results](#accept-results) · [Close](#close) |
+
+Individual task-plan review and corrective result review are optional detours.
+Run commands one at a time. Inspect the result and resolve any blocker before continuing.
 
 ## Drop context
 
-```
-/pw-new spring-boot-3-upgrade
-```
+Create the project and an optional requirements brief:
 
-You copy the migration ticket and a link to Spring's own 2→3 migration guide into `context/`,
-then add one row per input to `context/INDEX.md` — deterministically, one command per row (no
-hand-editing the table):
-
-```
-/pw-context spring-boot-3-upgrade add-input --file JIRA-4821.md --what The migration ticket --source Jira JIRA-4821 --trust Approved, has target date
-/pw-context spring-boot-3-upgrade add-input --file spring-migration-guide.md --what Vendor migration notes --source spring.io --trust Official
+```text
+/pw-new delivery-note
+/pw-context delivery-note req-init
 ```
 
-which lands exactly these rows:
+The project appears at `$PW_PROJECTS/delivery-note/`.
+`req-init` creates `context/REQUIREMENTS.md`; it does not fill your requirements.
+Open that file and write the goal, behavior, exclusions, and completion checks. For example:
 
-| File / link | What it is | Source | Trust notes |
-|---|---|---|---|
-| `JIRA-4821.md` | The migration ticket | Jira `JIRA-4821` | Approved, has target date |
-| `spring-migration-guide.md` | Vendor migration notes | spring.io | Official |
+```text
+Goal: Customers can save and view a delivery note on an order.
+Behavior: The note is optional. Existing orders remain valid.
+Out of scope: Changing order status or payment behavior.
+Completion: Tests cover orders with a note and orders without one.
+```
 
-...and your best guess at which repos are in scope (the "Repos in scope" table further down in the
-same file) — analysis will confirm or correct this, so a rough guess is fine.
+Save any supporting ticket or specification in `context/`, then register each actual input.
+The file name below is relative to `context/`. Registering a row does not create the input file.
+
+```text
+/pw-context delivery-note add-input --file REQUIREMENTS.md --what Delivery note requirements --source Product brief from me --trust Approved scope
+/pw-context delivery-note add-repo storefront main Collect and display the note
+/pw-context delivery-note add-repo order-service main Store and return the optional note
+```
+
+Expected result: `context/INDEX.md` lists the requirements file and both repositories.
+Use actual source details when you add a ticket, document link, or log.
 
 ## Analyze
 
+```text
+/pw-analyze delivery-note
 ```
-/pw-analyze spring-boot-3-upgrade
-```
 
-The agent reads `context/`, digs into the three repos' real state (actual Spring Boot version on
-each one's `master`, not a stale branch), and writes `analysis/spring-boot-3-upgrade.md` — a doc
-with sections like:
-
-```
-## 3. Affected repos & surfaces
-| Repo                  | Base branch | Nature of change                          |
-|------------------------|-------------|-------------------------------------------|
-| payments-api           | master      | Boot 2.7→3.2, javax→jakarta migration     |
-| orders-api             | master      | Boot 2.7→3.2, no javax usage found        |
-| notifications-worker   | master      | Boot 2.7→3.2 + Kafka client bump (coupled)|
-
-## 4. Approach options
-
-### Option A: big-bang — all three repos in one wave
-Bump Boot + javax→jakarta + Kafka client together, one PLAN, parallel tasks.
-- **Trade-offs:** fastest to land; biggest blast radius if the Kafka client bump misbehaves.
-
-### Option B: staged — payments-api first, the other two after it's proven in prod
-Same end state, split into two PLANs a week apart.
-- **Trade-offs:** de-risks the Kafka coupling; two review/ship cycles instead of one.
-
-**Chosen approach:** _pending your review_
-
-## 5. Decisions, risks & open questions
-
-### 5.3 Open questions (QnA)
-- Q1: notifications-worker's Kafka client bump is coupled to the Boot bump — same task,
-  or split? — status: awaiting answer
-```
+The agent examines the inputs and repository code, then writes analysis and a matching review file.
+In this example, the files are `analysis/delivery-note.md` and `analysis/review/delivery-note.review.md`.
+Read the analysis for affected surfaces, approach options, compatibility risks, and unanswered questions.
+Use the generated paths if your project uses different names.
 
 ## Review the analysis
 
-It also auto-creates `analysis/review/spring-boot-3-upgrade.review.md`, empty and `in-review`, with
-a `Q0` already seeded since §4 has two real options:
+Suppose the review file asks `Q0` about the approach. Answer the existing question:
 
-```
-### Q0 · §4 Approach options — [PENDING] (agent, 2026-08-10 09:02)
-Which approach — A (big-bang) or B (staged)?
+```text
+/pw-review delivery-note answer analysis/review/delivery-note.review.md Q0 Add the optional service field first, then update the storefront
 ```
 
-You open it, answer `Q0`, leave a comment on §3, and answer the other open question — note each
-`↳ you:` is a quoted line under the SAME heading it answers, not a new one:
+Use the question IDs in your actual review file. To request another change, add an item:
 
-```
-### Q0 · §4 Approach options — [PENDING] (agent, 2026-08-10 09:02)
-Which approach — A (big-bang) or B (staged)?
-
-> ↳ **you** (2026-08-10 09:18): Option A — the Kafka client bump is small enough, staging adds
-> ceremony we don't need here.
-
----
-
-### R1 · §3 Affected repos — [OPEN] (you, 2026-08-10 09:15)
-You're missing that payments-api also has a custom javax.validation setup in
-`common-validation/` — check whether that needs its own line item.
-
----
-
-### Q1 · §5.3 Open questions — [PENDING] (agent, 2026-08-10 09:02)
-Coupled Kafka client bump — same task as the Boot bump, or its own?
-
-> ↳ **you** (2026-08-10 09:20): keep it in the same task — they're coupled, splitting adds risk.
+```text
+/pw-review delivery-note item analysis/review/delivery-note.review.md --section Compatibility risks --text Check orders that have no delivery note
+/pw-review delivery-note analysis
 ```
 
-Then:
+The first command records feedback. The second applies analysis feedback and incorporates your answers.
 
-```
-/pw-review spring-boot-3-upgrade
-```
+| Part of the feedback command | Meaning |
+|---|---|
+| `delivery-note` | The project slug |
+| `item` | Record a new review item |
+| `analysis/review/delivery-note.review.md` | Review file receiving the item, relative to the project |
+| `--section Compatibility risks` | Heading or anchor in the analysis you want changed; use your actual heading |
+| `--text Check orders that have no delivery note` | Your requested change |
 
-The agent sets §4's `**Chosen approach:** Option A`, updates §3, folds your Q1 answer into §7's
-task shape (same task, not split — plus one terse line in §5.1's Decisions log, never a tag left
-in §3/§4 themselves) and resolves all three — **editing each heading in place** (never adding a
-second one), with a concrete quoted `↳ agent:` reply and a `---` rule after each:
+`--section` and `--text` belong to the `item` action. Each value continues until the next flag or the end of the command, so multi-word values need no quotes.
+See [review feedback parameters](REVIEW.md#add-feedback-with-section-and-text) for the shorter form.
+Read the revised analysis and the agent replies. Once questions and review items are resolved, approve it:
 
-```
-### R1 · §3 Affected repos — [RESOLVED] (you, 2026-08-10 09:15) <!-- pw-item-status: resolved -->
-You're missing that payments-api also has a custom javax.validation setup in
-`common-validation/` — check whether that needs its own line item.
-
-> ↳ **agent** (2026-08-10 09:46): §3 — added a `common-validation` row (config-only change, no
-> own task needed).
-
----
+```text
+/pw-review delivery-note signoff analysis/review/delivery-note.review.md approved
 ```
 
-When you're satisfied, **you** — never the agent — write the Sign-off row:
-
-```
-/pw-review spring-boot-3-upgrade signoff analysis/review/spring-boot-3.review.md approved
-```
-
-which appends (date-time stamped for you, any earlier rows preserved as history):
-
-```
-| 2026-08-10 09:45 | you | approved |
-```
-
-That row is the actual gate — but **`/pw-breakdown` also checks that `Chosen approach:` isn't
-still pending**, even if this row already says `approved`. Answering `Q0` isn't optional
-paperwork; it's what breakdown actually builds from.
-
-> **AI-assisted option:** turn this on with `/pw-config spring-boot-3-upgrade set ai-review analysis
-> advisory` (dashboard `AI Review:` line — off by default; `/pw-config spring-boot-3-upgrade
-> show` on its own shows all five phases). Once it's `advisory`/`auto`, `/pw-review
-> spring-boot-3-upgrade ai` runs a fresh `pw-reviewer` pass first, filing items like `R1` above but
-> tagged `(pw-reviewer, …)`. See [docs/REVIEW.md](./REVIEW.md#3-ai-assisted-review-optional-per-phase).
+`signoff` records your decision. Resolving feedback alone does not record human approval.
+For an optional AI pass, use the [advisory review recipe](RECIPES.md#use-ai-review-with-human-approval).
 
 ## Break down
 
-```
-/pw-breakdown spring-boot-3-upgrade
-```
-
-Refuses if the row above is missing. Once it's there, the agent writes `task/PLAN.md` — a repo
-manifest, a dependency DAG, and a task table:
-
-```
-| ID  | Title                           | Repo                  | depends_on | Execute with |
-|-----|----------------------------------|-----------------------|-----------|--------------|
-| T01 | Bump payments-api to Boot 3      | payments-api          | —         | opus         |
-| T02 | Bump orders-api to Boot 3        | orders-api            | —         | sonnet       |
-| T03 | Bump notifications-worker+Kafka  | notifications-worker  | —         | kilo:kilo/alibaba-token-plan/deepseek-v4-pro (BYOK under the gateway) |
+```text
+/pw-breakdown delivery-note
 ```
 
-...plus one self-contained `T01.md`/`T02.md`/`T03.md` per row, each with exact steps and a runnable
-`## Verify` block (e.g. `mvn -q verify` with an expected "BUILD SUCCESS").
+The agent writes `task/PLAN.md` and individual task files. An illustrative plan contains:
+
+| Task | Repository | Work | Dependency |
+|---|---|---|---|
+| T01 | order-service | Store and return the optional note | None |
+| T02 | storefront | Collect and display the note | T01 |
+
+Each task needs concrete steps and a runnable `## Verify` block.
+Check the repository, base branch, model choice, dependencies, and expected test results.
 
 ## Review the plan (the hard gate)
 
-Same review loop as analysis, but against `task/review/PLAN.review.md` — and **this is the one
-hard gate** for execution:
+If the plan misses compatibility tests, record that request and apply it:
 
-```
-| 2026-08-10 14:10 | you | approved |
+```text
+/pw-review delivery-note item task/review/PLAN.review.md --section Verification --text Require tests for orders with no note
+/pw-review delivery-note task/review/PLAN.review.md
 ```
 
-> **AI-assisted option:** with `plan` mode set to `auto`, a clean `pw-reviewer` pass can write this
-> row itself — tagged `pw-reviewer (auto)`, never blended with your own row. Given this is the only
-> hard gate, think carefully before setting this phase to `auto` rather than `advisory`.
+The second command applies feedback from that exact review file to `task/PLAN.md`.
+
+You may also see `/pw-review delivery-note plan`:
+
+- `delivery-note` is the project slug.
+- `plan` is a **scope selector**, not a file name or an approval decision.
+- It selects reviews under `task/review/`, including PLAN and any individual task reviews there. `task` is an alias for this scope.
+- Use `task/review/PLAN.review.md` when you want to apply only PLAN feedback.
+
+Before approving, check:
+
+- The service task covers existing orders and optional notes.
+- The storefront task depends on the service task.
+- Each task names its repository, base branch, and runnable verification checks.
+- Model choices and parallelism fit the work you want to run.
+
+Read the revised plan, then approve it:
+
+```text
+/pw-review delivery-note signoff task/review/PLAN.review.md approved
+```
+
+Every execution invocation checks the current PLAN approval. New feedback can reopen that gate.
 
 ## Review an individual task's plan (optional)
 
-Per-task review files are optional and created on demand — and you don't have to wait for a bad
-execution result to use one. Say you actually read `T03.md`'s steps before running anything and
-notice it pins the wrong Kafka client version:
+To inspect T02 separately before execution, create its review and add your request:
 
+```text
+/pw-review delivery-note init task/T02.md
+/pw-review delivery-note item task/review/T02.review.md --section Steps --text Keep the note field optional in the form
+/pw-review delivery-note T02
 ```
-/pw-review spring-boot-3-upgrade T03
-```
 
-creates `task/review/T03.review.md` on the spot (if it doesn't exist yet) from your feedback. Add
-an item — *"Step 2 pins `kafka-clients:3.4.0`, we need `3.6.1` for the Boot 3.2 baseline"* — and the
-agent revises `T03.md`'s steps before `/pw-execute` ever touches that repo. Nothing about T01/T02
-is affected; this is scoped to one task, and the PLAN's overall approval above still stands.
-
-> **AI-assisted option:** `task-plan` mode, same idea — `/pw-review spring-boot-3-upgrade ai T03`
-> gives T03's plan a fresh look before anything runs, catching exactly this kind of thing without
-> you having to read every task file yourself.
+This changes the selected task plan. PLAN approval still governs execution.
 
 ## Execute
 
-```
-/pw-execute spring-boot-3-upgrade
-```
-
-Refuses unless PLAN is `approved`. The orchestrator spawns one executor per task (T01/T02/T03
-have no dependencies on each other here, so they run in parallel), each in its own isolated
-`worktree/<repo>/<task-id>-<slug>/` — a real git worktree off the real repo, not a copy. Each
-executor makes its edits, commits, runs its `## Verify` block, and pastes the real output into the
-task's `## Result`. You'll see a recap like:
-
-```
-T01 payments-api           done   commit a1b2c3d   verify: BUILD SUCCESS
-T02 orders-api             done   commit 9f8e7d6   verify: BUILD SUCCESS
-T03 notifications-worker   done   commit 4c5d6e7   verify: BUILD SUCCESS
+```text
+/pw-execute delivery-note --wave
 ```
 
-`/pw-execute` stops here — **committed + verified, nothing pushed.**
+The first wave runs T01 because T02 depends on it. The recap identifies completed, failed, and newly ready tasks.
+Run `/pw-status delivery-note` to find the task links.
+Open T01 and read `## Result` for its commit and actual verification output.
+For a local diff, ask the agent:
 
-> **Long plan?** The bare `/pw-execute spring-boot-3-upgrade` above resumes **everything**
-> outstanding in one invocation — fine for three tasks like this one. For a much longer plan,
-> `/pw-execute spring-boot-3-upgrade --wave` instead runs only the tasks that are immediately ready
-> right now, then stops and reports which tasks are newly ready for the *next* `--wave` call — a
-> checkpoint-sized chunk so a lost session only costs one wave, not the whole remaining DAG.
+```text
+Show T01's diff and verification output in delivery-note. Point out any failed or skipped checks.
+```
 
-> **Provider changed mid-project?** If an API Provider you were using goes away (a BYOK ends, auth
-> fails, you drop it from `pw.config.sh`), tasks whose `Execute with:` still pin it are caught at the
-> **availability gate** before any spawn — `/pw-execute` refuses them with the live-catalog
-> candidates to re-pin to, and the provider-consistency audit names every `stale-provider`/`unbound`
-> row. Because routing is plain text (the task's `Route:` field, the PLAN `- Routing:` line,
-> `PW_ROUTE_DEFAULT`), you can also change *how* a task runs — in-process vs a strict-model headless
-> session — between spawns to match what's still working, without re-planning.
+Check that the service field remains optional and orders without a note pass the compatibility tests.
+Run another wave to execute T02 after T01 succeeds:
+
+```text
+/pw-execute delivery-note --wave
+```
+
+A bare `/pw-execute delivery-note` instead runs the remaining dependency sequence in one invocation.
+Completed tasks remain complete. Execution stops at local commits and verification by default.
 
 ## Review an execution result (optional)
 
-`done` isn't the same as `accepted` — you still look at what actually got committed. Say T02's
-diff looks fine, but T01's changed a config default it shouldn't have. You reject it:
+Read each task's diff and `## Result`.
+If T02 uses a required field, create its review if needed, then give a scoped correction:
 
-```
-Status: verify-failed        # you flip this on T01
-```
-
-...then either add an item to `task/review/T01.review.md` or just tell the agent what's wrong.
-Running `/pw-review spring-boot-3-upgrade T01` creates that review file from your feedback if it
-doesn't exist, applies the fix in the same worktree, and:
-
-(And if the syntax is foggy: `/pw-help project spring-boot-3-upgrade` prints the live how-to for
-this project — every review file that exists, its gate state, and the exact
-`/pw-review spring-boot-3-upgrade item/answer/signoff …` lines to run.)
-
-```
-/pw-execute spring-boot-3-upgrade T01
+```text
+/pw-review delivery-note init task/T02.md
+/pw-review delivery-note item task/review/T02.review.md --section Result --text The note field must remain optional
+/pw-review delivery-note T02
 ```
 
-re-runs and re-verifies **just T01**, in its existing worktree — T02 and T03 are untouched, and
-you don't re-run the whole plan.
+Task repair normally re-runs verification. If checks remain failed or pending, run:
 
-> **AI-assisted option:** `task-exec` mode — a fresh `pw-reviewer` pass looks at what actually got
-> committed (not just the plan) and can flag T01's config-default change itself, before you do.
+```text
+/pw-execute delivery-note T02
+```
+
+Inspect the new result before accepting it. Related dependent tasks can also need fresh checks after an upstream fix.
 
 ## Ship
 
-```
-/pw-ship spring-boot-3-upgrade
+Once verification passes and you want to publish the branches:
+
+```text
+/pw-ship delivery-note
 ```
 
-Pushes each task's branch and opens one MR/PR per (repo, base) pair, using your configured Git
-forge CLI (`gh`/`glab`). Each MR title
-is prefixed with the ticket from `context/INDEX.md`'s `Source` column (`JIRA-4821` here) — that's
-where the `[JIRA-4821]` below comes from, not something typed by hand:
-
-```
-T01  payments-api          MR !142  [JIRA-4821] Upgrade to Spring Boot 3 — payments-api
-                                     agent/spring-boot-3-upgrade/T01-boot3-payments → master
-T02  orders-api            PR #58   [JIRA-4821] Upgrade to Spring Boot 3 — orders-api
-                                     agent/spring-boot-3-upgrade/T02-boot3-orders   → master
-T03  notifications-worker  MR !89   [JIRA-4821] Upgrade to Spring Boot 3 — notifications-worker
-                                     agent/spring-boot-3-upgrade/T03-boot3-kafka    → master
-```
-
-The command above already polled each MR's pipeline to a terminal state — that's the default. Pass
-`--skip-build-check` (`/pw-ship spring-boot-3-upgrade --skip-build-check`) if you want the old
-immediate-return behavior instead, e.g. for a fast dry run where you don't want to wait on CI.
+This pushes eligible branches and opens MRs/PRs. It monitors CI by default.
+The recap includes links, branch targets, and check results.
+`--skip-build-check` skips CI monitoring; it still publishes changes. It is not a dry run.
 
 ## Review via MR/PR comments
 
-A reviewer can now comment directly on the pushed diff, in your Git host's own UI — a genuinely
-different review entry point from everything above (those were all local `.review.md` files; this
-one lives on the MR itself). Say someone comments on MR !142:
+After a reviewer comments on T01's MR, run:
 
-*"This bumps `common-validation` too — was that intentional, or should it be a separate MR?"*
-
-```
-/pw-ship spring-boot-3-upgrade T01 comments
+```text
+/pw-ship delivery-note T01 comments
 ```
 
-runs the full loop: **FETCH** the open thread → **FIX** in T01's worktree if a change is warranted
-(here, maybe just clarifying, no code change needed) → **REPLY** on the thread with a concrete
-answer (never a bare "done") → **MIRROR** the exchange into `task/T01.md`'s `## Result` and
-`task/review/T01.review.md` as a [RESOLVED] item, so the project dir stays the record even for an
-MR-driven change. Run `/pw-ship spring-boot-3-upgrade comments` (no task ID) to sweep **every**
-open MR in the project in one pass instead of one at a time. Full mechanics, including why a
-general/no-diff comment still counts: [docs/REVIEW.md](./REVIEW.md#2-the-mr-review-flow-post-ship).
-
-> **AI-assisted option:** `ship` mode extends the same delegation to this surface too — see
-> [docs/REVIEW.md](./REVIEW.md#3-ai-assisted-review-optional-per-phase) for how it applies here.
+The agent reads comments, applies justified fixes, verifies them, pushes updates, and replies on the MR.
+The project records the exchange and review-attempt history.
+Without a task ID, `comments` handles all eligible open MRs.
+If the target branch changes, `/pw-sync delivery-note` refreshes open MR branches and verifies them again.
 
 ## Accept results
 
-Once each MR is reviewed and you're satisfied, you flip its task to `accepted` (the one status
-only you ever set).
+When the diffs, checks, and review responses satisfy you, tell the agent explicitly:
+
+```text
+I reviewed T01 and T02 in delivery-note. Accept both task results and update the project records.
+```
+
+This is an acceptance request in chat, not a slash command.
+Run `/pw-status delivery-note` to confirm that both tasks are `accepted`.
+Approval of the PLAN, task acceptance, and merging an MR are separate decisions.
 
 ## Close
 
+```text
+/pw-close delivery-note
 ```
-/pw-close spring-boot-3-upgrade
-```
 
-Captures learnings into the project dashboard's "Decisions & learnings" section (and your memory
-tool, if you've configured one — see [docs/MEMORY.md](./MEMORY.md)), safely tears down the
-worktrees, and sets `Status: done`. **`accepted` ≠ merged** — open/on-hold MRs don't block close-out.
+Close checks task acceptance, records learnings, removes eligible worktrees, and marks the project `done`.
+It preserves the project directory and branches. Dirty worktrees remain for recovery.
+An open MR can remain after close; acceptance does not merge it.
 
----
-
-That's the whole loop, on one made-up example, with every review entry point shown separately.
-Ready on a real project? → the Quick Start in [README.md](../README.md), or
-[ONBOARDING.md](../ONBOARDING.md) if this machine isn't set up yet.
+For your next project, keep the [recipes](RECIPES.md) handy and use `/pw-help project <slug>` at each checkpoint.
