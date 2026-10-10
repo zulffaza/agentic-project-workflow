@@ -39,6 +39,9 @@
 # the strict fixture refuses a header-less write).
 # C176-C178 extend the guidance repair set to the legacy review-hint families and the
 # analysis/review allowlist (live-project drift found after plan 30).
+# C211–C221 minted by the review-handoff plan (2026-10-10: advisory-only external reports —
+# off-write rejection + migration, all= expansion/override, prepare snapshot, import schema/
+# freshness/budget guards, context|rfc|close lanes, staging-approval refusal).
 # C136–C150 cover the stacked-MR lifecycle (plan 35): parent-in-depends_on validation,
 # effective-target landed skip, exact local parent fork, effective target in ship exec, pending-op
 # done classification, squash-promotion block, comment-sweep debt gate, PLAN mirror detection,
@@ -263,3 +266,17 @@ C207-rr-note-only-description	pw-shiplib.sh	        parts.append(shown)	        
 C208-rr-observed-heads	pw-shiplib.sh	    heads_line = 'observed heads: ' + '; '.join(	    heads_line = 'observed heads: ' + ''	T1	^pw-ship-review-request\.t\.sh$
 C209-rr-diff-evidence-gate	pw-shiplib.sh	        if not description and entry['target'] and entry['head']:	        if False:	T1	^pw-ship-review-request\.t\.sh$
 C210-rr-doctor-prompt-check	pw-doctor.sh	  _perr="$(pw_review_prompt_error "$_ppath")"	  _perr=""	T1	^pw-doctor\.t\.sh$
+C211-review-off-reads-die	pw-config.sh	  case "${1:-}" in off|""|—|-) printf 'advisory' ;; *) printf '%s' "$1" ;; esac	  case "${1:-}" in ""|—|-) printf 'advisory' ;; *) printf '%s' "$1" ;; esac	T1	^pw-config\.t\.sh$
+C212-axis-override-dropped	pw-config.sh	  for pair in ${explicit[@]+"${explicit[@]}"}; do out="$out $pair"; done	  : # override loop removed	T1	^pw-config\.t\.sh$
+C213-dup-all-accepted	pw-config.sh	      [ -z "$allv" ] || die "$axis: duplicate all= — give exactly one baseline"	      : || die "$axis: duplicate all= — give exactly one baseline"	T1	^pw-config\.t\.sh$
+C214-prepare-snapshot-uncopied	pw-review.sh	    cp "$d/$rel2" "$pdir/snapshot/$rel2" || { rm -rf "$pdir"; die "prepare: snapshot copy failed: $rel2"; }	    true || { rm -rf "$pdir"; die "prepare: snapshot copy failed: $rel2"; }	T1	^pw-review-handoff\.t\.sh$
+C215-import-freshness-bypassed	pw-review.sh	  if [ -z "$fp_now" ] || [ "$fp_now" != "$fp_expected" ]; then	  if false; then	T1	^pw-review-handoff\.t\.sh$
+C216-import-clean-consistency-dropped	pw-review.sh	if verdict == "clean" and findings:	if False:	T1	^pw-review-handoff\.t\.sh$
+C217-import-injection-guard-dropped	pw-review.sh	            if ln.lstrip().startswith("#") or "<!--" in ln or "-->" in ln:	            if False:	T1	^pw-review-handoff\.t\.sh$
+C218-repair-budget-unenforced	pw-review.sh	  if [ "$repair" = 1 ] && [ "$round_new" -gt "$rounds" ]; then	  if false; then	T1	^pw-review-handoff\.t\.sh$
+C219-scan-new-lanes-dropped	pw-review-read.sh	  for rel in analysis/review task/review context/review rfc/review review; do	  for rel in analysis/review task/review; do	T1	^pw-review-handoff\.t\.sh$
+C220-staging-approval-allowed	pw-review.sh	  [ "$lane" = rfc ] && die "RFC comment staging never receives an approval row — its unresolved comments keep their own has-open check (see docs/RFC.md)"	  [ "$lane" = nowhere-invalid ] && die "RFC comment staging never receives an approval row — its unresolved comments keep their own has-open check (see docs/RFC.md)"	T1	^pw-review-handoff\.t\.sh$
+C221-ensure-migration-dropped	pw-config.sh	    case "${kv#*=}" in off) pairs="$pairs ${kv%%=*}=advisory" ;; esac	    case "${kv#*=}" in offx) pairs="$pairs ${kv%%=*}=advisory" ;; esac	T1	^pw-config\.t\.sh$
+C222-code-artifact-prefix-dropped	pw-review.sh	        if a == wt or a.startswith(wt + "/"):	        if False:	T1	^pw-review-handoff\.t\.sh$
+C223-close-scope-arm-dropped	pw-review.sh	if man_art == "-":	if False:	T1	^pw-review-handoff\.t\.sh$
+C224-audit-used-first-parens-only	pw-status.sh	s/.*spawned $id[^(]*\(([^)]*)\).*/\1/p	s/.*spawned $id \(([^)]*)\).*/\1/p	T1	^pw-status\.t\.sh$

@@ -34,6 +34,21 @@ battery_rows() {
     printf 'help project-review %s\tpw-help.sh\tproject %s pw-review\n' "$s" "$s"
     printf 'provider-audit %s\tpw-status.sh\tprovider-audit %s\n' "$s" "$s"
   done
+  # review handoff (plan 36): prepare freezes a packet (writes review/ai/<pass-id>/ only —
+  # existing review files are left alone), then the readers report it. F1 has no PLAN, so the
+  # prepare rows run on the mid-lifecycle fixtures; the import refusal row is fixture-agnostic
+  # (a path that never exists → the missing-report refusal).
+  for s in "$S2" "$S3"; do
+    printf 'review-prepare %s\tpw-review.sh\tprepare %s task/PLAN.md --pass-id p-batt\n' "$s" "$s"
+    printf 'review-passes %s\tpw-review.sh\tpasses %s\n' "$s" "$s"
+    printf 'review-read-passes %s\tpw-review-read.sh\tpasses %s\n' "$s" "$s"
+  done
+  printf 'review-import-refusal %s\tpw-review.sh\timport %s --report no-such-report.json\n' "$S1" "$S1"
+  for s in "$S1" "$S2" "$S3"; do
+    printf 'review-trigger-get %s\tpw-config.sh\tproject get %s review-trigger\n' "$s" "$s"
+    printf 'review-repair-get %s\tpw-config.sh\tproject get %s review-repair\n' "$s" "$s"
+    printf 'review-rounds-get %s\tpw-config.sh\tproject get %s review-rounds\n' "$s" "$s"
+  done
   # project-doctor battery rows: F1 (fresh scaffold → green) + F3 (hostile → red) only — the
   # all-green-on-planted-defects walk is config-sensitive (produced-by membership reads
   # PW_PROVIDERS) and owned by the T1 case with its deterministic f2 fixture config.
@@ -94,9 +109,9 @@ _gate_cmd() {     # "<mode> <fixture>" → echo preflight args (review-plan → 
 PWTEST_MODES="pw-doc|lint summary
 pw-doc|analysis task plan review dashboard all
 pw-preflight|analyze prepare execute breakdown ship review comments close
-pw-config|model-check model-resolve project global
+pw-config|model-check model-resolve project global review-trigger review-repair review-rounds
 pw-session|session-check
-pw-review-read|gate has-open count eligible scan
+pw-review-read|gate has-open count eligible scan passes
 pw-status|provider-audit
 pw-ship|history request-review"
 

@@ -26,13 +26,29 @@ fresh is that it doesn't.
 
 ## What "the artifact" is, per phase
 
-| Phase | Artifact | Review file |
+| Surface | Artifact | Review file |
 |---|---|---|
+| `context` | `context/REQUIREMENTS.md` (the readiness brief) | `context/review/CONTEXT.review.md` |
 | `analysis` | `analysis/<topic>.md` | `analysis/review/<topic>.review.md` |
 | `plan` | `task/PLAN.md` | `task/review/PLAN.review.md` |
 | `task-plan` | one `task/T0n.md`, **before** it runs | `task/review/T0n.review.md` |
 | `task-exec` | a task's committed diff/result, **after** it ran | `task/review/T0n.review.md` |
 | `ship` | an MR/PR's diff + description | (mirrors into `task/review/T0n.review.md`'s MR tracking table — see `docs/REVIEW.md`) |
+| `rfc` | the LOCAL `rfc/RFC.md` content | `rfc/review/RFC-CONTENT.review.md` (the fetched-comment staging `analysis/review/RFC.review.md` is a separate side-loop — never approve it) |
+| `close` | the close evidence bundle (dashboard + PLAN + task reviews) | `review/CLOSE.review.md` |
+
+## External reports (a handoff packet from another session)
+
+When you are handed a `review/ai/<pass-id>/` packet instead of an artifact directly — the manual
+handoff flow (`/pw-review <slug> prepare` → a fresh session anywhere → `/pw-review <slug> import
+--report <file.json>`): follow that packet's `request.md`, read ONLY its `snapshot/` copies plus
+the declared criteria/ledger, and return ONE schema-conforming report (`pw-review-report/1`) as
+JSON — in chat or at an authorized file path OUTSIDE the project. Do not file items yourself, do
+not edit any project file, do not approve anything: the producing session validates and imports
+the report, and an imported external report is ADVISORY ONLY (no approval row, no repair,
+regardless of the project's outcome mode). A `verdict=clean` needs an empty findings list; every
+finding carries evidence and exactly one requested correction; anything you cannot judge belongs
+in `questions`.
 
 ## The review-file schema (recap — full template: `template/_REVIEW.template.md`)
 
@@ -134,22 +150,24 @@ flags and the row records `unknown`. An unconfirmed identity grants no approval 
 artifact belongs to a phase EARLIER than the project's current one, its repair/reopen requires
 the human's explicit confirmation (`--confirm-earlier`); otherwise leave the gate alone.
 
-This project's AI Review mode for your phase controls what you're allowed to do:
+This project's AI Review OUTCOME for your surface controls what you're allowed to do (scheduling —
+whether a pass starts at all — lives on the separate `review-trigger` axis, and repair permission
+on `review-repair`; neither changes your own allowed outcome):
 
 ```sh
-tooling/scripts/entities/pw-config.sh ai-review <slug>                    # prints all 5 phases' current modes
-tooling/scripts/entities/pw-config.sh ai-review <slug> <phase> <mode>      # off | advisory | auto
+tooling/scripts/entities/pw-config.sh ai-review <slug>                    # prints all 8 surfaces' effective modes
+tooling/scripts/entities/pw-config.sh ai-review <slug> <surface> <mode>    # advisory | auto
 ```
 
-- **`off`**: you shouldn't be running at all — if you find yourself invoked anyway, say so and stop.
-- **`advisory`**: file your items/questions, then **stop**. A human reads them and writes the
+- **`advisory`** (the default, and what a legacy stored `off` row reads as): file your
+  items/questions, then **stop**. A human reads them and writes the
   Sign-off row themselves, exactly as if a human had raised those items — approval stays with the
   human even when every finding is resolved, and a clean advisory pass adds no row and changes no
   existing approval. This is the default expectation whenever you're unsure.
 - **`auto`**: same filing step, but if — and only if — your pass leaves **zero** [OPEN] items and
   **zero** [PENDING] questions, you may call:
   ```sh
-  tooling/scripts/entities/pw-review.sh auto-signoff <slug> <review-rel-path> <phase> \
+  tooling/scripts/entities/pw-review.sh auto-signoff <slug> <review-rel-path> <surface> \
     --provider <actual-provider> --model <actual-model>
   ```
   A clean auto pass may approve **directly** through this call — never after first fabricating a
@@ -159,7 +177,8 @@ tooling/scripts/entities/pw-config.sh ai-review <slug> <phase> <mode>      # off
   `changes-requested` — a human rejection survives until a human withdraws or replaces it; new
   operational rows never erase it) — it isn't taking your word for any of them. A refusal means
   one of those isn't actually true; don't retry the same call expecting a different answer, fix
-  the actual condition or leave it for a human.
+  the actual condition or leave it for a human. An EXTERNAL import (the packet flow above) can
+  never approve — only a workflow-managed pass like yours can.
 
 If you're a foreign agent without access to this bundle's `tooling/scripts/` (handed just the
 artifact + this skill, no checkout), you can still do the `advisory` half by hand — file items

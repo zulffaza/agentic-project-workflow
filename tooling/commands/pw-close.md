@@ -22,6 +22,18 @@ moment to skip a lint. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
    signed off on the change. Open/on-hold MRs are fine — merging is downstream and may take a long
    time, so it does NOT block close-out. Record each MR's state (open/on-hold/merged) in the
    dashboard Merge-requests table before closing.
+1b. **Final review — only when configured.** After step 1's checks pass and BEFORE any teardown,
+   read the `close` axis (`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh project get <slug>
+   review-trigger` and `… ai-review`) and, ONLY when the trigger is `completion` and the outcome is
+   callable (`advisory` default; a legacy `off` row reads as advisory), run the
+   `/pw-review <slug> ai close` flow against the project's close evidence
+   (`review/CLOSE.review.md`; the packet snapshots README + PLAN + task/review records). A fresh
+   reviewer only; bounded repairs only when `review-repair close=bounded` within `review-rounds`
+   passes (repairs may correct records; they never delete history or clear stack debt — the
+   preflight above owns that). Outage or unverified route: one skip line, continue. Findings do
+   not stop a close whose existing gates pass unless an item needs my decision — surface any
+   unresolved finding as a follow-up in the recap. The reviewer never removes worktrees, never
+   seeds memory, and never takes over this command's own steps.
 2. **Tear down worktrees — use the safe helper** (it refuses to remove the worktree you're
    currently in or one with uncommitted changes, which is what unexpectedly closed an editor once):
    ```bash

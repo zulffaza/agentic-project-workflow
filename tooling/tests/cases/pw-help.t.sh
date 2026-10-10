@@ -122,7 +122,7 @@ grep -qF 'HUMAN-TRIGGERED ONLY (C4)' "$PWTEST_OUT" && pwtest_ok "C4 doctrine lin
 pwtest_rc 0 "maintainer command view" "$C" command pw-review --maintainer
 _det_cmp cmdrevm "maintainer view deterministic across fresh invocations"
 pwtest_re 'entity script: tooling/scripts/entities/pw-review\.sh' "own script section (maintainer view)"
-pwtest_re '19 operators' "operator count in maintainer view (full name)"
+pwtest_re '22 operators' "operator count in maintainer view (full name)"
 pwtest_rc 0 "command --full renders the file" "$C" command pw-context --full
 grep -qF '{{PW_' "$PWTEST_OUT" && pwtest_bad "no {{PW_ leak (--full)" "the sub() helper died — placeholders surfaced" || pwtest_ok "no {{PW_ leak (--full)"
 grep -qF 'A2 flag-segment' "$PWTEST_OUT" && pwtest_ok "--full carries doctrine prose" || pwtest_bad "--full content" "body missing"
@@ -314,8 +314,10 @@ for cop in global model-check ensure get set show; do
 done
 grep -qF 'headless = strict binding' "$PWTEST_OUT" && pwtest_ok "set block carries routing values" \
   || pwtest_bad "set block values" "routing enum missing"
-grep -qF 'off|advisory|auto' "$PWTEST_OUT" && pwtest_ok "set block carries ai-review modes" \
+grep -qF 'advisory|auto' "$PWTEST_OUT" && pwtest_ok "set block carries ai-review outcome modes" \
   || pwtest_bad "review values" "modes missing"
+grep -qF 'manual|completion' "$PWTEST_OUT" && pwtest_ok "set block carries review-trigger values" \
+  || pwtest_bad "trigger values" "trigger enum missing"
 grep -qF 'researcher|analyst|writer-task|reviewer|verifier' "$PWTEST_OUT" \
   && pwtest_ok "set block carries ai-model roles" || pwtest_bad "model roles" "roles missing"
 # 8b-2) scope boundary (owner 09-24 feedback): the global vs per-project split must RENDER

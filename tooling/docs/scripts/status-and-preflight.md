@@ -25,7 +25,8 @@ $PW_HOME/tooling/scripts/entities/pw-status.sh --selftest              # isolate
 ## Unresolved review items     ← "  - <file> (N open)" lines, or "  (none)"; gate lines show the
                           latest decision WITH its By actor, through the same shared reader
                           the scan uses (hyphenated decisions never split at a dash)
-## AI Review modes            ← analysis/plan/task-plan/task-exec/ship modes
+## AI Review modes            ← effective outcome rows (legacy `off` shown as advisory), plus the
+                          trigger/repair rows and the rounds budget, all 8 surfaces
 ## Recent activity            ← last 5 LOG.md lines
 ## Blockers                   ← heuristic list (unapproved gates, open items, verify-failed)
 ## Next action                ← the one command the phase currently suggests
@@ -103,6 +104,10 @@ companion record (placeholder-row fill) lives in
 ledger + the task's `Actually used:` (what ran), validates the row against the live catalog via
 `pw-config.sh model-resolve`, and prints one pipe row per task:
 `T0n|expected=…|used=<q[:model]|never-run>|via=…|route=…|verdict=ok|mismatch|stale-provider|unbound`.
+The ledger read takes the newest line whose text contains `spawned T0n (` and captures the first
+parenthesized group after the id — description text between the id and the group (fixer/repair
+lines like `spawned T06 fixer for X (kilotest:model)`) parses fine, and a colon-less model value
+is captured verbatim; a line with no group falls back to `unknown`.
 `stale-provider` = the row pins a provider/api-provider gone from `PW_PROVIDERS`/
 `PW_KILO_API_PROVIDERS` (the migration case); `unbound` = the model isn't in the catalog. Exit 0
 iff nothing but `ok`/`never-run`; mutates nothing (no LOG line). Wired as a warning pass into
@@ -125,21 +130,31 @@ $PW_HOME/tooling/scripts/entities/pw-config.sh model-resolve <provider> <model-i
 ```
 
 Config keys: `routing | execution-limit | max-parallel | produced-by | ai-review | ai-model |
-pin | rfc-target`. `state`/`data` keys (`status`, `adopted`, `base-branches`, `landing-units`) appear in
+pin | rfc-target | review-trigger | review-repair | review-rounds`. `state`/`data` keys (`status`,
+`adopted`, `base-branches`, `landing-units`) appear in
 `show` but `get`/`set` **refuse** them — they're facts the owning flow derives. `set` validates
-before touching any file: bad enums (`routing ∈ auto|subagent|headless`; review modes
-`off|advisory|auto` — `off` is a real value, absence is a defect), integer bounds, `produced-by`
+before touching any file: bad enums (`routing ∈ auto|subagent|headless`; review outcomes
+`advisory|auto` — the removed legacy `off` reads as advisory and is refused on write; triggers
+`manual|completion`; repair `manual|bounded`; `review-rounds ∈ 1..3`), integer bounds,
+`produced-by`
 against current `PW_PROVIDERS`, and ai-model rows against the allowlist **and** the live catalog +
 configured API-provider scope (`model-check` + `model-resolve`) — a pin that can't bind is refused
-at write time, not discovered at spawn time. **Batch form:** `ai-review`/`ai-model`/`pin` accept
+at write time, not discovered at spawn time. **Batch form:** the per-surface axes
+(`ai-review`/`review-trigger`/`review-repair`) accept an `all=<value>` baseline expanded over the
+eight surfaces plus named overrides (override wins regardless of argument order; duplicate `all` or
+a repeated surface refuses the whole call); `ai-review`/`ai-model`/`pin` accept
 several `<k>=<v>` pairs in one call — validate-all-first (any illegal pair refuses the whole batch,
-nothing written), then one line-update and **one** LOG line. **`pin`** (`pin T01=<provider:model>
+nothing written), then one line-update and **one** LOG line. The expanded per-surface values are
+STORED explicitly (no wildcard persists). **`pin`** (`pin T01=<provider:model>
 T02=…`, `—` clears) writes the per-task executor pin through the single propagator (since 2026-09-25)
 (`_pin_propagate`): BOTH holders — the task file's `- **Execute with:**` field (the spawn bind)
 and the PLAN task-table `Execute with` cell (the gate/audit/resume-guard read) — so
 provider-audit's `mismatch` verdict can't arise from the config surface itself; `get pin` lists
 `T0n=value` pairs, `get pin.T0n` reads one. Bare `ai-model`/`ai-review` remain **deprecated
-shims** onto `project …` (same engine + stderr pointer) for pre-existing callers.
+shims** onto `project …` (same engine + stderr pointer) for pre-existing callers; the two new
+axes have no bare shims.
+`project ensure` also persists the legacy-`off` → `advisory` migration and creates the
+`Review Trigger:`/`Review Repair:`/`Review Budget:` lines; reads normalize `off` without writing.
 `/pw-config <slug> …` is the human-facing surface — prefer it over calling the script, and note
 configuration is no longer a `/pw-review` sub-verb.
 

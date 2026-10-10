@@ -20,11 +20,24 @@
        session of that model over the same work order and the result says which actually ran.
        See docs/EXECUTION.md §Spawning phase work; set rows with `/pw-config <slug> set ai-model <role>=<provider:model>`. -->
 - **AI Review:** <AI_REVIEW_DEFAULT>
-  <!-- 🤖 set via `/pw-config <slug> set ai-review <phase>=<mode>` — one mode per review phase
-       (analysis/plan/task-plan/task-exec/ship); `off` is an EXPLICIT value, not an absence: this
-       line is always present, even when nothing is enabled. `off` = no AI reviewer ·
-       `advisory` = pw-reviewer files items, a human still signs off ·
-       `auto` = it may also sign off itself on a genuinely clean pass. See docs/REVIEW.md. -->
+  <!-- 🤖 set via `/pw-config <slug> set ai-review <surface>=<mode>` — one OUTCOME mode per review
+       surface (context/analysis/plan/task-plan/task-exec/ship/rfc/close). `advisory` = a fresh
+       pw-reviewer files items, a human still signs off; `auto` = it may also sign off itself on a
+       genuinely clean pass (guarded tool call only). The removed `off` migrated to `advisory`
+       (reads normalize; `/pw-config <slug> project ensure` persists it). Scheduling lives on the
+       Review Trigger line, not here. See docs/REVIEW.md §3. -->
+- **Review Trigger:** <REVIEW_TRIGGER_DEFAULT>
+  <!-- 🤖 set via `/pw-config <slug> set review-trigger <surface>=<value>` — `manual` = an AI pass
+       starts only when you invoke one (`/pw-review <slug> ai …`); `completion` = it also starts
+       after a succeeded producing command's verification. `completion` never disables explicit
+       requests. -->
+- **Review Repair:** <REVIEW_REPAIR_DEFAULT>
+  <!-- 🤖 set via `/pw-config <slug> set review-repair <surface>=<value>` — `manual` = findings
+       stop for you; `bounded` = a completion review may run the bounded cycle
+       (review → repair → verify → fresh review) within the Review Budget. -->
+- **Review Budget:** <REVIEW_BUDGET_DEFAULT>
+  <!-- 🤖 set via `/pw-config <slug> set review-rounds <1..3>` — total reviewer passes in a
+       bounded cycle; 3 allows at most two intervening verified repairs. -->
 
 
 ## Where things are

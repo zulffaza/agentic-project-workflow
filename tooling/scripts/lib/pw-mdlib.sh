@@ -288,7 +288,7 @@ _decision_actor_kind() {
     "pw-review (repair)")                    echo repair ;;
     "pw-review (feedback)")                  echo feedback ;;
     "pw-review (auto-reopen)")               echo reopen ;;
-    pw-reviewer\ \(advisory*\)|pw-reviewer\ \(auto*\)|pw-reviewer)
+    pw-reviewer\ \(external\)|pw-reviewer\ \(external*\)|pw-reviewer\ \(advisory*\)|pw-reviewer\ \(auto*\)|pw-reviewer)
                                               echo reviewer ;;
     "")                                      echo blank ;;
     *)                                       echo human ;;

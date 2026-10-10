@@ -236,8 +236,9 @@ hand first.
 PLAN/RFC/MR agreement, and every config line checked against your **current** `pw.config.sh` (so a
 provider you dropped mid-project surfaces as `✗`, not a surprise at spawn time). `✗` lines carry
 their fix command; add `--fix` and it applies only the repairs that have a deterministic writer
-(e.g. inserting a missing `AI Review:` line with explicit `off` values — older projects started
-before that line was mandatory self-heal here). Exit non-zero on any `✗`, so you can gate CI on it.
+(e.g. inserting a missing `AI Review:` line with explicit `advisory` values, or persisting the
+legacy-`off` → `advisory` migration — older projects started before that line was mandatory
+self-heal here). Exit non-zero on any `✗`, so you can gate CI on it.
 This never replaces `/pw-status` (report) or the phase gates themselves — it *reuses* them.
 
 ## "My project still tells me to run internal scripts after an update"

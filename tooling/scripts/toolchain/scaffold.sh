@@ -16,10 +16,25 @@ PW_REPOS="${PW_REPOS:-$(cd "$PW_PROJECTS/.." && pwd)}"
 # pw-doctor.sh see, never a second, drifting copy of that fallback logic.
 . "$HERE/../lib/pw-common.sh"
 . "$HERE/../lib/pw-mdlib.sh"
-AI_REVIEW_PHASES="analysis plan task-plan task-exec ship"
+AI_REVIEW_PHASES="context analysis plan task-plan task-exec ship rfc close"
+# New rows start advisory (a legacy env floor of `off` normalizes — an explicit /pw-review … ai
+# request must never be silently dead; the removed `off` value is not a write target anymore).
+review_default="${PW_AI_REVIEW_DEFAULT:-advisory}"
+case "$review_default" in advisory|auto) ;; *) review_default="advisory" ;; esac
 ai_review_default_line=""
-for p in $AI_REVIEW_PHASES; do ai_review_default_line="$ai_review_default_line $p=${PW_AI_REVIEW_DEFAULT:-off}"; done
+for p in $AI_REVIEW_PHASES; do ai_review_default_line="$ai_review_default_line $p=$review_default"; done
 ai_review_default_line="${ai_review_default_line# }"
+# Scheduling/repair/budget floors: manual/manual/3 — completion review and bounded repair are
+# opt-in per project; the bounded cycle allows at most two intervening verified repairs.
+review_trigger_default_line=""
+review_repair_default_line=""
+for p in $AI_REVIEW_PHASES; do
+  review_trigger_default_line="$review_trigger_default_line $p=manual"
+  review_repair_default_line="$review_repair_default_line $p=manual"
+done
+review_trigger_default_line="${review_trigger_default_line# }"
+review_repair_default_line="${review_repair_default_line# }"
+review_budget_default_line="rounds=3"
 # spawn-lane model rows (docs/EXECUTION.md §Spawning phase work) — every lane defaults unbound
 # (`—` = provider's own default), same config-driven shape as the AI Review line above.
 AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier"
@@ -60,7 +75,7 @@ rsync -a \
   "$TEMPLATE_DIR"/ "$dest"/
 
 # Render the project dashboard as the project's README.md.
-sed "s/<PROJECT_NAME>/$slug/g; s|<CREATED>|$created|; s|<AI_REVIEW_DEFAULT>|$ai_review_default_line|; s|<AI_MODELS_DEFAULT>|$ai_model_default_line|" \
+sed "s/<PROJECT_NAME>/$slug/g; s|<CREATED>|$created|; s|<AI_REVIEW_DEFAULT>|$ai_review_default_line|; s|<REVIEW_TRIGGER_DEFAULT>|$review_trigger_default_line|; s|<REVIEW_REPAIR_DEFAULT>|$review_repair_default_line|; s|<REVIEW_BUDGET_DEFAULT>|$review_budget_default_line|; s|<AI_MODELS_DEFAULT>|$ai_model_default_line|" \
   "$TEMPLATE_DIR/PROJECT.template.md" > "$dest/README.md"
 
 # Stamp {{PW_*}} tokens (absolute paths) into every copied markdown file.

@@ -257,6 +257,16 @@ them:
   in one invocation. It is not the same as re-running one task; don't stop early just because the
   run started from a partial/failed state.
 
+**Completion review — only when configured.** For each task that this run brought to committed +
+verified (before you summarize it), read the `task-exec` axis
+(`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh project get <slug> review-trigger` and
+`… ai-review`) and, ONLY when the trigger is `completion` and the outcome is callable (`advisory`
+default; a legacy `off` row reads as advisory), run the `/pw-review <slug> ai T0n` flow for that
+task — a fresh reviewer only, bounded repairs only when `review-repair task-exec=bounded` and
+within `review-rounds` passes (repairs follow the normal executor ladder and re-run the task's
+`## Verify`). Reviewer outage or an unverified route: one skip line per task, continue. It never
+accepts a task, never pushes, and never signs off by itself (advisory) — acceptance stays mine.
+
 **`--then-ship` (opt-in chain, never a default).** With this flag (and the PLAN gate intact +
 `- Results acceptance` handling as above), when the whole resolved scope is committed + verified you
 **continue straight into row 7 in the same invocation**: run `/pw-ship`'s steps — confirm the push

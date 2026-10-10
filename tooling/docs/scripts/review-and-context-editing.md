@@ -131,6 +131,23 @@ actual run metadata (`unknown` when unconfirmed), never a human row, and honors
 unresolved comments block the consuming command through `has-open` (a fix routed from RFC
 feedback acts on the analysis document's OWN review gate).
 
+**Handoff operators (plan-36 review work).** `prepare <slug> <scope> [--refresh] [--repair]
+[--pass-id <id>] [--print]` freezes ONE review unit into `review/ai/<pass-id>/` — `manifest.json`
+(surface, artifact, round/budget, reviewed-identity `fingerprint`, recorded inputs/code evidence,
+existing-item ledger, state), a byte-identical `snapshot/` of the reviewed inputs, and a neutral
+`request.md` — WITHOUT launching any model; an existing packet for the same unit is shown, never
+overwritten, and `--repair` is refused past the README's `Review Budget` rounds.
+`import <slug> --report <file.json> [--pass <id>]` validates ONE external report against its
+prepared manifest (schema `pw-review-report/1`, project/pass binding, freshness fingerprint —
+content inputs AND recorded worktree head/patch digest for task surfaces) and files its
+findings/questions through the same item/question writers, credited `pw-reviewer (external)`;
+replay-safe (progress recorded per item; an identical replay is a no-op, one report per pass), and
+ADVISORY ONLY — no pass row, no approval, no repair, no `auto-signoff`, regardless of the surface's
+outcome mode. `passes` (read facet) lists every packet by pass-id/surface/state/artifact/round/
+verdict. The new surfaces `context` (→ `context/review/CONTEXT.review.md`), `rfc` content (→
+`rfc/review/RFC-CONTENT.review.md`, distinct from the comment staging) and `close` (→
+`review/CLOSE.review.md`) join the lane map; RFC staging keeps matching no surface.
+
 **Sign-off actors (attribution contract).** One append-only table, five distinct `By` values —
 the actor names WHO decided, not what physically wrote the row:
 
@@ -141,6 +158,11 @@ the actor names WHO decided, not what physically wrote the row:
 | Normal agent repair pass | `pw-review (repair)` | `changes-requested` (validated nonempty work only) |
 | Independent AI pass, advisory mode | `pw-reviewer (advisory; provider=<p>; model=<m>)` | `changes-requested` with real findings; NEVER `approved` |
 | Independent AI pass, auto mode | `pw-reviewer (auto; provider=<p>; model=<m>)` | `changes-requested` with real findings; `approved` only via the guarded auto-signoff |
+
+External report imports write item/question headings credited `(pw-reviewer (external), <ts>)`
+(classified as the reviewer role, never a human) and write NO decision row of their own — their
+provenance lives in the pass manifest, the validated `report.json` copy, and one `REVIEWER-NOTES.md`
+entry (`mode=external`, `ADVISORY ONLY`).
 
 Gate evaluation reads the decision, the artifact role, and the configured approval policy — never
 a substring of the actor label. Readers must tell human rows from recognized automated actors
@@ -158,7 +180,8 @@ decision together with its `By` actor, read through one shared latest-row reader
 ## pw-review-read.sh
 
 Structured summary of every review file's item counts and sign-off state.
-The read facet owns `gate`, `has-open`, `count`, `eligible`, and `scan`.
+The read facet owns `gate`, `has-open`, `count`, `eligible`, `scan`, and `passes`
+(the prepare/import packet inventory).
 Legacy `pw-review.sh` read calls forward here with their argument shapes preserved.
 
 ```bash

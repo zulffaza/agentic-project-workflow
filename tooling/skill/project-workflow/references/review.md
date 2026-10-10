@@ -143,35 +143,60 @@ Rules you MUST follow:
   (the actual machine marker — `[` / `]` are regex metacharacters, so grepping the literal bracket
   tag itself needs `-F` or escaping; the marker is simpler and more robust either way).
 
-## AI-assisted review (optional, per-phase opt-in)
-Every review point above defaults to human-only. A project's dashboard `AI Review:` line
-(`off`/`advisory`/`auto`, per phase) controls this — **the human-facing surface for viewing/setting
-it is `/pw-config` (`project get/set ai-review`), never the raw `pw-config.sh ai-review` verb** (bare
-`ai-review`/`ai-model` are deprecated shims kept for old callers; configuration is not a review
-operation — do not resurrect it under `/pw-review`). Delegate a phase's review to the `pw-reviewer` sub-agent via `/pw-review
-<slug> ai [phase|Tid(s)|path]` (a list of task ids = one reviewer pass per task):
+## AI-assisted review (optional; advisory-manual by default)
+
+Every review point above defaults to human-only and no pass starts by itself. FOUR per-project axes
+control the feature (surfaces: `context`, `analysis`, `plan`, `task-plan`, `task-exec`, `ship`,
+`rfc`, `close`) — **the human-facing surface for viewing/setting them is `/pw-config`
+(`project get/set ai-review | review-trigger | review-repair | review-rounds`), never the raw
+`pw-config.sh ai-review` verb** (bare `ai-review`/`ai-model` are deprecated shims kept for old
+callers; configuration is not a review operation — do not resurrect it under `/pw-review`):
+
+- **`ai-review <surface>=advisory|auto`** — the OUTCOME only. `advisory` (the default; a legacy
+  stored `off` and an unset row both read as advisory) files items/questions and leaves approval
+  with the human; `auto` may additionally self-approve a genuinely clean MANAGED pass.
+- **`review-trigger <surface>=manual|completion`** — WHEN a pass starts. `manual` (default) =
+  only an explicit `/pw-review <slug> ai …`; `completion` = also after a succeeded producing
+  command's verification (context prepare, analysis, breakdown, execute per task, ship, rfc
+  content, close). `completion` never disables explicit requests.
+- **`review-repair <surface>=manual|bounded`** — whether a completion review may run the bounded
+  cycle. `manual` (default) = findings stop for the owner; `bounded` = review → repair → verify →
+  fresh review within the budget.
+- **`review-rounds` (1..3, default 3)** — total reviewer passes in that cycle at most two
+  intervening verified repairs; no third repair, stop on clean/human-decision/no-progress.
+
+`all=<value>` on any axis sets every surface, with explicitly named surfaces overriding the
+baseline regardless of argument order. Delegate a surface's review to the `pw-reviewer` sub-agent
+via `/pw-review <slug> ai [surface|Tid(s)|path]` (a list of task ids = one reviewer pass per task)
+— or, for a manual/foreign reviewer session, freeze a packet with `/pw-review <slug> prepare
+<scope>` and import the returned schema report with `import --report <file.json>`; the import is
+ADVISORY ONLY (no approval row, no repair, even in `auto`) and replay-safe:
+
 - `advisory` — `pw-reviewer` files items exactly like a human would, tagged `(pw-reviewer,
   <timestamp>)` instead of `(you, …)`. A human still writes the Sign-off row; process its items via
   the normal apply-comments flow above, no different from a human's.
 - `auto` — same filing, but if the pass leaves nothing `[OPEN]`/`[PENDING]`, `pw-reviewer` may call
-  `pw-review.sh auto-signoff <slug> <review-rel-path> <phase> --provider <actual> --model <actual>`
+  `pw-review.sh auto-signoff <slug> <review-rel-path> <surface> --provider <actual> --model <actual>`
   itself — the ONE tool-enforced exception to "only a human clears a gate", re-checked by the tool
   (mode, zero open items in that file, artifact/lane match, and no standing human rejection), not
   taken on trust.
   Pass entry for an independent AI pass is `pw-review.sh start <slug> <review-rel-path> --phase
-  <phase> --provider <actual-provider> --model <actual-model>`: it records `changes-requested`
+  <surface> --provider <actual-provider> --model <actual-model>`: it records `changes-requested`
   (attributed `pw-reviewer (<mode>; provider=…; model=…)`) only after the pass has persisted real
   findings — a pass that starts empty and finds nothing files notes only and leaves Sign-off
   unchanged, a clean advisory pass never approves, and a clean auto pass approves directly through
   the guards above without first fabricating a `changes-requested` row.
-`pw-reviewer` is spawned **fresh** (no shared context with whoever produced the artifact) and gets
-handed only the artifact + review file + phase + `REVIEWER-NOTES.md` — never this session's own
+`pw-reviewer` is spawned **fresh** (no shared context with whoever produced the artifact — and
+never the producer's session resumed/forked, its chat history, a defense it wrote, or anything
+recoverable via session recall/shared boards) and gets
+handed only the artifact + review file + surface + `REVIEWER-NOTES.md` — never this session's own
 reasoning about the artifact. **Loop prevention:** before filing, it checks the review file for an
 existing item on the same section anchor — a 3rd item on the same anchor (i.e. a "fix" that already
 recurred once) gets filed as a [OPEN] escalation instead of an ordinary finding, so `auto-signoff`
 stays blocked by the tool's own check rather than by the reviewer remembering not to call it. Full
 method: the `pw-review` skill. Full human-facing explanation: `docs/REVIEW.md`'s "AI-assisted
-review" section.
+review" section. Raw-code/document review outside a project stays the separate
+`pw-independent-review` skill (chat or an explicit report file; it writes no project records).
 
 
 ## Fixer routing (batched; ladder-routed for tasks, driver-inline for docs)

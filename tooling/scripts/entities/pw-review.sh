@@ -6,8 +6,9 @@
 #
 # Facets (S1b): WRITE = init, init-docs, init-all, signoff, start, add-item,
 #                      answer, add-question, resolve, note-init, reindex,
-#                      archive, reopen, auto-signoff
-#               READ  = gate, has-open, count, scan, eligible
+#                      archive, reopen, auto-signoff, prepare, import
+#               READ  = gate, has-open, count, eligible, scan, passes (read facet),
+#                      eligible
 #               SPECIAL = auto-signoff (the tool-enforced gate exception, mode=auto only)
 #
 # Phase-scoped initialization and agent-managed operational states: agents record
@@ -48,6 +49,19 @@
 #       awaiting=C unactionable=D" — real actionable work only (stubs, resolved,
 #       archived, malformed, and waiting-human-only rows are not eligible);
 #       exit 0 iff N>0.
+#   pw-review.sh prepare      <slug> <scope> [--refresh] [--repair] [--pass-id <id>] [--print]
+#       Freeze ONE review unit into review/ai/<pass-id>/ (manifest + snapshot/ +
+#       request.md) WITHOUT launching a model. Scope: T0n | context|analysis|plan|
+#       task-plan|task-exec|ship|rfc|close | artifact path. An existing packet for the
+#       same unit shows instead of overwriting; --refresh = another paid identity,
+#       --repair = bounded-cycle round (refused past review-rounds).
+#   pw-review.sh import       <slug> --report <report.json> [--pass <id>]
+#       Validate an external reviewer report against its prepared manifest (schema,
+#       pass/project binding, freshness fingerprint) and import findings/questions
+#       once per pass (replay-safe; stale reports are retained but change nothing).
+#       Imports are ADVISORY only: no approval row, no repair, no publication.
+#   pw-review.sh passes       <slug> [--json]
+#       Read-only: one line per review/ai/ pass (surface, state, artifact, verdict).
 #   pw-review.sh scan         <slug> [--phase <phase>]
 #       Read-only project-wide summary, one line per review file, showing the
 #       latest decision AND its actor from the shared readers. Lanes: analysis
@@ -135,8 +149,8 @@ PW_HOME="$(cd "$HERE/../../.." && pwd)"
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 ST="$HERE/pw-status.sh"
 CFG="$HERE/pw-config.sh"
-# Mirror of the ai-review config phases (owned by pw-config.sh).
-AI_REVIEW_PHASES="analysis plan task-plan task-exec ship"
+# Mirror of the ai-review config surfaces (owned by pw-config.sh).
+AI_REVIEW_PHASES="context analysis plan task-plan task-exec ship rfc close"
 
 die() { echo "pw-review: $*" >&2; exit 2; }
 # proj_dir — one directory component only: the same slug contract the read facet applies.
@@ -175,12 +189,16 @@ staged_or_die() {
 # _dash_lane_state <slug> <rel> → prints "ok" (current lane), "earlier" (the
 # dashboard has moved past this artifact's lane — reopen/repair needs explicit
 # confirmation), or "unknown" (missing/non-canonical dashboard phase).
+# The rfccontent lane is exempt: the RFC side-loop runs across phases and its
+# published-content gate is the RFC flow's own, so no dashboard phase "consumes" it.
 _dash_lane_state() {
-  local slug="$1" rel="$2"
+  local slug="$1" rel="$2" lane
+  lane="$(pw_review_lane "$rel")"
+  [ "$lane" = rfccontent ] && { echo ok; return 0; }
   local raw tok; raw="$("$ST" phase "$slug" 2>/dev/null || true)"; tok="$(pw_phase_token "${raw:-missing}")"
   pw_phase_valid "$tok" || { echo unknown; return 0; }
   local dr lr
-  dr="$(pw_dash_rank "$tok")"; lr="$(pw_review_lane_rank "$(pw_review_lane "$rel")")"
+  dr="$(pw_dash_rank "$tok")"; lr="$(pw_review_lane_rank "$lane")"
   [ "$dr" -gt "$lr" ] && echo earlier || echo ok
 }
 
@@ -874,9 +892,9 @@ cmd_auto_signoff() {
   local lane; lane="$(pw_review_lane "$rel")"
   [ "$lane" = rfc ] && die "RFC comment staging never receives an approval row — its unresolved comments keep their own has-open check (see docs/RFC.md)"
   pw_review_phase_lane_ok "$phase" "$lane" \
-    || die "lane mismatch: $rel belongs to the '$lane' lane, not '$phase' → fix: pass the phase that owns this artifact (analysis↔analysis topics, plan↔PLAN, task-plan↔task plans, task-exec/ship↔task results)"
+    || die "lane mismatch: $rel belongs to the '$lane' lane, not '$phase' → fix: pass the surface that owns this artifact (context↔context readiness, analysis↔analysis topics, plan↔PLAN, task-plan/task-exec/ship↔task docs+results, rfc↔rfc/RFC.md content, close↔the CLOSE record)"
   local mode; mode="$(_ai_review_mode_of "$slug" "$phase")"
-  [ "$mode" = "auto" ] || die "refusing auto-signoff: this project's AI Review mode for '$phase' is '$mode', not 'auto' (pw-config.sh ai-review $slug $phase auto to enable)"
+  [ "$mode" = "auto" ] || die "refusing auto-signoff: this project's AI Review mode for '$phase' is '$mode', not 'auto' (pw-config.sh project set $slug ai-review $phase=auto to enable)"
   local st; st="$(_dash_lane_state "$slug" "$rel")"
   [ "$st" = unknown ] && die "dashboard phase is missing or non-canonical → fix: repair the dashboard Status line (/pw-status $slug shows the current phase)"
   [ "$st" = earlier ] && [ "$confirm" != 1 ] && die "$rel's phase was already consumed by a later dashboard phase — an auto approval here would silently rewind a used gate → fix: get the human's confirmation, then rerun with --confirm-earlier"
@@ -1139,7 +1157,7 @@ cmd_start() {
   if [ -n "$phase" ]; then
     case " $AI_REVIEW_PHASES " in *" $phase "*) ;; *) die "invalid phase '$phase' (allowed: $AI_REVIEW_PHASES)" ;; esac
     pw_review_phase_lane_ok "$phase" "$lane" \
-      || die "lane mismatch: $rel belongs to the '$lane' lane, not '$phase' → fix: select the phase that owns this artifact (analysis↔analysis topics, plan↔PLAN, task-plan↔task plans, task-exec/ship↔task results)"
+      || die "lane mismatch: $rel belongs to the '$lane' lane, not '$phase' → fix: select the surface that owns this artifact (context↔context readiness, analysis↔analysis topics, plan↔PLAN, task-plan/task-exec/ship↔task docs+results, rfc↔rfc/RFC.md content, close↔the CLOSE record)"
     mode="$(_ai_review_mode_of "$slug" "$phase")"
     [ "$mode" = advisory ] || [ "$mode" = auto ] \
       || die "AI Review mode for '$phase' is '$mode' — an independent AI pass needs advisory or auto → fix: run without --phase for the normal repair pass, or configure: /pw-config $slug set ai-review $phase=advisory"
@@ -1168,6 +1186,691 @@ cmd_start() {
 }
 
 # ---------------------------------------------------------------- scan
+
+# ---------------------------------------------------------------- prepare / import (handoff)
+# Freeze ONE review unit into review/ai/<pass-id>/ — a manifest, an immutable snapshot, and a
+# neutral reviewer request — WITHOUT launching a model. A manual (or later, a managed adapter's)
+# session consumes the packet and returns a schema-conforming report; `import` validates it
+# against the SAME manifest under the SAME validator. One packet + one validator; no second
+# markdown parser, no session-transfer service.
+# The imported result is ALWAYS advisory: it never approves a gate, never repairs, grants no
+# publication authority, and cannot become a managed pass. Only a workflow-managed reviewer
+# route (with trusted process evidence) may feed guarded auto-approval.
+# Pass states: prepared → importing → imported, or stale (inputs moved). One report per pass;
+# import is replay-safe (progress is recorded after each item, duplicates are skipped).
+
+_pass_root() { printf '%s/review/ai' "$1"; }
+
+_mf_read() { # <manifest> <key> — the scalar value after the first "key": on the first line
+  # carrying it. Read correctly even when the pair is nested inside the one-line import
+  # object (report_sha256 / verdict); strings stop at their closing quote, numbers at ,/}.
+  local line
+  line="$(grep -m1 "\"$2\":" "$1" 2>/dev/null || true)"
+  printf '%s' "$line" | awk -v k="\"$2\":" '
+    { i = index($0, k); if (!i) exit; s = substr($0, i + length(k)); sub(/^[ \t]+/, "", s)
+      if (substr(s,1,1) == "\"") { s = substr(s,2); sub(/".*$/, "", s) } else { sub(/[,}].*$/, "", s) }
+      print s }'
+}
+
+_mf_set_scalar() { # <manifest> <key> <raw-json-value> — rewrite one scalar, comma style kept
+  local f="$1" k="$2" v="$3" tmp="$1.tmp.$$"
+  if awk -v k="\"$k\":" -v v="\"$k\": $v" '
+      !d && index($0, k) > 0 {
+        tc = ($0 ~ /,[[:space:]]*$/) ? "," : ""
+        print "  " v tc; d = 1; next
+      }
+      { print }
+      END { if (!d) exit 3 }' "$f" > "$tmp"; then
+    mv "$tmp" "$f" || { rm -f "$tmp"; return 1; }
+    return 0
+  fi
+  rm -f "$tmp"; return 1
+}
+
+_json_list() { # <space-separated safe words> → ["a","b"] (empty → [])
+  local out="" w
+  for w in $1; do [ -n "$w" ] && out="$out,\"$w\""; done
+  printf '[%s]' "${out#,}"
+}
+
+_fingerprint_of_lines() { # <newline-joined "rel\tsha" lines> — canonical digest
+  printf '%s' "$1" | sed '/^$/d' | pw_review_fingerprint
+}
+
+_prepare_pass_id() { # <surface> → p-<surface>-<UTCstamp>-<hex4>
+  printf 'p-%s-%s-%04x' "$1" "$(date -u +%Y%m%dT%H%M%SZ)" "$(( $$ % 65536 ))"
+}
+
+_rounds_of_file() { # <readme> — review-rounds budget (default 3)
+  local line v
+  line="$(grep -m1 '^- \*\*Review Budget:\*\*' "$1" 2>/dev/null || true)"
+  v="$(printf '%s' "$line" | sed -n 's/.*rounds=\([0-9][0-9]*\).*/\1/p')"
+  printf '%s' "${v:-3}"
+}
+
+# _prepare_resolve <slug> <projdir> <scope> → "surface\tartifact\treview" (artifact "-" = close)
+_prepare_resolve() {
+  local slug="$1" d="$2" scope="$3" tok
+  tok="$(pw_phase_token "$("$ST" phase "$slug" 2>/dev/null || true)")"
+  case "$scope" in
+    context)
+      [ -f "$d/context/REQUIREMENTS.md" ] || die "prepare context: no context/REQUIREMENTS.md yet → fix: /pw-context $slug prepare"
+      printf 'context\tcontext/REQUIREMENTS.md\tcontext/review/CONTEXT.review.md\n' ;;
+    rfc)
+      [ -f "$d/rfc/RFC.md" ] || die "prepare rfc: no rfc/RFC.md yet → fix: /pw-rfc $slug init"
+      printf 'rfc\trfc/RFC.md\trfc/review/RFC-CONTENT.review.md\n' ;;
+    close)
+      printf 'close\t-\treview/CLOSE.review.md\n' ;;
+    analysis)
+      local -a cands=()
+      local f
+      if [ -d "$d/analysis" ]; then
+        for f in "$d"/analysis/*.md; do
+          [ -e "$f" ] || continue
+          case "$(basename "$f")" in _TEMPLATE*|README.md|RFC.md) continue ;; esac
+          cands+=("${f#$d/}")
+        done
+      fi
+      [ "${#cands[@]}" -eq 1 ] || die "prepare analysis: expected exactly ONE analysis doc (found ${#cands[@]}) → fix: name the path instead: /pw-review $slug prepare analysis/<topic>.md"
+      _prepare_path_unit "$slug" "$d" "${cands[0]}" ""
+      ;;
+    plan)
+      _prepare_path_unit "$slug" "$d" "task/PLAN.md" "plan" ;;
+    task-plan|task-exec|ship)
+      die "prepare $scope: name one task → fix: /pw-review $slug prepare T01   (the surface is inferred from the dashboard phase; use an explicit path for other units)" ;;
+    T[0-9]*)
+      case "$scope" in T[0-9][0-9]*) ;; *) die "invalid task id '$scope' (expected T01 …)" ;; esac
+      [ -f "$d/task/$scope.md" ] || die "no task/$scope.md in $slug → fix: /pw-breakdown owns task creation"
+      case "$tok" in
+        breakdown) printf 'task-plan\ttask/%s.md\ttask/review/%s.review.md\n' "$scope" "$scope" ;;
+        *)         printf 'task-exec\ttask/%s.md\ttask/review/%s.review.md\n' "$scope" "$scope" ;;
+      esac ;;
+    *)
+      _prepare_path_unit "$slug" "$d" "$scope" "" ;;
+  esac
+}
+
+# _prepare_path_unit <slug> <projdir> <artifact-rel> <forced-surface|""> — validate via the
+# shared artifact mapper and infer the surface from the lane (+ dashboard for task docs).
+_prepare_path_unit() {
+  local slug="$1" d="$2" rel="$3" surf="$4" line lane tok
+  if line="$(pw_review_reviewrel "$d" "$rel" 2>&1)"; then :; else die "prepare: $line"; fi
+  lane="$(pw_review_lane "${line%%$'\t'*}")"
+  if [ -z "$surf" ]; then
+    case "$lane" in
+      context)    surf=context ;;
+      analysis)   surf=analysis ;;
+      plan)       surf=plan ;;
+      rfccontent) surf=rfc ;;
+      task)
+        tok="$(pw_phase_token "$("$ST" phase "$slug" 2>/dev/null || true)")"
+        case "$tok" in breakdown) surf=task-plan ;; *) surf=task-exec ;; esac ;;
+      *) die "prepare: unsupported artifact: $rel" ;;
+    esac
+  fi
+  printf '%s\t%s\n' "$surf" "$line"
+}
+
+# _prepare_inputs <projdir> <surface> <artifact-rel> — one project-relative reviewed input per
+# line (the artifact plus its declared supporting set; close = the evidence bundle).
+_prepare_inputs() {
+  local d="$1" surf="$2" artifact="$3" f
+  case "$surf" in
+    close)
+      [ -f "$d/README.md" ] && echo "README.md"
+      [ -f "$d/task/PLAN.md" ] && echo "task/PLAN.md"
+      for f in "$d"/task/T*.md; do [ -e "$f" ] || continue; echo "${f#$d/}"; done
+      for f in "$d"/task/review/T*.review.md; do [ -e "$f" ] || continue; echo "${f#$d/}"; done
+      ;;
+    context)
+      echo "$artifact"
+      [ -f "$d/context/INDEX.md" ] && echo "context/INDEX.md"
+      ;;
+    *) echo "$artifact" ;;
+  esac
+}
+
+# _prepare_code_evidence <projdir> <task-id|""> — for each task worktree: repo, worktree path,
+# head, base ref, patch digest. Tab-separated lines; empty when nothing is discoverable.
+_prepare_code_evidence() {
+  local d="$1" tid="$2" wt repo head base bref ds
+  [ -n "$tid" ] || return 0
+  [ -d "$d/worktree" ] || return 0
+  for wt in "$d"/worktree/*/"$tid"-*; do
+    [ -d "$wt" ] || continue
+    repo="$(basename "$(dirname "$wt")")"
+    head="$(git -C "$wt" rev-parse HEAD 2>/dev/null || true)"
+    base="$(pw_field "$d/task/$tid.md" "Base branch" 2>/dev/null || true)"
+    bref=""
+    if [ -n "$base" ]; then
+      bref="$(git -C "$wt" rev-parse --verify --quiet "$base" || git -C "$wt" rev-parse --verify --quiet "origin/$base" || true)"
+    fi
+    if [ -n "$head" ] && [ -n "$bref" ]; then
+      ds="$(git -C "$wt" diff "$bref...HEAD" 2>/dev/null | pw_review_hash_stdin || true)"
+      [ -n "$ds" ] || ds="unavailable"
+    else
+      ds="unavailable"
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\n' "$repo" "${wt#$d/}" "${head:-unavailable}" "${base:-unavailable}" "$ds"
+  done
+}
+
+# _prepare_fingerprint <projdir> <manifest> — recompute the reviewed-identity digest from the
+# manifest's recorded inputs plus freshly read code evidence (byte-identical generator).
+_prepare_fingerprint() {
+  local d="$1" mf="$2" path sha lines="" line inblock surf art tid ce
+  inblock="$(sed -n '/"inputs": \[/,/^  \]/p' "$mf")"
+  while IFS= read -r line; do
+    case "$line" in
+      *'"path"'*)
+        path="$(printf '%s' "$line" | sed 's/.*"path":[[:space:]]*"\([^"]*\)".*/\1/')"
+        sha="$(pw_review_sha256 "$d/$path" 2>/dev/null || true)"
+        [ -n "$sha" ] || { echo "reviewed input missing or unhashable now: $path" >&2; return 1; }
+        lines="$lines$path	$sha
+" ;;
+    esac
+  done <<< "$inblock"
+  surf="$(_mf_read "$mf" surface)"; art="$(_mf_read "$mf" artifact)"
+  tid=""
+  case "$surf" in task-plan|task-exec|ship) tid="$(basename "$art" .md)" ;; esac
+  ce="$(_prepare_code_evidence "$d" "$tid")"
+  [ -n "$ce" ] && lines="$lines$ce
+"
+  _fingerprint_of_lines "$lines"
+  return 0
+}
+
+cmd_prepare() {
+  [ $# -ge 2 ] || die "usage: prepare <slug> <scope> [--refresh] [--repair] [--pass-id <id>] [--print]   (scope: T0n | context|analysis|plan|task-plan|task-exec|ship|rfc|close | artifact path)"
+  local slug="$1" scope="$2"; shift 2
+  local refresh=0 repair=0 pass_override="" print_req=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --refresh) refresh=1; shift ;;
+      --repair)  repair=1; shift ;;
+      --pass-id) [ $# -ge 2 ] || die "--pass-id requires an argument"; pass_override="$2"; shift 2 ;;
+      --pass-id=*) pass_override="${1#--pass-id=}"; shift ;;
+      --print) print_req=1; shift ;;
+      *) die "prepare: unknown option: $1 (try --help)" ;;
+    esac
+  done
+  case "$pass_override" in
+    '') ;;
+    *[!A-Za-z0-9._-]*) die "invalid --pass-id '$pass_override' → fix: letters, digits, dot, underscore, dash only (it becomes a directory name)" ;;
+  esac
+  local d; d="$(proj_dir "$slug")" || return 2
+  local unit surf artifact reviewrel
+  if unit="$(_prepare_resolve "$slug" "$d" "$scope" 2>&1)"; then :; else die "prepare: $unit"; fi
+  surf="${unit%%$'\t'*}"; unit="${unit#*$'\t'}"
+  artifact="${unit%%$'\t'*}"; reviewrel="${unit#*$'\t'}"
+  # the review record is the import target — create it before any report can land
+  local docfor="$artifact"
+  [ "$artifact" = "-" ] && docfor="close-report.md"
+  if [ ! -f "$d/$reviewrel" ]; then
+    _init_one "$slug" "$d" "$reviewrel" "$docfor" >/dev/null \
+      || die "prepare: could not create $reviewrel → fix: see the error above; create it with: /pw-review $slug init-docs $docfor"
+  fi
+  # prior passes for the SAME artifact+surface: show the packet, or require --refresh/--repair
+  local root pd m_surf m_art m_round maxround=0 count=0 newest=""
+  root="$(_pass_root "$d")"
+  if [ -d "$root" ]; then
+    for pd in "$root"/*/; do
+      [ -f "$pd/manifest.json" ] || continue
+      m_surf="$(_mf_read "$pd/manifest.json" surface)"
+      m_art="$(_mf_read "$pd/manifest.json" artifact)"
+      [ "$m_surf" = "$surf" ] && [ "$m_art" = "$artifact" ] || continue
+      count=$((count+1)); newest="$pd"
+      m_round="$(_mf_read "$pd/manifest.json" round)"; m_round="${m_round:-1}"
+      if [ "$m_round" -gt "$maxround" ] 2>/dev/null; then maxround="$m_round"; fi
+    done
+  fi
+  if [ "$count" -gt 0 ] && [ "$refresh" != 1 ] && [ "$repair" != 1 ]; then
+    local pid; pid="$(basename "${newest%/}")"
+    echo "$slug: prepare — an existing pass packet for $artifact already exists: review/ai/$pid (state=$(_mf_read "$newest/manifest.json" state))"
+    echo "  inspect: /pw-review $slug passes"
+    echo "  deliberate re-review of unchanged inputs: /pw-review $slug prepare $scope --refresh   (a new reviewer pass)"
+    echo "  bounded repair round after a fix: /pw-review $slug prepare $scope --repair"
+    return 0
+  fi
+  local rounds round_new
+  rounds="$(_rounds_of_file "$d/README.md")"
+  round_new=$((maxround+1))
+  if [ "$repair" = 1 ] && [ "$round_new" -gt "$rounds" ]; then
+    die "prepare --repair: bounded-cycle budget exhausted ($maxround pass(es) recorded, review-rounds=$rounds — 3 allows at most two intervening repairs) → fix: resolve the remaining items manually, or deliberately re-review with --refresh"
+  fi
+  local pass="$pass_override"
+  [ -n "$pass" ] || pass="$(_prepare_pass_id "$surf")"
+  local pdir="$root/$pass"
+  [ -e "$pdir" ] && die "prepare: pass directory review/ai/$pass already exists → fix: choose another --pass-id, or remove the stale directory deliberately"
+  mkdir -p "$pdir/snapshot" || die "prepare: cannot create review/ai/$pass → fix: check project write permissions"
+  # snapshot: immutable copies + the reviewed-identity fingerprint
+  local fp_lines="" ijson="" cjson="" ljson="" rel2 sha2 entry first_in=1 first_c=1 first_l=1
+  local -a inrel=()
+  while IFS= read -r rel2; do [ -n "$rel2" ] && inrel+=("$rel2"); done < <(_prepare_inputs "$d" "$surf" "$artifact")
+  for rel2 in ${inrel[@]+"${inrel[@]}"}; do
+    if [ ! -f "$d/$rel2" ]; then rm -rf "$pdir"; die "prepare: reviewed input missing: $rel2 → fix: create/repair it first, then re-run prepare"; fi
+    sha2="$(pw_review_sha256 "$d/$rel2" 2>/dev/null || true)"
+    if [ -z "$sha2" ]; then rm -rf "$pdir"; die "prepare: cannot hash $rel2 (no sha256 tool?) → fix: ensure shasum or sha256sum is on PATH"; fi
+    mkdir -p "$pdir/snapshot/$(dirname "$rel2")" || { rm -rf "$pdir"; die "prepare: cannot create the snapshot directory for $rel2"; }
+    cp "$d/$rel2" "$pdir/snapshot/$rel2" || { rm -rf "$pdir"; die "prepare: snapshot copy failed: $rel2"; }
+    entry="{\"path\": \"$(pw_review_json_escape "$rel2")\", \"sha256\": \"$sha2\"}"
+    if [ "$first_in" = 1 ]; then ijson="$entry"; first_in=0; else ijson="$ijson,
+$entry"; fi
+    fp_lines="$fp_lines$rel2	$sha2
+"
+  done
+  local tid="" ce
+  case "$surf" in task-plan|task-exec|ship) tid="$(basename "$artifact" .md)" ;; esac
+  ce="$(_prepare_code_evidence "$d" "$tid")"
+  if [ -n "$ce" ]; then
+    fp_lines="$fp_lines$ce
+"
+    while IFS=$'\t' read -r crepo cwt chead cbase cdiff; do
+      [ -n "$crepo" ] || continue
+      entry="{\"repo\": \"$(pw_review_json_escape "$crepo")\", \"worktree\": \"$(pw_review_json_escape "$cwt")\", \"head\": \"$(pw_review_json_escape "$chead")\", \"base\": \"$(pw_review_json_escape "$cbase")\", \"patch_sha256\": \"$(pw_review_json_escape "$cdiff")\"}"
+      if [ "$first_c" = 1 ]; then cjson="$entry"; first_c=0; else cjson="$cjson,$entry"; fi
+    done <<< "$ce"
+  fi
+  if [ -f "$d/$reviewrel" ]; then
+    local _ln lid lanchor lstatus lp
+    while IFS=$'\t' read -r _ln lid lanchor lstatus; do
+      [ -n "$lid" ] || continue
+      case "$lstatus" in
+        OPEN|PENDING)      lp=open ;;
+        RESOLVED|ANSWERED) lp=resolved ;;
+        *)                 lp=other ;;
+      esac
+      entry="\"$(pw_review_json_escape "$lid $lp $lanchor")\""
+      if [ "$first_l" = 1 ]; then ljson="$entry"; first_l=0; else ljson="$ljson,$entry"; fi
+    done < <(_review_items_tsv "$d/$reviewrel")
+  fi
+  local fp; fp="$(_fingerprint_of_lines "$fp_lines")"
+  local created; created="$(now_ts)"
+  local ledger_note=""
+  if [ "$artifact" = "-" ]; then ledger_note="close evidence set"; else ledger_note="$artifact"; fi
+  cat > "$pdir/manifest.json" <<MANIFEST_EOF
+{
+  "schema": "pw-review-pass/1",
+  "pass_id": "$pass",
+  "project": "$(pw_review_json_escape "$slug")",
+  "surface": "$(pw_review_json_escape "$surf")",
+  "scope": "$(pw_review_json_escape "$scope")",
+  "artifact": "$(pw_review_json_escape "$artifact")",
+  "review": "$(pw_review_json_escape "$reviewrel")",
+  "created": "$(pw_review_json_escape "$created")",
+  "launch": "external",
+  "round": $round_new,
+  "max_rounds": $rounds,
+  "fingerprint": "$fp",
+  "inputs": [
+$ijson
+  ],
+  "code": [$cjson],
+  "ledger": [$ljson],
+  "state": "prepared",
+  "import": null
+}
+MANIFEST_EOF
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$pdir/manifest.json" 2>/dev/null \
+      || { rm -rf "$pdir"; die "prepare: manifest generation produced invalid JSON (bug) → fix: report this; no packet was recorded"; }
+  fi
+  local ledger_disp
+  ledger_disp="$(printf '%s' "$ljson" | tr ',' '\n' | sed 's/^"//; s/"$//' | head -8)"
+  [ -n "$ledger_disp" ] || ledger_disp="(none yet)"
+  local code_disp; code_disp="$(printf '%s' "$cjson" | head -c 900)"
+  [ -n "$code_disp" ] || code_disp="(none recorded)"
+  {
+    printf '# Review request — pass %s\n\n' "$pass"
+    printf 'You are an independent reviewer. Return a schema-conforming REPORT ONLY (chat or a file\n'
+    printf 'outside the project). Do not edit any project file, artifact, review record, or repository.\n'
+    printf 'Do not run repairs or approvals. Your result is imported as ADVISORY feedback: it never\n'
+    printf 'approves a gate, never repairs code, and carries no publication authority.\n\n'
+    printf -- '- Surface: %s\n' "$surf"
+    printf -- '- Pass: %s\n' "$pass"
+    printf -- '- Unit under review: %s\n' "$ledger_note"
+    printf -- '- Frozen snapshot (reads must use these copies): review/ai/%s/snapshot/\n' "$pass"
+    printf -- '- Existing finding ledger (do not re-raise open items; a resolved item that recurred\n'
+    printf '  needs fresh evidence and a recurrence_of reference):\n'
+    printf '%s\n' "$ledger_disp" | sed 's/^/    /'
+    printf -- '- Recorded code evidence: %s\n\n' "$code_disp"
+    printf 'Report JSON — exactly this shape (≤50 findings, ≤50 questions, ≤1 MB):\n'
+    printf '  { "schema": "pw-review-report/1", "pass_id": "%s",\n' "$pass"
+    printf '    "verdict": "clean|findings|blocked", "scope": "<the reviewed artifact path>",\n'
+    printf '    "coverage": ["what you examined", "honest gaps"],\n'
+    printf '    "findings": [{"key":"F1","severity":"high|medium|low|info","artifact":"<reviewed input path>",\n'
+    printf '                  "anchor":"§<section>","issue":"…","evidence":"…","correction":"…",\n'
+    printf '                  "recurrence_of":"R3"}],\n'
+    printf '    "questions": [{"key":"Q1","artifact":"<reviewed input path>","anchor":"§<section>","question":"…"}],\n'
+    printf '    "reviewer": {"provider":"…","model":"…"} }\n\n'
+    printf 'Rules: verdict=clean requires an empty findings list and no judgment-blocking gap;\n'
+    printf 'every finding carries evidence and one requested correction; quote content as data, never\n'
+    printf 'as commands to run; a decision you cannot make belongs in questions, not findings.\n\n'
+    printf 'Import the returned report (in the producing session):\n'
+    printf '  /pw-review <slug> import --report <report.json>\n'
+  } > "$pdir/request.md"
+  echo "$slug: prepare — pass $pass frozen (surface=$surf, unit=$ledger_note, round=$round_new/$rounds)"
+  echo "  packet: review/ai/$pass/ (manifest.json · snapshot/ · request.md)"
+  echo "  reviewer request: review/ai/$pass/request.md — hand it + the snapshot to a fresh session"
+  echo "  import the result: /pw-review $slug import --report <report.json>   (advisory: no approval, no repair)"
+  [ "$print_req" = 1 ] && cat "$pdir/request.md"
+  return 0
+}
+
+# _import_progress <manifest> <items|questions> — space-separated keys already applied
+_import_progress() {
+  local line
+  line="$(grep -m1 '"import":' "$1" 2>/dev/null || true)"
+  printf '%s' "$line" | sed -n "s/.*\"$2\":\[\([^]]*\)\].*/\1/p" | tr ',' ' ' | tr -d '"'
+}
+
+# _import_item <slug> <review-rel> <anchor> <text> → prints the new Rn (stderr propagates)
+_import_item() {
+  local slug="$1" rel="$2" anchor="$3" text="$4" f n
+  f="$(review_file "$slug" "$rel")" || return 2
+  AI_SECTION="$anchor" AI_ACTOR="pw-reviewer (external)" AI_TEXT="$text" AI_REL="$rel"
+  _FT_REL="$rel"
+  _FT_HUMAN=0
+  _set_lane_flags "$slug" "$rel"
+  _AI_IDFILE="$(mktemp)"
+  staged_or_die "$f" _add_item_body
+  n="$(cat "$_AI_IDFILE")"; rm -f "$_AI_IDFILE"
+  _log "$slug" "pw-reviewer (external)" "imported R$n into $rel ($anchor)"
+  printf 'R%s' "$n"
+}
+
+# _import_question <slug> <review-rel> <anchor> <text> → prints the new Qn
+_import_question() {
+  local slug="$1" rel="$2" anchor="$3" text="$4" f n
+  f="$(review_file "$slug" "$rel")" || return 2
+  AQ_SECTION="$anchor" AQ_ACTOR="pw-reviewer (external)" AQ_TEXT="$text"
+  _AQ_IDFILE="$(mktemp)"
+  staged_or_die "$f" _add_question_body
+  n="$(cat "$_AQ_IDFILE")"; rm -f "$_AQ_IDFILE"
+  _reindex "$slug" "$rel"
+  _log "$slug" "pw-reviewer (external)" "imported Q$n into $rel ($anchor)"
+  printf 'Q%s' "$n"
+}
+
+# Notes entry appended by import (coordinator-owned validated write; runs staged under the
+# notes file's lock). Globals set by cmd_import: IMP_* .
+_import_notes_body() {
+  local f="$1" cov
+  {
+    printf '\n## %s · %s · %s · mode=external\n' "$IMP_TS" "$IMP_SURFACE" "$IMP_ARTIFACT"
+    printf -- '- **Verdict:** %s; imported %s; questions %s; skipped %s; source: external report (pass %s) — ADVISORY ONLY, no auto-approval eligibility.\n' \
+      "$IMP_VERDICT" "${IMP_ITEMS:-none}" "${IMP_QS:-none}" "${IMP_SKIPPED:-none}" "$IMP_PASS"
+    printf -- '- **Reasoning (coverage reported by the reviewer):**\n'
+    if [ -n "${IMP_COV// /}" ]; then
+      printf '%s\n' "$IMP_COV" | head -4 | sed 's/^/  - /'
+    else
+      printf '  - (no coverage detail supplied)\n'
+    fi
+    printf '  - declared reviewer identity: %s\n' "${IMP_DECLARED:-unknown}"
+    printf -- '- **Source:** external AI report imported by the coordinator — not a workflow-managed pass.\n'
+  } >> "$f"
+}
+
+cmd_import() {
+  [ $# -ge 2 ] || die "usage: import <slug> --report <report.json> [--pass <pass-id>]"
+  local slug="$1"; shift
+  local report="" pass=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --report) [ $# -ge 2 ] || die "--report requires an argument"; report="$2"; shift 2 ;;
+      --report=*) report="${1#--report=}"; shift ;;
+      --pass) [ $# -ge 2 ] || die "--pass requires an argument"; pass="$2"; shift 2 ;;
+      --pass=*) pass="${1#--pass=}"; shift ;;
+      *) die "import: unknown option: $1 (try --help)" ;;
+    esac
+  done
+  [ -n "$report" ] || die "import: --report <report.json> is required"
+  local d; d="$(proj_dir "$slug")" || return 2
+  local rp="$report"
+  case "$rp" in /*) ;; *) rp="$PWD/$rp" ;; esac
+  [ -f "$rp" ] || die "import: no such report file: $report → fix: pass the JSON file the reviewer produced (write the report to a file first if it arrived as chat)"
+  [ -L "$rp" ] && die "import: refusing a symlinked report: $report → fix: point --report at the real file"
+  local rp_pass
+  rp_pass="$(sed -n 's/.*"pass_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$rp" | head -1)"
+  [ -n "$rp_pass" ] || die "import: the report carries no \"pass_id\" → fix: import accepts only reports produced for a prepared pass (see its request.md)"
+  if [ -n "$pass" ] && [ "$pass" != "$rp_pass" ]; then
+    die "import: --pass '$pass' disagrees with the report's pass_id '$rp_pass' → fix: pass the right id or drop --pass"
+  fi
+  pass="$rp_pass"
+  case "$pass" in ''|*[!A-Za-z0-9._-]*) die "import: invalid pass id '$pass' in the report → fix: reports must carry the pass id that prepare issued" ;; esac
+  local pdir="$(_pass_root "$d")/$pass" mf="$(_pass_root "$d")/$pass/manifest.json"
+  [ -f "$mf" ] || die "import: no prepared packet for pass '$pass' → fix: /pw-review $slug prepare <scope> creates it (an unprepared report is unverified feedback: record it via add-item with its source, never a structured import)"
+  local m_project m_artifact m_surface m_review m_state
+  m_project="$(_mf_read "$mf" project)"
+  [ "$m_project" = "$slug" ] || die "import: pass '$pass' belongs to project '$m_project', not '$slug' → fix: run the import in the producing project"
+  m_artifact="$(_mf_read "$mf" artifact)"; m_surface="$(_mf_read "$mf" surface)"; m_review="$(_mf_read "$mf" review)"
+  m_state="$(_mf_read "$mf" state)"
+  if [ "$m_state" = "imported" ]; then
+    local m_rep_sha rp_sha_now
+    m_rep_sha="$(_mf_read "$mf" report_sha256)"
+    rp_sha_now="$(pw_review_sha256 "$rp" 2>/dev/null || true)"
+    if [ -n "$m_rep_sha" ] && [ "$m_rep_sha" = "$rp_sha_now" ]; then
+      echo "$slug: import — pass $pass was already imported (identical report); nothing to do (replay-safe)"
+      return 0
+    fi
+    die "import: pass '$pass' already has an imported report → fix: one report per pass — prepare a new pass (--refresh, or --repair after a fix) for a new review"
+  fi
+  command -v python3 >/dev/null 2>&1 || die "import: report validation needs python3 on PATH → fix: install python3 (the repository already uses it for complex parsing)"
+  local tmpd; tmpd="$(mktemp -d)" || die "import: cannot create a temp dir → fix: check TMPDIR"
+  local vout="" vrc=0
+  local vf="$tmpd/protocol.tsv"
+  vout="$(python3 - "$mf" "$rp" "$d" "$tmpd" "$vf" 2>&1 <<'PY'
+import hashlib, json, os, sys
+mf, rp, d, tmpd, vf = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+def fail(msg):
+    print("ERR " + msg)
+    sys.exit(1)
+if os.path.getsize(rp) > 1048576:
+    fail("report exceeds 1 MB")
+try:
+    rep = json.load(open(rp, encoding="utf-8"))
+except Exception as e:
+    fail("report is not valid JSON: %s" % e)
+try:
+    man = json.load(open(mf, encoding="utf-8"))
+except Exception as e:
+    fail("manifest unreadable: %s" % e)
+if not isinstance(rep, dict):
+    fail("report must be a JSON object")
+if rep.get("schema") != "pw-review-report/1":
+    fail("wrong report schema %r (expected pw-review-report/1)" % rep.get("schema"))
+if rep.get("pass_id") != man.get("pass_id"):
+    fail("report pass_id %r does not match the prepared pass %r" % (rep.get("pass_id"), man.get("pass_id")))
+verdict = rep.get("verdict")
+if verdict not in ("clean", "findings", "blocked"):
+    fail("verdict must be clean|findings|blocked, got %r" % (verdict,))
+man_art = man.get("artifact")
+if man_art == "-":
+    # close surface: no single artifact — the report only identifies the evidence set
+    if not isinstance(rep.get("scope"), str) or not rep["scope"].strip():
+        fail("report scope must identify the close evidence set")
+elif rep.get("scope") != man_art:
+    fail("report scope %r does not match the prepared artifact %r" % (rep.get("scope"), man_art))
+cov = rep.get("coverage", [])
+if not isinstance(cov, list) or any(not isinstance(x, str) for x in cov):
+    fail("coverage must be a list of strings")
+findings = rep.get("findings", [])
+questions = rep.get("questions", [])
+if not isinstance(findings, list) or len(findings) > 50:
+    fail("findings must be a list of at most 50 entries")
+if not isinstance(questions, list) or len(questions) > 50:
+    fail("questions must be a list of at most 50 entries")
+if verdict == "clean" and findings:
+    fail("verdict=clean with findings present is inconsistent")
+allowed_art = [i.get("path") for i in man.get("inputs", []) if isinstance(i, dict)]
+allowed_wt = [c.get("worktree") for c in man.get("code", []) if isinstance(c, dict) and isinstance(c.get("worktree"), str)]
+def art_allowed(a):
+    if a in allowed_art:
+        return True
+    for wt in allowed_wt:
+        wt = wt.rstrip("/")
+        if a == wt or a.startswith(wt + "/"):
+            return True
+    return False
+seen = set()
+def chk(tag, obj, fields):
+    if not isinstance(obj, dict):
+        fail("%s entries must be objects" % tag)
+    k = obj.get("key")
+    if not isinstance(k, str) or not k or len(k) > 40 or any(c not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-" for c in k):
+        fail("%s entry has no sane key (letters/digits/._-, ≤40 chars)" % tag)
+    if k in seen:
+        fail("duplicate %s key %r" % (tag, k))
+    seen.add(k)
+    for f in fields:
+        v = obj.get(f)
+        if not isinstance(v, str) or not v.strip():
+            fail("%s %s: field %r must be a non-empty string" % (tag, k, f))
+        if len(v) > 4000:
+            fail("%s %s: field %r exceeds 4000 chars" % (tag, k, f))
+        for ln in v.splitlines():
+            if ln.lstrip().startswith("#") or "<!--" in ln or "-->" in ln:
+                fail("%s %s: field %r must not contain markdown headings or HTML-comment syntax" % (tag, k, f))
+    a = obj.get("artifact")
+    if not art_allowed(a):
+        extra = (" + recorded worktree(s): %s" % ",".join(allowed_wt)) if allowed_wt else ""
+        fail("%s %s: artifact %r is not a reviewed input (allowed: %s%s)" % (tag, k, a, allowed_art, extra))
+    if "recurrence_of" in obj and not isinstance(obj["recurrence_of"], str):
+        fail("%s %s: recurrence_of must be a string" % (tag, k))
+    an = obj.get("anchor", "")
+    if not isinstance(an, str) or not an:
+        fail("%s %s: anchor must be a non-empty string" % (tag, k))
+    for bad in ("\n", "\r", "\t", "|"):
+        if bad in an:
+            fail("%s %s: anchor must be a single-line cell without tabs or pipes" % (tag, k))
+    for tok in ("[OPEN]", "[PENDING]", "[RESOLVED]", "[ANSWERED]", "<!--", "-->", "pw-item-status", "<YYYY-MM-DD", "<DD MMMM YYYY", "<§section"):
+        if tok in an:
+            fail("%s %s: anchor carries reserved review syntax (%r)" % (tag, k, tok))
+for f in findings:
+    chk("finding", f, ["artifact", "anchor", "issue", "evidence", "correction"])
+    if f.get("severity") not in ("high", "medium", "low", "info"):
+        fail("finding %s: severity must be high|medium|low|info" % f.get("key"))
+for q in questions:
+    chk("question", q, ["artifact", "anchor", "question"])
+declared = "unknown"
+rv = rep.get("reviewer")
+if isinstance(rv, dict):
+    parts = [str(rv.get(k)) for k in ("provider", "model") if isinstance(rv.get(k), str) and rv.get(k)]
+    if parts:
+        declared = "/".join(parts)
+lines = ["VERDICT\t" + verdict, "DECLARED\t" + declared]
+for c in cov[:8]:
+    lines.append("COVERAGE\t" + c.replace("\n", " ").replace("\t", " "))
+for i, f in enumerate(findings):
+    text = f["issue"]
+    rec = f.get("recurrence_of", "")
+    if rec:
+        text = "Recurrence of %s — reported fixed earlier; the defect is present again:\n%s" % (rec, text)
+    body = "%s\n\n- Evidence: %s\n- Severity: %s\n- Finding key: %s\n- Source: external AI report (pass %s; advisory import)\n- Requested correction: %s\n" % (
+        text, f["evidence"], f["severity"], f["key"], man.get("pass_id"), f["correction"])
+    p = os.path.join(tmpd, "finding-%d.txt" % i)
+    open(p, "w", encoding="utf-8").write(body)
+    lines.append("FINDING\t%s\t%s\t%s" % (f["key"], f["anchor"], p))
+for i, q in enumerate(questions):
+    body = "%s\n\n- Source: external AI report (pass %s; advisory import)\n" % (q["question"], man.get("pass_id"))
+    p = os.path.join(tmpd, "question-%d.txt" % i)
+    open(p, "w", encoding="utf-8").write(body)
+    lines.append("QUESTION\t%s\t%s\t%s" % (q["key"], q["anchor"], p))
+open(vf, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+print("OK")
+PY
+)" || vrc=$?
+  if [ "$vrc" != 0 ]; then
+    rm -rf "$tmpd"
+    printf '%s\n' "$vout" | sed 's/^/import: /' >&2
+    echo "import: report rejected for pass '$pass' — nothing imported (see the reason above)" >&2
+    exit 2
+  fi
+  # freshness: recompute the reviewed identity (content inputs + code evidence)
+  local fp_now fp_expected
+  fp_expected="$(_mf_read "$mf" fingerprint)"
+  fp_now="$(_prepare_fingerprint "$d" "$mf" 2>/dev/null || true)"
+  if [ -z "$fp_now" ] || [ "$fp_now" != "$fp_expected" ]; then
+    _mf_set_scalar "$mf" state '"stale"' || true
+    _log "$slug" pw-review "import refused: pass $pass inputs changed since prepare (report retained as stale evidence)"
+    rm -rf "$tmpd"
+    die "import: reviewed inputs changed since prepare (fingerprint mismatch) — the report is retained as stale evidence and nothing actionable was imported → fix: /pw-review $slug prepare $m_review --refresh (or --repair after a fix), then review the new snapshot"
+  fi
+  # verdict + apply payload
+  local verdict declared
+  verdict="$(awk -F'\t' '$1=="VERDICT"{print $2; exit}' "$vf")"
+  [ -n "$verdict" ] || { rm -rf "$tmpd"; die "import: validator produced no verdict (bug) → fix: report this"; }
+  declared="$(awk -F'\t' '$1=="DECLARED"{print $2; exit}' "$vf")"
+  [ -n "$declared" ] || declared="unknown"
+  _mf_set_scalar "$mf" state '"importing"' || { rm -rf "$tmpd"; die "import: cannot record pass state → fix: check review/ai/$pass permissions"; }
+  local applied_items applied_qs applied_keys skipped_words
+  applied_items="$(_import_progress "$mf" items)"
+  applied_qs="$(_import_progress "$mf" questions)"
+  applied_keys="$(_import_progress "$mf" keys)"
+  local anchors_file; anchors_file="$(mktemp)"
+  _review_items_tsv "$d/$m_review" | awk -F'\t' '$4=="OPEN"||$4=="PENDING"{print $3"\t"$2}' > "$anchors_file" || true
+  local tag key anchor tmpfile nid dup
+  while IFS=$'\t' read -r tag key anchor tmpfile; do
+    case "$tag" in FINDING|QUESTION) ;; *) continue ;; esac
+    case " $applied_keys " in *" $key "*) continue ;; esac
+    if [ "$tag" = "FINDING" ]; then
+      dup="$(awk -F'\t' -v a="$anchor" '$1==a{print $2; exit}' "$anchors_file")"
+      if [ -n "$dup" ]; then
+        skipped_words="$skipped_words $key:duplicate-of-$dup"
+        _log "$slug" pw-review "import skipped $key (anchor already open as $dup)"
+        continue
+      fi
+      if nid="$(_import_item "$slug" "$m_review" "$anchor" "$(cat "$tmpfile")")"; then
+        applied_items="$applied_items $nid"
+        applied_keys="$applied_keys $key"
+      else
+        rm -f "$anchors_file"; rm -rf "$tmpd"
+        die "import: failed to file finding $key — previously imported items are retained; re-run the SAME report to continue (replay-safe)"
+      fi
+    else
+      if nid="$(_import_question "$slug" "$m_review" "$anchor" "$(cat "$tmpfile")")"; then
+        applied_qs="$applied_qs $nid"
+        applied_keys="$applied_keys $key"
+      else
+        rm -f "$anchors_file"; rm -rf "$tmpd"
+        die "import: failed to file question $key — previously imported items are retained; re-run the SAME report to continue (replay-safe)"
+      fi
+    fi
+    local import_json
+    import_json="$(printf '{"report_sha256":"%s","verdict":"%s","items":%s,"questions":%s,"keys":%s,"skipped":%s,"at":"%s"}' \
+      "$(pw_review_sha256 "$rp" 2>/dev/null || true)" "$verdict" \
+      "$(_json_list "${applied_items# }")" "$(_json_list "${applied_qs# }")" "$(_json_list "${applied_keys# }")" "$(_json_list "${skipped_words# }")" "$(now_ts)")"
+    _mf_set_scalar "$mf" import "$import_json" || true
+  done < "$vf"
+  rm -f "$anchors_file"
+  # validated copy + terminal state + notes
+  local rp_sha at import_json
+  rp_sha="$(pw_review_sha256 "$rp" 2>/dev/null || true)"
+  cp "$rp" "$pdir/report.json.part.$$" && mv "$pdir/report.json.part.$$" "$pdir/report.json" \
+    || { rm -rf "$tmpd"; die "import: failed to store the validated report copy → fix: check permissions on review/ai/$pass"; }
+  at="$(now_ts)"
+  import_json="$(printf '{"report_sha256":"%s","verdict":"%s","items":%s,"questions":%s,"keys":%s,"skipped":%s,"at":"%s"}' \
+    "$rp_sha" "$verdict" "$(_json_list "${applied_items# }")" "$(_json_list "${applied_qs# }")" "$(_json_list "${applied_keys# }")" "$(_json_list "${skipped_words# }")" "$at")"
+  _mf_set_scalar "$mf" import "$import_json" || { rm -rf "$tmpd"; die "import: failed to record pass state → fix: check review/ai/$pass permissions"; }
+  _mf_set_scalar "$mf" state '"imported"' || { rm -rf "$tmpd"; die "import: failed to record pass state → fix: check review/ai/$pass permissions"; }
+  if [ ! -f "$d/REVIEWER-NOTES.md" ]; then cmd_note_init "$slug" >/dev/null 2>&1 || true; fi
+  IMP_TS="$at" IMP_SURFACE="$m_surface" IMP_ARTIFACT="$m_artifact" IMP_PASS="$pass" \
+  IMP_VERDICT="$verdict" IMP_DECLARED="$declared" \
+  IMP_ITEMS="$(printf '%s' "${applied_items# }" | tr ' ' ',')" \
+  IMP_QS="$(printf '%s' "${applied_qs# }" | tr ' ' ',')" \
+  IMP_SKIPPED="$(printf '%s' "${skipped_words# }" | tr ' ' ',')" \
+  IMP_COV="$(awk -F'\t' '$1=="COVERAGE"{print $2}' "$vf" | head -4)"
+  if [ -f "$d/REVIEWER-NOTES.md" ]; then
+    staged_or_die "$d/REVIEWER-NOTES.md" _import_notes_body
+  fi
+  rm -rf "$tmpd"
+  echo "$slug: import — pass $pass ($m_surface · $m_artifact) verdict=$verdict"
+  echo "  items:${applied_items:- none}${applied_qs:+ · questions:$applied_qs}${skipped_words:+ · skipped:$skipped_words}"
+  echo "  report stored: review/ai/$pass/report.json   (external import — advisory only: no approval row, no repair)"
+  echo "  apply the recorded findings: /pw-review $slug $m_review"
+  return 0
+}
+
 
 # ---------------------------------------------------------------- note-init
 cmd_note_init() {
@@ -1207,15 +1910,17 @@ cmd_note_init() {
   echo "$slug: review note-init created REVIEWER-NOTES.md"
 }
 
-# Private: this project's mode for one phase (always "off"/"advisory"/"auto" — never empty, since
-# cmd_ai_review ensures the line first). Used by cmd_auto_signoff and cmd_start's reviewer check.
+# Private: this project's EFFECTIVE mode for one surface (always "advisory"/"auto" — legacy
+# stored `off` and a missing row both read as `advisory`, so an explicit AI pass is never
+# silently dead; the config entity owns the stored values and the migration). Used by
+# cmd_auto_signoff and cmd_start's reviewer check.
 _ai_review_mode_of() {
-  local slug="$1" phase="$2" modes kv
-  modes="$("$CFG" ai-review "$slug")"   # the config entity owns the modes
+  local slug="$1" phase="$2" modes kv m
+  modes="$("$CFG" ai-review "$slug" 2>/dev/null || true)"   # the config entity owns the modes
   for kv in $modes; do
-    [ "${kv%%=*}" = "$phase" ] && { echo "${kv#*=}"; return 0; }
+    [ "${kv%%=*}" = "$phase" ] && { m="${kv#*=}"; case "$m" in off|"") echo advisory ;; *) echo "$m" ;; esac; return 0; }
   done
-  echo "off"
+  echo advisory
 }
 
 _reindex() { cmd_reindex "$1" "$2" >/dev/null; }
@@ -1255,8 +1960,11 @@ case "$OP" in
   reindex)      cmd_reindex "$@" ;;
   archive)      cmd_archive "$@" ;;
   reopen)       cmd_reopen "$@" ;;
+  prepare)      cmd_prepare "$@" ;;
+  import)       cmd_import "$@" ;;
+  passes)       exec "$HERE/pw-review-read.sh" passes "$@" ;;
   note-init)    cmd_note_init "$@" ;;
   auto-signoff) cmd_auto_signoff "$@" ;;
   -h|--help) pw_usage ;;
-  *) die "unknown operator: $OP → fix: see --help (init, init-docs, init-all, gate, has-open, count, eligible, scan, reindex, archive, start, reopen, note-init, auto-signoff, signoff, add-item, answer, add-question, resolve)" ;;
+  *) die "unknown operator: $OP → fix: see --help (init, init-docs, init-all, gate, has-open, count, eligible, scan, passes, reindex, archive, start, reopen, prepare, import, note-init, auto-signoff, signoff, add-item, answer, add-question, resolve)" ;;
 esac

@@ -544,3 +544,18 @@ done** — it is not shipped until the pipeline passes; see the fix loop below.
      red → stop, report the remaining error in the recap and the task's `## Result`, and tell me the
      task is NOT done — ask whether to keep fixing or take another action. Never claim `done` on a
      failing build.
+
+## Ship-surface review (only when configured)
+
+After a run whose shipped tasks finished with a green build check (or a reported
+unresolved/environmental one), read the `ship` axis
+(`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh project get <slug> review-trigger` and
+`… ai-review`) and, ONLY when the trigger is `completion` and the outcome is callable (`advisory`
+default; a legacy `off` row reads as advisory), run `/pw-review <slug> ai T0n` for each shipped
+task — a fresh reviewer only (it reads the task's committed diff + MR description; the item record
+stays in `task/review/T0n.review.md`). Bounded repairs only when `review-repair ship=bounded`
+within `review-rounds` passes; repairs go through the executor ladder, re-run the task's
+`## Verify`, push to the same branch, and re-monitor the pipeline before any fresh pass. The
+reviewer never writes forge comments (that is the comments flow above), never re-confirms pushes,
+and never merges. Outage or an unverified route: one skip line, continue. Advisory findings with a
+green build do not block the ship — they are mine to disposition.
