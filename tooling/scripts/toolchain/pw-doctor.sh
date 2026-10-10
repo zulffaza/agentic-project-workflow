@@ -325,11 +325,15 @@ for p in "${PW_PROVIDERS[@]}"; do
 
   # orphan commands: installed pw-* the bundle NO LONGER generates (renamed/dropped commands
   # would otherwise linger forever — the sync check only diffs names that still exist).
+  # Skill-layout providers share ONE root between generated command-skills and bundle plain
+  # skills — a shipped plain skill named pw-* (e.g. pw-independent-review) is NOT a command,
+  # so bundle skill sources are excluded here (the orphan-skill pass above owns their drift).
   corph=""
   if [ "$cmdstyle" = "skill" ]; then
     for inst in "$odir"/pw-*/; do
       [ -d "$inst" ] || continue
       n="$(basename "$inst")"
+      [ -d "$SKILL_DIR/$n" ] && continue
       [ -d "$tmp/$p/$n" ] || corph="$corph $n"
     done
   else

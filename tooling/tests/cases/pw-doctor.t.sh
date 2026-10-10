@@ -11,8 +11,9 @@ mkdir -p "$PW/tooling" "$FH"
 cp -R "$TOOL/scripts" "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" "$TOOL/templates" "$TOOL/prompts" "$PW/tooling/"
 cp "$REAL/pw.config.sh" "$PW/pw.config.sh"
 cat >> "$PW/pw.config.sh" <<CFG
-# --- test overrides: single provider, all dirs under \$FH ---
-PW_PROVIDERS=(kilo)
+# --- test overrides: two providers (kilo = file commands; codex = SKILL-layout commands),
+# all dirs under \$FH ---
+PW_PROVIDERS=(kilo codex)
 # plan-22: a nested-BYOK-scoped allowlist exercises the catalog fetch (prefix-filter entries +
 # short-form pattern matching against the tests/bin/kilo shim's provider-prefixed lines)
 PW_MODEL_ALLOWLIST_KILO="alibaba-token-plan/*"
@@ -26,6 +27,12 @@ DOCTOR="$PW/tooling/scripts/toolchain/pw-doctor.sh"
 
 # 1) --fix on a bare fake HOME installs everything; a follow-up check must be clean
 pwtest_rc 0 "doctor --fix installs a bare provider surface" env HOME="$FH" bash "$DOCTOR" --fix
+# skill-layout provider (codex commands ARE skill dirs in ONE root): a shipped PLAIN skill
+# named pw-* (pw-independent-review) must be installed there and must NOT be swept as an
+# orphan command by the same --fix (regression: the orphan-command pass deleted it).
+[ -e "$FH/.codex/skills/pw-independent-review" ] \
+  && pwtest_ok "skill-layout provider carries the pw-* plain skill after --fix" \
+  || pwtest_bad "skill-layout plain skill survives --fix" "missing $FH/.codex/skills/pw-independent-review"
 pwtest_rc 0 "doctor clean after fix" env HOME="$FH" bash "$DOCTOR"
 # plan-22: catalog fetched ONCE and filtered locally (entries are prefix filters, never `kilo
 # models` args — the shim errors on slash args, pinning that), allowlist patterns validated
