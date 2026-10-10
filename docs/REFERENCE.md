@@ -89,6 +89,7 @@ It is separate from PLAN approval and MR merging.
 | `/pw-help find <term>` | Search command and user documentation |
 | `/pw-status <slug>` | Show project progress and blockers |
 | `/pw-status <slug> rewind <phase>` | Reopen an earlier phase with a review trail |
+| `/pw-status --all` | Overview of every project: phase, attention, accepted tasks, last activity; optional `--attention`, `--phase <phase>`, `--json` |
 | `/pw-doctor [--fix]` | Check or repair installation consistency |
 | `/pw-doctor --project <slug> [--fix]` | Check or repair supported project consistency findings |
 | `/pw-doctor --project <slug> --guidance` | Preview recognized guidance updates in an existing project |

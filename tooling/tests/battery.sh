@@ -34,6 +34,9 @@ battery_rows() {
     printf 'help project-review %s\tpw-help.sh\tproject %s pw-review\n' "$s" "$s"
     printf 'provider-audit %s\tpw-status.sh\tprovider-audit %s\n' "$s" "$s"
   done
+  # cross-project overview (--all): one read-only scan over the whole fixture root.
+  # S3's prose phase line is the pinned partial-scan case (rc 1 + remediation).
+  printf 'status-all fixtures\tpw-status.sh\t--all\n'
   # review handoff (plan 36): prepare freezes a packet (writes review/ai/<pass-id>/ only —
   # existing review files are left alone), then the readers report it. F1 has no PLAN, so the
   # prepare rows run on the mid-lifecycle fixtures; the import refusal row is fixture-agnostic
@@ -112,7 +115,7 @@ pw-preflight|analyze prepare execute breakdown ship review comments close
 pw-config|model-check model-resolve project global review-trigger review-repair review-rounds
 pw-session|session-check
 pw-review-read|gate has-open count eligible scan passes
-pw-status|provider-audit
+pw-status|provider-audit --all
 pw-ship|history request-review"
 
 pwtest_is_crash() {  # file → 0 if output looks like a *script* defect (not a clean failure)

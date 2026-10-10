@@ -71,10 +71,13 @@ Optional controls have separate purposes:
 | What commands exist? | `/pw-help` |
 | What do I run next? | `/pw-help project delivery-note` |
 | What happened in this project? | `/pw-status delivery-note` |
+| Which projects need attention? | `/pw-status --all` |
 | How do I use one command? | `/pw-help command pw-review delivery-note` |
 | Where is a feature documented? | `/pw-help find acceptance` |
 
 Replace `delivery-note` with your project name. These help and status commands only read state.
+`/pw-status --all` prints one read-only table of every project under the projects root;
+add `--attention` to keep only rows that need inspection.
 
 ## Dig deeper
 

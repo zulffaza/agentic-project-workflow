@@ -16,6 +16,8 @@
 #   _review_has_open_marker <file>       0 iff any real heading (any level, 3+ hashes) is
 #                                        open/pending/conflicting — fail closed, a deeper
 #                                        malformed heading can never be auto-approved past
+#   pw_review_item_counts <file>         "open=N resolved=M" — the ONE heading-level count
+#                                        everything (cmd_count, status surfaces) shares
 #   _decision_is_approved <text>         0 iff a Sign-off Decision cell reads approved
 #                                        (accepts the legacy "approved ✅" form)
 #   _signoff_last_real_row_line <file>   line no. of the Sign-off table's last REAL row (0=none)
@@ -206,6 +208,19 @@ _review_has_open_marker() {
       if (t == "OPEN" || t == "PENDING" || t == "CONFLICT") { found = 1 }
     }
     END { exit(found ? 0 : 1) }'
+}
+
+# "open=N resolved=M" for one review file — the SAME heading-level classifier (and stub
+# filter) the gates use, shared so pw-review-read.sh count and the status surfaces can
+# never disagree about what is open. A second inline copy of this awk is exactly how two
+# readers of one file start drifting.
+pw_review_item_counts() {
+  _review_item_headings "$1" | awk "$_MD_STTAG"'
+    { id=$0; sub(/^#+ /,"",id); sub(/[^A-Za-z0-9].*$/,"",id)
+      tag=sttag($0,id)
+      if(tag=="OPEN" || tag=="PENDING" || tag=="CONFLICT") open++
+      if(tag=="RESOLVED" || tag=="ANSWERED") resolved++ }
+    END {printf "open=%d resolved=%d",open+0,resolved+0}'
 }
 
 # True iff a Sign-off Decision cell reads as "approved" — accepts both the CURRENT plain form

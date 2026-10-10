@@ -149,8 +149,9 @@ hdr_lines() {
 }
 
 # ops_of <script> — operator names from "pw-<s>.sh <op>  <args>" usage-header signatures.
+# <op> may be a bare word or a --flag (machine-side forms like --all have no slug slot).
 ops_of() {
-  hdr_lines "$1" | awk '/^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*([ ]|$)/{print $2}'
+  hdr_lines "$1" | awk '/^  pw-[a-z0-9-]+\.sh +(--[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)([ ]|$)/{print $2}'
 }
 
 # ops_detail <script> — memoized "op<TAB>sig<TAB>para<TAB>facet" rows in usage-header
@@ -177,13 +178,13 @@ ops_detail() {
         else { facet = "special"; sub(/^.*SPECIAL[ ]*=/, "", fline) }
         gsub(/[,()]/, " ", fline)
         nf = split(fline, fa, /[ ]+/)
-        for (fi = 1; fi <= nf; fi++) if (fa[fi] ~ /^[a-z][a-z0-9-]*$/ && !(fa[fi] in facs)) facs[fa[fi]] = facet
+        for (fi = 1; fi <= nf; fi++) if (fa[fi] ~ /^(--)?[a-z][a-z0-9-]*$/ && !(fa[fi] in facs)) facs[fa[fi]] = facet
       }
-      /^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*([ ]|$)/ {
+      /^  pw-[a-z0-9-]+\.sh +(--[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)([ ]|$)/ {
         tryflush()
         o = $2
         oc++; olist[oc] = o
-        if (!(o in sigs)) { s = $0; sub(/^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*[ ]+/, "", s); sigs[o] = s }
+        if (!(o in sigs)) { s = $0; sub(/^  pw-[a-z0-9-]+\.sh +(--[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)[ ]+/, "", s); sigs[o] = s }
         if (txt != "") { buf = $2; txt = "" } else buf = (buf == "" ? $2 : buf SUBSEP $2)
         next }
       NF==0 { tryflush(); buf = ""; txt = ""; next }
@@ -251,7 +252,7 @@ facets_map() {
         else { facet="special"; sub(/^.*SPECIAL[ ]*=/,"",line) }
         gsub(/[,()]/," ",line)
         n=split(line, a, /[ ]+/)
-        for (i=1;i<=n;i++) if (a[i] ~ /^[a-z][a-z0-9-]*$/) print facet "\t" a[i]
+        for (i=1;i<=n;i++) if (a[i] ~ /^(--)?[a-z][a-z0-9-]*$/) print facet "\t" a[i]
       }')"
   fi
   [ -n "${!var}" ] && printf '%s\n' "${!var}"
@@ -350,8 +351,13 @@ selector_tokens() {
 # has_shape <cmd> <tok> — token appears in a real invocation span: the slash form
 # `/pw-<cmd> <slug> <tok>` or a "literally `<tok>`" operator definition sentence.
 # Script-form lines are NOT surface proof — C3 mapping bodies name internal steps.
+# A --flag operator is a MACHINE-form op: its real shape is the no-slug
+# `/pw-<cmd> <tok>` line (there is no <project-slug> slot to require).
 has_shape() {
   local f="$CMDS/$1.md"
+  case "$2" in
+    --*) grep -qF -e "/$1 $2 " -e "/$1 $2$BT" -e "/$1 $2$TF" "$f"; return $? ;;
+  esac
   # one grep, same OR-of-literals semantics as the old seven grep -qF calls
   grep -qF -e "/$1 <slug> $2 " -e "/$1 <project-slug> $2 " \
     -e "/$1 <slug> $2$BT" -e "/$1 <project-slug> $2$BT" \
@@ -455,14 +461,26 @@ flowline() {
 
 # cmd_shape_line <cmd> <tok> — the user-typed invocation args: token through the
 # span-closing backtick/quote of the first command-form shape, else empty.
+# A --flag token uses the no-slug machine form `/pw-<cmd> <tok> …`.
 cmd_shape_line() {
   local ln m
-  ln="$(grep -m1 -n -E "/$1[ ]+(<project-slug>|<slug>)[ ]$2([ ]|$TF|$BT|[^A-Za-z0-9-])" "$CMDS/$1.md" 2>/dev/null | cut -d: -f1 || true)"
-  [ -n "$ln" ] || return 0
-  m="$(awk -v ln="$ln" -v cmd="$1" 'NR==ln {
-        if (match($0, cmd" (<project-slug>|<slug>) ")) { print substr($0, RSTART+RLENGTH); exit }
-        if (match($0, cmd" <slug> ")) { print substr($0, RSTART+RLENGTH); exit }
-      }' "$CMDS/$1.md")"   # awk already exits after the one printed line; a trailing `head -1` could SIGPIPE under load
+  case "$2" in
+    --*)
+      ln="$(grep -m1 -n -E "/$1[ ]+$2([ ]|$TF|$BT|\$)" "$CMDS/$1.md" 2>/dev/null | cut -d: -f1 || true)"
+      [ -n "$ln" ] || return 0
+      m="$(awk -v ln="$ln" -v cmd="$1" 'NR==ln {
+            if (match($0, cmd" ")) { print substr($0, RSTART+RLENGTH); exit }
+          }' "$CMDS/$1.md")"
+      ;;
+    *)
+      ln="$(grep -m1 -n -E "/$1[ ]+(<project-slug>|<slug>)[ ]$2([ ]|$TF|$BT|[^A-Za-z0-9-])" "$CMDS/$1.md" 2>/dev/null | cut -d: -f1 || true)"
+      [ -n "$ln" ] || return 0
+      m="$(awk -v ln="$ln" -v cmd="$1" 'NR==ln {
+            if (match($0, cmd" (<project-slug>|<slug>) ")) { print substr($0, RSTART+RLENGTH); exit }
+            if (match($0, cmd" <slug> ")) { print substr($0, RSTART+RLENGTH); exit }
+          }' "$CMDS/$1.md")"   # awk already exits after the one printed line; a trailing `head -1` could SIGPIPE under load
+      ;;
+  esac
   m="${m%%"$TF"*}"; m="${m%%"$BT"*}"; m="${m%"${m##*[! ]}"}"   # cut to first quote/backtick, trim trailing spaces
   printf '%s' "$m"
   return 0

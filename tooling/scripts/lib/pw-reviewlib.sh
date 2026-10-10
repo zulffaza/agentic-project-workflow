@@ -13,6 +13,8 @@
 #   pw_heading_meta_check   reserved-syntax guard for heading metadata
 #                           (status tags, HTML comments, machine markers, stub tokens)
 #   pw_review_lane          artifact path -> review lane (not a dashboard phase)
+#   pw_review_dirs          the canonical review-lane directory list (ONE copy for all readers)
+#   pw_review_files         immediate review files per lane (+ escape records)
 #   pw_review_lane_rank     lane order on the phase ladder
 #   pw_dash_rank            dashboard-phase order on the same ladder
 #   pw_review_phase_lane_ok  lane-vs-phase binding (auto policy applies to its own lane)
@@ -109,6 +111,57 @@ pw_review_lane() {
     task/T*.md)                         echo task ;;
     *)                                  echo other ;;
   esac
+}
+
+# --- review-lane discovery (the ONE list every reader shares) ------------------
+#
+# pw_review_dirs — the review lanes as project-relative directories, one per line, in
+# canonical scan order. THE single directory list: pw-review-read.sh scan and the
+# pw-status.sh surfaces consume it instead of keeping private copies — a missed dir is
+# how context/rfc/close coverage drifted once already.
+pw_review_dirs() {
+  printf '%s\n' "analysis/review" "task/review" "context/review" "rfc/review" "review"
+}
+
+# pw_review_files <projdir> — enumerate the immediate review files of a project.
+# Records on stdout, one per line, TAB-separated:
+#   file<TAB><lane-dir><TAB><file-abspath>     an existing *.review.md of that lane
+#   symlink<TAB><lane-dir><TAB><file-abspath>  the review FILE is a symlink — never read
+#   escape<TAB><lane-dir>                      the lane DIRECTORY is/contains a symlink, or
+#                                              otherwise resolves outside the project
+# Missing lanes are skipped silently; `find -maxdepth 1` (never recursive: review/ai/
+# handoff packets hold snapshot copies of review files and must never be re-counted).
+# A lane symlink is checked with an explicit -L walk: pw_review_contain's logical-PWD
+# resolution cannot see a LAST-segment symlink pointing outside, so the -L walk is the
+# authority for lane directories. rc 1 when any lane escaped — the escape records are
+# still emitted so each caller can choose its own policy (the scan dies; the status
+# surfaces flag uncertainty).
+pw_review_files() {
+  local d="$1" rel f seg p sy rc=0
+  for rel in $(pw_review_dirs); do
+    [ -d "$d/$rel" ] || continue
+    sy=0; p=""
+    for seg in $(printf '%s' "$rel" | tr '/' ' '); do
+      p="$p/$seg"
+      if [ -L "$d$p" ]; then sy=1; break; fi
+    done
+    if [ "$sy" = 1 ] || ! pw_review_contain "$d" "$rel" >/dev/null 2>&1; then
+      printf 'escape\t%s\n' "$rel"
+      rc=1
+      continue
+    fi
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      if [ -L "$f" ]; then
+        printf 'symlink\t%s\t%s\n' "$rel" "$f"
+      else
+        printf 'file\t%s\t%s\n' "$rel" "$f"
+      fi
+    done <<EOFL
+$(find "$d/$rel" -maxdepth 1 -name '*.review.md' 2>/dev/null | LC_ALL=C sort)
+EOFL
+  done
+  return $rc
 }
 
 # pw_review_lane_rank <lane> — position on the phase ladder (0 = unranked/exempt).

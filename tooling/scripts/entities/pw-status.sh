@@ -4,6 +4,15 @@
 #
 #   pw-status.sh <slug>                  full status report
 #   pw-status.sh <slug> --skip-cli-check skip CLI auth status check
+#   pw-status.sh --all [--attention] [--phase <phase>] [--json]
+#       READ-ONLY cross-project overview across the projects root: one row per
+#       discovered project — phase, attention conditions, accepted tasks, last
+#       recorded event, and the inspection command. Local records only: no
+#       forge/auth/model calls, no writes (never inserts missing dashboard
+#       lines). --attention keeps attention rows; --phase filters by dashboard
+#       phase token; --json prints one machine-readable object. Exit 0 =
+#       complete; 1 = partial (unreadable/malformed records; rows kept);
+#       2 = bad arguments or a missing projects root.
 #   pw-status.sh --selftest              run isolated self-test
 #
 #   Project-state setters (the dashboard/LOG.md entity; merged from pw-lib, plan 20):
@@ -35,8 +44,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_HOME="$(cd "$HERE/../../.." && pwd)"
 . "$HERE/../lib/pw-common.sh"
 . "$HERE/../lib/pw-mdlib.sh"
+. "$HERE/../lib/pw-reviewlib.sh"
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
+OVTAB="$(printf '\t')"
 
 die() { echo "pw-status: $*" >&2; exit 2; }
 proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new $1)"; printf '%s' "$d"; }
@@ -59,6 +70,41 @@ _latest_signoff_display() { # <file> → "changes-requested by pw-review (repair
   if _decision_is_approved "$_dec" && ! _review_approval_valid "$_f"; then
     printf ' [blocked by unresolved work or an active human rejection]'
   fi
+}
+
+# _review_gate_relevant <rel> <phase> — 0 when this review file's approval gate is a
+# gate of the project's CURRENT phase (the same scoping pw-preflight.sh enforces):
+# analysis-topic reviews gate analysis→breakdown→execution; the PLAN review gates
+# breakdown→execution. Everything else (context readiness, task-plan/task-exec/ship
+# mirrors, RFC content, the close record) is an OPTIONAL lane whose absence is never a
+# gate, and RFC comment staging (analysis/review/RFC.review.md) has no approval gate at
+# all. Keeping the split here means the overview and the single-project report always
+# classify the same file the same way.
+_review_gate_relevant() {
+  local rel="$1" phase="$2"
+  case "$rel" in
+    analysis/review/RFC.review.md) return 1 ;;
+    analysis/review/*.review.md)
+      case "$phase" in analysis|breakdown|executing) return 0 ;; *) return 1 ;; esac ;;
+    task/review/PLAN.review.md)
+      case "$phase" in breakdown|executing) return 0 ;; *) return 1 ;; esac ;;
+    *) return 1 ;;
+  esac
+}
+
+# _review_pending_display <file> — "in-review by <actor>" / "changes-requested by <actor>"
+# when the file carries a REAL (attributed) non-approved latest decision. rc 1 when there
+# is no real decision: the template's placeholder row ("| | | in-review |") reads as
+# in-review with an EMPTY actor and must never nag as pending work, and a valid approval
+# is not pending anything.
+_review_pending_display() {
+  local _f="$1" _dec _act
+  _dec="$(_signoff_latest_decision "$_f")" || return 1
+  case "$_dec" in ''|"none yet") return 1 ;; esac
+  _decision_is_approved "$_dec" && return 1
+  _act="$(_signoff_latest_actor "$_f")" || _act=""
+  [ -n "$_act" ] || return 1
+  printf '%s by %s' "$_dec" "$_act"
 }
 
 
@@ -369,7 +415,371 @@ cmd_stack() {
   echo "stacks: ${n} task(s), ${stale} stale, ${unv} unverified (not started), ${debt} with pending operations"
 }
 
+# --- cross-project overview (--all) -----------------------------------------------
+# READ-ONLY by contract: derives one row per discovered project from local records
+# only. Never writes (notably: never runs the config review-axis getters — they INSERT
+# missing dashboard lines as a side effect), never calls a forge/auth/model CLI, never
+# spawns workers, and never reads context payloads, worktrees, or secrets. Exit codes:
+# 0 = complete scan (including an empty result); 1 = partial scan (unreadable/malformed
+# records — every readable row is still emitted with its diagnostics); 2 = invalid
+# arguments or an inaccessible projects root.
+_overview_line() { # one control-free display line (untrusted file content safety)
+  printf '%s' "$1" | tr '\n\r\t' '   ' | sed 's/[[:cntrl:]]/ /g'
+}
+_overview_json() { # JSON string escape for an already _overview_line-sanitized value
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+_overview_slug_ok() {
+  case "$1" in ''|.|..|*/*|*[!a-z0-9-]*|[!a-z0-9]*) return 1 ;; esac
+  return 0
+}
+_overview_slug_clean() { # display-safe slug; never a command fragment for invalid names
+  _overview_line "$1" | sed "s/[\"\\\\]/_/g"
+}
+_overview_is_project() { # the workflow markers discovery recognizes
+  local d="$1"
+  if [ -d "$d/analysis" ] && [ -d "$d/task" ] && [ -f "$d/context/INDEX.md" ]; then return 0; fi
+  if [ -f "$d/task/PLAN.md" ] && { [ -d "$d/task/review" ] || [ -d "$d/analysis/review" ] || [ -d "$d/review" ]; }; then return 0; fi
+  return 1
+}
+_overview_event_display() { # <raw event timestamp> → compact "9 Oct" (raw when unparseable)
+  local raw="$1" e d
+  if e="$(pw_timestamp_epoch "$raw" 2>/dev/null)"; then
+    d="$(TZ=Asia/Jakarta LC_ALL=C date -r "$e" '+%e %b' 2>/dev/null)"
+    [ -n "$d" ] || d="$(TZ=Asia/Jakarta LC_ALL=C date -d "@$e" '+%e %b' 2>/dev/null)"
+    if [ -n "$d" ]; then printf '%s' "${d# }"; return 0; fi
+  fi
+  _overview_line "$raw" | sed "s/[\"\\\\]/'/g"
+}
+_overview_last_event() { # <log> → "json-raw<TAB>display"; rc 1 when there is no entry
+  local raw
+  [ -f "$1" ] && [ -r "$1" ] || return 1
+  raw="$(sed -n 's/^- \*\*\([^*]*\)\*\* ·.*/\1/p' "$1" | tail -n 1)"
+  [ -n "$raw" ] || return 1
+  raw="$(_overview_line "$raw")"
+  printf '%s\t%s' "$(_overview_json "$raw")" "$(_overview_event_display "$raw")"
+}
+_overview_rel_array() { # stdin: one project-relative path per line → "a","b" (JSON strings)
+  local out="" sep="" l
+  while IFS= read -r l; do
+    [ -n "$l" ] || continue
+    out="$out$sep\"$(_overview_json "$l")\""; sep=","
+  done
+  printf '%s' "$out"
+}
+_overview_list_count() { # stdin: one item per line → count
+  local n=0 l
+  while IFS= read -r l; do [ -n "$l" ] && n=$((n+1)); done
+  printf '%s' "$n"
+}
+
+# _overview_collect <dir> <display-slug> — one TAB record on stdout. Field map:
+#  1 group(0 unfinished/1 closed) · 2 attn(0 has/1 none) · 3 slug · 4 phase token|unknown
+#  5 attention text · 6 accepted ("n/a"|"?"|A/T) · 7 last-event display · 8 inspection cmd
+#  9 json phase_raw · 10 json path · 11 json description · 12 json reasons array
+#  13 json last-event raw · 14 json tasks object|null · 15 diagnostics text
+#  16 json diagnostics array · 17 unreadable flag · 18 malformed flag
+_overview_collect() {
+  local d="$1" slug="$2"
+  local readme="$d/README.md" plan="$d/task/PLAN.md"
+  local phase_raw="" phase="unknown" desc="" u=0 m=0
+  local diag_text="" diags_json="[" dsep="" diag_n=0
+  local meta_n=0 meta_json="" msep=""
+  local tasks_json="null" accepted_disp="n/a" tot=0 a_n=0 dn_n=0 vf_n=0 ip_n=0 td_n=0 ot_n=0
+  local vf_json="" done_json="" other_json=""
+  local id st stn spec idi sti tv dw diff_det seen=" " dash_pairs=""
+  local _k _lane _af _rel _oc open_n=0 open_files="" pend_rel="" appr_rel="" scanrec=""
+  local last_raw="" last_disp="" _le
+  local attn=0 attn_text="" reasons="[" rsep="" grp=0 aflag=1 inspect=""
+  _ov_diag() { # diagnostics list + metadata uncertainty (the same finding, two consumers)
+    local _t; _t="$(_overview_line "$1")"
+    diag_text="${diag_text:+$diag_text; }$_t"; diag_n=$((diag_n+1))
+    diags_json="$diags_json$dsep\"$(_overview_json "$_t")\""; dsep=","
+    meta_n=$((meta_n+1)); meta_json="$meta_json$msep\"$(_overview_json "$_t")\""; msep=","
+  }
+  _ov_diag_plain() { # diag only — the phase-token finding carries its own attention code
+    local _t; _t="$(_overview_line "$1")"
+    diag_text="${diag_text:+$diag_text; }$_t"; diag_n=$((diag_n+1))
+    diags_json="$diags_json$dsep\"$(_overview_json "$_t")\""; dsep=","
+  }
+  _ov_meta() { # metadata uncertainty without a scan-health diagnostic
+    local _t; _t="$(_overview_line "$1")"
+    meta_n=$((meta_n+1)); meta_json="$meta_json$msep\"$(_overview_json "$_t")\""; msep=","
+  }
+
+  # dashboard: phase + description (never a write; pw_field is a pure reader)
+  if [ ! -f "$readme" ] || [ ! -r "$readme" ]; then
+    u=1; _ov_diag "README.md missing or unreadable — dashboard fields unavailable"
+  else
+    phase_raw="$(_overview_line "$(pw_field "$readme" Status)")"
+    phase="$(pw_phase_token "${phase_raw:-missing}")"
+    if ! pw_phase_valid "$phase"; then
+      m=1; phase="unknown"
+      _ov_diag_plain "README.md Status line carries no valid lifecycle token"
+    fi
+    desc="$(_overview_line "$(pw_field "$readme" One-liner)")"
+    case "$desc" in '<'*'>') desc="" ;; esac   # scaffold placeholder, not a summary
+  fi
+
+  # PLAN tasks (+ holder disagreement against task files and the dashboard mirror)
+  if [ -f "$plan" ]; then
+    if [ ! -r "$plan" ]; then
+      u=1; accepted_disp="?"; _ov_diag "task/PLAN.md unreadable"
+    else
+      spec="$(_pw_plan_map "$plan")"
+      idi="${spec%% *}"; sti="$(printf '%s' "$spec" | cut -d' ' -f2)"
+      if [ "${idi:-0}" -gt 0 ] 2>/dev/null && [ "${sti:-0}" -gt 0 ] 2>/dev/null; then
+        [ -f "$readme" ] && dash_pairs="$(pw_plan_pairs "$readme")"
+        while IFS='|' read -r id st; do
+          [ -n "$id" ] || continue
+          case "$seen" in
+            *" $id "*) m=1; _ov_diag "duplicate task id $id in the PLAN task table"; continue ;;
+          esac
+          seen="$seen$id "
+          tot=$((tot+1))
+          stn="$(printf '%s' "$st" | sed -e 's/^[`*]*//' -e 's/[`*]*$//')"; stn="${stn%% *}"
+          case "$stn" in
+            accepted) a_n=$((a_n+1)) ;;
+            done) dn_n=$((dn_n+1)); done_json="$done_json${done_json:+,}\"$id\"" ;;
+            verify-failed) vf_n=$((vf_n+1)); vf_json="$vf_json${vf_json:+,}\"$id\"" ;;
+            in-progress) ip_n=$((ip_n+1)) ;;
+            todo) td_n=$((td_n+1)) ;;
+            '') m=1; _ov_diag "task $id has an empty PLAN status cell" ;;
+            *) ot_n=$((ot_n+1)); other_json="$other_json${other_json:+,}\"$id\""
+               _ov_meta "task $id status '$stn' is not a known task state" ;;
+          esac
+          case "$stn" in
+            accepted|done|verify-failed|in-progress|todo)
+              diff_det=""; tv=""
+              if [ -f "$d/task/$id.md" ] && [ -r "$d/task/$id.md" ]; then
+                tv="$(pw_field "$d/task/$id.md" Status | sed -e 's/^[`*]*//' -e 's/[`*]*$//')"; tv="${tv%% *}"
+              fi
+              case "$tv" in
+                accepted|done|verify-failed|in-progress|todo)
+                  [ "$tv" = "$stn" ] || diff_det="$id: PLAN=$stn task-file=$tv" ;;
+              esac
+              if [ -z "$diff_det" ] && [ -n "$dash_pairs" ]; then
+                dw="$(printf '%s\n' "$dash_pairs" | awk -F'|' -v id="$id" '$1==id{print $2; exit}')"
+                dw="$(printf '%s' "$dw" | sed -e 's/^[`*]*//' -e 's/[`*]*$//')"; dw="${dw%% *}"
+                case "$dw" in
+                  accepted|done|verify-failed|in-progress|todo)
+                    [ "$dw" = "$stn" ] || diff_det="$id: PLAN=$stn dashboard=$dw" ;;
+                esac
+              fi
+              [ -n "$diff_det" ] && _ov_meta "$diff_det"
+              ;;
+          esac
+        done <<EOF
+$(pw_plan_pairs "$plan")
+EOF
+        accepted_disp="$a_n/$tot"
+        tasks_json="{\"parsable\":true,\"accepted\":$a_n,\"total\":$tot,\"done\":$dn_n,\"verify_failed\":$vf_n,\"in_progress\":$ip_n,\"todo\":$td_n,\"other\":$ot_n}"
+      else
+        m=1; accepted_disp="?"
+        _ov_diag "task/PLAN.md task table unparsable (no ID/Status header row)"
+      fi
+    fi
+  fi
+
+  # review records across the shared five lanes (the same walk the review readers use)
+  scanrec="$(pw_review_files "$d" 2>/dev/null)" || true
+  while IFS="$OVTAB" read -r _k _lane _af; do
+    case "$_k" in
+      escape) u=1; _ov_diag "review directory '$_lane' is or climbs through a symlink — not read" ;;
+      symlink) u=1; _ov_diag "symlinked review file not read: $_lane/$(basename "$_af")" ;;
+      file)
+        _rel="$_lane/$(basename "$_af")"
+        if [ ! -r "$_af" ]; then u=1; _ov_diag "review file unreadable: $_rel"; continue; fi
+        _oc="$(pw_review_item_counts "$_af")"; _oc="${_oc#open=}"; _oc="${_oc%% *}"; _oc="${_oc:-0}"
+        if [ "$_oc" -gt 0 ]; then
+          open_n=$((open_n+_oc)); open_files="$open_files$_rel
+"
+        fi
+        if _review_approval_valid "$_af"; then :
+        elif _review_gate_relevant "$_rel" "$phase"; then
+          appr_rel="$appr_rel$_rel
+"
+        elif _review_pending_display "$_af" >/dev/null 2>&1; then
+          pend_rel="$pend_rel$_rel
+"
+        fi
+        ;;
+    esac
+  done <<EOF
+$scanrec
+EOF
+
+  # last recorded workflow event (never a file-timestamp proxy)
+  if _le="$(_overview_last_event "$d/LOG.md")"; then
+    last_raw="${_le%%"$OVTAB"*}"; last_disp="${_le#*"$OVTAB"}"
+  fi
+
+  # attention assembly (fixed order; counts only where the text carries them)
+  if [ "$phase" = unknown ]; then
+    attn=1; attn_text="phase-unknown"
+    reasons="$reasons$rsep{\"code\":\"phase-unknown\"}"; rsep=","
+  fi
+  if [ "$vf_n" -gt 0 ]; then
+    attn=1; attn_text="${attn_text:+$attn_text, }verification-failed ($vf_n)"
+    reasons="$reasons$rsep{\"code\":\"verification-failed\",\"count\":$vf_n,\"tasks\":[$vf_json]}"; rsep=","
+  fi
+  if [ "$dn_n" -gt 0 ]; then
+    attn=1; attn_text="${attn_text:+$attn_text, }acceptance-pending ($dn_n)"
+    reasons="$reasons$rsep{\"code\":\"acceptance-pending\",\"count\":$dn_n,\"tasks\":[$done_json]}"; rsep=","
+  fi
+  if [ -n "$appr_rel" ]; then
+    attn=1; attn_text="${attn_text:+$attn_text, }approval-needed"
+    _an="$(printf '%s' "$appr_rel" | _overview_list_count)"
+    reasons="$reasons$rsep{\"code\":\"approval-needed\",\"count\":$_an,\"files\":[$(printf '%s' "$appr_rel" | _overview_rel_array)]}"; rsep=","
+  fi
+  if [ "$open_n" -gt 0 ]; then
+    attn=1; attn_text="${attn_text:+$attn_text, }review-open ($open_n)"
+    reasons="$reasons$rsep{\"code\":\"review-open\",\"count\":$open_n,\"files\":[$(printf '%s' "$open_files" | _overview_rel_array)]}"; rsep=","
+  fi
+  if [ -n "$pend_rel" ]; then
+    attn=1; attn_text="${attn_text:+$attn_text, }review-pending"
+    _an="$(printf '%s' "$pend_rel" | _overview_list_count)"
+    reasons="$reasons$rsep{\"code\":\"review-pending\",\"count\":$_an,\"files\":[$(printf '%s' "$pend_rel" | _overview_rel_array)]}"; rsep=","
+  fi
+  if [ "$meta_n" -gt 0 ]; then
+    attn=1; attn_text="${attn_text:+$attn_text, }metadata ($meta_n)"
+    reasons="$reasons$rsep{\"code\":\"metadata\",\"count\":$meta_n,\"details\":[$meta_json]}"; rsep=","
+  fi
+  if ! _overview_slug_ok "$slug"; then
+    attn=1; attn_text="${attn_text:+$attn_text, }invalid-name"
+    reasons="$reasons$rsep{\"code\":\"invalid-name\"}"; rsep=","
+  fi
+
+  [ "$phase" = done ] && grp=1 || grp=0
+  [ "$attn" = 1 ] && aflag=0 || aflag=1
+  if _overview_slug_ok "$slug"; then
+    case "$phase" in
+      executing|review|done) inspect="/pw-status $slug" ;;
+      *) inspect="/pw-help project $slug" ;;
+    esac
+  fi
+
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$grp" "$aflag" "$(_overview_slug_clean "$slug")" "$phase" "$attn_text" "$accepted_disp" \
+    "$last_disp" "$inspect" "$(_overview_json "$phase_raw")" "$(_overview_json "$d")" \
+    "$(_overview_json "$desc")" "$reasons]" "$last_raw" "$tasks_json" "$diag_text" "$diags_json]" "$u" "$m"
+}
+
+cmd_all() {
+  local attention=0 phase_filter="" json=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --attention) attention=1; shift ;;
+      --phase) [ $# -ge 2 ] || die "--phase needs a phase value ($PW_VALID_PHASES) → fix: /pw-status --all --phase <phase>"; phase_filter="$2"; shift 2 ;;
+      --phase=*) phase_filter="${1#--phase=}"; shift ;;
+      --json) json=1; shift ;;
+      -h|--help) pw_usage ;;
+      -*) die "unknown option for --all: $1 → fix: /pw-status --all [--attention] [--phase <phase>] [--json]" ;;
+      *) die "unexpected argument '$1' with --all → fix: --all scans every project; a slug belongs to the single-project form (/pw-status <slug>)" ;;
+    esac
+  done
+  case "$phase_filter" in
+    ""|context|analysis|breakdown|executing|review|done) ;;
+    *) die "invalid --phase '$phase_filter' ($PW_VALID_PHASES) → fix: the overview filters dashboard phases; review surfaces belong to /pw-help project <slug>" ;;
+  esac
+  [ -d "$PROJECTS_DIR" ] || die "projects root not accessible: $PROJECTS_DIR → fix: check PW_PROJECTS_DIR (normally the directory holding your projects)"
+
+  local root bundle rec sorted entry name skipped=0
+  root="$(cd "$PROJECTS_DIR" && pwd -P)"
+  bundle="$(cd "$HERE/../../.." && pwd -P)"
+  OV_TMPD="$(mktemp -d)" || die "cannot create a temporary directory → fix: check TMPDIR"
+  trap 'rm -rf "$OV_TMPD"' EXIT
+  rec="$OV_TMPD/records"; sorted="$OV_TMPD/sorted"
+  : > "$rec"
+
+  for entry in "$root"/*; do
+    [ -e "$entry" ] || [ -L "$entry" ] || continue
+    [ -d "$entry" ] || continue
+    name="${entry##*/}"
+    if [ -L "$entry" ]; then skipped=$((skipped+1)); continue; fi
+    [ "$entry" = "$bundle" ] && continue
+    _overview_is_project "$entry" || continue
+    _overview_collect "$entry" "$name" >> "$rec"
+  done
+
+  LC_ALL=C sort -t "$OVTAB" -k1,1n -k2,2n -k3,3 "$rec" > "$sorted"
+
+  local discovered unread malformed shown=0 filtered=0
+  discovered="$(awk 'END{print NR+0}' "$sorted")"
+  unread="$(awk -F"$OVTAB" '$17==1{n++} END{print n+0}' "$sorted")"
+  malformed="$(awk -F"$OVTAB" '$18==1{n++} END{print n+0}' "$sorted")"
+
+  if [ "$json" = 1 ]; then
+    OV_SCANNED="$(pw_now_wib)" OV_ROOT="$(_overview_json "$root")" OV_SKIPPED="$skipped" \
+    awk -F"$OVTAB" -v wantatt="$attention" -v wantphase="$phase_filter" '
+      { if ($17==1) U++; if ($18==1) M++
+        if (wantatt==1 && $2+0!=0) next
+        if (wantphase!="" && $4!=wantphase) next
+        shown++; r[shown]=$0 }
+      END {
+        printf "{\"schema_version\":1,\"scanned_at\":\"%s\",\"root\":\"%s\",\"counts\":{\"discovered\":%d,\"shown\":%d,\"filtered\":%d,\"skipped_symlinks\":%s,\"unreadable\":%d,\"malformed\":%d},\"projects\":[",
+          ENVIRON["OV_SCANNED"], ENVIRON["OV_ROOT"], NR, shown, NR-shown, ENVIRON["OV_SKIPPED"], U+0, M+0
+        sep=""
+        for (i=1;i<=shown;i++) {
+          split(r[i], f, "\t")
+          printf "%s{\"slug\":\"%s\",\"path\":\"%s\",\"phase\":\"%s\",\"phase_raw\":%s,\"description\":%s,\"tasks\":%s,\"attention\":%s,\"last_event\":%s,\"inspect\":%s,\"diagnostics\":%s,\"unreadable\":%s,\"malformed\":%s}",
+            sep, f[3], f[10], f[4],
+            (f[9]=="" ? "null" : "\"" f[9] "\""),
+            (f[11]=="" ? "null" : "\"" f[11] "\""),
+            f[14], f[12],
+            (f[13]=="" ? "null" : "{\"raw\":\"" f[13] "\",\"display\":\"" f[7] "\"}"),
+            (f[8]=="" ? "null" : "\"" f[8] "\""),
+            f[16], (f[17]+0==1 ? "true" : "false"), (f[18]+0==1 ? "true" : "false")
+          sep=","
+        }
+        printf "]}\n"
+      }' "$sorted"
+    if [ "$unread" -gt 0 ] || [ "$malformed" -gt 0 ]; then
+      printf 'pw-status: partial scan — %s unreadable, %s malformed project(s); per-project diagnostics are inside the JSON → fix: repair the flagged records, then re-run.\n' "$unread" "$malformed" >&2
+    fi
+  else
+    printf 'Local project records | scanned: %s\n\n' "$(pw_now_wib)"
+    awk -F"$OVTAB" -v wantatt="$attention" -v wantphase="$phase_filter" -v cf="$OV_TMPD/counts" '
+      { if ($17==1) U++; if ($18==1) M++
+        if (wantatt==1 && $2+0!=0) next
+        if (wantphase!="" && $4!=wantphase) next
+        shown++; r[shown]=$0
+        if (length($3)>w1) w1=length($3)
+        if (length($5)>w2) w2=length($5)
+        if (length($7)>w3) w3=length($7)
+        if (length($4)>w4) w4=length($4)
+      }
+      END {
+        if (w1<7) w1=7; if (w2<9) w2=9; if (w3<6) w3=6; if (w4<5) w4=5
+        if (shown>0) {
+          printf "%-*s  %-*s  %-*s  %-8s  %-*s  %s\n", w1, "Project", w4, "Phase", w2, "Attention", "Accepted", w3, "Last event", "Inspect"
+          for (i=1;i<=shown;i++) {
+            split(r[i], f, "\t")
+            printf "%-*s  %-*s  %-*s  %-8s  %-*s  %s\n", w1, f[3], w4, f[4], w2, (f[5]=="" ? "none recorded" : f[5]), f[6], w3, (f[7]=="" ? "—" : f[7]), (f[8]=="" ? "—" : f[8])
+          }
+        }
+        printf "%d\t%d\n", shown+0, NR-shown > cf
+      }' "$sorted"
+    IFS="$OVTAB" read -r shown filtered < "$OV_TMPD/counts" || true
+    if [ "${shown:-0}" -eq 0 ]; then
+      if [ "${discovered:-0}" -eq 0 ]; then printf '(no projects)\n'; else printf '(no projects match the filter)\n'; fi
+    fi
+    printf '\n%s discovered | %s shown | %s filtered | %s skipped symlinks | %s unreadable | %s malformed\n' \
+      "$discovered" "${shown:-0}" "${filtered:-0}" "$skipped" "$unread" "$malformed"
+    printf 'Phase is recorded workflow state. Accepted does not mean merged.\n'
+    if [ "$unread" -gt 0 ] || [ "$malformed" -gt 0 ]; then
+      printf '\nPartial scan — records that need attention:\n'
+      awk -F"$OVTAB" '($17==1 || $18==1) { printf "  - %s: %s\n", $3, ($15=="" ? "(unreadable — inspect with /pw-status <slug>)" : $15) }' "$sorted"
+      printf '→ fix: repair the flagged records (detail: /pw-status <slug>), then re-run /pw-status --all.\n'
+    fi
+  fi
+
+  if [ "$unread" -gt 0 ] || [ "$malformed" -gt 0 ]; then exit 1; fi
+  return 0
+}
+
 case "${1:-}" in
+  --all)                 shift; cmd_all "$@"; exit $? ;;
   log)                   shift; cmd_log "$@"; exit $? ;;
   status)                shift; cmd_status "$@"; exit $? ;;
   oneliner)              shift; cmd_oneliner "$@"; exit $? ;;
@@ -487,29 +897,75 @@ fi
 echo "## Unresolved review items"
 # Real review files only, counted through the shared heading-level detector (the same one the
 # gates use) — never raw greps: a whole-project grep for "pw-item-status: open" lands on the
-# template guidance line present in every review file and reports phantoms. Archive files
-# (.archive.md) are closed history and are skipped; _REVIEW.template.md is not a review.
+# template guidance line present in every review file and reports phantoms. Discovery is the
+# shared review-lane walk (pw-reviewlib.sh) — the SAME five lanes the review readers scan, so
+# this report can never again cover fewer surfaces than /pw-review; archives (.archive.md)
+# never match the *.review.md pattern, _REVIEW.template.md is not a review, and the review/ai/
+# handoff packets (immutable snapshot copies) are never scanned.
 OPEN_ITEMS=""
-for rf in "$D"/analysis/review/*.review.md "$D"/task/review/*.review.md; do
-  [ -f "$rf" ] || continue
-  _c="$("$HERE/pw-review-read.sh" count "$SLUG" "${rf#$D/}" 2>/dev/null || true)"
-  _n="$(printf '%s' "$_c" | sed -n 's/open=\([0-9]*\).*/\1/p')"; _n="${_n:-0}"
-  [ "$_n" -gt 0 ] && OPEN_ITEMS="$OPEN_ITEMS${rf#$D/}|$_n
+PENDING_REVIEWS=""
+ESC_LANES=""
+_SCAN="$(pw_review_files "$D" 2>/dev/null)" || true
+while IFS="$OVTAB" read -r _kind _lane _afile; do
+  case "$_kind" in
+    escape)
+      ESC_LANES="$ESC_LANES$_lane$OVTAB" ;;
+    symlink)
+      ESC_LANES="$ESC_LANES$_lane/$(basename "$_afile")$OVTAB" ;;
+    file)
+      _rel="$_lane/$(basename "$_afile")"
+      _n="$(pw_review_item_counts "$_afile" | sed -n 's/open=\([0-9]*\).*/\1/p')"; _n="${_n:-0}"
+      [ "$_n" -gt 0 ] && OPEN_ITEMS="$OPEN_ITEMS${_rel}|$_n
 "
-done
+      if ! _review_approval_valid "$_afile" && ! _review_gate_relevant "$_rel" "$PHASE"; then
+        _pdisp="$(_review_pending_display "$_afile" || true)"
+        [ -n "$_pdisp" ] && PENDING_REVIEWS="$PENDING_REVIEWS${_rel}|$_pdisp
+"
+      fi
+      ;;
+  esac
+done <<EOF
+$_SCAN
+EOF
 if [ -n "$OPEN_ITEMS" ]; then
   printf '%s' "$OPEN_ITEMS" | while IFS='|' read -r _rel _n; do [ -n "$_rel" ] && echo "  - $_rel ($_n open)"; done
 else
   echo "  (none)"
 fi
+if [ -n "$ESC_LANES" ]; then
+  printf '  (skipped — never read through a symlink: %s)\n' "$(printf '%s' "$ESC_LANES" | tr "$OVTAB" ' ' )"
+fi
 echo
 
-# AI Review modes + scheduling/repair axes (effective values: legacy `off` reads advisory)
+# AI Review modes + scheduling/repair axes. READ-ONLY by contract: the config getters
+# INSERT missing dashboard lines as a side effect — a status report must never write.
+# Values are read straight from the dashboard through the shared field reader; legacy
+# `off` reads as effective advisory (marked, never migrated here — persisting it is
+# /pw-config … ensure's job), and absent lines show their effective defaults.
 echo "## AI Review modes"
-echo "outcome: $("$HERE/pw-config.sh" ai-review "$SLUG" 2>/dev/null || echo '—')"
-echo "trigger: $("$HERE/pw-config.sh" review-trigger "$SLUG" 2>/dev/null || echo '—')"
-echo "repair:  $("$HERE/pw-config.sh" review-repair "$SLUG" 2>/dev/null || echo '—')"
-echo "budget:  $("$HERE/pw-config.sh" review-rounds "$SLUG" 2>/dev/null || echo '—')"
+_axis="$(pw_field "$README" "AI Review")"
+if [ -n "$_axis" ]; then
+  _norm=""
+  _legacy_off=0
+  for _kv in $_axis; do
+    case "${_kv#*=}" in
+      off) _norm="$_norm ${_kv%%=*}=advisory"; _legacy_off=1 ;;
+      *)   _norm="$_norm $_kv" ;;
+    esac
+  done
+  echo "outcome:${_norm}"
+  if [ "$_legacy_off" = 1 ]; then
+    echo "  (stored legacy off reads as effective advisory — persist with: /pw-config $SLUG project ensure)"
+  fi
+else
+  echo "outcome: — (line absent; effective default: advisory per surface)"
+fi
+_axis="$(pw_field "$README" "Review Trigger")"
+if [ -n "$_axis" ]; then echo "trigger: $_axis"; else echo "trigger: — (line absent; effective default: manual per surface)"; fi
+_axis="$(pw_field "$README" "Review Repair")"
+if [ -n "$_axis" ]; then echo "repair:  $_axis"; else echo "repair:  — (line absent; effective default: manual per surface)"; fi
+_axis="$(pw_field "$README" "Review Budget")"
+if [ -n "$_axis" ]; then echo "budget:  $_axis"; else echo "budget:  — (line absent; effective default: rounds=3)"; fi
 echo
 
 # Last N LOG.md lines
@@ -551,6 +1007,17 @@ if [ "$PHASE" = "breakdown" ] || [ "$PHASE" = "executing" ]; then
   if [ -f "$D/task/review/PLAN.review.md" ] && ! _latest_signoff_approved "$D/task/review/PLAN.review.md"; then
     BLOCKERS+=("Unapproved PLAN review ($(_latest_signoff_display "$D/task/review/PLAN.review.md"))")
   fi
+fi
+
+# Check for pending review decisions on OPTIONAL lanes (attributed in-review /
+# changes-requested latest rows). Gate-relevant files are already named by the Unapproved
+# blockers above; placeholder rows (empty actor) are not a decision and never appear here.
+if [ -n "$PENDING_REVIEWS" ]; then
+  while IFS='|' read -r _rel _disp; do
+    [ -n "$_rel" ] && BLOCKERS+=("Pending review decision: $_rel ($_disp)")
+  done <<EOF
+$PENDING_REVIEWS
+EOF
 fi
 
 # Check for open reviews

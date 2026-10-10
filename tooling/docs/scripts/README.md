@@ -45,7 +45,7 @@ $PW_HOME/tooling/scripts/entities/<script>.sh <args> [options]      # shell
 | `0` | success (or, for `pw-review-read.sh scan`, "nothing to report") | all |
 | `1` | the check **failed** — error lines on stderr say what is wrong | `pw-preflight.sh`, `pw-doc.sh lint`, `pw-ship.sh monitor` (pipeline failed) |
 | `2` | bad usage, missing project, or (for `pw-ship.sh monitor`) timeout | everything else; `pw-ship.sh monitor` shares `2` between usage errors and timeouts — read the message |
-| `0`/`1` | `pw-status.sh` uses `2` for missing-project/usage errors, `1` never | `pw-status.sh` |
+| `0`/`1` | `pw-status.sh` uses `2` for missing-project/usage errors; `1` only for a partial `--all` overview (rows kept, diagnostics listed) | `pw-status.sh` |
 
 **On any non-zero exit: stop and report or fix the stderr message — do not proceed and hope.**
 That is the whole contract commands rely on: pre-flight fails *before* agent tokens are spent.

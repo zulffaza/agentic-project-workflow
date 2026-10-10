@@ -40,3 +40,10 @@ pwtest_re 'open=1 resolved=0' "conflict is reported as an open blocker, not reso
 pwtest_rc 1 "malformed conflict supplies no automatic repair authority" "$READ_FACET" eligible "$READ_CONFLICT" "$READ_PLAN"
 pwtest_re 'eligible=0' "a malformed deeper heading does not start repair"
 rm -rf "$PW_PROJECTS_DIR/$READ_CONFLICT"
+
+# shared five-lane discovery (pw-reviewlib.sh): the context lane is scanned like any other
+mkdir -p "$PW_PROJECTS_DIR/$S2/context/review"
+printf '# readiness\n\n### R1 · §Scope — [OPEN] (pwtest, 2026-10-05 10:00) <!-- pw-item-status: open -->\n' > "$PW_PROJECTS_DIR/$S2/context/review/CONTEXT.review.md"
+pwtest_rc 0 "scan covers the context lane" "$READ_FACET" scan "$S2" --phase context
+pwtest_re 'context/review/CONTEXT\.review\.md: 1 open' "context review listed with its open count"
+rm -rf "$PW_PROJECTS_DIR/$S2/context/review"

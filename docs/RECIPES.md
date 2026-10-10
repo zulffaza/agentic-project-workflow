@@ -25,10 +25,13 @@ In syntax descriptions, `<value>` means required and `[value]` means optional. D
 /pw-help command pw-execute delivery-note
 /pw-help find acceptance
 /pw-status delivery-note
+/pw-status --all
 ```
 
 Help lists commands, explains arguments, or suggests next steps from current project state.
-Status shows the phase, task progress, and blockers. Both only read state.
+Status shows the phase, task progress, and blockers. Both only read state. Add `--all` for a
+one-table overview of every project under the projects root (`--attention` keeps only rows
+that need inspection; `--json` prints a machine-readable object).
 
 ## Add context or continue existing work
 

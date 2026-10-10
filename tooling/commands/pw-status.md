@@ -1,9 +1,22 @@
 ---
 description: Show a project's phase, task status + open review items — or, with "rewind", move the dashboard Status back to an earlier phase
-args: <project-slug> [rewind <phase>]
+args: <project-slug> [rewind <phase>] | --all [--attention] [--phase <phase>] [--json]
 ---
 Arguments: {{ARGS}} (project slug). Project dir:
 `{{PW_PROJECTS}}/<slug>`.
+
+**No-slug overview:** when the 1st argument is literally `--all`, there is no `<project-slug>` —
+that form is the read-only cross-project overview:
+
+- **`/pw-status --all [--attention] [--phase <phase>] [--json]`** →
+  `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh --all [--attention] [--phase <phase>] [--json]` —
+  one row per discovered project: recorded phase, attention conditions, accepted tasks, last
+  recorded workflow event, and the inspection command. Read-only: local records only — no forge,
+  auth, model, or worker calls, and it never writes (it does not insert missing dashboard lines).
+  `--attention` keeps only rows that need inspection; `--phase` filters by dashboard phase
+  (`context|analysis|breakdown|executing|review|done`); `--json` prints one machine-readable
+  object. Exit `1` = partial scan (unreadable or malformed records — rows are still shown with
+  diagnostics); exit `2` = bad flags or an inaccessible projects root.
 
 **If the 2nd argument is literally `rewind`, this is the rewind flow, not a status report — skip
 everything below and follow this instead** (3rd argument is the phase to rewind to: `context` |

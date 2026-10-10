@@ -13,8 +13,25 @@ Invalid, date-only, or future timestamps never suppress a new entry. Existing hi
 ```bash
 $PW_HOME/tooling/scripts/entities/pw-status.sh <slug>                  # full report
 $PW_HOME/tooling/scripts/entities/pw-status.sh <slug> --skip-cli-check # omit the forge/CLI auth section
+$PW_HOME/tooling/scripts/entities/pw-status.sh --all [--attention] [--phase <phase>] [--json]
 $PW_HOME/tooling/scripts/entities/pw-status.sh --selftest              # isolated temp-project smoke test
 ```
+
+**Cross-project overview (`--all`)** — one read-only row per discovered project under the
+projects root: recorded phase, attention conditions, accepted-task count, last recorded workflow
+event, and the inspection command. It reads local records only: no forge, auth, model, or worker
+calls, and no writes. Flags: `--attention` keeps rows that need inspection; `--phase` filters by
+dashboard phase (`context|analysis|breakdown|executing|review|done` — review surfaces are not
+phases); `--json` prints one machine-readable object with the same discovery and filters.
+Phase means the recorded workflow step, never "an agent is running"; `accepted` counts tasks,
+never MR merge state. Attention reasons: `phase-unknown`, `verification-failed (N)`,
+`acceptance-pending (N)` (tasks `done` but not accepted), `approval-needed` (a current-phase
+gate is unconsumable), `review-open (N)`, `review-pending` (an attributed in-review /
+changes-requested decision on an optional lane), `metadata (N)` (unreadable/malformed records,
+unknown task states, duplicate IDs, holder disagreement), `invalid-name`. Exit `1` means a
+partial scan — unreadable or malformed records: readable rows are still printed, followed by a
+diagnostics list and a `→ fix:` line. Non-workflow child directories are ignored; child-directory
+symlinks are skipped and counted.
 
 **Output** — markdown sections, in this fixed order; feed it to the user as-is:
 
@@ -22,18 +39,25 @@ $PW_HOME/tooling/scripts/entities/pw-status.sh --selftest              # isolate
 ## Phase: executing
 ## Tasks                      ← README.md task table, verbatim
 ## PLAN                       ← task/PLAN.md task table (omitted if no PLAN.md)
-## Unresolved review items     ← "  - <file> (N open)" lines, or "  (none)"; gate lines show the
-                          latest decision WITH its By actor, through the same shared reader
-                          the scan uses (hyphenated decisions never split at a dash)
-## AI Review modes            ← effective outcome rows (legacy `off` shown as advisory), plus the
-                          trigger/repair rows and the rounds budget, all 8 surfaces
+## Unresolved review items     ← "  - <file> (N open)" lines, or "  (none)"; one shared walk
+                          across the five review lanes (analysis, task, context, rfc, close) —
+                          the same files the review readers scan; snapshot copies under
+                          review/ai/ are never counted twice, and a symlinked lane or file
+                          is skipped with a note instead of being read
+## AI Review modes            ← stored outcome/trigger/repair/budget rows read straight from the
+                          dashboard, with legacy `off` shown as effective advisory and
+                          absent lines shown with their effective defaults; READ-ONLY — a
+                          status read never inserts missing dashboard lines
 ## Recent activity            ← last 5 LOG.md lines
-## Blockers                   ← heuristic list (unapproved gates, open items, verify-failed)
+## Blockers                   ← heuristic list (unapproved gates, pending optional-lane review
+                          decisions, open items, verify-failed)
 ## Next action                ← the one command the phase currently suggests
 ## CLI auth status            ← ✓/✗ one line per forge CLI (skipped with --skip-cli-check)
 ```
 
-**Reading failures:** exit `2` + `pw-status: no such project …` on stderr. `## Blockers: (none)`
+**Reading failures:** exit `2` + `pw-status: no such project …` on stderr. The `--all` overview
+uses exit `1` for a partial scan (rows kept, diagnostics listed) and `2` for bad flags or a
+missing projects root. `## Blockers: (none)`
 does *not* mean pre-flight will pass — blockers are heuristic; preflight is authoritative.
 
 **When to use:** `/pw-status` report mode; any agent that wants a status snapshot without

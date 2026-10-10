@@ -71,6 +71,10 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   preview view). Log phase transitions, executor spawns, commits, pushes, MRs, review passes,
   close-out.
 - `pw-status.sh phase <slug>` — read the current phase (used by `/pw-review` scoping + `/pw-status`).
+- `pw-status.sh --all [--attention] [--phase <phase>] [--json]` — READ-ONLY cross-project
+  overview (no slug): per-project phase, attention conditions, accepted counts, last LOG event,
+  and the inspection command. Local records only — never writes (no config-line insertion, no
+  forge/auth/model calls). Exit `1` = partial scan (unreadable/malformed records; rows kept).
 - `pw-config.sh ai-review <slug> [<phase> <mode>]` / `pw-config.sh ai-model <slug> [<lane> <provider:model|—>]` —
   the two dashboard config lines (see `docs/EXECUTION.md` for what they bind). `ai-model` lanes =
   researcher / analyst / writer-task / reviewer / verifier (NOT executor — that pin is the task file).

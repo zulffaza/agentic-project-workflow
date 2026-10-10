@@ -412,7 +412,7 @@ _pwh_ref_hdr() { awk '/^# =+$/{c++; next} c==1 {if (/^#/) {sub(/^# ?/,""); print
 _ops_total=0
 for _sp in "$TOOLDIR"/scripts/entities/*.sh "$TOOLDIR"/scripts/toolchain/*.sh; do
   _sn="$(basename "$_sp")"
-  _ops="$(_pwh_ref_hdr "$_sp" | awk '/^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*([ ]|$)/{print $2}')"
+  _ops="$(_pwh_ref_hdr "$_sp" | awk '/^  pw-[a-z0-9-]+\.sh +(--[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)([ ]|$)/{print $2}')"
   _opsn="$(printf '%s\n' "$_ops" | awk 'NF{n++} END{print n+0}')"
   _ops_total=$((_ops_total+_opsn))
   pwtest_eq "ops_detail row count $_sn" "$_opsn" "$(ops_detail "$_sp" | wc -l | tr -d ' ')"
@@ -423,7 +423,7 @@ for _sp in "$TOOLDIR"/scripts/entities/*.sh "$TOOLDIR"/scripts/toolchain/*.sh; d
         if (buf=="") return
         if (txt != "" && index(SUBSEP buf SUBSEP, SUBSEP op SUBSEP)) { printf "%s\n", txt; found=1; exit }
       }
-      /^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*([ ]|$)/ {
+      /^  pw-[a-z0-9-]+\.sh +(--[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)([ ]|$)/ {
         tryflush()
         if (txt != "") { buf=$2; txt="" } else buf = (buf=="" ? $2 : buf SUBSEP $2)
         next }
@@ -433,7 +433,7 @@ for _sp in "$TOOLDIR"/scripts/entities/*.sh "$TOOLDIR"/scripts/toolchain/*.sh; d
     pwtest_eq "para parity $_sn:$_op" "$_rpara" "$_npara"
     _nsig="$(sig_of "$_sp" "$_op")"
     _rsig="$(_pwh_ref_hdr "$_sp" | awk -v op="$_op" '
-      $0 ~ "^  pw-[a-z0-9-]+\\.sh +"op"([ ]|$)" { sub(/^  pw-[a-z0-9-]+\.sh +[a-z][a-z0-9-]*[ ]+/, ""); print; exit }')"
+      $0 ~ "^  pw-[a-z0-9-]+\\.sh +(--)?"op"([ ]|$)" { sub(/^  pw-[a-z0-9-]+\.sh +(--[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)[ ]+/, ""); print; exit }')"
     pwtest_eq "sig parity $_sn:$_op" "$_rsig" "$_nsig"
     _nfac="$(facet_of "$_sp" "$_op")"
     _rfac="$(_pwh_ref_hdr "$_sp" | awk '
@@ -444,7 +444,7 @@ for _sp in "$TOOLDIR"/scripts/entities/*.sh "$TOOLDIR"/scripts/toolchain/*.sh; d
         else { facet="special"; sub(/^.*SPECIAL[ ]*=/,"",line) }
         gsub(/[,()]/," ",line)
         n=split(line, a, /[ ]+/)
-        for (i=1;i<=n;i++) if (a[i] ~ /^[a-z][a-z0-9-]*$/) print facet "\t" a[i]
+        for (i=1;i<=n;i++) if (a[i] ~ /^(--)?[a-z][a-z0-9-]*$/) print facet "\t" a[i]
       }' | awk -F'\t' -v op="$_op" '!v && $2==op{v=$1} END{if(v!="")print v}')"
     pwtest_eq "facet parity $_sn:$_op" "$_rfac" "$_nfac"
   done

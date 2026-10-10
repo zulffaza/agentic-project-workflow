@@ -22,6 +22,11 @@ installed CLIs, installs this skill + the `/pw-*` commands per provider) — see
 Phases are gated: a human approves after **analysis** and after **task breakdown** before the next
 phase runs. Don't skip a gate.
 
+Cross-project visibility: `/pw-status --all` — one read-only row per project under the projects
+root (recorded phase, attention conditions, accepted tasks, last recorded event, inspection
+command); `--attention` keeps rows that need inspection, `--phase <phase>` filters dashboard
+phases, `--json` prints a machine-readable object. No slug; never writes.
+
 ## Which phase am I in? → load the matching reference
 
 | You're asked to... | Load |

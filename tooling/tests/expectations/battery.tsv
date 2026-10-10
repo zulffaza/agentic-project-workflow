@@ -68,6 +68,7 @@ adopt pwt-f3-hostile	pw-context.sh	adopt-snapshot pwt-f3-hostile api agent/pwt-f
 help project pwt-f3-hostile	pw-help.sh	project pwt-f3-hostile	0	-
 help project-review pwt-f3-hostile	pw-help.sh	project pwt-f3-hostile pw-review	0	-
 provider-audit pwt-f3-hostile	pw-status.sh	provider-audit pwt-f3-hostile	0	-
+status-all fixtures	pw-status.sh	--all	1	-
 review-prepare pwt-f2-mid	pw-review.sh	prepare pwt-f2-mid task/PLAN.md --pass-id p-batt	0	-
 review-passes pwt-f2-mid	pw-review.sh	passes pwt-f2-mid	0	-
 review-read-passes pwt-f2-mid	pw-review-read.sh	passes pwt-f2-mid	0	-

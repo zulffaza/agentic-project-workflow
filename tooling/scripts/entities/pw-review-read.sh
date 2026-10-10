@@ -76,12 +76,7 @@ cmd_count() {
   local f stripped counts items; f="$(read_path "$1" "$2")" || return 2
   [ -f "$f" ] || { echo 'open=0 resolved=0'; return 1; }
   stripped="$(_comment_blanked "$f")"
-  counts="$(_review_item_headings "$f" | awk "$_MD_STTAG"'
-    { id=$0; sub(/^#+ /,"",id); sub(/[^A-Za-z0-9].*$/,"",id)
-      tag=sttag($0,id)
-      if(tag=="OPEN" || tag=="PENDING" || tag=="CONFLICT") open++
-      if(tag=="RESOLVED" || tag=="ANSWERED") resolved++ }
-    END {printf "open=%d resolved=%d",open+0,resolved+0}')"
+  counts="$(pw_review_item_counts "$f")"
   items="$(printf '%s\n' "$stripped" | awk '
     /^## Items/ {p=1; next}
     p && /^## / {p=0}
@@ -104,11 +99,19 @@ cmd_scan() {
   [ -n "$slug" ] || die 'usage: scan <slug> [--phase <phase>]'
   case "$phase" in ''|context|analysis|plan|task-plan|task-exec|ship|rfc|close) ;; *) die "unknown review surface '$phase' → fix: use context, analysis, plan, task-plan, task-exec, ship, rfc, or close" ;; esac
   d="$(proj_dir "$slug")" || return 2
-  for rel in analysis/review task/review context/review rfc/review review; do
-    [ -d "$d/$rel" ] || continue
-    pw_review_contain "$d" "$rel" >/dev/null || die "review directory escapes project: $rel → fix: remove the external symlink"
-    while IFS= read -r -d '' f; do files+=("$f"); done < <(find "$d/$rel" -maxdepth 1 -name '*.review.md' -print0 2>/dev/null)
-  done
+  # discovery through the shared lane walk (pw-reviewlib.sh): the same five lanes the
+  # status surfaces cover — never a second directory list living here.
+  local scanout="" esc_rel=""
+  scanout="$(pw_review_files "$d")" || {
+    esc_rel="$(printf '%s\n' "$scanout" | awk -F'\t' '$1=="escape"{print $2; exit}')"
+    die "review directory escapes project: ${esc_rel:-review} → fix: remove the external symlink"
+  }
+  while IFS=$'\t' read -r _kind _lane f; do
+    [ "$_kind" = file ] || continue
+    files+=("$f")
+  done <<EOF
+$scanout
+EOF
   [ ${#files[@]} -gt 0 ] || { echo 'No review files found'; return 0; }
   for f in "${files[@]}"; do
     rel="${f#$d/}"; f="$(read_path "$slug" "$rel")" || return 2

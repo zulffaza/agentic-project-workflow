@@ -274,10 +274,14 @@ C215-import-freshness-bypassed	pw-review.sh	  if [ -z "$fp_now" ] || [ "$fp_now"
 C216-import-clean-consistency-dropped	pw-review.sh	if verdict == "clean" and findings:	if False:	T1	^pw-review-handoff\.t\.sh$
 C217-import-injection-guard-dropped	pw-review.sh	            if ln.lstrip().startswith("#") or "<!--" in ln or "-->" in ln:	            if False:	T1	^pw-review-handoff\.t\.sh$
 C218-repair-budget-unenforced	pw-review.sh	  if [ "$repair" = 1 ] && [ "$round_new" -gt "$rounds" ]; then	  if false; then	T1	^pw-review-handoff\.t\.sh$
-C219-scan-new-lanes-dropped	pw-review-read.sh	  for rel in analysis/review task/review context/review rfc/review review; do	  for rel in analysis/review task/review; do	T1	^pw-review-handoff\.t\.sh$
+C219-scan-new-lanes-dropped	pw-reviewlib.sh	  printf '%s\n' "analysis/review" "task/review" "context/review" "rfc/review" "review"	  printf '%s\n' "analysis/review" "task/review" "context/review" "rfc/review"	T1	^pw-review-handoff\.t\.sh$
 C220-staging-approval-allowed	pw-review.sh	  [ "$lane" = rfc ] && die "RFC comment staging never receives an approval row — its unresolved comments keep their own has-open check (see docs/RFC.md)"	  [ "$lane" = nowhere-invalid ] && die "RFC comment staging never receives an approval row — its unresolved comments keep their own has-open check (see docs/RFC.md)"	T1	^pw-review-handoff\.t\.sh$
 C221-ensure-migration-dropped	pw-config.sh	    case "${kv#*=}" in off) pairs="$pairs ${kv%%=*}=advisory" ;; esac	    case "${kv#*=}" in offx) pairs="$pairs ${kv%%=*}=advisory" ;; esac	T1	^pw-config\.t\.sh$
 C222-code-artifact-prefix-dropped	pw-review.sh	        if a == wt or a.startswith(wt + "/"):	        if False:	T1	^pw-review-handoff\.t\.sh$
 C223-close-scope-arm-dropped	pw-review.sh	if man_art == "-":	if False:	T1	^pw-review-handoff\.t\.sh$
 C224-audit-used-first-parens-only	pw-status.sh	s/.*spawned $id[^(]*\(([^)]*)\).*/\1/p	s/.*spawned $id \(([^)]*)\).*/\1/p	T1	^pw-status\.t\.sh$
 C225-skill-layout-plain-skill-swept	pw-doctor.sh	[ -d "$SKILL_DIR/$n" ] && continue	[ -d "$SKILL_DIR/$n" ] && false && continue	T1	^pw-doctor\.t\.sh$
+C226-overview-snapshot-recursion	pw-reviewlib.sh	find "$d/$rel" -maxdepth 1 -name '*.review.md'	find "$d/$rel" -name '*.review.md'	T1	^pw-status\.t\.sh$
+C227-overview-lane-omission	pw-reviewlib.sh	printf '%s\n' "analysis/review" "task/review" "context/review" "rfc/review" "review"	printf '%s\n' "analysis/review" "task/review" "rfc/review" "review"	T1	^pw-status\.t\.sh$
+C228-overview-policy-write	pw-status.sh	_axis="$(pw_field "$README" "Review Trigger")"	_axis="$("$HERE/pw-config.sh" project get "$SLUG" review-trigger 2>/dev/null || true)"	T1	^pw-status\.t\.sh$
+C229-overview-phase-filter-leak	pw-status.sh	    ""|context|analysis|breakdown|executing|review|done) ;;	    ""|context|analysis|breakdown|executing|review|done|plan|rfc|close) ;;	T1	^pw-status\.t\.sh$
