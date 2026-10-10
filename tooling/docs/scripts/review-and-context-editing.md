@@ -131,7 +131,7 @@ actual run metadata (`unknown` when unconfirmed), never a human row, and honors
 unresolved comments block the consuming command through `has-open` (a fix routed from RFC
 feedback acts on the analysis document's OWN review gate).
 
-**Handoff operators (plan-36 review work).** `prepare <slug> <scope> [--refresh] [--repair]
+**Handoff operators (advisory external reports).** `prepare <slug> <scope> [--refresh] [--repair]
 [--pass-id <id>] [--print]` freezes ONE review unit into `review/ai/<pass-id>/` — `manifest.json`
 (surface, artifact, round/budget, reviewed-identity `fingerprint`, recorded inputs/code evidence,
 existing-item ledger, state), a byte-identical `snapshot/` of the reviewed inputs, and a neutral
