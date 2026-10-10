@@ -1,5 +1,4 @@
 selftest: pw-status.sh --selftest	pw-status.sh	--selftest	0	-
-history-pending F1	pw-ship.sh	history pwt-f1-scaffold pending	0	-
 status pwt-f1-scaffold	pw-status.sh	pwt-f1-scaffold --skip-cli-check	0	-
 review-scan pwt-f1-scaffold	pw-review.sh	scan pwt-f1-scaffold	0	-
 lint-all pwt-f1-scaffold	pw-doc.sh	lint all pwt-f1-scaffold	0	-
@@ -69,6 +68,22 @@ adopt pwt-f3-hostile	pw-context.sh	adopt-snapshot pwt-f3-hostile api agent/pwt-f
 help project pwt-f3-hostile	pw-help.sh	project pwt-f3-hostile	0	-
 help project-review pwt-f3-hostile	pw-help.sh	project pwt-f3-hostile pw-review	0	-
 provider-audit pwt-f3-hostile	pw-status.sh	provider-audit pwt-f3-hostile	0	-
+review-prepare pwt-f2-mid	pw-review.sh	prepare pwt-f2-mid task/PLAN.md --pass-id p-batt	0	-
+review-passes pwt-f2-mid	pw-review.sh	passes pwt-f2-mid	0	-
+review-read-passes pwt-f2-mid	pw-review-read.sh	passes pwt-f2-mid	0	-
+review-prepare pwt-f3-hostile	pw-review.sh	prepare pwt-f3-hostile task/PLAN.md --pass-id p-batt	0	-
+review-passes pwt-f3-hostile	pw-review.sh	passes pwt-f3-hostile	0	-
+review-read-passes pwt-f3-hostile	pw-review-read.sh	passes pwt-f3-hostile	0	-
+review-import-refusal pwt-f1-scaffold	pw-review.sh	import pwt-f1-scaffold --report no-such-report.json	2	-
+review-trigger-get pwt-f1-scaffold	pw-config.sh	project get pwt-f1-scaffold review-trigger	0	-
+review-repair-get pwt-f1-scaffold	pw-config.sh	project get pwt-f1-scaffold review-repair	0	-
+review-rounds-get pwt-f1-scaffold	pw-config.sh	project get pwt-f1-scaffold review-rounds	0	-
+review-trigger-get pwt-f2-mid	pw-config.sh	project get pwt-f2-mid review-trigger	0	-
+review-repair-get pwt-f2-mid	pw-config.sh	project get pwt-f2-mid review-repair	0	-
+review-rounds-get pwt-f2-mid	pw-config.sh	project get pwt-f2-mid review-rounds	0	-
+review-trigger-get pwt-f3-hostile	pw-config.sh	project get pwt-f3-hostile review-trigger	0	-
+review-repair-get pwt-f3-hostile	pw-config.sh	project get pwt-f3-hostile review-repair	0	-
+review-rounds-get pwt-f3-hostile	pw-config.sh	project get pwt-f3-hostile review-rounds	0	-
 doctor-project F1	pw-project-doctor.sh	pwt-f1-scaffold	0	-
 doctor-project F3	pw-project-doctor.sh	pwt-f3-hostile	1	-
 doctor-guidance F1	pw-project-doctor.sh	pwt-f1-scaffold --guidance	0	-
@@ -93,4 +108,5 @@ review-facet-gate F2	pw-review-read.sh	gate pwt-f2-mid task/review/PLAN.review.m
 review-facet-count F2	pw-review-read.sh	count pwt-f2-mid task/review/PLAN.review.md	0	-
 review-facet-open F2	pw-review-read.sh	has-open pwt-f2-mid task/review/PLAN.review.md	1	-
 review-facet-eligible F2	pw-review-read.sh	eligible pwt-f2-mid task/review/PLAN.review.md	1	-
+history-pending F1	pw-ship.sh	history pwt-f1-scaffold pending	0	-
 request-review F1	pw-ship.sh	request-review pwt-f1-scaffold	2	-

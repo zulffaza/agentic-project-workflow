@@ -181,18 +181,23 @@ See [config values](REFERENCE.md#what-you-can-update-per-project-pw-config) and 
 
 ## Use AI review with human approval
 
-Enable advisory mode for analysis and PLAN review, then request a pass:
+Advisory is the default outcome, and nothing starts by itself (`review-trigger` is `manual`).
+Request a pass after each artifact exists:
 
 ```text
-/pw-config delivery-note set ai-review analysis=advisory plan=advisory
 /pw-review delivery-note ai analysis
 /pw-review delivery-note ai plan
 ```
 
-Run each pass after its artifact exists. Advisory mode records findings and leaves approval to you.
-Use the normal review command to apply findings, inspect the changes, then sign off.
-Modes are `off`, `advisory`, and `auto`. Auto can approve a clean pass under additional safeguards.
-See [AI-assisted review](REVIEW.md#3-ai-assisted-review-optional-per-phase) before enabling auto.
+Advisory mode records findings and leaves approval to you. Use the normal review command to apply
+findings, inspect the changes, then sign off. Outcome modes are `advisory` and `auto`; auto can
+approve a clean MANAGED pass under additional safeguards. To let a surface review run right after
+its producing command, set `review-trigger <surface>=completion`; to let a completion review also
+repair and re-review within the budget, set `review-repair <surface>=bounded` (budget:
+`review-rounds`). To review in a separate session instead, freeze a packet with
+`/pw-review <scope> prepare …` and import the returned JSON with `import --report …` — imports are
+advisory only.
+See [AI-assisted review](REVIEW.md#3-ai-assisted-review-optional-advisory--manual-by-default) before enabling auto.
 
 ## Publish, handle comments, or refresh branches
 

@@ -331,7 +331,7 @@ cmd_provider_audit() {
     if [ -f "$logf" ]; then
       lline="$(grep -E "spawned $id( |\()" "$logf" 2>/dev/null | tail -1 || true)"
       if [ -n "$lline" ]; then
-        used="$(printf '%s' "$lline" | sed -nE 's/.*spawned [^ ]+ \(([^)]*)\).*/\1/p')"
+        used="$(printf '%s' "$lline" | sed -nE "s/.*spawned $id[^(]*\(([^)]*)\).*/\1/p")"
         [ -n "$used" ] || used="unknown"
         via="$(printf '%s' "$lline" | sed -nE 's/.*via=([a-z]+).*/\1/p')"
         via="${via:-—}"
@@ -504,9 +504,12 @@ else
 fi
 echo
 
-# AI Review modes
+# AI Review modes + scheduling/repair axes (effective values: legacy `off` reads advisory)
 echo "## AI Review modes"
-"$HERE/pw-config.sh" ai-review "$SLUG"
+echo "outcome: $("$HERE/pw-config.sh" ai-review "$SLUG" 2>/dev/null || echo '—')"
+echo "trigger: $("$HERE/pw-config.sh" review-trigger "$SLUG" 2>/dev/null || echo '—')"
+echo "repair:  $("$HERE/pw-config.sh" review-repair "$SLUG" 2>/dev/null || echo '—')"
+echo "budget:  $("$HERE/pw-config.sh" review-rounds "$SLUG" 2>/dev/null || echo '—')"
 echo
 
 # Last N LOG.md lines

@@ -249,8 +249,8 @@ matched against the model id (everything after the `<provider>:` prefix, e.g. `s
 
 **The rule, stated plainly: empty or unset = ALL models allowed.** That's the default for every
 provider — nothing is restricted until you explicitly set a pattern. This is deliberately
-opt-in, matching how every other optional knob in `pw.config.sh` works (off/unrestricted by
-default, e.g. `PW_AI_REVIEW_DEFAULT`).
+opt-in, matching how every other optional knob in `pw.config.sh` works (unrestricted until set,
+e.g. the `PW_MODEL_ALLOWLIST_*` patterns).
 
 **Where it's enforced:** `/pw-breakdown` checks a task's chosen model against the allowlist while
 filling `Execute with:`; `/pw-execute` checks again right before invoking it (catches a

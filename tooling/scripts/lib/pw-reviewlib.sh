@@ -84,16 +84,24 @@ pw_heading_meta_check() {
 
 # --- lanes and phase binding ---------------------------------------------------
 
-# pw_review_lane <project-rel review or artifact path> → analysis | plan | task | rfc | other.
+# pw_review_lane <project-rel review or artifact path> → context | analysis | plan | task | rfc |
+# rfccontent | close | other.
 # A LANE is an artifact family, deliberately distinct from a dashboard PHASE
-# (context/analysis/breakdown/executing/review/done) and from the config phase tokens
-# (analysis/plan/task-plan/task-exec/ship): the resolver both directions lives here.
+# (context/analysis/breakdown/executing/review/done) and from the config surface tokens
+# (context/analysis/plan/task-plan/task-exec/ship/rfc/close): the resolver both directions
+# lives here. `rfc` is the fetched-comment STAGING lane (never gets a pass/approval row);
+# `rfccontent` is the local rfc/RFC.md content review record (a real surface).
 pw_review_lane() {
   case "$1" in
     analysis/review/RFC.review.md)      echo rfc ;;
     analysis/review/*.review.md)        echo analysis ;;
     analysis/RFC.md)                    echo rfc ;;
     analysis/*.md)                      echo analysis ;;
+    context/review/CONTEXT.review.md)   echo context ;;
+    context/REQUIREMENTS.md)            echo context ;;
+    rfc/review/*.review.md)             echo rfccontent ;;
+    rfc/RFC.md)                         echo rfccontent ;;
+    review/CLOSE.review.md)             echo close ;;
     task/review/PLAN.review.md)         echo plan ;;
     task/review/T*.review.md)           echo task ;;
     task/review/T*.archive.md)          echo task ;;
@@ -103,13 +111,18 @@ pw_review_lane() {
   esac
 }
 
-# pw_review_lane_rank <lane> — position on the phase ladder (0 = unranked).
+# pw_review_lane_rank <lane> — position on the phase ladder (0 = unranked/exempt).
+# context ranks with analysis (reviewing readiness while analysis runs is fine; after
+# breakdown it is "earlier"). rfccontent is exempt (its side-loop runs across phases and
+# its published-content gate is the RFC flow's own). close ranks at done.
 pw_review_lane_rank() {
   case "$1" in
-    analysis) echo 1 ;;
-    plan)     echo 2 ;;
-    task)     echo 3 ;;
-    *)        echo 0 ;;
+    context)    echo 1 ;;
+    analysis)   echo 1 ;;
+    plan)       echo 2 ;;
+    task)       echo 3 ;;
+    close)      echo 4 ;;
+    *)          echo 0 ;;
   esac
 }
 
@@ -123,18 +136,22 @@ pw_dash_rank() {
   esac
 }
 
-# pw_review_phase_lane_ok <config-phase> <lane> — the selected review lane must own the
-# artifact being approved/entered: analysis↔analysis topics, plan↔PLAN, task-plan↔task,
-# task-exec↔task results, ship↔the mirrored task reviews. RFC staging matches NO phase —
-# it never receives an approval row (its unresolved comments keep their own separate check).
+# pw_review_phase_lane_ok <config-surface> <lane> — the selected review surface must own the
+# artifact being approved/entered: context↔context readiness, analysis↔analysis topics,
+# plan↔PLAN, task-plan↔task, task-exec↔task results, ship↔the mirrored task reviews,
+# rfc↔the LOCAL rfc/RFC.md content record (never the fetched-comment staging, which matches
+# NO surface, and close↔the local CLOSE record, whose approval carries no teardown permission).
 pw_review_phase_lane_ok() {
   local phase="$1" lane="$2"
   case "$phase" in
+    context)    [ "$lane" = "context" ] ;;
     analysis)   [ "$lane" = "analysis" ] ;;
     plan)       [ "$lane" = "plan" ] ;;
     task-plan)  [ "$lane" = "task" ] ;;
     task-exec)  [ "$lane" = "task" ] ;;
     ship)       [ "$lane" = "task" ] ;;
+    rfc)        [ "$lane" = "rfccontent" ] ;;
+    close)      [ "$lane" = "close" ] ;;
     *)          return 1 ;;
   esac
 }
@@ -176,10 +193,12 @@ pw_review_contain() {
 
 # pw_review_reviewrel <projdir> <artifact-rel-path> — validate one selected artifact and
 # print "<docrel>\t<reviewrel>". Accepts exactly the reviewable artifact families:
-# analysis topic docs, task/PLAN.md, task/T0n.md. Rejects: anything outside the project
-# (incl. symlink escapes), missing/non-regular targets, README/_TEMPLATE sources, RFC
-# staging (its side-loop owns no topic review), and review/archive files selected as if
-# they were artifacts.
+# analysis topic docs, task/PLAN.md, task/T0n.md, context/REQUIREMENTS.md (readiness), and
+# rfc/RFC.md (local RFC content). Rejects: anything outside the project (incl. symlink
+# escapes), missing/non-regular targets, README/_TEMPLATE sources, RFC comment staging
+# (analysis/RFC.md + its review — the side-loop owns that lane), the CLOSE record (created
+# by its own flow, not by artifact selection), and review/archive files selected as if they
+# were artifacts.
 pw_review_reviewrel() {
   local d="$1" rel="$2" abs lane base
   # normalize cosmetic forms before containment
@@ -191,16 +210,54 @@ pw_review_reviewrel() {
   base="$(basename "$rel")"
   case "$base" in README.md|_TEMPLATE*|*.archive.md|*.review.md) echo "not a reviewable artifact: $rel" >&2; return 1 ;; esac
   case "$rel" in
-    analysis/review/*|task/review/*) echo "already a review path, not an artifact: $rel" >&2; return 1 ;;
+    analysis/review/*|task/review/*|context/review/*|rfc/review/*|review/ai/*) echo "already a review path, not an artifact: $rel" >&2; return 1 ;;
   esac
   lane="$(pw_review_lane "$rel")"
   case "$lane" in
-    rfc)     echo "RFC staging keeps its own comment side-loop — no topic review for: $rel" >&2; return 1 ;;
+    rfc)     echo "RFC comment staging keeps its own comment side-loop — no topic review for: $rel" >&2; return 1 ;;
+    context) printf '%s\tcontext/review/CONTEXT.review.md\n' "$rel" ;;
+    rfccontent) printf '%s\trfc/review/RFC-CONTENT.review.md\n' "$rel" ;;
+    close)   echo "the close record is created by its own flow, not by artifact selection: $rel" >&2; return 1 ;;
     analysis) printf '%s\tanalysis/review/%s.review.md\n' "$rel" "${base%.md}" ;;
     plan)     printf '%s\ttask/review/PLAN.review.md\n' "$rel" ;;
     task)     printf '%s\ttask/review/%s.review.md\n' "$rel" "${base%.md}" ;;
-    *)        echo "unsupported artifact (reviewable: analysis/*.md, task/PLAN.md, task/T0n.md): $rel" >&2; return 1 ;;
+    *)        echo "unsupported artifact (reviewable: analysis/*.md, task/PLAN.md, task/T0n.md, context/REQUIREMENTS.md, rfc/RFC.md): $rel" >&2; return 1 ;;
   esac
+}
+
+# --- handoff primitives (prepare/import snapshot+report machinery) ------------------
+
+# pw_review_hash_stdin — hex sha256 of stdin (shasum first, sha256sum fallback).
+pw_review_hash_stdin() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  else
+    cat >/dev/null
+    echo "no sha256 tool on PATH (shasum/sha256sum)" >&2
+    return 1
+  fi
+}
+
+# pw_review_sha256 <file> — hex digest of a file's bytes (rc 1 + reason when unhashable).
+pw_review_sha256() {
+  local f="$1"
+  [ -f "$f" ] && [ ! -L "$f" ] || { echo "no hashable regular file: $f" >&2; return 1; }
+  pw_review_hash_stdin < "$f"
+}
+
+# pw_review_fingerprint — digest of the canonical reviewed-identity byte stream: a version
+# header line plus the caller's "rel\tsha256" (or "code\t…") lines, SORTED. Reads lines on
+# stdin; prepare and import feed the same generator so recomputation is byte-identical.
+pw_review_fingerprint() {
+  { printf 'pw-review-inputs/1\n'; LC_ALL=C sort; } | pw_review_hash_stdin
+}
+
+# pw_review_json_escape <value> — one-line JSON string escape (the prepare writer builds its
+# manifest with this; values are validated beforehand, this is the belt).
+pw_review_json_escape() {
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/	/\\t/g'
 }
 
 # --- per-file serialization + staged publish ---------------------------------------

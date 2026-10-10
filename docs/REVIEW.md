@@ -14,7 +14,7 @@ Adding an item or answering a question does not apply the correction by itself.
 | Review an analysis or PLAN | [Local review files](#1-local-review-files-pre-ship) |
 | Fix a reviewer's MR comment | `/pw-ship <slug> [task-ids] comments` and [MR review](#2-the-mr-review-flow-post-ship) |
 | An AI pass that keeps human approval | [Advisory recipe](RECIPES.md#use-ai-review-with-human-approval) |
-| Understand automatic approval safeguards | [AI-assisted review](#3-ai-assisted-review-optional-per-phase) |
+| Understand automatic approval safeguards | [AI-assisted review](#3-ai-assisted-review-optional-advisory--manual-by-default) |
 
 Use `/pw-help project <slug> pw-review` for paths and commands matched to your actual project.
 
@@ -352,35 +352,91 @@ asked and what changed?" entirely from the project dir, without opening the MR.
 
 ---
 
-## 3. AI-assisted review (optional, per-phase)
+## 3. AI-assisted review (optional; advisory + manual by default)
 
 Everything above assumes a human. You can instead (or additionally, as a pre-filter) delegate any
-of the five review points — analysis, the plan, a task's plan, a task's execution result, MR/PR
-comments — to a **fresh** AI review pass. "Fresh" is the whole point: the reviewer is spawned with
-no shared context with whoever produced the artifact, so it's a genuine second opinion rather than
-an echo of the producer's own reasoning — the same idea as having someone who's never seen your
-draft read it cold, rather than asking yourself "does this look right to me?"
+review point — context readiness, analysis, the plan, a task's plan, a task's execution result,
+the shipped MR, the local RFC content, close-out evidence — to a **fresh** AI review pass.
+"Fresh" is the whole point: the reviewer runs with no shared context with whoever produced the
+artifact, so it's a genuine second opinion rather than an echo of the producer's own reasoning —
+the same idea as having someone who's never seen your draft read it cold, rather than asking
+yourself "does this look right to me?" A pass started from the producing session still uses a
+fresh reviewer — the producing session is never the reviewer, and it must not hand over its chat,
+reasoning, a written defense, a resumable copy of itself, or anything the reviewer could recover
+through session recall.
 
-**Turning it on** — one dashboard line per project, five independent phases, viewed/changed through
-the config command (never a shell script, and not from `/pw-review` — reviewing is not configuring):
-```
-/pw-config myproj show                # every axis incl. all 5 phases' modes, in plain language
-/pw-config myproj set ai-review plan=auto    # e.g. let the plan-review gate run itself
-```
-Each phase (`analysis` / `plan` / `task-plan` / `task-exec` / `ship`) is independently `off`
-(default — nothing changes), `advisory`, or `auto`:
+**Four independent axes per surface.** Eight review surfaces — `context`, `analysis`, `plan`,
+`task-plan`, `task-exec`, `ship`, `rfc`, `close` — each carry four settings, viewed/changed
+through the config command (never a shell script, and not from `/pw-review` — reviewing is not
+configuring):
 
-| Mode | What happens |
+| Axis | Values (default) | What it decides |
+|---|---|---|
+| `ai-review` | `advisory`\|`auto` (`advisory`) | **Outcome**: advisory files findings and leaves approval with you; auto may ALSO approve a genuinely clean managed pass through the guarded call below. The removed `off` value reads as effective `advisory`; persist the migration with `/pw-config <slug> project ensure`. |
+| `review-trigger` | `manual`\|`completion` (`manual`) | **When a pass starts**: manual = only when you invoke one; completion = also after a succeeded producing command's verification (context prepare, analysis, breakdown, per-task execute, ship, RFC content, close). `completion` never disables explicit requests. |
+| `review-repair` | `manual`\|`bounded` (`manual`) | Whether a completion review may run the **bounded cycle**: review → repair → verify → fresh review. |
+| `review-rounds` | `1..3` (`3`) | Total reviewer passes in that cycle — with 3, at most two intervening verified repairs; the sequence stops at pass 3 even with findings left. |
+
+```
+/pw-config myproj show                                # every axis, in plain language
+/pw-config myproj set ai-review plan=auto             # let the plan-review gate self-approve clean passes
+/pw-config myproj set review-trigger all=completion   # start after each producing command too…
+/pw-config myproj set review-trigger context=manual   # …except where you want manual control
+/pw-config myproj set review-repair task-exec=bounded # completion review may repair+re-review task results
+/pw-config myproj set review-rounds 2                 # tighten the bounded cycle
+```
+
+`all=<value>` sets every surface in one validated write; explicitly named surfaces override the
+baseline regardless of argument order, and a batch with any illegal pair writes nothing:
+
+| Axis | What happens at each value |
 |---|---|
-| `off` | No AI reviewer involved. Identical to everything in sections 1–2 above. |
-| `advisory` | `pw-reviewer` files items into the normal `.review.md`, tagged `(pw-reviewer, <timestamp>)` so they're never confused with a human's. **A human still writes the Sign-off row** — this is a pre-filter, not a replacement, even when every finding has been resolved. |
-| `auto` | Same filing, but if the pass leaves **nothing** [OPEN] or [PENDING], `pw-reviewer` may sign off itself, via a guarded tool call that independently re-checks its conditions (mode, open counts, artifact/lane match, no standing human rejection). |
+| `ai-review=advisory` | `pw-reviewer` files items into the normal `.review.md`, tagged `(pw-reviewer, <timestamp>)` so they're never confused with a human's. **A human still writes the Sign-off row** — this is a pre-filter, not a replacement, even when every finding has been resolved. |
+| `ai-review=auto` | Same filing, but if the pass leaves **nothing** [OPEN] or [PENDING], `pw-reviewer` may sign off itself, via a guarded tool call that independently re-checks its conditions (mode, open counts, artifact/lane match, no standing human rejection). A clean **external** import never approves, even in `auto`. |
+| `review-trigger=manual` | No pass starts by itself — you invoke `/pw-review <slug> ai …` when you want one. |
+| `review-trigger=completion` | After the producing command's own verification succeeds (never on failure), that command runs the same fresh-reviewer flow for its surface before summarizing. The reviewer's availability is never allowed to fail the phase: an outage or an unverified cross-provider route records a skip and continues. Completion review never starts the NEXT phase, never accepts a task, and never pushes. |
+| `review-repair=bounded` | A completion review that ends with repairable findings may batch-fix them by their normal routing (the producing driver for docs; the executor ladder for task code, each fix re-running the task's `## Verify`) and then request a fresh pass on the changed artifact. Human questions, scope changes, and consumed earlier-phase edits stop the cycle for your decision. |
+| `review-repair=manual` | Findings stop for you — nothing repairs automatically. |
 
-**Run it** with `/pw-review <slug> ai [phase|Tid(s)|path]` — same scope resolution as the normal
+**Run it** with `/pw-review <slug> ai [surface|Tid(s)|path]` — same scope resolution as the normal
 `/pw-review` (a list of task ids = one fresh reviewer pass per task). Under the hood this spawns the
-`pw-reviewer` agent fresh, in-process, same provider
-(or hand the artifact + the standalone `pw-review` skill to a completely different agent/session
-yourself, if you want it run somewhere with zero shared context at all).
+`pw-reviewer` agent fresh, in-process, same provider. A cross-provider reviewer (e.g. Kilo
+producing, Codex reviewing) is a separate review-only CLI session used only when its read-only
+capability is verified; until then that route is recorded as a skip, never improvised. An explicit
+`--repair` on the invocation runs the bounded cycle once even when `review-trigger` is `manual`
+(repair permission on that surface must be `bounded` — `--repair` is refused when the outcome is
+unavailable and stops at the `review-rounds` budget: pass 1 → repair 1 → verify → pass 2 → repair 2
+→ verify → pass 3 → STOP, no third repair).
+
+**Manual reviewer sessions — `prepare` + `import`.** When you want the review done in a separate,
+non-native session (another chat, another provider, a colleague's agent), freeze a packet first:
+
+```
+/pw-review myproj prepare analysis                 # or: prepare T01 / prepare rfc / a path / close
+# → review/ai/p-analysis-…/ (manifest.json · snapshot/ · request.md); NO model is launched
+# hand request.md + the snapshot to a fresh session anywhere; it returns report JSON
+/pw-review myproj import --report ~/reviews/analysis.json
+# → validated once against the manifest (schema, project/pass binding, freshness fingerprint);
+#   findings land in the normal .review.md tagged (pw-reviewer (external), …); replay-safe
+```
+
+The import is **advisory only, in every configuration**: it writes no approval row, never repairs,
+never touches `auto-signoff` (only a workflow-managed pass can), and says so in `REVIEWER-NOTES.md`.
+A stale report (the reviewed files changed since `prepare`) is retained as evidence and imports
+nothing. One report per pass; `prepare --refresh` (a new paid identity) or `prepare --repair`
+(bounded-cycle round, refused past the budget) starts another. `prepare` never overwrites an
+existing packet for the same unit — rerunning it shows the current one. Without a prepared packet,
+a pasted review stays ordinary feedback — recorded as items with its source named, never claimed as
+a structured import.
+
+**Where the results land.** Every managed pass freezes its inputs under `review/ai/<pass-id>/`
+(manifest + snapshot + validated `report.json`); actionable findings and questions live in the
+artifact's own `.review.md`; the narrative (what ran, verdict, coverage gaps, attribution) goes to
+`REVIEWER-NOTES.md`; and approval — when it happens at all — is the review file's Sign-off table,
+written by you (advisory) or, for an eligible clean managed pass, by the guarded auto call.
+`/pw-review <slug> passes` lists every packet with its surface, state, artifact, round, and
+verdict. Raw code/document review outside a scaffolded project is a different tool — the
+`pw-independent-review` skill — whose default destination is chat, with no project records.
 
 **On `auto`'s self-approval** — this is the one place this feature changes an existing invariant
 ("only a human clears a gate"), so it's deliberately the most auditable part: the Sign-off row

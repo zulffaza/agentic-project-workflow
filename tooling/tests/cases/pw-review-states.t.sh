@@ -122,9 +122,14 @@ pwtest_rc 0 "advisory rerun idempotent" "$E" start "$SM" "$RVX" --phase analysis
   && pwtest_ok "same reviewer same attempt stayed idempotent" || pwtest_bad "retry attribution" "duplicated or lost"
 pwtest_rc 0 "pass without identity records unknown" "$E" start "$SM" "$RVX" --phase analysis
 rowfix '| pw-reviewer (advisory; provider=unknown; model=unknown) | changes-requested |' "unconfirmed identity printed as unknown" "$S/$RVX"
-pwtest_rc 0 "configure plan off" "$CFG" ai-review "$SM" plan off
-pwtest_rc 2 "phase with mode off refuses pass entry" "$E" start "$SM" "$PLAN" --phase plan
-pwtest_fix "mode-off refusal actionable"
+# legacy stored `off` reads as effective ADVISORY (migration): the value is refused on write
+# with an actionable hint, and a dashboard still carrying it allows explicit pass entry (the
+# normalization is what keeps a manual review from being silently dead).
+pwtest_rc 2 "ai-review refuses the removed off value" "$CFG" ai-review "$SM" plan off
+pwtest_fix "off refusal actionable"
+sed -i '' 's/plan=advisory/plan=off/' "$S/README.md"
+pwtest_rc 0 "legacy off still enables an explicit pass (normalized to advisory)" "$E" start "$SM" "$PLAN" --phase plan
+pwtest_re 'pass entry' "start ran under the normalized mode"
 pwtest_rc 2 "lane mismatch refuses (analysis file, ship phase)" "$E" start "$SM" "$RVX" --phase ship --provider kilo --model m
 pwtest_rc 2 "lane mismatch refuses (PLAN file, task-exec phase)" "$E" start "$SM" "$PLAN" --phase task-exec
 [ "$(rowcount ' changes-requested |' "$S/$RVX")" = 3 ] \

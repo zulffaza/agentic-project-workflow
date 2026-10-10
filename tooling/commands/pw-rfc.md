@@ -188,3 +188,15 @@ threads into the review loop. The default flow (no selector token) is Wave 1.**
 - Never performs a whole-doc overwrite on any backend — every external write is section-scoped.
 - Never blocks a phase because a backend is unset or unreachable — RFC publishing is best-effort
   enrichment on an already-complete artifact; report and continue.
+
+**Local RFC content review — only when configured.** When this run finalized `rfc/RFC.md` content
+for a wave (before its external publish, or when I ask for review of the local draft), read the
+`rfc` axis (`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh project get <slug> review-trigger`
+and `… ai-review`) and, ONLY when the trigger is `completion` and the outcome is callable
+(`advisory` default; a legacy `off` row reads as advisory), run the `/pw-review <slug> ai rfc` flow
+against the LOCAL content record (`rfc/review/RFC-CONTENT.review.md`) — a fresh reviewer only,
+bounded repairs only when `review-repair rfc=bounded` within `review-rounds` passes. This is
+distinct from the fetched-comment staging (`analysis/review/RFC.review.md`), which keeps its own
+side-loop and never receives an approval row. Imported/external content reports stay advisory; a
+clean result does not itself authorize a publish — the wave gate above still governs. Outage or an
+unverified route: one skip line, continue publishing when the wave gate passed.

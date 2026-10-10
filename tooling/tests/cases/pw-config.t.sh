@@ -9,24 +9,32 @@ pl_config_selftest() {
   : > "$tmp/demo2/LOG.md"
   die() { pwtest_bad "pw-lib-port[config]: $*" "ported selftest assert failed"; }
   # --- AI-assisted review -------------------------------------------------
-  # ai-review: get on a project with no AI Review line yet auto-creates it, all-off; set updates
-  # exactly one phase, leaving the other four untouched; invalid phase/mode rejected.
-  local got_ai; got_ai="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2)"
-  [ "$got_ai" = "analysis=off plan=off task-plan=off task-exec=off ship=off" ] || die "selftest FAIL: ai-review default line wrong: '$got_ai'"
+  # ai-review: get on a project with no AI Review line yet auto-creates it, all-ADVISORY
+  # across the eight surfaces (the removed `off` value reads as advisory — an explicit AI
+  # pass is never silently dead); set updates exactly one surface; invalid surface/mode rejected.
+  local got_ai SURF8="context=advisory analysis=advisory plan=advisory task-plan=advisory task-exec=advisory ship=advisory rfc=advisory close=advisory"
+  got_ai="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2)"
+  [ "$got_ai" = "$SURF8" ] || die "selftest FAIL: ai-review default line wrong: '$got_ai'"
   PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2 plan auto >/dev/null
   got_ai="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2)"
-  [ "$got_ai" = "analysis=off plan=auto task-plan=off task-exec=off ship=off" ] || die "selftest FAIL: ai-review set did not update only 'plan': '$got_ai'"
+  [ "$got_ai" = "context=advisory analysis=advisory plan=auto task-plan=advisory task-exec=advisory ship=advisory rfc=advisory close=advisory" ] \
+    || die "selftest FAIL: ai-review set did not update only 'plan': '$got_ai'"
   PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2 analysis advisory >/dev/null
   got_ai="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2)"
-  [ "$got_ai" = "analysis=advisory plan=auto task-plan=off task-exec=off ship=off" ] || die "selftest FAIL: ai-review 2nd set clobbered the 1st: '$got_ai'"
+  [ "$got_ai" = "context=advisory analysis=advisory plan=auto task-plan=advisory task-exec=advisory ship=advisory rfc=advisory close=advisory" ] \
+    || die "selftest FAIL: ai-review 2nd set clobbered the 1st: '$got_ai'"
   [ "$(grep -c '^- \*\*AI Review:\*\*' "$tmp/demo2/README.md")" = "1" ] || die "selftest FAIL: AI Review line duplicated"
   if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2 bogus-phase auto >/dev/null 2>&1; then
-    die "selftest FAIL: ai-review accepted an invalid phase"
+    die "selftest FAIL: ai-review accepted an invalid surface"
   fi
   if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2 plan bogus-mode >/dev/null 2>&1; then
     die "selftest FAIL: ai-review accepted an invalid mode"
   fi
-  [ "$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2)" = "analysis=advisory plan=auto task-plan=off task-exec=off ship=off" ] || die "selftest FAIL: rejected ai-review calls still mutated the line"
+  if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2 plan off >/dev/null 2>&1; then
+    die "selftest FAIL: ai-review accepted the removed 'off' value"
+  fi
+  [ "$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2)" = "context=advisory analysis=advisory plan=auto task-plan=advisory task-exec=advisory ship=advisory rfc=advisory close=advisory" ] \
+    || die "selftest FAIL: rejected ai-review calls still mutated the line"
 
 
   # --- model-check: empty/unset allowlist = all models allowed (the default rule) ---
@@ -195,10 +203,16 @@ printf '## Breakdown rules / execution routing (project-specific)\n- **Routing o
 PC="$(pwtest_script pw-config.sh)"
 PCS="env PW_CONFIG_FILE=$PWTEST_TESTSDIR/pw.config.test.sh PW_PROJECTS_DIR=$ROOT/projects $PC"
 
-# ensure: both explicit config lines appear (absent line = defect doctrine), idempotent.
+# ensure: every explicit config line appears (absent line = defect doctrine), idempotent.
 pwtest_rc 0 "project ensure inserts config lines" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project ensure pcfg-demo
-grep -qE '^- \*\*AI Review:\*\* analysis=off plan=off' "$PRJ/README.md" \
-  && pwtest_ok "AI Review line ensured with explicit off values" || pwtest_bad "ensure review line" "$(grep -c 'AI Review' "$PRJ/README.md")"
+grep -qE '^- \*\*AI Review:\*\* context=advisory analysis=advisory plan=advisory' "$PRJ/README.md" \
+  && pwtest_ok "AI Review line ensured with explicit advisory values" || pwtest_bad "ensure review line" "$(grep -c 'AI Review' "$PRJ/README.md")"
+grep -qE '^- \*\*Review Trigger:\*\* context=manual analysis=manual' "$PRJ/README.md" \
+  && pwtest_ok "Review Trigger line ensured (manual defaults)" || pwtest_bad "ensure trigger line" "$(grep -c 'Review Trigger' "$PRJ/README.md")"
+grep -qE '^- \*\*Review Repair:\*\* context=manual analysis=manual' "$PRJ/README.md" \
+  && pwtest_ok "Review Repair line ensured (manual defaults)" || pwtest_bad "ensure repair line" "$(grep -c 'Review Repair' "$PRJ/README.md")"
+grep -qE '^- \*\*Review Budget:\*\* rounds=3' "$PRJ/README.md" \
+  && pwtest_ok "Review Budget line ensured (rounds=3)" || pwtest_bad "ensure budget line" "$(grep -c 'Review Budget' "$PRJ/README.md")"
 grep -qE '^- \*\*AI Models:\*\* researcher=—' "$PRJ/README.md" \
   && pwtest_ok "AI Models line ensured with explicit — rows" || pwtest_bad "ensure models line" "$(grep -c 'AI Models' "$PRJ/README.md")"
 _before_ensure2="$(cat "$PRJ/README.md")"
@@ -239,14 +253,52 @@ pwtest_err "owning flow" "refusal names the owning flow"
 pwtest_rc 0 "project set ai-review plan auto" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review plan auto
 pwtest_rc 0 "project get ai-review shows it" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo ai-review
 pwtest_re 'plan=auto' "ai-review write landed"
-# BATCH set: several phase=mode pairs in ONE command → one write, one LOG line.
+# BATCH set: several surface=mode pairs in ONE command → one write, one LOG line.
 _before_log="$(grep -c '^- ' "$PRJ/LOG.md")"
-pwtest_rc 0 "project set ai-review batch" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review analysis=advisory task-plan=auto ship=off
+pwtest_rc 0 "project set ai-review batch" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review analysis=advisory task-plan=auto ship=auto
 pwtest_rc 0 "batch get reflects all pairs" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo ai-review
-pwtest_re 'analysis=advisory plan=auto task-plan=auto task-exec=off ship=off' "all three pairs landed, untouched kept"
+pwtest_re 'context=advisory analysis=advisory plan=auto task-plan=auto task-exec=advisory ship=auto rfc=advisory close=advisory' "all three pairs landed, untouched kept"
 _after_log="$(grep -c '^- ' "$PRJ/LOG.md")"
 [ "$(( _after_log - _before_log ))" = 1 ] \
   && pwtest_ok "batch is one LOG line" || pwtest_bad "batch log" "$((_after_log-_before_log)) new lines (want 1)"
+# removed values carry actionable refusals (off → advisory/manual; both → completion)
+pwtest_rc 2 "ai-review refuses removed off" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review all=off
+pwtest_err "review-trigger=manual" "off refusal points at the scheduling axis"
+pwtest_rc 2 "review-trigger refuses removed both" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo review-trigger all=both
+pwtest_err "completion" "both refusal points at completion"
+# all= expansion + named override (override wins in either order) + atomic duplicate rejection
+pwtest_rc 0 "ai-review all= expands over every surface" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review all=auto context=advisory
+pwtest_rc 0 "expanded get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo ai-review
+pwtest_re 'context=advisory analysis=auto plan=auto task-plan=auto task-exec=auto ship=auto rfc=auto close=auto' "all= baseline + explicit override both landed"
+pwtest_rc 0 "override before all lands too" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review ship=advisory all=auto
+pwtest_rc 0 "order-independent get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo ai-review
+pwtest_re 'ship=advisory' "named override beats all= regardless of argument order"
+pwtest_rc 2 "duplicate all= refused" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review all=auto all=advisory
+pwtest_rc 2 "unknown surface refused" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review bogus=auto
+# review-trigger / review-repair / review-rounds: value enums + ranges + persistence
+pwtest_rc 0 "review-trigger batch" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo review-trigger analysis=completion task-exec=completion
+pwtest_rc 0 "review-trigger get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo review-trigger
+pwtest_re 'context=manual analysis=completion plan=manual task-plan=manual task-exec=completion ship=manual rfc=manual close=manual' "trigger batch landed"
+pwtest_rc 2 "review-trigger refuses a bad value" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo review-trigger analysis=sometimes
+pwtest_rc 0 "review-repair all=bounded" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo review-repair all=bounded
+pwtest_rc 0 "review-repair get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo review-repair
+pwtest_re 'context=bounded analysis=bounded' "repair all= landed"
+pwtest_rc 0 "review-rounds set" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo review-rounds 2
+pwtest_rc 0 "review-rounds get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo review-rounds
+pwtest_re 'rounds=2' "rounds persisted"
+pwtest_rc 2 "review-rounds range" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo review-rounds 4
+pwtest_rc 2 "review-rounds integer" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo review-rounds many
+# legacy `off` migration: reads normalize to advisory (with a note), ensure persists it
+sed -i.bak 's/ship=advisory/ship=off/' "$PRJ/README.md" && rm -f "$PRJ/README.md.bak"
+pwtest_rc 0 "legacy off get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo ai-review
+pwtest_re 'ship=advisory' "legacy off reads as effective advisory"
+pwtest_err 'legacy off row' "get announces the migration"
+pwtest_rc 0 "legacy off show" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project show pcfg-demo
+pwtest_re 'ai-review\.ship[[:space:]]+config[[:space:]]+off[[:space:]]+README' "show keeps the STORED value visible"
+pwtest_re 'README\.md:AI Review[[:space:]]+advisory' "show pairs it with the effective value"
+pwtest_re 'legacy AI Review off row' "show carries the one migration note"
+pwtest_rc 0 "ensure persists the migration" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project ensure pcfg-demo
+grep -q 'ship=off' "$PRJ/README.md" && pwtest_bad "migration persisted" "ship=off survived ensure" || pwtest_ok "ensure rewrote legacy off to advisory"
 # all-or-nothing: a batch with one illegal pair must write NOTHING.
 _aim_before="$(grep -m1 '^- \*\*AI Models:\*\*' "$PRJ/README.md" | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//')"
 if PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-model \

@@ -467,7 +467,7 @@ if [ -f "$README" ]; then
   grep -q '^- \*\*AI Models:\*\*' "$README"  || missing="$missing AI-Models:"
   grep -q '^- \*\*AI Review:\*\*' "$README"  || missing="$missing AI-Review:"
   # unexpanded scaffold tokens = a render that never landed
-  tok="$(grep -oE '<(AI_MODELS_DEFAULT|AI_REVIEW_DEFAULT|PROJECT_NAME|CREATED)>' "$README" | head -1 || true)"
+  tok="$(grep -oE '<(AI_MODELS_DEFAULT|AI_REVIEW_DEFAULT|REVIEW_TRIGGER_DEFAULT|REVIEW_REPAIR_DEFAULT|REVIEW_BUDGET_DEFAULT|PROJECT_NAME|CREATED)>' "$README" | head -1 || true)"
   if [ -n "$missing" ]; then
     if [ "$FIX" = 1 ]; then
       # ensure covers the config lines; then RE-MEASURE — a successful repair must not keep a
@@ -495,6 +495,25 @@ if [ -f "$README" ]; then
     echo "      → fix: tell your agent to replace the token with an explicit value (/pw-config $SLUG project set for config lines), or re-scaffold an empty project with /pw-new"
   else
     ok "dashboard carries the current template's required lines (explicit values, incl. AI Review:)"
+  fi
+  # review-axis side lines (Trigger/Repair/Budget): defaults apply when absent (manual/manual/3)
+  # — a note, not a failure, for projects scaffolded before the axis existed; --fix (or the
+  # explicit ensure) materializes them plus the legacy-off migration.
+  nm2=""
+  grep -q '^- \*\*Review Trigger:\*\*' "$README" || nm2="$nm2 Review-Trigger:"
+  grep -q '^- \*\*Review Repair:\*\*'  "$README" || nm2="$nm2 Review-Repair:"
+  grep -q '^- \*\*Review Budget:\*\*'  "$README" || nm2="$nm2 Review-Budget:"
+  if [ -n "$nm2" ]; then
+    if [ "$FIX" = 1 ]; then
+      out="$("$CFG" project ensure "$SLUG" 2>&1)" || true
+      still2=""
+      grep -q '^- \*\*Review Trigger:\*\*' "$README" || still2="$still2 Review-Trigger:"
+      grep -q '^- \*\*Review Repair:\*\*'  "$README" || still2="$still2 Review-Repair:"
+      grep -q '^- \*\*Review Budget:\*\*'  "$README" || still2="$still2 Review-Budget:"
+      if [ -z "$still2" ]; then fixed "review-axis lines ensured (explicit defaults)"; else bad "dashboard review-axis lines still missing:$still2"; fi
+    else
+      note "dashboard lacks newer review-axis line(s):$nm2 (defaults manual/manual/3 apply) — add with: /pw-config $SLUG project ensure"
+    fi
   fi
 else
   bad "no README.md in project dir"
@@ -789,10 +808,39 @@ am_line="$(grep '^- \*\*AI Models:\*\*' "$README" 2>/dev/null | head -1 || true)
 c6bad=0
 if [ -z "$ai_line" ]; then : # absence is C11's ✗ (with the ensure fix) — never reported twice
 else
+  c6legacy=0
   for kv in $(printf '%s' "$ai_line" | sed 's/^- \*\*AI Review:\*\*[[:space:]]*//'); do
     mode="${kv#*=}"
-    case "$mode" in off|advisory|auto) : ;; *) bad "AI Review row '$kv' — mode outside off|advisory|auto"; c6bad=1 ;; esac
+    case "$mode" in
+      advisory|auto) : ;;
+      off) c6legacy=1 ;;
+      *) bad "AI Review row '$kv' — mode outside advisory|auto"; c6bad=1 ;;
+    esac
   done
+  [ "$c6legacy" = 1 ] && note "AI Review has legacy 'off' row(s) — they read as effective ADVISORY; persist with: /pw-config $SLUG project ensure"
+  true
+fi
+# review-axis side lines: validate values when present (defaults apply when absent — the
+# missing-line note above owns the fix path, never a double report)
+rt_line="$(grep '^- \*\*Review Trigger:\*\*' "$README" 2>/dev/null | head -1 || true)"
+if [ -n "$rt_line" ]; then
+  for kv in $(printf '%s' "$rt_line" | sed 's/^- \*\*Review Trigger:\*\*[[:space:]]*//'); do
+    case "${kv#*=}" in manual|completion) : ;; *) bad "Review Trigger row '$kv' — value outside manual|completion"; c6bad=1 ;; esac
+  done
+fi
+rr_line="$(grep '^- \*\*Review Repair:\*\*' "$README" 2>/dev/null | head -1 || true)"
+if [ -n "$rr_line" ]; then
+  for kv in $(printf '%s' "$rr_line" | sed 's/^- \*\*Review Repair:\*\*[[:space:]]*//'); do
+    case "${kv#*=}" in manual|bounded) : ;; *) bad "Review Repair row '$kv' — value outside manual|bounded"; c6bad=1 ;; esac
+  done
+fi
+rb_line="$(grep '^- \*\*Review Budget:\*\*' "$README" 2>/dev/null | head -1 || true)"
+if [ -n "$rb_line" ]; then
+  rb_n="$(printf '%s' "$rb_line" | sed -n 's/.*rounds=\([0-9][0-9]*\).*/\1/p')"
+  case "$rb_n" in ''|*[!0-9]*) bad "Review Budget line '$rb_line' — expected rounds=1..3"; c6bad=1 ;; esac
+  if [ -n "$rb_n" ]; then
+    { [ "$rb_n" -ge 1 ] && [ "$rb_n" -le 3 ]; } || { bad "Review Budget rounds=$rb_n — outside 1..3"; c6bad=1; }
+  fi
 fi
 if [ -z "$am_line" ]; then : # presence owned by C11
 else

@@ -93,8 +93,9 @@ PW_KILO_API_PROVIDERS=(kilo)
 # PLAN-only (an env there would be a third surface for one decision).
 
 # Per-project AI Review + spawn-lane model defaults (written into a new project's dashboard by
-# scaffold.sh — a project can always flip them later via /pw-review <slug> config [model …]).
-#   PW_AI_REVIEW_DEFAULT=off                     # off|advisory|auto — the per-phase starting mode
+# scaffold.sh — a project can always flip them later via /pw-config <slug> set …).
+#   PW_AI_REVIEW_DEFAULT=advisory                # advisory|auto — the per-surface starting OUTCOME
+#                                                # (legacy "off" here normalizes to "advisory")
 #   PW_AI_MODEL_DEFAULT_RESEARCHER=—             # e.g. kilo:command_code/MiniMaxAI/MiniMax-M3,
 #   PW_AI_MODEL_DEFAULT_ANALYST=—                #     claude:sonnet — `—` = provider default
 # (writer-task / reviewer / verifier follow the same PW_AI_MODEL_DEFAULT_<ROLE> pattern; the
@@ -143,14 +144,16 @@ PW_MODEL_ALLOWLIST_OPENCODE=""
 PW_MODEL_ALLOWLIST_CURSOR=""
 PW_MODEL_ALLOWLIST_CODEX=""
 
-# --- AI-assisted review (OPTIONAL — off leaves today's human-only review unchanged) ----------
-# Every scaffolded project gets a per-phase "AI Review" dashboard line (off|advisory|auto for each
-# of analysis/plan/task-plan/task-exec/ship), seeded from this ONE bundle-wide default and then
-# freely overridable per project/phase any time via `/pw-review <slug> config <phase> <mode>` —
-# see docs/REVIEW.md. This only changes what NEW projects are scaffolded with; it never touches an
-# already-scaffolded project's dashboard.
-#   PW_AI_REVIEW_DEFAULT="off"   # "off" (default) | "advisory" | "auto"
-PW_AI_REVIEW_DEFAULT="off"
+# --- AI-assisted review (OPTIONAL — manual trigger + human sign-off by default) ---------------
+# Every scaffolded project gets four review config lines: AI Review (outcome: advisory|auto per
+# surface; the legacy `off` value normalizes to `advisory` on read and is no longer writable),
+# Review Trigger (manual|completion), Review Repair (manual|bounded), and Review Budget
+# (rounds 1..3). All are overridable per project at any time via
+# `/pw-config <slug> set ai-review …` — see docs/REVIEW.md. This only changes what NEW projects
+# are scaffolded with; it never touches an already-scaffolded project's dashboard.
+#   PW_AI_REVIEW_DEFAULT="advisory"   # "advisory" (default) | "auto" — starting OUTCOME mode;
+#                                     # a legacy "off" here normalizes to "advisory"
+PW_AI_REVIEW_DEFAULT="advisory"
 
 # --- Review-request frame and generation prompts (OPTIONAL — defaults are seeded at install) --
 # /pw-ship <slug> request-review renders its copyable message through one editable Markdown

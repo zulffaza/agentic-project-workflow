@@ -9,8 +9,11 @@
 #       open=N resolved=M items=K; missing file prints zero counts and exits 1.
 #   pw-review-read.sh eligible <slug> <review-rel-path>
 #       eligible=N open=A foldin=B awaiting=C unactionable=D; exit 0 iff N>0.
-#   pw-review-read.sh scan     <slug> [--phase <analysis|plan|task-plan|task-exec|ship>]
-#       Summary per review, including latest decision and By actor.
+#   pw-review-read.sh scan     <slug> [--phase <context|analysis|plan|task-plan|task-exec|ship|rfc|close>]
+#       Summary per review, including latest decision and By actor. Scans the
+#       analysis/review, task/review, context/review, rfc/review, and review/ lanes.
+#   pw-review-read.sh passes   <slug> [--json]
+#       One line per review/ai/ handoff pass: pass-id, surface, state, artifact, verdict.
 #
 # Exit 2 means invalid usage, paths, or metadata. Reads never write project files.
 # Bash 3.2+; old timestamp formats, actors, and approved decorations remain readable.
@@ -99,21 +102,24 @@ cmd_scan() {
     esac
   done
   [ -n "$slug" ] || die 'usage: scan <slug> [--phase <phase>]'
-  case "$phase" in ''|analysis|plan|task-plan|task-exec|ship) ;; *) die "unknown review phase '$phase' → fix: use analysis, plan, task-plan, task-exec, or ship" ;; esac
+  case "$phase" in ''|context|analysis|plan|task-plan|task-exec|ship|rfc|close) ;; *) die "unknown review surface '$phase' → fix: use context, analysis, plan, task-plan, task-exec, ship, rfc, or close" ;; esac
   d="$(proj_dir "$slug")" || return 2
-  for rel in analysis/review task/review; do
+  for rel in analysis/review task/review context/review rfc/review review; do
     [ -d "$d/$rel" ] || continue
     pw_review_contain "$d" "$rel" >/dev/null || die "review directory escapes project: $rel → fix: remove the external symlink"
-    while IFS= read -r -d '' f; do files+=("$f"); done < <(find "$d/$rel" -name '*.review.md' -print0 2>/dev/null)
+    while IFS= read -r -d '' f; do files+=("$f"); done < <(find "$d/$rel" -maxdepth 1 -name '*.review.md' -print0 2>/dev/null)
   done
   [ ${#files[@]} -gt 0 ] || { echo 'No review files found'; return 0; }
   for f in "${files[@]}"; do
     rel="${f#$d/}"; f="$(read_path "$slug" "$rel")" || return 2
     lane="$(pw_review_lane "$rel")"
     case "$phase" in
+      context) [ "$lane" = context ] || continue ;;
       analysis) [ "$lane" = analysis ] || continue ;;
       plan) [ "$lane" = plan ] || continue ;;
       task-plan|task-exec|ship) [ "$lane" = task ] || continue ;;
+      rfc) [ "$lane" = rfccontent ] || continue ;;
+      close) [ "$lane" = close ] || continue ;;
     esac
     counts="$(cmd_count "$slug" "$rel" 2>/dev/null || true)"
     open="$(printf '%s' "$counts" | sed -n 's/open=\([0-9]*\).*/\1/p')"; open="${open:-0}"
@@ -128,6 +134,39 @@ cmd_scan() {
   done
   return 0
 }
+cmd_passes() {
+  local slug="$1" json="${2:-}" d root pd mf any=0 pid _pv
+  case "$json" in ''|--json) ;; *) die "passes: unknown option: $json (try --help)" ;; esac
+  d="$(proj_dir "$slug")" || return 2
+  root="$d/review/ai"
+  [ -d "$root" ] || { echo 'No AI review passes found'; return 0; }
+  _pfield() { # <manifest> <key> — the scalar after the first "key": (nested import object ok)
+    local line
+    line="$(grep -m1 "\"$2\":" "$1" 2>/dev/null || true)"
+    printf '%s' "$line" | awk -v k="\"$2\":" '
+      { i = index($0, k); if (!i) exit; s = substr($0, i + length(k)); sub(/^[ \t]+/, "", s)
+        if (substr(s,1,1) == "\"") { s = substr(s,2); sub(/".*$/, "", s) } else { sub(/[,}].*$/, "", s) }
+        print s }'
+  }
+  for pd in "$root"/*/; do
+    mf="$pd/manifest.json"
+    [ -f "$mf" ] || continue
+    any=1
+    pid="$(basename "${pd%/}")"
+    _pv="$(_pfield "$mf" verdict)"; [ -n "$_pv" ] || _pv="—"
+    if [ "$json" = "--json" ]; then
+      printf '{"pass_id": "%s", "surface": "%s", "state": "%s", "artifact": "%s", "verdict": "%s", "round": "%s"}\n' \
+        "$pid" "$(_pfield "$mf" surface)" "$(_pfield "$mf" state)" "$(_pfield "$mf" artifact)" \
+        "$_pv" "$(_pfield "$mf" round)"
+    else
+      printf 'review/ai/%s: surface=%s state=%s artifact=%s round=%s verdict=%s\n' \
+        "$pid" "$(_pfield "$mf" surface)" "$(_pfield "$mf" state)" "$(_pfield "$mf" artifact)" \
+        "$(_pfield "$mf" round)" "$_pv"
+    fi
+  done
+  [ "$any" = 1 ] || echo 'No AI review passes found'
+  return 0
+}
 [ $# -ge 1 ] || pw_usage
 case "$1" in -h|--help) pw_usage ;; esac
 op="$1"; shift
@@ -137,5 +176,6 @@ case "$op" in
   count) cmd_count "$@" ;;
   eligible) cmd_eligible "$@" ;;
   scan) cmd_scan "$@" ;;
+  passes) cmd_passes "$@" ;;
   *) die "unknown read operator: $op → fix: see --help" ;;
 esac

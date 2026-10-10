@@ -50,9 +50,16 @@ grep -qE '✗ .*PLAN gate failing' "$PWTEST_BOTH" \
 # --- C6 negatives (one scratch clone per planted defect, isolated greps) ----------------------
 PDC6="$PW_PROJECTS_DIR/pd-c6"; cp -a "$F2" "$PDC6"
 pwtest_rc 1 "doctor flags an illegal review mode" env PW_CONFIG_FILE="$PDF2CFG" bash -c \
-  "sed -i '' 's/analysis=off/analysis=maybe/' '$PDC6/README.md' && PW_CONFIG_FILE='$PDF2CFG' '$PDOCTOR' pd-c6"
-grep -qE "✗ .*AI Review row 'analysis=maybe'.*outside off\|advisory\|auto" "$PWTEST_BOTH" \
+  "sed -i '' 's/analysis=advisory/analysis=maybe/' '$PDC6/README.md' && PW_CONFIG_FILE='$PDF2CFG' '$PDOCTOR' pd-c6"
+grep -qE "✗ .*AI Review row 'analysis=maybe'.*outside advisory\|auto" "$PWTEST_BOTH" \
   && pwtest_ok "illegal mode named precisely" || pwtest_bad "illegal mode" "$(grep '✗' "$PWTEST_BOTH" | head -2 | tr '\n' '|')"
+# a legacy stored `off` is NOT an illegal value: it reads as effective advisory — the doctor
+# reports one migration note (not a ✗), and ensure is the persistence door.
+PDC6L="$PW_PROJECTS_DIR/pd-c6-legacy"; cp -a "$F2" "$PDC6L"
+pwtest_rc 0 "doctor accepts a legacy off row (advisory migration)" env PW_CONFIG_FILE="$PDF2CFG" bash -c \
+  "sed -i '' 's/analysis=advisory/analysis=off/' '$PDC6L/README.md' && PW_CONFIG_FILE='$PDF2CFG' '$PDOCTOR' pd-c6-legacy"
+grep -qE "· .*legacy 'off' row.*effective ADVISORY" "$PWTEST_BOTH" \
+  && pwtest_ok "legacy off reported as a migration note" || pwtest_bad "legacy off note" "$(grep '·' "$PWTEST_BOTH" | head -2 | tr '\n' '|')"
 
 PDC6B="$PW_PROJECTS_DIR/pd-c6b"; cp -a "$F2" "$PDC6B"
 pwtest_rc 1 "doctor flags stale produced-by" env PW_CONFIG_FILE="$PDF2CFG" bash -c \
@@ -82,8 +89,9 @@ grep -qE "✗ .*(not a single pin|not an integer|is not in provider)" "$PWTEST_B
 pwtest_rc 0 "doctor --fix repairs the deterministic case" env PW_CONFIG_FILE="$PDF2CFG" "$PDOCTOR" pd-fix --fix
 grep -qE "fixed: dashboard config lines ensured" "$PWTEST_BOTH" \
   && pwtest_ok "--fix report names the ensure" || pwtest_bad "--fix report" "$(grep 'fixed' "$PWTEST_BOTH" | tr '\n' '|')"
-grep -qE '^- \*\*AI Review:\*\* analysis=off plan=off' "$PDFIX/README.md" \
-  && pwtest_ok "AI Review line restored with explicit off values" || pwtest_bad "restored line" "$(grep -c 'AI Review' "$PDFIX/README.md")"
+grep -qE '^- \*\*AI Review:\*\* context=advisory analysis=advisory plan=advisory' "$PDFIX/README.md" \
+  && grep -qE '^- \*\*Review Trigger:\*\* context=manual' "$PDFIX/README.md" \
+  && pwtest_ok "review lines restored with explicit advisory/manual values" || pwtest_bad "restored line" "$(grep -c 'AI Review' "$PDFIX/README.md")"
 
 # RFC backend drift (C12, rev d ruling): optional UNTIL engaged — a META with no target/revision/
 # wave only WARNS (·, exit unaffected); once the project actually uses the RFC (Target set here),

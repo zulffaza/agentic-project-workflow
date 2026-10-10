@@ -32,6 +32,15 @@ The 2nd argument is the operator:
   4. Verify the saved context, then reply with the brief + index links, the unresolved decisions,
      source gaps, and the next action (`/pw-analyze <slug>` when the draft is usable). **Stop
      before analysis** — no analysis, no approval, no automatic `/pw-analyze`.
+  5. **Completion review — only when configured.** After the verification in step 4, read the
+     `context` axis (`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh project get <slug>
+     review-trigger` and `… ai-review`) and, ONLY when the trigger is `completion` and the outcome
+     is callable (`advisory` default; a legacy `off` row reads as advisory), run the
+     `/pw-review <slug> ai context` flow — a fresh reviewer only, bounded repairs only when
+     `review-repair context=bounded` within `review-rounds` passes (repairs may correct the brief
+     and index rows but can never answer my open decisions or fetch new sources). Reviewer outage
+     or an unverified route: one skip line, continue. It never approves analysis and never starts
+     it — the next action stays my explicit `/pw-analyze <slug>`.
   An omitted brief means resume from the saved context and this conversation; if both are empty,
   ask me for the intended outcome before constructing requirements.
 

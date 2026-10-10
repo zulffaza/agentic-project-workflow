@@ -165,6 +165,16 @@ decisions (options not converged, Q0 rules, the final doc) stay yours.
    {{PW_HOME}}/tooling/scripts/entities/pw-status.sh log     <slug> analyze "wrote analysis/<topic>.md (N open questions)"
    ```
 
+**Completion review — only when this project configured it (never assumed).** After the analysis doc
+and its lint pass, read the `analysis` axis (`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh
+project get <slug> review-trigger` and `… ai-review`) and, ONLY when the trigger is `completion`
+and the outcome is callable (`advisory` default; a legacy `off` row reads as advisory), run the
+`/pw-review <slug> ai analysis` flow BEFORE your summary — a fresh reviewer only (never inline in
+this session), bounded repairs only when `review-repair analysis=bounded` and within
+`review-rounds` passes. Reviewer outage or an unverified cross-provider route: record the skip in
+one line and continue. This never signs off by itself (advisory), never fails the analysis, and
+never starts `/pw-breakdown` — that stays my explicit next command.
+
 Stop after writing and summarize it for review. Explain the QnA flow: I answer each `Qn` in the
 review file with `↳ you: <answer>`, then `/pw-review <slug>` folds my answers back into the
 analysis. The review file (`analysis/review/<topic>.review.md`) is already there for me — I just

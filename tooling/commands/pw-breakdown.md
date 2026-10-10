@@ -220,6 +220,14 @@ Then **MANDATORY final step — do NOT skip** — update status + log via the he
 {{PW_HOME}}/tooling/scripts/entities/pw-status.sh log <slug> breakdown "wrote PLAN.md + N task files (ΣSP=<n>)"
 ```
 
+**Completion review — only when configured.** After PLAN + task files are written and linted, read
+the `plan` axis (`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh project get <slug>
+review-trigger` and `… ai-review`) and, ONLY when the trigger is `completion` and the outcome is
+callable (`advisory` default; legacy `off` reads as advisory), run the `/pw-review <slug> ai plan`
+flow BEFORE your summary — fresh reviewer only, bounded repairs only when `review-repair
+plan=bounded` within `review-rounds` passes. Outage or unverified route: one skip line, continue.
+It never signs off by itself (advisory), never fails breakdown, and never starts `/pw-execute`.
+
 Stop and summarize the plan + task list (chosen provider:model per task, SP, and the total manual
 estimate: person-days + critical-path days). Remind me that **only the PLAN review gates execution**
 — `task/review/PLAN.review.md` is already there for me; I just add items and sign off before

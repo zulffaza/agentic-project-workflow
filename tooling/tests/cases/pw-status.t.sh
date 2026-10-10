@@ -138,9 +138,24 @@ grep -qE '^T06\|.*verdict=stale-provider$' "$PWTEST_OUT" && pwtest_ok "provider 
 # ledger-tolerant (pre-ladder lines lack via= → '—') + task-id filter + all-ok subset exits 0:
 cat >> "$PA/LOG.md" <<'LOG'
 - **2026-09-23 09:00** · `exec` — spawned T06 (kilotest:test-model) · session=— · seed=x · out=y
+- **2026-09-23 09:10** · `exec` — spawned T06 fixer for T04.review.md R1 (kilotest:test-model) · session=— · seed=x · out=y
 LOG
 pwtest_rc 0 "provider-audit filtered to clean rows exits 0" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit paaudit T01 T05
 pwtest_rc 1 "provider-audit names the filtered offender" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit paaudit T04
+# a ledger line with description text between the task id and the model group must still parse
+# (regression: the capture required '(' immediately after 'spawned T0n ' → used=unknown);
+# the fixer line is the newest (file order = append order), so it is the one audited
+pwtest_rc 1 "provider-audit parses described fixer lines" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit paaudit T06
+grep -qE '^T06\|expected=kilotest:test-model\|used=kilotest:test-model\|' "$PWTEST_OUT" \
+  && pwtest_ok "fixer-style line yields the real model" || pwtest_bad "fixer line parse" "$(grep '^T06' "$PWTEST_OUT")"
+# …and a colon-less model value (no provider prefix) still captures (a colon-required pattern
+# would regress it to unknown)
+cat >> "$PA/LOG.md" <<'LOG'
+- **2026-09-23 09:15** · `exec` — spawned T02 (kilotest/other-model) via=subagent route=in-process
+LOG
+pwtest_rc 1 "provider-audit keeps colon-less models parseable" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit paaudit T02
+grep -qE '^T02\|.*used=kilotest/other-model\|' "$PWTEST_OUT" \
+  && pwtest_ok "colon-less model captured verbatim" || pwtest_bad "colon-less parse" "$(grep '^T02' "$PWTEST_OUT")"
 # report-only: audit must never mutate LOG.md
 before="$(cat "$PA/LOG.md")"
 env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit paaudit >/dev/null 2>&1

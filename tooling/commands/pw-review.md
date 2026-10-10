@@ -1,18 +1,19 @@
 ---
-description: Apply my review comments for the current phase (or a given review file) — or, with the "ai" sub-verb, delegate a fresh review pass to pw-reviewer — or, with "config", view/change this project's AI Review settings — or, with the write operators (init/init-all/item/answer/signoff), deterministically create review files for selected docs or the current phase and record my items, answers, and gate decisions; --skip-build-check disables the task-fix build loop
-args: <project-slug> [ai | config | init <artifact-path…> | init-all | item | answer | signoff] [phase | Tid(s) | path-to-.review.md | <phase> <mode>] [--skip-build-check]
+description: Apply my review comments for the current phase (or a given review file) — or, with the "ai" sub-verb, delegate a fresh cross-session review pass — or, with "prepare"/"import", freeze a reviewable packet for a manual reviewer session and import its validated report as advisory findings — or, with the write operators (init/init-all/item/answer/signoff), deterministically create review files for selected docs or the current phase and record my items, answers, and gate decisions; --skip-build-check disables the task-fix build loop
+args: <project-slug> [ai | config | prepare <scope> | import --report <file.json> | init <artifact-path…> | init-all | item | answer | signoff] [phase | Tid(s) | path-to-.review.md] [--refresh | --repair | --skip-build-check]
 ---
 Invoke the `project-workflow` skill (review rules). Arguments: {{ARGS}}.
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
-**If the 2nd argument is literally one of `init`, `init-all`, `item`, `answer`, `signoff`, this is a
+**If the 2nd argument is literally one of `init`, `init-all`, `item`, `answer`, `signoff`, `prepare`,
+`import`, this is a
 deterministic review-WRITE operation — mechanical mapping only (C3): parse the arguments per the
 A-rules below, run the script verbatim, show its output. No judgment, no doc reading, no
 "improving" or retyping my text — it is handed over VERBATIM via a `--stdin` heredoc (A3).**
 Command-only replies: the final reply states what was written (file, item/gate) in `/pw-*` terms;
 keep raw script diagnostics in your working context and quote them only when they carry evidence.
-Everything else below (apply-comments / `ai` / `config`) does NOT run for these operators.
+Everything else below (apply-comments / `ai`) does NOT run for these operators.
 
 - **`/pw-review <slug> init <artifact-path> [<artifact-path> …]`** →
   `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init-docs <slug> <artifact-rel-path>…` —
@@ -45,6 +46,25 @@ Everything else below (apply-comments / `ai` / `config`) does NOT run for these 
   --stdin` (heredoc). The script never flips the question's status — the fold-in + `[ANSWERED]`
   flip happens on the next apply-comments pass, per docs/REVIEW.md. A first answer after an approval
   records the same `pw-review (feedback)` `in-review` row a new item does.
+- **`/pw-review <slug> prepare <scope> [--refresh] [--repair]`** →
+  `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh prepare <slug> <scope> …` — freezes ONE review
+  unit into `review/ai/<pass-id>/` (manifest + byte-identical snapshot + a neutral reviewer request)
+  **without launching any model**. `<scope>`: a task id (`T01`), a surface word
+  (`context|analysis|plan|task-plan|task-exec|ship|rfc|close`), or a project-relative artifact path.
+  Run it verbatim and relay its recap (packet path, request path, import line). It never overwrites
+  an existing packet for the same unit — relay the shown packet instead; `--refresh` requests a new
+  paid identity (another round), `--repair` requests a bounded-cycle round after a fix and is
+  refused past the Review Budget. A failed prepare creates/keeps nothing; report the script's
+  `→ fix:` line verbatim.
+- **`/pw-review <slug> import --report <report.json> [--pass <id>]`** →
+  `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh import <slug> --report <path> …` — validates a
+  reviewer's report JSON against its prepared manifest (schema, project/pass binding, freshness
+  fingerprint) and files its findings/questions into the review file ONCE per pass (replay-safe;
+  stale or malformed reports change nothing and stay as evidence). The import is credited
+  `(pw-reviewer (external), …)`, is **ADVISORY ONLY** — it never writes an approval row, never
+  repairs, never routes to `auto-signoff` — and its notes entry says so. Relay the recap; never
+  "fix up" a rejected report by hand, and never claim a structured import happened for a result
+  that was pasted into chat instead (that stays ordinary feedback via `item`).
 - **`/pw-review <slug> signoff <review-rel-path> <approved|changes-requested|in-review>`** →
   `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh signoff <slug> <path> <decision>`.
    **HUMAN-TRIGGERED ONLY (C4): run this operator ONLY when my message explicitly asks to sign
@@ -65,28 +85,37 @@ to rewind a phase, that's `/pw-status <slug> rewind <phase>`, not this command.)
 
 **If the 2nd argument is literally `ai`, this is the AI-assisted review flow, not apply-comments —
 skip everything below and follow this instead** (the 3rd argument, if given, narrows scope exactly
-like the apply-comments flow does):
+like the apply-comments flow does; an optional `--repair` on the invocation requests the bounded
+repair cycle described at step 6):
 
-1. Resolve scope the same way apply-comments does (below) — explicit path > task id(s) > phase
-   word > infer from the current phase — but map it to one of the five AI-Review phase keys:
-   `analysis`, `plan`, `task-plan`, `task-exec`, `ship`. A list of task ids means one reviewer
-   pass PER named task (each task is its own artifact + review file) — never one pass across
-   several tasks.
-2. Check this project's mode for that phase: `…/{{PW_HOME}}/tooling/scripts/entities/pw-config.sh project get <slug> ai-review` (an
-   internal check — I never type this myself). If `off`, tell me AI review isn't enabled for this
-   phase and stop — point me at `/pw-config <slug> set ai-review <phase> <mode>` rather than guessing I
-   want it turned on, and never at the underlying script.
-3. If `advisory` or `auto`, ensure the review file exists (`pw-review.sh init-docs <slug>
-   <artifact-rel-path>` if not), then spawn the `pw-reviewer` agent **fresh** — same provider,
-   in-process sub-agent (Claude Task tool / kilo `mode: subagent`). Hand it **only**: the artifact
-    path, the review-file path, the phase name, and neutral routing metadata. Identify requested
-    routing as requested; pass an actual provider/model only when the runtime confirms the REVIEWER's run,
-   and `REVIEWER-NOTES.md` if it exists. Do **not** pass this session's own reasoning about the
-   artifact, or any chat history about how it was produced — that defeats the entire point of a
+1. Resolve scope the same way apply-comments does (below) — explicit path > task id(s) > surface
+   word > infer from the current phase — and map it to one of the eight AI-Review surface keys:
+   `context`, `analysis`, `plan`, `task-plan`, `task-exec`, `ship`, `rfc`, `close`. A list of task
+   ids means one reviewer pass PER named task (each task is its own artifact + review file) — never
+   one pass across several tasks.
+2. Check this project's effective mode for that surface: `…/{{PW_HOME}}/tooling/scripts/entities/pw-config.sh project get <slug> ai-review` (an
+   internal check — I never type this myself). The outcome axis is `advisory|auto` and defaults to
+   `advisory`; a legacy stored `off` reads as effective `advisory` (the config get normalizes and
+   notes it) and an unset row defaults to `advisory` — so an explicit request is normally
+   callable. If the get reports a genuinely unavailable surface or a broken dashboard, tell me in
+   one line and point me at `/pw-config <slug> project ensure` — never at the underlying script.
+3. **Fresh-context rule — never an exception.** Ensure the review file exists
+   (`pw-review.sh init-docs <slug> <artifact-rel-path>` if not), then dispatch a reviewer in a
+   FRESH context: same provider → a new `pw-reviewer` sub-agent (Claude Task tool / kilo
+   `mode: subagent`) per pass; cross-provider or no eligible native worker → a new
+   review-specific CLI session through the configured route **only when its read-only capability
+   is verified** — otherwise record the skip (one `REVIEWER-NOTES.md` line + recap) and leave the
+   gates alone. Starting this from the producing session does NOT transfer that session: hand the
+   reviewer **only** the artifact path, the review-file path, the surface name, neutral routing
+   metadata, and `REVIEWER-NOTES.md` if it exists. Identify requested routing as requested; pass an
+   actual provider/model only when the runtime confirms the REVIEWER's run. Do **not** pass this
+   session's own reasoning about the artifact, any chat history about how it was produced, a
+   producer-written defense, or a resumable copy of the producing session — do not let the reviewer
+   recover them via session recall or shared boards either. That defeats the entire point of a
    second opinion. Invoke the `pw-review` skill yourself first if you need the full method before
-    spawning it.
-    The reviewer must confirm its own execution identity. Your model as the spawning agent is
-    not evidence of its model; absent runtime confirmation, the reviewer records `unknown`.
+   spawning it.
+   The reviewer must confirm its own execution identity. Your model as the spawning agent is
+   not evidence of its model; absent runtime confirmation, the reviewer records `unknown`.
 4. `pw-reviewer` files items (tagged `(pw-reviewer, <timestamp>)`) and a `REVIEWER-NOTES.md` entry
     on its own — you don't do this part. It checks for an existing item on the same section anchor
     before filing anything (loop prevention — a 3rd item on the same anchor becomes a [OPEN]
@@ -105,16 +134,47 @@ like the apply-comments flow does):
    mode: remind me a human still needs to review its items and sign off — an advisory pass never
    approves, even when it finds nothing. An escalation means this needs my attention now, not
    another `ai` re-run.
+6. **`--repair` and the bounded cycle.** Plain `ai` is ONE pass — it never repairs. With `--repair`
+   on the invocation (outcome already `advisory|auto`), run the bounded cycle: after the pass
+   imports findings, batch-fix the eligible items by their normal routing (driver-inline for docs;
+   the executor ladder for task code, each fix re-running the task's `## Verify`), then request a
+   fresh pass on the changed artifact — never reuse the old snapshot or report. The cycle budget
+   is the project's Review Budget (`rounds`, default 3: pass 1 → repair 1 → verify → pass 2 →
+   repair 2 → verify → pass 3 → STOP; no third repair). Stop early on: clean verdict, human
+   decision needed (unanswered question / human rejection / consumed earlier phase), failed
+   verification, no input change, route failure, or exhausted budget — remaining items stay
+   visible. In `auto`, only a genuinely clean MANAGED pass may then call `auto-signoff` (never
+   after an external import — those stay advisory). A completion review that repairs automatically
+   happens only when the project sets `review-repair <surface>=bounded` AND the producing command's
+   flow reaches its completion hook; nothing here changes that setting for me.
+
+When the project's `review-trigger` for the surface is `completion` (or a producing command reports
+it ran a completion review), the pass starts after that command's successful verification — same
+fresh-context + validation flow as above, no explicit `ai` call needed. `manual` means only I start
+it. Either way an explicit `ai` request stays available.
+
+**Manual reviewer sessions (no native spawn, a separate chat/generic session, or I ask for a
+handoff):** use `prepare` + `import` instead of the spawn in step 3 — `… prepare <slug> <scope>`
+freezes the packet and prints the neutral request; hand the packet (or its `request.md`) plus the
+snapshot to a fresh session anywhere. The returned report is imported with `… import <slug>
+--report <path>` and is ADVISORY ONLY (no approval row, no repair, even in `auto`), after which the
+items apply through the normal apply-comments flow. Never treat report text pasted into this chat
+as an import — record it as ordinary feedback via `item`, with its source named. For an actual
+forge conversation (MR/PR comments), the route stays `/pw-ship <slug> comments` — a local report is
+not a forge thread and authorizes no replies.
 
 **If the 2nd argument is literally `config`, this is the configuration domain — which is no longer
 part of reviewing.** Tell me that in one line and hand me the right command instead of doing it
-half-heartedly from here: viewing/changing this project's AI-review modes and spawn-lane model
-rows lives on **`/pw-config`** now (`/pw-config <slug> show` to see all five phases + the five
-lanes and what each mode means; `/pw-config <slug> set ai-review <phase> <mode>` /
-`set ai-model <role> <provider:model>` to change one — validated writes, `off`/`—` are explicit
-values). If `/pw-config` is somehow unavailable in this install, say so and stop — do not run raw
-scripts at me. (The mode a phase runs in is still read here at step 2 of the `ai` flow via the
-internal config check — reading your setting to honor it is not "configuring".)
+half-heartedly from here: viewing/changing this project's AI-review outcome modes, scheduling
+triggers, repair permission, review budget, and spawn-lane model rows lives on **`/pw-config`**
+now (`/pw-config <slug> show` to see all eight surfaces; `/pw-config <slug> set ai-review
+<surface>=<mode>` / `set review-trigger <surface>=<value>` / `set review-repair <surface>=<value>` /
+`set review-rounds <1..3>` / `set ai-model <role> <provider:model>` to change one — validated
+writes; `all=<value>` sets every surface with named overrides winning; `—` is an explicit value,
+and the removed `off` outcome normalizes to advisory on read). If `/pw-config` is somehow
+unavailable in this install, say so and stop — do not run raw scripts at me. (The mode a surface
+runs in is still read here at step 2 of the `ai` flow via the internal config check — reading your
+setting to honor it is not "configuring".)
 
 **Step 0 — pinpoint before reading, IF a memory tool is configured** (optional; see
 `{{PW_HOME}}/tooling/docs/memory.md` and `PW_MEMORY` in `pw.config.sh`). For the item(s) about to

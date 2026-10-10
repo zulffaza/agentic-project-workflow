@@ -115,19 +115,28 @@ The [RFC guide](RFC.md) explains publication, targets, and the local comment loo
 | `execution-limit` | Integer `0..99`, subject to the machine floor | Self-repair budget |
 | `max-parallel` | Integer `1..99` | Concurrent executors |
 | `produced-by` | An enabled provider | Default provider for new executor pins |
-| `ai-review` | `phase=mode` pairs | Review mode per phase |
+| `ai-review` | `surface=mode` pairs or `all=mode` (+ named overrides) | Review OUTCOME per surface — `advisory` (default; a legacy `off` reads as advisory) or `auto` (guarded self-approval of a clean managed pass) |
+| `review-trigger` | `surface=value` pairs or `all=value` | WHEN a pass starts — `manual` (default) or `completion` (also after a succeeded producing command's verification) |
+| `review-repair` | `surface=value` pairs or `all=value` | Whether a completion review may repair+re-review — `manual` (default) or `bounded` (within the budget) |
+| `review-rounds` | Integer `1..3` | Total reviewer passes in a bounded cycle (default `3`; at most two intervening repairs) |
 | `ai-model` | `role=provider:model` or `role=—` pairs | Model for a workflow role; `—` clears the override |
 | `pin` | `T01=provider:model` or `T01=—` pairs | Executor model in both task and PLAN |
 | `rfc-target` | A document reference or URL | RFC destination |
 
-Review phases: `analysis`, `plan`, `task-plan`, `task-exec`, `ship`.
-Review modes: `off`, `advisory`, `auto`. Default is `off`.
+Review surfaces: `context`, `analysis`, `plan`, `task-plan`, `task-exec`, `ship`, `rfc`, `close`.
+Review outcome modes: `advisory`, `auto`. Default is `advisory` (nothing starts by itself —
+`review-trigger` is `manual`).
+For the three per-surface axes, `all=<value>` sets every surface and explicitly named surfaces
+override the baseline regardless of argument order. `off` writes are refused with the replacement
+named (`off` was the pre-migration outcome value — reads normalize it to `advisory`).
 Model roles: `researcher`, `analyst`, `writer-task`, `reviewer`, `verifier`.
 
-For `ai-review`, `ai-model`, and `pin`, a batch validates every pair before writing any value:
+For `ai-review`/`review-trigger`/`review-repair`, `ai-model`, and `pin`, a batch validates every
+pair before writing any value:
 
 ```text
-/pw-config delivery-note set ai-review analysis=advisory plan=advisory
+/pw-config delivery-note set ai-review all=auto context=advisory
+/pw-config delivery-note set review-trigger all=completion ship=manual
 ```
 
 `show` also lists facts owned by other commands. `set` cannot change project status, adopted work, base branches, or landing units.
