@@ -107,6 +107,10 @@ fi
 # (claude: no catalog; cursor: one gateway) simply have no entries defined.
 pw_api_entries() {  # <agent-provider> -> one entry per line (nothing when no scope is set)
   local upper var _n _i
+  # Charset gate at the sink: the provider token becomes a variable NAME below, and an
+  # unchecked token (`kilo[$(cmd)]`, backticks) would reach eval/declare as program text.
+  # Invalid -> same empty result as an unknown provider; callers see "no scope set".
+  case "${1:-}" in ''|*[!A-Za-z0-9_-]*) return 0 ;; esac
   upper="$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')"
   var="PW_${upper}_API_PROVIDERS"
   declare -p "$var" >/dev/null 2>&1 || return 0
@@ -816,7 +820,9 @@ pw_stack_parent() {
   case "$v" in
     ""|none|None|NONE|—|-|"<"*) return 0 ;;
   esac
-  case "$v" in T[0-9]*) printf '%s\n' "$v" ;; esac
+  # Full task-id validation, not a prefix glob: `T1/../../foo` matches `T[0-9]*` but must
+  # never flow into `task/<id>.md` path builds (pw_task_id_ok rejects any non-alnum tail).
+  if pw_task_id_ok "$v"; then printf '%s\n' "$v"; fi
 }
 
 # pw_plan_col <plan> <normalized-col-name> -> "T0n|value" per data row of the ## Task table.
@@ -874,6 +880,47 @@ pw_path_within() {
   rdir="$(cd "$dir" 2>/dev/null && pwd -P)" || return 1
   pdir="$(cd "$(dirname "$path")" 2>/dev/null && pwd -P)" || return 1
   case "$pdir/" in "$rdir/"*) return 0 ;; esac
+  return 1
+}
+
+# --- trust-boundary validators (the sink gates; see tooling/docs/SECURITY.md) ----------------
+# pw_proj_slug_ok <slug> — a project slug is exactly ONE path component (the pw-review
+# contract): no empty/dot/traversal components, no separators, no control whitespace.
+pw_proj_slug_ok() {
+  case "${1:-}" in ''|.|..|*/*|*"$IFS_NL"*|*$'\r'*|*$'\t'*) return 1 ;; esac
+  return 0
+}
+
+# pw_proj_dir <slug> — physical project directory, or empty on refusal. Shape-gated by
+# pw_proj_slug_ok, then pinned physically (pwd -P both sides): the canonical project
+# directory must remain inside the projects root, so a symlinked slug resolving outward
+# is refused too. Entities wrap this with their own die message.
+pw_proj_dir() {
+  local slug="$1" base d
+  pw_proj_slug_ok "$slug" || return 1
+  [ -d "$PROJECTS_DIR/$slug" ] || return 1
+  base="$(cd "$PROJECTS_DIR" 2>/dev/null && pwd -P)" || return 1
+  d="$(cd "$PROJECTS_DIR/$slug" && pwd -P)" || return 1
+  case "$d/" in "$base/"*) printf '%s' "$d" ;; *) return 1 ;; esac
+}
+
+# pw_branch_ok <branch> — the branch charset guard the stack paths already enforce:
+# ref-safe characters ([A-Za-z0-9._/-]) only, never a leading dash (git would parse the
+# value as an option at positional refspec sites like `git push origin "$branch"`).
+pw_branch_ok() {
+  case "${1:-}" in ''|*[!A-Za-z0-9._/-]*|-*) return 1 ;; esac
+  return 0
+}
+
+# pw_dir_within <base> <dir> — rc 0 when <dir> is an existing directory that resolves
+# physically inside <base> (the final component included, so a symlinked dir is refused
+# when it points outside). For task-file `Repo:`/`Worktree:` values before any git/cd use.
+pw_dir_within() {
+  local base="$1" dir="$2" rbase rdir
+  [ -n "$base" ] && [ -n "$dir" ] && [ -d "$dir" ] || return 1
+  rbase="$(cd "$base" 2>/dev/null && pwd -P)" || return 1
+  rdir="$(cd "$dir" 2>/dev/null && pwd -P)" || return 1
+  case "$rdir/" in "$rbase/"*) return 0 ;; esac
   return 1
 }
 

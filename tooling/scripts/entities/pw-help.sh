@@ -1315,7 +1315,7 @@ PYNORM
 
 # --- project-specific view ------------------------------------------------------------------
 # proj_dir mirrors the sibling entities' helper (die text in pw-help voice, full names).
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "project not found under $PROJECTS_DIR/$1 -> fix: scaffold it with /pw-new --project $1, or check /pw-status --project $1"; printf '%s' "$d"; }
+proj_dir() { local d; d="$(pw_proj_dir "$1")" || die "project not found under $PROJECTS_DIR/$1 -> fix: scaffold it with /pw-new --project $1, or check /pw-status --project $1"; printf '%s' "$d"; }
 
 # review_state <slug> <rel> — "<decision>|<actor>|<open-count>" via the read operators only.
 # Decision and actor come from the shared mdlib latest-ROW readers: the Sign-off table's

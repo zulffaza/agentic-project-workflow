@@ -102,7 +102,7 @@ PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 ST="$HERE/pw-status.sh"
 
 die() { echo "pw-config: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
+proj_dir() { local d; d="$(pw_proj_dir "$1")" || die "no such project: $1 ($PROJECTS_DIR/$1) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
 
 # --- AI Models (per-lane model row for the spawned sub-agent lanes — plan 01 §5.1) -----------
 # The model sibling of the AI Review config block below: which model a *lane* should run on when a
@@ -536,6 +536,12 @@ cmd_model_check() {
   done
   [ -n "$prov" ] || die "model-check: --provider is required → fix: model-check --provider <p> --model <m>   (empty PW_MODEL_ALLOWLIST_<PROVIDER> = all models allowed)"
   [ -n "$model" ] || die "model-check: --model is required → fix: model-check --provider <p> --model <m>   (empty PW_MODEL_ALLOWLIST_<PROVIDER> = all models allowed)"
+  # Sink gate: the provider token becomes a variable NAME below (`${!var}` indirect expansion),
+  # so it must be a plain token — never an unchecked string from a PLAN cell (a crafted
+  # `kilo[$(cmd)]` would evaluate its subscript as arithmetic). Provider membership is enforced
+  # where pins are WRITTEN (_model_pin_validate); model-check itself keeps its documented
+  # semantics (an unset/empty PW_MODEL_ALLOWLIST_<PROVIDER> = all models allowed).
+  case "$prov" in *[!A-Za-z0-9_-]*) die "model-check: invalid provider token '$prov' → fix: use a provider name (letters, digits, dash, underscore)" ;; esac
   local upper var allow pats pat matched=0
   upper="$(printf '%s' "$prov" | tr '[:lower:]' '[:upper:]')"
   var="PW_MODEL_ALLOWLIST_${upper}"
@@ -910,7 +916,7 @@ cmd_set() {
                for _pair in "${sets[@]}"; do
                  case "$_pair" in *=*) ;; *) die "pin: --set expects <T0n>=<provider:model|—>, got '$_pair'" ;; esac
                  _tid="${_pair%%=*}"; _val="${_pair#*=}"
-                 case "$_tid" in T[0-9]*) ;; *) die "pin: '$_tid' is not a task id (expected T01, T02, …)" ;; esac
+                 pw_task_id_ok "$_tid" || die "pin: '$_tid' is not a task id (expected T01, T02, …)"
                  [ -f "$d/task/$_tid.md" ] || die "pin: no task file task/$_tid.md — /pw-breakdown owns task creation"
                  grep -q '^- \*\*Execute with:\*\*' "$d/task/$_tid.md" \
                    || die "pin: task/$_tid.md has no '- **Execute with:**' field — fix the task doc first (template line missing; pw-doctor --project C11 flags it)"
@@ -991,6 +997,7 @@ cmd_global() {
   echo "pw-config global show — effective machine floors (source: pw.config.sh via pw-common.sh)"
   echo "  providers        : ${PW_PROVIDERS[*]}"
   for p in "${PW_PROVIDERS[@]}"; do
+    case "$p" in *[!A-Za-z0-9_-]*) continue ;; esac   # same sink rule as model-check: no variable names from unchecked tokens
     upper="$(printf '%s' "$p" | tr '[:lower:]' '[:upper:]')"
     es="$(pw_api_entries "$p" | tr '\n' ' ')"
     [ -n "${es// /}" ] || es="(unset = full catalog)"

@@ -72,7 +72,7 @@ REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
 ST="$HERE/pw-status.sh"
 
 die() { echo "pw-context: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
+proj_dir() { local d; d="$(pw_proj_dir "$1")" || die "no such project: $1 ($PROJECTS_DIR/$1) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
 _log() { PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" log --project "$1" --actor "$2" --message "$3" >/dev/null; }
 
 # Pipe-escape a table cell value.

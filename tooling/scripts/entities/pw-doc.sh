@@ -29,7 +29,7 @@ PW_HOME="$(cd "$HERE/../../.." && pwd)"
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 
 die() { echo "pw-doc: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
+proj_dir() { local d; d="$(pw_proj_dir "$1")" || die "no such project: $1 ($PROJECTS_DIR/$1) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
 
 
 
@@ -670,7 +670,7 @@ sync_tasks() {
     [ -n "$REPO" ] && [ -n "$BRANCH" ] || continue
     
     REPO_DIR="$REPOS_DIR/$REPO"
-    [ -d "$REPO_DIR" ] || continue
+    [ -d "$REPO_DIR" ] && pw_dir_within "$REPOS_DIR" "$REPO_DIR" || continue
     
     # Check for commits
     COMMIT_COUNT=0

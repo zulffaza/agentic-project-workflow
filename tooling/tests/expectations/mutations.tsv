@@ -287,3 +287,10 @@ C226-overview-snapshot-recursion	pw-reviewlib.sh	find "$d/$rel" -maxdepth 1 -nam
 C227-overview-lane-omission	pw-reviewlib.sh	printf '%s\n' "analysis/review" "task/review" "context/review" "rfc/review" "review"	printf '%s\n' "analysis/review" "task/review" "rfc/review" "review"	T1	^pw-status\.t\.sh$
 C228-overview-policy-write	pw-status.sh	_axis="$(pw_field "$README" "Review Trigger")"	_axis="$("$HERE/pw-config.sh" review-trigger --project "$SLUG" 2>/dev/null || true)"	T1	^pw-status\.t\.sh$
 C229-overview-phase-filter-leak	pw-status.sh	    ""|context|analysis|breakdown|executing|review|done) ;;	    ""|context|analysis|breakdown|executing|review|done|plan|rfc|close) ;;	T1	^pw-status\.t\.sh$
+C230-model-check-token-gate	pw-config.sh	case "$prov" in *[!A-Za-z0-9_-]*) die "model-check: invalid provider token	case "$prov" in !*) die "model-check: invalid provider token	T1	^pw-security\.t\.sh$
+C231-exec-branch-guard	pw-ship.sh	pw_branch_ok "$BRANCH" || die "refusing unsafe Branch	true || die "refusing unsafe Branch	T1	^pw-security\.t\.sh$
+C232-exec-repo-containment	pw-ship.sh	pw_dir_within "$REPOS_DIR" "$REPO_DIR" || die "repo path outside	true || die "repo path outside	T1	^pw-security\.t\.sh$
+C233-monitor-timeout-gate	pw-ship.sh	case "$TIMEOUT_MIN" in ''|*[!0-9]*) die "monitor: --timeout must be whole minutes	case "$TIMEOUT_MIN" in ''|!*) die "monitor: --timeout must be whole minutes	T1	^pw-security\.t\.sh$
+C234-prepare-task-gate	pw-review.sh	--task)    pw_task_id_ok "$tsel" || die "prepare: --task expects a task id	--task)    : || die "prepare: --task expects a task id	T1	^pw-security\.t\.sh$
+C235-proj-dir-shape-gate	pw-common.sh	case "${1:-}" in ''|.|..|*/*|*"$IFS_NL"*|*$'\r'*|*$'\t'*) return 1 ;; esac	case "${1:-}" in '') return 1 ;; esac	T1	^pw-security\.t\.sh$
+C236-proj-dir-physical-pin	pw-common.sh	case "$d/" in "$base/"*) printf '%s' "$d" ;; *) return 1 ;; esac	case "$d/" in "$base/"*) printf '%s' "$d" ;; *) printf '%s' "$d" ;; esac	T1	^pw-security\.t\.sh$

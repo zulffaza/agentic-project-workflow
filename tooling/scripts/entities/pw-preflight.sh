@@ -48,7 +48,7 @@ die_fix() {
   if [ $# -ge 2 ] && [ -n "$2" ]; then echo "  → fix: $2" >&2; fi
   exit 1
 }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die_fix "no such project: $1 ($d)" "check the slug under $PROJECTS_DIR (scaffold a new one with: /pw-new --project $1)"; printf '%s' "$d"; }
+proj_dir() { local d; d="$(pw_proj_dir "$1")" || die_fix "no such project: $1 ($PROJECTS_DIR/$1)" "check the slug under $PROJECTS_DIR (scaffold a new one with: /pw-new --project $1)"; printf '%s' "$d"; }
 
 # _gate_review_approved <review-rel-path> — the approval gate a phase-consuming
 # command needs, via the shared mdlib file readers (this script never re-implements a
@@ -168,6 +168,13 @@ case "$COMMAND" in
     while IFS= read -r EXEC_WITH; do
       EXEC_WITH="$(printf '%s' "$EXEC_WITH" | pw_trim)"
       if [ -n "$EXEC_WITH" ] && [ "$EXEC_WITH" != "—" ]; then
+        # Model gates apply only to the `provider:model` cell shape (docs/EXECUTION.md);
+        # an agent-name cell (e.g. `pw-executor`, or a providerless `repo/model` token)
+        # carries no provider:model pair to check — nothing is passed to the model sinks.
+        case "$EXEC_WITH" in
+          *:*) ;;
+          *) continue ;;
+        esac
         PROVIDER="${EXEC_WITH%%:*}"
         MODEL="${EXEC_WITH#*:}"
         if ! "$HERE/pw-config.sh" model-check --provider "$PROVIDER" --model "$MODEL" >/dev/null 2>&1; then

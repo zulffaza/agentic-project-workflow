@@ -270,6 +270,9 @@ cmd_init() {
 _init_one() {
   local slug="$1" d="$2" rel="$3" docrel="$4"
   local f="$d/$rel"
+  # Sink gate: the caller-supplied relative path must resolve inside the project, even
+  # though every current caller now validates its scope upstream (prepare → _prepare_resolve).
+  pw_review_contain "$d" "$rel" >/dev/null 2>&1 || { echo "pw-review: refusing $rel (does not resolve inside the project) → fix: keep review paths project-relative" >&2; return 1; }
   if [ -f "$f" ]; then
     echo "$slug: review already exists: $rel (left untouched)"
     return 0
@@ -1457,7 +1460,7 @@ _prepare_resolve() {
     task-plan|task-exec|ship)
       die "prepare: '$scope' names a whole lane, not one unit → fix: /pw-review prepare --project $slug --task T01   (the surface is inferred from the dashboard phase; use --file for other units)" ;;
     T[0-9]*)
-      case "$scope" in T[0-9][0-9]*) ;; *) die "invalid task id '$scope' (expected T01 …)" ;; esac
+      pw_task_id_ok "$scope" || die "invalid task id '$scope' (expected T01 …)"
       [ -f "$d/task/$scope.md" ] || die "no task/$scope.md in $slug → fix: /pw-breakdown owns task creation"
       case "$tok" in
         breakdown) printf 'task-plan\ttask/%s.md\ttask/review/%s.review.md\n' "$scope" "$scope" ;;
@@ -1596,7 +1599,7 @@ cmd_prepare() {
   if [ -n "$fsel" ]; then scope="$fsel"; scope_flag="--file"; nsel=$((nsel+1)); fi
   [ "$nsel" -eq 1 ] || die "prepare: pass exactly one unit selector → fix: prepare --project $slug (--task <T0n> | --surface <name> | --file <rel>) [--refresh] [--repair] [--pass-id <id>] [--print]"
   case "$scope_flag" in
-    --task)    case "$tsel" in T[0-9]*) ;; *) die "prepare: --task expects a task id like T01 (got '$tsel') → fix: --task T0n, or select the unit with --file <rel>" ;; esac ;;
+    --task)    pw_task_id_ok "$tsel" || die "prepare: --task expects a task id like T01 (got '$tsel') → fix: --task T0n, or select the unit with --file <rel>" ;;
     --surface) case "$ssel" in context|analysis|plan|task-plan|task-exec|ship|rfc|close) ;; *) die "prepare: unknown --surface '$ssel' → fix: context|analysis|plan|task-plan|task-exec|ship|rfc|close, or select the unit with --task/--file" ;; esac ;;
   esac
   case "$pass_override" in

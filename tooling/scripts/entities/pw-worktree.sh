@@ -31,7 +31,7 @@ REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
 ST="$HERE/pw-status.sh"
 
 die() { echo "pw-worktree: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
+proj_dir() { local d; d="$(pw_proj_dir "$1")" || die "no such project: $1 ($PROJECTS_DIR/$1) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
 
 cmd_create() {
 local a v
@@ -56,11 +56,17 @@ done
 [ -n "${TASK_ID:-}" ] || die "create: --task is required → fix: pass the task id (T0n)"
 [ -n "${REPO:-}" ] || die "create: --repo is required → fix: pass the repo dir name"
 [ -n "${BASE_BRANCH:-}" ] || die "create: --base is required → fix: pass the base branch"
+# Content gates BEFORE any path/git use: the task id, repo name, and base branch all come
+# from the orchestrator (task-file fields) and feed path builds and git commands below.
+pw_task_id_ok "$TASK_ID" || die "create: --task must be a task id (T0n) → fix: pass the task id, e.g. --task T01"
+case "$REPO" in ''|.|..|*/*) die "create: --repo must be a repository directory name (got '$REPO') → fix: pass the repo dir name" ;; esac
+pw_branch_ok "$BASE_BRANCH" || die "create: refusing unsafe base branch '$BASE_BRANCH' → fix: pass a plain branch name"
 
 D="$(proj_dir "$SLUG")"
 REPO_DIR="$REPOS_DIR/$REPO"
 
 [ -d "$REPO_DIR" ] || die "repo not found: $REPO_DIR → fix: pass the repo dir name (repos live under $REPOS_DIR — clone it there first)"
+pw_dir_within "$REPOS_DIR" "$REPO_DIR" || die "create: repo path resolves outside $REPOS_DIR: $REPO_DIR → fix: check the --repo name"
 
 # Construct branch name
 BRANCH_NAME="agent/$SLUG/$TASK_ID-$SLUG"
@@ -168,9 +174,11 @@ if [ "$ALL" -eq 1 ] && [ -n "$TASK$WPATH" ]; then
   die "teardown: --all conflicts with --task/--worktree → fix: pass --all alone, or one single target"
 fi
 
-projdir="$(cd "$dir" && pwd)"
+projdir="$(cd "$dir" && pwd -P)"
 wtroot="$projdir/worktree"
-here="$PWD"
+# Physical PWD: the guard compares against physically-resolved worktree paths (wtroot above),
+# so a logical PWD under a symlinked root (/var → /private/var) would never match.
+here="$(pwd -P)"
 
 [ -d "$wtroot" ] || { echo "no worktree/ dir under $projdir — nothing to tear down."; exit 0; }
 
@@ -193,7 +201,7 @@ if [ -n "$target" ]; then
     *) target="$projdir/$target" ;;
   esac
   [ -e "$target/.git" ] || { echo "not a worktree (no .git marker): $target" >&2; exit 2; }
-  target="$(cd "$target" && pwd)"
+  target="$(cd "$target" && pwd -P)"
   case "$target/" in
     "$wtroot/"*) ;;
     *) echo "target worktree not under $projdir/worktree: $target" >&2; exit 2 ;;
@@ -260,6 +268,7 @@ cmd_remove() {
   done
   [ -n "$slug" ] || die "remove: --project is required → fix: remove --project <slug> --task <T0n>"
   [ -n "$task" ] || die "remove: --task is required → fix: remove --project <slug> --task <T0n>"
+  pw_task_id_ok "$task" || die "remove: --task must be a task id (T0n) → fix: pass the task id, e.g. --task T01"
   local d; d="$(proj_dir "$slug")"
   local wt="$d/worktree"
 

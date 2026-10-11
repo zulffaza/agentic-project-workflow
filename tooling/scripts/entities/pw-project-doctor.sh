@@ -1016,7 +1016,7 @@ if ls "$D"/task/T*.md >/dev/null 2>&1; then
     elif [ "$live" = 0 ]; then
       c2mounted=$((c2mounted+1))
     fi
-    if [ "$live" = 1 ] && [ -n "$br" ] && [ -d "$PW_REPOS/$repo/.git" ]; then
+    if [ "$live" = 1 ] && [ -n "$br" ] && [ -d "$PW_REPOS/$repo/.git" ] && pw_dir_within "$PW_REPOS" "$PW_REPOS/$repo"; then
       git -C "$PW_REPOS/$repo" show-ref --verify --quiet "refs/heads/$br" 2>/dev/null \
         || git -C "$PW_REPOS/$repo" show-ref --verify --quiet "refs/remotes/origin/$br" 2>/dev/null \
         || { bad "$tid: branch '$br' not found in repo '$repo' (local or origin/*)"; c2=1; }
