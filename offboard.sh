@@ -20,7 +20,8 @@
 #    differs — hand-edited, or just a foreign file that happens to share a name — is reported
 #    and skipped, never guessed at.
 #  - Each skill's "install" is only removed if it's literally a symlink pointing at THIS bundle's
-#    tooling/skill/<name>, or a directory copy whose SKILL.md content matches it.
+#    tooling/skill/<name>, or a directory copy whose WHOLE TREE matches the bundle's (diff -rq —
+#    a hand-edited references file, or an added file, keeps the copy reported-but-untouched).
 #
 # NEVER touched, by design: pw.config.sh (your config), $PW_PROJECTS/* (your project data —
 # a different kind of thing from installed tooling), this bundle's own repo, pw-env.sh, and
@@ -104,6 +105,7 @@ plan_provider() {
 
   # --- skills (every tooling/skill/*/ with a SKILL.md) ---
   local skilldir; skilldir="$("${p}_skilldir")"
+  pw_hook_dir_ok "$skilldir" || die "offboard: provider hook ${p}_skilldir returned an unsafe path ('$skilldir') → fix: hooks must print a non-empty absolute path"
   local skips; skips=" $(pw_skill_skips_for "$p" | tr '\n' ' ') "   # D13 collision skips (case-matched: pipefail-proof)
   for skill_src in "$SKILL_DIR"/*/; do
     [ -f "${skill_src}SKILL.md" ] || continue
@@ -124,8 +126,8 @@ plan_provider() {
         skipped_count=$((skipped_count+1))
       fi
     elif [ -d "$starget" ]; then
-      if [ -f "$sfile" ] && cmp -s "$sfile" "$skill_src/SKILL.md"; then
-        echo "    skill '$skill_name': → remove directory copy $starget (content matches bundle)"
+      if diff -rq "$starget" "$skill_src" >/dev/null 2>&1; then
+        echo "    skill '$skill_name': → remove directory copy $starget (whole tree matches bundle)"
         REMOVE_PATHS+=("$starget")
       else
         echo "    skill '$skill_name': SKIPPED — $starget exists but isn't a symlink to us and its"
@@ -144,6 +146,7 @@ plan_provider() {
   # same name is never touched.
   local odir rm_c=0 skip_c=0 absent_c=0 style exp n
   odir="$("${p}_commanddir")"
+  pw_hook_dir_ok "$odir" || die "offboard: provider hook ${p}_commanddir returned an unsafe path ('$odir') → fix: hooks must print a non-empty absolute path"
   style="$(pw_provider_command_style "$p")"
   "$PW_HOME/tooling/scripts/toolchain/gen-commands.sh" --outdir "$tmp/cmd" "$p" >/dev/null 2>&1 || true
   if [ -d "$tmp/cmd/$p" ]; then
@@ -181,6 +184,7 @@ plan_provider() {
   if pw_provider_has_agent_hooks "$p"; then
     local adir rm_a=0 skip_a=0 absent_a=0
     adir="$("${p}_agentdir")"
+    pw_hook_dir_ok "$adir" || die "offboard: provider hook ${p}_agentdir returned an unsafe path ('$adir') → fix: hooks must print a non-empty absolute path"
     "$PW_HOME/tooling/scripts/toolchain/gen-agents.sh" --outdir "$tmp/agents" "$p" >/dev/null 2>&1 || true
     if [ -d "$tmp/agents/$p" ]; then
       for exp in "$tmp/agents/$p"/*.md; do

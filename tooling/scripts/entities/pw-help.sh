@@ -105,7 +105,23 @@ HELP_PHASE_MAP="setup|pw-new pw-adopt pw-context pw-doctor;analysis|pw-research 
 HELP_GLOBAL_ORDER="pw-help pw-doctor pw-config pw-status pw-research pw-verify"
 
 # --- shared helpers -------------------------------------------------------------
-sub() { sed -e "s|{{PW_HOME}}|$PW_HOME|g" -e "s|{{PW_PROJECTS}}|$PW_PROJECTS|g"; }
+# Token substitution for rendered help text. Bash string replacement, never a sed program
+# string: install paths ($PW_HOME/$PW_PROJECTS) are operator config and must not become
+# program text (a `|`, or GNU-sed's `e`, inside a path would execute). The line loop keeps
+# sed's per-line and trailing-newline behavior byte-identical.
+sub() {
+  local _l
+  while IFS= read -r _l || [ -n "$_l" ]; do
+    _l="${_l//\{\{PW_HOME\}\}/$PW_HOME}"
+    _l="${_l//\{\{PW_PROJECTS\}\}/$PW_PROJECTS}"
+    printf '%s\n' "$_l"
+  done
+}
+# Prefix every input line with a fixed string (bash-only replacement for a `sed "s|^|$var|"`).
+pfx() {
+  local _l
+  while IFS= read -r _l || [ -n "$_l" ]; do printf '%s%s\n' "$1" "$_l"; done
+}
 jstr() { local s="$1"; s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; s="${s//$'\t'/\\t}"; s="${s//$'\r'/\\r}"; printf '%s' "$s"; }
 TABS="$(printf '\t')"
 BT="$(printf '\140')"    # literal backtick — kept OUT of double quotes (there it starts command-sub)
@@ -535,7 +551,7 @@ r2_alias() {
     script="${script##*/}"
     sp="$(script_path "$script" 2>/dev/null || true)" || continue
     [ -n "$sp" ] || continue
-    printf '%s\n' "$(ops_of "$sp")" | grep -qx "$op" || continue
+    grep -qx "$op" <<<"$(ops_of "$sp")" || continue   # here-string, not a pipe: grep -q's early exit SIGPIPEs a pipe's producer and pipefail then masks the MATCH (load-dependent flake)
     printf '%s\t%s\n' "$script" "$op"
     return 0
   done <<EPAIRS
@@ -1165,7 +1181,7 @@ render_operators() {
   if [ -n "$op" ]; then
     while IFS= read -r s; do
       [ -n "$s" ] || continue
-      printf '%s\n' "$(ops_of "$s")" | grep -qx "$op" || continue
+      grep -qx "$op" <<<"$(ops_of "$s")" || continue   # here-string, not a pipe (same SIGPIPE/pipefail flake as above)
       found="yes"
       printf '%s :: %s %s\n' "$(basename "$s")" "$op" "$(sig_of "$s" "$op")" | flowline 98
       para_of "$s" "$op" | fold -s -w 92 | sed 's/^/    /'
@@ -1315,7 +1331,7 @@ PYNORM
 
 # --- project-specific view ------------------------------------------------------------------
 # proj_dir mirrors the sibling entities' helper (die text in pw-help voice, full names).
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "project not found under $PROJECTS_DIR/$1 -> fix: scaffold it with /pw-new --project $1, or check /pw-status --project $1"; printf '%s' "$d"; }
+proj_dir() { local d; d="$(pw_proj_dir "$1")" || die "project not found under $PROJECTS_DIR/$1 -> fix: scaffold it with /pw-new --project $1, or check /pw-status --project $1"; printf '%s' "$d"; }
 
 # review_state <slug> <rel> — "<decision>|<actor>|<open-count>" via the read operators only.
 # Decision and actor come from the shared mdlib latest-ROW readers: the Sign-off table's
@@ -1402,7 +1418,7 @@ EXN
 }
 
 render_project_cmd() {
-  local slug="$1" phase="$2" name="$3" plan="$4" planrev="$5" adocs="$6" trevs="$7" d="$9"
+  local slug="$1" phase="$2" name="$3" plan="$4" planrev="$5" adocs="$6" trevs="$7" tids="$8" d="$9"
   local c; c="$(canon "$name")"
   [ -f "$CMDS/$c.md" ] || die "no such command: $c -> fix: $(did_you_mean "$c")"
   if [ "$c" = "pw-review" ]; then
@@ -1421,7 +1437,7 @@ render_project_cmd() {
     [ -n "$trevs" ] && revlist="$revlist $trevs"
     for rvf in $revlist; do
       [ -f "$d/$rvf" ] || continue
-      _ishown="$(grep -oE '^### (Q|R)[0-9]+.*\[(PENDING|OPEN)\]' "$d/$rvf" 2>/dev/null | awk 'NR<=3' | cut -c5- | sed "s|^|      $rvf  |" | flowline 96)"
+      _ishown="$(grep -oE '^### (Q|R)[0-9]+.*\[(PENDING|OPEN)\]' "$d/$rvf" 2>/dev/null | awk 'NR<=3' | cut -c5- | flowline 96 | pfx "      $rvf  ")"
       [ -n "$_ishown" ] && { printf '%s\n' "$_ishown"; shown=1; }   # capture-then-print: a trailing `grep -q .` would SIGPIPE flowline under pipefail
     done
     [ "$shown" = 1 ] || echo "      (no open items / pending questions in the review files found)"
@@ -1479,7 +1495,7 @@ render_project() {
   local raw tok
   raw="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" phase --project "$slug" 2>/dev/null)" || raw="?"
   tok="$(pw_phase_token "$raw")"
-  local plan="" planrev="" adocs="" trevs="" tids f rel rvf
+  local plan="" planrev="" adocs="" trevs="" tids="" f rel rvf
   [ -f "$d/task/PLAN.md" ] && plan="task/PLAN.md" || true
   [ -f "$d/task/review/PLAN.review.md" ] && planrev="task/review/PLAN.review.md" || true
   for f in "$d"/analysis/*.md; do
@@ -1488,7 +1504,7 @@ render_project() {
     adocs="$adocs $rel"
   done
   for f in "$d"/task/review/T*.review.md; do [ -f "$f" ] && trevs="$trevs task/review/${f##*/}" || true; done
-  for f in "$d"/task/T[0-9][0-9].md; do [ -f "$f" ] && tids="$tids ${f##*.md}"; done
+  for f in "$d"/task/T[0-9][0-9].md; do [ -f "$f" ] && tids="${tids:-} ${f##*.md}"; done
 
   case "$name" in ""|--json) : ;; *) render_project_cmd "$slug" "$tok" "$name" "$plan" "$planrev" "$adocs" "$trevs" "$tids" "$d"; return 0 ;; esac
 
@@ -1502,7 +1518,7 @@ render_project() {
       if [ -f "$d/$rvf" ]; then st="$(review_state "$slug" "$rvf")"; split_state "$st"; printf '%s{"doc":"%s","review":"%s","gate":"%s","actor":"%s","open":"%s"}' "$sep" "$(jstr "$rel")" "$(jstr "$rvf")" "$(jstr "$RS_DEC")" "$(jstr "$RS_ACT")" "$(jstr "$RS_OPEN")"; sep=", "; fi
     done
     local jtasks=""
-    if [ -n "$tids" ]; then jtasks="$(printf '%s' "${tids# }" | sed -e 's/ /", "/g' | sed -e 's/^/"/' -e 's/$/"/')"; fi
+    if [ -n "${tids:-}" ]; then jtasks="$(printf '%s' "${tids# }" | sed -e 's/ /", "/g' | sed -e 's/^/"/' -e 's/$/"/')"; fi
     printf '],"next":[%s],"tasks":[%s]}\n' "$(render_project_next "$slug" "$tok" "$plan" "$planrev" "$d" json)" "$jtasks"
     return 0
   fi

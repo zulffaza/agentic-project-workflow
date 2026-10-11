@@ -27,9 +27,10 @@ PW_HOME="$(cd "$HERE/../../.." && pwd)"
 . "$HERE/../lib/pw-mdlib.sh"
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
+REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
 
 die() { echo "pw-doc: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
+proj_dir() { local d; d="$(pw_proj_dir "$1")" || die "no such project: $1 ($PROJECTS_DIR/$1) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
 
 
 
@@ -476,7 +477,7 @@ sync_dashboard() {
   local tf id st repo branch base title line mr
   for tf in "$D/task"/T*.md; do
     [ -f "$tf" ] || continue
-    id="$(basename "$tf" .md)"; [[ "$id" =~ ^T[0-9]+ ]] || continue
+    id="$(basename "$tf" .md)"; [[ "$id" =~ ^T[0-9]+$ ]] || continue
     st="$(pw_field "$tf" Status)"; [ -n "$st" ] || st="$(awk -F'\t' -v i="$id" '$1==i{print $2; exit}' "$plan_st")"; st="${st:-todo}"
     repo="$(pw_field "$tf" Repo)"; repo="${repo//\`/}"
     branch="$(pw_field "$tf" Branch)"; branch="${branch//\`/}"; branch="${branch%% *}"
@@ -484,6 +485,14 @@ sync_dashboard() {
     title="$(grep '^# ' "$tf" | head -1 | sed 's/^# //; s/^T[0-9]*[: ]*//' | pw_trim)"; [ -n "$title" ] || title="—"
     mr="$(pw_task_mr_url "$tf")"  # Result-scoped: **MR:** field -> its URL/sentinel, else bare URL
     [ "$mr" = "(none)" ] && mr="—"
+    # Reserved-character gate for every value that reaches the row writers below (ack -v rows
+    # undergo backslash-escape processing, and `|` would forge table cells): refuse machine
+    # fields; sanitize the display-only title.
+    case "$repo$branch$base$mr" in
+      *"|"*|*$'\t'*|*$'\n'*|*'\'*)
+        die "sync: task $id carries a reserved character (|, TAB, newline, backslash) in Repo/Branch/Base/MR → fix: clean the task file's machine fields" ;;
+    esac
+    case "$title" in *"|"*|*$'\t'*|*$'\n'*|*'\'*) title="${title//|/ }"; title="${title//$'\t'/ }"; title="${title//'\'/ }" ;; esac
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$st" "$repo" "$branch" "$base" "$title" "$mr" >> "$TASKROWS"
   done
   
@@ -580,12 +589,15 @@ sync_dashboard() {
   while IFS=$'\t' read -r id st repo branch base title mr; do
     [ "$mr" != "—" ] && [ -n "$mr" ] || continue
     grep -qE "^\|[ \t]*$id[ \t]*\|" "$README" || continue
-    case "$mr" in *://*) awk -v url="$mr" '
+    case "$mr" in *://*) awk -v url="$mr" -v id="$id" '
         /^## Merge requests/{ p=1; print; next } p && /^## /{ p=0; print; next }
-        p && /^[ \t]*\|[ \t]*'"$id"'[ \t]*\|/ {
+        p && /^[ \t]*\|/ {
           n = split($0, c, "|")
-          for (i = 2; i < n; i++) { h = c[i]; gsub(/[ \t`*]/, "", h); if (tolower(h) == "mr") c[i] = " " url " " }
-          out = ""; for (i = 1; i <= n; i++) out = out c[i] (i < n ? "|" : ""); print out; next
+          rid = c[2]; gsub(/[ \t`*]/, "", rid)
+          if (rid == id) {
+            for (i = 2; i < n; i++) { h = c[i]; gsub(/[ \t`*]/, "", h); if (tolower(h) == "mr") c[i] = " " url " " }
+            out = ""; for (i = 1; i <= n; i++) out = out c[i] (i < n ? "|" : ""); print out; next
+          }
         }
         { print }' "$README" > "$WORK/re" && mv "$WORK/re" "$README" ;; esac
   done < "$TASKROWS"
@@ -626,7 +638,11 @@ sync_plan() {
         *) continue ;;
       esac
       [ -n "$val" ] || continue
-      val="${val//|/&#124;}"
+      # Pipe → HTML entity. NOT a bash replacement: `&` is literal on bash 3.2 but becomes the
+      # MATCH on bash >= 5.2 (patsub_replacement), and `\&` keeps the backslash on 3.2 — no single
+      # spelling is right on both. A constant-program sed (data via stdin, `\&` = literal &) is
+      # deterministic on every bash and both sed flavors.
+      val="$(printf '%s' "$val" | sed 's/|/\&#124;/g')"
       if ! _plan_cell_update "$work/PLAN.md" "$id" "$col" "$val"; then
         rm -rf "$work"
         die "could not sync PLAN task-table row for $id → fix: add the row for $id to the task table (sync never creates rows)"
@@ -647,10 +663,10 @@ sync_plan() {
   
   # Update PLAN header if needed
   if grep -q '^\*\*Task count:\*\*' "$PLAN"; then
-    awk -v count="$TASK_COUNT" -v sp="$TOTAL_SP" '
+_pwstage="$(pw_tmpfile "$(dirname "$PLAN")")" || return 1;     awk -v count="$TASK_COUNT" -v sp="$TOTAL_SP" '
       /^\*\*Task count:\*\*/ { print "- **Task count:** " count " (ΣSP=" sp ")"; next }
       { print }
-    ' "$PLAN" > "$PLAN.tmp" && mv "$PLAN.tmp" "$PLAN"
+    ' "$PLAN" > "$_pwstage" && mv "$_pwstage" "$PLAN"
   fi
   
   echo "PLAN sync complete"
@@ -670,7 +686,7 @@ sync_tasks() {
     [ -n "$REPO" ] && [ -n "$BRANCH" ] || continue
     
     REPO_DIR="$REPOS_DIR/$REPO"
-    [ -d "$REPO_DIR" ] || continue
+    [ -d "$REPO_DIR" ] && pw_dir_within "$REPOS_DIR" "$REPO_DIR" || continue
     
     # Check for commits
     COMMIT_COUNT=0
@@ -683,8 +699,8 @@ sync_tasks() {
       if ! grep -q 'commits' "$task_file" 2>/dev/null; then
         # Append commit count to Result section
         if grep -q '^## Result' "$task_file"; then
-          awk -v count="$COMMIT_COUNT" '/^## Result/{p=1; print; print "- " count " commit(s)"; next} p && /^## /{p=0} {print}' \
-            "$task_file" > "$task_file.tmp" && mv "$task_file.tmp" "$task_file"
+_pwstage="$(pw_tmpfile "$(dirname "$task_file")")" || return 1;           awk -v count="$COMMIT_COUNT" '/^## Result/{p=1; print; print "- " count " commit(s)"; next} p && /^## /{p=0} {print}' \
+            "$task_file" > "$_pwstage" && mv "$_pwstage" "$task_file"
         fi
       fi
     fi

@@ -107,6 +107,10 @@ fi
 # (claude: no catalog; cursor: one gateway) simply have no entries defined.
 pw_api_entries() {  # <agent-provider> -> one entry per line (nothing when no scope is set)
   local upper var _n _i
+  # Charset gate at the sink: the provider token becomes a variable NAME below, and an
+  # unchecked token (`kilo[$(cmd)]`, backticks) would reach eval/declare as program text.
+  # Invalid -> same empty result as an unknown provider; callers see "no scope set".
+  case "${1:-}" in ''|*[!A-Za-z0-9_-]*) return 0 ;; esac
   upper="$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')"
   var="PW_${upper}_API_PROVIDERS"
   declare -p "$var" >/dev/null 2>&1 || return 0
@@ -307,6 +311,8 @@ declare -f render_kilo_agent >/dev/null 2>&1 || render_kilo_agent() {  local mod
 declare -f kilo_headless >/dev/null 2>&1 || kilo_headless() {
   cat <<'EOF'
 kilo run --auto -m <canonical-catalog-id> "<prompt>" --dir <path> [--variant <low|medium|high|max|minimal>] [--thinking] [--format json]
+NOTE: the prompt rides argv here (visible to `ps` on this host) — keep prompts free of
+secrets; the double-quoted single-argument form is still REQUIRED (word-splitting breaks it).
 --auto is REQUIRED headless — without it kilo run auto-REJECTS every permission (it can't even
 read the task file). Add --agent <name> when targeting a native agent instead of a bare model.
 -m receives the CANONICAL catalog id — the exact line `kilo models` prints (resolve it with
@@ -338,6 +344,8 @@ declare -f render_opencode_agent >/dev/null 2>&1 || render_opencode_agent() {
 declare -f opencode_headless >/dev/null 2>&1 || opencode_headless() {
   cat <<'EOF'
 opencode run --auto -m <canonical-catalog-id> "<prompt>" [--format json] [--attach <url>]
+NOTE: the prompt rides argv here (visible to `ps` on this host) — keep prompts free of
+secrets; the double-quoted single-argument form is still REQUIRED (word-splitting breaks it).
 --auto is REQUIRED headless — auto-approves permissions not explicitly denied.
 --attach <url> connects to an already-running server, avoiding a cold-boot delay.
 -m receives the CANONICAL id `opencode models` prints (resolve with
@@ -816,7 +824,9 @@ pw_stack_parent() {
   case "$v" in
     ""|none|None|NONE|—|-|"<"*) return 0 ;;
   esac
-  case "$v" in T[0-9]*) printf '%s\n' "$v" ;; esac
+  # Full task-id validation, not a prefix glob: `T1/../../foo` matches `T[0-9]*` but must
+  # never flow into `task/<id>.md` path builds (pw_task_id_ok rejects any non-alnum tail).
+  if pw_task_id_ok "$v"; then printf '%s\n' "$v"; fi
 }
 
 # pw_plan_col <plan> <normalized-col-name> -> "T0n|value" per data row of the ## Task table.
@@ -859,8 +869,8 @@ pw_stack_state_col() {  # <colname> -> 1-based column index
 }
 _pw_stack_ncol() { local n=0 c; for c in $PW_STACK_COLS; do n=$((n+1)); done; printf '%s' "$n"; }
 _pw_stack_tab=$(printf '\t')
-_stack_val_bad() {  # rc 0 when a value carries a reserved character (pipe, TAB, newline)
-  case "$1" in *"|"*|*"$_pw_stack_tab"*|*"$IFS_NL"*) return 0 ;; esac
+_stack_val_bad() {  # rc 0 when a value carries a reserved character (pipe, TAB, newline, backslash)
+  case "$1" in *"|"*|*"$_pw_stack_tab"*|*"$IFS_NL"*|*'\'*) return 0 ;; esac
   return 1
 }
 IFS_NL='
@@ -874,6 +884,76 @@ pw_path_within() {
   rdir="$(cd "$dir" 2>/dev/null && pwd -P)" || return 1
   pdir="$(cd "$(dirname "$path")" 2>/dev/null && pwd -P)" || return 1
   case "$pdir/" in "$rdir/"*) return 0 ;; esac
+  return 1
+}
+
+# --- trust-boundary validators (the sink gates; see tooling/docs/SECURITY.md) ----------------
+# pw_proj_slug_ok <slug> — a project slug is exactly ONE path component (the pw-review
+# contract): no empty/dot/traversal components, no separators, no control whitespace.
+pw_proj_slug_ok() {
+  case "${1:-}" in ''|.|..|*/*|*"$IFS_NL"*|*$'\r'*|*$'\t'*) return 1 ;; esac
+  return 0
+}
+
+# pw_proj_dir <slug> — physical project directory, or empty on refusal. Shape-gated by
+# pw_proj_slug_ok, then pinned physically (pwd -P both sides): the canonical project
+# directory must remain inside the projects root, so a symlinked slug resolving outward
+# is refused too. Entities wrap this with their own die message.
+pw_proj_dir() {
+  local slug="$1" base d
+  pw_proj_slug_ok "$slug" || return 1
+  [ -d "$PROJECTS_DIR/$slug" ] || return 1
+  base="$(cd "$PROJECTS_DIR" 2>/dev/null && pwd -P)" || return 1
+  d="$(cd "$PROJECTS_DIR/$slug" && pwd -P)" || return 1
+  case "$d/" in "$base/"*) printf '%s' "$d" ;; *) return 1 ;; esac
+}
+
+# pw_branch_ok <branch> — the branch charset guard the stack paths already enforce:
+# ref-safe characters ([A-Za-z0-9._/-]) only, never a leading dash (git would parse the
+# value as an option at positional refspec sites like `git push origin "$branch"`).
+pw_branch_ok() {
+  case "${1:-}" in ''|*[!A-Za-z0-9._/-]*|-*) return 1 ;; esac
+  return 0
+}
+
+# pw_hook_dir_ok <dir> — provider hook outputs (skilldir/commanddir/agentdir) must be a
+# non-empty absolute path (S14): an empty or relative hook return steered rm/ln/cmp at
+# '/name' or the CWD. Absolute — not strictly $HOME-prefixed — because custom install
+# roots outside $HOME are legitimate operator choices.
+pw_hook_dir_ok() {
+  [ -n "${1:-}" ] || return 1
+  case "$1" in /*) return 0 ;; *) return 1 ;; esac
+}
+
+# pw_dir_within <base> <dir> — rc 0 when <dir> is an existing directory that resolves
+# physically inside <base> (the final component included, so a symlinked dir is refused
+# when it points outside). For task-file `Repo:`/`Worktree:` values before any git/cd use.
+pw_dir_within() {
+  local base="$1" dir="$2" rbase rdir
+  [ -n "$base" ] && [ -n "$dir" ] && [ -d "$dir" ] || return 1
+  rbase="$(cd "$base" 2>/dev/null && pwd -P)" || return 1
+  rdir="$(cd "$dir" 2>/dev/null && pwd -P)" || return 1
+  case "$rdir/" in "$rbase/"*) return 0 ;; esac
+  return 1
+}
+
+# pw_stamp_tokens <file> — rewrite the scaffold tokens {{PW_HOME}}/{{PW_PROJECTS}}/{{PW_REPOS}}
+# in place with the current paths. Bash string replacement, never a sed/perl program string:
+# install paths are operator config and must not become program text (a `}` inside $PW_HOME
+# previously broke out of the perl s{...}{...} delimiters). Staged via pw_tmpfile + mv, and
+# every line is printed exactly once (trailing-newline behavior unchanged).
+pw_stamp_tokens() {
+  local f="$1" tmp
+  tmp="$(pw_tmpfile "$(dirname "$f")")" || return 1
+  if while IFS= read -r _stl || [ -n "$_stl" ]; do
+       _stl="${_stl//\{\{PW_HOME\}\}/$PW_HOME}"
+       _stl="${_stl//\{\{PW_PROJECTS\}\}/$PW_PROJECTS}"
+       _stl="${_stl//\{\{PW_REPOS\}\}/${PW_REPOS:-}}"
+       printf '%s\n' "$_stl"
+     done < "$f" > "$tmp"; then
+    if mv "$tmp" "$f"; then return 0; fi
+  fi
+  rm -f "$tmp"
   return 1
 }
 

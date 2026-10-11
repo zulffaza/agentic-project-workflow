@@ -37,10 +37,13 @@
 #       (AI Models: / AI Review: / Review Trigger: /
 #       Review Repair: / Review Budget: — `—`/`manual`/`3` are
 #       legal explicit values; an absent line is a defect,
-#       never a style choice). Also the one migration door for
-#       legacy `off` outcome rows: they become effective
-#       `advisory` on every read WITHOUT a write; ensure
-#       persists that normalization.
+#       never a style choice). Getters stay READ-ONLY: a read
+#       of an absent line returns the effective defaults and
+#       says so on stderr without writing; `ensure` (or any
+#       `--set`) is the only door that persists the line. Also
+#       the one migration door for legacy `off` outcome rows:
+#       they become effective `advisory` on every read WITHOUT
+#       a write; ensure persists that normalization.
 #   pw-config.sh global show
 #       The effective machine floors view: providers, API-provider scopes, model allowlists,
 #       route/ladder defaults, repair budgets, RFC backend. Read-only on purpose — pw.config.sh
@@ -102,7 +105,7 @@ PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 ST="$HERE/pw-status.sh"
 
 die() { echo "pw-config: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
+proj_dir() { local d; d="$(pw_proj_dir "$1")" || die "no such project: $1 ($PROJECTS_DIR/$1) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
 
 # --- AI Models (per-lane model row for the spawned sub-agent lanes — plan 01 §5.1) -----------
 # The model sibling of the AI Review config block below: which model a *lane* should run on when a
@@ -127,8 +130,8 @@ _ai_models_line_ensure() {
   for r in $AI_MODEL_ROLES; do default="$default $r=—"; done
   default="${default# }"
   grep -q '^- \*\*One-liner:\*\*' "$f" || die "no '- **One-liner:**' line to anchor AI Models: after in $f"
-  awk -v t="$default" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **AI Models:** " t; d=1}' \
-    "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   awk -v t="$default" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **AI Models:** " t; d=1}' \
+    "$f" > "$_pwstage" && mv "$_pwstage" "$f"
 }
 
 # Get (no --set) or set (--set <role>=<value>; — clears to no-row).
@@ -148,9 +151,13 @@ _line_pairs_set() {  # <file> <line-label> <k>=<v>… — batch-update a one-lin
     [ "$found" = 1 ] || new="$new $k=$v"
     cur="${new# }"
   done
-  awk -v pre="- **${label}:** " -v t="$cur" '
+  # Row-integrity gate: `cur` is re-emitted via awk -v (backslash-escape processing), so a
+  # reserved character would corrupt or forge the dashboard line.
+  case "$cur" in *"|"*|*$'\t'*|*$'\n'*|*'\'*)
+    die "_line_pairs_set: value for '${label}:' carries a reserved character (|, TAB, newline, backslash) → fix: strip it" ;; esac
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   awk -v pre="- **${label}:** " -v t="$cur" '
     !d && index($0, pre) == 1 { print pre t; d=1; next }
-    { print } END { if (!d) exit 3 }' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    { print } END { if (!d) exit 3 }' "$f" > "$_pwstage" && mv "$_pwstage" "$f"
 }
 
 # _ai_review_validate now lives with the review-axis block below (surface registry + two-mode enum).
@@ -206,9 +213,20 @@ cmd_ai_model() {
   [ -n "$slug" ] || die "ai-model: --project is required → fix: ai-model --project <slug> [--set <role=value>]…   (roles: $AI_MODEL_ROLES)"
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
-  _ai_models_line_ensure "$f"
+  # Read-only by contract (S23): the ensure (a WRITE) runs only for a set; a missing line on
+  # read shows the all-— defaults without writing.
+  if [ ${#sets[@]} -gt 0 ]; then
+    _ai_models_line_ensure "$f"
+  elif ! grep -q '^- \*\*AI Models:\*\*' "$f"; then
+    printf 'pw-config: note: AI Models line missing from the README — showing defaults; nothing was written (persist with: /pw-config set --project %s --key ai-model --set <role>=<value>)\n' "$slug" >&2
+  fi
   if [ ${#sets[@]} -eq 0 ]; then
-    grep '^- \*\*AI Models:\*\*' "$f" | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//'
+    if grep -q '^- \*\*AI Models:\*\*' "$f"; then
+      grep '^- \*\*AI Models:\*\*' "$f" | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//'
+    else
+      local r out=""; for r in $AI_MODEL_ROLES; do out="$out $r=—"; done
+      printf '%s\n' "${out# }"
+    fi
     return 0
   fi
   for s in "${sets[@]}"; do
@@ -261,6 +279,20 @@ _review_default_mode() {
   case "$v" in advisory|auto) printf '%s' "$v" ;; *) printf 'advisory' ;; esac
 }
 
+# Default k=v string for an axis line when it is absent from the README. Read-only getters
+# show these WITHOUT writing (S23); the set path persists via the ensure chain.
+_axis_default_kvs() { # <axis>
+  local p out=""
+  case "$1" in
+    ai-review)
+      local d; d="$(_review_default_mode)"
+      for p in $AI_REVIEW_PHASES; do out="$out $p=$d"; done ;;
+    review-trigger|review-repair)
+      for p in $AI_REVIEW_PHASES; do out="$out $p=manual"; done ;;
+  esac
+  printf '%s\n' "${out# }"
+}
+
 # Idempotent: insert one review-axis line if missing, after the line whose bold label is
 # <anchor-label> (fixed-string prefix match — never an ERE, backslash escapes differ across
 # awks). Requires the One-liner floor; rc 1 when the anchor line is absent.
@@ -271,14 +303,14 @@ _axis_line_ensure() { # <file> <label> <anchor-label> <k=v…>
   for kv in "$@"; do t="$t $kv"; done
   t="${t# }"
   grep -q '^- \*\*One-liner:\*\*' "$f" || return 1
-  if awk -v pre="- **${label}:** " -v t="$t" -v apre="- **${anchorlabel}:** " '
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   if awk -v pre="- **${label}:** " -v t="$t" -v apre="- **${anchorlabel}:** " '
       {print}
       !d && index($0, apre) == 1 {print pre t; d=1}
-      END { if (!d) exit 3 }' "$f" > "$f.tmp"; then
-    mv "$f.tmp" "$f" || { rm -f "$f.tmp"; return 1; }
+      END { if (!d) exit 3 }' "$f" > "$_pwstage"; then
+    mv "$_pwstage" "$f" || { rm -f "$_pwstage"; return 1; }
     return 0
   fi
-  rm -f "$f.tmp"
+  rm -f "$_pwstage"
   return 1
 }
 
@@ -423,14 +455,16 @@ _review_axis_cmd() { # <axis> <line-label> <validator-fn> <values-help> <"--proj
   [ -n "$slug" ] || die "$axis: --project is required → fix: $axis --project <slug> [--set <surface>=<value>]…   ($vhelp)"
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
-  case "$axis" in
-    ai-review)      _ai_review_line_ensure "$f" ;;
-    review-trigger) _review_trigger_line_ensure "$f" ;;
-    review-repair)  _review_repair_line_ensure "$f" ;;
-  esac
+  # Read-only by contract (S23): the ensure chain (a WRITE) runs only when a set was
+  # requested; a missing line on read is reported with its effective defaults, never written.
   if [ ${#sets[@]} -eq 0 ]; then
     local line out kv norm=0
-    line="$(grep -m1 "^- \*\*${label}:\*\*" "$f" | sed "s|^- \*\*${label}:\*\*[[:space:]]*||" || true)"
+    if grep -q "^- \*\*${label}:\*\*" "$f"; then
+      line="$(grep -m1 "^- \*\*${label}:\*\*" "$f" | sed "s|^- \*\*${label}:\*\*[[:space:]]*||" || true)"
+    else
+      line="$(_axis_default_kvs "$axis")"
+      printf 'pw-config: note: %s line missing from the README — showing effective defaults; nothing was written (persist with: /pw-config set --project %s --key %s --set <k>=<v>)\n' "$label" "$slug" "$axis" >&2
+    fi
     if [ "$axis" = "ai-review" ]; then
       out=""
       for kv in $line; do
@@ -447,6 +481,12 @@ _review_axis_cmd() { # <axis> <line-label> <validator-fn> <values-help> <"--proj
     return 0
   fi
   local argc=${#sets[@]} expanded pair
+  # Set path: persist the anchoring lines before writing (the ensures are WRITE actions).
+  case "$axis" in
+    ai-review)      _ai_review_line_ensure "$f" ;;
+    review-trigger) _review_trigger_line_ensure "$f" ;;
+    review-repair)  _review_repair_line_ensure "$f" ;;
+  esac
   expanded="$(_expand_axis_pairs "$axis" "${sets[@]}")" || exit 2
   for pair in $expanded; do "$vfn" "${pair%%=*}" "${pair#*=}"; done
   _line_pairs_set "$f" "$label" $expanded
@@ -494,9 +534,18 @@ cmd_review_rounds() {
   [ -n "$slug" ] || die "review-rounds: --project is required → fix: review-rounds --project <slug> [--value <n>]   (n: 1..3 — total reviewer passes in a bounded review→repair cycle; default 3)"
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
-  _review_budget_line_ensure "$f"
+  # Read-only by contract (S23): the ensure (a WRITE) runs only for a value write.
+  if [ "$hasval" -gt 0 ]; then
+    _review_budget_line_ensure "$f"
+  elif ! grep -q '^- \*\*Review Budget:\*\*' "$f"; then
+    printf 'pw-config: note: Review Budget line missing from the README — showing the default; nothing was written (persist with: /pw-config set --project %s --key review-rounds --value <n>)\n' "$slug" >&2
+  fi
   if [ "$hasval" = 0 ]; then
-    grep -m1 '^- \*\*Review Budget:\*\*' "$f" | sed 's/^- \*\*Review Budget:\*\*[[:space:]]*//'
+    if grep -q '^- \*\*Review Budget:\*\*' "$f"; then
+      grep -m1 '^- \*\*Review Budget:\*\*' "$f" | sed 's/^- \*\*Review Budget:\*\*[[:space:]]*//'
+    else
+      printf 'rounds=3\n'
+    fi
     return 0
   fi
   _require_int review-rounds "$val" 1 3
@@ -536,6 +585,12 @@ cmd_model_check() {
   done
   [ -n "$prov" ] || die "model-check: --provider is required → fix: model-check --provider <p> --model <m>   (empty PW_MODEL_ALLOWLIST_<PROVIDER> = all models allowed)"
   [ -n "$model" ] || die "model-check: --model is required → fix: model-check --provider <p> --model <m>   (empty PW_MODEL_ALLOWLIST_<PROVIDER> = all models allowed)"
+  # Sink gate: the provider token becomes a variable NAME below (`${!var}` indirect expansion),
+  # so it must be a plain token — never an unchecked string from a PLAN cell (a crafted
+  # `kilo[$(cmd)]` would evaluate its subscript as arithmetic). Provider membership is enforced
+  # where pins are WRITTEN (_model_pin_validate); model-check itself keeps its documented
+  # semantics (an unset/empty PW_MODEL_ALLOWLIST_<PROVIDER> = all models allowed).
+  case "$prov" in *[!A-Za-z0-9_-]*) die "model-check: invalid provider token '$prov' → fix: use a provider name (letters, digits, dash, underscore)" ;; esac
   local upper var allow pats pat matched=0
   upper="$(printf '%s' "$prov" | tr '[:lower:]' '[:upper:]')"
   var="PW_MODEL_ALLOWLIST_${upper}"
@@ -653,17 +708,17 @@ _plan_value() {  # <file> <bold-label> -> trimmed value, empty when the bullet/p
 _plan_set_bullet() {  # <file> <bold-label> <value> <insert-anchor-ERE>
   local f="$1" label="$2" value="$3" anchor="$4"
   if grep -qE "^- \*\*${label}:\*\*" "$f"; then
-    awk -v label="$label" -v value="$value" '
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v label="$label" -v value="$value" '
       !done && index($0, "- **" label ":**") == 1 { print "- **" label ":** " value; done=1; next }
-      { print } END { if (!done) exit 3 }' "$f" > "$f.tmp" && mv "$f.tmp" "$f" && return 0
-    rm -f "$f.tmp"; return 3
+      { print } END { if (!done) exit 3 }' "$f" > "$_pwstage" && mv "$_pwstage" "$f" && return 0
+    rm -f "$_pwstage"; return 3
   fi
   if [ -n "$anchor" ] && grep -qE "$anchor" "$f"; then
-    awk -v label="$label" -v value="$value" -v anchor="$anchor" '
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v label="$label" -v value="$value" -v anchor="$anchor" '
       { print }
       !done && $0 ~ anchor { print "- **" label ":** " value; done=1 }
-      END { if (!done) exit 3 }' "$f" > "$f.tmp" && mv "$f.tmp" "$f" && return 0
-    rm -f "$f.tmp"; return 3
+      END { if (!done) exit 3 }' "$f" > "$_pwstage" && mv "$_pwstage" "$f" && return 0
+    rm -f "$_pwstage"; return 3
   fi
   return 3
 }
@@ -676,10 +731,10 @@ _plan_get_maxparallel() {  # <plan> -> digits, empty when unset/placeholder
 _plan_set_maxparallel() {
   local f="$1" value="$2"
   grep -qE '^- Max parallelism:' "$f" || return 3
-  awk -v value="$value" '
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   awk -v value="$value" '
     !done && /^- Max parallelism:/ { print "- Max parallelism: " value " concurrent executors."; done=1; next }
-    { print } END { if (!done) exit 3 }' "$f" > "$f.tmp" && mv "$f.tmp" "$f" && return 0
-  rm -f "$f.tmp"; return 3
+    { print } END { if (!done) exit 3 }' "$f" > "$_pwstage" && mv "$_pwstage" "$f" && return 0
+  rm -f "$_pwstage"; return 3
 }
 
 _require_int() { # <key> <value> <min> <max>
@@ -850,8 +905,8 @@ _pin_propagate() {
   local tf="$d/task/$tid.md"
   grep -q '^- \*\*Execute with:\*\*' "$tf" \
     || die "pin: task/$tid.md has no '- **Execute with:**' field — fix the task doc first (template line missing; pw-doctor --project C11 flags it)"
-  awk -v v="$val" '!w && /^- \*\*Execute with:\*\*/ { print "- **Execute with:** " v; w=1; next } { print }' \
-    "$tf" > "$tf.tmp" && mv "$tf.tmp" "$tf"
+_pwstage="$(pw_tmpfile "$(dirname "$tf")")" || return 1;   awk -v v="$val" '!w && /^- \*\*Execute with:\*\*/ { print "- **Execute with:** " v; w=1; next } { print }' \
+    "$tf" > "$_pwstage" && mv "$_pwstage" "$tf"
   _plan_cell_update "$plan" "$tid" executewith "$val" \
     || die "pin: PLAN 'Execute with' cell write failed for $tid (see above) — the PLAN task-table row must exist; repair the PLAN doc, then re-run"
 }
@@ -910,7 +965,7 @@ cmd_set() {
                for _pair in "${sets[@]}"; do
                  case "$_pair" in *=*) ;; *) die "pin: --set expects <T0n>=<provider:model|—>, got '$_pair'" ;; esac
                  _tid="${_pair%%=*}"; _val="${_pair#*=}"
-                 case "$_tid" in T[0-9]*) ;; *) die "pin: '$_tid' is not a task id (expected T01, T02, …)" ;; esac
+                 pw_task_id_ok "$_tid" || die "pin: '$_tid' is not a task id (expected T01, T02, …)"
                  [ -f "$d/task/$_tid.md" ] || die "pin: no task file task/$_tid.md — /pw-breakdown owns task creation"
                  grep -q '^- \*\*Execute with:\*\*' "$d/task/$_tid.md" \
                    || die "pin: task/$_tid.md has no '- **Execute with:**' field — fix the task doc first (template line missing; pw-doctor --project C11 flags it)"
@@ -991,6 +1046,7 @@ cmd_global() {
   echo "pw-config global show — effective machine floors (source: pw.config.sh via pw-common.sh)"
   echo "  providers        : ${PW_PROVIDERS[*]}"
   for p in "${PW_PROVIDERS[@]}"; do
+    case "$p" in *[!A-Za-z0-9_-]*) continue ;; esac   # same sink rule as model-check: no variable names from unchecked tokens
     upper="$(printf '%s' "$p" | tr '[:lower:]' '[:upper:]')"
     es="$(pw_api_entries "$p" | tr '\n' ' ')"
     [ -n "${es// /}" ] || es="(unset = full catalog)"

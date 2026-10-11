@@ -202,8 +202,8 @@ cmd_passes() {
     _pv="$(_pfield "$mf" verdict)"; [ -n "$_pv" ] || _pv="—"
     if [ "$json" = "--json" ]; then
       printf '{"pass_id": "%s", "surface": "%s", "state": "%s", "artifact": "%s", "verdict": "%s", "round": "%s"}\n' \
-        "$pid" "$(_pfield "$mf" surface)" "$(_pfield "$mf" state)" "$(_pfield "$mf" artifact)" \
-        "$_pv" "$(_pfield "$mf" round)"
+        "$(pw_review_json_escape "$pid")" "$(pw_review_json_escape "$(_pfield "$mf" surface)")" "$(pw_review_json_escape "$(_pfield "$mf" state)")" "$(pw_review_json_escape "$(_pfield "$mf" artifact)")" \
+        "$(pw_review_json_escape "$_pv")" "$(pw_review_json_escape "$(_pfield "$mf" round)")"
     else
       printf 'review/ai/%s: surface=%s state=%s artifact=%s round=%s verdict=%s\n' \
         "$pid" "$(_pfield "$mf" surface)" "$(_pfield "$mf" state)" "$(_pfield "$mf" artifact)" \

@@ -287,3 +287,26 @@ C226-overview-snapshot-recursion	pw-reviewlib.sh	find "$d/$rel" -maxdepth 1 -nam
 C227-overview-lane-omission	pw-reviewlib.sh	printf '%s\n' "analysis/review" "task/review" "context/review" "rfc/review" "review"	printf '%s\n' "analysis/review" "task/review" "rfc/review" "review"	T1	^pw-status\.t\.sh$
 C228-overview-policy-write	pw-status.sh	_axis="$(pw_field "$README" "Review Trigger")"	_axis="$("$HERE/pw-config.sh" review-trigger --project "$SLUG" 2>/dev/null || true)"	T1	^pw-status\.t\.sh$
 C229-overview-phase-filter-leak	pw-status.sh	    ""|context|analysis|breakdown|executing|review|done) ;;	    ""|context|analysis|breakdown|executing|review|done|plan|rfc|close) ;;	T1	^pw-status\.t\.sh$
+C230-model-check-token-gate	pw-config.sh	case "$prov" in *[!A-Za-z0-9_-]*) die "model-check: invalid provider token	case "$prov" in !*) die "model-check: invalid provider token	T1	^pw-security\.t\.sh$
+C231-exec-branch-guard	pw-ship.sh	pw_branch_ok "$BRANCH" || die "refusing unsafe Branch	true || die "refusing unsafe Branch	T1	^pw-security\.t\.sh$
+C232-exec-repo-containment	pw-ship.sh	pw_dir_within "$REPOS_DIR" "$REPO_DIR" || die "repo path outside	true || die "repo path outside	T1	^pw-security\.t\.sh$
+C233-monitor-timeout-gate	pw-ship.sh	case "$TIMEOUT_MIN" in ''|*[!0-9]*) die "monitor: --timeout must be whole minutes	case "$TIMEOUT_MIN" in ''|!*) die "monitor: --timeout must be whole minutes	T1	^pw-security\.t\.sh$
+C234-prepare-task-gate	pw-review.sh	--task)    pw_task_id_ok "$tsel" || die "prepare: --task expects a task id	--task)    : || die "prepare: --task expects a task id	T1	^pw-security\.t\.sh$
+C235-proj-dir-shape-gate	pw-common.sh	case "${1:-}" in ''|.|..|*/*|*"$IFS_NL"*|*$'\r'*|*$'\t'*) return 1 ;; esac	case "${1:-}" in '') return 1 ;; esac	T1	^pw-security\.t\.sh$
+C236-proj-dir-physical-pin	pw-common.sh	case "$d/" in "$base/"*) printf '%s' "$d" ;; *) return 1 ;; esac	case "$d/" in "$base/"*) printf '%s' "$d" ;; *) printf '%s' "$d" ;; esac	T1	^pw-security\.t\.sh$
+C237-comment-note-guard	pw-ship.sh	case "$note" in *"|"*|*"$IFS_NL"*|*$'\t'*|*'\'*|*"<!--"*)	case "$note" in !*)	T1	^pw-security\.t\.sh$
+C238-comment-thread-guard	pw-ship.sh	case "$thread" in ''|*[!A-Za-z0-9._-]*) die "comment-seen: invalid --thread	case "$thread" in ''|!*) die "comment-seen: invalid --thread	T1	^pw-security\.t\.sh$
+C239-dashboard-value-guard	pw-mdlib.sh	echo "_dashboard_update: refusing a value with reserved characters (TAB, newline, backslash) → fix: strip them from the value" >&2; return 1 ;; esac	: ;; esac	T1	^pw-security\.t\.sh$
+C240-plan-cell-value-guard	pw-mdlib.sh	echo "_plan_cell_update: refusing a value with reserved characters (TAB, newline, backslash) → fix: strip them from the value" >&2; return 1 ;; esac	: ;; esac	T1	^pw-security\.t\.sh$
+C241-monitor-host-pin	pw-ship.sh	if [ -n "$_origin_host" ] && [ "$_origin_host" != "$MR_HOST" ]; then	if false; then	T1	^pw-security\.t\.sh$
+C242-axis-default-read	pw-config.sh	line="$(_axis_default_kvs "$axis")"	line=""	T1	^pw-security\.t\.sh$
+C243-stamp-tokens-sub	pw-common.sh	_stl="${_stl//\{\{PW_HOME\}\}/$PW_HOME}"	_stl="${_stl}"	T1	^pw-security\.t\.sh$
+C244-offboard-tree-check	offboard.sh	if diff -rq "$starget" "$skill_src" >/dev/null 2>&1; then	if true; then	T1	^pw-doctor\.t\.sh$
+C245-doctor-orphan-marker-skill	pw-doctor.sh	if grep -qF 'pw-generated' "$skilldir/$n/SKILL.md" 2>/dev/null; then	if true; then	T1	^pw-doctor\.t\.sh$
+C246-doctor-orphan-marker-cmd	pw-doctor.sh	if grep -qF 'pw-generated' "$odir/$n" 2>/dev/null; then rm -f "$odir/$n"	if true; then rm -f "$odir/$n"	T1	^pw-doctor\.t\.sh$
+C247-gen-flat-symlink-guard	gen-commands.sh	[ -L "$outdir/$name.md" ] && rm -f "$outdir/$name.md"	:	T1	^pw-security\.t\.sh$
+C248-doctor-env-guard	pw-doctor.sh	        *'"'*|*'`'*|*'$'*|*'\'*|*$'\n'*)	        !*)	T1	^pw-doctor\.t\.sh$
+C249-doctor-hook-assert	pw-doctor.sh	pw_hook_dir_ok "$skilldir" || { echo "pw-doctor: provider hook ${p}_skilldir returned an unsafe path	: || { echo "pw-doctor: provider hook ${p}_skilldir returned an unsafe path	T1	^pw-doctor\.t\.sh$
+C250-review-archive-stage-off	pw-review.sh	local htmp; htmp="$(pw_tmpfile "$(dirname "$af")")"	local htmp; htmp="$af.tmp"	T0	
+C251-review-manifest-stage-off	pw-review.sh	tmp; tmp="$(pw_tmpfile "$(dirname "$1")")"	tmp="$tf.tmp"	T0	
+C252-doc-pipe-escape-amp	pw-doc.sh	sed 's/|/\&#124;/g'	sed 's/|/&#124;/g'	T1	^pw-doc\.t\.sh$

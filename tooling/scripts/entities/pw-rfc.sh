@@ -35,7 +35,7 @@ PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 ST="$HERE/pw-status.sh"
 
 die() { echo "pw-rfc: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
+proj_dir() { local d; d="$(pw_proj_dir "$1")" || die "no such project: $1 ($PROJECTS_DIR/$1) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
 
 # --- RFC side-loop (see tooling/docs/rfc.md + tooling/docs/rfc-backends.md) ------------
 # Deterministic helpers for the optional /pw-rfc publish loop — never touches the dashboard
@@ -71,7 +71,9 @@ cmd_rfc_init() {
   local tmpl="$HERE/../../../template/rfc/_TEMPLATE-RFC.md"
   [ -f "$tmpl" ] || die "template not found: $tmpl"
   mkdir -p "$d/rfc"
-  sed "s/<PROJECT_NAME>/$slug/g" "$tmpl" > "$f"
+  # Bash string replacement, never a sed program string: the slug is caller data and must not
+  # become program text (a `/` or GNU-sed `e` would alter or execute the program).
+  { while IFS= read -r _rl || [ -n "$_rl" ]; do printf '%s\n' "${_rl//<PROJECT_NAME>/$slug}"; done < "$tmpl"; } > "$f"
   "$ST" log --project "$slug" --actor rfc --message "created rfc/RFC.md from template (backend: $backend)"
   echo "$slug: rfc-init created rfc/RFC.md"
 }
@@ -112,8 +114,8 @@ _rfc_comment_section_ensure() {
 _rfc_meta_upsert() {
   local f="$1" label="$2" value="$3"
   if grep -qF -- "- **$label:**" "$f"; then
-    awk -v l="$label" -v v="$value" '!d && index($0, "- **" l ":**")==1 { print "- **" l ":** " v; d=1; next } { print }' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v l="$label" -v v="$value" '!d && index($0, "- **" l ":**")==1 { print "- **" l ":** " v; d=1; next } { print }' \
+      "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   else
     printf -- '- **%s:** %s\n' "$label" "$value" >> "$f"
   fi
@@ -221,8 +223,8 @@ cmd_rfc_comment_seen() {
   local marker="<!-- pw-rfc-comment:$thread -->"
   local row="| \`$thread\` | $replies | $solved $marker |"
   if grep -Fq "$marker" "$f"; then
-    awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
+      "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   else
     printf '%s\n' "$row" >> "$f"
   fi
@@ -254,15 +256,15 @@ cmd_rfc_dashboard() {
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
   if grep -q '^- \*\*RFC:\*\*' "$f"; then
-    awk -v t="$text" '!d && /^- \*\*RFC:\*\*/ {print "- **RFC:** " t; d=1; next} {print}' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v t="$text" '!d && /^- \*\*RFC:\*\*/ {print "- **RFC:** " t; d=1; next} {print}' \
+      "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   elif grep -q '^- \*\*Adopted:\*\*' "$f"; then
-    awk -v t="$text" '{print} !d && /^- \*\*Adopted:\*\*/ {print "- **RFC:** " t; d=1}' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v t="$text" '{print} !d && /^- \*\*Adopted:\*\*/ {print "- **RFC:** " t; d=1}' \
+      "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   else
     grep -q '^- \*\*One-liner:\*\*' "$f" || die "no anchor line (Adopted:/One-liner:) in $f"
-    awk -v t="$text" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **RFC:** " t; d=1}' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v t="$text" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **RFC:** " t; d=1}' \
+      "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   fi
   "$ST" log --project "$slug" --actor rfc --message "dashboard: $text"
   echo "$slug: RFC -> $text"

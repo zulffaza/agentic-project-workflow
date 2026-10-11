@@ -72,7 +72,7 @@ REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
 ST="$HERE/pw-status.sh"
 
 die() { echo "pw-context: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
+proj_dir() { local d; d="$(pw_proj_dir "$1")" || die "no such project: $1 ($PROJECTS_DIR/$1) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
 _log() { PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" log --project "$1" --actor "$2" --message "$3" >/dev/null; }
 
 # Pipe-escape a table cell value.
@@ -540,6 +540,7 @@ cmd_adopt_snapshot() {
   REPO_DIR="$REPOS_DIR/$REPO"
 
   [ -d "$REPO_DIR" ] || die "repo not found: $REPO_DIR → fix: pass the repo dir name (repos live under $REPOS_DIR — clone it there first)"
+  pw_dir_within "$REPOS_DIR" "$REPO_DIR" || die "adopt: repo path resolves outside $REPOS_DIR: $REPO_DIR → fix: check the --repo name"
 
   # Validate branch exists
   if ! git -C "$REPO_DIR" rev-parse --verify "$BRANCH" >/dev/null 2>&1; then
@@ -555,6 +556,12 @@ cmd_adopt_snapshot() {
     # "url contains gitlab|github" substring test is dead on self-hosted forges (source.golabs.io):
     # it skipped the target lookup and silently shipped an "unconfirmed" inferred base.
     mr_host="$(printf '%s' "$MR_URL" | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||')"
+    # Host pin (S12): the MR URL host must match the repo's own origin before any
+    # credential-bearing forge call below (a decoy URL is refused, not queried).
+    mr_origin_host="$(git -C "$REPO_DIR" config --get remote.origin.url 2>/dev/null | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||' || true)"
+    if [ -n "$mr_origin_host" ] && [ "$mr_origin_host" != "$mr_host" ]; then
+      die "adopt: MR URL host '$mr_host' does not match the repo origin host '$mr_origin_host' → fix: correct the MR URL (a host mismatch is refused)"
+    fi
     if [ "$mr_host" = "github.com" ]; then
       if command -v gh >/dev/null 2>&1; then
         MR_NUM="$(echo "$MR_URL" | grep -o 'pull/[0-9]*' | sed 's/pull\///')"
@@ -656,12 +663,12 @@ cmd_adopt() {
       if (length(h) >= length(key) && substr(h, length(h)-length(key)+1) == key) { print u; exit }
     }' "$f")"
   if [ -n "$uid" ]; then
-    awk -v u="$uid" -v base="$base" -v mr="$mr" '
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v u="$uid" -v base="$base" -v mr="$mr" '
       $0 ~ ("^## " u " · ") { inU=1; print; next }
       inU && /^## A[0-9]+ · / { inU=0 }
       inU && /^- Base: / { print "- Base: " base; next }
       inU && /^- MR: /   { print "- MR: " mr;   next }
-      { print }' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+      { print }' "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   else
     local n; n="$(grep -cE '^## A[0-9]+ · ' "$f" 2>/dev/null || true)"; : "${n:=0}"
     uid="A$((n+1))"

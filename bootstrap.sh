@@ -161,6 +161,13 @@ fi
 
 # --- 5. write the env file ---------------------------------------------------
 ENV_FILE="$PW_HOME/pw-env.sh"
+# A path carrying a shell-special character (" ` $ \ or a newline) would become live code in
+# the generated file the moment it is sourced — refuse loudly instead of writing it.
+case "$PW_HOME$PW_PROJECTS$PW_REPOS" in
+  *'"'*|*'`'*|*'$'*|*'\'*|*$'\n'*)
+    echo "bootstrap: refusing to write pw-env.sh — PW_HOME/PW_PROJECTS/PW_REPOS contain a shell-special character (\" \` \$ \\ or newline) → fix: move the bundle to a plain path" >&2
+    exit 1 ;;
+esac
 cat > "$ENV_FILE" <<EOF
 # Written by bootstrap.sh — source this for the path vars used across the docs.
 #   source "$ENV_FILE"

@@ -61,9 +61,14 @@ if [ -f "$ENV_FILE" ]; then
   else
     echo "  ✗ pw-env.sh is stale (PW_HOME=$envhome)"; issues=$((issues+1))
     if [ "$FIX" -eq 1 ]; then
-      printf '# Written by pw-doctor --fix.\nexport PW_HOME="%s"\nexport PW_PROJECTS="%s"\nexport PW_REPOS="%s"\n' \
-        "$PW_HOME" "$PW_PROJECTS" "$PW_REPOS" > "$ENV_FILE"
-      echo "      fixed: rewrote pw-env.sh"
+      case "$PW_HOME$PW_PROJECTS$PW_REPOS" in
+        *'"'*|*'`'*|*'$'*|*'\'*|*$'\n'*)
+          echo "      REFUSED: rewrite — a path carries a shell-special character (would become live code when sourced); fix the install path" ;;
+        *)
+          printf '# Written by pw-doctor --fix.\nexport PW_HOME="%s"\nexport PW_PROJECTS="%s"\nexport PW_REPOS="%s"\n' \
+            "$PW_HOME" "$PW_PROJECTS" "$PW_REPOS" > "$ENV_FILE"
+          echo "      fixed: rewrote pw-env.sh" ;;
+      esac
     fi
   fi
 else
@@ -215,6 +220,7 @@ for p in "${PW_PROVIDERS[@]}"; do
   # caught on a copy-fallback filesystem (a symlink install is trivially "in sync" since diff -rq
   # dereferences it). Loops every tooling/skill/*/ dir — adding a new skill needs no change here.
   skilldir="$("${p}_skilldir")"
+  pw_hook_dir_ok "$skilldir" || { echo "pw-doctor: provider hook ${p}_skilldir returned an unsafe path ('$skilldir') → fix: hooks must print a non-empty absolute path" >&2; exit 2; }
   # Skill-layout providers (codex): bundle skills whose names collide with canonical commands
   # are NOT installed by design — the generated command-skill owns the name (single namespace).
   skips="$(pw_skill_skips_for "$p")"
@@ -266,7 +272,18 @@ for p in "${PW_PROVIDERS[@]}"; do
   done
   if [ -n "$sorph" ]; then
     echo "    ✗ orphan skill(s) — installed but no longer shipped:$sorph"; issues=$((issues+1))
-    if [ "$FIX" -eq 1 ]; then for n in $sorph; do rm -rf "$skilldir/$n"; done; echo "      fixed: removed orphan skills"; fi
+    if [ "$FIX" -eq 1 ]; then
+      for n in $sorph; do
+        # content-check-and-skip (S10): remove only bundle-generated residue (the generator
+        # marker), never a foreign or hand-made entry that merely shares the namespace.
+        if grep -qF 'pw-generated' "$skilldir/$n/SKILL.md" 2>/dev/null; then
+          rm -rf "$skilldir/$n"
+        else
+          echo "      SKIPPED '$n' (no bundle marker — foreign or hand-made; remove by hand if obsolete)"
+        fi
+      done
+      echo "      fixed: removed marked orphan skills"
+    fi
   else
     echo "    ✓ no orphan skills"
   fi
@@ -275,6 +292,7 @@ for p in "${PW_PROVIDERS[@]}"; do
   # Layout-aware: flat = <name>.md files; skill = <name>/ dirs (SKILL.md + agents/openai.yaml)
   # compared as whole trees, so drift in the policy file counts too.
   odir="$("${p}_commanddir")"
+  pw_hook_dir_ok "$odir" || { echo "pw-doctor: provider hook ${p}_commanddir returned an unsafe path ('$odir') → fix: hooks must print a non-empty absolute path" >&2; exit 2; }
   "$HERE/gen-commands.sh" --outdir "$tmp" "$p" >/dev/null
   # strict-YAML frontmatter of the freshly rendered copies — never trust the render hooks alone;
   # this is the same code path that installs them (kilo 7.8.8 made bad frontmatter fatal).
@@ -346,9 +364,16 @@ for p in "${PW_PROVIDERS[@]}"; do
     echo "    ✗ orphan command file(s) — installed but no longer generated:$corph"; issues=$((issues+1))
     if [ "$FIX" -eq 1 ]; then
       for n in $corph; do
-        if [ "$cmdstyle" = "skill" ]; then rm -rf "$odir/$n"; else rm -f "$odir/$n"; fi
+        # content-check-and-skip (S10): only bundle-generated residue (marker) is removed.
+        if [ "$cmdstyle" = "skill" ]; then
+          if grep -qF 'pw-generated' "$odir/$n/SKILL.md" 2>/dev/null; then rm -rf "$odir/$n"
+          else echo "      SKIPPED '$n' (no bundle marker — foreign or hand-made; remove by hand if obsolete)"; fi
+        else
+          if grep -qF 'pw-generated' "$odir/$n" 2>/dev/null; then rm -f "$odir/$n"
+          else echo "      SKIPPED '$n' (no bundle marker — foreign or hand-made; remove by hand if obsolete)"; fi
+        fi
       done
-      echo "      fixed: removed orphan commands"
+      echo "      fixed: removed marked orphan commands"
     fi
   else
     echo "    ✓ no orphan commands"
@@ -375,13 +400,16 @@ for p in "${PW_PROVIDERS[@]}"; do
 
   # agents: generation drift + registration-surface check (report-only, never writes user config)
   if pw_provider_has_agent_hooks "$p"; then
-    _pw_doctor_agents_drift "$p" "$("${p}_agentdir")"
+    _adir_tmp="$("${p}_agentdir")"
+    pw_hook_dir_ok "$_adir_tmp" || { echo "pw-doctor: provider hook ${p}_agentdir returned an unsafe path ('$_adir_tmp') → fix: hooks must print a non-empty absolute path" >&2; exit 2; }
+    _pw_doctor_agents_drift "$p" "$_adir_tmp"
   fi
 
   # agents: generate to a SEPARATE temp subdir (the commands check already populated $tmp/$p),
   # diff against what's installed (only if provider has agent hooks)
   if pw_provider_has_agent_hooks "$p"; then
     adir="$("${p}_agentdir")"
+    pw_hook_dir_ok "$adir" || { echo "pw-doctor: provider hook ${p}_agentdir returned an unsafe path ('$adir') → fix: hooks must print a non-empty absolute path" >&2; exit 2; }
     "$HERE/gen-agents.sh" --outdir "$tmp/agents" "$p" >/dev/null 2>&1
     # strict-YAML frontmatter of the freshly rendered agents (same guard as the commands check)
     afw_bad=0
@@ -415,7 +443,14 @@ for p in "${PW_PROVIDERS[@]}"; do
     done
     if [ -n "$aorph" ]; then
       echo "    ✗ orphan agent file(s) — installed but no longer generated:$aorph"; issues=$((issues+1))
-      if [ "$FIX" -eq 1 ]; then for n in $aorph; do rm -f "$adir/$n"; done; echo "      fixed: removed orphan agents"; fi
+      if [ "$FIX" -eq 1 ]; then
+        for n in $aorph; do
+          # content-check-and-skip (S10): only bundle-generated residue (marker) is removed.
+          if grep -qF 'pw-generated' "$adir/$n" 2>/dev/null; then rm -f "$adir/$n"
+          else echo "      SKIPPED '$n' (no bundle marker — foreign or hand-made; remove by hand if obsolete)"; fi
+        done
+        echo "      fixed: removed marked orphan agents"
+      fi
     else
       echo "    ✓ no orphan agents"
     fi

@@ -21,7 +21,7 @@ TOOL_DIR="${TOOL:-$PWTEST_TOOLING_DIR}"
 # expectations, and case files reference scripts by BASENAME; layout lives only here (L-rules).
 pwtest_script() {
   local n="$1" d
-  for d in "$TOOL/scripts/entities" "$TOOL/scripts/lib" "$TOOL/scripts/toolchain" "$TOOL"; do
+  for d in "$TOOL/scripts/entities" "$TOOL/scripts/lib" "$TOOL/scripts/toolchain" "$TOOL" "$TOOL/.."; do
     [ -f "$d/$n" ] && { printf '%s/%s' "$d" "$n"; return 0; }
   done
   echo "pwtest_script: no such script: $n" >&2; return 1

@@ -1,6 +1,6 @@
 ---
 name: pw-maintainer
-description: Maintainer cheat-sheet for changing the agentic-project-workflow bundle itself. Use when asked to change or maintain the bundle — edit anything under tooling/ or template/, add or rename a command / operator / script / agent / skill, write or refresh user documentation, write or re-pin a mutation row, run the test harness, decide where new capability goes, or diagnose "pw-doctor reports out of sync". Loads the sources-only doctrine, the change-and-test protocol, the S/L/C/A/D placement conventions, and the user-vs-maintainer doc boundary on demand. NOT for running a project through the /pw-* pipeline — that is the project-workflow skill.
+description: Maintainer cheat-sheet for changing the agentic-project-workflow bundle itself. Use when asked to change or maintain the bundle — edit anything under tooling/ or template/, add or rename a command / operator / script / agent / skill / flag, touch parsing, write paths, subprocess calls, sed/awk/perl program strings, or input handling (run the security checklist before writing), write or refresh user documentation, write or re-pin a mutation row, run the test harness, decide where new capability goes, or diagnose "pw-doctor reports out of sync". Loads the sources-only doctrine, the change-and-test protocol, the S/L/C/A/D placement conventions, and the user-vs-maintainer doc boundary on demand. NOT for running a project through the /pw-* pipeline — that is the project-workflow skill.
 ---
 
 # pw-maintainer — changing the bundle
@@ -33,6 +33,11 @@ that matches your task.
   frozen core `pw-lib.sh` is fully dissolved — do not resurrect it.
 - **Test after ANY change** under `tooling/` or `template/`. A change to a documented format or
   contract also needs a **mutation row** that bites: revert the fix and a test must fail.
+- **Agent-authored content is untrusted input.** Task files, PLAN cells, README rows, MR URLs,
+  and file names are attacker-influenceable; every sink (path build, git command, program
+  string, variable name, arithmetic, row writer) validates its own input — call-site checks are
+  not enough. Run the [security checklist](references/security.md) before adding a flag,
+  operator, parser, write path, subprocess, or program string.
 - **Respect the information boundary.** Internal mechanics and plan numbers never reach user docs.
   Two specifics bite hardest — full treatment in
   [`references/boundary-and-docs.md`](references/boundary-and-docs.md): **shipped docs are
@@ -49,6 +54,7 @@ that matches your task.
 | You're asked to… | Load |
 |---|---|
 | make any change and prove it's safe (the ordered loop) | [`references/change-protocol.md`](references/change-protocol.md) |
+| add a flag / operator / parser / write path / subprocess — or touch any input handling | [`references/security.md`](references/security.md), then [`docs/SECURITY.md`](../../docs/SECURITY.md) for the full doctrine |
 | decide *where* a new script / command / operator / argument goes | [`references/conventions-nav.md`](references/conventions-nav.md) |
 | run the harness, pick test tiers, author or re-pin a mutation row | [`references/testing-harness.md`](references/testing-harness.md) |
 | write, review, or refresh user guides and user-facing guidance | [User documentation skill](../pw-maintainer-user-documentation/SKILL.md), then the boundary reference below |

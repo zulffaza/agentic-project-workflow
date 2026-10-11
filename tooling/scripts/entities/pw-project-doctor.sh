@@ -379,7 +379,7 @@ pw_guidance_engine() { # $1 = 1 apply / 0 preview
               esac
             done
             out="$out$r"
-            local tmp="$full.pwguidance.$$"
+            local tmp; tmp="$(pw_tmpfile "$(dirname "$full")")"
             cp -p "$full" "$tmp" && printf '%s' "$out" > "$tmp" && mv -f "$tmp" "$full" \
               || { rm -f "$tmp"; echo "pw-guidance: FAILED to write $rel — nothing changed" >&2; exit 2; }
             echo "  repaired $rel: $n occurrence(s)"
@@ -551,13 +551,14 @@ for tf in "$D"/task/T*.md "$D"/task/PLAN.md; do
   if grep -q '{{PW_' "$tf"; then tokfiles="$tokfiles $(basename "$tf")"; fi
 done
 if [ -n "$tokfiles" ] && [ "$FIX" = 1 ]; then
-  # deterministic writer: the very render scaffold applies to copied templates
+  # deterministic writer: the same shared token stamper scaffold applies to copied templates
+  # (bash replacement + pw_tmpfile staging — install paths never become perl program text)
+  PW_PROJECTS="$PROJECTS_DIR"
+  PW_REPOS="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
   for tf in "$D"/task/T*.md "$D"/task/PLAN.md; do
     [ -f "$tf" ] || continue
     grep -q '{{PW_' "$tf" || continue
-    perl -pi -e "s{\Q{{PW_HOME}}\E}{$PW_HOME}g;
-                 s{\Q{{PW_PROJECTS}}\E}{$PROJECTS_DIR}g;
-                 s{\Q{{PW_REPOS}}\E}{${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}}g" "$tf"
+    pw_stamp_tokens "$tf" || { echo "pw-project-doctor: token stamping failed for $tf" >&2; exit 2; }
   done
   fixed "scaffold tokens stamped in:$tokfiles"
   after2=""
@@ -1016,7 +1017,7 @@ if ls "$D"/task/T*.md >/dev/null 2>&1; then
     elif [ "$live" = 0 ]; then
       c2mounted=$((c2mounted+1))
     fi
-    if [ "$live" = 1 ] && [ -n "$br" ] && [ -d "$PW_REPOS/$repo/.git" ]; then
+    if [ "$live" = 1 ] && [ -n "$br" ] && [ -d "$PW_REPOS/$repo/.git" ] && pw_dir_within "$PW_REPOS" "$PW_REPOS/$repo"; then
       git -C "$PW_REPOS/$repo" show-ref --verify --quiet "refs/heads/$br" 2>/dev/null \
         || git -C "$PW_REPOS/$repo" show-ref --verify --quiet "refs/remotes/origin/$br" 2>/dev/null \
         || { bad "$tid: branch '$br' not found in repo '$repo' (local or origin/*)"; c2=1; }

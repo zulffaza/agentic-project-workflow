@@ -101,7 +101,7 @@ PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
 
 die() { echo "pw-ship: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
+proj_dir() { local d; d="$(pw_proj_dir "$1")" || die "no such project: $1 ($PROJECTS_DIR/$1) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
 
 # ================= READ facet =================================================
 
@@ -251,7 +251,7 @@ cmd_request_review() {
   #   task | recorded MR (task Result first, dashboard fallback) | conflict | title |
   #   landing unit | stack parent | parent MR | parent branch
   # A task-file URL that disagrees with a dashboard URL is a recorded-links conflict.
-  local tmp; tmp="$(mktemp -t pw-review-request 2>/dev/null || printf '%s/pw-review-request.$$' "${TMPDIR:-/tmp}")"
+  local tmp; tmp="$(mktemp -t pw-review-request)" || die "cannot create a staging file for the review request → fix: check TMPDIR"
   : > "$tmp" || die "request-review: cannot create the candidate temp file → fix: check TMPDIR"
   PW_RR_TMP="$tmp"
   trap 'rm -f "${PW_RR_TMP:-}"' EXIT
@@ -351,7 +351,7 @@ cmd_resolve() {
     # Check for real commits
     HAS_COMMIT="no"
     REPO_DIR="$REPOS_DIR/$repo"
-    if [ -n "$repo" ] && [ -d "$REPO_DIR" ] && [ -n "$branch" ]; then
+    if [ -n "$repo" ] && [ -d "$REPO_DIR" ] && pw_dir_within "$REPOS_DIR" "$REPO_DIR" && [ -n "$branch" ]; then
       if git -C "$REPO_DIR" rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
         COMMIT_COUNT="$(git -C "$REPO_DIR" log --oneline "origin/$BASE..origin/$branch" 2>/dev/null | wc -l | pw_trim)"
         if [ "${COMMIT_COUNT:-0}" -gt 0 ] 2>/dev/null; then
@@ -461,15 +461,15 @@ _mr_state_impl() {
     branch="$(grep -m1 -E '^- \*\*Branch:\*\*' "$taskfile" | sed -E 's/^- \*\*Branch:\*\* *`?([^`]*)`?$/\1/; s/[[:space:]]*$//' || true)"
     local wt_rel
     wt_rel="$(grep -m1 -E '^- \*\*Worktree:\*\*' "$taskfile" | sed -E 's/^- \*\*Worktree:\*\* *`?([^`]*)`?$/\1/; s/[[:space:]]*$//' || true)"
-    [ -n "$wt_rel" ] && [ -d "$d/$wt_rel" ] && repo_dir="$d/$wt_rel"
+    [ -n "$wt_rel" ] && [ -d "$d/$wt_rel" ] && pw_dir_within "$d/worktree" "$d/$wt_rel" && repo_dir="$d/$wt_rel"
   fi
   if [ -z "$repo_dir" ] && [ -n "$branch" ]; then
     local g
-    for g in $(find "$d/worktree" -maxdepth 4 -name .git 2>/dev/null); do
+    while IFS= read -r g; do
       local cand; cand="$(dirname "$g")"
       local cb; cb="$(git -C "$cand" branch --show-current 2>/dev/null || true)"
       if [ "$cb" = "$branch" ]; then repo_dir="$cand"; break; fi
-    done
+    done < <(find "$d/worktree" -maxdepth 4 -name .git 2>/dev/null)
   fi
   if [ -z "$repo_dir" ] || [ ! -d "$repo_dir" ]; then
     if [ -z "$branch" ]; then
@@ -543,6 +543,7 @@ cmd_mr_state() {
   done
   [ -n "$slug" ] || die "mr-state: --project is required → fix: mr-state --project <slug> --task <task-id>"
   [ -n "$task" ] || die "mr-state: --task is required → fix: mr-state --project <slug> --task <task-id>"
+  pw_task_id_ok "$task" || die "mr-state: invalid task id '$task' → fix: task ids look like T01"
   _mr_state_impl "$slug" "$task"
 }
 
@@ -559,6 +560,7 @@ cmd_mr_state_batch() {
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
       --task)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --task; v="$1"; shift; }
+        pw_task_id_ok "$v" || die "mr-state-batch: invalid task id '$v' → fix: task ids look like T01"
         TASK_IDS[${#TASK_IDS[@]}]="$v" ;;
       -h|--help) pw_usage ;;
       -*) _pw_unknown "$a" "mr-state-batch --project <slug> [--task <task-id>]…" ;;
@@ -617,6 +619,10 @@ cmd_monitor() {
   done
 
   [ -n "$slug" ] && [ -n "$task" ] || die "monitor: --project and --task are required → fix: monitor --project <slug> --task <task-id> [--timeout <minutes>] [--interval <seconds>]"
+  pw_task_id_ok "$task" || die "monitor: invalid task id '$task' → fix: task ids look like T01"
+  # --timeout feeds `$((TIMEOUT_MIN * 60))` below; bash arithmetic re-expands variable content
+  # (command substitutions included), so the value must be whole digits before it reaches it.
+  case "$TIMEOUT_MIN" in ''|*[!0-9]*) die "monitor: --timeout must be whole minutes (got '$TIMEOUT_MIN') → fix: --timeout <minutes>" ;; esac
   SLUG="$slug"
   TASK_ID="$task"
 
@@ -639,6 +645,21 @@ cmd_monitor() {
   # grep cannot identify self-hosted GitLab (e.g. source.golabs.io contains no "gitlab").
   if [ -f "$PW_HOME/pw.config.sh" ]; then . "$PW_HOME/pw.config.sh"; fi
   MR_HOST="$(echo "$MR_URL" | sed -E 's#^https?://([^/:?#]+).*#\1#')"
+  # Host pin (S12): when the task's repo resolves, the MR URL host must match that repo's OWN
+  # origin host — a decoy URL must not steer token-bearing forge calls (or the exported
+  # GITLAB_HOST) to an arbitrary host. A repo that does not resolve keeps the legacy
+  # resolution (CI-only polls have no checkout to cross-check against).
+  local _mrepo _mrepo_dir _origin_host
+  _mrepo="$(pw_field "$TASK_FILE" Repo 2>/dev/null || true)"; _mrepo="${_mrepo//\`/}"
+  if [ -n "$_mrepo" ] && [ "$_mrepo" != "—" ]; then
+    _mrepo_dir="$REPOS_DIR/$_mrepo"
+    if [ -d "$_mrepo_dir" ] && pw_dir_within "$REPOS_DIR" "$_mrepo_dir"; then
+      _origin_host="$(git -C "$_mrepo_dir" config --get remote.origin.url 2>/dev/null | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||' || true)"
+      if [ -n "$_origin_host" ] && [ "$_origin_host" != "$MR_HOST" ]; then
+        die "monitor: MR URL host '$MR_HOST' does not match the repo origin host '$_origin_host' → fix: correct the task file's MR URL (a host mismatch is refused)"
+      fi
+    fi
+  fi
   FORGE="gitlab"
   case "$MR_HOST" in github.com) FORGE="github" ;; esac
   if declare -p PW_FORGE_HOSTS >/dev/null 2>&1; then
@@ -812,13 +833,13 @@ cmd_monitor() {
 _record_build_check() {
   local tf="$1" rec="$2"
   if grep -qE '^[*+-] (\*\*)?Build check' "$tf"; then
-    awk -v r="$rec" '
+_pwstage="$(pw_tmpfile "$(dirname "$tf")")" || return 1;     awk -v r="$rec" '
       !d && /^[*+-] \*\*Build check:\*\*/ { print "- **Build check:** " r; d=1; next }
       !d && /^[*+-] Build check:/           { print "- Build check: " r;      d=1; next }
-      {print}' "$tf" > "$tf.tmp" && mv "$tf.tmp" "$tf"
+      {print}' "$tf" > "$_pwstage" && mv "$_pwstage" "$tf"
   elif grep -q '^## Result' "$tf"; then
-    awk -v r="$rec" '/^## Result/{p=1; print; print "- Build check: " r; next} p && /^## /{p=0} {print}' \
-      "$tf" > "$tf.tmp" && mv "$tf.tmp" "$tf"
+_pwstage="$(pw_tmpfile "$(dirname "$tf")")" || return 1;     awk -v r="$rec" '/^## Result/{p=1; print; print "- Build check: " r; next} p && /^## /{p=0} {print}' \
+      "$tf" > "$_pwstage" && mv "$_pwstage" "$tf"
   fi
 }
 
@@ -842,6 +863,7 @@ cmd_exec() {
   done
   [ -n "$slug" ] || die "exec: --project is required → fix: exec --project <slug> --task <task-id> --file <description-file>"
   [ -n "$task" ] || die "exec: --task is required → fix: exec --project <slug> --task <task-id> --file <description-file>"
+  pw_task_id_ok "$task" || die "exec: invalid task id '$task' → fix: task ids look like T01"
   [ -n "$file" ] || die "exec: --file is required → fix: exec --project <slug> --task <task-id> --file <description-file>"
 
   SLUG="$slug"
@@ -866,9 +888,15 @@ cmd_exec() {
   [ -n "$REPO" ] || die "Repo not set in task file"
   [ -n "$BRANCH" ] || die "Branch not set in task file"
   [ -n "$BASE" ] || BASE="master"
+  # Content guard on the task-file branch values BEFORE any git use: `--force`/`--all`/`--delete`
+  # survive the sanitize above (dashes are in the ref charset) and would parse as git options at
+  # the positional refspec sites (`git push origin "$BRANCH"`).
+  pw_branch_ok "$BRANCH" || die "refusing unsafe Branch '$BRANCH' for $TASK_ID → fix: correct the task file's Branch field"
+  pw_branch_ok "$BASE" || die "refusing unsafe Base branch '$BASE' for $TASK_ID → fix: correct the task file's Base branch field"
 
   REPO_DIR="$REPOS_DIR/$REPO"
   [ -d "$REPO_DIR" ] || die "repo not found: $REPO_DIR"
+  pw_dir_within "$REPOS_DIR" "$REPO_DIR" || die "repo path outside $REPOS_DIR: $REPO_DIR → fix: check the task file's Repo field"
 
   # Effective review target (plan 35): a stacked task targets its nearest unmerged ancestor's
   # branch, else its ultimate Base branch. The entity boundary enforces the same gates the
@@ -1000,12 +1028,12 @@ EOF
       # (v2 templates carry a "- **MR:** <placeholder>" bullet — appending a second plain line
       # left the resolver reading the placeholder and re-creating the MR every run):
       if grep -qE '^- \*\*MR:\*\*' "$TASK_FILE"; then
-        awk -v mr="$MR_URL" '!d && /^- \*\*MR:\*\*/ { print "- **MR:** " mr; d=1; next } {print}' \
-          "$TASK_FILE" > "$TASK_FILE.tmp" && mv "$TASK_FILE.tmp" "$TASK_FILE"
+_pwstage="$(pw_tmpfile "$(dirname "$TASK_FILE")")" || return 1;         awk -v mr="$MR_URL" '!d && /^- \*\*MR:\*\*/ { print "- **MR:** " mr; d=1; next } {print}' \
+          "$TASK_FILE" > "$_pwstage" && mv "$_pwstage" "$TASK_FILE"
       elif grep -q '^## Result' "$TASK_FILE"; then
         # Append MR line to Result section
-        awk -v mr="$MR_URL" '/^## Result/{p=1; print; print "- MR: " mr; next} p && /^## /{p=0} {print}' \
-          "$TASK_FILE" > "$TASK_FILE.tmp" && mv "$TASK_FILE.tmp" "$TASK_FILE"
+_pwstage="$(pw_tmpfile "$(dirname "$TASK_FILE")")" || return 1;         awk -v mr="$MR_URL" '/^## Result/{p=1; print; print "- MR: " mr; next} p && /^## /{p=0} {print}' \
+          "$TASK_FILE" > "$_pwstage" && mv "$_pwstage" "$TASK_FILE"
       else
         # Add Result section
         printf '\n## Result\n\n- MR: %s\n' "$MR_URL" >> "$TASK_FILE"
@@ -1069,8 +1097,8 @@ _ship_comment_section_ensure() {
   } > "$sectionfile"
   if grep -q '^## Sign-off' "$f"; then
     local signline; signline="$(grep -n '^## Sign-off' "$f" | head -1 | cut -d: -f1)"
-    { head -n "$((signline - 1))" "$f"; cat "$sectionfile"; printf '\n'; tail -n "+${signline}" "$f"; } \
-      > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     { head -n "$((signline - 1))" "$f"; cat "$sectionfile"; printf '\n'; tail -n "+${signline}" "$f"; } \
+      > "$_pwstage" && mv "$_pwstage" "$f"
   else
     cat "$sectionfile" >> "$f"
   fi
@@ -1115,11 +1143,17 @@ cmd_comment_seen() {
   done
   [ -n "$slug" ] || die "comment-seen: --project is required → fix: comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no>"
   [ -n "$task" ] || die "comment-seen: --task is required → fix: comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no>"
+  pw_task_id_ok "$task" || die "comment-seen: invalid task id '$task' → fix: task ids look like T01"
   [ -n "$thread" ] || die "comment-seen: --thread is required → fix: pass the MR discussion/thread id"
   [ -n "$kind" ] || die "comment-seen: --kind is required → fix: --kind <resolvable|unresolvable>"
   [ -n "$replied" ] || die "comment-seen: --replied is required → fix: --replied <yes|no>"
   case "$kind" in resolvable|unresolvable) ;; *) die "kind must be 'resolvable' or 'unresolvable' (got '$kind')" ;; esac
   case "$replied" in yes|no) ;; *) die "replied must be 'yes' or 'no' (got '$replied')" ;; esac
+  # Row-integrity gates: $thread lands in the hidden marker, $note in a table row — a `|` or
+  # newline would forge columns and a crafted marker would mark an arbitrary thread as replied.
+  case "$thread" in ''|*[!A-Za-z0-9._-]*) die "comment-seen: invalid --thread id '$thread' → fix: pass the forge discussion/thread id (letters, digits, dot, dash, underscore)" ;; esac
+  case "$note" in *"|"*|*"$IFS_NL"*|*$'\t'*|*'\'*|*"<!--"*)
+    die "comment-seen: --note must be plain text (no |, TAB, newline, backslash, or an HTML comment opener) → fix: strip the markup from the note" ;; esac
   local d; d="$(proj_dir "$slug")"
   local f="$d/task/review/$task.review.md"
   [ -f "$f" ] || die "no review file: task/review/$task.review.md (run '/pw-review init --project $slug --file task/review/$task.review.md --doc task/$task.md' first)"
@@ -1128,18 +1162,18 @@ cmd_comment_seen() {
   local shortid="${thread:0:8}"
   local row="| \`$shortid\` | $kind | $replied | $note $marker |"
   if grep -Fq "$marker" "$f"; then
-    awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
+      "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   else
     # Insert right after this section's table separator, so a brand-new row lands INSIDE the
     # table (immediately below the header) instead of at the true end of the file — where it
     # would land after ## Sign-off and read as an orphaned, disconnected block. Falls back to a
     # plain append only if the separator can't be found (defensive; should not normally happen).
-    awk -v row="$row" '
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v row="$row" '
       /^## MR comment tracking/ { insec=1 }
       { print }
       insec && !done && /^\|[-| ]+\|[ ]*$/ { print row; done=1 }
-    ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    ' "$f" > "$_pwstage" && mv "$_pwstage" "$f"
     grep -Fq "$marker" "$f" || printf '%s\n' "$row" >> "$f"
   fi
   "$ST" log --project "$slug" --actor ship --message "comment-seen $task/$thread ($kind): replied=$replied"
@@ -1168,6 +1202,8 @@ cmd_dashboard_mr_state() {
   done
   [ -n "$slug" ] || die "dashboard-mr-state: --project is required → fix: dashboard-mr-state --project <slug> --task <task-id> --state <state>"
   [ -n "$task" ] || die "dashboard-mr-state: --task is required → fix: dashboard-mr-state --project <slug> --task <task-id> --state <state>"
+  pw_task_id_ok "$task" || die "dashboard-mr-state: invalid task id '$task' → fix: task ids look like T01"
+  case "$state" in ''|*[!A-Za-z_-]*) die "dashboard-mr-state: --state must be a plain word (letters, dash, underscore — got '$state') → fix: open|merged|closed|draft" ;; esac
   [ -n "$state" ] || die "dashboard-mr-state: --state is required → fix: dashboard-mr-state --project <slug> --task <task-id> --state <state>"
   local d; d="$(proj_dir "$slug")"
   local readme="$d/README.md"
@@ -1227,13 +1263,13 @@ _stack_task_repo_dir() {
   local d="$1" t="$2" branch wt_rel cand g cb
   branch="$(_stack_branch_of "$d" "$t")"
   wt_rel="$(pw_field "$d/task/$t.md" Worktree 2>/dev/null || true)"; wt_rel="${wt_rel//\`/}"
-  if [ -n "$wt_rel" ] && [ -d "$d/$wt_rel" ]; then printf '%s' "$d/$wt_rel"; return 0; fi
+  if [ -n "$wt_rel" ] && [ -d "$d/$wt_rel" ] && pw_dir_within "$d/worktree" "$d/$wt_rel"; then printf '%s' "$d/$wt_rel"; return 0; fi
   if [ -n "$branch" ]; then
-    for g in $(find "$d/worktree" -maxdepth 4 -name .git 2>/dev/null); do
+    while IFS= read -r g; do
       cand="$(dirname "$g")"
       cb="$(git -C "$cand" branch --show-current 2>/dev/null || true)"
       [ "$cb" = "$branch" ] && { printf '%s' "$cand"; return 0; }
-    done
+    done < <(find "$d/worktree" -maxdepth 4 -name .git 2>/dev/null)
   fi
   return 1
 }
@@ -1267,7 +1303,7 @@ _stack_stale() {
   done
   repo="$(_stack_repo_of "$d" "$t")"; branch="$(_stack_branch_of "$d" "$t")"
   cur_head=""
-  if [ -n "$repo" ] && [ -n "$branch" ] && [ -d "$REPOS_DIR/$repo" ]; then
+  if [ -n "$repo" ] && [ -n "$branch" ] && pw_dir_within "$REPOS_DIR" "$REPOS_DIR/$repo"; then
     cur_head="$(git -C "$REPOS_DIR/$repo" rev-parse "$branch" 2>/dev/null || true)"
     [ -n "$cur_head" ] && [ "$vh" != "$cur_head" ] && return 0
   fi
@@ -1277,7 +1313,7 @@ _stack_stale() {
     vp_exp="$(pw_stack_state_get "$d" "$parent_task" verified_head)"
     [ "$vp_rec" = "$vp_exp" ] || return 0
     cps="$(pw_stack_state_get "$d" "$t" consumed_parent_sha)"
-    if [ -n "$cps" ] && [ -n "$repo" ] && [ -n "$branch" ] && [ -d "$REPOS_DIR/$repo" ]; then
+    if [ -n "$cps" ] && [ -n "$repo" ] && [ -n "$branch" ] && pw_dir_within "$REPOS_DIR" "$REPOS_DIR/$repo"; then
       git -C "$REPOS_DIR/$repo" merge-base --is-ancestor "$cps" "$branch" 2>/dev/null || return 0
     fi
   fi
@@ -1320,7 +1356,7 @@ _stack_preview_freshness() {
     *) printf 'stale'; return 0 ;;
   esac
   repo="$(_stack_repo_of "$d" "$t")"; branch="$(_stack_branch_of "$d" "$t")"
-  if [ -n "$branch" ] && [ -n "$repo" ] && [ -d "$REPOS_DIR/$repo" ]; then
+  if [ -n "$branch" ] && [ -n "$repo" ] && pw_dir_within "$REPOS_DIR" "$REPOS_DIR/$repo"; then
     { git -C "$REPOS_DIR/$repo" rev-parse --verify --quiet "refs/heads/$branch" >/dev/null 2>&1 \
       || git -C "$REPOS_DIR/$repo" rev-parse --verify --quiet "refs/remotes/origin/$branch" >/dev/null 2>&1; } \
       && { printf 'stale'; return 0; }
@@ -1343,7 +1379,7 @@ _stack_verify_landing() {
   local repo rd vh ref mstate="" mrurl mview mtgt
   repo="$(_stack_repo_of "$d" "$t")"
   [ -n "$repo" ] || { echo "parent $t has no Repo field" >&2; return 1; }
-  rd="$REPOS_DIR/$repo"; [ -d "$rd" ] || { echo "repo not found: $rd" >&2; return 1; }
+  rd="$REPOS_DIR/$repo"; [ -d "$rd" ] && pw_dir_within "$REPOS_DIR" "$rd" || { echo "repo not found: $rd" >&2; return 1; }
   git -C "$rd" fetch -q --prune origin 2>/dev/null \
     || { echo "cannot refresh origin refs in $repo before proving the landing → fix: network/auth, then retry" >&2; return 1; }
   vh="$(pw_stack_state_get "$d" "$t" verified_head 2>/dev/null || true)"
@@ -1547,7 +1583,8 @@ cmd_stack_plan() {
       --task)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --task; v="$1"; shift; }
         saw_ids=1
-        pw_task_id_ok "$v" && ids="$ids$v
+        pw_task_id_ok "$v" || die "stack-plan: invalid task id '$v' → fix: task ids look like T01 (repeat --task per id)"
+        ids="$ids$v
 " ;;
       -h|--help) pw_usage ;;
       -*) _pw_unknown "$a" "stack-plan --project <slug> [--task <task-id>]…" ;;
@@ -1597,7 +1634,8 @@ EOF
     elif [ "$_pf" = "unverified" ]; then
       ready="no"; reason="not verified yet — execute + verify before publishing its own work"
     elif [ -n "$parent" ] && [ "$target" != "$base" ]; then
-      if ! git -C "$REPOS_DIR/$repo" rev-parse --verify "origin/$target" >/dev/null 2>&1; then
+      if ! { pw_dir_within "$REPOS_DIR" "$REPOS_DIR/$repo" \
+             && git -C "$REPOS_DIR/$repo" rev-parse --verify "origin/$target" >/dev/null 2>&1; }; then
         ready="no"; reason="parent '$target' not published on origin — publish the parent first"
       fi
     fi
@@ -1691,7 +1729,7 @@ cmd_stack_verify() {
   pw_stack_state_validate "$d" || die "stack state invalid (see the reason above) → fix: repair task/stack.tsv before binding a verification"
   local repo branch base; repo="$(_stack_repo_of "$d" "$t")"; branch="$(_stack_branch_of "$d" "$t")"; base="$(_stack_base_of "$d" "$t")"
   [ -n "$repo" ] && [ -n "$branch" ] || die "task $t needs Repo/Branch fields to bind a verification"
-  local rd="$REPOS_DIR/$repo"; [ -d "$rd" ] || die "repo not found: $rd"
+  local rd="$REPOS_DIR/$repo"; [ -d "$rd" ] && pw_dir_within "$REPOS_DIR" "$rd" || die "repo not found: $rd"
   local cur_head; cur_head="$(git -C "$rd" rev-parse "$branch" 2>/dev/null || true)"
   [ -n "$cur_head" ] || die "cannot resolve branch '$branch' in $repo → fix: ensure the task branch exists locally"
   if [ -n "$head" ] && [ "$head" != "$cur_head" ]; then
@@ -1803,7 +1841,7 @@ cmd_stack_land() {
   local d; d="$(proj_dir "$slug")"
   pw_stack_state_validate "$d" || die "stack state invalid (see the reason above) → fix: repair task/stack.tsv before recording a landing"
   { [ -n "$into" ] && [ "$into" != "-" ]; } || die "stack-land: --landed-into branch is required → fix: name the branch the MR merged into"
-  case "$into" in *[!A-Za-z0-9._/-]*) die "stack-land: invalid destination branch '$into'" ;; esac
+  case "$into" in ''|*[!A-Za-z0-9._/-]*|-*) die "stack-land: invalid destination branch '$into'" ;; esac
   _stack_verify_landing "$slug" "$d" "$t" "$msha" "$into" "$kind" \
     || die "stack-land: landing for $t NOT proven (no record written) → fix: observe the real forge MR state + destination branch before promoting children"
   # Retain the parent's verified tip as a recovery ref BEFORE recording the landing: after the
@@ -1812,7 +1850,7 @@ cmd_stack_land() {
   local rrepo rd vh
   rrepo="$(_stack_repo_of "$d" "$t")"; rd="$REPOS_DIR/$rrepo"
   vh="$(pw_stack_state_get "$d" "$t" verified_head 2>/dev/null || true)"
-  if [ -n "$rrepo" ] && [ -d "$rd" ] && [ -n "$vh" ]; then
+  if [ -n "$rrepo" ] && [ -d "$rd" ] && pw_dir_within "$REPOS_DIR" "$rd" && [ -n "$vh" ]; then
     git -C "$rd" update-ref "refs/pw-stack-landed/$(basename "$d")/$t" "$vh" \
       || die "stack-land: landing proven but the recovery ref could not be retained → fix: check repo permissions for $rd"
   fi
@@ -2185,10 +2223,8 @@ cmd_stack_adopt() {
       --apply) apply=1 ;;
       --task)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --task; v="$1"; shift; }
-        case "$v" in
-          T[0-9]*) ids="$ids $v" ;;
-          *) die "stack-adopt: invalid task id '$v' → fix: task ids look like T01 (repeat --task per id)" ;;
-        esac ;;
+        pw_task_id_ok "$v" || die "stack-adopt: invalid task id '$v' → fix: task ids look like T01 (repeat --task per id)"
+        ids="$ids $v" ;;
       -h|--help) pw_usage ;;
       -*) _pw_unknown "$a" "stack-adopt --project <slug> [--apply] [--task <task-id>]…" ;;
       *) _pw_positional "$a" "stack-adopt --project <slug> [--apply] [--task <task-id>]…" ;;
@@ -2247,10 +2283,14 @@ EOF
 # rule (MR-URL host → PW_FORGE_HOSTS override, github.com default) exactly like mr-state/history, so
 # every forge write is checked against the same identity the rest of ship uses.
 _stack_mr_view() {
-  local mrurl="$1" repo_dir="$2" host forge iid out st tg hd
+  local mrurl="$1" repo_dir="$2" host forge iid out st tg hd url_host
   { [ -n "$mrurl" ] && [ -n "$repo_dir" ] && [ -d "$repo_dir" ]; } || return 1
-  host="$(printf '%s' "$mrurl" | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||')"
+  # Host pins to the repo's OWN origin (S12): the MR URL host is only a cross-check, so a decoy
+  # URL can never redirect the credential-bearing forge query.
+  host="$(git -C "$repo_dir" config --get remote.origin.url 2>/dev/null | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||' || true)"
   [ -n "$host" ] || return 1
+  url_host="$(printf '%s' "$mrurl" | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||')"
+  [ -z "$url_host" ] || [ "$url_host" = "$host" ] || return 1
   forge="$(_stack_forge_of "$host")"
   if [ "$forge" = github ]; then
     iid="$(printf '%s' "$mrurl" | grep -oE '/pull/[0-9]+' | grep -oE '[0-9]+$' || true)"
@@ -2294,7 +2334,7 @@ _stack_task_field_put() {
     *"$_pw_stack_tab"*|*"$IFS_NL"*|*"|"*) echo "_stack_task_field_put: value has a reserved character (pipe/TAB/newline)" >&2; return 2 ;;
   esac
   [ -f "$f" ] || { echo "_stack_task_field_put: no such file $f" >&2; return 2; }
-  tmp="$(mktemp "$(dirname "$f")/.pwtmp.XXXXXX" 2>/dev/null || printf '%s' "$f.pwtmp.$$")"
+  tmp="$(mktemp "$(dirname "$f")/.pwtmp.XXXXXX")" || die "cannot stage a temp beside $f → fix: check the directory permissions"
   if grep -qE "^- \*\*$field:\*\*" "$f"; then
     awk -v fld="$field" -v v="$val" '!d && $0 ~ ("^- \\*\\*" fld ":\\*\\*") { print "- **" fld ":** " v; d=1; next } {print}' "$f" > "$tmp" || { rm -f "$tmp"; return 2; }
   elif grep -qE "^- \*\*depends_on:\*\*" "$f"; then
@@ -2352,7 +2392,7 @@ cmd_stack_inherited() {
   local short; short="$(printf '%s' "$sha" | cut -c1-12)"
   local bullet key; bullet="- **Inherited:** $p @ $short (upstream fix — inherited update, no reviewer request)"
   key="- **Inherited:** $p @"
-  local tmp; tmp="$(mktemp "$(dirname "$tf")/.pwtmp.XXXXXX" 2>/dev/null || printf '%s' "$tf.pwtmp.$$")"
+  local tmp; tmp="$(mktemp "$(dirname "$tf")/.pwtmp.XXXXXX")" || die "cannot stage a temp beside $tf → fix: check the directory permissions"
   if grep -qF -- "$key" "$tf"; then
     awk -v key="$key" -v line="$bullet" 'index($0, key) == 1 { print line; next } { print }' "$tf" > "$tmp" \
       || { rm -f "$tmp"; die "stack-inherited: rewrite failed for $tf"; }
@@ -2434,7 +2474,8 @@ cmd_stack_cascade() {
   local desc; desc="$(pw_stack_descendants "$d" "$root" 2>/dev/null || true)"
   [ -n "$desc" ] || { echo "$slug: $root has no stack descendants (nothing to cascade)"; return 0; }
   local rrepo rd; rrepo="$(_stack_repo_of "$d" "$root")"; rd="$REPOS_DIR/$rrepo"
-  [ -d "$rd" ] || die "repo not found: $rd"
+  case "$rrepo" in ''|.|..|*/*) die "stack-cascade: invalid Repo field '$rrepo' for $root → fix: a single repository directory name" ;; esac
+  [ -d "$rd" ] && pw_dir_within "$REPOS_DIR" "$rd" || die "repo not found: $rd"
   local opkey; opkey="cascade:$root:$(printf '%s' "$rsha" | cut -c1-7)"
   local t stages=""
   # Build the stage set (persisted before any side effect). Already-shipped descendants (an MR URL)
@@ -2453,7 +2494,7 @@ cmd_stack_cascade() {
     cmd_stack_op --project "$slug" create --key "$opkey" --kind cascade --ancestor "$root" --event cascade --stages "$stages" --expected "$rsha" >/dev/null \
       || die "stack-cascade: could not record the pending recovery row (nothing was changed)"
   fi
-  local evbase; evbase="${evdir:-$d/task/.cascade-evidence}"; mkdir -p "$evbase"
+  local evbase; evbase="${evdir:-$d/task/.cascade-evidence}"; mkdir -p "$evbase" || die "stack-cascade: cannot create the evidence dir $evbase → fix: check the path and permissions (nothing was pushed)"
   # Component lock (one cascade writer per project); the shared clone is NEVER checked out into
   # (worktrees are rehydrated at the approved location instead), so no checkout restore is needed.
   PW_CASCADE_LOCK="$d/task/.stack-cascade.lock"
@@ -2481,6 +2522,7 @@ cmd_stack_cascade() {
     [ -n "$psha" ] || die "stack-cascade: parent $pd has no verified_head (cascade order broken) → fix: verify the parent first"
     dbranch="$(_stack_branch_of "$d" "$D")"
     [ -n "$dbranch" ] || die "stack-cascade: $D has no Branch field"
+    pw_branch_ok "$dbranch" || die "stack-cascade: refusing unsafe Branch '$dbranch' for $D → fix: correct the task file's Branch field"
     # Resolve a working tree WITHOUT ever touching the shared clone's checkout: prefer the mounted
     # worktree, else rehydrate one at the approved task-worktree location. A branch that exists
     # NOWHERE means the task is UNSTARTED: record the new prerequisite head for spawn-time

@@ -131,6 +131,8 @@ cmd_session_check() {
     if [ -n "$prov" ] || [ -n "$sid" ]; then
       die "session-check: --provider/--session cannot combine with --project/--task → fix: pass one form"
     fi
+    pw_proj_slug_ok "$slug" || die "session-check: invalid project slug '$slug' → fix: use one project directory name"
+    pw_task_id_ok "$task" || die "session-check: invalid task id '$task' → fix: task ids look like T01"
     local tf; tf="$PROJECTS_DIR/$slug/task/$task.md"
     [ -f "$tf" ] || die "no task file: $slug/task/$task.md → fix: check the task id (or pass --provider <p> --session <id> directly)"
     local sess exec_with
@@ -144,6 +146,9 @@ cmd_session_check() {
     [ -n "$sid" ] || die "session-check: --session is required → fix: session-check --provider <p> --session <id>"
     id="$sid"
   fi
+  # The id is globbed into transcript paths (~/.claude/projects/*/<id>.jsonl, …); keep it a
+  # plain token so `../` can never walk the probe outside those roots.
+  case "$id" in ''|*[!A-Za-z0-9._-]*) echo "session-check: invalid session id '$id' → fix: pass the provider's session/thread id (letters, digits, dot, dash, underscore)" >&2; return 1 ;; esac
   case "$prov" in
     kilo)     _sc_kilo "$id"   ;;
     claude)   _sc_claude "$id" ;;

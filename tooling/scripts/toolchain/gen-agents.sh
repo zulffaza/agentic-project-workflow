@@ -30,6 +30,10 @@ done
 PROVIDERS=("${PW_PROVIDERS[@]}")
 [ "${#ARGS_PROVIDERS[@]}" -gt 0 ] && PROVIDERS=("${ARGS_PROVIDERS[@]}")
 
+# Appended to every rendered artifact (after the deny-guard): the doctor's orphan sweep
+# removes ONLY entries carrying this bundle marker (content-check-and-skip for anything else).
+GEN_MARKER='<!-- pw-generated: build artifact — regenerate with /pw-doctor --fix; never hand-edit -->'
+
 # --- frontmatter/body helpers (parse the canonical file) ---------------------
 fm() {  # fm <file> <key> -> value of that frontmatter key (empty if absent)
   awk -v k="$2" '
@@ -78,8 +82,11 @@ for prov in "${PROVIDERS[@]}"; do
     bodytext="${bodytext//\{\{PW_HOME\}\}/$PW_HOME}"
     bodytext="${bodytext//\{\{PW_PROJECTS\}\}/$PW_PROJECTS}"
     bodytext="${bodytext//\{\{PW_REPOS\}\}/$PW_REPOS}"
+    # A stale SYMLINK at the write target would make `>` write THROUGH it — remove before write.
+    [ -L "$outdir/$agentname.md" ] && rm -f "$outdir/$agentname.md"
     "render_${prov}_agent" > "$outdir/$agentname.md"
     [ "$agentname" = "pw-orchestrator" ] && guard_no_orchestrator_worktree_deny "$outdir/$agentname.md"
+    printf '%s\n' "$GEN_MARKER" >> "$outdir/$agentname.md"
     count=$((count+1))
   done
   n=$(( $(ls "$CANON_DIR"/*.md | wc -l) - 1 ))   # minus README.md
