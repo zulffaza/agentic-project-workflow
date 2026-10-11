@@ -551,7 +551,7 @@ r2_alias() {
     script="${script##*/}"
     sp="$(script_path "$script" 2>/dev/null || true)" || continue
     [ -n "$sp" ] || continue
-    printf '%s\n' "$(ops_of "$sp")" | grep -qx "$op" || continue
+    grep -qx "$op" <<<"$(ops_of "$sp")" || continue   # here-string, not a pipe: grep -q's early exit SIGPIPEs a pipe's producer and pipefail then masks the MATCH (load-dependent flake)
     printf '%s\t%s\n' "$script" "$op"
     return 0
   done <<EPAIRS
@@ -1181,7 +1181,7 @@ render_operators() {
   if [ -n "$op" ]; then
     while IFS= read -r s; do
       [ -n "$s" ] || continue
-      printf '%s\n' "$(ops_of "$s")" | grep -qx "$op" || continue
+      grep -qx "$op" <<<"$(ops_of "$s")" || continue   # here-string, not a pipe (same SIGPIPE/pipefail flake as above)
       found="yes"
       printf '%s :: %s %s\n' "$(basename "$s")" "$op" "$(sig_of "$s" "$op")" | flowline 98
       para_of "$s" "$op" | fold -s -w 92 | sed 's/^/    /'
