@@ -148,6 +148,10 @@ _line_pairs_set() {  # <file> <line-label> <k>=<v>… — batch-update a one-lin
     [ "$found" = 1 ] || new="$new $k=$v"
     cur="${new# }"
   done
+  # Row-integrity gate: `cur` is re-emitted via awk -v (backslash-escape processing), so a
+  # reserved character would corrupt or forge the dashboard line.
+  case "$cur" in *"|"*|*$'\t'*|*$'\n'*|*'\'*)
+    die "_line_pairs_set: value for '${label}:' carries a reserved character (|, TAB, newline, backslash) → fix: strip it" ;; esac
   awk -v pre="- **${label}:** " -v t="$cur" '
     !d && index($0, pre) == 1 { print pre t; d=1; next }
     { print } END { if (!d) exit 3 }' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
@@ -206,9 +210,20 @@ cmd_ai_model() {
   [ -n "$slug" ] || die "ai-model: --project is required → fix: ai-model --project <slug> [--set <role=value>]…   (roles: $AI_MODEL_ROLES)"
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
-  _ai_models_line_ensure "$f"
+  # Read-only by contract (S23): the ensure (a WRITE) runs only for a set; a missing line on
+  # read shows the all-— defaults without writing.
+  if [ ${#sets[@]} -gt 0 ]; then
+    _ai_models_line_ensure "$f"
+  elif ! grep -q '^- \*\*AI Models:\*\*' "$f"; then
+    printf 'pw-config: note: AI Models line missing from the README — showing defaults; nothing was written (persist with: /pw-config set --project %s --key ai-model --set <role>=<value>)\n' "$slug" >&2
+  fi
   if [ ${#sets[@]} -eq 0 ]; then
-    grep '^- \*\*AI Models:\*\*' "$f" | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//'
+    if grep -q '^- \*\*AI Models:\*\*' "$f"; then
+      grep '^- \*\*AI Models:\*\*' "$f" | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//'
+    else
+      local r out=""; for r in $AI_MODEL_ROLES; do out="$out $r=—"; done
+      printf '%s\n' "${out# }"
+    fi
     return 0
   fi
   for s in "${sets[@]}"; do
@@ -259,6 +274,20 @@ _review_mode_effective() {
 _review_default_mode() {
   local v="${PW_AI_REVIEW_DEFAULT:-advisory}"
   case "$v" in advisory|auto) printf '%s' "$v" ;; *) printf 'advisory' ;; esac
+}
+
+# Default k=v string for an axis line when it is absent from the README. Read-only getters
+# show these WITHOUT writing (S23); the set path persists via the ensure chain.
+_axis_default_kvs() { # <axis>
+  local p out=""
+  case "$1" in
+    ai-review)
+      local d; d="$(_review_default_mode)"
+      for p in $AI_REVIEW_PHASES; do out="$out $p=$d"; done ;;
+    review-trigger|review-repair)
+      for p in $AI_REVIEW_PHASES; do out="$out $p=manual"; done ;;
+  esac
+  printf '%s\n' "${out# }"
 }
 
 # Idempotent: insert one review-axis line if missing, after the line whose bold label is
@@ -423,14 +452,16 @@ _review_axis_cmd() { # <axis> <line-label> <validator-fn> <values-help> <"--proj
   [ -n "$slug" ] || die "$axis: --project is required → fix: $axis --project <slug> [--set <surface>=<value>]…   ($vhelp)"
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
-  case "$axis" in
-    ai-review)      _ai_review_line_ensure "$f" ;;
-    review-trigger) _review_trigger_line_ensure "$f" ;;
-    review-repair)  _review_repair_line_ensure "$f" ;;
-  esac
+  # Read-only by contract (S23): the ensure chain (a WRITE) runs only when a set was
+  # requested; a missing line on read is reported with its effective defaults, never written.
   if [ ${#sets[@]} -eq 0 ]; then
     local line out kv norm=0
-    line="$(grep -m1 "^- \*\*${label}:\*\*" "$f" | sed "s|^- \*\*${label}:\*\*[[:space:]]*||" || true)"
+    if grep -q "^- \*\*${label}:\*\*" "$f"; then
+      line="$(grep -m1 "^- \*\*${label}:\*\*" "$f" | sed "s|^- \*\*${label}:\*\*[[:space:]]*||" || true)"
+    else
+      line="$(_axis_default_kvs "$axis")"
+      printf 'pw-config: note: %s line missing from the README — showing effective defaults; nothing was written (persist with: /pw-config set --project %s --key %s --set <k>=<v>)\n' "$label" "$slug" "$axis" >&2
+    fi
     if [ "$axis" = "ai-review" ]; then
       out=""
       for kv in $line; do
@@ -447,6 +478,12 @@ _review_axis_cmd() { # <axis> <line-label> <validator-fn> <values-help> <"--proj
     return 0
   fi
   local argc=${#sets[@]} expanded pair
+  # Set path: persist the anchoring lines before writing (the ensures are WRITE actions).
+  case "$axis" in
+    ai-review)      _ai_review_line_ensure "$f" ;;
+    review-trigger) _review_trigger_line_ensure "$f" ;;
+    review-repair)  _review_repair_line_ensure "$f" ;;
+  esac
   expanded="$(_expand_axis_pairs "$axis" "${sets[@]}")" || exit 2
   for pair in $expanded; do "$vfn" "${pair%%=*}" "${pair#*=}"; done
   _line_pairs_set "$f" "$label" $expanded
@@ -494,9 +531,18 @@ cmd_review_rounds() {
   [ -n "$slug" ] || die "review-rounds: --project is required → fix: review-rounds --project <slug> [--value <n>]   (n: 1..3 — total reviewer passes in a bounded review→repair cycle; default 3)"
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
-  _review_budget_line_ensure "$f"
+  # Read-only by contract (S23): the ensure (a WRITE) runs only for a value write.
+  if [ "$hasval" -gt 0 ]; then
+    _review_budget_line_ensure "$f"
+  elif ! grep -q '^- \*\*Review Budget:\*\*' "$f"; then
+    printf 'pw-config: note: Review Budget line missing from the README — showing the default; nothing was written (persist with: /pw-config set --project %s --key review-rounds --value <n>)\n' "$slug" >&2
+  fi
   if [ "$hasval" = 0 ]; then
-    grep -m1 '^- \*\*Review Budget:\*\*' "$f" | sed 's/^- \*\*Review Budget:\*\*[[:space:]]*//'
+    if grep -q '^- \*\*Review Budget:\*\*' "$f"; then
+      grep -m1 '^- \*\*Review Budget:\*\*' "$f" | sed 's/^- \*\*Review Budget:\*\*[[:space:]]*//'
+    else
+      printf 'rounds=3\n'
+    fi
     return 0
   fi
   _require_int review-rounds "$val" 1 3

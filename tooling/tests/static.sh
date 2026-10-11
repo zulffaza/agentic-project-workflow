@@ -44,6 +44,11 @@ grep[^#]*verify-failed	- \*\*Status:|\|.*verify-failed.*\|	machine-token read mu
 ^# Tasks|\^## Tasks	-	no bare `## Tasks` anchor literal (C2)
 exec "\$0"	-	re-spawn via $HERE not $0 (C12)
 bash "\$0"	-	re-spawn via $HERE not $0 (C12)
+pw_phase_hint \| sed	-	phase hint uses bash replacement, never a sed program splice (C234/C243 class)
+s\|{{PW_HOME}}\|	-	help token substitution is bash replacement, not a sed program (S3 class)
+\\Q{{PW_HOME}}\\E	-	perl token stamping replaced by pw_stamp_tokens — install paths stay data
+s/<PROJECT_NAME>/	-	rfc/scaffold template stamping is bash replacement, not sed (S3 class)
+'"\$	\$'	no shell variable spliced into an awk program (S20 class)
 IDIOMS
 
       # 4) every script resolves projects from PW_PROJECTS_DIR (C16)

@@ -487,6 +487,10 @@ md_replace_range() {
 _dashboard_update() {
   [ $# -eq 5 ] || { echo "_dashboard_update: expected 5 args, got $#" >&2; return 2; }
   local file="$1" idname="$2" tgtname="$3" rowid="$4" newval="$5"
+  # Value gate: newval is re-emitted via awk -v (backslash-escape processing) into a table
+  # cell — reserved characters would corrupt or forge the row.
+  case "$newval" in *"|"*|*$'\t'*|*$'\n'*|*'\'*)
+    echo "_dashboard_update: refusing a value with reserved characters (|, TAB, newline, backslash) → fix: strip them from the value" >&2; return 1 ;; esac
   local errfile="${file}.dash-err" rc=0
   awk -v idname="$idname" -v tgtname="$tgtname" -v rowid="$rowid" -v newval="$newval" '
     function trim(s){ sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
@@ -604,6 +608,10 @@ _dashboard_fill() {
 _plan_cell_update() {
   [ $# -eq 4 ] || { echo "_plan_cell_update: expected 4 args, got $#" >&2; return 2; }
   local file="$1" taskid="$2" colname="$3" newval="$4"
+  # Value gate: newval is re-emitted via awk -v into a PLAN table cell — reserved characters
+  # would corrupt or forge the row (gate inputs are read from this table).
+  case "$newval" in *"|"*|*$'\t'*|*$'\n'*|*'\'*)
+    echo "_plan_cell_update: refusing a value with reserved characters (|, TAB, newline, backslash) → fix: strip them from the value" >&2; return 1 ;; esac
   local errfile="${file}.plan-err" rc=0
   awk -v taskid="$taskid" -v colname="$colname" -v newval="$newval" '
     function trim(s){ sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }

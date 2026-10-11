@@ -865,8 +865,8 @@ pw_stack_state_col() {  # <colname> -> 1-based column index
 }
 _pw_stack_ncol() { local n=0 c; for c in $PW_STACK_COLS; do n=$((n+1)); done; printf '%s' "$n"; }
 _pw_stack_tab=$(printf '\t')
-_stack_val_bad() {  # rc 0 when a value carries a reserved character (pipe, TAB, newline)
-  case "$1" in *"|"*|*"$_pw_stack_tab"*|*"$IFS_NL"*) return 0 ;; esac
+_stack_val_bad() {  # rc 0 when a value carries a reserved character (pipe, TAB, newline, backslash)
+  case "$1" in *"|"*|*"$_pw_stack_tab"*|*"$IFS_NL"*|*'\'*) return 0 ;; esac
   return 1
 }
 IFS_NL='
@@ -921,6 +921,26 @@ pw_dir_within() {
   rbase="$(cd "$base" 2>/dev/null && pwd -P)" || return 1
   rdir="$(cd "$dir" 2>/dev/null && pwd -P)" || return 1
   case "$rdir/" in "$rbase/"*) return 0 ;; esac
+  return 1
+}
+
+# pw_stamp_tokens <file> — rewrite the scaffold tokens {{PW_HOME}}/{{PW_PROJECTS}}/{{PW_REPOS}}
+# in place with the current paths. Bash string replacement, never a sed/perl program string:
+# install paths are operator config and must not become program text (a `}` inside $PW_HOME
+# previously broke out of the perl s{...}{...} delimiters). Staged via pw_tmpfile + mv, and
+# every line is printed exactly once (trailing-newline behavior unchanged).
+pw_stamp_tokens() {
+  local f="$1" tmp
+  tmp="$(pw_tmpfile "$(dirname "$f")")" || return 1
+  if while IFS= read -r _stl || [ -n "$_stl" ]; do
+       _stl="${_stl//\{\{PW_HOME\}\}/$PW_HOME}"
+       _stl="${_stl//\{\{PW_PROJECTS\}\}/$PW_PROJECTS}"
+       _stl="${_stl//\{\{PW_REPOS\}\}/${PW_REPOS:-}}"
+       printf '%s\n' "$_stl"
+     done < "$f" > "$tmp"; then
+    if mv "$tmp" "$f"; then return 0; fi
+  fi
+  rm -f "$tmp"
   return 1
 }
 

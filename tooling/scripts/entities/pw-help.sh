@@ -105,7 +105,23 @@ HELP_PHASE_MAP="setup|pw-new pw-adopt pw-context pw-doctor;analysis|pw-research 
 HELP_GLOBAL_ORDER="pw-help pw-doctor pw-config pw-status pw-research pw-verify"
 
 # --- shared helpers -------------------------------------------------------------
-sub() { sed -e "s|{{PW_HOME}}|$PW_HOME|g" -e "s|{{PW_PROJECTS}}|$PW_PROJECTS|g"; }
+# Token substitution for rendered help text. Bash string replacement, never a sed program
+# string: install paths ($PW_HOME/$PW_PROJECTS) are operator config and must not become
+# program text (a `|`, or GNU-sed's `e`, inside a path would execute). The line loop keeps
+# sed's per-line and trailing-newline behavior byte-identical.
+sub() {
+  local _l
+  while IFS= read -r _l || [ -n "$_l" ]; do
+    _l="${_l//\{\{PW_HOME\}\}/$PW_HOME}"
+    _l="${_l//\{\{PW_PROJECTS\}\}/$PW_PROJECTS}"
+    printf '%s\n' "$_l"
+  done
+}
+# Prefix every input line with a fixed string (bash-only replacement for a `sed "s|^|$var|"`).
+pfx() {
+  local _l
+  while IFS= read -r _l || [ -n "$_l" ]; do printf '%s%s\n' "$1" "$_l"; done
+}
 jstr() { local s="$1"; s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; s="${s//$'\t'/\\t}"; s="${s//$'\r'/\\r}"; printf '%s' "$s"; }
 TABS="$(printf '\t')"
 BT="$(printf '\140')"    # literal backtick — kept OUT of double quotes (there it starts command-sub)
@@ -1421,7 +1437,7 @@ render_project_cmd() {
     [ -n "$trevs" ] && revlist="$revlist $trevs"
     for rvf in $revlist; do
       [ -f "$d/$rvf" ] || continue
-      _ishown="$(grep -oE '^### (Q|R)[0-9]+.*\[(PENDING|OPEN)\]' "$d/$rvf" 2>/dev/null | awk 'NR<=3' | cut -c5- | sed "s|^|      $rvf  |" | flowline 96)"
+      _ishown="$(grep -oE '^### (Q|R)[0-9]+.*\[(PENDING|OPEN)\]' "$d/$rvf" 2>/dev/null | awk 'NR<=3' | cut -c5- | flowline 96 | pfx "      $rvf  ")"
       [ -n "$_ishown" ] && { printf '%s\n' "$_ishown"; shown=1; }   # capture-then-print: a trailing `grep -q .` would SIGPIPE flowline under pipefail
     done
     [ "$shown" = 1 ] || echo "      (no open items / pending questions in the review files found)"

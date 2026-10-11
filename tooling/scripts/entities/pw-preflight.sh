@@ -102,7 +102,8 @@ case "$COMMAND" in
   comments) PHASE_FIX="comments push to MRs, which exist only after a ship — run /pw-ship --project $SLUG (push mode) first" ;;
 esac
 if ! pw_phase_valid "$PHASE"; then
-  die_fix "phase token '${PHASE:-missing}' is not canonical (README says: '- **Status:** ${PHASE_RAW:-none}')" "$(pw_phase_hint | sed "s/<slug>/$SLUG/")"
+  _phint="$(pw_phase_hint)"; _phint="${_phint//<slug>/$SLUG}"
+  die_fix "phase token '${PHASE:-missing}' is not canonical (README says: '- **Status:** ${PHASE_RAW:-none}')" "$_phint"
 fi
 # Gate: require PHASE (except commands without a phase constraint).
 phase_gate() { case " $1 " in *" $PHASE "*) return 0 ;; *) die_fix "cannot $COMMAND in phase '$PHASE' (must be: $1)" "${PHASE_FIX}";; esac; }

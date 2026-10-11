@@ -83,15 +83,24 @@ rsync -a \
   --exclude '.DS_Store' \
   "$TEMPLATE_DIR"/ "$dest"/
 
-# Render the project dashboard as the project's README.md.
-sed "s/<PROJECT_NAME>/$slug/g; s|<CREATED>|$created|; s|<AI_REVIEW_DEFAULT>|$ai_review_default_line|; s|<REVIEW_TRIGGER_DEFAULT>|$review_trigger_default_line|; s|<REVIEW_REPAIR_DEFAULT>|$review_repair_default_line|; s|<REVIEW_BUDGET_DEFAULT>|$review_budget_default_line|; s|<AI_MODELS_DEFAULT>|$ai_model_default_line|" \
-  "$TEMPLATE_DIR/PROJECT.template.md" > "$dest/README.md"
+# Render the project dashboard as the project's README.md. Bash string replacement, never a
+# sed program string: the config-derived default lines are data (a `|` in a config value
+# must not terminate a sed s-command or reach GNU-sed's `e`).
+while IFS= read -r _rl || [ -n "$_rl" ]; do
+  _rl="${_rl//<PROJECT_NAME>/$slug}"
+  _rl="${_rl//<CREATED>/$created}"
+  _rl="${_rl//<AI_REVIEW_DEFAULT>/$ai_review_default_line}"
+  _rl="${_rl//<REVIEW_TRIGGER_DEFAULT>/$review_trigger_default_line}"
+  _rl="${_rl//<REVIEW_REPAIR_DEFAULT>/$review_repair_default_line}"
+  _rl="${_rl//<REVIEW_BUDGET_DEFAULT>/$review_budget_default_line}"
+  _rl="${_rl//<AI_MODELS_DEFAULT>/$ai_model_default_line}"
+  printf '%s\n' "$_rl"
+done < "$TEMPLATE_DIR/PROJECT.template.md" > "$dest/README.md"
 
-# Stamp {{PW_*}} tokens (absolute paths) into every copied markdown file.
+# Stamp {{PW_*}} tokens (absolute paths) into every copied markdown file. Shared helper —
+# bash replacement + pw_tmpfile staging; install paths never become perl program text.
 find "$dest" -type f -name '*.md' -print0 | while IFS= read -r -d '' md; do
-  perl -pi -e "s{\Q{{PW_HOME}}\E}{$PW_HOME}g;
-               s{\Q{{PW_PROJECTS}}\E}{$PW_PROJECTS}g;
-               s{\Q{{PW_REPOS}}\E}{$PW_REPOS}g" "$md"
+  pw_stamp_tokens "$md" || { echo "scaffold: token stamping failed for $md" >&2; exit 1; }
 done
 
 # Keep empty phase dirs present even if rsync left them out; add the review/ subdirs.

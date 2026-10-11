@@ -645,6 +645,21 @@ cmd_monitor() {
   # grep cannot identify self-hosted GitLab (e.g. source.golabs.io contains no "gitlab").
   if [ -f "$PW_HOME/pw.config.sh" ]; then . "$PW_HOME/pw.config.sh"; fi
   MR_HOST="$(echo "$MR_URL" | sed -E 's#^https?://([^/:?#]+).*#\1#')"
+  # Host pin (S12): when the task's repo resolves, the MR URL host must match that repo's OWN
+  # origin host — a decoy URL must not steer token-bearing forge calls (or the exported
+  # GITLAB_HOST) to an arbitrary host. A repo that does not resolve keeps the legacy
+  # resolution (CI-only polls have no checkout to cross-check against).
+  local _mrepo _mrepo_dir _origin_host
+  _mrepo="$(pw_field "$TASK_FILE" Repo 2>/dev/null || true)"; _mrepo="${_mrepo//\`/}"
+  if [ -n "$_mrepo" ] && [ "$_mrepo" != "—" ]; then
+    _mrepo_dir="$REPOS_DIR/$_mrepo"
+    if [ -d "$_mrepo_dir" ] && pw_dir_within "$REPOS_DIR" "$_mrepo_dir"; then
+      _origin_host="$(git -C "$_mrepo_dir" config --get remote.origin.url 2>/dev/null | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||' || true)"
+      if [ -n "$_origin_host" ] && [ "$_origin_host" != "$MR_HOST" ]; then
+        die "monitor: MR URL host '$MR_HOST' does not match the repo origin host '$_origin_host' → fix: correct the task file's MR URL (a host mismatch is refused)"
+      fi
+    fi
+  fi
   FORGE="gitlab"
   case "$MR_HOST" in github.com) FORGE="github" ;; esac
   if declare -p PW_FORGE_HOSTS >/dev/null 2>&1; then
@@ -1134,6 +1149,11 @@ cmd_comment_seen() {
   [ -n "$replied" ] || die "comment-seen: --replied is required → fix: --replied <yes|no>"
   case "$kind" in resolvable|unresolvable) ;; *) die "kind must be 'resolvable' or 'unresolvable' (got '$kind')" ;; esac
   case "$replied" in yes|no) ;; *) die "replied must be 'yes' or 'no' (got '$replied')" ;; esac
+  # Row-integrity gates: $thread lands in the hidden marker, $note in a table row — a `|` or
+  # newline would forge columns and a crafted marker would mark an arbitrary thread as replied.
+  case "$thread" in ''|*[!A-Za-z0-9._-]*) die "comment-seen: invalid --thread id '$thread' → fix: pass the forge discussion/thread id (letters, digits, dot, dash, underscore)" ;; esac
+  case "$note" in *"|"*|*"$IFS_NL"*|*$'\t'*|*'\'*|*"<!--"*)
+    die "comment-seen: --note must be plain text (no |, TAB, newline, backslash, or an HTML comment opener) → fix: strip the markup from the note" ;; esac
   local d; d="$(proj_dir "$slug")"
   local f="$d/task/review/$task.review.md"
   [ -f "$f" ] || die "no review file: task/review/$task.review.md (run '/pw-review init --project $slug --file task/review/$task.review.md --doc task/$task.md' first)"
@@ -2262,10 +2282,14 @@ EOF
 # rule (MR-URL host → PW_FORGE_HOSTS override, github.com default) exactly like mr-state/history, so
 # every forge write is checked against the same identity the rest of ship uses.
 _stack_mr_view() {
-  local mrurl="$1" repo_dir="$2" host forge iid out st tg hd
+  local mrurl="$1" repo_dir="$2" host forge iid out st tg hd url_host
   { [ -n "$mrurl" ] && [ -n "$repo_dir" ] && [ -d "$repo_dir" ]; } || return 1
-  host="$(printf '%s' "$mrurl" | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||')"
+  # Host pins to the repo's OWN origin (S12): the MR URL host is only a cross-check, so a decoy
+  # URL can never redirect the credential-bearing forge query.
+  host="$(git -C "$repo_dir" config --get remote.origin.url 2>/dev/null | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||' || true)"
   [ -n "$host" ] || return 1
+  url_host="$(printf '%s' "$mrurl" | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||')"
+  [ -z "$url_host" ] || [ "$url_host" = "$host" ] || return 1
   forge="$(_stack_forge_of "$host")"
   if [ "$forge" = github ]; then
     iid="$(printf '%s' "$mrurl" | grep -oE '/pull/[0-9]+' | grep -oE '[0-9]+$' || true)"

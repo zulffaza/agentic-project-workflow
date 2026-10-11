@@ -551,13 +551,14 @@ for tf in "$D"/task/T*.md "$D"/task/PLAN.md; do
   if grep -q '{{PW_' "$tf"; then tokfiles="$tokfiles $(basename "$tf")"; fi
 done
 if [ -n "$tokfiles" ] && [ "$FIX" = 1 ]; then
-  # deterministic writer: the very render scaffold applies to copied templates
+  # deterministic writer: the same shared token stamper scaffold applies to copied templates
+  # (bash replacement + pw_tmpfile staging — install paths never become perl program text)
+  PW_PROJECTS="$PROJECTS_DIR"
+  PW_REPOS="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
   for tf in "$D"/task/T*.md "$D"/task/PLAN.md; do
     [ -f "$tf" ] || continue
     grep -q '{{PW_' "$tf" || continue
-    perl -pi -e "s{\Q{{PW_HOME}}\E}{$PW_HOME}g;
-                 s{\Q{{PW_PROJECTS}}\E}{$PROJECTS_DIR}g;
-                 s{\Q{{PW_REPOS}}\E}{${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}}g" "$tf"
+    pw_stamp_tokens "$tf" || { echo "pw-project-doctor: token stamping failed for $tf" >&2; exit 2; }
   done
   fixed "scaffold tokens stamped in:$tokfiles"
   after2=""

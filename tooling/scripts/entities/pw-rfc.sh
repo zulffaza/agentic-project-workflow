@@ -71,7 +71,9 @@ cmd_rfc_init() {
   local tmpl="$HERE/../../../template/rfc/_TEMPLATE-RFC.md"
   [ -f "$tmpl" ] || die "template not found: $tmpl"
   mkdir -p "$d/rfc"
-  sed "s/<PROJECT_NAME>/$slug/g" "$tmpl" > "$f"
+  # Bash string replacement, never a sed program string: the slug is caller data and must not
+  # become program text (a `/` or GNU-sed `e` would alter or execute the program).
+  { while IFS= read -r _rl || [ -n "$_rl" ]; do printf '%s\n' "${_rl//<PROJECT_NAME>/$slug}"; done < "$tmpl"; } > "$f"
   "$ST" log --project "$slug" --actor rfc --message "created rfc/RFC.md from template (backend: $backend)"
   echo "$slug: rfc-init created rfc/RFC.md"
 }

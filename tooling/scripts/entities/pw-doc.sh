@@ -476,7 +476,7 @@ sync_dashboard() {
   local tf id st repo branch base title line mr
   for tf in "$D/task"/T*.md; do
     [ -f "$tf" ] || continue
-    id="$(basename "$tf" .md)"; [[ "$id" =~ ^T[0-9]+ ]] || continue
+    id="$(basename "$tf" .md)"; [[ "$id" =~ ^T[0-9]+$ ]] || continue
     st="$(pw_field "$tf" Status)"; [ -n "$st" ] || st="$(awk -F'\t' -v i="$id" '$1==i{print $2; exit}' "$plan_st")"; st="${st:-todo}"
     repo="$(pw_field "$tf" Repo)"; repo="${repo//\`/}"
     branch="$(pw_field "$tf" Branch)"; branch="${branch//\`/}"; branch="${branch%% *}"
@@ -484,6 +484,14 @@ sync_dashboard() {
     title="$(grep '^# ' "$tf" | head -1 | sed 's/^# //; s/^T[0-9]*[: ]*//' | pw_trim)"; [ -n "$title" ] || title="—"
     mr="$(pw_task_mr_url "$tf")"  # Result-scoped: **MR:** field -> its URL/sentinel, else bare URL
     [ "$mr" = "(none)" ] && mr="—"
+    # Reserved-character gate for every value that reaches the row writers below (ack -v rows
+    # undergo backslash-escape processing, and `|` would forge table cells): refuse machine
+    # fields; sanitize the display-only title.
+    case "$repo$branch$base$mr" in
+      *"|"*|*$'\t'*|*$'\n'*|*'\'*)
+        die "sync: task $id carries a reserved character (|, TAB, newline, backslash) in Repo/Branch/Base/MR → fix: clean the task file's machine fields" ;;
+    esac
+    case "$title" in *"|"*|*$'\t'*|*$'\n'*|*'\'*) title="${title//|/ }"; title="${title//$'\t'/ }"; title="${title//'\'/ }" ;; esac
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$st" "$repo" "$branch" "$base" "$title" "$mr" >> "$TASKROWS"
   done
   
@@ -580,12 +588,15 @@ sync_dashboard() {
   while IFS=$'\t' read -r id st repo branch base title mr; do
     [ "$mr" != "—" ] && [ -n "$mr" ] || continue
     grep -qE "^\|[ \t]*$id[ \t]*\|" "$README" || continue
-    case "$mr" in *://*) awk -v url="$mr" '
+    case "$mr" in *://*) awk -v url="$mr" -v id="$id" '
         /^## Merge requests/{ p=1; print; next } p && /^## /{ p=0; print; next }
-        p && /^[ \t]*\|[ \t]*'"$id"'[ \t]*\|/ {
+        p && /^[ \t]*\|/ {
           n = split($0, c, "|")
-          for (i = 2; i < n; i++) { h = c[i]; gsub(/[ \t`*]/, "", h); if (tolower(h) == "mr") c[i] = " " url " " }
-          out = ""; for (i = 1; i <= n; i++) out = out c[i] (i < n ? "|" : ""); print out; next
+          rid = c[2]; gsub(/[ \t`*]/, "", rid)
+          if (rid == id) {
+            for (i = 2; i < n; i++) { h = c[i]; gsub(/[ \t`*]/, "", h); if (tolower(h) == "mr") c[i] = " " url " " }
+            out = ""; for (i = 1; i <= n; i++) out = out c[i] (i < n ? "|" : ""); print out; next
+          }
         }
         { print }' "$README" > "$WORK/re" && mv "$WORK/re" "$README" ;; esac
   done < "$TASKROWS"

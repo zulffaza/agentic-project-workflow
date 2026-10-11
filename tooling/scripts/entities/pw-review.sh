@@ -376,7 +376,8 @@ cmd_init_all() {
   [ -n "$slug" ] || die "init-all: --project is required → fix: init-all --project <slug>"
   local d; d="$(proj_dir "$slug")" || return 2
   local raw tok; raw="$("$ST" phase --project "$slug" 2>/dev/null || true)"; tok="$(pw_phase_token "${raw:-missing}")"
-  pw_phase_valid "$tok" || die "dashboard phase is '$tok' — cannot scope init-all → fix: $(pw_phase_hint | sed "s/<slug>/$slug/")"
+    _rph="$(pw_phase_hint)"; _rph="${_rph//<slug>/$slug}"
+    pw_phase_valid "$tok" || die "dashboard phase is '$tok' — cannot scope init-all → fix: $_rph"
   case "$tok" in
     context)
       echo "$slug: phase 'context' — no review files to initialize yet (/pw-analyze $slug produces the first reviewable analysis)"

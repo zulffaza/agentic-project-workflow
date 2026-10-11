@@ -540,6 +540,7 @@ cmd_adopt_snapshot() {
   REPO_DIR="$REPOS_DIR/$REPO"
 
   [ -d "$REPO_DIR" ] || die "repo not found: $REPO_DIR → fix: pass the repo dir name (repos live under $REPOS_DIR — clone it there first)"
+  pw_dir_within "$REPOS_DIR" "$REPO_DIR" || die "adopt: repo path resolves outside $REPOS_DIR: $REPO_DIR → fix: check the --repo name"
 
   # Validate branch exists
   if ! git -C "$REPO_DIR" rev-parse --verify "$BRANCH" >/dev/null 2>&1; then
@@ -555,6 +556,12 @@ cmd_adopt_snapshot() {
     # "url contains gitlab|github" substring test is dead on self-hosted forges (source.golabs.io):
     # it skipped the target lookup and silently shipped an "unconfirmed" inferred base.
     mr_host="$(printf '%s' "$MR_URL" | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||')"
+    # Host pin (S12): the MR URL host must match the repo's own origin before any
+    # credential-bearing forge call below (a decoy URL is refused, not queried).
+    mr_origin_host="$(git -C "$REPO_DIR" config --get remote.origin.url 2>/dev/null | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||' || true)"
+    if [ -n "$mr_origin_host" ] && [ "$mr_origin_host" != "$mr_host" ]; then
+      die "adopt: MR URL host '$mr_host' does not match the repo origin host '$mr_origin_host' → fix: correct the MR URL (a host mismatch is refused)"
+    fi
     if [ "$mr_host" = "github.com" ]; then
       if command -v gh >/dev/null 2>&1; then
         MR_NUM="$(echo "$MR_URL" | grep -o 'pull/[0-9]*' | sed 's/pull\///')"
