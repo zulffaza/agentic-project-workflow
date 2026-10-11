@@ -658,10 +658,10 @@ sync_plan() {
   
   # Update PLAN header if needed
   if grep -q '^\*\*Task count:\*\*' "$PLAN"; then
-    awk -v count="$TASK_COUNT" -v sp="$TOTAL_SP" '
+_pwstage="$(pw_tmpfile "$(dirname "$PLAN")")" || return 1;     awk -v count="$TASK_COUNT" -v sp="$TOTAL_SP" '
       /^\*\*Task count:\*\*/ { print "- **Task count:** " count " (ΣSP=" sp ")"; next }
       { print }
-    ' "$PLAN" > "$PLAN.tmp" && mv "$PLAN.tmp" "$PLAN"
+    ' "$PLAN" > "$_pwstage" && mv "$_pwstage" "$PLAN"
   fi
   
   echo "PLAN sync complete"
@@ -694,8 +694,8 @@ sync_tasks() {
       if ! grep -q 'commits' "$task_file" 2>/dev/null; then
         # Append commit count to Result section
         if grep -q '^## Result' "$task_file"; then
-          awk -v count="$COMMIT_COUNT" '/^## Result/{p=1; print; print "- " count " commit(s)"; next} p && /^## /{p=0} {print}' \
-            "$task_file" > "$task_file.tmp" && mv "$task_file.tmp" "$task_file"
+_pwstage="$(pw_tmpfile "$(dirname "$task_file")")" || return 1;           awk -v count="$COMMIT_COUNT" '/^## Result/{p=1; print; print "- " count " commit(s)"; next} p && /^## /{p=0} {print}' \
+            "$task_file" > "$_pwstage" && mv "$_pwstage" "$task_file"
         fi
       fi
     fi

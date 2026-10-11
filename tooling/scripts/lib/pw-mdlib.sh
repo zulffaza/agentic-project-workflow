@@ -443,30 +443,37 @@ md_table_last_row_line() {
   '
 }
 
+# mdlib primitives are usable standalone (some callers source mdlib without pw-common):
+# provide the shared stager when it is not already defined. pw-common's definition wins when
+# both are sourced (it is sourced first by every entity).
+if ! declare -f pw_tmpfile >/dev/null 2>&1; then
+  pw_tmpfile() { mktemp "$1/.pwtmp.XXXXXX" 2>/dev/null || printf '%s' "$1/.pwtmp.$$.$RANDOM"; }
+fi
+
 # Splice the contents of <lines-file> into <file> AFTER line <lineno> (original-file
 # numbering). head/tail splice, not awk -v — no shell-quote gymnastics, portable.
 md_insert_lines_after() {
   local f="$1" n="$2" src="$3"
-  { head -n "$n" "$f"; cat "$src"; tail -n "+$((n+1))" "$f"; } > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   { head -n "$n" "$f"; cat "$src"; tail -n "+$((n+1))" "$f"; } > "$_pwstage" && mv "$_pwstage" "$f"
 }
 
 # Splice the contents of <lines-file> into <file> BEFORE line <lineno> (original-file
 # numbering). Same head/tail splice reasoning as md_insert_lines_after.
 md_insert_lines_before() {
   local f="$1" n="$2" src="$3"
-  { head -n "$((n-1))" "$f"; cat "$src"; tail -n "+${n}" "$f"; } > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   { head -n "$((n-1))" "$f"; cat "$src"; tail -n "+${n}" "$f"; } > "$_pwstage" && mv "$_pwstage" "$f"
 }
 
 # Replace exactly line <lineno> of <file> with the contents of <lines-file>.
 md_replace_line() {
   local f="$1" n="$2" src="$3"
-  { head -n "$((n-1))" "$f"; cat "$src"; tail -n "+$((n+1))" "$f"; } > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   { head -n "$((n-1))" "$f"; cat "$src"; tail -n "+$((n+1))" "$f"; } > "$_pwstage" && mv "$_pwstage" "$f"
 }
 
 # Replace the inclusive line range [<start>,<end>] of <file> with the contents of <lines-file>.
 md_replace_range() {
   local f="$1" s="$2" e="$3" src="$4"
-  { head -n "$((s-1))" "$f"; cat "$src"; tail -n "+$((e+1))" "$f"; } > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   { head -n "$((s-1))" "$f"; cat "$src"; tail -n "+$((e+1))" "$f"; } > "$_pwstage" && mv "$_pwstage" "$f"
 }
 
 # Update one cell of a markdown table in a file: find the table whose header's FIRST cell equals
@@ -491,8 +498,9 @@ _dashboard_update() {
   # cell — reserved characters would corrupt or forge the row.
   case "$newval" in *"|"*|*$'\t'*|*$'\n'*|*'\'*)
     echo "_dashboard_update: refusing a value with reserved characters (|, TAB, newline, backslash) → fix: strip them from the value" >&2; return 1 ;; esac
-  local errfile="${file}.dash-err" rc=0
-  awk -v idname="$idname" -v tgtname="$tgtname" -v rowid="$rowid" -v newval="$newval" '
+  local errfile rc=0
+  errfile="$(mktemp "${file}.pwtmp.XXXXXX" 2>/dev/null || mktemp -t pwmdlib)" || return 1
+_pwstage="$(pw_tmpfile "$(dirname "$file")")" || return 1;   awk -v idname="$idname" -v tgtname="$tgtname" -v rowid="$rowid" -v newval="$newval" '
     function trim(s){ sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
     BEGIN{ idcol=0; tgtcol=0; intable=0; found=0; matched=0 }
     {
@@ -530,9 +538,9 @@ _dashboard_update() {
       else if (idcol == 0) print "ERR: no \"" idname "\" column in the matched table" > "/dev/stderr"
       else if (!matched) print "ERR: no row with " idname "=\"" rowid "\" in the matched table" > "/dev/stderr"
     }
-  ' "$file" > "$file.tmp" 2> "$errfile" || rc=$?
+  ' "$file" > "$_pwstage" 2> "$errfile" || rc=$?
   if [ "$rc" -ne 0 ] || [ -s "$errfile" ]; then
-    rm -f "$file.tmp"
+    rm -f "$_pwstage"
     # KI-2 fill-rule fallback: only when the failure is "no matching row" — the original error
     # stays the contract message when the fill finds no untouched placeholder either.
     if grep -q '^ERR: no row with' "$errfile" 2>/dev/null \
@@ -543,7 +551,7 @@ _dashboard_update() {
     cat "$errfile" >&2; rm -f "$errfile"; return 1
   fi
   rm -f "$errfile"
-  mv "$file.tmp" "$file"
+  mv "$_pwstage" "$file"
 }
 
 # Private: the fill half of _dashboard_update's KI-2 rule — rewrites the FIRST untouched
@@ -555,8 +563,9 @@ _dashboard_update() {
 #   _dashboard_fill <file> <id-col-name> <target-col-name> <row-id> <new-value>
 _dashboard_fill() {
   local file="$1" idname="$2" tgtname="$3" rowid="$4" newval="$5"
-  local errfile="${file}.fill-err" rc=0
-  awk -v idname="$idname" -v tgtname="$tgtname" -v rowid="$rowid" -v newval="$newval" '
+  local errfile rc=0
+  errfile="$(mktemp "${file}.pwtmp.XXXXXX" 2>/dev/null || mktemp -t pwmdlib)" || return 1
+_pwstage="$(pw_tmpfile "$(dirname "$file")")" || return 1;   awk -v idname="$idname" -v tgtname="$tgtname" -v rowid="$rowid" -v newval="$newval" '
     function trim(s){ sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
     BEGIN{ idcol=0; tgtcol=0; intable=0; found=0; matched=0 }
     {
@@ -589,12 +598,12 @@ _dashboard_fill() {
       else if (tgtcol == 0) print "ERR: no \"" tgtname "\" column in the matched table" > "/dev/stderr"
       else if (!matched) print "ERR: no untouched placeholder row (blank " idname " cell) to fill" > "/dev/stderr"
     }
-  ' "$file" > "$file.tmp" 2> "$errfile" || rc=$?
+  ' "$file" > "$_pwstage" 2> "$errfile" || rc=$?
   if [ "$rc" -ne 0 ] || [ -s "$errfile" ]; then
-    rm -f "$file.tmp" "$errfile"; return 1
+    rm -f "$_pwstage" "$errfile"; return 1
   fi
   rm -f "$errfile"
-  mv "$file.tmp" "$file"
+  mv "$_pwstage" "$file"
 }
 
 # Update one cell of a PLAN.md task-table row (both table generations): find the `## Task`
@@ -612,8 +621,9 @@ _plan_cell_update() {
   # would corrupt or forge the row (gate inputs are read from this table).
   case "$newval" in *"|"*|*$'\t'*|*$'\n'*|*'\'*)
     echo "_plan_cell_update: refusing a value with reserved characters (|, TAB, newline, backslash) → fix: strip them from the value" >&2; return 1 ;; esac
-  local errfile="${file}.plan-err" rc=0
-  awk -v taskid="$taskid" -v colname="$colname" -v newval="$newval" '
+  local errfile rc=0
+  errfile="$(mktemp "${file}.pwtmp.XXXXXX" 2>/dev/null || mktemp -t pwmdlib)" || return 1
+_pwstage="$(pw_tmpfile "$(dirname "$file")")" || return 1;   awk -v taskid="$taskid" -v colname="$colname" -v newval="$newval" '
     function trim(s){ sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
     function norm(s){ gsub(/[ \t`*]/, "", s); return tolower(s) }
     BEGIN{ p=0; sawhdr=0; idcol=0; tgt=0; matched=0 }
@@ -652,12 +662,12 @@ _plan_cell_update() {
       else if (tgt == 0) print "ERR: no \"" colname "\" column in the PLAN task table" > "/dev/stderr"
       else if (!matched) print "ERR: no row for " taskid " in the PLAN task table" > "/dev/stderr"
     }
-  ' "$file" > "$file.tmp" 2> "$errfile" || rc=$?
+  ' "$file" > "$_pwstage" 2> "$errfile" || rc=$?
   if [ "$rc" -ne 0 ] || [ -s "$errfile" ]; then
-    rm -f "$file.tmp"; cat "$errfile" >&2; rm -f "$errfile"; return 1
+    rm -f "$_pwstage"; cat "$errfile" >&2; rm -f "$errfile"; return 1
   fi
   rm -f "$errfile"
-  mv "$file.tmp" "$file"
+  mv "$_pwstage" "$file"
 }
 
 # Ensure the context/INDEX.md provenance table has EXACTLY ONE, generic `ADOPTED.md` row —
@@ -673,13 +683,13 @@ _index_provenance_ensure() {
   local row="| \`ADOPTED.md\` | Adoption record — all continuation units (one section per unit; see the file) | git state snapshot, gathered by /pw-adopt | $today | authoritative — live repo state |"
   # Insert right after the FIRST table's separator (the provenance table, above "## Repos in
   # scope"); drop that table's single empty placeholder row if present.
-  awk -v row="$row" '
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   awk -v row="$row" '
     /^## Repos in scope/ { stop=1 }
     {
       if (!stop && !ins && $0 ~ /^\|[-: |]+\|[[:space:]]*$/) { print; print row; ins=1; next }
       if (!stop && ins && !dropped && $0 ~ /^\|[[:space:]]*(\|[[:space:]]*)+$/) { dropped=1; next }
       print
-    }' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    }' "$f" > "$_pwstage" && mv "$_pwstage" "$f"
 }
 
 # Deterministically append/upsert ONE row per adoption unit into the context/INDEX.md
@@ -700,10 +710,10 @@ _scope_upsert() {
   local marker="<!-- pw-adopt-scope:$key -->"
   local row="| \`$repo\` | \`origin/$base\` | continuation — adopted branch \`$branch\`, $mrtxt $marker |"
   if grep -Fq "$marker" "$f"; then                     # unit already has a row → rewrite it in place
-    awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
+      "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   else                                                 # new unit → append at the end of the table
-    awk -v row="$row" '
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v row="$row" '
       {
         if ($0 ~ /^## Repos in scope/) insec=1
         else if ($0 ~ /^## /) { if (insec && sep && !ins) { print row; ins=1 } insec=0 }
@@ -715,6 +725,6 @@ _scope_upsert() {
         print
       }
       END { if (insec && sep && !ins) print row }' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+      "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   fi
 }

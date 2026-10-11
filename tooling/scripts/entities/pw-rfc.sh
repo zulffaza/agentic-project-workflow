@@ -114,8 +114,8 @@ _rfc_comment_section_ensure() {
 _rfc_meta_upsert() {
   local f="$1" label="$2" value="$3"
   if grep -qF -- "- **$label:**" "$f"; then
-    awk -v l="$label" -v v="$value" '!d && index($0, "- **" l ":**")==1 { print "- **" l ":** " v; d=1; next } { print }' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v l="$label" -v v="$value" '!d && index($0, "- **" l ":**")==1 { print "- **" l ":** " v; d=1; next } { print }' \
+      "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   else
     printf -- '- **%s:** %s\n' "$label" "$value" >> "$f"
   fi
@@ -223,8 +223,8 @@ cmd_rfc_comment_seen() {
   local marker="<!-- pw-rfc-comment:$thread -->"
   local row="| \`$thread\` | $replies | $solved $marker |"
   if grep -Fq "$marker" "$f"; then
-    awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
+      "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   else
     printf '%s\n' "$row" >> "$f"
   fi
@@ -256,15 +256,15 @@ cmd_rfc_dashboard() {
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
   if grep -q '^- \*\*RFC:\*\*' "$f"; then
-    awk -v t="$text" '!d && /^- \*\*RFC:\*\*/ {print "- **RFC:** " t; d=1; next} {print}' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v t="$text" '!d && /^- \*\*RFC:\*\*/ {print "- **RFC:** " t; d=1; next} {print}' \
+      "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   elif grep -q '^- \*\*Adopted:\*\*' "$f"; then
-    awk -v t="$text" '{print} !d && /^- \*\*Adopted:\*\*/ {print "- **RFC:** " t; d=1}' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v t="$text" '{print} !d && /^- \*\*Adopted:\*\*/ {print "- **RFC:** " t; d=1}' \
+      "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   else
     grep -q '^- \*\*One-liner:\*\*' "$f" || die "no anchor line (Adopted:/One-liner:) in $f"
-    awk -v t="$text" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **RFC:** " t; d=1}' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v t="$text" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **RFC:** " t; d=1}' \
+      "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   fi
   "$ST" log --project "$slug" --actor rfc --message "dashboard: $text"
   echo "$slug: RFC -> $text"

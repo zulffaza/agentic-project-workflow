@@ -363,7 +363,7 @@ pw_review_staged() {
   local dir work rc=0
   pw_review_lock "$f" || return 3
   dir="$(dirname "$f")"
-  work="$dir/.pwrev.$(basename "$f").$$"
+  work="$(mktemp "$dir/.pwrev.XXXXXX" 2>/dev/null)" || { rc=1; echo "could not stage a copy of $f" >&2; pw_review_unlock "$f"; return 1; }
   if cp "$f" "$work" 2>/dev/null; then
     if "$fn" "$work" "$@"; then
       if mv "$work" "$f" 2>/dev/null; then rc=0; else rc=1; echo "staged publish failed for $f (original left untouched)" >&2; fi
@@ -404,13 +404,13 @@ pw_signoff_row_put() {
     return 1
   fi
   if grep -q '^| | | in-review |$' "$f"; then
-    if ! awk -v row="$row" '{ if ($0 == "| | | in-review |") { print row; next } print }' "$f" > "$f.tmp"; then
-      rm -f "$f.tmp"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1; if ! awk -v row="$row" '{ if ($0 == "| | | in-review |") { print row; next } print }' "$f" > "$_pwstage"; then
+      rm -f "$_pwstage"
       echo "pw_signoff_row_put: failed to rewrite the placeholder row in $f (file left as it was)" >&2
       return 1
     fi
-    if ! mv "$f.tmp" "$f"; then
-      rm -f "$f.tmp"
+    if ! mv "$_pwstage" "$f"; then
+      rm -f "$_pwstage"
       echo "pw_signoff_row_put: failed to publish the placeholder replacement in $f (file left as it was)" >&2
       return 1
     fi
@@ -440,9 +440,10 @@ pw_review_gate_refresh() {
   local line="Gate: $state"
   local hl; hl="$(grep -n '^Gate:' "$f" | head -1 | cut -d: -f1)"
   [ -n "$hl" ] || return 1
-  printf '%s\n' "$line" > "$f.gate" || { rm -f "$f.gate"; return 1; }
-  if ! md_replace_line "$f" "$hl" "$f.gate"; then rm -f "$f.gate"; return 1; fi
-  rm -f "$f.gate"
+  local _gate; _gate="$(pw_tmpfile "$(dirname "$f")")" || return 1
+  printf '%s\n' "$line" > "$_gate" || { rm -f "$_gate"; return 1; }
+  if ! md_replace_line "$f" "$hl" "$_gate"; then rm -f "$_gate"; return 1; fi
+  rm -f "$_gate"
 }
 
 # pw_review_contents_rebuild <file> — regenerate the heading-anchored "## Contents"
@@ -509,8 +510,8 @@ pw_review_contents_rebuild() {
         rm -f "$block"; return 1
       fi
     else
-      { cat "$block"; printf '\n'; cat "$f"; } > "$f.tmp" || { rm -f "$block" "$f.tmp"; return 1; }
-      if ! mv "$f.tmp" "$f"; then rm -f "$block" "$f.tmp"; return 1; fi
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1; { cat "$block"; printf '\n'; cat "$f"; } > "$_pwstage" || { rm -f "$block" "$_pwstage"; return 1; }
+      if ! mv "$_pwstage" "$f"; then rm -f "$block" "$_pwstage"; return 1; fi
     fi
   fi
   rm -f "$block"

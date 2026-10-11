@@ -311,6 +311,8 @@ declare -f render_kilo_agent >/dev/null 2>&1 || render_kilo_agent() {  local mod
 declare -f kilo_headless >/dev/null 2>&1 || kilo_headless() {
   cat <<'EOF'
 kilo run --auto -m <canonical-catalog-id> "<prompt>" --dir <path> [--variant <low|medium|high|max|minimal>] [--thinking] [--format json]
+NOTE: the prompt rides argv here (visible to `ps` on this host) — keep prompts free of
+secrets; the double-quoted single-argument form is still REQUIRED (word-splitting breaks it).
 --auto is REQUIRED headless — without it kilo run auto-REJECTS every permission (it can't even
 read the task file). Add --agent <name> when targeting a native agent instead of a bare model.
 -m receives the CANONICAL catalog id — the exact line `kilo models` prints (resolve it with
@@ -342,6 +344,8 @@ declare -f render_opencode_agent >/dev/null 2>&1 || render_opencode_agent() {
 declare -f opencode_headless >/dev/null 2>&1 || opencode_headless() {
   cat <<'EOF'
 opencode run --auto -m <canonical-catalog-id> "<prompt>" [--format json] [--attach <url>]
+NOTE: the prompt rides argv here (visible to `ps` on this host) — keep prompts free of
+secrets; the double-quoted single-argument form is still REQUIRED (word-splitting breaks it).
 --auto is REQUIRED headless — auto-approves permissions not explicitly denied.
 --attach <url> connects to an already-running server, avoiding a cold-boot delay.
 -m receives the CANONICAL id `opencode models` prints (resolve with

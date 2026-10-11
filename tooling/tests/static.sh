@@ -49,6 +49,11 @@ s\|{{PW_HOME}}\|	-	help token substitution is bash replacement, not a sed progra
 \\Q{{PW_HOME}}\\E	-	perl token stamping replaced by pw_stamp_tokens — install paths stay data
 s/<PROJECT_NAME>/	-	rfc/scaffold template stamping is bash replacement, not sed (S3 class)
 '"\$	\$'	no shell variable spliced into an awk program (S20 class)
+\$[A-Za-z_]+\.tmp"	\$work	fixed-name staging is banned — pw_tmpfile + mv (S7 class)
+\.pwrev\.\$	-	review staging is mktemp-only, never a fixed .pwrev name (S7 class)
+\.pwtmp\.\$\$	pw_tmpfile\(\)	no PID-fallback staging names — mktemp or die (pw_tmpfile's own fallback excepted)
+\.pwguidance\.	-	guidance rewrites stage via pw_tmpfile (S7 class)
+\.(dash|fill|plan)-err	\$work	err side-files via mktemp, never a fixed suffixed name (S7 class)
 IDIOMS
 
       # 4) every script resolves projects from PW_PROJECTS_DIR (C16)

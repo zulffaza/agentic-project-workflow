@@ -663,12 +663,12 @@ cmd_adopt() {
       if (length(h) >= length(key) && substr(h, length(h)-length(key)+1) == key) { print u; exit }
     }' "$f")"
   if [ -n "$uid" ]; then
-    awk -v u="$uid" -v base="$base" -v mr="$mr" '
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v u="$uid" -v base="$base" -v mr="$mr" '
       $0 ~ ("^## " u " · ") { inU=1; print; next }
       inU && /^## A[0-9]+ · / { inU=0 }
       inU && /^- Base: / { print "- Base: " base; next }
       inU && /^- MR: /   { print "- MR: " mr;   next }
-      { print }' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+      { print }' "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   else
     local n; n="$(grep -cE '^## A[0-9]+ · ' "$f" 2>/dev/null || true)"; : "${n:=0}"
     uid="A$((n+1))"

@@ -127,8 +127,8 @@ _ai_models_line_ensure() {
   for r in $AI_MODEL_ROLES; do default="$default $r=—"; done
   default="${default# }"
   grep -q '^- \*\*One-liner:\*\*' "$f" || die "no '- **One-liner:**' line to anchor AI Models: after in $f"
-  awk -v t="$default" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **AI Models:** " t; d=1}' \
-    "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   awk -v t="$default" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **AI Models:** " t; d=1}' \
+    "$f" > "$_pwstage" && mv "$_pwstage" "$f"
 }
 
 # Get (no --set) or set (--set <role>=<value>; — clears to no-row).
@@ -152,9 +152,9 @@ _line_pairs_set() {  # <file> <line-label> <k>=<v>… — batch-update a one-lin
   # reserved character would corrupt or forge the dashboard line.
   case "$cur" in *"|"*|*$'\t'*|*$'\n'*|*'\'*)
     die "_line_pairs_set: value for '${label}:' carries a reserved character (|, TAB, newline, backslash) → fix: strip it" ;; esac
-  awk -v pre="- **${label}:** " -v t="$cur" '
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   awk -v pre="- **${label}:** " -v t="$cur" '
     !d && index($0, pre) == 1 { print pre t; d=1; next }
-    { print } END { if (!d) exit 3 }' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    { print } END { if (!d) exit 3 }' "$f" > "$_pwstage" && mv "$_pwstage" "$f"
 }
 
 # _ai_review_validate now lives with the review-axis block below (surface registry + two-mode enum).
@@ -300,14 +300,14 @@ _axis_line_ensure() { # <file> <label> <anchor-label> <k=v…>
   for kv in "$@"; do t="$t $kv"; done
   t="${t# }"
   grep -q '^- \*\*One-liner:\*\*' "$f" || return 1
-  if awk -v pre="- **${label}:** " -v t="$t" -v apre="- **${anchorlabel}:** " '
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   if awk -v pre="- **${label}:** " -v t="$t" -v apre="- **${anchorlabel}:** " '
       {print}
       !d && index($0, apre) == 1 {print pre t; d=1}
-      END { if (!d) exit 3 }' "$f" > "$f.tmp"; then
-    mv "$f.tmp" "$f" || { rm -f "$f.tmp"; return 1; }
+      END { if (!d) exit 3 }' "$f" > "$_pwstage"; then
+    mv "$_pwstage" "$f" || { rm -f "$_pwstage"; return 1; }
     return 0
   fi
-  rm -f "$f.tmp"
+  rm -f "$_pwstage"
   return 1
 }
 
@@ -705,17 +705,17 @@ _plan_value() {  # <file> <bold-label> -> trimmed value, empty when the bullet/p
 _plan_set_bullet() {  # <file> <bold-label> <value> <insert-anchor-ERE>
   local f="$1" label="$2" value="$3" anchor="$4"
   if grep -qE "^- \*\*${label}:\*\*" "$f"; then
-    awk -v label="$label" -v value="$value" '
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v label="$label" -v value="$value" '
       !done && index($0, "- **" label ":**") == 1 { print "- **" label ":** " value; done=1; next }
-      { print } END { if (!done) exit 3 }' "$f" > "$f.tmp" && mv "$f.tmp" "$f" && return 0
-    rm -f "$f.tmp"; return 3
+      { print } END { if (!done) exit 3 }' "$f" > "$_pwstage" && mv "$_pwstage" "$f" && return 0
+    rm -f "$_pwstage"; return 3
   fi
   if [ -n "$anchor" ] && grep -qE "$anchor" "$f"; then
-    awk -v label="$label" -v value="$value" -v anchor="$anchor" '
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v label="$label" -v value="$value" -v anchor="$anchor" '
       { print }
       !done && $0 ~ anchor { print "- **" label ":** " value; done=1 }
-      END { if (!done) exit 3 }' "$f" > "$f.tmp" && mv "$f.tmp" "$f" && return 0
-    rm -f "$f.tmp"; return 3
+      END { if (!done) exit 3 }' "$f" > "$_pwstage" && mv "$_pwstage" "$f" && return 0
+    rm -f "$_pwstage"; return 3
   fi
   return 3
 }
@@ -728,10 +728,10 @@ _plan_get_maxparallel() {  # <plan> -> digits, empty when unset/placeholder
 _plan_set_maxparallel() {
   local f="$1" value="$2"
   grep -qE '^- Max parallelism:' "$f" || return 3
-  awk -v value="$value" '
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   awk -v value="$value" '
     !done && /^- Max parallelism:/ { print "- Max parallelism: " value " concurrent executors."; done=1; next }
-    { print } END { if (!done) exit 3 }' "$f" > "$f.tmp" && mv "$f.tmp" "$f" && return 0
-  rm -f "$f.tmp"; return 3
+    { print } END { if (!done) exit 3 }' "$f" > "$_pwstage" && mv "$_pwstage" "$f" && return 0
+  rm -f "$_pwstage"; return 3
 }
 
 _require_int() { # <key> <value> <min> <max>
@@ -902,8 +902,8 @@ _pin_propagate() {
   local tf="$d/task/$tid.md"
   grep -q '^- \*\*Execute with:\*\*' "$tf" \
     || die "pin: task/$tid.md has no '- **Execute with:**' field — fix the task doc first (template line missing; pw-doctor --project C11 flags it)"
-  awk -v v="$val" '!w && /^- \*\*Execute with:\*\*/ { print "- **Execute with:** " v; w=1; next } { print }' \
-    "$tf" > "$tf.tmp" && mv "$tf.tmp" "$tf"
+_pwstage="$(pw_tmpfile "$(dirname "$tf")")" || return 1;   awk -v v="$val" '!w && /^- \*\*Execute with:\*\*/ { print "- **Execute with:** " v; w=1; next } { print }' \
+    "$tf" > "$_pwstage" && mv "$_pwstage" "$tf"
   _plan_cell_update "$plan" "$tid" executewith "$val" \
     || die "pin: PLAN 'Execute with' cell write failed for $tid (see above) — the PLAN task-table row must exist; repair the PLAN doc, then re-run"
 }

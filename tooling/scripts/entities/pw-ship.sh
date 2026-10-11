@@ -251,7 +251,7 @@ cmd_request_review() {
   #   task | recorded MR (task Result first, dashboard fallback) | conflict | title |
   #   landing unit | stack parent | parent MR | parent branch
   # A task-file URL that disagrees with a dashboard URL is a recorded-links conflict.
-  local tmp; tmp="$(mktemp -t pw-review-request 2>/dev/null || printf '%s/pw-review-request.$$' "${TMPDIR:-/tmp}")"
+  local tmp; tmp="$(mktemp -t pw-review-request)" || die "cannot create a staging file for the review request → fix: check TMPDIR"
   : > "$tmp" || die "request-review: cannot create the candidate temp file → fix: check TMPDIR"
   PW_RR_TMP="$tmp"
   trap 'rm -f "${PW_RR_TMP:-}"' EXIT
@@ -465,11 +465,11 @@ _mr_state_impl() {
   fi
   if [ -z "$repo_dir" ] && [ -n "$branch" ]; then
     local g
-    for g in $(find "$d/worktree" -maxdepth 4 -name .git 2>/dev/null); do
+    while IFS= read -r g; do
       local cand; cand="$(dirname "$g")"
       local cb; cb="$(git -C "$cand" branch --show-current 2>/dev/null || true)"
       if [ "$cb" = "$branch" ]; then repo_dir="$cand"; break; fi
-    done
+    done < <(find "$d/worktree" -maxdepth 4 -name .git 2>/dev/null)
   fi
   if [ -z "$repo_dir" ] || [ ! -d "$repo_dir" ]; then
     if [ -z "$branch" ]; then
@@ -833,13 +833,13 @@ cmd_monitor() {
 _record_build_check() {
   local tf="$1" rec="$2"
   if grep -qE '^[*+-] (\*\*)?Build check' "$tf"; then
-    awk -v r="$rec" '
+_pwstage="$(pw_tmpfile "$(dirname "$tf")")" || return 1;     awk -v r="$rec" '
       !d && /^[*+-] \*\*Build check:\*\*/ { print "- **Build check:** " r; d=1; next }
       !d && /^[*+-] Build check:/           { print "- Build check: " r;      d=1; next }
-      {print}' "$tf" > "$tf.tmp" && mv "$tf.tmp" "$tf"
+      {print}' "$tf" > "$_pwstage" && mv "$_pwstage" "$tf"
   elif grep -q '^## Result' "$tf"; then
-    awk -v r="$rec" '/^## Result/{p=1; print; print "- Build check: " r; next} p && /^## /{p=0} {print}' \
-      "$tf" > "$tf.tmp" && mv "$tf.tmp" "$tf"
+_pwstage="$(pw_tmpfile "$(dirname "$tf")")" || return 1;     awk -v r="$rec" '/^## Result/{p=1; print; print "- Build check: " r; next} p && /^## /{p=0} {print}' \
+      "$tf" > "$_pwstage" && mv "$_pwstage" "$tf"
   fi
 }
 
@@ -1028,12 +1028,12 @@ EOF
       # (v2 templates carry a "- **MR:** <placeholder>" bullet — appending a second plain line
       # left the resolver reading the placeholder and re-creating the MR every run):
       if grep -qE '^- \*\*MR:\*\*' "$TASK_FILE"; then
-        awk -v mr="$MR_URL" '!d && /^- \*\*MR:\*\*/ { print "- **MR:** " mr; d=1; next } {print}' \
-          "$TASK_FILE" > "$TASK_FILE.tmp" && mv "$TASK_FILE.tmp" "$TASK_FILE"
+_pwstage="$(pw_tmpfile "$(dirname "$TASK_FILE")")" || return 1;         awk -v mr="$MR_URL" '!d && /^- \*\*MR:\*\*/ { print "- **MR:** " mr; d=1; next } {print}' \
+          "$TASK_FILE" > "$_pwstage" && mv "$_pwstage" "$TASK_FILE"
       elif grep -q '^## Result' "$TASK_FILE"; then
         # Append MR line to Result section
-        awk -v mr="$MR_URL" '/^## Result/{p=1; print; print "- MR: " mr; next} p && /^## /{p=0} {print}' \
-          "$TASK_FILE" > "$TASK_FILE.tmp" && mv "$TASK_FILE.tmp" "$TASK_FILE"
+_pwstage="$(pw_tmpfile "$(dirname "$TASK_FILE")")" || return 1;         awk -v mr="$MR_URL" '/^## Result/{p=1; print; print "- MR: " mr; next} p && /^## /{p=0} {print}' \
+          "$TASK_FILE" > "$_pwstage" && mv "$_pwstage" "$TASK_FILE"
       else
         # Add Result section
         printf '\n## Result\n\n- MR: %s\n' "$MR_URL" >> "$TASK_FILE"
@@ -1097,8 +1097,8 @@ _ship_comment_section_ensure() {
   } > "$sectionfile"
   if grep -q '^## Sign-off' "$f"; then
     local signline; signline="$(grep -n '^## Sign-off' "$f" | head -1 | cut -d: -f1)"
-    { head -n "$((signline - 1))" "$f"; cat "$sectionfile"; printf '\n'; tail -n "+${signline}" "$f"; } \
-      > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     { head -n "$((signline - 1))" "$f"; cat "$sectionfile"; printf '\n'; tail -n "+${signline}" "$f"; } \
+      > "$_pwstage" && mv "$_pwstage" "$f"
   else
     cat "$sectionfile" >> "$f"
   fi
@@ -1162,18 +1162,18 @@ cmd_comment_seen() {
   local shortid="${thread:0:8}"
   local row="| \`$shortid\` | $kind | $replied | $note $marker |"
   if grep -Fq "$marker" "$f"; then
-    awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
+      "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   else
     # Insert right after this section's table separator, so a brand-new row lands INSIDE the
     # table (immediately below the header) instead of at the true end of the file — where it
     # would land after ## Sign-off and read as an orphaned, disconnected block. Falls back to a
     # plain append only if the separator can't be found (defensive; should not normally happen).
-    awk -v row="$row" '
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v row="$row" '
       /^## MR comment tracking/ { insec=1 }
       { print }
       insec && !done && /^\|[-| ]+\|[ ]*$/ { print row; done=1 }
-    ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    ' "$f" > "$_pwstage" && mv "$_pwstage" "$f"
     grep -Fq "$marker" "$f" || printf '%s\n' "$row" >> "$f"
   fi
   "$ST" log --project "$slug" --actor ship --message "comment-seen $task/$thread ($kind): replied=$replied"
@@ -1264,11 +1264,11 @@ _stack_task_repo_dir() {
   wt_rel="$(pw_field "$d/task/$t.md" Worktree 2>/dev/null || true)"; wt_rel="${wt_rel//\`/}"
   if [ -n "$wt_rel" ] && [ -d "$d/$wt_rel" ] && pw_dir_within "$d/worktree" "$d/$wt_rel"; then printf '%s' "$d/$wt_rel"; return 0; fi
   if [ -n "$branch" ]; then
-    for g in $(find "$d/worktree" -maxdepth 4 -name .git 2>/dev/null); do
+    while IFS= read -r g; do
       cand="$(dirname "$g")"
       cb="$(git -C "$cand" branch --show-current 2>/dev/null || true)"
       [ "$cb" = "$branch" ] && { printf '%s' "$cand"; return 0; }
-    done
+    done < <(find "$d/worktree" -maxdepth 4 -name .git 2>/dev/null)
   fi
   return 1
 }
@@ -2333,7 +2333,7 @@ _stack_task_field_put() {
     *"$_pw_stack_tab"*|*"$IFS_NL"*|*"|"*) echo "_stack_task_field_put: value has a reserved character (pipe/TAB/newline)" >&2; return 2 ;;
   esac
   [ -f "$f" ] || { echo "_stack_task_field_put: no such file $f" >&2; return 2; }
-  tmp="$(mktemp "$(dirname "$f")/.pwtmp.XXXXXX" 2>/dev/null || printf '%s' "$f.pwtmp.$$")"
+  tmp="$(mktemp "$(dirname "$f")/.pwtmp.XXXXXX")" || die "cannot stage a temp beside $f → fix: check the directory permissions"
   if grep -qE "^- \*\*$field:\*\*" "$f"; then
     awk -v fld="$field" -v v="$val" '!d && $0 ~ ("^- \\*\\*" fld ":\\*\\*") { print "- **" fld ":** " v; d=1; next } {print}' "$f" > "$tmp" || { rm -f "$tmp"; return 2; }
   elif grep -qE "^- \*\*depends_on:\*\*" "$f"; then
@@ -2391,7 +2391,7 @@ cmd_stack_inherited() {
   local short; short="$(printf '%s' "$sha" | cut -c1-12)"
   local bullet key; bullet="- **Inherited:** $p @ $short (upstream fix — inherited update, no reviewer request)"
   key="- **Inherited:** $p @"
-  local tmp; tmp="$(mktemp "$(dirname "$tf")/.pwtmp.XXXXXX" 2>/dev/null || printf '%s' "$tf.pwtmp.$$")"
+  local tmp; tmp="$(mktemp "$(dirname "$tf")/.pwtmp.XXXXXX")" || die "cannot stage a temp beside $tf → fix: check the directory permissions"
   if grep -qF -- "$key" "$tf"; then
     awk -v key="$key" -v line="$bullet" 'index($0, key) == 1 { print line; next } { print }' "$tf" > "$tmp" \
       || { rm -f "$tmp"; die "stack-inherited: rewrite failed for $tf"; }

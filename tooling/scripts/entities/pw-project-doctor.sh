@@ -379,7 +379,7 @@ pw_guidance_engine() { # $1 = 1 apply / 0 preview
               esac
             done
             out="$out$r"
-            local tmp="$full.pwguidance.$$"
+            local tmp; tmp="$(pw_tmpfile "$(dirname "$full")")"
             cp -p "$full" "$tmp" && printf '%s' "$out" > "$tmp" && mv -f "$tmp" "$full" \
               || { rm -f "$tmp"; echo "pw-guidance: FAILED to write $rel — nothing changed" >&2; exit 2; }
             echo "  repaired $rel: $n occurrence(s)"

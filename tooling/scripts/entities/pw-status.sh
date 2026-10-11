@@ -220,8 +220,8 @@ cmd_status() {
   if [ "$rewind" -eq 0 ] && [ "$tr" -ge 0 ] && [ "$cr" -ge 0 ] && [ "$tr" -lt "$cr" ]; then
     die "refusing to move Status backward: $cur → $phase. If you really mean to rewind a phase, pass --rewind."
   fi
-  awk -v p="$phase" '!d && /^- \*\*Status:\*\*/ {print "- **Status:** " p; d=1; next} {print}' \
-    "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   awk -v p="$phase" '!d && /^- \*\*Status:\*\*/ {print "- **Status:** " p; d=1; next} {print}' \
+    "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   cmd_log --project "$slug" --actor status --message "Status -> $phase$([ "$rewind" -eq 1 ] && echo ' (rewind)')"
   echo "$slug: Status -> $phase"
 }
@@ -250,8 +250,8 @@ cmd_oneliner() {
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
   grep -q '^- \*\*One-liner:\*\*' "$f" || die "no '- **One-liner:**' line in $f"
-  awk -v t="$text" '!d && /^- \*\*One-liner:\*\*/ {print "- **One-liner:** " t; d=1; next} {print}' \
-    "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   awk -v t="$text" '!d && /^- \*\*One-liner:\*\*/ {print "- **One-liner:** " t; d=1; next} {print}' \
+    "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   cmd_log --project "$slug" --actor analyze --message "One-liner set"
   echo "$slug: One-liner set"
 }
@@ -283,12 +283,12 @@ cmd_adopted() {
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
   if grep -q '^- \*\*Adopted:\*\*' "$f"; then
-    awk -v t="$text" '!d && /^- \*\*Adopted:\*\*/ {print "- **Adopted:** " t; d=1; next} {print}' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v t="$text" '!d && /^- \*\*Adopted:\*\*/ {print "- **Adopted:** " t; d=1; next} {print}' \
+      "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   else
     grep -q '^- \*\*One-liner:\*\*' "$f" || die "no '- **One-liner:**' line to anchor Adopted: after in $f"
-    awk -v t="$text" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **Adopted:** " t; d=1}' \
-      "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v t="$text" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **Adopted:** " t; d=1}' \
+      "$f" > "$_pwstage" && mv "$_pwstage" "$f"
   fi
   cmd_log --project "$slug" --actor adopt --message "Adopted pointer set: $text"
   echo "$slug: Adopted -> $text"
@@ -953,13 +953,15 @@ done
 
 if [ "$SELFTEST" -eq 1 ]; then
   echo "pw-status selftest: creating temp project..."
-  TMPDIR="$(mktemp -d)"
-  trap 'rm -rf "$TMPDIR"' EXIT
-  PROJECTS_DIR="$TMPDIR"
-  export PW_PROJECTS_DIR="$TMPDIR"   # child calls resolve projects from the env
+  # Private name, never the exported TMPDIR: children inherit whatever TMPDIR points at
+  # (their mktemp writes must not land in the tree this trap deletes).
+  SELFTEST_DIR="$(mktemp -d)"
+  trap 'rm -rf "$SELFTEST_DIR"' EXIT
+  PROJECTS_DIR="$SELFTEST_DIR"
+  export PW_PROJECTS_DIR="$SELFTEST_DIR"   # child calls resolve projects from the env
   SLUG="test-project"
-  mkdir -p "$TMPDIR/$SLUG/context" "$TMPDIR/$SLUG/analysis/review" "$TMPDIR/$SLUG/task/review"
-  cat > "$TMPDIR/$SLUG/README.md" <<'EOF'
+  mkdir -p "$SELFTEST_DIR/$SLUG/context" "$SELFTEST_DIR/$SLUG/analysis/review" "$SELFTEST_DIR/$SLUG/task/review"
+  cat > "$SELFTEST_DIR/$SLUG/README.md" <<'EOF'
 # test-project
 
 - **Status:** executing
@@ -980,7 +982,7 @@ if [ "$SELFTEST" -eq 1 ]; then
 |------|----|-------|
 | T01 | !123 | open |
 EOF
-  cat > "$TMPDIR/$SLUG/task/PLAN.md" <<'EOF'
+  cat > "$SELFTEST_DIR/$SLUG/task/PLAN.md" <<'EOF'
 # PLAN — test-project
 
 ## Task table
@@ -990,7 +992,7 @@ EOF
 | T01 | api-service | agent/test-project/T01-test | 5 | kilo:default | — | done |
 | T02 | worker-service | agent/test-project/T02-test | 3 | kilo:default | T01 | in-progress |
 EOF
-  cat > "$TMPDIR/$SLUG/LOG.md" <<'EOF'
+  cat > "$SELFTEST_DIR/$SLUG/LOG.md" <<'EOF'
 # Activity log — test-project
 
 - **2026-09-10 09:00** · `scaffold` — project created
@@ -1136,6 +1138,7 @@ if [ "$PHASE" = "analysis" ] || [ "$PHASE" = "breakdown" ] || [ "$PHASE" = "exec
     _unapproved=""
     for _rf in "$ANALYSIS_REVIEW"/*.review.md; do
       [ -f "$_rf" ] || continue
+      [ -L "$_rf" ] && continue    # shared-lane policy: symlinked review files are never read
       case "${_rf##*/}" in RFC.review.md) continue ;; esac
       _latest_signoff_approved "$_rf" && continue
       _unapproved="$_unapproved ${_rf#$D/}"

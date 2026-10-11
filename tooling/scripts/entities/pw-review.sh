@@ -286,7 +286,7 @@ _init_one() {
   mkdir -p "$(dirname "$f")" 2>/dev/null || { echo "pw-review: cannot create directory for $rel → fix: check the review/ subdir permissions under $d" >&2; return 1; }
   [ -w "$(dirname "$f")" ] || { echo "pw-review: write failed for $rel (review dir not writable → fix: check the review/ subdir permissions under $d)" >&2; return 1; }
   pw_review_lock "$f" || { echo "pw-review: $rel is locked by another writer → fix: retry in a moment; if no writer is running, remove the stale lock directory $f.pwlock" >&2; return 1; }
-  local tmpf="$f.init.$$" rc=1
+  local tmpf rc=1; tmpf="$(pw_tmpfile "$(dirname "$f")")"
   if sed "s|<doc\\.md>|$docc|g" "$tmpl" > "$tmpf" 2>/dev/null \
      && [ ! -e "$f" ] && [ ! -L "$f" ] && mv "$tmpf" "$f" 2>/dev/null; then
     rc=0
@@ -1178,11 +1178,11 @@ _archive_body() {
     } > "$secfile" || { rm -f "$secfile"; echo "pw-review: FAILED to render the Archived items section — nothing published → fix: check the file is writable and retry" >&2; return 1; }
     if grep -q '^## Sign-off' "$f"; then
       local signline; signline="$(grep -n '^## Sign-off' "$f" | head -1 | cut -d: -f1)"
-      if ! { head -n "$((signline - 1))" "$f"; cat "$secfile"; printf '\n'; tail -n "+${signline}" "$f"; } > "$f.tmp"; then
-        rm -f "$secfile" "$f.tmp"; echo "pw-review: FAILED to add the Archived items section to $rel — nothing published → fix: check the file is writable and retry" >&2; return 1
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;       if ! { head -n "$((signline - 1))" "$f"; cat "$secfile"; printf '\n'; tail -n "+${signline}" "$f"; } > "$_pwstage"; then
+        rm -f "$secfile" "$_pwstage"; echo "pw-review: FAILED to add the Archived items section to $rel — nothing published → fix: check the file is writable and retry" >&2; return 1
       fi
-      if ! mv "$f.tmp" "$f"; then
-        rm -f "$secfile" "$f.tmp"; echo "pw-review: FAILED to publish the Archived items section in $rel — nothing published → fix: check the file is writable and retry" >&2; return 1
+      if ! mv "$_pwstage" "$f"; then
+        rm -f "$secfile" "$_pwstage"; echo "pw-review: FAILED to publish the Archived items section in $rel — nothing published → fix: check the file is writable and retry" >&2; return 1
       fi
     else
       if ! cat "$secfile" >> "$f"; then
@@ -1192,7 +1192,7 @@ _archive_body() {
     rm -f "$secfile"
   fi
   if [ ! -f "$af" ]; then
-    local htmp="$af.tmp"
+    local htmp; htmp="$(pw_tmpfile "$(dirname "$af")")"
     {
       printf '# Archived review items — %s\n\n' "$(basename "${rel%.review.md}")"
       printf 'Items/questions moved out of `%s` once fully [RESOLVED]/[ANSWERED] — text preserved verbatim, never edited. See that file'"'"'s "## Archived items"\n' "$rel"
@@ -1213,7 +1213,7 @@ _archive_body() {
     [ -n "$summary" ] || summary="(no summary line)"
     local bmark="<!-- pw-archived-block:$id -->"
     if ! grep -Fq "$bmark" "$af"; then
-      local atmp="$af.tmp"
+      local atmp; atmp="$(pw_tmpfile "$(dirname "$af")")"
       if cp "$af" "$atmp" 2>/dev/null \
          && { printf '\n---\n\n'; printf '%s\n' "$bmark"; printf '%s\n' "$blocktxt"; printf '<!-- end pw-archived-block:%s -->\n' "$id"; } >> "$atmp" \
          && mv "$atmp" "$af" 2>/dev/null; then
@@ -1225,19 +1225,19 @@ _archive_body() {
     local marker="<!-- pw-archived:$id -->"
     local row="| $id | $summary | $today $marker |"
     if grep -Fq "$marker" "$f"; then
-      if ! awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' "$f" > "$f.tmp"; then
-        rm -f "$f.tmp"; echo "pw-review: FAILED to rewrite the $id pointer row — whole archive aborted, nothing published → fix: check the file is writable and retry" >&2; return 1
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;       if ! awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' "$f" > "$_pwstage"; then
+        rm -f "$_pwstage"; echo "pw-review: FAILED to rewrite the $id pointer row — whole archive aborted, nothing published → fix: check the file is writable and retry" >&2; return 1
       fi
-      mv "$f.tmp" "$f" || { rm -f "$f.tmp"; echo "pw-review: FAILED to publish the $id pointer row — whole archive aborted → fix: check the file is writable and retry" >&2; return 1; }
+      mv "$_pwstage" "$f" || { rm -f "$_pwstage"; echo "pw-review: FAILED to publish the $id pointer row — whole archive aborted → fix: check the file is writable and retry" >&2; return 1; }
     else
-      if ! awk -v row="$row" '
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;       if ! awk -v row="$row" '
         /^## Archived items/ { insec=1 }
         { print }
         insec && !done && /^\|[-| ]+\|[ ]*$/ { print row; done=1 }
-      ' "$f" > "$f.tmp"; then
-        rm -f "$f.tmp"; echo "pw-review: FAILED to insert the $id pointer row — whole archive aborted, nothing published → fix: check the file is writable and retry" >&2; return 1
+      ' "$f" > "$_pwstage"; then
+        rm -f "$_pwstage"; echo "pw-review: FAILED to insert the $id pointer row — whole archive aborted, nothing published → fix: check the file is writable and retry" >&2; return 1
       fi
-      mv "$f.tmp" "$f" || { rm -f "$f.tmp"; echo "pw-review: FAILED to publish the $id pointer row — whole archive aborted → fix: check the file is writable and retry" >&2; return 1; }
+      mv "$_pwstage" "$f" || { rm -f "$_pwstage"; echo "pw-review: FAILED to publish the $id pointer row — whole archive aborted → fix: check the file is writable and retry" >&2; return 1; }
       grep -Fq "$marker" "$f" || { echo "pw-review: FAILED to place the $id pointer row in $rel (Archived items table not found) — whole archive aborted, nothing published → fix: restore the '## Archived items' table and retry" >&2; return 1; }
     fi
   done
@@ -1246,14 +1246,14 @@ _archive_body() {
   while IFS=$'\t' read -r _ i; do
     local s="${rstarts[$i]}" e="${rends[$i]}"
     local flen; flen="$(wc -l < "$f" | tr -d ' ')"
-    if ! {
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     if ! {
       [ "$s" -gt 1 ] && sed -n "1,$((s-1))p" "$f"
       [ "$e" -lt "$flen" ] && sed -n "$((e+1)),\$p" "$f"
       true
-    } > "$f.tmp"; then
-      rm -f "$f.tmp"; echo "pw-review: FAILED to remove the archived $((i+1))-th block from $rel — whole archive aborted, nothing published → fix: check the file is writable and retry" >&2; return 1
+    } > "$_pwstage"; then
+      rm -f "$_pwstage"; echo "pw-review: FAILED to remove the archived $((i+1))-th block from $rel — whole archive aborted, nothing published → fix: check the file is writable and retry" >&2; return 1
     fi
-    mv "$f.tmp" "$f" || { rm -f "$f.tmp"; echo "pw-review: FAILED to publish block removals for $rel — nothing published → fix: check the file is writable and retry" >&2; return 1; }
+    mv "$_pwstage" "$f" || { rm -f "$_pwstage"; echo "pw-review: FAILED to publish block removals for $rel — nothing published → fix: check the file is writable and retry" >&2; return 1; }
   done <<< "$order"
 
   pw_review_contents_rebuild "$f" \
@@ -1395,7 +1395,7 @@ _mf_read() { # <manifest> <key> — the scalar value after the first "key": on t
 }
 
 _mf_set_scalar() { # <manifest> <key> <raw-json-value> — rewrite one scalar, comma style kept
-  local f="$1" k="$2" v="$3" tmp="$1.tmp.$$"
+  local f="$1" k="$2" v="$3" tmp; tmp="$(pw_tmpfile "$(dirname "$1")")"
   if awk -v k="\"$k\":" -v v="\"$k\": $v" '
       !d && index($0, k) > 0 {
         tc = ($0 ~ /,[[:space:]]*$/) ? "," : ""
@@ -2064,7 +2064,7 @@ PY
   # validated copy + terminal state + notes
   local rp_sha at import_json
   rp_sha="$(pw_review_sha256 "$rp" 2>/dev/null || true)"
-  cp "$rp" "$pdir/report.json.part.$$" && mv "$pdir/report.json.part.$$" "$pdir/report.json" \
+  _rpt="$(pw_tmpfile "$pdir")" && cp "$rp" "$_rpt" && mv "$_rpt" "$pdir/report.json" \
     || { rm -rf "$tmpd"; die "import: failed to store the validated report copy → fix: check permissions on review/ai/$pass"; }
   at="$(now_ts)"
   import_json="$(printf '{"report_sha256":"%s","verdict":"%s","items":%s,"questions":%s,"keys":%s,"skipped":%s,"at":"%s"}' \
