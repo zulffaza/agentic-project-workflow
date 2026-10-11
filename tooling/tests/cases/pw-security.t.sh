@@ -114,6 +114,10 @@ _cellf="$PWTEST_ROOT/pwsec-cell.md"
 printf '# PLAN\n\n## Task\n\n| ID | Title | Status |\n|----|-------|--------|\n| T01 | x | todo |\n' > "$_cellf"
 pwtest_rc 1 "plan cell writer refuses a backslash sequence" _plan_cell_update "$_cellf" T01 status 'a\b'
 grep -q 'a\\b' "$_cellf" && pwtest_bad "cell refusal purity" "value leaked into the cell" || pwtest_ok "cell left untouched by the refused value"
+_dashf="$PWTEST_ROOT/pwsec-dash.md"
+printf '| ID | State |\n|----|-------|\n| T01 | open |\n' > "$_dashf"
+pwtest_rc 1 "dashboard cell writer refuses a backslash sequence" _dashboard_update "$_dashf" ID State T01 'a\b'
+grep -q 'a\\b' "$_dashf" && pwtest_bad "dashboard refusal purity" "value leaked into the cell" || pwtest_ok "dashboard cell left untouched by the refused value"
 
 # --- Phase 2 (S12): monitor pins the forge host to the task repo's origin (decoy URL refused)
 cat > "$SEC_DIR/task/T92.md" <<'EOF'
