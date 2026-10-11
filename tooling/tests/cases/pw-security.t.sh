@@ -148,10 +148,20 @@ pwtest_rc 0 "stamp tokens rewrites the file" bash -c '. "$1"; PW_REPOS="/x/r"; p
 grep -q '^home={{PW_HOME}}$' "$_stf" && pwtest_bad "stamp tokens" "{{PW_HOME}} not replaced" || pwtest_ok "{{PW_HOME}} replaced"
 grep -q '^repos=/x/r$' "$_stf" && pwtest_ok "{{PW_REPOS}} replaced" || pwtest_bad "stamp tokens" "{{PW_REPOS}} not replaced"
 
+# --- Phase 3: generators replace symlinked targets instead of writing through them, and every
+# rendered artifact carries the bundle marker the doctor's orphan sweep requires.
+_genout="$PWTEST_ROOT/pwsec-gen"; rm -rf "$_genout"; mkdir -p "$_genout/claude"
+_genvictim="$PWTEST_ROOT/pwsec-victim"; printf 'keep me\n' > "$_genvictim"
+ln -s "$_genvictim" "$_genout/claude/pw-help.md"
+pwtest_rc 0 "gen-commands replaces a symlinked command target" "$TOOL/scripts/toolchain/gen-commands.sh" --outdir "$_genout" claude
+[ "$(cat "$_genvictim")" = "keep me" ] && pwtest_ok "symlink target untouched" || pwtest_bad "gen symlink guard" "victim overwritten"
+[ ! -L "$_genout/claude/pw-help.md" ] && pwtest_ok "target replaced by a regular file" || pwtest_bad "gen symlink guard" "still a symlink"
+grep -q 'pw-generated' "$_genout/claude/pw-help.md" && pwtest_ok "generated artifact carries the bundle marker" || pwtest_bad "gen marker" "marker missing"
+
 # --- refusals are pure: no sentinel, no stray project, and the fixture stayed intact.
 [ ! -e "$PWN" ] && pwtest_ok "no refusal leaked a side effect" || pwtest_bad "refusal purity" "sentinel present"
 [ ! -e "$PW_PROJECTS_DIR/out" ] || pwtest_bad "traversal purity" "../out was created above the projects dir"
 [ -f "$SEC_DIR/task/PLAN.md" ] && pwtest_ok "fixture intact after refusals" || pwtest_bad "fixture integrity" "PLAN.md vanished"
 
 # cleanup — leave shared fixtures as found.
-rm -rf "$SEC_DIR" "$S23_DIR" "$PWTEST_ROOT/outside-repo" "$PWTEST_ROOT/outside-proj" "$PWTEST_ROOT/pwsec-desc" "$_cellf" "$_stf" "$PWTEST_ROOT/pwsec-cell.md"
+rm -rf "$SEC_DIR" "$S23_DIR" "$PWTEST_ROOT/outside-repo" "$PWTEST_ROOT/outside-proj" "$PWTEST_ROOT/pwsec-desc" "$_cellf" "$_stf" "$PWTEST_ROOT/pwsec-cell.md" "$_genout" "$_genvictim"

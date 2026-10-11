@@ -1605,6 +1605,7 @@ cmd_prepare() {
   esac
   case "$pass_override" in
     '') ;;
+    .|..) die "invalid --pass-id '$pass_override' → fix: the reserved component names '.' and '..' are refused (it becomes a directory name)" ;;
     *[!A-Za-z0-9._-]*) die "invalid --pass-id '$pass_override' → fix: letters, digits, dot, underscore, dash only (it becomes a directory name)" ;;
   esac
   local d; d="$(proj_dir "$slug")" || return 2
@@ -1852,7 +1853,7 @@ cmd_import() {
     die "import: --pass '$pass' disagrees with the report's pass_id '$rp_pass' → fix: pass the right id or drop --pass"
   fi
   pass="$rp_pass"
-  case "$pass" in ''|*[!A-Za-z0-9._-]*) die "import: invalid pass id '$pass' in the report → fix: reports must carry the pass id that prepare issued" ;; esac
+  case "$pass" in ''|.|..|*[!A-Za-z0-9._-]*) die "import: invalid pass id '$pass' in the report → fix: reports must carry the pass id that prepare issued" ;; esac
   local pdir="$(_pass_root "$d")/$pass" mf="$(_pass_root "$d")/$pass/manifest.json"
   [ -f "$mf" ] || die "import: no prepared packet for pass '$pass' → fix: /pw-review prepare --project $slug (--task <T0n> | --surface <name> | --file <rel>) creates it (an unprepared report is unverified feedback: record it via add-item with its source, never a structured import)"
   local m_project m_artifact m_surface m_review m_state

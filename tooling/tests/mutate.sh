@@ -49,11 +49,12 @@ _pwtest_timeout() {
 # (caught|hung|vacuous|died|drift|applyfail), MUT_RC, MUT_ELAPSED. No stack bookkeeping here —
 # the serial live-tree caller wraps it with _pwt_mutable_push/pop; workers use disposable copies.
 # _pwt_resolve <bundle-root> <script-basename> — layout resolver (scripts/{entities,lib,toolchain}/
-# + root); the register's file column stays a basename so layout moves never touch anchors.
+# + tooling root + bundle root); the register's file column stays a basename so layout moves
+# never touch anchors.
 _pwt_resolve() {
   local r="$1" n="$2" d
-  for d in "scripts/entities/" "scripts/lib/" "scripts/toolchain/" ""; do
-    [ -f "$r/tooling/$d$n" ] && { printf '%s/tooling/%s%s' "$r" "$d" "$n"; return 0; }
+  for d in "$r/tooling/scripts/entities" "$r/tooling/scripts/lib" "$r/tooling/scripts/toolchain" "$r/tooling" "$r"; do
+    [ -f "$d/$n" ] && { printf '%s/%s' "$d" "$n"; return 0; }
   done
   return 1
 }

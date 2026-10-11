@@ -301,3 +301,9 @@ C240-plan-cell-value-guard	pw-mdlib.sh	echo "_plan_cell_update: refusing a value
 C241-monitor-host-pin	pw-ship.sh	if [ -n "$_origin_host" ] && [ "$_origin_host" != "$MR_HOST" ]; then	if false; then	T1	^pw-security\.t\.sh$
 C242-axis-default-read	pw-config.sh	line="$(_axis_default_kvs "$axis")"	line=""	T1	^pw-security\.t\.sh$
 C243-stamp-tokens-sub	pw-common.sh	_stl="${_stl//\{\{PW_HOME\}\}/$PW_HOME}"	_stl="${_stl}"	T1	^pw-security\.t\.sh$
+C244-offboard-tree-check	offboard.sh	if diff -rq "$starget" "$skill_src" >/dev/null 2>&1; then	if true; then	T1	^pw-doctor\.t\.sh$
+C245-doctor-orphan-marker-skill	pw-doctor.sh	if grep -qF 'pw-generated' "$skilldir/$n/SKILL.md" 2>/dev/null; then	if true; then	T1	^pw-doctor\.t\.sh$
+C246-doctor-orphan-marker-cmd	pw-doctor.sh	if grep -qF 'pw-generated' "$odir/$n" 2>/dev/null; then rm -f "$odir/$n"	if true; then rm -f "$odir/$n"	T1	^pw-doctor\.t\.sh$
+C247-gen-flat-symlink-guard	gen-commands.sh	[ -L "$outdir/$name.md" ] && rm -f "$outdir/$name.md"	:	T1	^pw-security\.t\.sh$
+C248-doctor-env-guard	pw-doctor.sh	        *'"'*|*'`'*|*'$'*|*'\'*|*$'\n'*)	        !*)	T1	^pw-doctor\.t\.sh$
+C249-doctor-hook-assert	pw-doctor.sh	pw_hook_dir_ok "$skilldir" || { echo "pw-doctor: provider hook ${p}_skilldir returned an unsafe path	: || { echo "pw-doctor: provider hook ${p}_skilldir returned an unsafe path	T1	^pw-doctor\.t\.sh$

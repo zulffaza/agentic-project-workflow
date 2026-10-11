@@ -912,6 +912,15 @@ pw_branch_ok() {
   return 0
 }
 
+# pw_hook_dir_ok <dir> — provider hook outputs (skilldir/commanddir/agentdir) must be a
+# non-empty absolute path (S14): an empty or relative hook return steered rm/ln/cmp at
+# '/name' or the CWD. Absolute — not strictly $HOME-prefixed — because custom install
+# roots outside $HOME are legitimate operator choices.
+pw_hook_dir_ok() {
+  [ -n "${1:-}" ] || return 1
+  case "$1" in /*) return 0 ;; *) return 1 ;; esac
+}
+
 # pw_dir_within <base> <dir> — rc 0 when <dir> is an existing directory that resolves
 # physically inside <base> (the final component included, so a symlinked dir is refused
 # when it points outside). For task-file `Repo:`/`Worktree:` values before any git/cd use.

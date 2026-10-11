@@ -28,6 +28,10 @@ done
 PROVIDERS=("${PW_PROVIDERS[@]}")
 [ "${#ARGS_PROVIDERS[@]}" -gt 0 ] && PROVIDERS=("${ARGS_PROVIDERS[@]}")
 
+# Appended to every rendered artifact (after existing output): the doctor's orphan sweep
+# removes ONLY entries carrying this bundle marker (content-check-and-skip for anything else).
+GEN_MARKER='<!-- pw-generated: build artifact — regenerate with /pw-doctor --fix; never hand-edit -->'
+
 # --- frontmatter/body helpers (parse the canonical file) ---------------------
 fm() {  # fm <file> <key> -> value of that frontmatter key (empty if absent)
   awk -v k="$2" '
@@ -61,17 +65,23 @@ for prov in "${PROVIDERS[@]}"; do
     bodytext="${bodytext//\{\{PW_PROJECTS\}\}/$PW_PROJECTS}"
     bodytext="${bodytext//\{\{PW_REPOS\}\}/$PW_REPOS}"
     if [ "$style" = "skill" ]; then
-      # A stale SYMLINK at the target (e.g. a bundle skill from before the collision-skip policy)
-      # would make `>` write THROUGH it into the bundle — remove links before writing.
+      # A stale SYMLINK at any write target (e.g. a bundle skill from before the collision-skip
+      # policy) would make `>` write THROUGH it into the bundle — remove links before writing,
+      # at the directory entry AND at every file the render redirects into.
       [ -L "$outdir/$name" ] && rm -f "$outdir/$name"
       mkdir -p "$outdir/$name"
+      [ -L "$outdir/$name/SKILL.md" ] && rm -f "$outdir/$name/SKILL.md"
       "render_${prov}_command" > "$outdir/$name/SKILL.md"
+      printf '%s\n' "$GEN_MARKER" >> "$outdir/$name/SKILL.md"
       if declare -f "render_${prov}_skill_policy" >/dev/null 2>&1; then
         mkdir -p "$outdir/$name/agents"
+        [ -L "$outdir/$name/agents/openai.yaml" ] && rm -f "$outdir/$name/agents/openai.yaml"
         "render_${prov}_skill_policy" > "$outdir/$name/agents/openai.yaml"
       fi
     else
+      [ -L "$outdir/$name.md" ] && rm -f "$outdir/$name.md"
       "render_${prov}_command" > "$outdir/$name.md"
+      printf '%s\n' "$GEN_MARKER" >> "$outdir/$name.md"
     fi
     count=$((count+1))
   done
