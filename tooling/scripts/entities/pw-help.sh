@@ -1495,7 +1495,7 @@ render_project() {
   local raw tok
   raw="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" phase --project "$slug" 2>/dev/null)" || raw="?"
   tok="$(pw_phase_token "$raw")"
-  local plan="" planrev="" adocs="" trevs="" tids f rel rvf
+  local plan="" planrev="" adocs="" trevs="" tids="" f rel rvf
   [ -f "$d/task/PLAN.md" ] && plan="task/PLAN.md" || true
   [ -f "$d/task/review/PLAN.review.md" ] && planrev="task/review/PLAN.review.md" || true
   for f in "$d"/analysis/*.md; do
