@@ -296,8 +296,8 @@ C235-proj-dir-shape-gate	pw-common.sh	case "${1:-}" in ''|.|..|*/*|*"$IFS_NL"*|*
 C236-proj-dir-physical-pin	pw-common.sh	case "$d/" in "$base/"*) printf '%s' "$d" ;; *) return 1 ;; esac	case "$d/" in "$base/"*) printf '%s' "$d" ;; *) printf '%s' "$d" ;; esac	T1	^pw-security\.t\.sh$
 C237-comment-note-guard	pw-ship.sh	case "$note" in *"|"*|*"$IFS_NL"*|*$'\t'*|*'\'*|*"<!--"*)	case "$note" in !*)	T1	^pw-security\.t\.sh$
 C238-comment-thread-guard	pw-ship.sh	case "$thread" in ''|*[!A-Za-z0-9._-]*) die "comment-seen: invalid --thread	case "$thread" in ''|!*) die "comment-seen: invalid --thread	T1	^pw-security\.t\.sh$
-C239-dashboard-value-guard	pw-mdlib.sh	echo "_dashboard_update: refusing a value with reserved characters (|, TAB, newline, backslash) → fix: strip them from the value" >&2; return 1 ;; esac	: ;; esac	T1	^pw-security\.t\.sh$
-C240-plan-cell-value-guard	pw-mdlib.sh	echo "_plan_cell_update: refusing a value with reserved characters (|, TAB, newline, backslash) → fix: strip them from the value" >&2; return 1 ;; esac	: ;; esac	T1	^pw-security\.t\.sh$
+C239-dashboard-value-guard	pw-mdlib.sh	echo "_dashboard_update: refusing a value with reserved characters (TAB, newline, backslash) → fix: strip them from the value" >&2; return 1 ;; esac	: ;; esac	T1	^pw-security\.t\.sh$
+C240-plan-cell-value-guard	pw-mdlib.sh	echo "_plan_cell_update: refusing a value with reserved characters (TAB, newline, backslash) → fix: strip them from the value" >&2; return 1 ;; esac	: ;; esac	T1	^pw-security\.t\.sh$
 C241-monitor-host-pin	pw-ship.sh	if [ -n "$_origin_host" ] && [ "$_origin_host" != "$MR_HOST" ]; then	if false; then	T1	^pw-security\.t\.sh$
 C242-axis-default-read	pw-config.sh	line="$(_axis_default_kvs "$axis")"	line=""	T1	^pw-security\.t\.sh$
 C243-stamp-tokens-sub	pw-common.sh	_stl="${_stl//\{\{PW_HOME\}\}/$PW_HOME}"	_stl="${_stl}"	T1	^pw-security\.t\.sh$
@@ -307,3 +307,6 @@ C246-doctor-orphan-marker-cmd	pw-doctor.sh	if grep -qF 'pw-generated' "$odir/$n"
 C247-gen-flat-symlink-guard	gen-commands.sh	[ -L "$outdir/$name.md" ] && rm -f "$outdir/$name.md"	:	T1	^pw-security\.t\.sh$
 C248-doctor-env-guard	pw-doctor.sh	        *'"'*|*'`'*|*'$'*|*'\'*|*$'\n'*)	        !*)	T1	^pw-doctor\.t\.sh$
 C249-doctor-hook-assert	pw-doctor.sh	pw_hook_dir_ok "$skilldir" || { echo "pw-doctor: provider hook ${p}_skilldir returned an unsafe path	: || { echo "pw-doctor: provider hook ${p}_skilldir returned an unsafe path	T1	^pw-doctor\.t\.sh$
+C250-review-archive-stage-off	pw-review.sh	local htmp; htmp="$(pw_tmpfile "$(dirname "$af")")"	local htmp; htmp="$af.tmp"	T0	
+C251-review-manifest-stage-off	pw-review.sh	tmp; tmp="$(pw_tmpfile "$(dirname "$1")")"	tmp="$tf.tmp"	T0	
+C252-doc-pipe-escape-amp	pw-doc.sh	val="${val//|/\&#124;}"	val="${val//|/&#124;}"	T1	^pw-doc\.t\.sh$

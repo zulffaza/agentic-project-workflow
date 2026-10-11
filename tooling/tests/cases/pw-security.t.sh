@@ -112,8 +112,8 @@ pwtest_rc any "dashboard writer refuses a pipe in the state value" "$SH" dashboa
 . "$TOOL/scripts/lib/pw-mdlib.sh"
 _cellf="$PWTEST_ROOT/pwsec-cell.md"
 printf '# PLAN\n\n## Task\n\n| ID | Title | Status |\n|----|-------|--------|\n| T01 | x | todo |\n' > "$_cellf"
-pwtest_rc 1 "plan cell writer refuses a pipe" _plan_cell_update "$_cellf" T01 status 'a|b'
-grep -q 'a|b' "$_cellf" && pwtest_bad "cell refusal purity" "value leaked into the cell" || pwtest_ok "cell left untouched by the refused value"
+pwtest_rc 1 "plan cell writer refuses a backslash sequence" _plan_cell_update "$_cellf" T01 status 'a\b'
+grep -q 'a\\b' "$_cellf" && pwtest_bad "cell refusal purity" "value leaked into the cell" || pwtest_ok "cell left untouched by the refused value"
 
 # --- Phase 2 (S12): monitor pins the forge host to the task repo's origin (decoy URL refused)
 cat > "$SEC_DIR/task/T92.md" <<'EOF'

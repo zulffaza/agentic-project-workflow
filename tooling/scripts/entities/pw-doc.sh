@@ -27,6 +27,7 @@ PW_HOME="$(cd "$HERE/../../.." && pwd)"
 . "$HERE/../lib/pw-mdlib.sh"
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
+REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
 
 die() { echo "pw-doc: $*" >&2; exit 2; }
 proj_dir() { local d; d="$(pw_proj_dir "$1")" || die "no such project: $1 ($PROJECTS_DIR/$1) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
@@ -637,7 +638,7 @@ sync_plan() {
         *) continue ;;
       esac
       [ -n "$val" ] || continue
-      val="${val//|/&#124;}"
+      val="${val//|/\&#124;}"   # `&` is the MATCH in a parameter-expansion replacement — escape it or the cell gets `|#124;` (pre-existing bug found by the sample-project smoke)
       if ! _plan_cell_update "$work/PLAN.md" "$id" "$col" "$val"; then
         rm -rf "$work"
         die "could not sync PLAN task-table row for $id → fix: add the row for $id to the task table (sync never creates rows)"

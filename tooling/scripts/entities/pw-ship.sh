@@ -1203,6 +1203,7 @@ cmd_dashboard_mr_state() {
   [ -n "$slug" ] || die "dashboard-mr-state: --project is required → fix: dashboard-mr-state --project <slug> --task <task-id> --state <state>"
   [ -n "$task" ] || die "dashboard-mr-state: --task is required → fix: dashboard-mr-state --project <slug> --task <task-id> --state <state>"
   pw_task_id_ok "$task" || die "dashboard-mr-state: invalid task id '$task' → fix: task ids look like T01"
+  case "$state" in ''|*[!A-Za-z_-]*) die "dashboard-mr-state: --state must be a plain word (letters, dash, underscore — got '$state') → fix: open|merged|closed|draft" ;; esac
   [ -n "$state" ] || die "dashboard-mr-state: --state is required → fix: dashboard-mr-state --project <slug> --task <task-id> --state <state>"
   local d; d="$(proj_dir "$slug")"
   local readme="$d/README.md"

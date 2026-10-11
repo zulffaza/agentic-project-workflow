@@ -1418,7 +1418,7 @@ EXN
 }
 
 render_project_cmd() {
-  local slug="$1" phase="$2" name="$3" plan="$4" planrev="$5" adocs="$6" trevs="$7" d="$9"
+  local slug="$1" phase="$2" name="$3" plan="$4" planrev="$5" adocs="$6" trevs="$7" tids="$8" d="$9"
   local c; c="$(canon "$name")"
   [ -f "$CMDS/$c.md" ] || die "no such command: $c -> fix: $(did_you_mean "$c")"
   if [ "$c" = "pw-review" ]; then
@@ -1504,7 +1504,7 @@ render_project() {
     adocs="$adocs $rel"
   done
   for f in "$d"/task/review/T*.review.md; do [ -f "$f" ] && trevs="$trevs task/review/${f##*/}" || true; done
-  for f in "$d"/task/T[0-9][0-9].md; do [ -f "$f" ] && tids="$tids ${f##*.md}"; done
+  for f in "$d"/task/T[0-9][0-9].md; do [ -f "$f" ] && tids="${tids:-} ${f##*.md}"; done
 
   case "$name" in ""|--json) : ;; *) render_project_cmd "$slug" "$tok" "$name" "$plan" "$planrev" "$adocs" "$trevs" "$tids" "$d"; return 0 ;; esac
 
@@ -1518,7 +1518,7 @@ render_project() {
       if [ -f "$d/$rvf" ]; then st="$(review_state "$slug" "$rvf")"; split_state "$st"; printf '%s{"doc":"%s","review":"%s","gate":"%s","actor":"%s","open":"%s"}' "$sep" "$(jstr "$rel")" "$(jstr "$rvf")" "$(jstr "$RS_DEC")" "$(jstr "$RS_ACT")" "$(jstr "$RS_OPEN")"; sep=", "; fi
     done
     local jtasks=""
-    if [ -n "$tids" ]; then jtasks="$(printf '%s' "${tids# }" | sed -e 's/ /", "/g' | sed -e 's/^/"/' -e 's/$/"/')"; fi
+    if [ -n "${tids:-}" ]; then jtasks="$(printf '%s' "${tids# }" | sed -e 's/ /", "/g' | sed -e 's/^/"/' -e 's/$/"/')"; fi
     printf '],"next":[%s],"tasks":[%s]}\n' "$(render_project_next "$slug" "$tok" "$plan" "$planrev" "$d" json)" "$jtasks"
     return 0
   fi
