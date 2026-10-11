@@ -309,4 +309,4 @@ C248-doctor-env-guard	pw-doctor.sh	        *'"'*|*'`'*|*'$'*|*'\'*|*$'\n'*)	    
 C249-doctor-hook-assert	pw-doctor.sh	pw_hook_dir_ok "$skilldir" || { echo "pw-doctor: provider hook ${p}_skilldir returned an unsafe path	: || { echo "pw-doctor: provider hook ${p}_skilldir returned an unsafe path	T1	^pw-doctor\.t\.sh$
 C250-review-archive-stage-off	pw-review.sh	local htmp; htmp="$(pw_tmpfile "$(dirname "$af")")"	local htmp; htmp="$af.tmp"	T0	
 C251-review-manifest-stage-off	pw-review.sh	tmp; tmp="$(pw_tmpfile "$(dirname "$1")")"	tmp="$tf.tmp"	T0	
-C252-doc-pipe-escape-amp	pw-doc.sh	val="${val//|/\&#124;}"	val="${val//|/&#124;}"	T1	^pw-doc\.t\.sh$
+C252-doc-pipe-escape-amp	pw-doc.sh	sed 's/|/\&#124;/g'	sed 's/|/&#124;/g'	T1	^pw-doc\.t\.sh$

@@ -638,7 +638,11 @@ sync_plan() {
         *) continue ;;
       esac
       [ -n "$val" ] || continue
-      val="${val//|/\&#124;}"   # `&` is the MATCH in a parameter-expansion replacement — escape it or the cell gets `|#124;` (pre-existing bug found by the sample-project smoke)
+      # Pipe → HTML entity. NOT a bash replacement: `&` is literal on bash 3.2 but becomes the
+      # MATCH on bash >= 5.2 (patsub_replacement), and `\&` keeps the backslash on 3.2 — no single
+      # spelling is right on both. A constant-program sed (data via stdin, `\&` = literal &) is
+      # deterministic on every bash and both sed flavors.
+      val="$(printf '%s' "$val" | sed 's/|/\&#124;/g')"
       if ! _plan_cell_update "$work/PLAN.md" "$id" "$col" "$val"; then
         rm -rf "$work"
         die "could not sync PLAN task-table row for $id → fix: add the row for $id to the task table (sync never creates rows)"
