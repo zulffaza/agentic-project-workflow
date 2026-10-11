@@ -57,7 +57,16 @@ for forge, host, url, endpoint in [
         run_env = dict(env)
         if env_extra:
             run_env.update(env_extra)
-        result = subprocess.run(['bash', script, 'history', project.name, op, *args], env=run_env,
+        rest = list(args)
+        mr = None
+        if rest and not rest[0].startswith('--'):
+            mr = rest.pop(0)
+        argv = ['bash', script, 'history', '--project', project.name, '--operation', op]
+        if mr is not None:
+            argv += ['--mr', mr]
+        if rest:
+            argv += ['--options'] + rest
+        result = subprocess.run(argv, env=run_env,
                                 text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd='/')
         if result.returncode != rc:
             print(result.stderr, file=sys.stderr)
@@ -365,7 +374,7 @@ from pathlib import Path
 key = hashlib.sha256(b'glab|gitlab.example.com|projects/pwtest%2Fapi/merge_requests/42').hexdigest()
 Path(sys.argv[1], key + '.json').write_text(json.dumps({'creation_url': 'https://gitlab.example.com/pwtest/api/-/merge_requests/42', 'response': {'state': 'opened', 'sha': 'dead000f', 'description': ''}, 'reads': 0, 'writes': 0}))
 FIXTURE
-pwtest_rc 0 'real ship exec snapshots marked newly created MR through readback' env PWTEST_HISTORY_FORGE_DIR="$ROOT/history-create-forge" PW_CONFIG_FILE="$ROOT/history-forge-config.sh" PWTEST_FORGE_STATE_FILE=/dev/null "$(pwtest_script pw-ship.sh)" exec "$HH_CREATE" T01 "$ROOT/history-create.md"
+pwtest_rc 0 'real ship exec snapshots marked newly created MR through readback' env PWTEST_HISTORY_FORGE_DIR="$ROOT/history-create-forge" PW_CONFIG_FILE="$ROOT/history-forge-config.sh" PWTEST_FORGE_STATE_FILE=/dev/null "$(pwtest_script pw-ship.sh)" exec --project "$HH_CREATE" --task T01 --file "$ROOT/history-create.md"
 pwtest_re 'init: recorded' 'creation integrates initial ownership snapshot'
 [ -d "$PW_PROJECTS_DIR/$HH_CREATE/.ship-history" ] && pwtest_ok 'ownership stored under project, not worktree' || pwtest_bad 'ownership store' 'missing'
 rm -rf "$PW_PROJECTS_DIR/$HH_CREATE"

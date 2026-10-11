@@ -77,7 +77,7 @@ echo
 if [ "${#DETECTED[@]}" -eq 0 ]; then
   echo "No enabled provider CLI is installed. Set PW_PROVIDERS in $CONFIG,"
   echo "install a supported CLI, or add your provider (see ONBOARDING.md)."
-  echo "Scaffolding still works: \$PW_HOME/tooling/scripts/toolchain/scaffold.sh <slug>."
+  echo "Scaffolding still works: \$PW_HOME/tooling/scripts/toolchain/scaffold.sh --project <slug>."
 fi
 
 if [ "$MODE" = "check" ]; then
@@ -173,7 +173,7 @@ echo
 
 # --- 5b. seed the request-review frame + generation prompts (create-only; user customization
 # lives here) ---------------------------------------------------------------------------------
-# Editable Markdown files the user owns: /pw-ship <slug> request-review reads the frame and (for
+# Editable Markdown files the user owns: /pw-ship request-review --project <slug> reads the frame and (for
 # the optional AI prose) the two generation prompts implicitly on every invocation. NEVER
 # overwrite an existing file (install, --force, or rerun): a customized valid file is healthy,
 # not drift. The tracked seeds stay under tooling/templates/ and tooling/prompts/.
@@ -211,4 +211,4 @@ echo "Done. To make the path vars available in your shell now:"
 echo "    source \"$ENV_FILE\""
 echo "(optional) add that line to your ~/.zshrc so it persists."
 echo
-echo "Verify end-to-end (in your agent CLI):  /pw-new demo   then   /pw-status demo"
+echo "Verify end-to-end (in your agent CLI):  /pw-new --project demo   then   /pw-status --project demo"

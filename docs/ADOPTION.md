@@ -17,12 +17,12 @@ instead of by hand. Everything from analysis onward — the gates, review flow, 
 
 `ADOPTED.md` lives in `context/` for a reason: adopting a branch **adds to the baseline** that
 analysis reasons from. So adoption is only meaningful at two moments — never as a way to park in a
-mid-pipeline phase. The trailing `review` keyword picks the intent:
+mid-pipeline phase. The `--intent` flag picks the intent (`continue-dev` is the default):
 
 | Intent | Command | Lands at | For |
 |---|---|---|---|
-| **Continue development** (default) | `/pw-adopt <slug> <repo> <branch> [mr]` | `context` | the branch needs *more work* → analyze → breakdown → execute → ship the **remaining** work |
-| **Review-only** | `/pw-adopt <slug> <repo> <branch> <mr> review` | `review` | branch is **done + already has an MR** → just service MR comments (`/pw-ship … comments`, `/pw-sync`); skips analyze/breakdown |
+| **Continue development** (default) | `/pw-adopt --project <slug> --repo <repo> --branch <branch> [--mr <mr-url>]` | `context` | the branch needs *more work* → analyze → breakdown → execute → ship the **remaining** work |
+| **Review-only** | `/pw-adopt --project <slug> --repo <repo> --branch <branch> --mr <mr-url> --intent review-only` | `review` | branch is **done + already has an MR** → just service MR comments (`/pw-ship comments`, `/pw-sync`); skips analyze/breakdown |
 
 **Phase guard:**
 - Adopting into a **`done`** (closed) project is refused — reopen it deliberately first.
@@ -38,8 +38,8 @@ An **adoption unit** is a tuple `(repo, in-progress-branch, [mr])`. Run `/pw-ado
 in-progress branch** — multi-repo work already in flight = several units:
 
 ```bash
-/pw-adopt my-project repo-a feat-a https://…/mr/42     # unit A1 (has an MR)
-/pw-adopt my-project repo-b feat-b                      # unit A2 (no MR yet)
+/pw-adopt --project my-project --repo repo-a --branch feat-a --mr https://…/mr/42   # unit A1 (has an MR)
+/pw-adopt --project my-project --repo repo-b --branch feat-b                        # unit A2 (no MR yet)
 ```
 
 Each run:
@@ -102,7 +102,7 @@ updates the existing MR(s) for the adopted branches — in the same shipment.
 
 ## What changes downstream (continue-dev intent)
 
-Review-only adopts skip breakdown/execution entirely — they go straight to `/pw-ship … comments`.
+Review-only adopts skip breakdown/execution entirely — they go straight to `/pw-ship comments`.
 For continue-dev, the differences vs a fresh project are:
 
 - **Breakdown** — a task extending an adopted unit gets `Branch:` = that adopted branch (not a new
@@ -112,6 +112,6 @@ For continue-dev, the differences vs a fresh project are:
 - **Execution** — adopted-branch tasks share **one worktree per adopted branch**, attaching the
   existing branch. Serial within a branch, parallel across branches and fresh tasks.
 - **Ship** — each adopted branch is **one shipment**: `/pw-ship` updates its existing MR (no
-  duplicate) or opens one. `/pw-sync` and `/pw-ship … comments` work as normal.
+  duplicate) or opens one. `/pw-sync` and `/pw-ship comments` work as normal.
 
-Full command detail: `/pw-help command pw-adopt`.
+Full command detail: `/pw-help command --name pw-adopt`.

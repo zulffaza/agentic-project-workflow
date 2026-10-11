@@ -3,7 +3,7 @@
 [README](../README.md) · [Recipes](RECIPES.md) · [Workflow](WORKFLOW.md)
 
 Use this page to look up syntax. Use the [walkthrough](WALKTHROUGH.md) to follow a complete project.
-Run `/pw-help command <name> [<slug>]` for the current command's detailed usage.
+Run `/pw-help command --name <name> [--project <slug>]` for the current command's detailed usage.
 Commands belong in your agent session. Setup commands belong in a terminal.
 
 `<slug>` is the project identifier: lowercase letters, digits, and hyphens, starting with a letter or digit (for example, `delivery-note`).
@@ -18,29 +18,29 @@ Task IDs are `T01`, `T02`, etc. Multiple task IDs use spaces.
 
 | Command | Purpose |
 |---|---|
-| `/pw-new <slug>` | Create a fresh project |
-| `/pw-adopt <slug> <repo> <branch> [mr-url] [review]` | Continue existing work; trailing `review` requires an MR |
-| `/pw-context <slug> prepare [brief]` | Let the agent draft the context from your intent: requirements brief, inputs, repository guesses; stops before analysis |
-| `/pw-context <slug> req-init` | Create an optional requirements brief, preserving an existing file |
-| `/pw-context <slug> add-input --file <f> --what <description> --source <source> [--trust <notes>]` | Register one input's provenance |
-| `/pw-context <slug> add-repo <repo> <base> <why>` | Register repository scope |
-| `/pw-research "<question>"` | Answer one question without a project |
-| `/pw-research <slug> --context [focus]` | Check the project's context against sources and code |
-| `/pw-analyze <slug> [focus]` | Produce analysis from the context |
-| `/pw-breakdown <slug>` | Turn approved analysis into PLAN and tasks |
+| `/pw-new --project <slug>` | Create a fresh project |
+| `/pw-adopt --project <slug> --repo <repo> --branch <branch> [--mr <mr-url>] [--intent continue-dev\|review-only]` | Continue existing work; `--intent review-only` requires an MR |
+| `/pw-context prepare --project <slug> [--brief <prose…>]` | Let the agent draft the context from your intent: requirements brief, inputs, repository guesses; stops before analysis |
+| `/pw-context req-init --project <slug>` | Create an optional requirements brief, preserving an existing file |
+| `/pw-context add-input --project <slug> --file <f> --what <description> --source <source> [--trust <notes>]` | Register one input's provenance |
+| `/pw-context add-repo --project <slug> --repo <repo> --base <base> --why <why>` | Register repository scope |
+| `/pw-research --question "<question>"` | Answer one question without a project |
+| `/pw-research --project <slug> --context [--focus <focus>]` | Check the project's context against sources and code |
+| `/pw-analyze --project <slug> [--focus <focus>]` | Produce analysis from the context |
+| `/pw-breakdown --project <slug>` | Turn approved analysis into PLAN and tasks |
 
 ### Review and approve
 
 | Command | Purpose |
 |---|---|
-| `/pw-review <slug> [phase\|task-ids\|review-path]` | Apply recorded feedback; default scope follows the current phase |
-| `/pw-review <slug> init <artifact-path> [artifact-path…]` | Create reviews for exactly the named existing artifacts |
-| `/pw-review <slug> init-all` | Create missing reviews for the current phase only |
-| `/pw-review <slug> item <review-path> --section <section words> --text <ask>` | Record feedback with a heading or anchor and your requested change |
-| `/pw-review <slug> item <review-path> <section-token> <ask>` | Short form for a single section token, such as `§4` |
-| `/pw-review <slug> answer <review-path> <Qid> <answer>` | Record an answer to an existing question |
-| `/pw-review <slug> signoff <review-path> <decision>` | Record your `approved`, `changes-requested`, or `in-review` decision |
-| `/pw-review <slug> ai [phase\|task-ids\|review-path]` | Request a fresh AI pass for an enabled review mode |
+| `/pw-review --project <slug> [--phase <phase> \| --task <task-id>… \| --file <review-path>]` | Apply recorded feedback; default scope follows the current phase |
+| `/pw-review init --project <slug> --file <artifact-path> [--file <artifact-path>…]` | Create reviews for exactly the named existing artifacts |
+| `/pw-review init-all --project <slug>` | Create missing reviews for the current phase only |
+| `/pw-review item --project <slug> --file <review-path> --section <section words> --text <ask>` | Record feedback with a heading or anchor and your requested change |
+| `/pw-review item --project <slug> --file <review-path> --section §4 --text <ask>` | Same flags; a single section token such as `§4` |
+| `/pw-review answer --project <slug> --file <review-path> --question <Qid> --text <answer>` | Record an answer to an existing question |
+| `/pw-review signoff --project <slug> --file <review-path> --decision <approved\|changes-requested\|in-review>` | Record your approval decision |
+| `/pw-review ai --project <slug> [--surface <surface> \| --task <task-id>… \| --file <review-path>]` | Request a fresh AI pass for an enabled review mode |
 
 `init` takes the artifact path, such as `task/PLAN.md`. `item`, `answer`, and `signoff` take its review path.
 For `item`:
@@ -49,8 +49,8 @@ For `item`:
 - `--text` is the feedback you want applied.
 - Both values can contain spaces; each ends at the next flag or the end of the command. No quoting is needed.
 
-The flags record feedback. Apply it afterward with `/pw-review <slug> <review-path>` for one file.
-`plan` (or `task`) instead selects the `task/review/` directory, including individual task reviews.
+The flags record feedback. Apply it afterward with `/pw-review --project <slug> --file <review-path>` for one file.
+`--phase plan` (or `--phase task`) instead selects the `task/review/` directory, including individual task reviews.
 See [review scope selection](REVIEW.md#apply-feedback-to-the-scope-you-choose).
 An answer alone does not resolve its question.
 See [review](REVIEW.md) for scope, gate transitions, and AI approval safeguards.
@@ -59,19 +59,19 @@ See [review](REVIEW.md) for scope, gate transitions, and AI approval safeguards.
 
 | Command | Purpose |
 |---|---|
-| `/pw-execute <slug> [task-ids]` | Execute selected tasks, or resume the remaining plan |
-| `/pw-execute <slug> --wave` | Run only the tasks ready at this checkpoint |
-| `/pw-execute <slug> T02 with <model-or-agent>` | Override execution choice for the selected task |
-| `/pw-execute <slug> --acceptance <manual\|auto>` | Override result acceptance for one run |
-| `/pw-execute <slug> --then-ship` | Request shipping after execution, with push confirmation |
-| `/pw-ship <slug> [task-ids] [--skip-build-check]` | Push verified branches, open MRs, and monitor CI |
-| `/pw-ship <slug> [task-ids] comments [--skip-build-check]` | Handle MR feedback, including fixes, pushes, and replies |
-| `/pw-ship <slug> request-review [all\|task-ids] [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]` | Read-only: one copyable teammate review request for the open MRs |
-| `/pw-ship <slug> stack` | Preview stack topology and health without writes |
-| `/pw-ship <slug> stack adopt [task-ids] [--apply]` | Preview an existing stack import; `--apply` records it |
-| `/pw-sync <slug> [task-ids]` | Refresh open MR branches against changed targets, verify, and push |
-| `/pw-verify <repo-ref\|worktree-path\|task-path> [--commit <sha>] [note]` | Independently verify a result without fixing it |
-| `/pw-close <slug>` | Check acceptance, record learnings, and clean eligible worktrees |
+| `/pw-execute --project <slug> [--task <task-id>…]` | Execute selected tasks, or resume the remaining plan |
+| `/pw-execute --project <slug> --wave` | Run only the tasks ready at this checkpoint |
+| `/pw-execute --project <slug> --task T02 --model <provider:model\|agent>` | Override execution choice for the selected task |
+| `/pw-execute --project <slug> --acceptance <manual\|auto>` | Override result acceptance for one run |
+| `/pw-execute --project <slug> --then-ship` | Request shipping after execution, with push confirmation |
+| `/pw-ship --project <slug> [--task <task-id>…] [--skip-build-check]` | Push verified branches, open MRs, and monitor CI |
+| `/pw-ship comments --project <slug> [--task <task-id>…] [--skip-build-check]` | Handle MR feedback, including fixes, pushes, and replies |
+| `/pw-ship request-review --project <slug> [--all \| --task <task-id>…] [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]` | Read-only: one copyable teammate review request for the open MRs |
+| `/pw-ship stack --project <slug>` | Preview stack topology and health without writes |
+| `/pw-ship stack-adopt --project <slug> [--task <task-id>…] [--apply]` | Preview an existing stack import; `--apply` records it |
+| `/pw-sync --project <slug> [--task <task-id>…]` | Refresh open MR branches against changed targets, verify, and push |
+| `/pw-verify --repo-ref <repo-ref> | --worktree <worktree-path> | --task <task-path> [--commit <sha>] [--note <note>]` | Independently verify a result without fixing it |
+| `/pw-close --project <slug>` | Check acceptance, record learnings, and clean eligible worktrees |
 
 `--skip-build-check` skips the ship CI monitor. It still publishes changes.
 On local task review, the same flag skips the repair verification loop; the recap must identify the unchecked result.
@@ -87,17 +87,17 @@ It is separate from PLAN approval and MR merging.
 | `/pw-help project <slug> [name]` | Show commands that apply to the project now |
 | `/pw-help workflow` | Show the phase sequence and gates |
 | `/pw-help find <term>` | Search command and user documentation |
-| `/pw-status <slug>` | Show project progress and blockers |
-| `/pw-status <slug> rewind <phase>` | Reopen an earlier phase with a review trail |
+| `/pw-status --project <slug>` | Show project progress and blockers |
+| `/pw-status rewind --project <slug> --phase <phase>` | Reopen an earlier phase with a review trail |
 | `/pw-status --all` | Overview of every project: phase, attention, accepted tasks, last activity; optional `--attention`, `--phase <phase>`, `--json` |
 | `/pw-doctor [--fix]` | Check or repair installation consistency |
 | `/pw-doctor --project <slug> [--fix]` | Check or repair supported project consistency findings |
 | `/pw-doctor --project <slug> --guidance` | Preview recognized guidance updates in an existing project |
 | `/pw-doctor --project <slug> --guidance --apply` | Apply the selected project's recognized guidance updates |
-| `/pw-config <slug> [show]` | Show project settings and their sources |
-| `/pw-config <slug> get <key>` | Read one value |
-| `/pw-config <slug> set <key> <value…>` | Validate and change a project setting |
-| `/pw-config <slug> ensure` | Add missing config fields with defaults |
+| `/pw-config show --project <slug>` | Show project settings and their sources |
+| `/pw-config get --project <slug> --key <key>` | Read one value |
+| `/pw-config set --project <slug> --key <key> --value <value…>` | Validate and change a project setting |
+| `/pw-config ensure --project <slug>` | Add missing config fields with defaults |
 | `/pw-config global show` | Read machine settings; no project slug |
 | `/pw-config model-check <provider> <model-id>` | Check model permission against the allowlist; no project slug |
 
@@ -105,7 +105,7 @@ Guidance preview writes nothing. Applying it repairs recognized prose, preservin
 Health repair (`--fix`) and guidance repair are separate modes. See the [preview/apply recipe](RECIPES.md#refresh-old-project-guidance-after-a-workflow-update).
 
 Model permission does not prove live availability. Pin writes also validate the catalog and provider scope.
-For optional RFCs, use `/pw-rfc <slug> [--target <ref>]`, `/pw-rfc <slug> milestone`, or `/pw-rfc <slug> comments`.
+For optional RFCs, use `/pw-rfc --project <slug> [--target <ref>]`, `/pw-rfc milestone --project <slug>`, or `/pw-rfc comments --project <slug>`.
 The [RFC guide](RFC.md) explains publication, targets, and the local comment loop.
 
 ### What you can update per project (`/pw-config`)

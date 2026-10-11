@@ -2,7 +2,7 @@
 
 ← [back to README](../README.md)
 
-Symptom → what to do. If you don't see your symptom here, `/pw-status <slug>` (where a project
+Symptom → what to do. If you don't see your symptom here, `/pw-status --project <slug>` (where a project
 actually is) and `/pw-doctor` (whether your install is actually in sync) answer most "why isn't
 this working" questions before you go digging further. Every entry below is self-contained: the
 action, plus the one-line cause where knowing it helps.
@@ -13,9 +13,9 @@ action, plus the one-line cause where knowing it helps.
 |---|---|
 | Unsure what to run next | `/pw-help project <slug>` |
 | Command missing or stale | `/pw-doctor`; if unavailable, follow [setup recovery](../ONBOARDING.md#troubleshooting--pw-doctor) |
-| Execution stopped or session ended | `/pw-status <slug>`, then resume the appropriate task scope |
+| Execution stopped or session ended | `/pw-status --project <slug>`, then resume the appropriate task scope |
 | Approval blocks the next step | Read the named review file, apply feedback, and explicitly sign off after review |
-| Model unavailable or project records disagree | `/pw-doctor --project <slug>` and `/pw-config <slug> show` |
+| Model unavailable or project records disagree | `/pw-doctor --project <slug>` and `/pw-config show --project <slug>` |
 
 Read the detailed symptom below for the cause and recovery action.
 `--fix` repairs supported deterministic findings. It does not supply approval or settle project decisions.
@@ -52,7 +52,7 @@ exactly this reason — it's not a bug, just a git-worktree invariant.
 **Symptom:** `task/PLAN.md`'s status table still shows a task as `in-progress`, but nothing is
 actually running — the orchestrator session that started it was killed, crashed, or you closed it.
 
-**Fix:** just re-run `/pw-execute <slug>` (or `/pw-execute <slug> <task-id>` for just that one).
+**Fix:** just re-run `/pw-execute --project <slug>` (or `/pw-execute --project <slug> --task <task-id>` for just that one).
 Step 2 of `/pw-execute` explicitly treats `in-progress` as a stale/crashed run and re-runs it as
 part of a normal resume — you do **not** need to hand-edit the status back to `todo` first. If the
 task's worktree already has partial/uncommitted changes from the crashed attempt, the re-run
@@ -67,7 +67,7 @@ Close skips a worktree when you are inside it or it contains uncommitted changes
 
 - If it is your current directory, move to the bundle or project root. Close terminals or editor tabs tied to that worktree.
 - If it is dirty, inspect the changes and commit or stash the work you need.
-- Re-run `/pw-close <slug>` from outside the worktree.
+- Re-run `/pw-close --project <slug>` from outside the worktree.
 
 If you want to discard dirty work, tell the agent explicitly. It must confirm before removing that worktree.
 
@@ -102,14 +102,14 @@ mid-flight.
 Inspect the current settings and all affected rows:
 
 ```text
-/pw-config <slug> show
+/pw-config show --project <slug>
 /pw-doctor --project <slug>
 ```
 
 Choose a real, in-scope model from the reported candidates, then update the pin:
 
 ```text
-/pw-config <slug> set pin T02=<provider>:<model-id>
+/pw-config set --project <slug> --key pin --set T02=<provider>:<model-id>
 ```
 
 Use the affected task ID. This updates both the task and its PLAN row.
@@ -169,7 +169,7 @@ After updating the bundle, run `/pw-doctor` and repair reported installation dri
 To retry a pending review-attempt delivery, use the affected task ID:
 
 ```text
-/pw-ship <slug> T02 comments
+/pw-ship comments --project <slug> --task T02
 ```
 
 The retry reuses the saved attempt block and its original order. It also processes any new actionable comments.
@@ -178,7 +178,7 @@ See [description and review-attempt history](REVIEW.md#description-and-review-at
 
 ## "The review-request message looks wrong, or the frame file is missing"
 
-`/pw-ship <slug> request-review` renders its message through one editable frame file and writes
+`/pw-ship request-review --project <slug>` renders its message through one editable frame file and writes
 the optional prose under two editable prompts. The defaults live under `user/` in your workflow
 install: `user/templates/review-request.md` (layout), `user/prompts/review-request-summary.md`
 (`--summary` / `--mr-summary`), and `user/prompts/review-request-note.md` (`--note`). Each of the
@@ -210,7 +210,7 @@ start, ship, and close depend on that parent:
 - **Won't ship:** a stacked child's MR targets the parent's branch, so the parent's branch must be
   published first — ship the parent, then the child. Merge order is parent, then child.
 - **Won't close / shows "stale":** an upstream parent changed after the child was verified (or a
-  stack update is still in progress). Run `/pw-sync <slug> <child>` to merge the updated parent,
+  stack update is still in progress). Run `/pw-sync --project <slug> --task <child>` to merge the updated parent,
   re-verify, and push — that clears the debt. A squash/rebase parent landing keeps the child
   promotion blocked on purpose until you approve an explicit restack; a blind rebase can lose work.
   A not-yet-started stacked child shows **unverified** (not stale): it does not block shipping its
@@ -220,13 +220,13 @@ start, ship, and close depend on that parent:
   re-run the retarget with `--apply` to finish the local state and dashboard. It resumes the pending
   recovery row and does **not** write to the forge again. Never delete a pending recovery row by
   hand; `stack-debt` blocks shipping until it resolves.
-- **Preview anything first:** `/pw-ship <slug> stack` shows the parents, targets, freshness, and any
+- **Preview anything first:** `/pw-ship stack --project <slug>` shows the parents, targets, freshness, and any
   pending update without changing a thing. `/pw-doctor --project <slug>` reports stack topology and
   PLAN/field mismatches (and `--fix` re-syncs the PLAN `Stacked on` cell).
 
 ## "I don't know what state a project is in, or what to run next"
 
-`/pw-status <slug>` — it's built for exactly this question (phase, dashboard `Status:`, what's
+`/pw-status --project <slug>` — it's built for exactly this question (phase, dashboard `Status:`, what's
 still open, what command comes next). Don't try to reconstruct it by reading `LOG.md`/`PLAN.md` by
 hand first.
 

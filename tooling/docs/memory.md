@@ -32,7 +32,7 @@ use the tool). `PW_MEMORY_NOTES` is where you write a one-paragraph reminder for
 different agent.
 
 ### Where the `/pw-*` commands touch memory (only when configured)
-- **`/pw-context <slug> prepare`** — *searches* configured knowledge, then relevant recent memory,
+- **`/pw-context prepare --project <slug>`** — *searches* configured knowledge, then relevant recent memory,
   while drafting requirements, inputs, and repository guesses. A hit is a discovery pointer: follow
   its source; keep a recollection only as an explicitly unverified note when the source is
   unavailable. No memory configured changes nothing in the saved result; **preparation never writes

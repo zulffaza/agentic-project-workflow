@@ -14,12 +14,12 @@ done
 B_PROJECT=review-binding
 rm -rf "$PW_PROJECTS_DIR/$B_PROJECT"; cp -a "$F2" "$PW_PROJECTS_DIR/$B_PROJECT"
 B_CFG="$(pwtest_script pw-config.sh)"; B_REVIEW="$(pwtest_script pw-review.sh)"
-pwtest_rc 0 "task-plan auto policy configured independently" "$B_CFG" ai-review "$B_PROJECT" task-plan auto
-pwtest_rc 0 "PLAN policy stays advisory" "$B_CFG" ai-review "$B_PROJECT" plan advisory
-pwtest_rc 2 "task-plan auto cannot approve PLAN under its different policy" "$B_REVIEW" auto-signoff "$B_PROJECT" task/review/PLAN.review.md task-plan --confirm-earlier
-pwtest_rc 0 "fixture enters normal task-result review" "$(pwtest_script pw-status.sh)" status "$B_PROJECT" review
-pwtest_rc 0 "task-result feedback is recorded during review" "$B_REVIEW" add-item "$B_PROJECT" task/review/T04.review.md --section '§4' --text 'Recheck this task result.'
-pwtest_rc 0 "current task result needs no earlier-gate confirmation" "$B_REVIEW" start "$B_PROJECT" task/review/T04.review.md
+pwtest_rc 0 "task-plan auto policy configured independently" "$B_CFG" set --project "$B_PROJECT" --key ai-review --set task-plan=auto
+pwtest_rc 0 "PLAN policy stays advisory" "$B_CFG" set --project "$B_PROJECT" --key ai-review --set plan=advisory
+pwtest_rc 2 "task-plan auto cannot approve PLAN under its different policy" "$B_REVIEW" auto-signoff --project "$B_PROJECT" --file task/review/PLAN.review.md --phase task-plan --confirm-earlier
+pwtest_rc 0 "fixture enters normal task-result review" "$(pwtest_script pw-status.sh)" status --project "$B_PROJECT" --phase review
+pwtest_rc 0 "task-result feedback is recorded during review" "$B_REVIEW" add-item --project "$B_PROJECT" --file task/review/T04.review.md --section '§4' --text 'Recheck this task result.'
+pwtest_rc 0 "current task result needs no earlier-gate confirmation" "$B_REVIEW" start --project "$B_PROJECT" --file task/review/T04.review.md
 rm -rf "$PW_PROJECTS_DIR/$B_PROJECT"
 
 # A callback runs inside a conditional transaction, where errexit cannot protect it.

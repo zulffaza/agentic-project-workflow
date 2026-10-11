@@ -1,113 +1,226 @@
 selftest: pw-status.sh --selftest	pw-status.sh	--selftest	0	-
-status pwt-f1-scaffold	pw-status.sh	pwt-f1-scaffold --skip-cli-check	0	-
-review-scan pwt-f1-scaffold	pw-review.sh	scan pwt-f1-scaffold	0	-
-lint-all pwt-f1-scaffold	pw-doc.sh	lint all pwt-f1-scaffold	0	-
-lint-plan pwt-f1-scaffold	pw-doc.sh	lint plan pwt-f1-scaffold	2	-
-lint-dashboard pwt-f1-scaffold	pw-doc.sh	lint dashboard pwt-f1-scaffold	0	-
-lint-analysis pwt-f1-scaffold	pw-doc.sh	lint analysis pwt-f1-scaffold	2	-
-lint-review pwt-f1-scaffold	pw-doc.sh	lint review pwt-f1-scaffold task/review/PLAN.review.md	2	-
-lint-task-t01 pwt-f1-scaffold	pw-doc.sh	lint task pwt-f1-scaffold T01	2	-
-summary-plan pwt-f1-scaffold	pw-doc.sh	summary plan pwt-f1-scaffold	2	-
-summary-project pwt-f1-scaffold	pw-doc.sh	summary project pwt-f1-scaffold	0	-
-summary-task pwt-f1-scaffold	pw-doc.sh	summary task pwt-f1-scaffold T01	2	-
-summary-analysis pwt-f1-scaffold	pw-doc.sh	summary analysis pwt-f1-scaffold	2	-
-resolve pwt-f1-scaffold	pw-ship.sh	resolve pwt-f1-scaffold	2	-
-batch pwt-f1-scaffold	pw-ship.sh	mr-state-batch pwt-f1-scaffold	2	-
-stack-preview pwt-f1-scaffold	pw-ship.sh	stack pwt-f1-scaffold	0	-
-stack-validate pwt-f1-scaffold	pw-ship.sh	stack-validate pwt-f1-scaffold	0	-
-stack-plan pwt-f1-scaffold	pw-ship.sh	stack-plan pwt-f1-scaffold	0	-
-stack-report pwt-f1-scaffold	pw-status.sh	stack pwt-f1-scaffold	0	-
-rfc pwt-f1-scaffold	pw-rfc.sh	comments pwt-f1-scaffold	2	-
-adopt pwt-f1-scaffold	pw-context.sh	adopt-snapshot pwt-f1-scaffold api agent/pwt-f1-scaffold/T01-thing	2	-
-help project pwt-f1-scaffold	pw-help.sh	project pwt-f1-scaffold	0	-
-help project-review pwt-f1-scaffold	pw-help.sh	project pwt-f1-scaffold pw-review	0	-
-provider-audit pwt-f1-scaffold	pw-status.sh	provider-audit pwt-f1-scaffold	2	-
-status pwt-f2-mid	pw-status.sh	pwt-f2-mid --skip-cli-check	0	-
-review-scan pwt-f2-mid	pw-review.sh	scan pwt-f2-mid	0	-
-lint-all pwt-f2-mid	pw-doc.sh	lint all pwt-f2-mid	0	-
-lint-plan pwt-f2-mid	pw-doc.sh	lint plan pwt-f2-mid	0	-
-lint-dashboard pwt-f2-mid	pw-doc.sh	lint dashboard pwt-f2-mid	0	-
-lint-analysis pwt-f2-mid	pw-doc.sh	lint analysis pwt-f2-mid	2	-
-lint-review pwt-f2-mid	pw-doc.sh	lint review pwt-f2-mid task/review/PLAN.review.md	0	-
-lint-task-t01 pwt-f2-mid	pw-doc.sh	lint task pwt-f2-mid T01	0	-
-summary-plan pwt-f2-mid	pw-doc.sh	summary plan pwt-f2-mid	0	-
-summary-project pwt-f2-mid	pw-doc.sh	summary project pwt-f2-mid	0	-
-summary-task pwt-f2-mid	pw-doc.sh	summary task pwt-f2-mid T01	0	-
-summary-analysis pwt-f2-mid	pw-doc.sh	summary analysis pwt-f2-mid	2	-
-resolve pwt-f2-mid	pw-ship.sh	resolve pwt-f2-mid	0	-
-batch pwt-f2-mid	pw-ship.sh	mr-state-batch pwt-f2-mid	0	-
-stack-preview pwt-f2-mid	pw-ship.sh	stack pwt-f2-mid	0	-
-stack-validate pwt-f2-mid	pw-ship.sh	stack-validate pwt-f2-mid	0	-
-stack-plan pwt-f2-mid	pw-ship.sh	stack-plan pwt-f2-mid	0	-
-stack-report pwt-f2-mid	pw-status.sh	stack pwt-f2-mid	0	-
-rfc pwt-f2-mid	pw-rfc.sh	comments pwt-f2-mid	2	-
-adopt pwt-f2-mid	pw-context.sh	adopt-snapshot pwt-f2-mid api agent/pwt-f2-mid/T01-thing	0	-
-help project pwt-f2-mid	pw-help.sh	project pwt-f2-mid	0	-
-help project-review pwt-f2-mid	pw-help.sh	project pwt-f2-mid pw-review	0	-
-provider-audit pwt-f2-mid	pw-status.sh	provider-audit pwt-f2-mid	0	-
-status pwt-f3-hostile	pw-status.sh	pwt-f3-hostile --skip-cli-check	0	-
-review-scan pwt-f3-hostile	pw-review.sh	scan pwt-f3-hostile	0	-
-lint-all pwt-f3-hostile	pw-doc.sh	lint all pwt-f3-hostile	1	-
-lint-plan pwt-f3-hostile	pw-doc.sh	lint plan pwt-f3-hostile	0	-
-lint-dashboard pwt-f3-hostile	pw-doc.sh	lint dashboard pwt-f3-hostile	1	-
-lint-analysis pwt-f3-hostile	pw-doc.sh	lint analysis pwt-f3-hostile	2	-
-lint-review pwt-f3-hostile	pw-doc.sh	lint review pwt-f3-hostile task/review/PLAN.review.md	0	-
-lint-task-t01 pwt-f3-hostile	pw-doc.sh	lint task pwt-f3-hostile T01	0	-
-summary-plan pwt-f3-hostile	pw-doc.sh	summary plan pwt-f3-hostile	0	-
-summary-project pwt-f3-hostile	pw-doc.sh	summary project pwt-f3-hostile	0	-
-summary-task pwt-f3-hostile	pw-doc.sh	summary task pwt-f3-hostile T01	0	-
-summary-analysis pwt-f3-hostile	pw-doc.sh	summary analysis pwt-f3-hostile	2	-
-resolve pwt-f3-hostile	pw-ship.sh	resolve pwt-f3-hostile	0	-
-batch pwt-f3-hostile	pw-ship.sh	mr-state-batch pwt-f3-hostile	0	-
-stack-preview pwt-f3-hostile	pw-ship.sh	stack pwt-f3-hostile	0	-
-stack-validate pwt-f3-hostile	pw-ship.sh	stack-validate pwt-f3-hostile	0	-
-stack-plan pwt-f3-hostile	pw-ship.sh	stack-plan pwt-f3-hostile	0	-
-stack-report pwt-f3-hostile	pw-status.sh	stack pwt-f3-hostile	0	-
-rfc pwt-f3-hostile	pw-rfc.sh	comments pwt-f3-hostile	2	-
-adopt pwt-f3-hostile	pw-context.sh	adopt-snapshot pwt-f3-hostile api agent/pwt-f3-hostile/T01-thing	0	-
-help project pwt-f3-hostile	pw-help.sh	project pwt-f3-hostile	0	-
-help project-review pwt-f3-hostile	pw-help.sh	project pwt-f3-hostile pw-review	0	-
-provider-audit pwt-f3-hostile	pw-status.sh	provider-audit pwt-f3-hostile	0	-
+status pwt-f1-scaffold	pw-status.sh	--project pwt-f1-scaffold --skip-cli-check	0	-
+review-scan pwt-f1-scaffold	pw-review.sh	scan --project pwt-f1-scaffold	0	-
+lint-all pwt-f1-scaffold	pw-doc.sh	lint --kind all --project pwt-f1-scaffold	0	-
+lint-plan pwt-f1-scaffold	pw-doc.sh	lint --kind plan --project pwt-f1-scaffold	2	-
+lint-dashboard pwt-f1-scaffold	pw-doc.sh	lint --kind dashboard --project pwt-f1-scaffold	0	-
+lint-analysis pwt-f1-scaffold	pw-doc.sh	lint --kind analysis --project pwt-f1-scaffold	2	-
+lint-review pwt-f1-scaffold	pw-doc.sh	lint --kind review --project pwt-f1-scaffold --file task/review/PLAN.review.md	2	-
+lint-task-t01 pwt-f1-scaffold	pw-doc.sh	lint --kind task --project pwt-f1-scaffold --file T01	2	-
+summary-plan pwt-f1-scaffold	pw-doc.sh	summary --kind plan --project pwt-f1-scaffold	2	-
+summary-project pwt-f1-scaffold	pw-doc.sh	summary --kind project --project pwt-f1-scaffold	0	-
+summary-task pwt-f1-scaffold	pw-doc.sh	summary --kind task --project pwt-f1-scaffold --file T01	2	-
+summary-analysis pwt-f1-scaffold	pw-doc.sh	summary --kind analysis --project pwt-f1-scaffold	2	-
+resolve pwt-f1-scaffold	pw-ship.sh	resolve --project pwt-f1-scaffold	2	-
+batch pwt-f1-scaffold	pw-ship.sh	mr-state-batch --project pwt-f1-scaffold	2	-
+stack-preview pwt-f1-scaffold	pw-ship.sh	stack --project pwt-f1-scaffold	0	-
+stack-validate pwt-f1-scaffold	pw-ship.sh	stack-validate --project pwt-f1-scaffold	0	-
+stack-plan pwt-f1-scaffold	pw-ship.sh	stack-plan --project pwt-f1-scaffold	0	-
+stack-report pwt-f1-scaffold	pw-status.sh	stack --project pwt-f1-scaffold	0	-
+rfc pwt-f1-scaffold	pw-rfc.sh	comments --project pwt-f1-scaffold	2	-
+adopt pwt-f1-scaffold	pw-context.sh	adopt-snapshot --project pwt-f1-scaffold --repo api --branch agent/pwt-f1-scaffold/T01-thing	2	-
+help project pwt-f1-scaffold	pw-help.sh	project --project pwt-f1-scaffold	0	-
+help project-review pwt-f1-scaffold	pw-help.sh	project --project pwt-f1-scaffold --name pw-review	0	-
+provider-audit pwt-f1-scaffold	pw-status.sh	provider-audit --project pwt-f1-scaffold	2	-
+status pwt-f2-mid	pw-status.sh	--project pwt-f2-mid --skip-cli-check	0	-
+review-scan pwt-f2-mid	pw-review.sh	scan --project pwt-f2-mid	0	-
+lint-all pwt-f2-mid	pw-doc.sh	lint --kind all --project pwt-f2-mid	0	-
+lint-plan pwt-f2-mid	pw-doc.sh	lint --kind plan --project pwt-f2-mid	0	-
+lint-dashboard pwt-f2-mid	pw-doc.sh	lint --kind dashboard --project pwt-f2-mid	0	-
+lint-analysis pwt-f2-mid	pw-doc.sh	lint --kind analysis --project pwt-f2-mid	2	-
+lint-review pwt-f2-mid	pw-doc.sh	lint --kind review --project pwt-f2-mid --file task/review/PLAN.review.md	0	-
+lint-task-t01 pwt-f2-mid	pw-doc.sh	lint --kind task --project pwt-f2-mid --file T01	0	-
+summary-plan pwt-f2-mid	pw-doc.sh	summary --kind plan --project pwt-f2-mid	0	-
+summary-project pwt-f2-mid	pw-doc.sh	summary --kind project --project pwt-f2-mid	0	-
+summary-task pwt-f2-mid	pw-doc.sh	summary --kind task --project pwt-f2-mid --file T01	0	-
+summary-analysis pwt-f2-mid	pw-doc.sh	summary --kind analysis --project pwt-f2-mid	2	-
+resolve pwt-f2-mid	pw-ship.sh	resolve --project pwt-f2-mid	0	-
+batch pwt-f2-mid	pw-ship.sh	mr-state-batch --project pwt-f2-mid	0	-
+stack-preview pwt-f2-mid	pw-ship.sh	stack --project pwt-f2-mid	0	-
+stack-validate pwt-f2-mid	pw-ship.sh	stack-validate --project pwt-f2-mid	0	-
+stack-plan pwt-f2-mid	pw-ship.sh	stack-plan --project pwt-f2-mid	0	-
+stack-report pwt-f2-mid	pw-status.sh	stack --project pwt-f2-mid	0	-
+rfc pwt-f2-mid	pw-rfc.sh	comments --project pwt-f2-mid	2	-
+adopt pwt-f2-mid	pw-context.sh	adopt-snapshot --project pwt-f2-mid --repo api --branch agent/pwt-f2-mid/T01-thing	0	-
+help project pwt-f2-mid	pw-help.sh	project --project pwt-f2-mid	0	-
+help project-review pwt-f2-mid	pw-help.sh	project --project pwt-f2-mid --name pw-review	0	-
+provider-audit pwt-f2-mid	pw-status.sh	provider-audit --project pwt-f2-mid	0	-
+status pwt-f3-hostile	pw-status.sh	--project pwt-f3-hostile --skip-cli-check	0	-
+review-scan pwt-f3-hostile	pw-review.sh	scan --project pwt-f3-hostile	0	-
+lint-all pwt-f3-hostile	pw-doc.sh	lint --kind all --project pwt-f3-hostile	1	-
+lint-plan pwt-f3-hostile	pw-doc.sh	lint --kind plan --project pwt-f3-hostile	0	-
+lint-dashboard pwt-f3-hostile	pw-doc.sh	lint --kind dashboard --project pwt-f3-hostile	1	-
+lint-analysis pwt-f3-hostile	pw-doc.sh	lint --kind analysis --project pwt-f3-hostile	2	-
+lint-review pwt-f3-hostile	pw-doc.sh	lint --kind review --project pwt-f3-hostile --file task/review/PLAN.review.md	0	-
+lint-task-t01 pwt-f3-hostile	pw-doc.sh	lint --kind task --project pwt-f3-hostile --file T01	0	-
+summary-plan pwt-f3-hostile	pw-doc.sh	summary --kind plan --project pwt-f3-hostile	0	-
+summary-project pwt-f3-hostile	pw-doc.sh	summary --kind project --project pwt-f3-hostile	0	-
+summary-task pwt-f3-hostile	pw-doc.sh	summary --kind task --project pwt-f3-hostile --file T01	0	-
+summary-analysis pwt-f3-hostile	pw-doc.sh	summary --kind analysis --project pwt-f3-hostile	2	-
+resolve pwt-f3-hostile	pw-ship.sh	resolve --project pwt-f3-hostile	0	-
+batch pwt-f3-hostile	pw-ship.sh	mr-state-batch --project pwt-f3-hostile	0	-
+stack-preview pwt-f3-hostile	pw-ship.sh	stack --project pwt-f3-hostile	0	-
+stack-validate pwt-f3-hostile	pw-ship.sh	stack-validate --project pwt-f3-hostile	0	-
+stack-plan pwt-f3-hostile	pw-ship.sh	stack-plan --project pwt-f3-hostile	0	-
+stack-report pwt-f3-hostile	pw-status.sh	stack --project pwt-f3-hostile	0	-
+rfc pwt-f3-hostile	pw-rfc.sh	comments --project pwt-f3-hostile	2	-
+adopt pwt-f3-hostile	pw-context.sh	adopt-snapshot --project pwt-f3-hostile --repo api --branch agent/pwt-f3-hostile/T01-thing	0	-
+help project pwt-f3-hostile	pw-help.sh	project --project pwt-f3-hostile	0	-
+help project-review pwt-f3-hostile	pw-help.sh	project --project pwt-f3-hostile --name pw-review	0	-
+provider-audit pwt-f3-hostile	pw-status.sh	provider-audit --project pwt-f3-hostile	0	-
 status-all fixtures	pw-status.sh	--all	1	-
-review-prepare pwt-f2-mid	pw-review.sh	prepare pwt-f2-mid task/PLAN.md --pass-id p-batt	0	-
-review-passes pwt-f2-mid	pw-review.sh	passes pwt-f2-mid	0	-
-review-read-passes pwt-f2-mid	pw-review-read.sh	passes pwt-f2-mid	0	-
-review-prepare pwt-f3-hostile	pw-review.sh	prepare pwt-f3-hostile task/PLAN.md --pass-id p-batt	0	-
-review-passes pwt-f3-hostile	pw-review.sh	passes pwt-f3-hostile	0	-
-review-read-passes pwt-f3-hostile	pw-review-read.sh	passes pwt-f3-hostile	0	-
-review-import-refusal pwt-f1-scaffold	pw-review.sh	import pwt-f1-scaffold --report no-such-report.json	2	-
-review-trigger-get pwt-f1-scaffold	pw-config.sh	project get pwt-f1-scaffold review-trigger	0	-
-review-repair-get pwt-f1-scaffold	pw-config.sh	project get pwt-f1-scaffold review-repair	0	-
-review-rounds-get pwt-f1-scaffold	pw-config.sh	project get pwt-f1-scaffold review-rounds	0	-
-review-trigger-get pwt-f2-mid	pw-config.sh	project get pwt-f2-mid review-trigger	0	-
-review-repair-get pwt-f2-mid	pw-config.sh	project get pwt-f2-mid review-repair	0	-
-review-rounds-get pwt-f2-mid	pw-config.sh	project get pwt-f2-mid review-rounds	0	-
-review-trigger-get pwt-f3-hostile	pw-config.sh	project get pwt-f3-hostile review-trigger	0	-
-review-repair-get pwt-f3-hostile	pw-config.sh	project get pwt-f3-hostile review-repair	0	-
-review-rounds-get pwt-f3-hostile	pw-config.sh	project get pwt-f3-hostile review-rounds	0	-
-doctor-project F1	pw-project-doctor.sh	pwt-f1-scaffold	0	-
-doctor-project F3	pw-project-doctor.sh	pwt-f3-hostile	1	-
-doctor-guidance F1	pw-project-doctor.sh	pwt-f1-scaffold --guidance	0	-
-doctor-guidance F2	pw-project-doctor.sh	pwt-f2-mid --guidance	0	-
-doctor-guidance F3	pw-project-doctor.sh	pwt-f3-hostile --guidance	0	-
-project show F2	pw-config.sh	project show pwt-f2-mid	0	-
+review-prepare pwt-f2-mid	pw-review.sh	prepare --project pwt-f2-mid --file task/PLAN.md --pass-id p-batt	0	-
+review-passes pwt-f2-mid	pw-review.sh	passes --project pwt-f2-mid	0	-
+review-read-passes pwt-f2-mid	pw-review-read.sh	passes --project pwt-f2-mid	0	-
+review-prepare pwt-f3-hostile	pw-review.sh	prepare --project pwt-f3-hostile --file task/PLAN.md --pass-id p-batt	0	-
+review-passes pwt-f3-hostile	pw-review.sh	passes --project pwt-f3-hostile	0	-
+review-read-passes pwt-f3-hostile	pw-review-read.sh	passes --project pwt-f3-hostile	0	-
+review-import-refusal pwt-f1-scaffold	pw-review.sh	import --project pwt-f1-scaffold --report no-such-report.json	2	-
+review-trigger-get pwt-f1-scaffold	pw-config.sh	get --project pwt-f1-scaffold --key review-trigger	0	-
+review-repair-get pwt-f1-scaffold	pw-config.sh	get --project pwt-f1-scaffold --key review-repair	0	-
+review-rounds-get pwt-f1-scaffold	pw-config.sh	get --project pwt-f1-scaffold --key review-rounds	0	-
+review-trigger-get pwt-f2-mid	pw-config.sh	get --project pwt-f2-mid --key review-trigger	0	-
+review-repair-get pwt-f2-mid	pw-config.sh	get --project pwt-f2-mid --key review-repair	0	-
+review-rounds-get pwt-f2-mid	pw-config.sh	get --project pwt-f2-mid --key review-rounds	0	-
+review-trigger-get pwt-f3-hostile	pw-config.sh	get --project pwt-f3-hostile --key review-trigger	0	-
+review-repair-get pwt-f3-hostile	pw-config.sh	get --project pwt-f3-hostile --key review-repair	0	-
+review-rounds-get pwt-f3-hostile	pw-config.sh	get --project pwt-f3-hostile --key review-rounds	0	-
+doctor-project F1	pw-project-doctor.sh	--project pwt-f1-scaffold	0	-
+doctor-project F3	pw-project-doctor.sh	--project pwt-f3-hostile	1	-
+doctor-guidance F1	pw-project-doctor.sh	--project pwt-f1-scaffold --guidance	0	-
+doctor-guidance F2	pw-project-doctor.sh	--project pwt-f2-mid --guidance	0	-
+doctor-guidance F3	pw-project-doctor.sh	--project pwt-f3-hostile --guidance	0	-
+project show F2	pw-config.sh	show --project pwt-f2-mid	0	-
 global show	pw-config.sh	global show	0	-
-model-check allow	pw-config.sh	model-check claude opus	0	-
-model-resolve ok	pw-config.sh	model-resolve kilo alibaba-token-plan/test-model	0	-
-model-resolve gone	pw-config.sh	model-resolve kilo alibaba-token-plan/nope-xyz	1	-
-model-resolve claude	pw-config.sh	model-resolve claude opus	0	-
-session-check live	pw-session.sh	session-check kilo ses_livetest0000000001	0	-
-session-check dead	pw-session.sh	session-check kilo ses_dead00000000000000000000	1	-
-session-check unknown	pw-session.sh	session-check kilotest ses_any	2	-
-lint-task-crlf pwt-f3-hostile	pw-doc.sh	lint task pwt-f3-hostile	2	-
-batch-list F3	pw-ship.sh	mr-state-batch pwt-f3-hostile T02 T05	0	-
-unknown-project	pw-status.sh	nope-not-here	2	-
-help unknown-project	pw-help.sh	project nope-not-here	2	-
-unknown-arg	pw-doc.sh	lint bogus-mode pwt-f2-mid	2	-
-review-facet-scan F2	pw-review-read.sh	scan pwt-f2-mid	0	-
-review-facet-gate F2	pw-review-read.sh	gate pwt-f2-mid task/review/PLAN.review.md	0	-
-review-facet-count F2	pw-review-read.sh	count pwt-f2-mid task/review/PLAN.review.md	0	-
-review-facet-open F2	pw-review-read.sh	has-open pwt-f2-mid task/review/PLAN.review.md	1	-
-review-facet-eligible F2	pw-review-read.sh	eligible pwt-f2-mid task/review/PLAN.review.md	1	-
-history-pending F1	pw-ship.sh	history pwt-f1-scaffold pending	0	-
-request-review F1	pw-ship.sh	request-review pwt-f1-scaffold	2	-
+model-check allow	pw-config.sh	model-check --provider claude --model opus	0	-
+model-resolve ok	pw-config.sh	model-resolve --provider kilo --model alibaba-token-plan/test-model	0	-
+model-resolve gone	pw-config.sh	model-resolve --provider kilo --model alibaba-token-plan/nope-xyz	1	-
+model-resolve claude	pw-config.sh	model-resolve --provider claude --model opus	0	-
+session-check live	pw-session.sh	session-check --provider kilo --session ses_livetest0000000001	0	-
+session-check dead	pw-session.sh	session-check --provider kilo --session ses_dead00000000000000000000	1	-
+session-check unknown	pw-session.sh	session-check --provider kilotest --session ses_any	2	-
+lint-task-crlf pwt-f3-hostile	pw-doc.sh	lint --kind task --project pwt-f3-hostile	2	-
+batch-list F3	pw-ship.sh	mr-state-batch --project pwt-f3-hostile --task T02 --task T05	0	-
+unknown-project	pw-status.sh	--project nope-not-here	2	-
+help unknown-project	pw-help.sh	project --project nope-not-here	2	-
+unknown-arg	pw-doc.sh	lint --kind bogus-mode --project pwt-f2-mid	2	-
+review-facet-scan F2	pw-review-read.sh	scan --project pwt-f2-mid	0	-
+review-facet-gate F2	pw-review-read.sh	gate --project pwt-f2-mid --file task/review/PLAN.review.md	0	-
+review-facet-count F2	pw-review-read.sh	count --project pwt-f2-mid --file task/review/PLAN.review.md	0	-
+review-facet-open F2	pw-review-read.sh	has-open --project pwt-f2-mid --file task/review/PLAN.review.md	1	-
+review-facet-eligible F2	pw-review-read.sh	eligible --project pwt-f2-mid --file task/review/PLAN.review.md	1	-
+history-pending F1	pw-ship.sh	history --project pwt-f1-scaffold --operation pending	0	-
+request-review F1	pw-ship.sh	request-review --project pwt-f1-scaffold	2	-
+selftest: pw-status.sh --selftest	pw-status.sh	--selftest	0	-
+status pwt-f1-scaffold	pw-status.sh	--project pwt-f1-scaffold --skip-cli-check	0	-
+review-scan pwt-f1-scaffold	pw-review.sh	scan --project pwt-f1-scaffold	0	-
+lint-all pwt-f1-scaffold	pw-doc.sh	lint --kind all --project pwt-f1-scaffold	0	-
+lint-plan pwt-f1-scaffold	pw-doc.sh	lint --kind plan --project pwt-f1-scaffold	2	-
+lint-dashboard pwt-f1-scaffold	pw-doc.sh	lint --kind dashboard --project pwt-f1-scaffold	0	-
+lint-analysis pwt-f1-scaffold	pw-doc.sh	lint --kind analysis --project pwt-f1-scaffold	2	-
+lint-review pwt-f1-scaffold	pw-doc.sh	lint --kind review --project pwt-f1-scaffold --file task/review/PLAN.review.md	2	-
+lint-task-t01 pwt-f1-scaffold	pw-doc.sh	lint --kind task --project pwt-f1-scaffold --file T01	2	-
+summary-plan pwt-f1-scaffold	pw-doc.sh	summary --kind plan --project pwt-f1-scaffold	2	-
+summary-project pwt-f1-scaffold	pw-doc.sh	summary --kind project --project pwt-f1-scaffold	0	-
+summary-task pwt-f1-scaffold	pw-doc.sh	summary --kind task --project pwt-f1-scaffold --file T01	2	-
+summary-analysis pwt-f1-scaffold	pw-doc.sh	summary --kind analysis --project pwt-f1-scaffold	2	-
+resolve pwt-f1-scaffold	pw-ship.sh	resolve --project pwt-f1-scaffold	2	-
+batch pwt-f1-scaffold	pw-ship.sh	mr-state-batch --project pwt-f1-scaffold	2	-
+stack-preview pwt-f1-scaffold	pw-ship.sh	stack --project pwt-f1-scaffold	0	-
+stack-validate pwt-f1-scaffold	pw-ship.sh	stack-validate --project pwt-f1-scaffold	0	-
+stack-plan pwt-f1-scaffold	pw-ship.sh	stack-plan --project pwt-f1-scaffold	0	-
+stack-report pwt-f1-scaffold	pw-status.sh	stack --project pwt-f1-scaffold	0	-
+rfc pwt-f1-scaffold	pw-rfc.sh	comments --project pwt-f1-scaffold	2	-
+adopt pwt-f1-scaffold	pw-context.sh	adopt-snapshot --project pwt-f1-scaffold --repo api --branch agent/pwt-f1-scaffold/T01-thing	2	-
+help project pwt-f1-scaffold	pw-help.sh	project --project pwt-f1-scaffold	0	-
+help project-review pwt-f1-scaffold	pw-help.sh	project --project pwt-f1-scaffold --name pw-review	0	-
+provider-audit pwt-f1-scaffold	pw-status.sh	provider-audit --project pwt-f1-scaffold	2	-
+status pwt-f2-mid	pw-status.sh	--project pwt-f2-mid --skip-cli-check	0	-
+review-scan pwt-f2-mid	pw-review.sh	scan --project pwt-f2-mid	0	-
+lint-all pwt-f2-mid	pw-doc.sh	lint --kind all --project pwt-f2-mid	0	-
+lint-plan pwt-f2-mid	pw-doc.sh	lint --kind plan --project pwt-f2-mid	0	-
+lint-dashboard pwt-f2-mid	pw-doc.sh	lint --kind dashboard --project pwt-f2-mid	0	-
+lint-analysis pwt-f2-mid	pw-doc.sh	lint --kind analysis --project pwt-f2-mid	2	-
+lint-review pwt-f2-mid	pw-doc.sh	lint --kind review --project pwt-f2-mid --file task/review/PLAN.review.md	0	-
+lint-task-t01 pwt-f2-mid	pw-doc.sh	lint --kind task --project pwt-f2-mid --file T01	0	-
+summary-plan pwt-f2-mid	pw-doc.sh	summary --kind plan --project pwt-f2-mid	0	-
+summary-project pwt-f2-mid	pw-doc.sh	summary --kind project --project pwt-f2-mid	0	-
+summary-task pwt-f2-mid	pw-doc.sh	summary --kind task --project pwt-f2-mid --file T01	0	-
+summary-analysis pwt-f2-mid	pw-doc.sh	summary --kind analysis --project pwt-f2-mid	2	-
+resolve pwt-f2-mid	pw-ship.sh	resolve --project pwt-f2-mid	0	-
+batch pwt-f2-mid	pw-ship.sh	mr-state-batch --project pwt-f2-mid	0	-
+stack-preview pwt-f2-mid	pw-ship.sh	stack --project pwt-f2-mid	0	-
+stack-validate pwt-f2-mid	pw-ship.sh	stack-validate --project pwt-f2-mid	0	-
+stack-plan pwt-f2-mid	pw-ship.sh	stack-plan --project pwt-f2-mid	0	-
+stack-report pwt-f2-mid	pw-status.sh	stack --project pwt-f2-mid	0	-
+rfc pwt-f2-mid	pw-rfc.sh	comments --project pwt-f2-mid	2	-
+adopt pwt-f2-mid	pw-context.sh	adopt-snapshot --project pwt-f2-mid --repo api --branch agent/pwt-f2-mid/T01-thing	0	-
+help project pwt-f2-mid	pw-help.sh	project --project pwt-f2-mid	0	-
+help project-review pwt-f2-mid	pw-help.sh	project --project pwt-f2-mid --name pw-review	0	-
+provider-audit pwt-f2-mid	pw-status.sh	provider-audit --project pwt-f2-mid	0	-
+status pwt-f3-hostile	pw-status.sh	--project pwt-f3-hostile --skip-cli-check	0	-
+review-scan pwt-f3-hostile	pw-review.sh	scan --project pwt-f3-hostile	0	-
+lint-all pwt-f3-hostile	pw-doc.sh	lint --kind all --project pwt-f3-hostile	1	-
+lint-plan pwt-f3-hostile	pw-doc.sh	lint --kind plan --project pwt-f3-hostile	0	-
+lint-dashboard pwt-f3-hostile	pw-doc.sh	lint --kind dashboard --project pwt-f3-hostile	1	-
+lint-analysis pwt-f3-hostile	pw-doc.sh	lint --kind analysis --project pwt-f3-hostile	2	-
+lint-review pwt-f3-hostile	pw-doc.sh	lint --kind review --project pwt-f3-hostile --file task/review/PLAN.review.md	0	-
+lint-task-t01 pwt-f3-hostile	pw-doc.sh	lint --kind task --project pwt-f3-hostile --file T01	0	-
+summary-plan pwt-f3-hostile	pw-doc.sh	summary --kind plan --project pwt-f3-hostile	0	-
+summary-project pwt-f3-hostile	pw-doc.sh	summary --kind project --project pwt-f3-hostile	0	-
+summary-task pwt-f3-hostile	pw-doc.sh	summary --kind task --project pwt-f3-hostile --file T01	0	-
+summary-analysis pwt-f3-hostile	pw-doc.sh	summary --kind analysis --project pwt-f3-hostile	2	-
+resolve pwt-f3-hostile	pw-ship.sh	resolve --project pwt-f3-hostile	0	-
+batch pwt-f3-hostile	pw-ship.sh	mr-state-batch --project pwt-f3-hostile	0	-
+stack-preview pwt-f3-hostile	pw-ship.sh	stack --project pwt-f3-hostile	0	-
+stack-validate pwt-f3-hostile	pw-ship.sh	stack-validate --project pwt-f3-hostile	0	-
+stack-plan pwt-f3-hostile	pw-ship.sh	stack-plan --project pwt-f3-hostile	0	-
+stack-report pwt-f3-hostile	pw-status.sh	stack --project pwt-f3-hostile	0	-
+rfc pwt-f3-hostile	pw-rfc.sh	comments --project pwt-f3-hostile	2	-
+adopt pwt-f3-hostile	pw-context.sh	adopt-snapshot --project pwt-f3-hostile --repo api --branch agent/pwt-f3-hostile/T01-thing	0	-
+help project pwt-f3-hostile	pw-help.sh	project --project pwt-f3-hostile	0	-
+help project-review pwt-f3-hostile	pw-help.sh	project --project pwt-f3-hostile --name pw-review	0	-
+provider-audit pwt-f3-hostile	pw-status.sh	provider-audit --project pwt-f3-hostile	0	-
+status-all fixtures	pw-status.sh	--all	1	-
+review-prepare pwt-f2-mid	pw-review.sh	prepare --project pwt-f2-mid --file task/PLAN.md --pass-id p-batt	0	-
+review-passes pwt-f2-mid	pw-review.sh	passes --project pwt-f2-mid	0	-
+review-read-passes pwt-f2-mid	pw-review-read.sh	passes --project pwt-f2-mid	0	-
+review-prepare pwt-f3-hostile	pw-review.sh	prepare --project pwt-f3-hostile --file task/PLAN.md --pass-id p-batt	0	-
+review-passes pwt-f3-hostile	pw-review.sh	passes --project pwt-f3-hostile	0	-
+review-read-passes pwt-f3-hostile	pw-review-read.sh	passes --project pwt-f3-hostile	0	-
+review-import-refusal pwt-f1-scaffold	pw-review.sh	import --project pwt-f1-scaffold --report no-such-report.json	2	-
+review-trigger-get pwt-f1-scaffold	pw-config.sh	get --project pwt-f1-scaffold --key review-trigger	0	-
+review-repair-get pwt-f1-scaffold	pw-config.sh	get --project pwt-f1-scaffold --key review-repair	0	-
+review-rounds-get pwt-f1-scaffold	pw-config.sh	get --project pwt-f1-scaffold --key review-rounds	0	-
+review-trigger-get pwt-f2-mid	pw-config.sh	get --project pwt-f2-mid --key review-trigger	0	-
+review-repair-get pwt-f2-mid	pw-config.sh	get --project pwt-f2-mid --key review-repair	0	-
+review-rounds-get pwt-f2-mid	pw-config.sh	get --project pwt-f2-mid --key review-rounds	0	-
+review-trigger-get pwt-f3-hostile	pw-config.sh	get --project pwt-f3-hostile --key review-trigger	0	-
+review-repair-get pwt-f3-hostile	pw-config.sh	get --project pwt-f3-hostile --key review-repair	0	-
+review-rounds-get pwt-f3-hostile	pw-config.sh	get --project pwt-f3-hostile --key review-rounds	0	-
+doctor-project F1	pw-project-doctor.sh	--project pwt-f1-scaffold	0	-
+doctor-project F3	pw-project-doctor.sh	--project pwt-f3-hostile	1	-
+doctor-guidance F1	pw-project-doctor.sh	--project pwt-f1-scaffold --guidance	0	-
+doctor-guidance F2	pw-project-doctor.sh	--project pwt-f2-mid --guidance	0	-
+doctor-guidance F3	pw-project-doctor.sh	--project pwt-f3-hostile --guidance	0	-
+project show F2	pw-config.sh	show --project pwt-f2-mid	0	-
+global show	pw-config.sh	global show	0	-
+model-check allow	pw-config.sh	model-check --provider claude --model opus	0	-
+model-resolve ok	pw-config.sh	model-resolve --provider kilo --model alibaba-token-plan/test-model	0	-
+model-resolve gone	pw-config.sh	model-resolve --provider kilo --model alibaba-token-plan/nope-xyz	1	-
+model-resolve claude	pw-config.sh	model-resolve --provider claude --model opus	0	-
+session-check live	pw-session.sh	session-check --provider kilo --session ses_livetest0000000001	0	-
+session-check dead	pw-session.sh	session-check --provider kilo --session ses_dead00000000000000000000	1	-
+session-check unknown	pw-session.sh	session-check --provider kilotest --session ses_any	2	-
+lint-task-crlf pwt-f3-hostile	pw-doc.sh	lint --kind task --project pwt-f3-hostile	2	-
+batch-list F3	pw-ship.sh	mr-state-batch --project pwt-f3-hostile --task T02 --task T05	0	-
+unknown-project	pw-status.sh	--project nope-not-here	2	-
+help unknown-project	pw-help.sh	project --project nope-not-here	2	-
+unknown-arg	pw-doc.sh	lint --kind bogus-mode --project pwt-f2-mid	2	-
+review-facet-scan F2	pw-review-read.sh	scan --project pwt-f2-mid	0	-
+review-facet-gate F2	pw-review-read.sh	gate --project pwt-f2-mid --file task/review/PLAN.review.md	0	-
+review-facet-count F2	pw-review-read.sh	count --project pwt-f2-mid --file task/review/PLAN.review.md	0	-
+review-facet-open F2	pw-review-read.sh	has-open --project pwt-f2-mid --file task/review/PLAN.review.md	1	-
+review-facet-eligible F2	pw-review-read.sh	eligible --project pwt-f2-mid --file task/review/PLAN.review.md	1	-
+history-pending F1	pw-ship.sh	history --project pwt-f1-scaffold --operation pending	0	-
+request-review F1	pw-ship.sh	request-review --project pwt-f1-scaffold	2	-

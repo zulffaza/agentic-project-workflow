@@ -310,7 +310,7 @@ kilo run --auto -m <canonical-catalog-id> "<prompt>" --dir <path> [--variant <lo
 --auto is REQUIRED headless — without it kilo run auto-REJECTS every permission (it can't even
 read the task file). Add --agent <name> when targeting a native agent instead of a bare model.
 -m receives the CANONICAL catalog id — the exact line `kilo models` prints (resolve it with
-`pw-config.sh model-resolve kilo <model-id>`). PW_KILO_API_PROVIDERS entries are model-id
+`pw-config.sh model-resolve --provider kilo --model <model-id>`). PW_KILO_API_PROVIDERS entries are model-id
 PREFIX FILTERS (slashes allowed, e.g. `kilo/alibaba-token-plan` for a nested BYOK), never
 `kilo models` arguments — `kilo models kilo/alibaba-token-plan` errors "Provider not found".
 EOF
@@ -341,7 +341,7 @@ opencode run --auto -m <canonical-catalog-id> "<prompt>" [--format json] [--atta
 --auto is REQUIRED headless — auto-approves permissions not explicitly denied.
 --attach <url> connects to an already-running server, avoiding a cold-boot delay.
 -m receives the CANONICAL id `opencode models` prints (resolve with
-`pw-config.sh model-resolve opencode <model-id>`); PW_OPENCODE_API_PROVIDERS entries, if set,
+`pw-config.sh model-resolve --provider opencode --model <model-id>`); PW_OPENCODE_API_PROVIDERS entries, if set,
 are model-id prefix filters — same semantics as the kilo axis.
 EOF
 }
@@ -512,6 +512,16 @@ pw_usage() {
   exit 0
 }
 
+# --- named-argument grammar (one flag grammar for every external operator) --------------------
+# Operation words stay positional and first; every VALUE is named (--project <slug>, --file <f>,
+# --decision <d>, ...), so a missing or reordered value can never silently change meaning.
+# Each script's own die() supplies the prefix; these helpers keep the refusal wording uniform.
+_pw_missing() { die "$1 needs a value → fix: pass $1 <value> (quote values with spaces)"; }
+_pw_unknown() { die "unknown option: $1 → fix: $2"; }
+_pw_positional() { die "unexpected argument: $1 → fix: $2"; }
+# _pw_dup <flag> — a second occurrence of a single-value flag is a usage error, never a race.
+_pw_dup() { die "duplicate option: $1 → fix: pass it once"; }
+
 # --- task-file field readers -------------------------------------------------
 # The canonical task template writes one bold bullet per field
 # ("- **Repo:** svc"); pre-2026-09-15 templates packed two per line
@@ -546,7 +556,7 @@ pw_has_field() { [ -n "$(pw_field "$1" "$2")" ]; }
 PW_VALID_PHASES="context analysis breakdown executing review done"
 pw_phase_token() { printf '%s\n' "${1%%[[:space:]—-]*}"; }
 pw_phase_valid() { case " $PW_VALID_PHASES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
-pw_phase_hint() { printf 'fix the Status line: it must start with one of %s (free prose may follow the token) — repair with: pw-status.sh status <slug> <phase> [--rewind]' "$PW_VALID_PHASES"; }
+pw_phase_hint() { printf 'fix the Status line: it must start with one of %s (free prose may follow the token) — repair with: pw-status.sh status --project <slug> --phase <phase> [--rewind]' "$PW_VALID_PHASES"; }
 
 # pw_trim strips surrounding whitespace from stdin. NEVER use `| xargs` for this:
 # xargs parses quotes, so a title/path containing an unbalanced apostrophe

@@ -167,7 +167,7 @@ sync by whoever maintains the bundle, not something you edit here to change beha
     binds — outranking a `kilo.jsonc` map block if both set it. So a dashboard `- **AI Models:**` row
     can reach kilo's md path without any user-config edit once `render_kilo_agent` prints a canonical
     `model:`. `<canonical-catalog-id>` is the exact line `kilo models` prints — resolve a row's model
-    to it with `pw-config.sh model-resolve kilo <model-id>` (it also enforces the
+    to it with `pw-config.sh model-resolve --provider kilo --model <model-id>` (it also enforces the
     `PW_KILO_API_PROVIDERS` **prefix-filter** scope: entries may contain slashes — a BYOK nested
     under the gateway is `kilo/alibaba-token-plan/<model>` — but are never `kilo models`
     *arguments*, which error "Provider not found" for sub-provider paths; verified 2026-09-22).
@@ -198,7 +198,7 @@ sync by whoever maintains the bundle, not something you edit here to change beha
   exit codes, prove the run. The bypass flag is required headless (no TTY for approvals); the
   tighter `--approve-for-me` (workspace-write + auto-review; conflicts with an explicit `-s`) also
   completes headless but **blocks network** — only for network-free tasks. Model ids are BARE
-  catalog slugs (`codex debug models`; resolve with `pw-config.sh model-resolve codex <id>`); no
+  catalog slugs (`codex debug models`; resolve with `pw-config.sh model-resolve --provider codex --model <id>`); no
   `PW_CODEX_API_PROVIDERS` axis (single ChatGPT gateway). **Fast tier** = `-c
   service_tier="priority"` on the SAME slug (not an id segment) — requested tier is NOT verifiable
   from output (invalid values are silently ignored), so `Model used:` records the REQUESTED tier.
@@ -333,7 +333,7 @@ allowlist is the real gate), if you want to look yourself — but `/pw-doctor` i
     headless run were unchanged).
   - **Sessions/ledger:** `codex exec --json` first event `{"type":"thread.started",
     "thread_id":"<uuid>"}`; rollout file `~/.codex/sessions/<Y>/<M>/<D>/rollout-<ts>-<uuid>.jsonl`
-    (id embedded in the FILENAME — `pw-session.sh session-check codex <uuid>` globs it);
+    (id embedded in the FILENAME — `pw-session.sh session-check --provider codex --session <uuid>` globs it);
     `codex exec resume <uuid>` round-trips context (verified) but has **no `-C` flag** — cd first.
   - **Model/tier axes:** bare slugs only; effort = `model_reasoning_effort`; Fast = `service_tier
     = "priority"` (same slug; invalid values SILENTLY ignored — record the requested tier, never

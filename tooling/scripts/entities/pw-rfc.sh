@@ -4,16 +4,21 @@
 # deterministic state (rfc/RFC.md, rfc/META.md, dashboard RFC: line) + comment
 # listing. Never touches dashboard Status: (RFC is a side-loop, not a phase).
 #
-#   pw-rfc.sh init         <slug> [backend]      create rfc/RFC.md + META.md from
-#       template if missing (idempotent; META stamped with the REAL backend).
-#   pw-rfc.sh target       <slug> <ref>          set META Target: (persists).
-#   pw-rfc.sh state        <slug> <field> <value>
+#   pw-rfc.sh init --project <slug> [--backend <b>]
+#       create rfc/RFC.md + META.md from template if missing (idempotent; META
+#       stamped with the REAL backend).
+#   pw-rfc.sh target --project <slug> --ref <ref>          set META Target: (persists).
+#   pw-rfc.sh state --project <slug> --field <field> --value <value>
 #       set META Backend|LastRevision|Wave1Published|Wave2Published.
-#   pw-rfc.sh comment-seen <slug> <thread-id> <reply-count> <solved:yes|no>
+#   pw-rfc.sh comment-seen --project <slug> --thread <thread-id> --replies <n> --solved <yes|no>
 #       per-thread upsert into META's ## Comment tracking (hidden keyed marker).
-#   pw-rfc.sh dashboard    <slug> <text...>      set the dashboard RFC: line.
-#   pw-rfc.sh comments     <slug>
+#   pw-rfc.sh dashboard --project <slug> --text <text…>    set the dashboard RFC: line.
+#   pw-rfc.sh comments --project <slug> [--backend <b>]
 #       list open threads + per-thread reply counts (was pw-rfc-comments.sh).
+#
+# Named-argument grammar: operation words first, every value named; --project
+# selects the project. Scalar values are ONE token (quote spaces); the prose
+# --text runs until the next --flag token.
 #
 # Merged from pw-lib's rfc block + pw-rfc-comments.sh (plan 20). See
 # tooling/docs/rfc.md + rfc-backends.md.
@@ -30,7 +35,7 @@ PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 ST="$HERE/pw-status.sh"
 
 die() { echo "pw-rfc: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new $1)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
 
 # --- RFC side-loop (see tooling/docs/rfc.md + tooling/docs/rfc-backends.md) ------------
 # Deterministic helpers for the optional /pw-rfc publish loop — never touches the dashboard
@@ -40,10 +45,23 @@ proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1
 # idempotent, same shape as cmd_review_init. Never clobbers a doc already in progress. Also
 # ensures rfc/META.md exists, stamped with the REAL configured backend (not a hardcoded guess) —
 # call this with the resolved backend so META.md never drifts from what's actually configured.
-#   rfc init <slug> [backend]   (backend defaults to "markdown" if omitted)
+#   rfc init --project <slug> [--backend <b>]   (backend defaults to "markdown" if omitted)
 cmd_rfc_init() {
-  [ $# -ge 1 ] && [ $# -le 2 ] || die "usage: init <slug> [backend]"
-  local slug="$1" backend="${2:-markdown}" d; d="$(proj_dir "$slug")"
+  local slug="" backend="markdown" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --project=*) v="${a#*=}"; a="--project" ;; --backend=*) v="${a#*=}"; a="--backend" ;; esac
+    case "$a" in
+      --project|--backend)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --backend) backend="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "init --project <slug> [--backend <b>]" ;;
+      *) _pw_positional "$a" "operation words first, values named — e.g. init --project <slug> [--backend <b>]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "init: --project is required → fix: init --project <slug> [--backend <b>]"
+  local d; d="$(proj_dir "$slug")"
   local f="$d/rfc/RFC.md"
   _rfc_meta_ensure "$d/rfc/META.md" "$slug" "$backend"
   if [ -f "$f" ]; then
@@ -54,7 +72,7 @@ cmd_rfc_init() {
   [ -f "$tmpl" ] || die "template not found: $tmpl"
   mkdir -p "$d/rfc"
   sed "s/<PROJECT_NAME>/$slug/g" "$tmpl" > "$f"
-  "$ST" log "$slug" rfc "created rfc/RFC.md from template (backend: $backend)"
+  "$ST" log --project "$slug" --actor rfc --message "created rfc/RFC.md from template (backend: $backend)"
   echo "$slug: rfc-init created rfc/RFC.md"
 }
 
@@ -103,21 +121,54 @@ _rfc_meta_upsert() {
 
 # Set/insert rfc/META.md's Target: (the external doc ref a publish goes to). Persists per-project
 # so a later /pw-rfc run doesn't need --target repeated.
-#   rfc target <slug> <ref>
+#   rfc target --project <slug> --ref <ref>
 cmd_rfc_target() {
-  [ $# -eq 2 ] || die "usage: target <slug> <ref>"
-  local slug="$1" ref="$2" d; d="$(proj_dir "$slug")"; local f="$d/rfc/META.md"
+  local slug="" ref="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --project=*) v="${a#*=}"; a="--project" ;; --ref=*) v="${a#*=}"; a="--ref" ;; esac
+    case "$a" in
+      --project|--ref)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --ref) ref="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "target --project <slug> --ref <ref>" ;;
+      *) _pw_positional "$a" "target --project <slug> --ref <ref>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "target: --project is required → fix: target --project <slug> --ref <ref>"
+  [ -n "$ref" ] || die "target: --ref is required → fix: pass the external doc ref"
+  local d; d="$(proj_dir "$slug")"; local f="$d/rfc/META.md"
   _rfc_meta_ensure "$f" "$slug"
   _rfc_meta_upsert "$f" "Target" "$ref"
-  "$ST" log "$slug" rfc "target set: $ref"
+  "$ST" log --project "$slug" --actor rfc --message "target set: $ref"
   echo "$slug: rfc target -> $ref"
 }
 
 # Set/insert any other rfc/META.md field.
-#   rfc state <slug> <field> <value>   (field: Backend|LastRevision|Wave1Published|Wave2Published)
+#   rfc state --project <slug> --field <field> --value <value>   (field: Backend|LastRevision|Wave1Published|Wave2Published)
 cmd_rfc_state() {
-  [ $# -eq 3 ] || die "usage: state <slug> <field> <value>   (field: Backend|LastRevision|Wave1Published|Wave2Published)"
-  local slug="$1" field="$2" value="$3" d; d="$(proj_dir "$slug")"; local f="$d/rfc/META.md"
+  local slug="" field="" value="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --field=*)   v="${a#*=}"; a="--field" ;;
+      --value=*)   v="${a#*=}"; a="--value" ;;
+    esac
+    case "$a" in
+      --project|--field|--value)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --field) field="$v" ;; --value) value="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "state --project <slug> --field <field> --value <value>" ;;
+      *) _pw_positional "$a" "state --project <slug> --field <field> --value <value>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "state: --project is required → fix: state --project <slug> --field <field> --value <value>"
+  [ -n "$field" ] || die "state: --field is required → fix: state --project <slug> --field <field> --value <value>"
+  [ -n "$value" ] || die "state: --value is required → fix: state --project <slug> --field <field> --value <value>"
+  local d; d="$(proj_dir "$slug")"; local f="$d/rfc/META.md"
   local label
   case "$field" in
     Backend)        label="Backend" ;;
@@ -128,7 +179,7 @@ cmd_rfc_state() {
   esac
   _rfc_meta_ensure "$f" "$slug"
   _rfc_meta_upsert "$f" "$label" "$value"
-  "$ST" log "$slug" rfc "state $field=$value"
+  "$ST" log --project "$slug" --actor rfc --message "state $field=$value"
   echo "$slug: rfc state $field -> $value"
 }
 
@@ -138,10 +189,30 @@ cmd_rfc_state() {
 # "never seen this thread" from "seen before, N replies then, M replies now" from "already
 # recorded as solved" — a single scalar watermark can't represent per-thread state (the bug: an
 # earlier thread getting new replies after a later thread became "latest" was invisible forever).
-#   rfc comment-seen <slug> <thread-id> <reply-count> <solved:yes|no>
+#   rfc comment-seen --project <slug> --thread <thread-id> --replies <n> --solved <yes|no>
 cmd_rfc_comment_seen() {
-  [ $# -eq 4 ] || die "usage: comment-seen <slug> <thread-id> <reply-count> <solved:yes|no>"
-  local slug="$1" thread="$2" replies="$3" solved="$4"
+  local slug="" thread="" replies="" solved="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --thread=*)  v="${a#*=}"; a="--thread" ;;
+      --replies=*) v="${a#*=}"; a="--replies" ;;
+      --solved=*)  v="${a#*=}"; a="--solved" ;;
+    esac
+    case "$a" in
+      --project|--thread|--replies|--solved)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --thread) thread="$v" ;; --replies) replies="$v" ;; --solved) solved="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "comment-seen --project <slug> --thread <thread-id> --replies <n> --solved <yes|no>" ;;
+      *) _pw_positional "$a" "comment-seen --project <slug> --thread <thread-id> --replies <n> --solved <yes|no>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "comment-seen: --project is required → fix: comment-seen --project <slug> --thread <thread-id> --replies <n> --solved <yes|no>"
+  [ -n "$thread" ] || die "comment-seen: --thread is required → fix: comment-seen --project <slug> --thread <thread-id> --replies <n> --solved <yes|no>"
+  [ -n "$replies" ] || die "comment-seen: --replies is required → fix: comment-seen --project <slug> --thread <thread-id> --replies <n> --solved <yes|no>"
+  [ -n "$solved" ] || die "comment-seen: --solved is required → fix: comment-seen --project <slug> --thread <thread-id> --replies <n> --solved <yes|no>"
   case "$solved" in yes|no) ;; *) die "solved must be 'yes' or 'no' (got '$solved')" ;; esac
   case "$replies" in ''|*[!0-9]*) die "reply-count must be a non-negative integer (got '$replies')" ;; esac
   local d; d="$(proj_dir "$slug")"; local f="$d/rfc/META.md"
@@ -155,17 +226,31 @@ cmd_rfc_comment_seen() {
   else
     printf '%s\n' "$row" >> "$f"
   fi
-  "$ST" log "$slug" rfc "comment-seen $thread: $replies replies, solved=$solved"
+  "$ST" log --project "$slug" --actor rfc --message "comment-seen $thread: $replies replies, solved=$solved"
   echo "$slug: rfc comment-seen $thread -> $replies replies, solved=$solved"
 }
 
 # Set/insert the project dashboard's `- **RFC:**` line — mirrors cmd_adopted almost verbatim,
 # anchoring after Adopted: if present (dashboard field order: Status → One-liner → [Adopted] →
 # [RFC]), else after One-liner.
-#   rfc dashboard <slug> <text...>
+#   rfc dashboard --project <slug> --text <text…>
 cmd_rfc_dashboard() {
-  [ $# -ge 2 ] || die "usage: dashboard <slug> <text...>"
-  local slug="$1"; shift; local text="$*"
+  local slug="" text="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --project=*) v="${a#*=}"; a="--project" ;; --text=*) v="${a#*=}"; a="--text" ;; esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      --text)
+        while [ $# -gt 0 ]; do case "$1" in --*) break ;; esac; v="${v:+$v }$1"; shift; done
+        [ -n "$v" ] || die "dashboard: --text requires a value → fix: --text <text…> (runs until the next --flag)"
+        text="$v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "dashboard --project <slug> --text <text…>" ;;
+      *) _pw_positional "$a" "dashboard --project <slug> --text <text…>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "dashboard: --project is required → fix: dashboard --project <slug> --text <text…>"
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
   if grep -q '^- \*\*RFC:\*\*' "$f"; then
@@ -179,7 +264,7 @@ cmd_rfc_dashboard() {
     awk -v t="$text" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **RFC:** " t; d=1}' \
       "$f" > "$f.tmp" && mv "$f.tmp" "$f"
   fi
-  "$ST" log "$slug" rfc "dashboard: $text"
+  "$ST" log --project "$slug" --actor rfc --message "dashboard: $text"
   echo "$slug: RFC -> $text"
 }
 
@@ -189,17 +274,24 @@ SLUG=""
 BACKEND="${PW_RFC_BACKEND:-markdown}"
 BACKEND_FROM_META=1
 
+local a v
 while [ $# -gt 0 ]; do
-  case "$1" in
-    --backend) shift; BACKEND="${1:-$BACKEND}"; BACKEND_FROM_META=0; shift ;;
-    --backend=*) BACKEND="${1#--backend=}"; BACKEND_FROM_META=0; shift ;;
+  a="$1"; shift; v=""
+  case "$a" in --project=*) v="${a#*=}"; a="--project" ;; --backend=*) v="${a#*=}"; a="--backend" ;; esac
+  case "$a" in
+    --project)
+      [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }
+      SLUG="$v" ;;
+    --backend)
+      [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --backend; v="$1"; shift; }
+      BACKEND="$v"; BACKEND_FROM_META=0 ;;
     -h|--help) pw_usage ;;
-    -*) die "unknown option: $1" ;;
-    *) SLUG="$1"; shift ;;
+    -*) _pw_unknown "$a" "comments --project <slug> [--backend <b>]" ;;
+    *) _pw_positional "$a" "comments --project <slug> [--backend <b>]" ;;
   esac
 done
 
-[ -n "$SLUG" ] || die "usage: pw-rfc.sh comments <slug> [--backend <backend>]"
+[ -n "$SLUG" ] || die "comments: --project is required → fix: comments --project <slug> [--backend <b>]"
 
 D="$(proj_dir "$SLUG")"
 META="$D/rfc/META.md"

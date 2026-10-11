@@ -9,21 +9,21 @@ P="$PW_PROJECTS_DIR/$RE"
 RV="task/review/T04.review.md"   # fresh template shape (stubs unfilled, placeholder sign-off row)
 
 # 1) init-all: creates exactly the missing task review files, idempotent rerun
-pwtest_rc 0 "init-all creates missing review files" "$E" init-all "$RE"
+pwtest_rc 0 "init-all creates missing review files" "$E" init-all --project "$RE"
 for t in T01 T02 T03; do
   [ -f "$P/task/review/$t.review.md" ] && pwtest_ok "init-all created $t.review.md" \
     || pwtest_bad "init-all $t.review.md" "missing"
 done
 [ -f "$P/task/review/T04.review.md" ] && pwtest_ok "init-all left existing T04.review.md" \
   || pwtest_bad "init-all clobber" "T04.review.md gone"
-pwtest_rc 0 "init-all rerun (idempotent)" "$E" init-all "$RE"
+pwtest_rc 0 "init-all rerun (idempotent)" "$E" init-all --project "$RE"
 pwtest_re "0 created, .* already present" "init-all rerun reports nothing created"
 
 # 2) add-item fills the template stub in place → R1 (not R2 — stubs don't consume ids)
 # Plan 31: item timestamps are explicit WIB date-time ("5 October 2026 - 18.42 WIB"), and the
 # first feedback write queues one attributed 'pw-review (feedback) | in-review' row in place
 # of the template's blank placeholder row.
-pwtest_rc 0 "add-item R1" "$E" add-item "$RE" "$RV" --section '§3 Repos' --text the toggle also lives in common-config, add a row
+pwtest_rc 0 "add-item R1" "$E" add-item --project "$RE" --file "$RV" --section '§3 Repos' --text the toggle also lives in common-config, add a row
 pwtest_grep_file '^### R1 · §3 Repos — \[OPEN\] \(you, [0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\.[0-9]{2} WIB\) <!-- pw-item-status: open -->' \
   "add-item wrote a real R1 heading with marker (WIB timestamp)" "$P/$RV"
 pwtest_grep_file 'pw-review \(feedback\) \| in-review \|$' "add-item queued the feedback-cycle row in the Sign-off table" "$P/$RV"
@@ -34,33 +34,33 @@ else pwtest_bad "R-stub handling" "stub still live under ## Items or lost"; fi
 pwtest_grep_file '\| R1 \| §3 Repos \| \[OPEN\] \|' "reindex picked R1 into ## Contents" "$P/$RV"
 
 # second item appends → R2, multi-line via stdin with quotes/pipes
-printf 'line one\nline two with "quotes" and | pipes\n' | pwtest_rc 0 "add-item R2 via stdin" "$E" add-item "$RE" "$RV" --section '§4' --stdin
+printf 'line one\nline two with "quotes" and | pipes\n' | pwtest_rc 0 "add-item R2 via stdin" "$E" add-item --project "$RE" --file "$RV" --section '§4' --stdin
 pwtest_grep_file '^### R2 · §4 — \[OPEN\]' "second item is R2" "$P/$RV"
 pwtest_grep_file 'line two with "quotes" and \| pipes' "stdin text verbatim" "$P/$RV"
 
 # refusals: empty text, heading-collision text, missing section
-pwtest_rc 2 "add-item refuses empty text" "$E" add-item "$RE" "$RV" --section '§4' --text ''
+pwtest_rc 2 "add-item refuses empty text" "$E" add-item --project "$RE" --file "$RV" --section '§4' --text ''
 pwtest_fix "add-item empty-text refusal actionable"
-pwtest_rc 2 "add-item refuses ## in text" "$E" add-item "$RE" "$RV" --section '§4' --text '### sneaky heading'
-pwtest_rc 2 "add-item requires --section" "$E" add-item "$RE" "$RV" --text 'no anchor'
+pwtest_rc 2 "add-item refuses ## in text" "$E" add-item --project "$RE" --file "$RV" --section '§4' --text '### sneaky heading'
+pwtest_rc 2 "add-item requires --section" "$E" add-item --project "$RE" --file "$RV" --text 'no anchor'
 
 # 3) add-question fills the Q stub → Q1; answer appends ↳ you lines
-pwtest_rc 0 "add-question Q1" "$E" add-question "$RE" "$RV" --section '§4' --text 'ship the flag off or on?'
+pwtest_rc 0 "add-question Q1" "$E" add-question --project "$RE" --file "$RV" --section '§4' --text 'ship the flag off or on?'
 pwtest_grep_file '^### Q1 · §4 — \[PENDING\] \(agent, [0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\.[0-9]{2} WIB\) <!-- pw-item-status: open -->' \
   "add-question wrote a real Q1 heading with marker (WIB timestamp)" "$P/$RV"
-pwtest_rc 0 "answer Q1" "$E" answer "$RE" "$RV" Q1 --text ship it OFF by default
+pwtest_rc 0 "answer Q1" "$E" answer --project "$RE" --file "$RV" --question Q1 --text ship it OFF by default
 pwtest_grep_file '^> ↳ \*\*you\*\* \([0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\.[0-9]{2} WIB\): ship it OFF by default' "answer wrote the ↳ you line (WIB timestamp)" "$P/$RV"
-pwtest_rc 0 "answer Q1 again" "$E" answer "$RE" "$RV" Q1 --text correction, staging first
+pwtest_rc 0 "answer Q1 again" "$E" answer --project "$RE" --file "$RV" --question Q1 --text correction, staging first
 # second answer joins the same quote block via a blank quoted '>' separator
 if awk '/^### Q1 ·/{f=1} f && /^---$/{exit} f' "$P/$RV" | grep -q '^>$'; then
   pwtest_ok "second answer separated by blank quoted line"
 else pwtest_bad "quote separator" "no '>' line between the two ↳ you lines"; fi
-pwtest_rc 2 "answer refuses unknown Qid" "$E" answer "$RE" "$RV" Q9 --text nope
-pwtest_rc 2 "answer refuses non-Q id" "$E" answer "$RE" "$RV" R1 --text nope
+pwtest_rc 2 "answer refuses unknown Qid" "$E" answer --project "$RE" --file "$RV" --question Q9 --text nope
+pwtest_rc 2 "answer refuses non-Q id" "$E" answer --project "$RE" --file "$RV" --question R1 --text nope
 
 # 4) resolve: flips the SAME heading (tag+marker), appends ↳ agent, human text untouched
 ASK_BEFORE="$(grep -F 'the toggle also lives in common-config' "$P/$RV")"
-pwtest_rc 0 "resolve R1" "$E" resolve "$RE" "$RV" R1 --reply 'added a common-config row (config-only change)'
+pwtest_rc 0 "resolve R1" "$E" resolve --project "$RE" --file "$RV" --item R1 --reply 'added a common-config row (config-only change)'
 pwtest_grep_file '^### R1 · §3 Repos — \[RESOLVED\] .*<!-- pw-item-status: resolved -->' \
   "resolve flipped R1 tag+marker in the same heading" "$P/$RV"
 [ "$(grep -c '^### R1 · §3 Repos' "$P/$RV")" = 1 ] && pwtest_ok "no second R1 heading" \
@@ -68,24 +68,24 @@ pwtest_grep_file '^### R1 · §3 Repos — \[RESOLVED\] .*<!-- pw-item-status: r
 [ "$ASK_BEFORE" = "$(grep -F 'the toggle also lives in common-config' "$P/$RV")" ] \
   && pwtest_ok "human ask byte-identical after resolve" || pwtest_bad "resolve edited human text" "ask line changed"
 pwtest_grep_file '^> ↳ \*\*agent\*\* \([0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\.[0-9]{2} WIB\): added a common-config row' "resolve appended the ↳ agent reply (WIB timestamp)" "$P/$RV"
-pwtest_rc 2 "resolve refuses already-resolved" "$E" resolve "$RE" "$RV" R1 --reply again
-pwtest_rc 2 "resolve refuses empty reply" "$E" resolve "$RE" "$RV" R2 --reply '  '
+pwtest_rc 2 "resolve refuses already-resolved" "$E" resolve --project "$RE" --file "$RV" --item R1 --reply again
+pwtest_rc 2 "resolve refuses empty reply" "$E" resolve --project "$RE" --file "$RV" --item R2 --reply '  '
 # Q resolve requires the human's answer first
-pwtest_rc 0 "add-question Q2" "$E" add-question "$RE" "$RV" --section '§5' --text 'a second question?'
-pwtest_rc 2 "resolve Q2 refuses without a ↳ you line" "$E" resolve "$RE" "$RV" Q2 --reply folding nothing
-pwtest_rc 0 "resolve Q1 (answered)" "$E" resolve "$RE" "$RV" Q1 --reply folded into §4 — default off
+pwtest_rc 0 "add-question Q2" "$E" add-question --project "$RE" --file "$RV" --section '§5' --text 'a second question?'
+pwtest_rc 2 "resolve Q2 refuses without a ↳ you line" "$E" resolve --project "$RE" --file "$RV" --item Q2 --reply folding nothing
+pwtest_rc 0 "resolve Q1 (answered)" "$E" resolve --project "$RE" --file "$RV" --item Q1 --reply folded into §4 — default off
 pwtest_grep_file '^### Q1 · §4 — \[ANSWERED\] .*<!-- pw-item-status: resolved -->' "Q1 flipped to ANSWERED" "$P/$RV"
 
 # 5) signoff: placeholder replaced, history append-only, gate reads the latest row.
 # Plan 31 deliberately tightens the gate: an approval with REAL open items is STALE for
 # consumers — gate exits 1 while items/questions stay unresolved (expectation updated).
-pwtest_rc 2 "signoff refuses bad decision" "$E" signoff "$RE" "$RV" approve
+pwtest_rc 2 "signoff refuses bad decision" "$E" signoff --project "$RE" --file "$RV" --decision approve
 pwtest_fix "bad-decision refusal actionable"
-pwtest_rc 0 "signoff approved" "$E" signoff "$RE" "$RV" approved
-pwtest_rc 1 "gate refuses approved-with-open-items (stale approval blocked)" "$(pwtest_script pw-review.sh)" gate "$RE" "$RV"
+pwtest_rc 0 "signoff approved" "$E" signoff --project "$RE" --file "$RV" --decision approved
+pwtest_rc 1 "gate refuses approved-with-open-items (stale approval blocked)" "$(pwtest_script pw-review.sh)" gate --project "$RE" --file "$RV"
 pwtest_err 'STALE' "stale-approval gate note explains the open-item block"
-pwtest_rc 0 "signoff changes-requested (--by)" "$E" signoff "$RE" "$RV" changes-requested --by faza
-pwtest_rc 1 "gate now reads changes-requested (latest row wins)" "$(pwtest_script pw-review.sh)" gate "$RE" "$RV"
+pwtest_rc 0 "signoff changes-requested (--by)" "$E" signoff --project "$RE" --file "$RV" --decision changes-requested --by faza
+pwtest_rc 1 "gate now reads changes-requested (latest row wins)" "$(pwtest_script pw-review.sh)" gate --project "$RE" --file "$RV"
 n1="$(grep -c '^| [0-9]* [A-Za-z]* [0-9]* - [0-9]*.[0-9]* WIB | you | approved |$' "$P/$RV")"
 n2="$(grep -c '^| [0-9]* [A-Za-z]* [0-9]* - [0-9]*.[0-9]* WIB | faza | changes-requested |$' "$P/$RV")"
 if [ "$n1" = 1 ] && [ "$n2" = 1 ]; then
@@ -97,36 +97,36 @@ grep -q 'signed off' "$P/LOG.md" && pwtest_ok "signoff logged" || pwtest_bad "si
 # human feedback over a still-active HUMAN changes-requested → it queues one in-review row),
 # fold Q2, human approves — the gate (latest approved AND zero open AND no active human
 # rejection) finally reads clean.
-pwtest_rc 0 "resolve R2" "$E" resolve "$RE" "$RV" R2 --reply 'flag documented; item closed'
-pwtest_rc 0 "answer Q2 queues a fresh cycle" "$E" answer "$RE" "$RV" Q2 --text keep both lanes
+pwtest_rc 0 "resolve R2" "$E" resolve --project "$RE" --file "$RV" --item R2 --reply 'flag documented; item closed'
+pwtest_rc 0 "answer Q2 queues a fresh cycle" "$E" answer --project "$RE" --file "$RV" --question Q2 --text keep both lanes
 pwtest_grep_file 'pw-review \(feedback\) \| in-review \|$' "human answer over a human rejection re-queues one in-review row" "$P/$RV"
-pwtest_rc 0 "resolve Q2" "$E" resolve "$RE" "$RV" Q2 --reply 'folded: both lanes documented'
-pwtest_rc 0 "human approves once the table is clean" "$E" signoff "$RE" "$RV" approved --by faza
-pwtest_rc 0 "gate approves with zero open items" "$(pwtest_script pw-review.sh)" gate "$RE" "$RV"
+pwtest_rc 0 "resolve Q2" "$E" resolve --project "$RE" --file "$RV" --item Q2 --reply 'folded: both lanes documented'
+pwtest_rc 0 "human approves once the table is clean" "$E" signoff --project "$RE" --file "$RV" --decision approved --by faza
+pwtest_rc 0 "gate approves with zero open items" "$(pwtest_script pw-review.sh)" gate --project "$RE" --file "$RV"
 
 # 6) ids stay monotonic across an archive run (archived markers counted)
-pwtest_rc 0 "archive resolved items" "$(pwtest_script pw-review.sh)" archive "$RE" "$RV"
-pwtest_rc 0 "add-item after archive" "$E" add-item "$RE" "$RV" --section '§6' --text post-archive item
+pwtest_rc 0 "archive resolved items" "$(pwtest_script pw-review.sh)" archive --project "$RE" --file "$RV"
+pwtest_rc 0 "add-item after archive" "$E" add-item --project "$RE" --file "$RV" --section '§6' --text post-archive item
 pwtest_grep_file '^### R3 · §6 — \[OPEN\]' "next id skipped archived R1 (got R3, not R1)" "$P/$RV"
 
 # 7) lint + count agree with the edited file (post-archive live state: only R3 open —
 #    R1/Q1/R2/Q2 all archived by 5b/6; count expectation updated for plan 31)
-pwtest_rc 0 "lint passes on the edited review file" "$(pwtest_script pw-doc.sh)" lint review "$RE" "$RV"
-pwtest_rc 0 "count on edited file" "$(pwtest_script pw-review.sh)" count "$RE" "$RV"
+pwtest_rc 0 "lint passes on the edited review file" "$(pwtest_script pw-doc.sh)" lint --kind review --project "$RE" --file "$RV"
+pwtest_rc 0 "count on edited file" "$(pwtest_script pw-review.sh)" count --project "$RE" --file "$RV"
 pwtest_re 'open=1 resolved=0 items=1' "count sees the live post-archive state (open=1 resolved=0 items=1)"
 
 rm -rf "$PW_PROJECTS_DIR/$RE"
 
 
 # --- scan (merged from pw-review-scan.t.sh, plan 20 Phase 3) ---
-pwtest_rc 0 "scan F1 empty report rc" "$(pwtest_script pw-review.sh)" scan "$S1"
-pwtest_rc 0 "scan F2 reports rows" "$(pwtest_script pw-review.sh)" scan "$S2"
+pwtest_rc 0 "scan F1 empty report rc" "$(pwtest_script pw-review.sh)" scan --project "$S1"
+pwtest_rc 0 "scan F2 reports rows" "$(pwtest_script pw-review.sh)" scan --project "$S2"
 pwtest_re 'fixture.review.md' "analysis-lane row emitted"
 pwtest_re 'in-review|open|approved' "shows decision state (col-3 read, C5)"
 grep -qi template "$PWTEST_OUT" \
   && pwtest_bad "templates never surface as reviews" "$(head -c 160 "$PWTEST_OUT"|tr '\n' ' ')" \
   || pwtest_ok "no template file listed as a review (status/scan round)"
-pwtest_rc 0 "scan F3 ignores commented example rows (C5)" "$(pwtest_script pw-review.sh)" scan "$S3"
+pwtest_rc 0 "scan F3 ignores commented example rows (C5)" "$(pwtest_script pw-review.sh)" scan --project "$S3"
 
 # C22 (2026-09-16): display counts must read the SAME heading-level detector the gates use —
 # the template guidance line in every review file literally contains `pw-item-status: open`
@@ -141,32 +141,32 @@ else
 fi
 RSC=reviewscanprobe; rm -rf "$PW_PROJECTS_DIR/$RSC"; cp -a "$F2" "$PW_PROJECTS_DIR/$RSC"
 printf '### R9 · §2 — [OPEN] (you, 2026-09-16 00:00) <!-- pw-item-status: open -->\n---\n' >> "$PW_PROJECTS_DIR/$RSC/analysis/review/fixture.review.md"
-pwtest_rc 0 "scan on cloned F2 with one real open heading" "$(pwtest_script pw-review.sh)" scan "$RSC"
+pwtest_rc 0 "scan on cloned F2 with one real open heading" "$(pwtest_script pw-review.sh)" scan --project "$RSC"
 pwtest_re '1 open' "real open heading counted (C22b)"
 pwtest_re 'fixture\.review\.md: 1 open \(approved · pwtest\)' "scan line shows open-count and decision-with-actor (plan 31 readers)"
 printf '### R9b · §3 — [RESOLVED] (you, 2026-09-16 00:00) <!-- pw-item-status: resolved -->\n---\n' >> "$PW_PROJECTS_DIR/$RSC/task/review/PLAN.review.md"
-pwtest_rc 0 "scan sees a real resolved heading" "$(pwtest_script pw-review.sh)" scan "$RSC"
+pwtest_rc 0 "scan sees a real resolved heading" "$(pwtest_script pw-review.sh)" scan --project "$RSC"
 pwtest_re 'PLAN.review.md: 1 resolved' "resolved heading counted under its file (C22c)"
 # Plan 31 lane filter: plan→PLAN only; task-plan/task-exec/ship→the task artifacts (the old
 # filter emitted PLAN under task-plan and nothing under ship).
-pwtest_rc 0 "scan --phase plan selects only the plan lane" "$(pwtest_script pw-review.sh)" scan "$RSC" --phase plan
+pwtest_rc 0 "scan --phase plan selects only the plan lane" "$(pwtest_script pw-review.sh)" scan --project "$RSC" --phase plan
 pwtest_re 'PLAN.review.md' "plan lane lists the PLAN review"
 if printf '%s' "$PWTEST_OUT" | grep -qE 'T0[0-9]'; then pwtest_bad "plan lane excludes task artifacts" "task review surfaced under plan"; else pwtest_ok "plan lane excludes task artifacts"; fi
-pwtest_rc 0 "scan --phase task-plan selects task artifacts" "$(pwtest_script pw-review.sh)" scan "$RSC" --phase task-plan
+pwtest_rc 0 "scan --phase task-plan selects task artifacts" "$(pwtest_script pw-review.sh)" scan --project "$RSC" --phase task-plan
 pwtest_re 'T04\.review\.md' "task-plan lane lists task reviews"
 if printf '%s' "$PWTEST_OUT" | grep -q 'PLAN.review.md'; then pwtest_bad "task-plan lane excludes PLAN" "PLAN surfaced under task-plan"; else pwtest_ok "task-plan lane excludes the plan-lane row"; fi
-pwtest_rc 0 "scan --phase task-exec lists the task lane" "$(pwtest_script pw-review.sh)" scan "$RSC" --phase task-exec
+pwtest_rc 0 "scan --phase task-exec lists the task lane" "$(pwtest_script pw-review.sh)" scan --project "$RSC" --phase task-exec
 pwtest_re 'T04\.review\.md' "task-exec lane lists task reviews"
-pwtest_rc 0 "scan --phase ship maps the mirrored task reviews" "$(pwtest_script pw-review.sh)" scan "$RSC" --phase ship
+pwtest_rc 0 "scan --phase ship maps the mirrored task reviews" "$(pwtest_script pw-review.sh)" scan --project "$RSC" --phase ship
 pwtest_re 'T04\.review\.md' "ship lane lists task reviews"
 rm -rf "$PW_PROJECTS_DIR/$RSC"
 
 # --- init idempotency (ported from pw-lib.t.sh §2, plan 20) ---
 # 2) review-init idempotent (P8):
 RI=libtestri; rm -rf "$PW_PROJECTS_DIR/$RI"; cp -a "$F2" "$PW_PROJECTS_DIR/$RI"
-pwtest_rc 0 "review-init new file ok" "$(pwtest_script pw-review.sh)" init "$RI" task/review/T99.review.md task/T99.md || true
+pwtest_rc 0 "review-init new file ok" "$(pwtest_script pw-review.sh)" init --project "$RI" --file task/review/T99.review.md --doc task/T99.md || true
 printf '\nspecial content kept\n' >> "$PW_PROJECTS_DIR/$RI/task/review/T99.review.md"
-pwtest_rc 0 "review-init rerun" "$(pwtest_script pw-review.sh)" init "$RI" task/review/T99.review.md task/T99.md
+pwtest_rc 0 "review-init rerun" "$(pwtest_script pw-review.sh)" init --project "$RI" --file task/review/T99.review.md --doc task/T99.md
 grep -q 'special content kept' "$PW_PROJECTS_DIR/$RI/task/review/T99.review.md" \
   && pwtest_ok "review-init preserves existing" || pwtest_bad "review-init clobber" "existing content lost"
 
@@ -187,12 +187,12 @@ rv_selftest() {
   LIBP="$(pwtest_script pw-config.sh)"
   # demo2 starts advisory for the auto-signoff refusal checks (the original relied on the
   # ai-review section that runs earlier in the selftest):
-  PW_PROJECTS_DIR="$tmp" "$LIBP" ai-review demo2 analysis advisory >/dev/null 2>&1 || true
+  PW_PROJECTS_DIR="$tmp" "$LIBP" ai-review --project demo2 --set analysis=advisory >/dev/null 2>&1 || true
   # review-init: creates a review file verbatim from the template (header + Reviewing: link
   # stamped, format hints intact), and is idempotent — a 2nd call never clobbers your items.
   mkdir -p "$tmp/demo/analysis"
   printf '# Analysis: demo\n' > "$tmp/demo/analysis/topic.md"
-  PW_PROJECTS_DIR="$tmp" "$SH" init demo analysis/review/topic.review.md analysis/topic.md >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$SH" init --project demo --file analysis/review/topic.review.md --doc analysis/topic.md >/dev/null
   local RV="$tmp/demo/analysis/review/topic.review.md"
   [ -f "$RV" ] || die "selftest FAIL: review-init did not create the file"
   grep -q '^# Review: topic.md$' "$RV" || die "selftest FAIL: review header not stamped"
@@ -200,15 +200,15 @@ rv_selftest() {
   grep -q '^> \*\*Add an item:\*\*' "$RV" || die "selftest FAIL: permanent Items format hint missing"
   grep -q '^> \*\*Answer a question:\*\*' "$RV" || die "selftest FAIL: permanent Open-questions format hint missing"
   printf '\n### R1 · your item\n' >> "$RV"                    # simulate the human adding an item
-  PW_PROJECTS_DIR="$tmp" "$SH" init demo analysis/review/topic.review.md analysis/topic.md >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$SH" init --project demo --file analysis/review/topic.review.md --doc analysis/topic.md >/dev/null
   grep -q '^### R1 · your item$' "$RV" || die "selftest FAIL: review-init clobbered an existing review file"
 
   # review note-init: idempotent, same shape as review-init/rfc init.
-  PW_PROJECTS_DIR="$tmp" "$SH" note-init demo2 >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$SH" note-init --project demo2 >/dev/null
   local NOTES="$tmp/demo2/REVIEWER-NOTES.md"
   [ -f "$NOTES" ] || die "selftest FAIL: review note-init did not create REVIEWER-NOTES.md"
   printf '\n## manual entry\n' >> "$NOTES"
-  PW_PROJECTS_DIR="$tmp" "$SH" note-init demo2 >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$SH" note-init --project demo2 >/dev/null
   grep -q '^## manual entry$' "$NOTES" || die "selftest FAIL: review note-init clobbered an existing file"
 
   # review auto-signoff: refuses when mode isn't auto (demo2/analysis is "advisory" above), refuses
@@ -216,16 +216,16 @@ rv_selftest() {
   # template's unfilled R1/Q1 stubs (literal `<YYYY-MM-DD` placeholder text) are heads-up copies,
   # not items, and must never block (C22: the same phantoms made pw-status report approved gates
   # as unresolved). Success places a distinctly-tagged row INSIDE the Sign-off table.
-  PW_PROJECTS_DIR="$tmp" "$SH" init demo2 analysis/review/topic2.review.md analysis/topic2.md >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$SH" init --project demo2 --file analysis/review/topic2.review.md --doc analysis/topic2.md >/dev/null
   local RV2="$tmp/demo2/analysis/review/topic2.review.md"
   grep -q '\[OPEN\]' "$RV2" || die "selftest FAIL: fresh review-init unexpectedly has no [OPEN] stub (test assumption invalid)"
-  if PW_PROJECTS_DIR="$tmp" "$SH" auto-signoff demo2 analysis/review/topic2.review.md analysis >/dev/null 2>&1; then
+  if PW_PROJECTS_DIR="$tmp" "$SH" auto-signoff --project demo2 --file analysis/review/topic2.review.md --phase analysis >/dev/null 2>&1; then
     die "selftest FAIL: auto-signoff succeeded although mode is 'advisory', not 'auto'"
   fi
-  PW_PROJECTS_DIR="$tmp" "$LIBP" ai-review demo2 analysis auto >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$LIBP" ai-review --project demo2 --set analysis=auto >/dev/null
   # a genuinely filled open item must still refuse auto-signoff — realistic timestamp, real ask.
   printf '### R9 · §1 Goal wording — [OPEN] (you, 2026-09-16 11:00) <!-- pw-item-status: open -->\nPlease reword §1.\n---\n' >> "$RV2"
-  if PW_PROJECTS_DIR="$tmp" "$SH" auto-signoff demo2 analysis/review/topic2.review.md analysis >/dev/null 2>&1; then
+  if PW_PROJECTS_DIR="$tmp" "$SH" auto-signoff --project demo2 --file analysis/review/topic2.review.md --phase analysis >/dev/null 2>&1; then
     die "selftest FAIL: auto-signoff succeeded although a real filled item is open"
   fi
   sed -i '' -e '/^### R9 · §1 Goal wording/,+2d' "$RV2"
@@ -266,7 +266,7 @@ rv_selftest() {
       print line }
   ' "$MKT") && die "selftest FAIL: multi-line comment content was not actually stripped"
 
-  PW_PROJECTS_DIR="$tmp" "$SH" auto-signoff demo2 analysis/review/topic2.review.md analysis >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$SH" auto-signoff --project demo2 --file analysis/review/topic2.review.md --phase analysis >/dev/null
   grep -q '| pw-reviewer (auto; provider=unknown; model=unknown) | approved |$' "$RV2" || die "selftest FAIL: auto-signoff row not written/tagged correctly"
   grep -q '| pw-reviewer (auto) | approved ✅ |$' "$RV2" && die "selftest FAIL: auto-signoff wrote the legacy emoji form — new rows must be plain 'approved'"
   grep -q '^| | | in-review |$' "$RV2" && die "selftest FAIL: auto-signoff left the placeholder row instead of replacing it"
@@ -293,17 +293,17 @@ rv_selftest() {
   # block, containing two lines that look exactly like real approved-row table rows. This is
   # exactly the fixture that would trip the naive "last | line from ## Sign-off to EOF" bug.
   local gd
-  gd="$(PW_PROJECTS_DIR="$tmp" "$SH" gate demo2 analysis/review/topic2.review.md)" \
+  gd="$(PW_PROJECTS_DIR="$tmp" "$SH" gate --project demo2 --file analysis/review/topic2.review.md)" \
     || die "selftest FAIL: review gate exited non-zero on a genuinely approved file"
   [ "$gd" = "approved" ] || die "selftest FAIL: review gate printed '$gd', expected 'approved'"
 
   # reopen: must succeed, append (never delete) an in-review row, and gate must now report open.
-  PW_PROJECTS_DIR="$tmp" "$SH" reopen demo2 analysis/review/topic2.review.md >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$SH" reopen --project demo2 --file analysis/review/topic2.review.md >/dev/null
   grep -q '| pw-reviewer (auto; provider=unknown; model=unknown) | approved |$' "$RV2" \
     || die "selftest FAIL: review reopen deleted the prior approval instead of appending after it"
   grep -q '| pw-review (auto-reopen) | in-review |$' "$RV2" \
     || die "selftest FAIL: review reopen did not append the expected in-review row"
-  if gd="$(PW_PROJECTS_DIR="$tmp" "$SH" gate demo2 analysis/review/topic2.review.md)"; then
+  if gd="$(PW_PROJECTS_DIR="$tmp" "$SH" gate --project demo2 --file analysis/review/topic2.review.md)"; then
     die "selftest FAIL: review gate exited 0 right after reopen (should read in-review now)"
   fi
   [ "$gd" = "in-review" ] || die "selftest FAIL: review gate printed '$gd' after reopen, expected 'in-review'"
@@ -317,7 +317,7 @@ rv_selftest() {
   strip_rv2() { _comment_blanked "$RV2"; }
 
   # reopen again while already open: idempotent no-op, must NOT append a second in-review row.
-  PW_PROJECTS_DIR="$tmp" "$SH" reopen demo2 analysis/review/topic2.review.md >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$SH" reopen --project demo2 --file analysis/review/topic2.review.md >/dev/null
   [ "$(strip_rv2 | grep -c '| pw-review (auto-reopen) | in-review |$')" -eq 1 ] \
     || die "selftest FAIL: review reopen was not idempotent — appended a second in-review row"
 
@@ -325,11 +325,11 @@ rv_selftest() {
   # inside/after the template's trailing WORKED-EXAMPLE comment block — the exact regression this
   # round's _signoff_last_real_row_line fix targets (a raw scan previously picked the example's
   # own "approved" lines, since they're the last such lines in the whole file).
-  PW_PROJECTS_DIR="$tmp" "$LIBP" ai-review demo2 analysis auto >/dev/null   # already auto from above; explicit for clarity
-  PW_PROJECTS_DIR="$tmp" "$SH" auto-signoff demo2 analysis/review/topic2.review.md analysis >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$LIBP" ai-review --project demo2 --set analysis=auto >/dev/null   # already auto from above; explicit for clarity
+  PW_PROJECTS_DIR="$tmp" "$SH" auto-signoff --project demo2 --file analysis/review/topic2.review.md --phase analysis >/dev/null
   [ "$(strip_rv2 | grep -c '| pw-reviewer (auto; provider=unknown; model=unknown) | approved |$')" -eq 2 ] \
     || die "selftest FAIL: second auto-signoff didn't produce a second distinct real approved row"
-  gd="$(PW_PROJECTS_DIR="$tmp" "$SH" gate demo2 analysis/review/topic2.review.md)" \
+  gd="$(PW_PROJECTS_DIR="$tmp" "$SH" gate --project demo2 --file analysis/review/topic2.review.md)" \
     || die "selftest FAIL: review gate exited non-zero after the second (re-)approval"
   [ "$gd" = "approved" ] || die "selftest FAIL: review gate printed '$gd' after re-approval, expected 'approved'"
   # and the row order must still be [1st approved, in-review, 2nd approved] top-to-bottom in the
@@ -346,15 +346,15 @@ rv_selftest() {
     || die "selftest FAIL: Sign-off rows out of order (1st-approved=$ln_row1 reopen=$ln_reopen 2nd-approved=$ln_row2) — the second approval didn't land after the reopen row"
 
   # reopen must refuse silently (no-op, exit 0) when the file is NOT currently approved.
-  PW_PROJECTS_DIR="$tmp" "$SH" reopen demo2 analysis/review/topic2.review.md >/dev/null
-  PW_PROJECTS_DIR="$tmp" "$SH" reopen demo2 analysis/review/topic2.review.md >/dev/null || \
+  PW_PROJECTS_DIR="$tmp" "$SH" reopen --project demo2 --file analysis/review/topic2.review.md >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$SH" reopen --project demo2 --file analysis/review/topic2.review.md >/dev/null || \
     die "selftest FAIL: reopen on an already-open file exited non-zero (should be a harmless no-op)"
 
   # --- review has-open: the generic open-item check /pw-breakdown's RFC hard block relies on ---
   # a project with no RFC.review.md at all (never touched the side-loop) must report "no"/exit 1,
   # never an error.
   local RFCRV="$tmp/demo2/analysis/review/RFC.review.md" hn
-  if hn="$(PW_PROJECTS_DIR="$tmp" "$SH" has-open demo2 analysis/review/RFC.review.md)"; then
+  if hn="$(PW_PROJECTS_DIR="$tmp" "$SH" has-open --project demo2 --file analysis/review/RFC.review.md)"; then
     die "selftest FAIL: review has-open exited 0 for a nonexistent RFC.review.md (should be 'no'/exit 1)"
   fi
   [ "$hn" = "no" ] || die "selftest FAIL: review has-open printed '$hn' for a missing file, expected 'no'"
@@ -363,10 +363,10 @@ rv_selftest() {
   mkdir -p "$(dirname "$RFCRV")"
   printf '# RFC comments\n\n### R1 — a pulled comment <!-- pw-item-status: open -->\n\n> quoted comment text\n' \
     > "$RFCRV"
-  if ! PW_PROJECTS_DIR="$tmp" "$SH" has-open demo2 analysis/review/RFC.review.md >/dev/null; then
+  if ! PW_PROJECTS_DIR="$tmp" "$SH" has-open --project demo2 --file analysis/review/RFC.review.md >/dev/null; then
     die "selftest FAIL: review has-open exited non-zero on a file with a real open item"
   fi
-  hn="$(PW_PROJECTS_DIR="$tmp" "$SH" has-open demo2 analysis/review/RFC.review.md)"
+  hn="$(PW_PROJECTS_DIR="$tmp" "$SH" has-open --project demo2 --file analysis/review/RFC.review.md)"
   [ "$hn" = "yes" ] || die "selftest FAIL: review has-open printed '$hn' with an open item present, expected 'yes'"
 
   # resolve it in place — has-open must now report clean ("no"/exit 1), same file, no other rows.
@@ -374,7 +374,7 @@ rv_selftest() {
   # 1, and an ungated `hn="$(...)"` on a nonzero-exit command would trip `set -e` and abort the
   # whole selftest silently, same reasoning as the existing `review gate` checks above.
   sed -i '' -e 's/<!-- pw-item-status: open -->/<!-- pw-item-status: resolved -->/' "$RFCRV"
-  if hn="$(PW_PROJECTS_DIR="$tmp" "$SH" has-open demo2 analysis/review/RFC.review.md)"; then
+  if hn="$(PW_PROJECTS_DIR="$tmp" "$SH" has-open --project demo2 --file analysis/review/RFC.review.md)"; then
     die "selftest FAIL: review has-open exited 0 after the only open item was resolved"
   fi
   [ "$hn" = "no" ] || die "selftest FAIL: review has-open printed '$hn' after resolving, expected 'no'"
@@ -382,7 +382,7 @@ rv_selftest() {
   # review gate on a review file with no Sign-off rows fabricated at all → dies, doesn't crash.
   local NOSIGN="$tmp/demo2/no-signoff.review.md"
   printf '# not a real review file\nno Sign-off section here\n' > "$NOSIGN"
-  if PW_PROJECTS_DIR="$tmp" "$SH" gate demo2 no-signoff.review.md >/dev/null 2>&1; then
+  if PW_PROJECTS_DIR="$tmp" "$SH" gate --project demo2 --file no-signoff.review.md >/dev/null 2>&1; then
     die "selftest FAIL: review gate succeeded on a file with no ## Sign-off section at all"
   fi
 
@@ -400,7 +400,7 @@ pl_review_selftest() {
   printf -- '- **Status:** context\n- **One-liner:** <x>\n' > "$tmp/reviewtest/README.md"
   : > "$tmp/reviewtest/LOG.md"
   printf '# Analysis: rt\n' > "$tmp/reviewtest/analysis/rt.md"
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" init reviewtest analysis/review/rt.review.md analysis/rt.md >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" init --project reviewtest --file analysis/review/rt.review.md --doc analysis/rt.md >/dev/null
   local RTV="$tmp/reviewtest/analysis/review/rt.review.md"
   # Add a 2nd OPEN item and a RESOLVED item into ## Items, BEFORE ## Open questions — realistic
   # placement (never a blind end-of-file append, which would land after ## Sign-off and prove
@@ -428,14 +428,14 @@ pl_review_selftest() {
   # reindex: builds a Contents table with exactly R2 (open) and R3 (resolved) — ignoring the
   # template's own commented-out worked-example headings (R1/Q1, still present verbatim above the
   # live section) — and is idempotent (a 2nd run replaces the block in place, never duplicates it).
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" reindex reviewtest analysis/review/rt.review.md >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" reindex --project reviewtest --file analysis/review/rt.review.md >/dev/null
   grep -q '<!-- pw-contents:begin -->' "$RTV" || die "selftest FAIL: review reindex did not insert a Contents block"
   local CT1; CT1="$(sed -n '/pw-contents:begin/,/pw-contents:end/p' "$RTV")"
   printf '%s\n' "$CT1" | grep -qF '| R2 | §3 second item | [OPEN] |' || die "selftest FAIL: reindex Contents missing/wrong R2 row"
   printf '%s\n' "$CT1" | grep -qF '| R3 | §4 third item | [RESOLVED] |' || die "selftest FAIL: reindex Contents missing/wrong R3 row"
   printf '%s\n' "$CT1" | grep -q '| R1 |' && die "selftest FAIL: reindex Contents picked up a commented-out worked-example heading"
   [ "$(grep -c '<!-- pw-contents:begin -->' "$RTV")" = "1" ] || die "selftest FAIL: reindex duplicated the Contents begin-marker"
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" reindex reviewtest analysis/review/rt.review.md >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" reindex --project reviewtest --file analysis/review/rt.review.md >/dev/null
   [ "$(grep -c '<!-- pw-contents:begin -->' "$RTV")" = "1" ] || die "selftest FAIL: re-running reindex duplicated the Contents block instead of replacing it in place"
   [ "$(grep -c '^## Contents' "$RTV")" = "1" ] || die "selftest FAIL: re-running reindex duplicated the Contents heading"
 
@@ -445,11 +445,11 @@ pl_review_selftest() {
   # with the right marker landed in a new "## Archived items" section.
   local before_signoff before_hasopen
   before_signoff="$(sed -n '/^## Sign-off/,$p' "$RTV")"
-  before_hasopen="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" has-open reviewtest analysis/review/rt.review.md)"
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" archive reviewtest analysis/review/rt.review.md >/dev/null
+  before_hasopen="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" has-open --project reviewtest --file analysis/review/rt.review.md)"
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" archive --project reviewtest --file analysis/review/rt.review.md >/dev/null
   local after_signoff after_hasopen
   after_signoff="$(sed -n '/^## Sign-off/,$p' "$RTV")"
-  after_hasopen="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" has-open reviewtest analysis/review/rt.review.md)"
+  after_hasopen="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" has-open --project reviewtest --file analysis/review/rt.review.md)"
   [ "$before_signoff" = "$after_signoff" ] || die "selftest FAIL: review archive changed the Sign-off table/section — gate-safety broken"
   [ "$before_hasopen" = "$after_hasopen" ] || die "selftest FAIL: review archive changed has-open's verdict ($before_hasopen -> $after_hasopen)"
   [ "$after_hasopen" = "yes" ] || die "selftest FAIL: R2 should still be open after archiving R3 (test assumption invalid)"
@@ -464,7 +464,7 @@ pl_review_selftest() {
 
   # a 2nd archive run with nothing newly resolved must be a harmless no-op (no duplicate rows).
   local archived_rows_before; archived_rows_before="$(grep -c 'pw-archived:' "$RTV")"
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" archive reviewtest analysis/review/rt.review.md >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-review.sh)" archive --project reviewtest --file analysis/review/rt.review.md >/dev/null
   [ "$(grep -c 'pw-archived:' "$RTV")" = "$archived_rows_before" ] \
     || die "selftest FAIL: re-running archive with nothing newly resolved was not a no-op"
   rm -rf "$tmp"

@@ -1,9 +1,9 @@
 # RFC: <PROJECT_NAME>
 
 <!-- [🤖 agent] generates this file locally via `/pw-rfc` — always, regardless of whether you
-     publish anywhere external (Generate vs Publish, see docs/RFC.md). Wave 1 (`/pw-rfc <slug>`,
+     publish anywhere external (Generate vs Publish, see docs/RFC.md). Wave 1 (`/pw-rfc --project <slug>`,
      gated on analysis `approved`) fills Background → Dependencies. Wave 2
-     (`/pw-rfc <slug> milestone`, gated on PLAN `approved`) fills Milestone + Conclusion.
+     (`/pw-rfc milestone --project <slug>`, gated on PLAN `approved`) fills Milestone + Conclusion.
      Rollout/Rollback Plan are filled only if you ask. Glossary and the References subsections stay
      human-owned placeholders — the agent never fills those. Legend: 🤖 agent · 🧑 you.
 
@@ -103,7 +103,7 @@
 ## References
 
 ### Open questions?
-🧑 <RFC-doc comments pulled read-only via `/pw-rfc <slug> comments` land in
+🧑 <RFC-doc comments pulled read-only via `/pw-rfc comments --project <slug>` land in
    analysis/review/RFC.review.md instead of here — this section is for questions you want to
    record directly in the RFC itself>
 

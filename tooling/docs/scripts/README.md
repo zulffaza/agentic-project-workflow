@@ -24,10 +24,13 @@ script or operator? Placement rules (one script per entity, no second catch-all 
 ## Common invocation pattern
 
 ```bash
-$PW_HOME/tooling/scripts/entities/<script>.sh <args> [options]      # shell
-{{PW_HOME}}/tooling/scripts/entities/<script>.sh <args> [options]   # inside command/agent/skill prompt files
+$PW_HOME/tooling/scripts/entities/<script>.sh <op…> [--flag <value>]… [--switch]…    # shell
+{{PW_HOME}}/tooling/scripts/entities/<script>.sh <op…> [--flag <value>]… [--switch]… # inside command/agent/skill prompt files
 ```
 
+- Named-argument grammar: operation words first, every value named (`--project <slug>` selects
+  the project in every project form). A scalar flag takes exactly one token (quote values with
+  spaces); a prose value runs until the next `--flag` token.
 - `-h` / `--help` prints the script's own usage header and exits 0 — on every script.
 - Human-readable errors go to **stderr**, prefixed with the script name (`pw-preflight: …`,
   `pw-doc lint: …`). On success most scripts are silent or print a short report to stdout.
@@ -53,7 +56,7 @@ That is the whole contract commands rely on: pre-flight fails *before* agent tok
 ## Success checklist for a failing invocation
 
 1. Read the stderr prefix — it names the script and usually the missing gate or file.
-2. "not approved / open items" → run the review it names (e.g. `/pw-review <slug> plan`).
+2. "not approved / open items" → run the review it names (e.g. `/pw-review --project <slug>` for the plan phase).
 3. "not found" → the phase you're in hasn't produced that artifact yet; run the upstream command.
 4. Exit `2` from `pw-ship.sh monitor` with "still running" → CI hasn't settled; re-run or
    raise `--timeout`.

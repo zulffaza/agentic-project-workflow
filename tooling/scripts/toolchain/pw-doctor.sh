@@ -463,7 +463,7 @@ for p in "${PW_PROVIDERS[@]}"; do
   # actually tell live from dead for this provider? A probe id must come back dead(1); 2 means
   # the store/CLI is unreachable — resume paths treat "unverified" conservatively (cold).
   _sirc=0
-  "$HERE/../entities/pw-session.sh" session-check "$p" ses-doctor-probe-nonexistent >/dev/null 2>&1 || _sirc=$?
+  "$HERE/../entities/pw-session.sh" session-check --provider "$p" --session ses-doctor-probe-nonexistent >/dev/null 2>&1 || _sirc=$?
   case "$_sirc" in
     0) echo "    ⚠ session liveness: probe id unexpectedly reported LIVE (check pw-session.sh)" ;;
     2) echo "    · session liveness: unverifiable for $p (store/CLI not reachable — resumes fall back to cold)" ;;

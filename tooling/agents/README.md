@@ -53,7 +53,7 @@ provider's `render_<name>_agent` hook wraps the body in that provider's frontmat
 
 ## Reuse before you create
 The six shipped agents cover the workflow's roles (orchestrator, researcher, analyst, writer-task,
-executor, reviewer — `pw-reviewer` is spawned only by `/pw-review … ai`). **Execution can still
+executor, reviewer — `pw-reviewer` is spawned only by `/pw-review ai …`). **Execution can still
 reuse an existing agent you already have** (e.g. `pw-executor`) — a task's `Execute with:` names
 whatever should run it, and the discipline (worktree isolation, running `## Verify`, faithful
 reporting) comes from the `project-workflow` skill + the task file, not from a bespoke agent. Ship
@@ -86,7 +86,7 @@ model: <optional default model>
 Two kinds of thing live here, and the difference is load-bearing:
 - **`pw-executor` and `pw-reviewer` are sub-agents** — spawned *in-process* (Claude Task
   `subagent_type`; kilo `mode: subagent`). A provider can spawn only its **own** sub-agents.
-  `pw-reviewer` is spawned by whichever agent is running `/pw-review <slug> ai …`, not only by
+  `pw-reviewer` is spawned by whichever agent is running `/pw-review ai --project <slug> …`, not only by
   `pw-orchestrator` — any primary agent on that provider can spawn it.
 - **`pw-orchestrator` is a primary/invocable agent** — run through a provider's CLI, the only unit
   that crosses a provider boundary.
@@ -117,7 +117,7 @@ the on-disk PLAN/dashboard/task state stays the durable cross-machine recovery.
 
 The phase roles without a task file (researcher / analyst / writer-task / reviewer / verifier)
 bind their model one rung up the ladder: an interactive override for that spawn, the project
-dashboard's `- **AI Models:**` line (`pw-config.sh project set ai-model <slug> <role> <provider:model>`,
+dashboard's `- **AI Models:**` line (`pw-config.sh set --project <slug> --key ai-model --set <role>=<provider:model>`,
 the sibling of `- **AI Review:**`; the human surface is `/pw-config`), or nothing — which
 falls through to the provider's floor (`small_model`/`subagent_model` on kilo; the session model on
 claude). Canonical defs ship with `model:` **unset** on purpose: a provider alias baked into a def
@@ -145,7 +145,7 @@ never overrides a task file.
   `pw-review`/`pw-rfc` bundle skills are skipped there (the command-skills own the names) and
   their METHOD travels read-as-file in reviewer spawn prompts.
 - Session/ledger: `thread_id` (UUID) from the `--json` `thread.started` event; liveness =
-  `pw-session.sh session-check codex <id>` (rollout file under `~/.codex/sessions/`); resume =
+  `pw-session.sh session-check --provider codex --session <id>` (rollout file under `~/.codex/sessions/`); resume =
   `codex exec resume <id>` (cd first — no `-C` on resume).
 - Models: bare visible slugs from `codex debug models`; effort = per-run reasoning-effort
   override; Fast = per-run `service_tier="priority"` on the SAME slug (requested-only — invalid

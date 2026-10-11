@@ -6,10 +6,10 @@ from*, so later phases (and future-you) know what to trust and can trace a claim
 source. Fill one row per input. Prefer links + short excerpts over dumping huge files.
 
 **Filled by:** [🧑 you] — both tables below — or agent-assisted preparation:
-`/pw-context <slug> prepare <brief>` drafts the brief, proposes input rows, and records supported
+`/pw-context prepare --project <slug> --brief <brief>` drafts the brief, proposes input rows, and records supported
 repository guesses from your stated intent; review and correct them before analysis. **Easiest
-manual path:** the deterministic row operators — `/pw-context <slug> add-input --file <f> --what <prose…>
---source <prose…> [--trust <prose…>]` and `/pw-context <slug> add-repo <repo> <base> <why…>`
+manual path:** the deterministic row operators — `/pw-context add-input --project <slug> --file <f> --what <prose…>
+--source <prose…> [--trust <prose…>]` and `/pw-context add-repo --project <slug> --repo <repo> --base <base> --why <why…>`
 (stamp the date, escape pipes, replace the empty placeholder row, never touch the `_e.g._` or
 adopt-marker rows). Hand-editing stays legal. **Exception:**
 on continuation projects, `/pw-adopt` deterministically maintains its own rows — a one-time generic

@@ -90,8 +90,9 @@ is normative.
 
 ## C-rules — how slash commands are shaped
 
-- **C1 — one command per entity; first argument is the operator.** A no-operator invocation keeps
-  the command's original behavior (`/pw-review <slug>` alone = the AI-review round).
+- **C1 — one command per entity; operation words first.** A no-operator invocation keeps
+  the command's original behavior where one is declared (`/pw-review --project <slug>` alone = the
+  apply-comments round; bare `/pw-help` = the overview).
 - **C2 — new behavior on an existing entity → new operator on that entity's command.** New
   behavior that is actually a *different* entity → a separate command. Never bolt a second entity
   onto an existing command, and never mint a command named after one operator
@@ -118,33 +119,45 @@ is normative.
   names: check it before proposing a new command/skill name, and append any new reservation **here**
   (not only in the proposing plan — a plan is single-use, this doc is not).
 
-## A-rules — arguments that contain spaces (free text)
+## A-rules — the named-argument grammar (every external operator)
 
-Slash-command args are space-separated, but asks/answers/provenance prose contain spaces. This is
-safe because the agent mediates (C3): the user's raw line is parsed by the command file's rules,
-and the script only ever receives already-separated values — it never splits spaces itself.
+**Uniform grammar (breaking change):** every external operator — slash command or
+entity/toolchain script — takes operation words first, then named values:
 
-- **A1 — rest-of-line slot.** An operator has *at most one* free-text slot, and it is always the
-  **last** argument. Everything after the last fixed positional is the text; the user never
-  quotes:
+```
+<command> [<operation words>] [--argument-name <value>]... [--switch]...
+```
 
-  ```
-  /pw-review myproj item analysis/review/topic.review.md §4 the toggle also lives in common-config, add a row
-  └─ fixed: slug, operator, path, section ─────────────┘ └─ rest-of-line: the ask ─────────────────────────┘
-  ```
-
-- **A2 — flag-segment form** for the rare operator with *two* prose fields: `--flag` segments
-  where **each value runs until the next `--flag` token** — a deterministic split, still no
-  quoting:
-
-  ```
-  /pw-context myproj add-input --file spring-rfc.md --what Migration RFC excerpt --source Lark doc docs/xxxx --trust Approved RFC
-  ```
-
-- **A3 — quote-safe handoff.** The agent passes each parsed value to the script via `--stdin`
+- **A1 — operation words first.** The operator words come before any flag (`/pw-context
+  add-repo …`, `/pw-status rewind …`, `/pw-config global show`). Nothing but operator
+  words ever sits in the positional slot.
+- **A2 — the project is always `--project <slug>`.** No command takes a project slug
+  positionally — creation and adoption included (`/pw-new --project <slug>`,
+  `/pw-adopt --project <slug> --repo …`). A no-operator invocation keeps the command's
+  original default behavior where one is declared (`/pw-review --project <slug>` = the
+  apply-comments flow; bare `/pw-help` = the overview).
+- **A3 — value kinds.** A scalar flag takes exactly ONE token (quote values with spaces).
+  A prose flag takes everything until the next `--flag` token or end of line — the user
+  never quotes prose. A value that itself starts with `--` passes as `--flag=value`.
+  Repeated selection repeats the flag (`--task T01 --task T03`); pair grammars use
+  `--set <member=value>` (config) or `--unit <repo>:<branch>[:<mr-url>]` (adopt batches);
+  boolean switches stay bare (`--json`, `--wave`, `--fix`).
+- **A4 — quote-safe handoff.** The agent passes each parsed value to the script via `--stdin`
   heredoc (preferred — survives quotes, backticks, and multi-line prose) or as a single
-  shell-quoted argv. The script takes the value verbatim and never re-parses.
-- **A4** — new operators follow A1 by default; A2 only when a second prose field is unavoidable.
+  shell-quoted argv. The script takes the value verbatim and never re-parses. Scripts reject
+  unknown flags and stray positional values with `→ fix:` guidance (exit 2), so a wrong
+  shape can never silently change meaning.
+- **A5 — scope is declared, never inferred.** Each command's frontmatter declares
+  `scope: global|project|mixed`; a mixed command adds `scope-forms` (form=scope pairs).
+  `/pw-help` groups forms by that declaration; `--project` presence is behavior, not the
+  classifier.
+
+Example — one operator carrying every rule at once:
+
+```
+/pw-context add-input --project myproj --file spring-rfc.md --what Migration RFC excerpt --source Lark doc docs/xxxx --trust Approved RFC
+└────── operation words ──────┘ └─ named project ──┘ └──────── prose + scalar values, no quoting ────────┘
+```
 
 ## D-rules — doc layers & issue routing
 
@@ -258,7 +271,8 @@ detail — two audiences, one page, neither served.
 4. Command surface: operator on the entity's existing command (C1/C2); mechanical mapping (C3);
    human-only? → C4 label + static test. New/renamed command → also add it to pw-help.sh's
    phase map (the T4 set-equality canary) — same commit, per S7.
-5. Prose argument? → A1 rest-of-line; two prose fields → A2 flag segments; handoff via A3.
+5. Prose argument? → A3 prose flag (value runs until the next `--flag`); every value named,
+   `--project <slug>` for the project; handoff via A4.
 6. Docs before ship: usage header (S6) + a section in `docs/scripts/` + command file + affected
    skills/agents/templates. **No doc-less capability ships.** Found an issue/gotcha on the way?
    Route it by **D2** — user symptom → `docs/TROUBLESHOOTING.md`; unfixed defect →

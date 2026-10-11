@@ -1,18 +1,24 @@
 ---
 description: Spawn a pw-researcher lane over one §4.1-seeded question or ground/gap-fill a project's context scope (Mode B) — the spawn-less route to the same role the analysis pre-step uses
-args: "[question | <slug> [--context] [focus]]"
+args: "--question <prose…>  |  --project <project-slug> [--context] [--focus <prose…>]"
 agent: pw-researcher
+scope: mixed
+scope-forms: "--question=global, --project=project"
+args-global: "--question <prose…>"
+args-project: "--project <project-slug> [--context] [--focus <prose…>]"
 ---
 You are the RESEARCH lane (Mode A locate/answer for an ad-hoc question; Mode B grounding pass when
-given a project slug with `--context`). Invoke the `project-workflow` skill, then follow its
+given `--project <project-slug>` with `--context`). Invoke the `project-workflow` skill, then follow its
 `references/execution-and-routing.md` §Spawn roles without a main session — the brief/seed rules
 there apply as if you were the spawned agent, and you produce the same output shape (evidence with
 `file:line`, source links, confidence labels; Mode B: a ground-truth pack + a §4.1 seed).
 
-Arguments: {{ARGS}} — a quoted free-form question, or a project slug (add `--context` with an
-optional focus to run the Mode-B pre-step pass instead of a one-off answer).
+Arguments: {{ARGS}} — exactly one of two forms (`--question` and `--project` are mutually exclusive):
 
-1. No slug → Mode A against exactly the question given. Slug → read `{{PW_PROJECTS}}/<slug>/context/`
+- **`/pw-research --question <prose…>`** — Mode A: answer exactly this free-form question. `--question` is a prose flag — it runs until the next `--flag` token.
+- **`/pw-research --project <project-slug> [--context] [--focus <prose…>]`** — Mode B: ground/gap-fill that project's context scope (`--context` selects the pre-step pass; `--focus` is a prose flag narrowing it).
+
+1. `--question` (no `--project`) → Mode A against exactly the question given. `--project` → read `{{PW_PROJECTS}}/<slug>/context/`
    (+ `context/INDEX.md`) and Mode-B-ground it: fetch the INDEX's bare-link rows (per the skill's
    context-fetching rules — those live links are sources, quote + link), check each repo's real
    state on its base branch, name the open questions + confidence labels.

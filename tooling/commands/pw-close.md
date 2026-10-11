@@ -1,18 +1,19 @@
 ---
 description: Close out a finished project — verify, tear down, learn
-args: <project-slug>
+args: "--project <project-slug>"
+scope: project
 ---
-Invoke the `project-workflow` skill (close phase — learn + teardown). Arguments: {{ARGS}} (project slug).
+Invoke the `project-workflow` skill (close phase — learn + teardown). Arguments: {{ARGS}} — `--project <project-slug>` selects the project.
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
 <!-- Pre-flight: deterministic checks before agent reasoning -->
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh close <slug> || exit 1
-{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint all <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh close --project <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind all --project <slug> || exit 1
 ```
 **Reading the pre-flight:** `pw-preflight.sh close` checks every task is `accepted` in a legal
-phase; `pw-doc.sh lint all` checks every doc kind (analysis §1–5, PLAN, tasks, reviews, dashboard
+phase; `pw-doc.sh lint --kind all` checks every doc kind (analysis §1–5, PLAN, tasks, reviews, dashboard
 row-count) at once. Non-zero + `pw-…:` stderr = STOP and relay it — closing is exactly the wrong
 moment to skip a lint. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
 
@@ -23,10 +24,10 @@ moment to skip a lint. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
    time, so it does NOT block close-out. Record each MR's state (open/on-hold/merged) in the
    dashboard Merge-requests table before closing.
 1b. **Final review — only when configured.** After step 1's checks pass and BEFORE any teardown,
-   read the `close` axis (`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh project get <slug>
-   review-trigger` and `… ai-review`) and, ONLY when the trigger is `completion` and the outcome is
+   read the `close` axis (`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh get --project <slug>
+   --key review-trigger` and `… --key ai-review`) and, ONLY when the trigger is `completion` and the outcome is
    callable (`advisory` default; a legacy `off` row reads as advisory), run the
-   `/pw-review <slug> ai close` flow against the project's close evidence
+   `/pw-review ai --project <slug> --surface close` flow against the project's close evidence
    (`review/CLOSE.review.md`; the packet snapshots README + PLAN + task/review records). A fresh
    reviewer only; bounded repairs only when `review-repair close=bounded` within `review-rounds`
    passes (repairs may correct records; they never delete history or clear stack debt — the
@@ -37,7 +38,7 @@ moment to skip a lint. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
 2. **Tear down worktrees — use the safe helper** (it refuses to remove the worktree you're
    currently in or one with uncommitted changes, which is what unexpectedly closed an editor once):
    ```bash
-   {{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh teardown {{PW_PROJECTS}}/<slug>
+   {{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh teardown --dir {{PW_PROJECTS}}/<slug>
    ```
    Run it from the bundle/project root — **NOT from inside a worktree**, and close any worktree
    folder still open in your editor first. It reports removed / skipped (current dir) / skipped
@@ -56,9 +57,9 @@ moment to skip a lint. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
    (`{{PW_HOME}}/template/` for project scaffolding, `{{PW_HOME}}/tooling/` for machinery).
 5. Close out via the helper, then summarize:
    ```bash
-   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh provider-audit <slug>
-   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh log <slug> close "closed — N MRs open, worktrees removed, memories seeded"
-   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh status <slug> done
+   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh provider-audit --project <slug>
+   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh log --project <slug> --actor close --message "closed — N MRs open, worktrees removed, memories seeded"
+   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh status --project <slug> --phase done
    ```
    Summarize: MRs opened / merged, worktrees removed, memories seeded, and any leftover follow-ups.
    **Include unresolved `provider-audit` verdicts** (`stale-provider`/`unbound`/`mismatch` rows) in

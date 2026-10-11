@@ -65,8 +65,8 @@ markdown-hygiene rules (never split `**bold**` across a `` `code` `` span) — a
 [`tooling/docs/rfc.md`](../../docs/rfc.md)'s "Doc hygiene" section and
 [`tooling/docs/rfc-backends.md`](../../docs/rfc-backends.md)'s per-backend rows. Diagram generation
 (isolated sub-agent, mermaid, degrade-to-placeholder on failure) — `rfc.md`'s Diagrams section. The
-comment-pull loop (`/pw-rfc … comments`) — same file, "Comment loop" section; the pull itself is
-mechanical (`tooling/scripts/entities/pw-rfc.sh comments <slug> [--backend …]` — fetch → track against `rfc/META.md`
+comment-pull loop (`/pw-rfc comments --project <slug>`) — same file, "Comment loop" section; the pull itself is
+mechanical (`tooling/scripts/entities/pw-rfc.sh comments --project <slug> [--backend …]` — fetch → track against `rfc/META.md`
 → append to `analysis/review/RFC.review.md`), so run the script rather than hand-fetching
 comments, then triage what it appended.
 

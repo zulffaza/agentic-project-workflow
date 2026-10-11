@@ -1,19 +1,27 @@
 ---
 description: Execute a project's PLAN.md via orchestrated worktree sub-agents
-args: <project-slug> [task-ids | "with <model/agent>" | --wave | --acceptance auto | --then-ship]
+args: "--project <project-slug> [--task <T0n>]… [--wave] [--model <provider:model|agent>] [--acceptance auto] [--then-ship]"
 agent: pw-orchestrator
+scope: project
 ---
 Follow the `project-workflow` skill. Act as the ORCHESTRATOR — never edit repo code yourself.
-Arguments: {{ARGS}} (first token = project slug; optional remainder = task IDs, an override like
-"T03 with opus", or the literal `--wave`).
+Arguments: {{ARGS}} — the project is always `--project <slug>`; `--task <T0n>` (repeated) scopes
+the run to those tasks, `--model <provider:model|agent>` overrides the model/agent for this run,
+`--wave` runs only the immediately-runnable wave.
+
+**Named-argument grammar (uniform across every /pw-* command).** The first word is the
+operator; every value is a named argument. The project is always `--project <slug>`. Scalar
+values are one token (quote spaces); prose values run until the next `--flag` token; a value
+that starts with `--` is passed as `--flag=value`. Unknown flags and stray positional values
+fail closed. Full rules: `{{PW_HOME}}/tooling/docs/conventions.md`.
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
 <!-- Pre-flight: deterministic checks before agent reasoning -->
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh execute <slug> || exit 1
-{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint plan <slug> || exit 1
-{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint task <slug> --all || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh execute --project <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind plan --project <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind task --project <slug> --all || exit 1
 ```
 **Reading the pre-flight:** `pw-preflight.sh execute` checks the PLAN `approved` sign-off, a
 phase execution is legal in, and every `Execute with:` row on both axes — *permission*
@@ -23,21 +31,21 @@ hard stop with the re-pin candidates); the two `pw-doc.sh lint`
 calls check PLAN/task-file format (tables, required fields/sections). Silent = pass; otherwise
 one `pw-…:` stderr line + exit 1 — **STOP, relay it verbatim** (it names the unmet gate and the
 fix; e.g. run `/pw-review` for approval). After the gates pass, run
-`{{PW_HOME}}/tooling/scripts/entities/pw-status.sh provider-audit <slug>` once as a **warning**
+`{{PW_HOME}}/tooling/scripts/entities/pw-status.sh provider-audit --project <slug>` once as a **warning**
 pass (non-blocking here): `stale-provider`/`unbound` rows name exactly what to re-pin before
 spawning. Never reason past a failed pre-flight. Output
 semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
 
 1. Read `<project>/task/PLAN.md` fully. **Gate:** `…/{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh gate
-   <slug> task/review/PLAN.review.md` — this is the file's CURRENT Sign-off decision only, never
+   --project <slug> --file task/review/PLAN.review.md` — this is the file's CURRENT Sign-off decision only, never
    "was it ever approved"; if it exits non-zero (missing file, `in-review`, or `changes-requested`),
    STOP and ask, quoting what it printed. Checked on **every** invocation, including a resume — a
    PLAN reopened after approval (e.g. by `/pw-review`'s workflow-attributed gate transitions, when a fix lands post-approval)
    must re-block execution here even mid-run, not just on the very first call. (Per-task review
    files are **optional** — their absence never blocks execution; they only matter when a task is
-   being sent back.) Then: `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh status <slug> executing`.
+   being sent back.) Then: `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh status --project <slug> --phase executing`.
 2. **Reconcile execution state before resolving scope:** run
-   `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh sync <slug> --plan-only`.
+   `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh sync --project <slug> --plan-only`.
    Task files supply Status and Result fields; the helper preserves task links, routing, and
    dependencies. If sync fails, STOP and relay the error. Never schedule from a stale PLAN table.
    **Resolve scope — this decides resume behavior, get it right:**
@@ -58,7 +66,7 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
    - **Keep walking the DAG to the end of *that* scope in this SAME invocation — do not stop after
      handling only one task.** The moment a task you (re)ran reaches `done`, immediately continue:
      spawn whatever depends on it *within scope*, and any other independent ready task *within
-     scope*, without waiting for me to invoke `/pw-execute` again. A bare `/pw-execute <slug>`
+     scope*, without waiting for me to invoke `/pw-execute` again. A bare `/pw-execute --project <slug>`
      drives the run to the end of everything currently outstanding, once; `--wave` drives it only
      to the end of the immediately-runnable wave, then checkpoints.
 3. Walk the dependency DAG within that scope. Spawn one executor per task, only once its
@@ -70,7 +78,7 @@ semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
      - **Fresh task** (`Branch:` is a new `agent/<slug>/<T0n>-<slug>`) → **create its worktree with
        the script** — never hand-roll `git worktree add` (branch naming, path layout and attach
        semantics live in one place: `tooling/docs/scripts/workflow-automation.md`):
-       `{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh create <slug> <T0n> <repo> <base-branch>` — it forks the
+       `{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh create --project <slug> --task <T0n> --repo <repo> --base <base-branch>` — it forks the
        task's `Branch:` from `origin/<base-branch>` (NOT the repo's current HEAD) at
        `worktree/<repo>/<task-id>-<slug>/` and prints the path on its last line; pass that path to
        the spawn. Two tasks in one repo may declare different bases (e.g. `master` and `spring3`) —
@@ -84,12 +92,12 @@ already exists the script attaches instead of dying; re-running is idempotent.
         first. Verify the child against the inherited code (compare environmental failures to the
         parent snapshot, not an unrelated base), and after its `## Verify` passes, bind the verification
         so its own descendants can fork from it:
-        `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-verify <slug> <T0n> <captured-verify-output>`
+        `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-verify --project <slug> --task <T0n> --evidence <captured-verify-output>`
         (run it right after the child's `## Verify` passes; it binds the CURRENT head, the consumed
         parent commit, and the effective target, and refuses when the parent's committed code is absent
         from the child — a manual `stack-record` flag can never certify unverified work).
         If the parent changes after the child started, the child's binding is invalid — mark it stale
-        (`pw-ship.sh stack-stale <slug> <T0n>`) and re-run it.
+        (`pw-ship.sh stack-stale --project <slug> --task <T0n>`) and re-run it.
       - **Adopted task** (`Branch:` is an existing in-progress branch from `context/ADOPTED.md`) → do
        NOT create an `agent/…` branch: run the same script with the **adopted branch** as `<T0n>`'s
        task id kept, and it attaches the existing branch at the convention path — but only after
@@ -112,8 +120,8 @@ already exists the script attaches instead of dying; re-running is idempotent.
    availability (live catalog + api-provider prefix scope; catches a hand-edited task file AND a
    row pinning a provider that since left `PW_KILO_API_PROVIDERS`):
    ```bash
-   {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-check   <provider> <model-id>
-   {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-resolve <provider> <model-id>
+   {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-check  --provider <provider> --model <model-id>
+   {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-resolve --provider <provider> --model <model-id>
    ```
    `model-resolve` exit 0 prints the **canonical** catalog id — that is what a headless
    `-m`/`--model` receives (gateway-nested rows bind as `kilo/alibaba-token-plan/<m>`;
@@ -166,12 +174,12 @@ already exists the script attaches instead of dying; re-running is idempotent.
         writes it as the first line of that log when the run is theirs). A later **re-repair, Row-8
         batch, or §3.6 dependent recheck** is routed by the ladder: resume that id
         (`kilo run -s <id>`/`--fork`, `claude --resume <id>`/`-c`) only after
-        `pw-session.sh session-check <provider> <id>` exits 0 (live) — never blind; cold/inline is
+        `pw-session.sh session-check --provider <provider> --session <id>` exits 0 (live) — never blind; cold/inline is
         the fallback when it is dead/absent (machine restarts can invalidate ids; on-disk
         PLAN/task state is the durable recovery).
       - **Either way, tee the run to a log** so I can watch it: append the executor's combined output        to `{{PW_PROJECTS}}/<slug>/worktree/<T0n>.log` — the FIRST line of that log is
         `session <id>` — and log the spawn so it's resumable:
-        `pw-status.sh log <slug> execute "spawned T0n (provider:model) · via=… · session=<id> · seed=task/T0n.md ·
+        `pw-status.sh log --project <slug> --actor execute --message "spawned T0n (provider:model) · via=… · session=<id> · seed=task/T0n.md ·
         out=worktree/<T0n>.log · state=…"` + in the task's `## Result → Session: <provider>:<id>`.
         (kilo prints a session id on headless runs; where none is observable, write `session —` and
         cold-resume from the task file. Ids stay machine-local — never in MR text.)
@@ -199,8 +207,8 @@ already exists the script attaches instead of dying; re-running is idempotent.
 5. Each executor works ONLY in its own worktree, runs the task's `## Verify`, reports real output,
    and fills the task's `## Result` block (time, log path, commit sha(s), verify outcome).
    After each task starts or returns, and after each repair/re-verification changes its task file,
-   run `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh sync <slug> --plan-only`, then
-   `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh sync <slug> --dashboard-only`.
+   run `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh sync --project <slug> --plan-only`, then
+   `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh sync --project <slug> --dashboard-only`.
    STOP on sync failure. Re-read the synchronized PLAN before scheduling dependents or reporting
    completion. Never infer `accepted` from `done`.
    **`Verify outcome:` and `Notes:` are one distinct fact per (sub-)bullet, never a single run-on
@@ -235,9 +243,9 @@ already exists the script attaches instead of dying; re-running is idempotent.
    <slug> [task-ids]` step, so nothing goes outward until I ask. Set each task's `## Result → MR: —`
    (not shipped yet). Keep the dashboard task-status table current and log each action via the
    helper:
-   `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log <slug> execute "spawned T0n (provider:model); committed <sha>"`.
+   `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log --project <slug> --actor execute --message "spawned T0n (provider:model); committed <sha>"`.
    **The dashboard `Status: review` transition is keyed to the WHOLE PLAN, not the resolved
-   scope** — set it via `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh status <slug> review` only when *every*
+   scope** — set it via `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh status --project <slug> --phase review` only when *every*
    task in the *entire* `PLAN.md` table is `done`/`accepted` (or blocked only by a `verify-failed`
    dependency), regardless of whether this particular invocation was a `--wave`, a task-id-scoped
    re-run, or a full resume. A `--wave` call that finishes its wave but leaves later tasks still
@@ -249,19 +257,19 @@ already exists the script attaches instead of dying; re-running is idempotent.
 Stop for my review before marking anything `accepted`. Two different re-run paths — don't confuse
 them:
 - **I explicitly reject one task** after review: I flip it to `Status: verify-failed` and either
-  add items to `task/review/T0n.review.md` or just tell you what's wrong — `/pw-review <slug> T0n`
+  add items to `task/review/T0n.review.md` or just tell you what's wrong — `/pw-review --project <slug> --task T0n`
   applies the fix (creating the review file from my feedback if it doesn't exist), then
-  `/pw-execute <slug> T0n` re-runs + re-verifies **just that task** in the same worktree, then stops.
-- **A bare `/pw-execute <slug>` resume** (no task IDs): per step 2, this walks **everything** not
+  `/pw-execute --project <slug> --task T0n` re-runs + re-verifies **just that task** in the same worktree, then stops.
+- **A bare `/pw-execute --project <slug>` resume** (no task IDs): per step 2, this walks **everything** not
   yet `accepted` — including any task still `verify-failed` — through to the end of what's ready,
   in one invocation. It is not the same as re-running one task; don't stop early just because the
   run started from a partial/failed state.
 
 **Completion review — only when configured.** For each task that this run brought to committed +
 verified (before you summarize it), read the `task-exec` axis
-(`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh project get <slug> review-trigger` and
-`… ai-review`) and, ONLY when the trigger is `completion` and the outcome is callable (`advisory`
-default; a legacy `off` row reads as advisory), run the `/pw-review <slug> ai T0n` flow for that
+(`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh get --project <slug> --key review-trigger` and
+`get --project <slug> --key ai-review`) and, ONLY when the trigger is `completion` and the outcome is callable (`advisory`
+default; a legacy `off` row reads as advisory), run the `/pw-review ai --project <slug> --task T0n` flow for that
 task — a fresh reviewer only, bounded repairs only when `review-repair task-exec=bounded` and
 within `review-rounds` passes (repairs follow the normal executor ladder and re-run the task's
 `## Verify`). Reviewer outage or an unverified route: one skip line per task, continue. It never

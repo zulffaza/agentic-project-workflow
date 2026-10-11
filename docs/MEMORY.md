@@ -39,7 +39,7 @@ teammate — or a different agent CLI — needs to actually use it correctly.
 
 | Command | What it does with memory |
 |---|---|
-| `/pw-context <slug> prepare` | **Searches** configured knowledge and relevant recent memory while drafting requirements, inputs, and repository guesses. A memory hit is a pointer: it follows the source, keeps unverifiable recollections marked as such, and continues without memory when none is configured. Never writes to memory. |
+| `/pw-context prepare --project <slug>` | **Searches** configured knowledge and relevant recent memory while drafting requirements, inputs, and repository guesses. A memory hit is a pointer: it follows the source, keeps unverifiable recollections marked as such, and continues without memory when none is configured. Never writes to memory. |
 | `/pw-analyze` | **Searches** first for prior context on the domain/repos, folds in what's relevant, cites it. Also **opportunistically seeds** a genuinely durable, generalizable finding as it writes the doc (reusing the fact's own one-line Decisions-log form — never a separate write-up). |
 | `/pw-review` | **Pinpoints** which section a review item targets before reading anything, if the tool supports it — treated strictly as a location pointer, never as content (see below). Also **opportunistically seeds** a durable fix, reusing its own reply text. |
 | `/pw-close` | **Seeds** durable, workflow-level learnings — not what the commits/repos already record. |

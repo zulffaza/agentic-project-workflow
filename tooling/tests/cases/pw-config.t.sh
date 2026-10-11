@@ -13,27 +13,27 @@ pl_config_selftest() {
   # across the eight surfaces (the removed `off` value reads as advisory — an explicit AI
   # pass is never silently dead); set updates exactly one surface; invalid surface/mode rejected.
   local got_ai SURF8="context=advisory analysis=advisory plan=advisory task-plan=advisory task-exec=advisory ship=advisory rfc=advisory close=advisory"
-  got_ai="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2)"
+  got_ai="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review --project demo2)"
   [ "$got_ai" = "$SURF8" ] || die "selftest FAIL: ai-review default line wrong: '$got_ai'"
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2 plan auto >/dev/null
-  got_ai="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2)"
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review --project demo2 --set plan=auto >/dev/null
+  got_ai="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review --project demo2)"
   [ "$got_ai" = "context=advisory analysis=advisory plan=auto task-plan=advisory task-exec=advisory ship=advisory rfc=advisory close=advisory" ] \
     || die "selftest FAIL: ai-review set did not update only 'plan': '$got_ai'"
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2 analysis advisory >/dev/null
-  got_ai="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2)"
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review --project demo2 --set analysis=advisory >/dev/null
+  got_ai="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review --project demo2)"
   [ "$got_ai" = "context=advisory analysis=advisory plan=auto task-plan=advisory task-exec=advisory ship=advisory rfc=advisory close=advisory" ] \
     || die "selftest FAIL: ai-review 2nd set clobbered the 1st: '$got_ai'"
   [ "$(grep -c '^- \*\*AI Review:\*\*' "$tmp/demo2/README.md")" = "1" ] || die "selftest FAIL: AI Review line duplicated"
-  if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2 bogus-phase auto >/dev/null 2>&1; then
+  if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review --project demo2 --set bogus-phase=auto >/dev/null 2>&1; then
     die "selftest FAIL: ai-review accepted an invalid surface"
   fi
-  if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2 plan bogus-mode >/dev/null 2>&1; then
+  if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review --project demo2 --set plan=bogus-mode >/dev/null 2>&1; then
     die "selftest FAIL: ai-review accepted an invalid mode"
   fi
-  if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2 plan off >/dev/null 2>&1; then
+  if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review --project demo2 --set plan=off >/dev/null 2>&1; then
     die "selftest FAIL: ai-review accepted the removed 'off' value"
   fi
-  [ "$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review demo2)" = "context=advisory analysis=advisory plan=auto task-plan=advisory task-exec=advisory ship=advisory rfc=advisory close=advisory" ] \
+  [ "$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-review --project demo2)" = "context=advisory analysis=advisory plan=auto task-plan=advisory task-exec=advisory ship=advisory rfc=advisory close=advisory" ] \
     || die "selftest FAIL: rejected ai-review calls still mutated the line"
 
 
@@ -44,17 +44,17 @@ pl_config_selftest() {
   # the suite failed on the maintainer machine the day a real allowlist landed. Env prefixes
   # only win when the sourced config doesn't assign the same variable.
   local mc NOSCOPE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh"
-  mc="$(PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CLAUDE="" "$(pwtest_script pw-config.sh)" model-check claude some-random-model-nobody-configured)" \
+  mc="$(PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CLAUDE="" "$(pwtest_script pw-config.sh)" model-check --provider claude --model some-random-model-nobody-configured)" \
     || die "selftest FAIL: model-check refused with an empty allowlist (should always pass)"
   echo "$mc" | grep -q "all models allowed" || die "selftest FAIL: model-check's empty-allowlist message didn't state the 'all models allowed' rule"
   # a configured allowlist passes a matching model...
-  PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CLAUDE="sonnet,haiku" "$(pwtest_script pw-config.sh)" model-check claude sonnet >/dev/null \
+  PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CLAUDE="sonnet,haiku" "$(pwtest_script pw-config.sh)" model-check --provider claude --model sonnet >/dev/null \
     || die "selftest FAIL: model-check refused a model matching its configured allowlist"
   # ...glob patterns match...
-  PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_KILO="command_code/deepseek/*" "$(pwtest_script pw-config.sh)" model-check kilo command_code/deepseek/deepseek-v4-flash >/dev/null \
+  PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_KILO="command_code/deepseek/*" "$(pwtest_script pw-config.sh)" model-check --provider kilo --model command_code/deepseek/deepseek-v4-flash >/dev/null \
     || die "selftest FAIL: model-check refused a model matching a glob pattern in its allowlist"
   # ...and refuses one that doesn't, without silently passing.
-  if PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CLAUDE="sonnet,haiku" "$(pwtest_script pw-config.sh)" model-check claude opus >/dev/null 2>&1; then
+  if PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CLAUDE="sonnet,haiku" "$(pwtest_script pw-config.sh)" model-check --provider claude --model opus >/dev/null 2>&1; then
     die "selftest FAIL: model-check allowed a model NOT in its configured allowlist"
   fi
   # ...cursor provider (2026-09): the rules are provider-generic, but the bracket-param quirk is
@@ -62,11 +62,11 @@ pl_config_selftest() {
   # suffixes; model-check's shell `case` GLOB treats a bracket literal-ish (char class), so docs
   # steer allowlist patterns to the suffix-free id part with '*' — here we assert the plain, glob,
   # and refuse paths so a future refactor can't silently change that contract.
-  mc="$(PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CURSOR="" "$(pwtest_script pw-config.sh)" model-check cursor cursor-grok-4.6-low)" \
+  mc="$(PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CURSOR="" "$(pwtest_script pw-config.sh)" model-check --provider cursor --model cursor-grok-4.6-low)" \
     || die "selftest FAIL: model-check refused cursor with an empty allowlist (should always pass)"
-  PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CURSOR="claude-opus-5*,gpt-5*" "$(pwtest_script pw-config.sh)" model-check cursor gpt-5.6-sol >/dev/null \
+  PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CURSOR="claude-opus-5*,gpt-5*" "$(pwtest_script pw-config.sh)" model-check --provider cursor --model gpt-5.6-sol >/dev/null \
     || die "selftest FAIL: model-check refused cursor model matching an allowlist glob"
-  if PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CURSOR="claude-opus-5*" "$(pwtest_script pw-config.sh)" model-check cursor gpt-5.6-everything >/dev/null 2>&1; then
+  if PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CURSOR="claude-opus-5*" "$(pwtest_script pw-config.sh)" model-check --provider cursor --model gpt-5.6-everything >/dev/null 2>&1; then
     die "selftest FAIL: model-check allowed a cursor model NOT in its configured allowlist"
   fi
   # ai-model: the lane row exists, defaults to all-—, updates one lane only, clears back, refuses
@@ -74,37 +74,37 @@ pl_config_selftest() {
   # duplicated a task's `Execute with:` would silently drift from it — the executor is pinned in
   # its task file, never here (§5.1). The row IS advisory on kilo at Task-spawn time (a headless
   # session carries it instead, §8c) — recorded in the result, never silently ignored.
-  local got_m; got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" project get demo2 ai-model 2>/dev/null)"
+  local got_m; got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" get --project demo2 --key ai-model 2>/dev/null)"
   [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=—" ] \
     || die "selftest FAIL: ai-model default line wrong: '$got_m'"
   # write-time validation (permission + availability + provider membership) rides the shim
   # catalog + noscope fixture config: only rows that can actually bind are accepted.
   PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" \
-    "$(pwtest_script pw-config.sh)" project set demo2 ai-model researcher kilo:command_code/MiniMaxAI/MiniMax-M3 >/dev/null 2>&1 || die "selftest FAIL: project set ai-model refused a resolvable in-scope row"
-  got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" project get demo2 ai-model 2>/dev/null)"
+    "$(pwtest_script pw-config.sh)" set --project demo2 --key ai-model --set researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 >/dev/null 2>&1 || die "selftest FAIL: project set ai-model refused a resolvable in-scope row"
+  got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" get --project demo2 --key ai-model 2>/dev/null)"
   [ "$got_m" = "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 analyst=— writer-task=— reviewer=— verifier=—" ] \
     || die "selftest FAIL: ai-model set not isolated to researcher: '$got_m'"
   # a catalog miss is refused AT WRITE TIME (not discovered at spawn), leaving the line intact:
   if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" \
-     "$(pwtest_script pw-config.sh)" project set demo2 ai-model researcher kilo:command_code/gone-xyz >/dev/null 2>&1; then
+     "$(pwtest_script pw-config.sh)" set --project demo2 --key ai-model --set researcher=kilo:command_code/gone-xyz >/dev/null 2>&1; then
     die "selftest FAIL: project set ai-model accepted a model missing from the live catalog"
   fi
   # a provider absent from PW_PROVIDERS is refused the same way:
   if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" \
-     "$(pwtest_script pw-config.sh)" project set demo2 ai-model analyst ghostprov:some-model >/dev/null 2>&1; then
+     "$(pwtest_script pw-config.sh)" set --project demo2 --key ai-model --set analyst=ghostprov:some-model >/dev/null 2>&1; then
     die "selftest FAIL: project set ai-model accepted a provider that is not enabled"
   fi
-  got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" project get demo2 ai-model 2>/dev/null)"
+  got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" get --project demo2 --key ai-model 2>/dev/null)"
   [ "$got_m" = "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 analyst=— writer-task=— reviewer=— verifier=—" ] \
     || die "selftest FAIL: refused ai-model sets still mutated the line: '$got_m'"
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model demo2 researcher — >/dev/null 2>&1
-  got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model demo2)"
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model --project demo2 --set researcher=— >/dev/null 2>&1
+  got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model --project demo2)"
   [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=—" ] \
     || die "selftest FAIL: ai-model clear-to-default failed: '$got_m'"
-  if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model demo2 executor claude:sonnet >/dev/null 2>&1; then
+  if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model --project demo2 --set executor=claude:sonnet >/dev/null 2>&1; then
     die "selftest FAIL: ai-model accepted the executor lane (the task file binds the executor)"
   fi
-  if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model demo2 analyst sonnet-no-provider >/dev/null 2>&1; then
+  if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model --project demo2 --set analyst=sonnet-no-provider >/dev/null 2>&1; then
     die "selftest FAIL: ai-model accepted a row without <provider>:<model> form"
   fi
   grep -q '^- \*\*AI Models:\*\*' "$tmp/demo2/README.md" \
@@ -121,13 +121,13 @@ CFG_OPEN="$PWTEST_TESTSDIR/pw.config.test.noscope.sh"    # entries unset → no 
 MR="$(pwtest_script pw-config.sh)"
 
 # nested BYOK: the row's model part (no `kilo/` prefix) resolves to the CANONICAL catalog line.
-mr_out="$(PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve kilo alibaba-token-plan/test-model 2>/dev/null)" \
+mr_out="$(PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve --provider kilo --model alibaba-token-plan/test-model 2>/dev/null)" \
   || pwtest_bad "model-resolve nested BYOK" "refused an in-catalog in-scope model"
 [ "$mr_out" = "kilo/alibaba-token-plan/test-model" ] \
   && pwtest_ok "model-resolve prints the canonical nested-BYOK id" \
   || pwtest_bad "model-resolve canonical id" "got '$mr_out'"
 # a row already carrying the full catalog line matches exactly too.
-mr_out2="$(PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve kilo kilo/alibaba-token-plan/test-model 2>/dev/null)" \
+mr_out2="$(PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve --provider kilo --model kilo/alibaba-token-plan/test-model 2>/dev/null)" \
   && [ "$mr_out2" = "kilo/alibaba-token-plan/test-model" ] \
   && pwtest_ok "model-resolve accepts the exact catalog line" \
   || pwtest_bad "model-resolve exact line" "got '$mr_out2'"
@@ -136,60 +136,60 @@ mr_out2="$(PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve kilo kilo/alibaba-to
 # gateway — different connections. When both exist, matching is exact-first: the row binds the
 # line it literally names, never whichever the catalog happens to print first.
 mr_out3="$(PWTEST_KILO_CATALOG_EXTRA='alibaba-token-plan/test-model' PW_CONFIG_FILE="$CFG_OPEN" \
-  "$MR" model-resolve kilo alibaba-token-plan/test-model 2>/dev/null)" \
+  "$MR" model-resolve --provider kilo --model alibaba-token-plan/test-model 2>/dev/null)" \
   && [ "$mr_out3" = "alibaba-token-plan/test-model" ] \
   && pwtest_ok "model-resolve exact line wins over the gateway-prefixed form" \
   || pwtest_bad "model-resolve exact-preferred" "got '$mr_out3'"
 # …and a coexisting DIRECT line that is OUT of scope is a hard exit 2 — never silently re-bound
 # to the in-scope gateway line.
 PW_CONFIG_FILE="$CFG_SCOPED" PWTEST_KILO_CATALOG_EXTRA='alibaba-token-plan/test-model' \
-  "$MR" model-resolve kilo alibaba-token-plan/test-model >/dev/null 2>"$ROOT/mr3.err"
+  "$MR" model-resolve --provider kilo --model alibaba-token-plan/test-model >/dev/null 2>"$ROOT/mr3.err"
 [ "$?" = 2 ] && pwtest_ok "out-of-scope direct line exits 2 (no silent gateway re-bind)" \
   || pwtest_bad "direct out-of-scope" "rc=$?; $(head -c 120 "$ROOT/mr3.err")"
 # the gateway-only fallback still resolves, but announces the substitution on stderr.
-PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve kilo alibaba-token-plan/other-model >/dev/null 2>"$ROOT/mr4.err" \
+PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve --provider kilo --model alibaba-token-plan/other-model >/dev/null 2>"$ROOT/mr4.err" \
   && grep -q "gateway-nested" "$ROOT/mr4.err" \
   && pwtest_ok "gateway fallback is announced on stderr" \
   || pwtest_bad "gateway fallback note" "rc/note missing: $(head -c 120 "$ROOT/mr4.err")"
 # not in the catalog → exit 1 + candidates/fix line.
-PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve kilo alibaba-token-plan/gone-xyz >/dev/null 2>"$ROOT/mr1.err"
+PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve --provider kilo --model alibaba-token-plan/gone-xyz >/dev/null 2>"$ROOT/mr1.err"
 [ "$?" = 1 ] && pwtest_ok "model-resolve exit 1 for a catalog miss" || pwtest_bad "model-resolve exit 1" "rc=$?"
 grep -qE 'not in the live catalog|→ fix:' "$ROOT/mr1.err" \
   && pwtest_ok "catalog-miss refusal is actionable" || pwtest_bad "catalog-miss fix" "$(head -c 120 "$ROOT/mr1.err")"
 # in the catalog but OUT of the configured prefix scope → exit 2 naming the scope (the
 # `kilo:`→`kilo/alibaba-token-plan` migration case).
-PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve kilo command_code/MiniMaxAI/MiniMax-M3 >/dev/null 2>"$ROOT/mr2.err"
+PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve --provider kilo --model command_code/MiniMaxAI/MiniMax-M3 >/dev/null 2>"$ROOT/mr2.err"
 [ "$?" = 2 ] && pwtest_ok "model-resolve exit 2 for out-of-scope provider" || pwtest_bad "model-resolve exit 2" "rc=$?; $(head -c 120 "$ROOT/mr2.err")"
 grep -qE 'OUTSIDE the PW_KILO_API_PROVIDERS scope|kilo/alibaba-token-plan' "$ROOT/mr2.err" \
   && pwtest_ok "out-of-scope refusal names the current scope" || pwtest_bad "out-of-scope fix" "$(head -c 140 "$ROOT/mr2.err")"
 # no scope configured → every catalog line is in scope (the fallback rule).
-PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve kilo command_code/MiniMaxAI/MiniMax-M3 >/dev/null 2>&1 \
+PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider kilo --model command_code/MiniMaxAI/MiniMax-M3 >/dev/null 2>&1 \
   && pwtest_ok "empty entries = no filtering (in scope)" \
   || pwtest_bad "empty entries fallback" "refused with no scope configured"
 # the axis is generic: opencode nested id resolves the same way.
-PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve opencode testprov/nested/deep-model >/dev/null 2>&1 \
+PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider opencode --model testprov/nested/deep-model >/dev/null 2>&1 \
   && pwtest_ok "opencode axis resolves (prefix semantics generic)" \
   || pwtest_bad "opencode axis" "refused an in-catalog id"
 # The cursor axis with the REAL catalog shape ("agent models" lines carry a " - description"
 # tail — the 09-28 corpus case where every cursor pin read false-unbound): the resolver must
 # strip the tail, bind the bare id, and still refuse a true catalog miss.
-PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve cursor cursor-test-high >/dev/null 2>&1 \
+PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model cursor-test-high >/dev/null 2>&1 \
   && pwtest_ok "cursor id resolves despite ' - description' catalog lines" \
   || pwtest_bad "cursor resolve tail" "refused an in-catalog cursor model"
-mr_cur="$(PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve cursor cursor-test-high 2>/dev/null || true)"
+mr_cur="$(PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model cursor-test-high 2>/dev/null || true)"
 [ "$mr_cur" = "cursor-test-high" ] && pwtest_ok "canonical cursor id printed bare" \
   || pwtest_bad "canonical cursor id" "got '$mr_cur'"
-if PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve cursor cursor-test-gone >/dev/null 2>&1; then
+if PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model cursor-test-gone >/dev/null 2>&1; then
   pwtest_bad "cursor catalog miss exits 1" "resolved a model that is not in the catalog"
 else pwtest_ok "cursor catalog miss still exits 1"; fi
 # claude (no catalog) + unknown provider + CLI-off-PATH all FAIL OPEN as unverified — never a
 # false dead, so a non-zero is always a positive determination safe to hard-stop on.
-"$MR" model-resolve claude anything >/dev/null 2>&1 \
+"$MR" model-resolve --provider claude --model anything >/dev/null 2>&1 \
   && pwtest_ok "claude unverified → exit 0" || pwtest_bad "claude unverified" "refused"
-"$MR" model-resolve kilotest anything >/dev/null 2>&1 \
+"$MR" model-resolve --provider kilotest --model anything >/dev/null 2>&1 \
   && pwtest_ok "unknown provider unverified → exit 0" || pwtest_bad "unknown provider" "refused"
 mkdir -p "$ROOT/nobin"
-PATH="$ROOT/nobin:/usr/bin:/bin" PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve kilo alibaba-token-plan/test-model >/dev/null 2>&1 \
+PATH="$ROOT/nobin:/usr/bin:/bin" PW_CONFIG_FILE="$CFG_SCOPED" "$MR" model-resolve --provider kilo --model alibaba-token-plan/test-model >/dev/null 2>&1 \
   && pwtest_ok "CLI off PATH → unverified, never a false dead" \
   || pwtest_bad "CLI off PATH fallback" "refused as if dead"
 
@@ -204,7 +204,7 @@ PC="$(pwtest_script pw-config.sh)"
 PCS="env PW_CONFIG_FILE=$PWTEST_TESTSDIR/pw.config.test.sh PW_PROJECTS_DIR=$ROOT/projects $PC"
 
 # ensure: every explicit config line appears (absent line = defect doctrine), idempotent.
-pwtest_rc 0 "project ensure inserts config lines" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project ensure pcfg-demo
+pwtest_rc 0 "project ensure inserts config lines" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" ensure --project pcfg-demo
 grep -qE '^- \*\*AI Review:\*\* context=advisory analysis=advisory plan=advisory' "$PRJ/README.md" \
   && pwtest_ok "AI Review line ensured with explicit advisory values" || pwtest_bad "ensure review line" "$(grep -c 'AI Review' "$PRJ/README.md")"
 grep -qE '^- \*\*Review Trigger:\*\* context=manual analysis=manual' "$PRJ/README.md" \
@@ -216,93 +216,92 @@ grep -qE '^- \*\*Review Budget:\*\* rounds=3' "$PRJ/README.md" \
 grep -qE '^- \*\*AI Models:\*\* researcher=—' "$PRJ/README.md" \
   && pwtest_ok "AI Models line ensured with explicit — rows" || pwtest_bad "ensure models line" "$(grep -c 'AI Models' "$PRJ/README.md")"
 _before_ensure2="$(cat "$PRJ/README.md")"
-pwtest_rc 0 "project ensure idempotent" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project ensure pcfg-demo
+pwtest_rc 0 "project ensure idempotent" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" ensure --project pcfg-demo
 [ "$_before_ensure2" = "$(cat "$PRJ/README.md")" ] && pwtest_ok "second ensure is a no-op" || pwtest_bad "ensure not idempotent" "README changed twice"
 
 # get: unset values report the effective floor, not silence.
-pwtest_rc 0 "project get routing (unset)" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo routing
+pwtest_rc 0 "project get routing (unset)" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" get --project pcfg-demo --key routing
 pwtest_re 'unset — effective: auto' "unset routing names the effective floor"
 
 # set: enum validation refuses first…
-pwtest_rc 2 "project set refuses a bad routing value" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo routing turbo
+pwtest_rc 2 "project set refuses a bad routing value" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key routing --value turbo
 # …and accepts the strict rung (headless) via the insert-anchor path (no bullet existed).
-pwtest_rc 0 "project set routing headless (strict)" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo routing headless
+pwtest_rc 0 "project set routing headless (strict)" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key routing --value headless
 grep -qE '^- \*\*Routing:\*\* headless$' "$PRJ/task/PLAN.md" \
   && pwtest_ok "routing bullet inserted after the routing section anchor" || pwtest_bad "routing insert" "$(grep 'Routing' "$PRJ/task/PLAN.md")"
 # existing-bullet replace: execution-limit + produced-by; max-parallel keeps its sentence shape.
-pwtest_rc 0 "project set execution-limit" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo execution-limit 5
+pwtest_rc 0 "project set execution-limit" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key execution-limit --value 5
 grep -qE '^- \*\*AI execution limit:\*\* 5$' "$PRJ/task/PLAN.md" && pwtest_ok "limit bullet replaced" || pwtest_bad "limit bullet" "$(grep 'execution limit' "$PRJ/task/PLAN.md")"
-pwtest_rc 2 "execution-limit refuses non-integer" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo execution-limit many
-pwtest_rc 2 "execution-limit refuses out-of-range" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo execution-limit 100
-pwtest_rc 0 "project set max-parallel" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo max-parallel 4
+pwtest_rc 2 "execution-limit refuses non-integer" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key execution-limit --value many
+pwtest_rc 2 "execution-limit refuses out-of-range" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key execution-limit --value 100
+pwtest_rc 0 "project set max-parallel" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key max-parallel --value 4
 grep -qE '^- Max parallelism: 4 concurrent executors\.$' "$PRJ/task/PLAN.md" && pwtest_ok "max-parallel keeps its sentence" || pwtest_bad "max-parallel line" "$(grep 'Max parallelism' "$PRJ/task/PLAN.md")"
 # produced-by validates against the CURRENT global config: kilotest is not enabled in
 # pw.config.test.sh (kilo claude cursor)…
-pwtest_rc 2 "produced-by refuses an unlisted provider" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo produced-by kilotest
+pwtest_rc 2 "produced-by refuses an unlisted provider" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key produced-by --value kilotest
 # …but replaces cleanly when it is (f2 fixture config).
-pwtest_rc 0 "produced-by accepts an enabled provider" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.f2.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo produced-by kilotest
+pwtest_rc 0 "produced-by accepts an enabled provider" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.f2.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key produced-by --value kilotest
 grep -qE '^- \*\*Produced by:\*\* kilotest$' "$PRJ/task/PLAN.md" && pwtest_ok "produced-by bullet replaced (placeholder gone)" || pwtest_bad "produced-by bullet" "$(grep 'Produced by' "$PRJ/task/PLAN.md")"
 
 # state/data keys: show-only, refused by get and set with the owning flow named.
-pwtest_rc 2 "project get refuses state key" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo status
+pwtest_rc 2 "project get refuses state key" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" get --project pcfg-demo --key status
 pwtest_err "state/data" "refusal explains state/data"
-pwtest_rc 2 "project set refuses data key" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo base-branches master
+pwtest_rc 2 "project set refuses data key" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key base-branches --value master
 pwtest_err "owning flow" "refusal names the owning flow"
 
 # ai-review through project: same validated writer as the (deprecated) bare verb.
-pwtest_rc 0 "project set ai-review plan auto" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review plan auto
-pwtest_rc 0 "project get ai-review shows it" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo ai-review
+pwtest_rc 0 "project set ai-review plan auto" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key ai-review --set plan=auto
+pwtest_rc 0 "project get ai-review shows it" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" get --project pcfg-demo --key ai-review
 pwtest_re 'plan=auto' "ai-review write landed"
 # BATCH set: several surface=mode pairs in ONE command → one write, one LOG line.
 _before_log="$(grep -c '^- ' "$PRJ/LOG.md")"
-pwtest_rc 0 "project set ai-review batch" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review analysis=advisory task-plan=auto ship=auto
-pwtest_rc 0 "batch get reflects all pairs" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo ai-review
+pwtest_rc 0 "project set ai-review batch" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key ai-review --set analysis=advisory --set task-plan=auto --set ship=auto
+pwtest_rc 0 "batch get reflects all pairs" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" get --project pcfg-demo --key ai-review
 pwtest_re 'context=advisory analysis=advisory plan=auto task-plan=auto task-exec=advisory ship=auto rfc=advisory close=advisory' "all three pairs landed, untouched kept"
 _after_log="$(grep -c '^- ' "$PRJ/LOG.md")"
 [ "$(( _after_log - _before_log ))" = 1 ] \
   && pwtest_ok "batch is one LOG line" || pwtest_bad "batch log" "$((_after_log-_before_log)) new lines (want 1)"
 # removed values carry actionable refusals (off → advisory/manual; both → completion)
-pwtest_rc 2 "ai-review refuses removed off" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review all=off
+pwtest_rc 2 "ai-review refuses removed off" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key ai-review --set all=off
 pwtest_err "review-trigger=manual" "off refusal points at the scheduling axis"
-pwtest_rc 2 "review-trigger refuses removed both" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo review-trigger all=both
+pwtest_rc 2 "review-trigger refuses removed both" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key review-trigger --set all=both
 pwtest_err "completion" "both refusal points at completion"
 # all= expansion + named override (override wins in either order) + atomic duplicate rejection
-pwtest_rc 0 "ai-review all= expands over every surface" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review all=auto context=advisory
-pwtest_rc 0 "expanded get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo ai-review
+pwtest_rc 0 "ai-review all= expands over every surface" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key ai-review --set all=auto --set context=advisory
+pwtest_rc 0 "expanded get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" get --project pcfg-demo --key ai-review
 pwtest_re 'context=advisory analysis=auto plan=auto task-plan=auto task-exec=auto ship=auto rfc=auto close=auto' "all= baseline + explicit override both landed"
-pwtest_rc 0 "override before all lands too" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review ship=advisory all=auto
-pwtest_rc 0 "order-independent get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo ai-review
+pwtest_rc 0 "override before all lands too" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key ai-review --set ship=advisory --set all=auto
+pwtest_rc 0 "order-independent get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" get --project pcfg-demo --key ai-review
 pwtest_re 'ship=advisory' "named override beats all= regardless of argument order"
-pwtest_rc 2 "duplicate all= refused" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review all=auto all=advisory
-pwtest_rc 2 "unknown surface refused" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-review bogus=auto
+pwtest_rc 2 "duplicate all= refused" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key ai-review --set all=auto --set all=advisory
+pwtest_rc 2 "unknown surface refused" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key ai-review --set bogus=auto
 # review-trigger / review-repair / review-rounds: value enums + ranges + persistence
-pwtest_rc 0 "review-trigger batch" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo review-trigger analysis=completion task-exec=completion
-pwtest_rc 0 "review-trigger get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo review-trigger
+pwtest_rc 0 "review-trigger batch" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key review-trigger --set analysis=completion --set task-exec=completion
+pwtest_rc 0 "review-trigger get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" get --project pcfg-demo --key review-trigger
 pwtest_re 'context=manual analysis=completion plan=manual task-plan=manual task-exec=completion ship=manual rfc=manual close=manual' "trigger batch landed"
-pwtest_rc 2 "review-trigger refuses a bad value" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo review-trigger analysis=sometimes
-pwtest_rc 0 "review-repair all=bounded" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo review-repair all=bounded
-pwtest_rc 0 "review-repair get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo review-repair
+pwtest_rc 2 "review-trigger refuses a bad value" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key review-trigger --set analysis=sometimes
+pwtest_rc 0 "review-repair all=bounded" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key review-repair --set all=bounded
+pwtest_rc 0 "review-repair get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" get --project pcfg-demo --key review-repair
 pwtest_re 'context=bounded analysis=bounded' "repair all= landed"
-pwtest_rc 0 "review-rounds set" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo review-rounds 2
-pwtest_rc 0 "review-rounds get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo review-rounds
+pwtest_rc 0 "review-rounds set" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key review-rounds --value 2
+pwtest_rc 0 "review-rounds get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" get --project pcfg-demo --key review-rounds
 pwtest_re 'rounds=2' "rounds persisted"
-pwtest_rc 2 "review-rounds range" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo review-rounds 4
-pwtest_rc 2 "review-rounds integer" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo review-rounds many
+pwtest_rc 2 "review-rounds range" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key review-rounds --value 4
+pwtest_rc 2 "review-rounds integer" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key review-rounds --value many
 # legacy `off` migration: reads normalize to advisory (with a note), ensure persists it
 sed -i.bak 's/ship=advisory/ship=off/' "$PRJ/README.md" && rm -f "$PRJ/README.md.bak"
-pwtest_rc 0 "legacy off get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo ai-review
+pwtest_rc 0 "legacy off get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" get --project pcfg-demo --key ai-review
 pwtest_re 'ship=advisory' "legacy off reads as effective advisory"
 pwtest_err 'legacy off row' "get announces the migration"
-pwtest_rc 0 "legacy off show" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project show pcfg-demo
+pwtest_rc 0 "legacy off show" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" show --project pcfg-demo
 pwtest_re 'ai-review\.ship[[:space:]]+config[[:space:]]+off[[:space:]]+README' "show keeps the STORED value visible"
 pwtest_re 'README\.md:AI Review[[:space:]]+advisory' "show pairs it with the effective value"
 pwtest_re 'legacy AI Review off row' "show carries the one migration note"
-pwtest_rc 0 "ensure persists the migration" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project ensure pcfg-demo
+pwtest_rc 0 "ensure persists the migration" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" ensure --project pcfg-demo
 grep -q 'ship=off' "$PRJ/README.md" && pwtest_bad "migration persisted" "ship=off survived ensure" || pwtest_ok "ensure rewrote legacy off to advisory"
 # all-or-nothing: a batch with one illegal pair must write NOTHING.
 _aim_before="$(grep -m1 '^- \*\*AI Models:\*\*' "$PRJ/README.md" | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//')"
-if PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-model \
-   "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3" "analyst=ghostprov:m" >/dev/null 2>&1; then
+if PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key ai-model --set "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3" --set "analyst=ghostprov:m" >/dev/null 2>&1; then
   pwtest_bad "batch all-or-nothing" "refused-batch returned 0"
 else
   pwtest_ok "batch refuses when ANY pair is invalid"
@@ -310,23 +309,22 @@ fi
 _aim_after="$(grep -m1 '^- \*\*AI Models:\*\*' "$PRJ/README.md" | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//')"
 [ "$_aim_before" = "$_aim_after" ] && pwtest_ok "refused batch wrote nothing (validated before write)" || pwtest_bad "batch atomicity" "line changed: '$_aim_after'"
 # batch ai-model with all-valid pairs lands in one write + one log.
-pwtest_rc 0 "project set ai-model batch valid" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo ai-model \
-  "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3" "reviewer=—"
-pwtest_rc 0 "batch ai-model get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project get pcfg-demo ai-model
+pwtest_rc 0 "project set ai-model batch valid" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key ai-model --set "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3" --set "reviewer=—"
+pwtest_rc 0 "batch ai-model get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" get --project pcfg-demo --key ai-model
 pwtest_re 'researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 analyst=— writer-task=— reviewer=— verifier=—' "model batch landed both kinds of pair"
 # rfc-target delegates to the rfc entity (META gets created + stamped).
-pwtest_rc 0 "project set rfc-target" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project set pcfg-demo rfc-target "https://example/rfcs/42"
+pwtest_rc 0 "project set rfc-target" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key rfc-target --value "https://example/rfcs/42"
 grep -qF 'https://example/rfcs/42' "$PRJ/rfc/META.md" 2>/dev/null && pwtest_ok "rfc-target persisted to META" || pwtest_bad "rfc-target META" "$(cat "$PRJ/rfc/META.md" 2>/dev/null | head -3)"
 
 # show lists kinds + json parses; LOG.md recorded the writes; global show is pure read.
-pwtest_rc 0 "project show lists the whole surface" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project show pcfg-demo
+pwtest_rc 0 "project show lists the whole surface" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" show --project pcfg-demo
 pwtest_re 'routing[[:space:]]+config' "show row: routing is config-kind"
 pwtest_re 'status[[:space:]]+state' "show row: status is state-kind"
 # discoverability (owner 09-24): the settable vocabulary ships IN the show output's footer —
 # you never have to open a doc to learn what can change and to which values.
 pwtest_re 'settable keys: routing' "show footer lists settable keys + value shapes"
 pwtest_re 'show-only .flows derive' "show footer names the show-only kinds"
-pwtest_rc 0 "project show --json parses" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" project show pcfg-demo --json
+pwtest_rc 0 "project show --json parses" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" show --project pcfg-demo --json
 python3 -c "import json,sys; d=json.load(sys.stdin); assert d['slug']=='pcfg-demo' and any(r['key']=='routing' and r['stored']=='headless' for r in d['rows'])" < "$PWTEST_OUT" \
   && pwtest_ok "json carries the written values" || pwtest_bad "json shape" "$(head -c 120 "$PWTEST_OUT")"
 grep -qE '· `config` — routing -> headless' "$PRJ/LOG.md" && pwtest_ok "every set logs to LOG.md" || pwtest_bad "LOG lines" "$(grep -c '^- ' "$PRJ/LOG.md")"
@@ -340,7 +338,7 @@ pwtest_re 'review-note-prompt[[:space:]]+: .*user/prompts/review-request-note\.m
 [ "$(grep -c '^- ' "$PRJ/LOG.md")" = "$LOGN" ] && [ "$READMEB" = "$(cat "$PRJ/README.md")" ] \
   && pwtest_ok "global show mutates nothing (read-only floor view)" || pwtest_bad "global show mutated" "LOG/README changed"
 # deprecated shims still work but announce the pointer on stderr.
-pwtest_rc 0 "bare ai-review still functions (shim)" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" ai-review pcfg-demo
+pwtest_rc 0 "bare ai-review still functions (shim)" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" ai-review --project pcfg-demo
 pwtest_err 'deprecated' "bare verb prints the deprecation pointer"
 
 # --- plan 23: `pin` — the dual-holder batch key riding the KI-1 propagator ---
@@ -366,13 +364,13 @@ PLAN
   GOOD="kilo:command_code/MiniMaxAI/MiniMax-M3"
 
   # single pin → BOTH holders + exactly one LOG line
-  PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin "T01=$GOOD" >/dev/null
+  PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" set --project pinproj --key pin --set "T01=$GOOD" >/dev/null
   grep -q "^- \*\*Execute with:\*\* $GOOD\$" "$tmp/pinproj/task/T01.md" || die "task-file holder not written"
   grep -qF "| $GOOD | 1 | todo |" "$tmp/pinproj/task/PLAN.md" || die "PLAN cell holder not written"
   [ "$(grep -c 'pin T01 ->' "$tmp/pinproj/LOG.md")" = "1" ] || die "expected exactly one LOG line for the single pin"
 
   # batch → both pins, both holders, ONE log line
-  PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin T01=claude:opus T02=claude:haiku >/dev/null
+  PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" set --project pinproj --key pin --set T01=claude:opus --set T02=claude:haiku >/dev/null
   grep -q '^- \*\*Execute with:\*\* claude:opus$' "$tmp/pinproj/task/T01.md" || die "batch T01 file holder not written"
   grep -q '^- \*\*Execute with:\*\* claude:haiku$' "$tmp/pinproj/task/T02.md" || die "batch T02 file holder not written"
   grep -q '| claude:haiku | 1 | todo |' "$tmp/pinproj/task/PLAN.md" || die "batch T02 PLAN cell not written"
@@ -380,40 +378,40 @@ PLAN
   [ "$(grep -c 'pin set: T01=claude:opus T02=claude:haiku' "$tmp/pinproj/LOG.md")" = "1" ] || die "batch LOG line missing or doubled"
 
   # all-or-nothing: a catalog-miss pair refuses the WHOLE batch — the valid pair is not written
-  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin "T01=$GOOD" T02=kilo:command_code/gone-xyz >/dev/null 2>&1; then
+  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" set --project pinproj --key pin --set "T01=$GOOD" --set T02=kilo:command_code/gone-xyz >/dev/null 2>&1; then
     die "catalog-miss pair was not refused at write time"
   fi
   grep -q '^- \*\*Execute with:\*\* claude:opus$' "$tmp/pinproj/task/T01.md" || die "refused batch still wrote the valid pair (not all-or-nothing)"
   # provider not enabled → refused
-  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin T01=ghostprov:m >/dev/null 2>&1; then
+  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" set --project pinproj --key pin --set T01=ghostprov:m >/dev/null 2>&1; then
     die "provider absent from PW_PROVIDERS was accepted"
   fi
   # malformed id / missing task file / missing PLAN row → refused
-  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin X9=claude:opus >/dev/null 2>&1; then die "non-T0n id accepted"; fi
-  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin T99=claude:opus >/dev/null 2>&1; then die "missing task file accepted"; fi
+  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" set --project pinproj --key pin --set X9=claude:opus >/dev/null 2>&1; then die "non-T0n id accepted"; fi
+  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" set --project pinproj --key pin --set T99=claude:opus >/dev/null 2>&1; then die "missing task file accepted"; fi
   printf -- '- **Status:** todo\n- **Execute with:** claude:sonnet\n' > "$tmp/pinproj/task/T03.md"
-  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin T03=claude:opus >/dev/null 2>&1; then die "task with no PLAN row accepted"; fi
+  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" set --project pinproj --key pin --set T03=claude:opus >/dev/null 2>&1; then die "task with no PLAN row accepted"; fi
   rm -f "$tmp/pinproj/task/T03.md"
   # a task file WITHOUT the Execute-with field is refused at validation (nothing half-written)
   printf -- '- **Status:** todo\n' > "$tmp/pinproj/task/T04.md"
   awk '/^\| \[T02\]/ { print; print "| [T04](./T04.md) | d | api | — | G1 | claude:sonnet | 1 | todo | — | — |"; next } { print }' \
     "$tmp/pinproj/task/PLAN.md" > "$tmp/pinproj/task/PLAN.md.tmp" && mv "$tmp/pinproj/task/PLAN.md.tmp" "$tmp/pinproj/task/PLAN.md"
-  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin T04=claude:opus >/dev/null 2>&1; then die "task without the Execute-with field accepted"; fi
+  if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" set --project pinproj --key pin --set T04=claude:opus >/dev/null 2>&1; then die "task without the Execute-with field accepted"; fi
   rm -f "$tmp/pinproj/task/T04.md"
 
   # clear to — (both holders)
-  PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" project set pinproj pin T02=— >/dev/null
+  PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$NOSCOPE" "$CFG" set --project pinproj --key pin --set T02=— >/dev/null
   grep -q '^- \*\*Execute with:\*\* —$' "$tmp/pinproj/task/T02.md" || die "clear did not write the task file"
   grep -q '| — | 1 | todo |' "$tmp/pinproj/task/PLAN.md" || die "clear did not write the PLAN cell"
 
   # read side: get pin (list) + get pin.T0n (one)
-  local got; got="$(PW_PROJECTS_DIR="$tmp" "$CFG" project get pinproj pin | tr '\n' ' ')"
+  local got; got="$(PW_PROJECTS_DIR="$tmp" "$CFG" get --project pinproj --key pin | tr '\n' ' ')"
   [ "$got" = "T01=claude:opus T02=— " ] || die "get pin list wrong: '$got'"
-  got="$(PW_PROJECTS_DIR="$tmp" "$CFG" project get pinproj pin.T01)"
+  got="$(PW_PROJECTS_DIR="$tmp" "$CFG" get --project pinproj --key pin.T01)"
   [ "$got" = "claude:opus" ] || die "get pin.T01 wrong: '$got'"
 
   # discoverability: the show footer carries the pin vocabulary
-  PW_PROJECTS_DIR="$tmp" "$CFG" project show pinproj | grep -qF 'pin[T0n=provider:model|—]' || die "show footer missing the pin key vocabulary"
+  PW_PROJECTS_DIR="$tmp" "$CFG" show --project pinproj | grep -qF 'pin[T0n=provider:model|—]' || die "show footer missing the pin key vocabulary"
   rm -rf "$tmp"
   pwtest_ok "plan-23 pin key: dual-holder batches, all-or-nothing, clear, get, footer (all asserts passed)"
 }
@@ -423,19 +421,19 @@ p23_pin_selftest
 # one-line JSON shape); allowlist allow/refuse; hidden-visibility slugs are REFUSED by
 # model-resolve — a hidden slug still RUNS silently on the real CLI (probe 2026-10-04), so the
 # visible-catalog filter is the availability gate, and the allowlist is the permission gate.
-mc="$(PW_CONFIG_FILE="$CFG_OPEN" PW_MODEL_ALLOWLIST_CODEX="" "$MR" model-check codex codex-test-luna 2>/dev/null)" \
+mc="$(PW_CONFIG_FILE="$CFG_OPEN" PW_MODEL_ALLOWLIST_CODEX="" "$MR" model-check --provider codex --model codex-test-luna 2>/dev/null)" \
   && pwtest_ok "model-check codex: empty allowlist passes" \
   || pwtest_bad "model-check codex empty allowlist" "refused with an empty allowlist"
-PW_CONFIG_FILE="$CFG_OPEN" PW_MODEL_ALLOWLIST_CODEX="codex-test-*" "$MR" model-check codex codex-test-astra >/dev/null 2>&1 \
+PW_CONFIG_FILE="$CFG_OPEN" PW_MODEL_ALLOWLIST_CODEX="codex-test-*" "$MR" model-check --provider codex --model codex-test-astra >/dev/null 2>&1 \
   && pwtest_ok "model-check codex: glob pattern allows" \
   || pwtest_bad "model-check codex glob allow" "refused a slug matching the allowlist glob"
-PW_CONFIG_FILE="$CFG_OPEN" PW_MODEL_ALLOWLIST_CODEX="codex-test-astra" "$MR" model-check codex codex-test-luna >/dev/null 2>&1 \
+PW_CONFIG_FILE="$CFG_OPEN" PW_MODEL_ALLOWLIST_CODEX="codex-test-astra" "$MR" model-check --provider codex --model codex-test-luna >/dev/null 2>&1 \
   && pwtest_bad "model-check codex refuse" "allowed a slug outside the allowlist" \
   || pwtest_ok "model-check codex: non-matching slug refused"
-mrx="$(PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve codex codex-test-luna 2>/dev/null)" \
+mrx="$(PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider codex --model codex-test-luna 2>/dev/null)" \
   && [ "$mrx" = "codex-test-luna" ] \
   && pwtest_ok "model-resolve codex: exact bare slug binds" \
   || pwtest_bad "model-resolve codex exact" "got '$mrx'"
-PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve codex codex-test-reserve >/dev/null 2>&1 \
+PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider codex --model codex-test-reserve >/dev/null 2>&1 \
   && pwtest_bad "model-resolve codex hidden slug" "resolved a visibility:hide slug (it would run silently)" \
   || pwtest_ok "model-resolve codex: hidden-visibility slug refused (positive exit 1)"

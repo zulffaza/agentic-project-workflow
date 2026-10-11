@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
 # pw-review-read.sh - read-only review facet; legacy pw-review.sh reads forward here.
 #
-#   pw-review-read.sh gate     <slug> <review-rel-path>
+#   pw-review-read.sh gate     --project <slug> --file <review-rel-path>
 #       Latest decision; exit 0 for consumable approval, 1 for an unapproved gate.
-#   pw-review-read.sh has-open <slug> <review-rel-path>
+#   pw-review-read.sh has-open --project <slug> --file <review-rel-path>
 #       yes/no, exit 0/1; missing file means no.
-#   pw-review-read.sh count    <slug> <review-rel-path>
+#   pw-review-read.sh count    --project <slug> --file <review-rel-path>
 #       open=N resolved=M items=K; missing file prints zero counts and exits 1.
-#   pw-review-read.sh eligible <slug> <review-rel-path>
+#   pw-review-read.sh eligible --project <slug> --file <review-rel-path>
 #       eligible=N open=A foldin=B awaiting=C unactionable=D; exit 0 iff N>0.
-#   pw-review-read.sh scan     <slug> [--phase <context|analysis|plan|task-plan|task-exec|ship|rfc|close>]
+#   pw-review-read.sh scan     --project <slug> [--phase <context|analysis|plan|task-plan|task-exec|ship|rfc|close>]
 #       Summary per review, including latest decision and By actor. Scans the
 #       analysis/review, task/review, context/review, rfc/review, and review/ lanes.
-#   pw-review-read.sh passes   <slug> [--json]
+#   pw-review-read.sh passes   --project <slug> [--json]
 #       One line per review/ai/ handoff pass: pass-id, surface, state, artifact, verdict.
 #
+# Named-argument grammar: operation words first, every value named; --project
+# selects the project in every project form. Scalar values are ONE token (quote spaces).
 # Exit 2 means invalid usage, paths, or metadata. Reads never write project files.
 # Bash 3.2+; old timestamp formats, actors, and approved decorations remain readable.
 set -euo pipefail
@@ -42,38 +44,63 @@ read_path() {
   pw_review_contain "$d" "$2" >/dev/null || die "invalid review path: $2 → fix: keep it project-relative inside the selected project"
   printf '%s/%s' "$d" "$2"
 }
+# _parse_rf <op> "$@" — shared named-grammar parse for the file-scoped readers
+# (--project/--file only); sets RP_SLUG, RP_REL.
+RP_SLUG=""; RP_REL=""
+_parse_rf() {
+  local _op="$1"; shift
+  local a v
+  RP_SLUG=""; RP_REL=""
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --file=*)    v="${a#*=}"; a="--file" ;;
+    esac
+    case "$a" in
+      --project|--file)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) RP_SLUG="$v" ;; --file) RP_REL="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "$_op --project <slug> --file <review-rel-path>" ;;
+      *) _pw_positional "$a" "$_op --project <slug> --file <review-rel-path>" ;;
+    esac
+  done
+  [ -n "$RP_SLUG" ] || die "$_op: --project is required → fix: $_op --project <slug> --file <review-rel-path>"
+  [ -n "$RP_REL" ] || die "$_op: --file is required → fix: the review file's project-relative path"
+}
 cmd_gate() {
-  [ $# -eq 2 ] || die 'usage: gate <slug> <review-rel-path>'
-  local f decision; f="$(read_path "$1" "$2")" || return 2
-  [ -f "$f" ] || die "no such review file: $2 → fix: /pw-review $1 init <artifact-path>"
-  decision="$(_signoff_latest_decision "$f")" || die "no Sign-off table rows found in $2 → fix: restore the review table through the agent"
+  _parse_rf gate "$@"
+  local f decision; f="$(read_path "$RP_SLUG" "$RP_REL")" || return 2
+  [ -f "$f" ] || die "no such review file: $RP_REL → fix: /pw-review init --project $RP_SLUG --file $RP_REL --doc <doc-rel-path>"
+  decision="$(_signoff_latest_decision "$f")" || die "no Sign-off table rows found in $RP_REL → fix: restore the review table through the agent"
   echo "$decision"
   if _review_approval_valid "$f"; then return 0; fi
   if _decision_is_approved "$decision"; then
     if _review_has_open_marker "$f"; then
-      echo "pw-review: approval in $2 is STALE for gate consumers; unresolved item/question remains → fix: /pw-review $1 $2, then explicitly approve after resolving the work" >&2
+      echo "pw-review: approval in $RP_REL is STALE for gate consumers; unresolved item/question remains → fix: resolve the open items, then approve explicitly: /pw-review signoff --project $RP_SLUG --file $RP_REL --decision approved" >&2
     else
-      echo "pw-review: an explicit human changes-requested remains active in $2 → fix: only the human can explicitly withdraw that rejection or approve" >&2
+      echo "pw-review: an explicit human changes-requested remains active in $RP_REL → fix: only the human can explicitly withdraw that rejection or approve" >&2
     fi
   fi
   return 1
 }
 cmd_has_open() {
-  [ $# -eq 2 ] || die 'usage: has-open <slug> <review-rel-path>'
-  local f; f="$(read_path "$1" "$2")" || return 2
+  _parse_rf has-open "$@"
+  local f; f="$(read_path "$RP_SLUG" "$RP_REL")" || return 2
   if [ -f "$f" ] && _review_has_open_marker "$f"; then echo yes; return 0; fi
   echo no; return 1
 }
 cmd_eligible() {
-  [ $# -eq 2 ] || die 'usage: eligible <slug> <review-rel-path>'
-  local f counts e; f="$(read_path "$1" "$2")" || return 2
-  [ -f "$f" ] || die "no such review file: $2 → fix: /pw-review $1 init <artifact-path>"
-  counts="$(_review_eligible_counts "$f")"; echo "$1: $2 → $counts"
+  _parse_rf eligible "$@"
+  local f counts e; f="$(read_path "$RP_SLUG" "$RP_REL")" || return 2
+  [ -f "$f" ] || die "no such review file: $RP_REL → fix: /pw-review init --project $RP_SLUG --file $RP_REL --doc <doc-rel-path>"
+  counts="$(_review_eligible_counts "$f")"; echo "$RP_SLUG: $RP_REL → $counts"
   e="${counts#eligible=}"; e="${e%% *}"; [ "${e:-0}" -gt 0 ]
 }
 cmd_count() {
-  [ $# -eq 2 ] || die 'usage: count <slug> <review-rel-path>'
-  local f stripped counts items; f="$(read_path "$1" "$2")" || return 2
+  _parse_rf count "$@"
+  local f stripped counts items; f="$(read_path "$RP_SLUG" "$RP_REL")" || return 2
   [ -f "$f" ] || { echo 'open=0 resolved=0'; return 1; }
   stripped="$(_comment_blanked "$f")"
   counts="$(pw_review_item_counts "$f")"
@@ -85,18 +112,23 @@ cmd_count() {
   echo "$counts items=${items:-0}"
 }
 cmd_scan() {
-  local slug="" phase="" d f rel counts open resolved decision actor parts summary lane
+  local slug="" phase="" d f rel counts open resolved decision actor parts summary lane a v
   local files=()
   while [ $# -gt 0 ]; do
-    case "$1" in
-      --phase) [ $# -ge 2 ] || die '--phase requires an argument'; phase="$2"; shift 2 ;;
-      --phase=*) phase="${1#--phase=}"; shift ;;
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --phase=*)   v="${a#*=}"; a="--phase" ;;
+    esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      --phase)   [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --phase; v="$1"; shift; }; phase="$v" ;;
       -h|--help) pw_usage ;;
-      -*) die "unknown option: $1 → fix: see --help" ;;
-      *) [ -z "$slug" ] || die 'scan accepts one project slug → fix: see --help'; slug="$1"; shift ;;
+      -*) _pw_unknown "$a" "scan --project <slug> [--phase <phase>]" ;;
+      *) _pw_positional "$a" "scan --project <slug> [--phase <phase>]" ;;
     esac
   done
-  [ -n "$slug" ] || die 'usage: scan <slug> [--phase <phase>]'
+  [ -n "$slug" ] || die "scan: --project is required → fix: scan --project <slug> [--phase <phase>]"
   case "$phase" in ''|context|analysis|plan|task-plan|task-exec|ship|rfc|close) ;; *) die "unknown review surface '$phase' → fix: use context, analysis, plan, task-plan, task-exec, ship, rfc, or close" ;; esac
   d="$(proj_dir "$slug")" || return 2
   # discovery through the shared lane walk (pw-reviewlib.sh): the same five lanes the
@@ -124,7 +156,7 @@ EOF
       rfc) [ "$lane" = rfccontent ] || continue ;;
       close) [ "$lane" = close ] || continue ;;
     esac
-    counts="$(cmd_count "$slug" "$rel" 2>/dev/null || true)"
+    counts="$(cmd_count --project "$slug" --file "$rel" 2>/dev/null || true)"
     open="$(printf '%s' "$counts" | sed -n 's/open=\([0-9]*\).*/\1/p')"; open="${open:-0}"
     resolved="$(printf '%s' "$counts" | sed -n 's/.*resolved=\([0-9]*\).*/\1/p')"; resolved="${resolved:-0}"
     decision="$(_signoff_latest_decision "$f")" || decision=""
@@ -138,8 +170,19 @@ EOF
   return 0
 }
 cmd_passes() {
-  local slug="$1" json="${2:-}" d root pd mf any=0 pid _pv
-  case "$json" in ''|--json) ;; *) die "passes: unknown option: $json (try --help)" ;; esac
+  local slug="" json="" d root pd mf any=0 pid _pv a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --project=*) v="${a#*=}"; a="--project" ;; esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      --json) json="--json" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "passes --project <slug> [--json]" ;;
+      *) _pw_positional "$a" "passes --project <slug> [--json]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "passes: --project is required → fix: passes --project <slug> [--json]"
   d="$(proj_dir "$slug")" || return 2
   root="$d/review/ai"
   [ -d "$root" ] || { echo 'No AI review passes found'; return 0; }

@@ -7,7 +7,7 @@ execution, and the multi-repo worktree mechanics.
 
 ## Start with the execution scope
 
-Use `/pw-execute <slug>` to resume the remaining plan, `--wave` to stop after the current ready group, or task IDs to select work.
+Use `/pw-execute --project <slug>` to resume the remaining plan, `--wave` to stop after the current ready group, or repeated `--task T0n` flags to select work.
 Read task diffs and `## Result` after execution. By default, execution stops at local commits and verification.
 
 | You need… | Read |
@@ -43,12 +43,12 @@ You can reuse an existing registered agent. Ad-hoc code work uses the main agent
 
 | Execution scope | Command | Where it stops |
 |---|---|---|
-| Remaining plan | `/pw-execute <slug>` | Continues through ready tasks and newly unblocked dependencies |
-| Current ready group | `/pw-execute <slug> --wave` | Runs tasks whose dependencies are already `done`/`accepted`, then reports a checkpoint |
-| Selected tasks | `/pw-execute <slug> T03` | Runs the named scope and stops |
+| Remaining plan | `/pw-execute --project <slug>` | Continues through ready tasks and newly unblocked dependencies |
+| Current ready group | `/pw-execute --project <slug> --wave` | Runs tasks whose dependencies are already `done`/`accepted`, then reports a checkpoint |
+| Selected tasks | `/pw-execute --project <slug> --task T03` | Runs the named scope and stops |
 
 Use full resume after an interrupted run. Use a wave when you want to inspect progress before the next group.
-Full operator semantics: `/pw-help command pw-execute`.
+Full operator semantics: `/pw-help command --name pw-execute`.
 
 <a id="choosing-a-model--sub-agent-per-task--two-axes-not-one"></a>
 ## Task executors and project roles
@@ -62,7 +62,7 @@ The dashboard's role settings never override this task contract.
 The dashboard's `AI Models` row selects models for these project roles:
 `researcher`, `analyst`, `writer-task`, `reviewer`, and `verifier`.
 There is no executor row; executors use their task settings.
-Inspect or change role choices through `/pw-config <slug>`.
+Inspect or change role choices through `/pw-config show --project <slug>`.
 
 ### Model precedence for project roles
 
@@ -163,7 +163,7 @@ tighten that in `PLAN.md → ## Execution strategy`:
   change re-enters the executors's worktree: diagnose → fix → re-verify → new commit, capped
   (`- AI execution limit:`, floor `PW_MAX_SELF_REPAIR`=3 — same constant as the ship loop's
   ≤3 rounds) before it reports `verify-failed`. Pre-existing/environmental failures keep today's
-  `done`-with-caveat rule and never loop. Removes the manual `/pw-execute <slug> T0n` re-trigger for
+  `done`-with-caveat rule and never loop. Removes the manual `/pw-execute --project <slug> --task T0n` re-trigger for
   fixable cases.
 - **`- Results acceptance: <manual|auto>`** (default `manual`) — in `auto`, at the end of a run the
   **driver** flips clean tasks (`done`, required kinds green, zero open review/dep-impact items) to
@@ -210,7 +210,7 @@ capability. How a Claude-only session still runs the phases:
   `/pw-*` commands — it spawns `claude:pw-executor` sub-agents in-process and **must not edit repo
   code itself**. The long-lived-driver benefit is replaced by disk state + bounded units: one
   `--wave` per invocation, human gate between waves, `/compact` between waves; resumed work is a
-  plain `/pw-execute <slug>` walking the PLAN (the on-disk PLAN/dashboard/worktree commits are the
+  plain `/pw-execute --project <slug>` walking the PLAN (the on-disk PLAN/dashboard/worktree commits are the
   resumable state; session ids are machine-local only).
 - **Flow C (bulk wave):** spawn `pw-orchestrator` as a *sub-agent* for **one bounded wave** — it
   fans out to its own `pw-executor` sub-agents and reports; it works today because the canonical def
@@ -220,7 +220,7 @@ capability. How a Claude-only session still runs the phases:
   parent's context.
 - **Spawn-less fallbacks everywhere:** if even a spawn is unavailable/denied, the `pw-*` role defs
   are readable prompt bodies (installed as each provider's agent files) — play the role yourself, or
-  hand a session the task file as its work order (exactly what `/pw-execute <slug> <T0n>`'s
+  hand a session the task file as its work order (exactly what `/pw-execute --project <slug> --task <T0n>`'s
   `provider:model` default already is). The commands' `agent:` frontmatter that starts a *Kilo* session with a
   primary role is **Kilo-only sugar** — on Claude-like providers it does nothing.
 - **Codex twist (Flow B only):** codex has **no sub-agent surface at all** — no defs are seeded and
@@ -324,7 +324,7 @@ driver inline) is the routing ladder's call — §The per-spawn ledger below.
 **Model lanes vs executor pins are different axes.** A task's `Execute with:` binds the EXECUTOR
 per unit (above). A *lane* spawns on the provider default unless the project's
 `- **AI Models:** researcher=… analyst=… writer-task=… verifier=… reviewer=…` row binds it
-(`/pw-config <slug> set ai-model <lane>=<provider:model|—>`; unset = provider/session default;
+(`/pw-config set --project <slug> --key ai-model --set <lane>=<provider:model|—>`; unset = provider/session default;
 the `AI Models:` dashboard line — same anchored-line config idiom as `AI Review`). Per-provider honesty: **claude**
 can start a session per model and per-spawn override is real; **kilo**'s Task-tool has no model arg
 — its levers are a map-block pin (user's own config) or running the lane **headless**:
@@ -403,12 +403,12 @@ When `Execute with:` names an agent, resolve its provider the same way as a mode
 orchestrator's own provider — then apply the same-vs-different routing above.
 
 **Requesting a specific model/agent — three ways, all honored:**
-1. **Statically** — set the task's `Execute with:` field. Preferred: `/pw-config <slug> set pin
-   T03=claude:opus` (batches: several `T0n=<provider:model>` pairs in one call, `—` clears;
+1. **Statically** — set the task's `Execute with:` field. Preferred: `/pw-config set --project
+   <slug> --key pin --set T03=claude:opus` (batches: several `T0n=<provider:model>` pairs in one call, `—` clears;
    validated at write time and written to BOTH holders — the task file and the PLAN cell — so
    they can't drift). Asking the breakdown agent also works ("make T03 use opus because it's the
    risky migration"); a raw hand-edit must keep the task file and its PLAN cell in sync yourself.
-2. **At execution** — tell the orchestrator: `/pw-execute myproj T03 with opus`, or "run T03 with
+2. **At execution** — tell the orchestrator: `/pw-execute --project myproj --task T03 --model opus`, or "run T03 with
    the `pw-executor` agent". It overrides and writes what it used into `Actually used:`.
 3. **Default** — if unset, the orchestrator picks per the table above and records its choice + why.
 
@@ -423,14 +423,14 @@ For a stacked task, it starts from the parent's verified commit instead.
 For adopted work, it attaches the existing branch and serializes tasks that share that branch.
 Different adopted branches can run independently.
 
-Use `/pw-execute <slug>` to create or resume the required worktrees.
-Use `/pw-status <slug>` to inspect task state and `/pw-doctor --project <slug>` for consistency problems.
+Use `/pw-execute --project <slug>` to create or resume the required worktrees.
+Use `/pw-status --project <slug>` to inspect task state and `/pw-doctor --project <slug>` for consistency problems.
 If Git reports that a branch is already checked out, follow [worktree troubleshooting](TROUBLESHOOTING.md).
 
 One repository can have tasks against different base branches. PLAN records each `(repo, base)` pair.
 Each task keeps its own branch and worktree so those changes remain separate.
 
-Run `/pw-close <slug>` after accepting results to clean eligible worktrees.
+Run `/pw-close --project <slug>` after accepting results to clean eligible worktrees.
 Run it from the bundle or project root, and close worktree folders in your editor first.
 Dirty worktrees and the worktree you occupy remain protected and appear as leftovers.
 

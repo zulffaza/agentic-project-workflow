@@ -1,12 +1,12 @@
 # Learn + close (`/pw-close`)
 
-**Pre-flight first:** `{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh close <slug>` +
-`{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint all <slug>` (each `|| exit 1`; add `pw-review-read.sh scan <slug>`
+**Pre-flight first:** `{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh close --project <slug>` +
+`{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind all --project <slug>` (each `|| exit 1`; add `pw-review-read.sh scan --project <slug>`
 to show what's still open). `/pw-close` already runs the first two — reached without it, run them
 yourself; nonzero = STOP and relay stderr.
 
 After a run, `/pw-close`: verify all tasks `accepted`, **tear down worktrees with the safe helper**
-(`tooling/scripts/entities/pw-worktree.sh teardown <project-dir>` — it won't remove the worktree you're standing in or a
+(`tooling/scripts/entities/pw-worktree.sh teardown --dir <project-dir>` — it won't remove the worktree you're standing in or a
 dirty one, the guard that stops an editor closing on you; don't delete branches/project dir), seed
 workflow-level learnings **if a memory tool is configured** (`PW_MEMORY`; mark superseded facts
 `[SUPERSEDED]`), improve the bundle's `template/` files or this skill, set `Status: done`, and

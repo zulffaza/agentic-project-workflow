@@ -11,9 +11,9 @@
 # everything else prints the exact fix command instead of guessing. Fix hints name
 # USER COMMANDS (/pw-*) or the user's own pw.config.sh — never raw scripts (plan 27 F1).
 #
-#   pw-project-doctor.sh <slug>            check only (exit 1 on any ✗)
-#   pw-project-doctor.sh <slug> --fix      apply the deterministic repairs
-#   pw-project-doctor.sh <slug> --guidance [--apply]
+#   pw-project-doctor.sh --project <slug>            check only (exit 1 on any ✗)
+#   pw-project-doctor.sh --project <slug> --fix      apply the deterministic repairs
+#   pw-project-doctor.sh --project <slug> --guidance [--apply]
 #                                          scoped workflow-guidance prose repair (plan 30):
 #                                          exact-byte replacement of known script-name leaks in
 #                                          project copies with their /pw-* command forms.
@@ -21,9 +21,12 @@
 #                                          atomically and is idempotent. Never runs the health
 #                                          walk, forge, or stack writers; --guidance --fix refuses.
 #
+# Named-argument grammar: every value named; --project selects the project. Scalar
+# values are ONE token (quote spaces).
+#
 # Output sections (human labels; internal check IDs stay in this header for docs/tests):
 #   [1/8] Documentation & template lint
-#         C10 doc format       pw-doc.sh lint all — structure/field/format validity
+#         C10 doc format       pw-doc.sh lint --kind all --project <slug> — structure/field/format validity
 #         C11 template currency required dashboard/PLAN lines; no unexpanded scaffold tokens
 #   [2/8] RFC data              C12 rfc/META.md well-formed; backend/target vs CURRENT global
 #         config. Optional-until-used (rev d owner ruling): an NOT-engaged side-loop warns (·,
@@ -33,7 +36,7 @@
 #                              C3 depends_on (resolves over ALL task ids; no cycles)
 #   [4/8] Configuration        C6 every config line present/legal/in sync with current floors;
 #                              pin enforcement is LIVE work only — accepted-task pin debt is a · (rev f)
-#   [5/8] Provider & model pins C8 pw-status.sh provider-audit: ✗ only when a LIVE task's pin is
+#   [5/8] Provider & model pins C8 pw-status.sh provider-audit --project <slug>: ✗ only when a LIVE task's pin is
 #                              unusable (unbound/stale-provider, with a /pw-* decision block);
 #                              ran-with-a-different-model is history → ·, never ✗ (owner ruling)
 #   [6/8] Execution health     C5 stale in-progress runs · C2 live tasks' worktrees/branches
@@ -67,18 +70,25 @@ bad()  { printf '  ✗ %s\n' "$*"; FAILS=$((FAILS+1)); }
 note() { printf '  · %s\n' "$*"; NOTES=$((NOTES+1)); }
 fixed(){ printf '      fixed: %s\n' "$*"; FIXES=$((FIXES+1)); }
 
+die() { echo "pw-project-doctor: $*" >&2; exit 2; }
+
 SLUG=""; FIX=0; GUIDANCE=0; APPLY=0
-for a in "$@"; do
+while [ $# -gt 0 ]; do
+  a="$1"; shift; v=""
+  case "$a" in --project=*) v="${a#*=}"; a="--project" ;; esac
   case "$a" in
+    --project)
+      [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }
+      SLUG="$v" ;;
     --fix) FIX=1 ;;
     --guidance) GUIDANCE=1 ;;
     --apply) APPLY=1 ;;
     -h|--help) pw_usage ;;
-    *) [ -z "$SLUG" ] || { echo "pw-project-doctor: extra argument '$a' (usage: <slug> [--fix | --guidance [--apply]] — see --help)" >&2; exit 2; }
-       SLUG="$a" ;;
+    -*) _pw_unknown "$a" "--project <slug> [--fix | --guidance [--apply]]" ;;
+    *) _pw_positional "$a" "the project is named — e.g. pw-project-doctor.sh --project <slug> [--fix | --guidance [--apply]]" ;;
   esac
 done
-[ -n "$SLUG" ] || { echo "usage: pw-project-doctor.sh <slug> [--fix | --guidance [--apply]]" >&2; exit 2; }
+[ -n "$SLUG" ] || { echo "usage: pw-project-doctor.sh --project <slug> [--fix | --guidance [--apply]]" >&2; exit 2; }
 [ "$APPLY" -eq 0 ] || [ "$GUIDANCE" -eq 1 ] || { echo "pw-project-doctor: --apply requires --guidance (it has no meaning for the health walk)" >&2; exit 2; }
 [ "$GUIDANCE" -eq 0 ] || [ "$FIX" -eq 0 ] || { echo "pw-project-doctor: --guidance and --fix are separate mutation scopes — run them one at a time" >&2; exit 2; }
 D="$PROJECTS_DIR/$SLUG"
@@ -129,10 +139,10 @@ path:** the deterministic operators — `/pw-context <slug> add-input --file <f>
 --source <prose…> [--trust <prose…>]` and `/pw-context <slug> add-repo <repo> <base> <why…>`
 >>>NEW
 **Filled by:** [🧑 you] — both tables below — or agent-assisted preparation:
-`/pw-context <slug> prepare <brief>` drafts the brief, proposes input rows, and records supported
+`/pw-context prepare --project <slug> --brief <brief>` drafts the brief, proposes input rows, and records supported
 repository guesses from your stated intent; review and correct them before analysis. **Easiest
-manual path:** the deterministic row operators — `/pw-context <slug> add-input --file <f> --what <prose…>
---source <prose…> [--trust <prose…>]` and `/pw-context <slug> add-repo <repo> <base> <why…>`
+manual path:** the deterministic row operators — `/pw-context add-input --project <slug> --file <f> --what <prose…>
+--source <prose…> [--trust <prose…>]` and `/pw-context add-repo --project <slug> --repo <repo> --base <base> --why <why…>`
 <<<RULE
 >>>FILE context/README.md
 >>>OLD
@@ -156,10 +166,10 @@ run `/pw-context <slug> req-init` to create `REQUIREMENTS.md` from its template,
 It's optional — the pipeline never requires it — but it sharpens the analysis phase.
 >>>NEW
 **Optional — a one-page brief.** If the raw inputs don't clearly state *what you want and why*,
-run `/pw-context <slug> prepare <your brief>` and let the agent draft the brief with traceable
-inputs, or write it yourself: run `/pw-context <slug> req-init`, fill it in (problem, goal, scope,
+run `/pw-context prepare --project <slug> --brief <your brief>` and let the agent draft the brief with traceable
+inputs, or write it yourself: run `/pw-context req-init --project <slug>`, fill it in (problem, goal, scope,
 constraints, success criteria), and register it:
-`/pw-context <slug> add-input --file REQUIREMENTS.md --what <one line> --source <where it came from>`.
+`/pw-context add-input --project <slug> --file REQUIREMENTS.md --what <one line> --source <where it came from>`.
 It's optional — the pipeline never requires it — but it sharpens the analysis phase.
 <<<RULE
 >>>FILE analysis/README.md
@@ -180,30 +190,30 @@ text. Only you approve (guarded AI `auto` mode aside). See `../README.md` → "R
 
 | You want to… | Use |
 |---|---|
-| Start a review for this doc | `/pw-review <slug> init analysis/<topic>.md` |
-| Add feedback | `/pw-review <slug> item analysis/review/<topic>.review.md §<section> <your comment>` |
-| Answer the agent's questions | `/pw-review <slug> answer analysis/review/<topic>.review.md Q<n> <your answer>` |
-| Have the agent apply approved fixes | `/pw-review <slug> analysis/review/<topic>.review.md` |
-| Ask for an independent AI pass | `/pw-review <slug> ai analysis` |
-| Approve (human-only) | `/pw-review <slug> signoff analysis/review/<topic>.review.md approved` |
+| Start a review for this doc | `/pw-review init --project <slug> --file analysis/<topic>.md` |
+| Add feedback | `/pw-review item --project <slug> --file analysis/review/<topic>.review.md --section <§section> --text <your comment>` |
+| Answer the agent's questions | `/pw-review answer --project <slug> --file analysis/review/<topic>.review.md --question Q<n> --text <your answer>` |
+| Have the agent apply approved fixes | `/pw-review --project <slug> --file analysis/review/<topic>.review.md` |
+| Ask for an independent AI pass | `/pw-review ai --project <slug> --surface analysis` |
+| Approve (human-only) | `/pw-review signoff --project <slug> --file analysis/review/<topic>.review.md --decision approved` |
 <<<RULE
 >>>FILE PROJECT.md
 >>>OLD
 set via `/pw-config <slug> ai-model <role> <provider:model>` — one row per spawn
 >>>NEW
-set via `/pw-config <slug> set ai-model <role>=<provider:model>` — one row per spawn
+set via `/pw-config set --project <slug> --key ai-model --set <role>=<provider:model>` — one row per spawn
 <<<RULE
 >>>FILE PROJECT.md
 >>>OLD
 See docs/EXECUTION.md §Spawning phase work + `pw-config.sh project ai-model`.
 >>>NEW
-See docs/EXECUTION.md §Spawning phase work; set rows with `/pw-config <slug> set ai-model <role>=<provider:model>`.
+See docs/EXECUTION.md §Spawning phase work; set rows with `/pw-config set --project <slug> --key ai-model --set <role>=<provider:model>`.
 <<<RULE
 >>>FILE PROJECT.md
 >>>OLD
 set via `/pw-config <slug> ai-review <phase> <mode>` — one mode per review phase
 >>>NEW
-set via `/pw-config <slug> set ai-review <phase>=<mode>` — one mode per review phase
+set via `/pw-config set --project <slug> --key ai-review --set <phase>=<mode>` — one mode per review phase
 <<<RULE
 >>>FILE rfc/README.md
 >>>OLD
@@ -245,7 +255,7 @@ archive`
 >>>OLD
 `pw-status.sh status <slug> <phase> --rewind`
 >>>NEW
-`/pw-status <slug> rewind <phase>`
+`/pw-status rewind --project <slug> --phase <phase>`
 <<<RULE
 >>>FILE */review/*.review.md
 >>>OLD
@@ -267,7 +277,7 @@ Create this file via `pw-review.sh
   init` (copies the template verbatim) — or `pw-review.sh init-all <slug>` for every
   missing review file in the project at once — never by hand.
 >>>NEW
-Create this file with `/pw-review <slug> init <doc-path>` (copies the template verbatim) — or `/pw-review <slug> init-all` for the review files missing in the project's CURRENT phase — never by hand.
+Create this file with `/pw-review init --project <slug> --file <doc-path>` (copies the template verbatim) — or `/pw-review init-all --project <slug>` for the review files missing in the project's CURRENT phase — never by hand.
 <<<RULE
 >>>FILE */review/*.review.md
 >>>OLD
@@ -451,7 +461,7 @@ _field_val() { # <file> <field> — resolved + token-expanded; paths lose a trai
 
 # --- C10+C11: Documentation & template lint -------------------------------------
 echo "[1/8] Documentation & template lint"
-if LINT_OUT="$("$DOCL" lint all "$SLUG" 2>&1)"; then
+if LINT_OUT="$("$DOCL" lint --kind all --project "$SLUG" 2>&1)"; then
   ok "lint all: clean"
 else
   case $? in
@@ -472,7 +482,7 @@ if [ -f "$README" ]; then
     if [ "$FIX" = 1 ]; then
       # ensure covers the config lines; then RE-MEASURE — a successful repair must not keep a
       # stale ✗ (the summary reports what is still broken after --fix, not what it found).
-      out="$("$CFG" project ensure "$SLUG" 2>&1)" || true
+      out="$("$CFG" ensure --project "$SLUG" 2>&1)" || true
       still=""
       grep -q '^- \*\*AI Models:\*\*' "$README" || still="$still AI-Models:"
       grep -q '^- \*\*AI Review:\*\*' "$README" || still="$still AI-Review:"
@@ -488,11 +498,11 @@ if [ -f "$README" ]; then
       fi
     else
       bad "dashboard missing explicit config line(s):${missing}"
-      echo "      → fix: /pw-config $SLUG project ensure   (inserts the missing config lines; Status/One-liner are owned by /pw-* flows)"
+      echo "      → fix: /pw-config ensure --project $SLUG   (inserts the missing config lines; Status/One-liner are owned by /pw-* flows)"
     fi
   elif [ -n "$tok" ]; then
     bad "unexpanded template token $tok in the dashboard — scaffold render broke"
-    echo "      → fix: tell your agent to replace the token with an explicit value (/pw-config $SLUG project set for config lines), or re-scaffold an empty project with /pw-new"
+    echo "      → fix: tell your agent to replace the token with an explicit value (/pw-config set --project $SLUG for config lines), or re-scaffold an empty project with /pw-new"
   else
     ok "dashboard carries the current template's required lines (explicit values, incl. AI Review:)"
   fi
@@ -505,19 +515,19 @@ if [ -f "$README" ]; then
   grep -q '^- \*\*Review Budget:\*\*'  "$README" || nm2="$nm2 Review-Budget:"
   if [ -n "$nm2" ]; then
     if [ "$FIX" = 1 ]; then
-      out="$("$CFG" project ensure "$SLUG" 2>&1)" || true
+      out="$("$CFG" ensure --project "$SLUG" 2>&1)" || true
       still2=""
       grep -q '^- \*\*Review Trigger:\*\*' "$README" || still2="$still2 Review-Trigger:"
       grep -q '^- \*\*Review Repair:\*\*'  "$README" || still2="$still2 Review-Repair:"
       grep -q '^- \*\*Review Budget:\*\*'  "$README" || still2="$still2 Review-Budget:"
       if [ -z "$still2" ]; then fixed "review-axis lines ensured (explicit defaults)"; else bad "dashboard review-axis lines still missing:$still2"; fi
     else
-      note "dashboard lacks newer review-axis line(s):$nm2 (defaults manual/manual/3 apply) — add with: /pw-config $SLUG project ensure"
+      note "dashboard lacks newer review-axis line(s):$nm2 (defaults manual/manual/3 apply) — add with: /pw-config ensure --project $SLUG"
     fi
   fi
 else
   bad "no README.md in project dir"
-  echo "      → fix: tell your agent the dashboard README.md is missing — it restores the file from the bundle template (config lines back: /pw-config $SLUG project ensure)"
+  echo "      → fix: tell your agent the dashboard README.md is missing — it restores the file from the bundle template (config lines back: /pw-config ensure --project $SLUG)"
 fi
 if [ -f "$PLAN" ]; then
   pm=""
@@ -586,12 +596,12 @@ else
   fi; }
   if [ -z "$mbackend" ]; then
     c12emit "rfc/META.md has no Backend: line (the file is agent-owned — never hand-edit it)"
-    echo "      → fix: /pw-rfc $SLUG — the RFC side-loop re-stamps Backend with the real configured value on its next run"
+    echo "      → fix: /pw-rfc --project $SLUG — the RFC side-loop re-stamps Backend with the real configured value on its next run"
   elif [ "$mbackend" != "$want_backend" ]; then
     c12emit "RFC backend drift: META says '$mbackend', current global config says '$want_backend' (a retired/changed PW_RFC_BACKEND)"
-    echo "      → fix: /pw-rfc $SLUG to re-init against the current backend, or restore the old backend in pw.config.sh"
+    echo "      → fix: /pw-rfc --project $SLUG to re-init against the current backend, or restore the old backend in pw.config.sh"
   elif [ -z "$mtarget" ]; then
-    c12emit "RFC target unset in META — set one before the next publish wave (/pw-rfc $SLUG --target <ref>, or ask your agent)"
+    c12emit "RFC target unset in META — set one before the next publish wave (/pw-rfc --project $SLUG --target <ref>, or ask your agent)"
   else
     ok "RFC backend '$mbackend' matches the global config; target present"
   fi
@@ -622,11 +632,11 @@ else
            c1bad=1 ;;
       esac
       [ -f "$D/task/$tid.md" ] || { bad "task $tid: no task/$tid.md behind the PLAN row"
-        echo "      → fix: re-run /pw-breakdown $SLUG for the missing task, or remove the stray row from PLAN's table"; c1bad=1; }
+        echo "      → fix: re-run /pw-breakdown --project $SLUG for the missing task, or remove the stray row from PLAN's table"; c1bad=1; }
     done <<< "$pairs"
     while IFS= read -r ev; do
       case "$ev" in
-        "") bad "task table: an 'Execute with:' cell is empty"; echo "      → fix: /pw-config $SLUG project set pin <T0n>=<provider:model> fills both holders"; c1bad=1 ;;
+        "") bad "task table: an 'Execute with:' cell is empty"; echo "      → fix: /pw-config set --project $SLUG --key pin --set <T0n>=<provider:model> fills both holders"; c1bad=1 ;;
         *[[:space:]]*) bad "task table: 'Execute with: $ev' is not a single provider/model/agent token" ; c1bad=1 ;;
       esac
     done <<< "$execs"
@@ -735,11 +745,11 @@ if ls "$D"/task/T*.md >/dev/null 2>&1; then
   done
 fi
 if [ "$stacks_present" = 1 ]; then
-  if sv_out="$("$HERE/pw-ship.sh" stack-validate "$SLUG" 2>&1)"; then
+  if sv_out="$("$HERE/pw-ship.sh" stack-validate --project "$SLUG" 2>&1)"; then
     ok "stack topology valid (same-repo parents, single destination, acyclic, depends_on present)"
   else
     bad "stack topology invalid: $(printf '%s' "$sv_out" | head -1)"
-    echo "      → fix: /pw-ship $SLUG stack previews the inferred edges, then fix the named 'Stacked on:' / depends_on fields"
+    echo "      → fix: /pw-ship stack --project $SLUG previews the inferred edges, then fix the named 'Stacked on:' / depends_on fields"
   fi
   # field ↔ PLAN mirror agreement (PLAN column absent on legacy projects = tolerated)
   if [ -f "$PLAN" ] && [ -n "$(pw_plan_stacked "$PLAN")" ]; then
@@ -788,15 +798,15 @@ if [ "$stacks_present" = 1 ]; then
     ncols="$(printf '%s' "$hdr" | awk -F'\t' '{print NF}')"
     if [ "$ncols" != "$exp" ]; then
       bad "task/stack.tsv header has $ncols columns (expected $exp) — a hand-edited or stale state file"
-      echo "      → fix: /pw-ship $SLUG stack and re-record the affected rows; never hand-edit the state file"
+      echo "      → fix: /pw-ship stack --project $SLUG and re-record the affected rows; never hand-edit the state file"
     else
       ok "stack state file is well-formed ($exp columns)"
     fi
   fi
-  stale_n="$("$HERE/pw-ship.sh" stack "$SLUG" 2>/dev/null | awk -F'|' '$7=="stale" {c++} END{print c+0}')"
+  stale_n="$("$HERE/pw-ship.sh" stack --project "$SLUG" 2>/dev/null | awk -F'|' '$7=="stale" {c++} END{print c+0}')"
   [ "${stale_n:-0}" -gt 0 ] && note "$stale_n stack task(s) carry freshness debt — clear it with /pw-sync before shipping or closing"
-  if [ -f "$D/task/stack-ops.tsv" ] && ! "$HERE/pw-ship.sh" stack-debt "$SLUG" >/dev/null 2>&1; then
-    note "pending stack operation(s) recorded — resume them (/pw-ship $SLUG stack) before outward work"
+  if [ -f "$D/task/stack-ops.tsv" ] && ! "$HERE/pw-ship.sh" stack-debt --project "$SLUG" >/dev/null 2>&1; then
+    note "pending stack operation(s) recorded — resume them (/pw-ship stack --project $SLUG) before outward work"
   fi
 fi
 
@@ -817,7 +827,7 @@ else
       *) bad "AI Review row '$kv' — mode outside advisory|auto"; c6bad=1 ;;
     esac
   done
-  [ "$c6legacy" = 1 ] && note "AI Review has legacy 'off' row(s) — they read as effective ADVISORY; persist with: /pw-config $SLUG project ensure"
+  [ "$c6legacy" = 1 ] && note "AI Review has legacy 'off' row(s) — they read as effective ADVISORY; persist with: /pw-config ensure --project $SLUG"
   true
 fi
 # review-axis side lines: validate values when present (defaults apply when absent — the
@@ -892,9 +902,9 @@ if ls "$D"/task/T*.md >/dev/null 2>&1; then
         c6hist=$((c6hist+1))
       else
         case "$problem" in
-          empty) bad "$tid: '- **Execute with:**' empty" ; echo "      → fix: /pw-config $SLUG project set pin $tid=<provider:model>" ;;
-          prose) bad "$tid: 'Execute with: $raw' is prose, not a single pin (guidance text leaked into the field)" ; echo "      → fix: /pw-config $SLUG project set pin $tid=<provider:model> — the reasoning belongs in Why:" ;;
-          *) bad "$tid: pin '$pin' — provider '${pin%%:*}' not in current PW_PROVIDERS (${PW_PROVIDERS[*]})" ; echo "      → fix: /pw-config $SLUG project set pin $tid=<provider:model> with a current provider, or re-enable it in pw.config.sh (PW_PROVIDERS)" ;;
+          empty) bad "$tid: '- **Execute with:**' empty" ; echo "      → fix: /pw-config set --project $SLUG --key pin --set $tid=<provider:model>" ;;
+          prose) bad "$tid: 'Execute with: $raw' is prose, not a single pin (guidance text leaked into the field)" ; echo "      → fix: /pw-config set --project $SLUG --key pin --set $tid=<provider:model> — the reasoning belongs in Why:" ;;
+          *) bad "$tid: pin '$pin' — provider '${pin%%:*}' not in current PW_PROVIDERS (${PW_PROVIDERS[*]})" ; echo "      → fix: /pw-config set --project $SLUG --key pin --set $tid=<provider:model> with a current provider, or re-enable it in pw.config.sh (PW_PROVIDERS)" ;;
         esac
         c6bad=1
       fi
@@ -910,7 +920,7 @@ fi
 # command form. "Ran with a different model" (mismatch) is intent-vs-history — a ·, never a fail
 # (owner ruling 09-28: users may freely re-pin; the ledger stays the record of what ran).
 echo "[5/8] Provider & model pins"
-if pa_out="$("$ST" provider-audit "$SLUG" 2>&1)"; then
+if pa_out="$("$ST" provider-audit --project "$SLUG" 2>&1)"; then
   ok "every task pin resolves against the current providers/models, and rows that ran match them"
 else
   pa_rc=$?
@@ -942,7 +952,7 @@ else
         bad "live task pins are not usable against the current config:"
         printf '%s' "$c8bad"
         echo "      → decision (one per row):"
-        echo "        (a) re-pin it:  /pw-config $SLUG project set pin <T0n>=<provider:model>   (validated at write)"
+        echo "        (a) re-pin it:  /pw-config set --project $SLUG --key pin --set <T0n>=<provider:model>   (validated at write)"
         _c8v=""
         for _pv in $c8provs; do _u="$(printf '%s' "$_pv" | tr '[:lower:]' '[:upper:]')"; _c8v="$_c8v PW_${_u}_API_PROVIDERS"; done
         echo "        (b) or restore the retired scope in pw.config.sh (${_c8v# } for the flagged provider(s))"
@@ -968,7 +978,7 @@ if ls "$D"/task/T*.md >/dev/null 2>&1; then
     lg="$(_mtime_epoch "$D/LOG.md")"; [ "$lg" -gt "$newest" ] && newest="$lg"
     if [ $((now - newest)) -gt "$cutoff" ]; then
       bad "task $tid: in-progress with no worktree/LOG activity in $(( (now - newest) / 86400 ))d (stale — resume or reset it)"
-      echo "      → fix: /pw-execute $SLUG $tid (resume), or set its Status honestly"
+      echo "      → fix: /pw-execute --project $SLUG --task $tid (resume), or set its Status honestly"
       c5=1
     fi
   done
@@ -998,7 +1008,7 @@ if ls "$D"/task/T*.md >/dev/null 2>&1; then
     if [ ! -d "$wtp" ]; then
       if [ "$live" = 1 ]; then
         bad "$tid: declared worktree '$wt' not mounted"
-        echo "      → fix: /pw-execute $SLUG $tid re-creates the worktree for a live task"
+        echo "      → fix: /pw-execute --project $SLUG --task $tid re-creates the worktree for a live task"
         c2=1
       else
         c2torn=$((c2torn+1))
@@ -1027,11 +1037,11 @@ echo "[7/8] Review gates"
 if [ ! -f "$D/task/review/PLAN.review.md" ]; then
   note "no PLAN review file yet (created on first /pw-review)"
 else
-  if pf_out="$("$PF" review "$SLUG" plan 2>&1)"; then
+  if pf_out="$("$PF" review --project "$SLUG" --lane plan 2>&1)"; then
     ok "PLAN gate: sign-off valid, passes right now"
   else
     bad "PLAN gate failing right now: $(printf '%s' "$pf_out" | head -1)"
-    echo "      → fix: /pw-review $SLUG (then sign off task/review/PLAN.review.md — the sign-off itself is human)"
+    echo "      → fix: /pw-review --project $SLUG (then sign off task/review/PLAN.review.md — the sign-off itself is human)"
   fi
 fi
 

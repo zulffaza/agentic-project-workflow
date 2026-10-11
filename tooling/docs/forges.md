@@ -86,7 +86,7 @@ misses every inline review comment.
 **Consequence for anything that loops "fetch → fix → reply → treat as done":** a thread with
 `resolvable: false` can never show resolved on the forge, so you cannot use the forge's own
 resolved/open state to decide whether it still needs handling — it will look "open" forever.
-`/pw-ship … comments` handles this by tracking every thread it has already replied to — resolvable
+`/pw-ship comments --project <slug>` handles this by tracking every thread it has already replied to — resolvable
 or not — in a **local** table (`task/review/T0n.review.md`'s `## MR comment tracking`, via
 `pw-ship.sh comment-seen`) instead of relying solely on the forge's resolved bit — see
 [`docs/REVIEW.md`](../../docs/REVIEW.md#2-the-mr-review-flow-post-ship).
@@ -164,7 +164,7 @@ it fires in each mode, and how `--skip-build-check` disables it for a given run)
   `/pw-ship` run on one slow pipeline. This is a monitoring convenience, not a blocking gate — the
   push/MR-open/MR-update it's checking already happened before polling started.
 
-**Head-scoped one-shot reads (no polling):** `/pw-ship <slug> request-review` never polls. It reads
+**Head-scoped one-shot reads (no polling):** `/pw-ship request-review --project <slug>` never polls. It reads
 the *current* head status once — GitLab: `glab api projects/:id/merge_requests/<iid>/pipelines`
 filtered to the MR head sha; GitHub: `gh api repos/:owner/:repo/commits/<sha>/check-runs`
 aggregated across runs. Unreadable, empty, or non-head-specific results render `unavailable` in

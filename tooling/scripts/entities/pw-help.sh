@@ -2,38 +2,46 @@
 # ============================================================================
 # pw-help.sh — deterministic discovery: one help surface for commands + operators
 #
-#   pw-help.sh overview   [--json]
-#       Global at-a-glance: one line per command AND one line per exposed
-#       operator, grouped by phase bucket. Each operator line prints the
-#       command-form invocation plus its use case (the first sentence of its
-#       usage-header paragraph, or the command file's own definition line for
-#       command-level sugar operators). Rendered live from command frontmatter
-#       + script usage headers — zero maintained snapshot. Includes pw-help.
+# Named-argument grammar (plan 42): operator words first, every value named; the
+# project is selected with --project <slug>. Scope is DECLARED per command
+# (frontmatter `scope:` + per-form `scope-forms:`) — the overview's two sections
+# (Global Operations / Project Operations) and the command view's grouping read
+# that declaration; nothing is inferred from shapes.
 #
-#   pw-help.sh command    <name> [<slug>] [--full|--json|--maintainer]
+#   pw-help.sh overview   [--json]
+#       The two scope sections: Global Operations (no existing workflow project
+#       required) and Project Operations (--project <slug>; Create or Attach
+#       labeled separately, then the phase buckets). One line per command form
+#       AND per exposed operator of that section, each with its use case (the
+#       command file's own definition line, else the script paragraph).
+#       Rendered live from command frontmatter + script usage headers — zero
+#       maintained snapshot. Includes pw-help.
+#
+#   pw-help.sh command    --name <name> [--project <slug>] [--full|--json|--maintainer]
 #       The how-to manual for one command: per-operator blocks (Use when / Does /
-#       Shape / doctrine labels / runnable example line) lifted from the command
+#       doctrine labels / runnable example line) lifted from the command
 #       file's own bullets + the entity's usage-header paragraphs, user-surface doc
 #       pointers, and the frontmatter summary; the default human view is command surface
 #       only, with --maintainer adding the entity-script sections (S1b facet-grouped
-#       operator sigs) and tooling/docs pointers. With <slug> the invocation slots
-#       show that slug. --full renders the entire command file (placeholders
+#       operator sigs) and tooling/docs pointers. With --project <slug> the invocation
+#       slots show that slug. --full renders the entire command file (placeholders
 #       substituted) for the rare reader that needs the doctrine verbatim.
 #
-#   pw-help.sh project    <slug> [<name>] [--json]
+#   pw-help.sh project    --project <slug> [--name <command>] [--json]
 #       Project-specific how-to: current phase (read via the state reader), the
 #       most-likely-next command lines filled with THIS project's real targets,
 #       the review/plan/task files found on disk with gate states and open-item
-#       counts, and (with <name>) one command's operators concretized against
-#       those targets. The state-rich report stays /pw-status - this view answers
+#       counts, and (with --name) one command's project-scope operators
+#       concretized against those targets (global forms go to a separate footer).
+#       The state-rich report stays /pw-status - this view answers
 #       "what do I run now, with what exact arguments".
 #
-#   pw-help.sh operators  <name> [<operator>]
+#   pw-help.sh operators  --name <name> [--operator <op>]
 #       Operator deep dive for the named command's entity/toolchain scripts
 #       (the view the `command` footnotes point at). The name slot resolves a
 #       command name, a bare name (pw- prefix added), or an entity/toolchain
 #       script basename — library scripts are never listable (they are
-#       source-only: L2). Without the operator slot: the verbatim
+#       source-only: L2). Without --operator: the verbatim
 #       usage-header dump (S1b facet lines included). With it: just that
 #       operator's usage-header paragraph,
 #       one occurrence per owning script, facet-labelled.
@@ -43,23 +51,23 @@
 #       gates live — rendered from $PW_VALID_PHASES + the phase map, so the
 #       command half can never drift.
 #
-#   pw-help.sh find       <term...> [--json]
+#   pw-help.sh find       --term <term…> [--json] [--maintainer]
 #       Bounded discovery grep across the caller-visible surfaces (tooling commands,
 #       entity + toolchain script usage headers, tooling docs + root docs) — never
-#       library sources, never corpus projects. The term(s) are ONE literal
-#       case-insensitive phrase (rest-of-line, A1); matches print surface-grouped
-#       file:line with a trimmed snippet, capped at 20 plus a how-to-narrow tail.
-#       Zero hits is a RESULT, not an error (exit 0). It is a pointer, not a reader:
-#       deep content is the command view, doctrine is the command file.
-#       Agents: --json returns [{surface,path,line,text}] — one cheap bounded call
-#       beats exploratory greps to locate a concept across the tooling surface set.
+#       library sources, never corpus projects. The term is ONE literal
+#       case-insensitive phrase (prose flag — runs until the next --flag); matches
+#       print surface-grouped file:line with a trimmed snippet, capped at 20 plus a
+#       how-to-narrow tail. Zero hits is a RESULT, not an error (exit 0). It is a
+#       pointer, not a reader: deep content is the command view, doctrine is the
+#       command file. Agents: --json returns [{surface,path,line,text}] — one cheap
+#       bounded call beats exploratory greps to locate a concept across the surface set.
 #
 #   pw-help.sh --selftest                  run the isolated harness case.
 #
 # Read-only by contract: sign-off state is read through the shared mdlib latest-row
 # readers (_signoff_latest_decision/_signoff_latest_actor, sourced from pw-mdlib.sh), and the
 # audited subprocess whitelist stays read-only (pw-status.sh phase; pw-review-read.sh count;
-# pw-config.sh project get). It never runs a setter and never writes — a
+# pw-config.sh get). It never runs a setter and never writes — a
 # command line it prints is example text, never executed.
 #
 # Exit codes: 0 success · 2 usage / unknown name (stderr carries a → fix:
@@ -90,6 +98,11 @@ die() { printf "%s\n" "pw-help: $*" | flowline 98 >&2; exit 2; }
 # --- the phase -> command map (embedded knowledge; the static.sh set-equality
 # canary pins its names against $CMDS, so a new command cannot stay invisible) ---
 HELP_PHASE_MAP="setup|pw-new pw-adopt pw-context pw-doctor;analysis|pw-research pw-analyze pw-review;breakdown|pw-breakdown pw-rfc;executing|pw-execute pw-verify pw-sync;ship|pw-ship;close|pw-close;anytime|pw-status pw-help pw-config"
+
+# --- the Global Operations order (the overview's first section). Every command whose
+# frontmatter scope is global|mixed MUST be listed here and every listed command MUST
+# carry global forms; render_overview validates both directions on every run. ---
+HELP_GLOBAL_ORDER="pw-help pw-doctor pw-config pw-status pw-research pw-verify"
 
 # --- shared helpers -------------------------------------------------------------
 sub() { sed -e "s|{{PW_HOME}}|$PW_HOME|g" -e "s|{{PW_PROJECTS}}|$PW_PROJECTS|g"; }
@@ -150,8 +163,10 @@ hdr_lines() {
 
 # ops_of <script> — operator names from "pw-<s>.sh <op>  <args>" usage-header signatures.
 # <op> may be a bare word or a --flag (machine-side forms like --all have no slug slot).
+# `--project` is the named project slot, never an operator: a default-flow header line
+# (`pw-status.sh --project <slug> …`) contributes no operator token.
 ops_of() {
-  hdr_lines "$1" | awk '/^  pw-[a-z0-9-]+\.sh +(--[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)([ ]|$)/{print $2}'
+  hdr_lines "$1" | awk '/^  pw-[a-z0-9-]+\.sh +(--[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)([ ]|$)/ && $2 != "--project" {print $2}'
 }
 
 # ops_detail <script> — memoized "op<TAB>sig<TAB>para<TAB>facet" rows in usage-header
@@ -180,7 +195,7 @@ ops_detail() {
         nf = split(fline, fa, /[ ]+/)
         for (fi = 1; fi <= nf; fi++) if (fa[fi] ~ /^(--)?[a-z][a-z0-9-]*$/ && !(fa[fi] in facs)) facs[fa[fi]] = facet
       }
-      /^  pw-[a-z0-9-]+\.sh +(--[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)([ ]|$)/ {
+      /^  pw-[a-z0-9-]+\.sh +(--[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)([ ]|$)/ && $2 != "--project" {
         tryflush()
         o = $2
         oc++; olist[oc] = o
@@ -335,10 +350,10 @@ cmd_use_clause() {
 
 selector_tokens() {
   printf '%s' "$1" | awk '{
-    s=$0; depth=0; in1=0; seg=""
+    s=$0; depth=0; in1=0; seg=""; brk=""
     for (i=1; i<=length(s); i++) { c=substr(s,i,1)
-      if (c=="[" || c=="<") { depth++; if (depth==1) { in1=1; continue } }
-      if (c=="]" || c==">") { if (depth==1) { if (in1 && index(seg,"|")>0) found = found seg "\n"; in1=0; seg="" }; if (depth>0) depth--; continue }
+      if (c=="[" || c=="<") { depth++; if (depth==1) { in1=1; brk=c; continue } }
+      if (c=="]" || c==">") { if (depth==1) { if (in1 && (index(seg,"|")>0 || (brk=="[" && seg ~ /^[a-z][a-z0-9-]*$/))) found = found seg "\n"; in1=0; seg="" }; if (depth>0) depth--; continue }
       if (in1 && depth==1) seg = seg c
     }
     if (found != "") { n=split(found, G, "\n"); for (k=1; k<=n; k++) { if (G[k]=="") continue; m=split(G[k], P, "|");
@@ -348,20 +363,15 @@ selector_tokens() {
 
 
 
-# has_shape <cmd> <tok> — token appears in a real invocation span: the slash form
-# `/pw-<cmd> <slug> <tok>` or a "literally `<tok>`" operator definition sentence.
-# Script-form lines are NOT surface proof — C3 mapping bodies name internal steps.
-# A --flag operator is a MACHINE-form op: its real shape is the no-slug
-# `/pw-<cmd> <tok>` line (there is no <project-slug> slot to require).
+# has_shape <cmd> <tok> — token appears as the FIRST word after the command name in a real
+# invocation span (`/pw-<cmd> <tok> …` — operator words come first in the named-argument
+# grammar; the project is a --project flag, never a positional), or in a "literally `<tok>`"
+# operator definition sentence. Script-form lines are NOT surface proof — C3 mapping bodies
+# name internal steps.
 has_shape() {
   local f="$CMDS/$1.md"
-  case "$2" in
-    --*) grep -qF -e "/$1 $2 " -e "/$1 $2$BT" -e "/$1 $2$TF" "$f"; return $? ;;
-  esac
-  # one grep, same OR-of-literals semantics as the old seven grep -qF calls
-  grep -qF -e "/$1 <slug> $2 " -e "/$1 <project-slug> $2 " \
-    -e "/$1 <slug> $2$BT" -e "/$1 <project-slug> $2$BT" \
-    -e "literally $TF$2$TF" -e "literally $BT$2$BT" -e "literally \"$2\"" "$f"
+  grep -qE "/$1 $2([ ]|$BT|$TF|,|\.|\)|\$)" "$f" \
+    || grep -qF -e "literally $TF$2$TF" -e "literally $BT$2$BT" -e "literally \"$2\"" "$f"
 }
 
 # user_prose — scrub maintainer-domain terms from prose that reaches the DEFAULT
@@ -459,30 +469,31 @@ flowline() {
 }
 
 
-# cmd_shape_line <cmd> <tok> — the user-typed invocation args: token through the
-# span-closing backtick/quote of the first command-form shape, else empty.
-# A --flag token uses the no-slug machine form `/pw-<cmd> <tok> …`.
+# cmd_shape_line <cmd> <tok> — the user-typed invocation args: the token as the first word
+# after the command name, through the span-closing backtick/quote of the first matching
+# shape line (`/pw-<cmd> <tok> --project <project-slug> …`), else empty. The first
+# boundary-valid occurrence in the file wins (same first-match discipline as before).
 cmd_shape_line() {
-  local ln m
-  case "$2" in
-    --*)
-      ln="$(grep -m1 -n -E "/$1[ ]+$2([ ]|$TF|$BT|\$)" "$CMDS/$1.md" 2>/dev/null | cut -d: -f1 || true)"
-      [ -n "$ln" ] || return 0
-      m="$(awk -v ln="$ln" -v cmd="$1" 'NR==ln {
-            if (match($0, cmd" ")) { print substr($0, RSTART+RLENGTH); exit }
-          }' "$CMDS/$1.md")"
-      ;;
-    *)
-      ln="$(grep -m1 -n -E "/$1[ ]+(<project-slug>|<slug>)[ ]$2([ ]|$TF|$BT|[^A-Za-z0-9-])" "$CMDS/$1.md" 2>/dev/null | cut -d: -f1 || true)"
-      [ -n "$ln" ] || return 0
-      m="$(awk -v ln="$ln" -v cmd="$1" 'NR==ln {
-            if (match($0, cmd" (<project-slug>|<slug>) ")) { print substr($0, RSTART+RLENGTH); exit }
-            if (match($0, cmd" <slug> ")) { print substr($0, RSTART+RLENGTH); exit }
-          }' "$CMDS/$1.md")"   # awk already exits after the one printed line; a trailing `head -1` could SIGPIPE under load
-      ;;
-  esac
-  m="${m%%"$TF"*}"; m="${m%%"$BT"*}"; m="${m%"${m##*[! ]}"}"   # cut to first quote/backtick, trim trailing spaces
-  printf '%s' "$m"
+  local cmd="$1" tok="$2"
+  awk -v cmd="$cmd" -v tok="$tok" -v sq="'" -v bt='`' '
+    { key = "/" cmd " " tok; from = 1; pos = 0
+      while (1) {
+        p = index(substr($0, from), key)
+        if (p == 0) break
+        pos = from + p - 1
+        c = substr($0, pos + length(key), 1)
+        if (c == "" || c == " " || c == bt || c == sq || c == "," || c == ")" || c == ".") break
+        from = pos + 1; pos = 0
+      }
+      if (pos == 0) next
+      rest = substr($0, pos + length(key))
+      sub(/^ +/, "", rest)
+      i = index(rest, bt); if (i > 0) rest = substr(rest, 1, i - 1)
+      j = index(rest, sq); if (j > 0) rest = substr(rest, 1, j - 1)
+      sub(/ +$/, "", rest)
+      if (rest == "") print tok; else print tok " " rest
+      exit
+    }' "$CMDS/$cmd.md" 2>/dev/null || true
   return 0
 }
 
@@ -515,7 +526,7 @@ token_use_clause() {
 # operator invoked from the token\'s bullet block (<=9 lines under the shape).
 r2_alias() {
   local cmd="$1" tok="$2" ln win pair script op sp
-  ln="$(grep -m1 -n -E "/$cmd[ ]+(<project-slug>|<slug>)[ ]$tok([ ]|$TF|$BT|[^A-Za-z0-9-])" "$CMDS/$cmd.md" 2>/dev/null | cut -d: -f1 || true)"
+  ln="$(grep -m1 -n -E "^[[:space:]]*-[[:space:]]+\*\*[\`]?/$cmd ${tok}([ ]|\`|\*|$)" "$CMDS/$cmd.md" 2>/dev/null | cut -d: -f1 || true)"
   [ -n "$ln" ] || return 1
   win="$(sed -n "${ln},$((ln+9))p" "$CMDS/$cmd.md")"
   while IFS= read -r pair; do
@@ -626,7 +637,7 @@ ops_surfaced() {
       use="$(gist "$par")"
       [ -n "$use" ] || use="$(cmd_use_clause "$cmd" "$op")"
       [ -n "$use" ] || use="$(token_use_clause "$cmd" "$op" 2>/dev/null || true)"
-      printf '%s\t%s\t%s\t%s\t%s\n' "$op" "$args" "$(printf '%s' "${use:-see: /pw-help operators $cmd}" | user_prose)" "$fac" "${script}"
+      printf '%s\t%s\t%s\t%s\t%s\n' "$op" "$args" "$(printf '%s' "${use:-see: /pw-help operators --name $cmd}" | user_prose)" "$fac" "${script}"
     done
   done
   # R2: frontmatter selector sugar ops (ai/config/item...) not already listed.
@@ -654,19 +665,70 @@ ops_surfaced() {
         [ -n "$use" ] || use="$(gist "$(para_of "$sp" "$aop")")"
       fi
     fi
-    printf '%s\t%s\t%s\t%s\t%s\n' "$tok" "$args" "$(printf '%s' "${use:-see: /pw-help operators $cmd}" | user_prose)" "$fac" "${ascript:-$cmd.sh}"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$tok" "$args" "$(printf '%s' "${use:-see: /pw-help operators --name $cmd}" | user_prose)" "$fac" "${ascript:-$cmd.sh}"
   done
   return 0
 }
 
-# has_default <cmd> — the command file carries the no-operator flow: an invocation whose
-# slug slot is followed by an optional-arg bracket or closes the span — never by an op word.
+# --- scope map (declared metadata — NEVER inferred from shapes or prose) --------------------
+# Every canonical command declares `scope: global|project|mixed` in its frontmatter.
+# global  — needs no existing workflow project (install checks, discovery, standalone work).
+# project — selects the project with `--project <project-slug>` (creation included).
+# mixed   — carries BOTH kinds of form and must classify each one in
+#           `scope-forms: "tok=project, tok=global, …"` where tok is a surfaced operator
+#           token, a selector flag (`--all`, `--question`, `--project`), or `default`
+#           (the no-operator flow). An unclassified or unknown form is a documentation
+#           defect and fails loudly — same discipline as the phase-map canary.
+scope_of() {
+  local cmd="$1" tok="$2" sc forms v
+  sc="$(fmof "$CMDS/$cmd.md" scope)"
+  case "$sc" in
+    global|project) printf '%s' "$sc"; return 0 ;;
+    mixed) ;;
+    *) die "BUG: commands/$cmd.md scope must be global|project|mixed (got: '${sc:-missing}') → fix: add the scope: line in the same commit as the command" ;;
+  esac
+  forms="$(fmof "$CMDS/$cmd.md" scope-forms)"
+  [ -n "$forms" ] || die "BUG: mixed command $cmd carries no scope-forms map → fix: scope-forms: \"tok=project, other=global\" in commands/$cmd.md"
+  v="$(printf '%s' "$forms" | tr ',' '\n' | awk -F= -v k="$tok" '
+    { key=$1; sub(/^[ \t]+/,"",key); sub(/[ \t]+$/,"",key)
+      if (key==k) { val=$2; sub(/^[ \t]+/,"",val); sub(/[ \t]+$/,"",val); print val; exit } }')"
+  case "$v" in
+    global|project) printf '%s' "$v" ;;
+    *) die "BUG: scope-forms of $cmd does not classify '$tok' → fix: add ${tok}=<global|project> to commands/$cmd.md" ;;
+  esac
+}
+
+# scope_args <cmd> <global|project> — display args for one scope section. Mixed commands
+# carry args-global/args-project; a single-scope command uses its one args line.
+scope_args() {
+  local cmd="$1" sec="$2" v
+  v="$(fmof "$CMDS/$cmd.md" "args-$sec")"
+  [ -n "$v" ] || v="$(fmof "$CMDS/$cmd.md" args)"
+  printf '%s' "$v"
+}
+
+# has_scope_form <cmd> <global|project> — the command exposes at least one form of that scope.
+has_scope_form() {
+  local cmd="$1" sec="$2" sc
+  sc="$(fmof "$CMDS/$cmd.md" scope)"
+  case "$sc" in
+    "$sec") return 0 ;;
+    mixed) printf '%s' "$(fmof "$CMDS/$cmd.md" scope-forms)" | grep -q "=$sec" ; return $? ;;
+  esac
+  return 1
+}
+
+# has_default <cmd> — the command file carries the no-operator flow for its declared
+# default scope: an invocation `/pw-<cmd> --project (<project-slug>|<slug>)` whose span
+# opens an optional-arg bracket or closes right after (quote/backtick/comma/period), or
+# the C1 exception (bare `/pw-help` → overview).
 has_default() {
   local f="$CMDS/$1.md"
-  grep -qE "/$1[ ]+<project-slug>[ ]*(\[|,|\.)" "$f" && return 0
-  grep -qE "/$1[ ]+<slug>[ ]*(\[|,|\.)" "$f" && return 0
-  grep -qF "/$1 <slug>$BT" "$f" && return 0
-  grep -qF "/$1 <project-slug>$BT" "$f" && return 0
+  if [ "$1" = pw-help ]; then
+    grep -qF "/pw-help$BT" "$f" && return 0
+    grep -qF "/pw-help$TF" "$f" && return 0
+  fi
+  grep -qE "/$1 --project (<project-slug>|<slug>)[ ]*([,\"'\`]|\$|\[)" "$f" && return 0
   return 1
 }
 
@@ -697,30 +759,74 @@ stamp() {
 
 
 # --- overview ------------------------------------------------------------------------
-# Shape: bucket headers; per command a head line ("/pw-<cmd> <args>", use = frontmatter
+# Shape: two top-level scope groups — Global Operations (no existing workflow project
+# required) and Project Operations (explicitly select --project <project-slug>, with
+# creation/attachment labeled separately, then the phase buckets). A mixed command
+# splits across the groups by its DECLARED scope-forms; each block shows only that
+# scope's forms. Per command: a head line ("/pw-<cmd> <args>", use = frontmatter
 # description sentence; op slot "(default)" when it has a default flow AND exposed ops),
 # then one continuation line per surfaced operator with facet labels (S1b).
-render_overview() {
-  local json=0; [ "${1:-}" = "--json" ] && json=1
-  local saveIFS="$IFS" ofirst=1
-  local entry bucket cmd file desc args ops_lines op bargs buse bfac dflt fmfacs
-  if [ "$json" = 1 ]; then printf '[\n'; else
-    echo
-    echo "  pw-* commands + operators - how-to per operator: /pw-help command <name>"
-    echo "  ----------------------------------------------------------------------------"
+
+# ov_cmd_block <cmd> <global|project> — one overview command block for one scope section.
+ov_cmd_block() {
+  local cmd="$1" sec="$2" file desc args ops_lines dflt dsc sc op bargs buse bfac bscript
+  file="$CMDS/$cmd.md"
+  [ -f "$file" ] || die "BUG: $cmd is missing $file → fix: keep the overview groups and the commands dir in sync"
+  sc="$(fmof "$file" scope)"
+  desc="$(fmof "$file" description)"; args="$(scope_args "$cmd" "$sec")"
+  ops_lines="$(ops_surfaced "$cmd")"
+  dflt=""
+  if [ -n "$ops_lines" ] && has_default "$cmd"; then
+    dsc="$sc"
+    if [ "$sc" = mixed ]; then
+      case "$(fmof "$file" scope-forms)" in *default=*) dsc="$(scope_of "$cmd" default)" ;; *) dsc="" ;; esac
+    fi
+    [ -n "$dsc" ] && [ "$dsc" = "$sec" ] && dflt="(default)"
   fi
-  IFS=';'
-  for entry in $HELP_PHASE_MAP; do
-    IFS="$saveIFS"
-    bucket="${entry%%|*}"
-    [ "$json" = 1 ] || echo "  $bucket"
-    for cmd in ${entry#*|}; do
-      file="$CMDS/$cmd.md"
-      [ -f "$file" ] || die "BUG: the phase map names $cmd but $CMDS/$cmd.md is missing → fix: update HELP_PHASE_MAP in this script in the same commit as the command"
-      desc="$(fmof "$file" description)"; args="$(fmof "$file" args)"
-      ops_lines="$(ops_surfaced "$cmd")"
-        jop=""; jonsep=""
-      if [ "$json" = 1 ]; then
+  ov_emit "/pw-${cmd#pw-}" "$dflt" "$args" "$(gist "$desc")"
+  while IFS="$TABS" read -r op bargs buse bfac bscript; do
+    [ -n "$op" ] || continue
+    if [ "$sc" = mixed ]; then
+      [ "$(scope_of "$cmd" "$op")" = "$sec" ] || continue
+    elif [ "$sc" != "$sec" ]; then continue; fi
+    ov_emit "" "$bfac" "$bargs" "$buse"
+  done <<EOPS
+$ops_lines
+EOPS
+  return 0
+}
+
+render_overview() {
+  local json=0 a
+  for a in "$@"; do
+    case "$a" in
+      --json) json=1 ;;
+      *) die "overview: unknown option: $a → fix: /pw-help overview [--json]" ;;
+    esac
+  done
+  local saveIFS="$IFS" ofirst=1
+  local entry bucket cmd file desc args ops_lines op bargs buse bfac bscript dflt fmfacs sc jop jonsep
+  # scope-declaration canary (both directions) — a new command or a stale group entry
+  # fails loudly, same discipline as the phase-map set-equality canary.
+  for cmd in $(cd "$CMDS" && ls *.md | sed 's/\.md$//'); do
+    sc="$(fmof "$CMDS/$cmd.md" scope)"
+    case "$sc" in
+      global|mixed) case " $HELP_GLOBAL_ORDER " in *" $cmd "*) ;; *) die "BUG: $cmd declares scope $sc but is not in HELP_GLOBAL_ORDER → fix: add it in this script" ;; esac ;;
+      project) case " $HELP_GLOBAL_ORDER " in *" $cmd "*) die "BUG: HELP_GLOBAL_ORDER names $cmd but it declares scope: project → fix: remove it in this script" ;; esac ;;
+      *) die "BUG: commands/$cmd.md scope must be global|project|mixed (got '${sc:-missing}') → fix: add the scope: line in the same commit as the command" ;;
+    esac
+  done
+  if [ "$json" = 1 ]; then
+    printf '[\n'
+    IFS=';'
+    for entry in $HELP_PHASE_MAP; do
+      IFS="$saveIFS"
+      bucket="${entry%%|*}"
+      for cmd in ${entry#*|}; do
+        file="$CMDS/$cmd.md"
+        [ -f "$file" ] || die "BUG: the phase map names $cmd but $CMDS/$cmd.md is missing → fix: update HELP_PHASE_MAP in this script in the same commit as the command"
+        desc="$(fmof "$file" description)"; args="$(fmof "$file" args)"
+        ops_lines="$(ops_surfaced "$cmd")"
         [ "$ofirst" = 1 ] || printf ',\n'; ofirst=0
         fmfacs=""
         if [ -f "$TOOL/scripts/entities/$cmd.sh" ]; then
@@ -738,32 +844,51 @@ render_overview() {
           jfs="$(printf '%s\n' "$fmfacs" | awk -F'\t' '$1=="special"{out=out sep "\"" $2 "\""; sep=", "} END{printf "%s", out}')"
           jfa="$(printf '{"write":[%s],"read":[%s],"special":[%s]}' "$jfw" "$jfr" "$jfs")"
         fi
-        jop=""
+        jop=""; jonsep=""
         while IFS="$TABS" read -r jon jon2 jou jou2 jon5; do
           [ -n "$jon" ] || continue
-          jop="$jop$jonsep{\"name\":\"$(jstr "$jon")\",\"use\":\"$(jstr "$jou")\",\"facet\":\"$(jstr "$jou2")\"}"
+          jop="$jop$jonsep{\"name\":\"$(jstr "$jon")\",\"scope\":\"$(scope_of "$cmd" "$jon")\",\"use\":\"$(jstr "$jou")\",\"facet\":\"$(jstr "$jou2")\"}"
           jonsep=", "
         done <<EOPS
 $ops_lines
 EOPS
 
-        printf '  {"cmd":"%s","args":"%s","summary":"%s","agent":%s,"scripts":[%s],"facets":%s,"phase":"%s","ops":[%s]}' \
-          "$jc" "$ja" "$jd" "$jag" "$jsc" "$jfa" "$(jstr "$bucket")" "$jop"
-        continue
-      fi
-      if [ -n "$ops_lines" ] && has_default "$cmd"; then dflt="(default)"; else dflt=""; fi
-      ov_emit "/pw-${cmd#pw-}" "$dflt" "$args" "$(gist "$desc")"
-      while IFS="$TABS" read -r op bargs buse bfac bscript; do
-        [ -n "$op" ] || continue
-        ov_emit "" "$bfac" "$bargs" "$buse"
-        done <<EOPS
-$ops_lines
-EOPS
+        printf '  {"cmd":"%s","args":"%s","summary":"%s","scope":"%s","agent":%s,"scripts":[%s],"facets":%s,"phase":"%s","ops":[%s]}' \
+          "$jc" "$ja" "$jd" "$(fmof "$file" scope)" "$jag" "$jsc" "$jfa" "$(jstr "$bucket")" "$jop"
+      done
+      IFS=';'
     done
+    IFS="$saveIFS"
+    printf '\n]\n'
+    return 0
+  fi
+  echo
+  echo "  pw-* commands + operators - how-to per operator: /pw-help command --name <name>"
+  echo "  ----------------------------------------------------------------------------"
+  printf '  Global Operations - no existing workflow project required\n'
+  for cmd in $HELP_GLOBAL_ORDER; do ov_cmd_block "$cmd" global; done
+  echo
+  printf '  Project Operations - explicitly select --project <project-slug>\n'
+  printf '  Create or Attach - an existing scaffold is not required\n'
+  ov_cmd_block pw-new project
+  ov_cmd_block pw-adopt project
+  IFS=';'
+  for entry in $HELP_PHASE_MAP; do
+    IFS="$saveIFS"
+    bucket="${entry%%|*}"
+    hits=""
+    for cmd in ${entry#*|}; do
+      case " pw-new pw-adopt " in *" $cmd "*) continue ;; esac
+      has_scope_form "$cmd" project || continue
+      hits="$hits $cmd"
+    done
+    [ -n "$hits" ] || continue
+    echo "  $bucket"
+    for cmd in $hits; do ov_cmd_block "$cmd" project; done
     IFS=';'
   done
   IFS="$saveIFS"
-  if [ "$json" = 1 ]; then printf '\n]\n'; else stamp; fi
+  stamp
 }
 
 # --- command how-to --------------------------------------------------------------------
@@ -772,31 +897,45 @@ EOPS
 # the human-facing prose is lifted verbatim, never re-written.
 cmd_block() {
   local cmd="$1" tok="$2" ln
-  ln="$(grep -m1 -n -E "^[[:space:]]*-[[:space:]]+\*\*\`/$cmd([ ][^\`]*)?[ ]$tok([ ]|$|[^A-Za-z0-9-])|^[[:space:]]*\*\*If the 2nd argument is literally [$TF$BT]$tok[$TF$BT]" "$CMDS/$cmd.md" 2>/dev/null | cut -d: -f1 || true)"
+  ln="$(grep -m1 -n -E "^[[:space:]]*-[[:space:]]+\*\*[\`]?/$cmd ${tok}([ ]|\`|\*|$)|^[[:space:]]*\*\*If the (1st|2nd) (word|argument) is literally [$TF$BT]${tok}[$TF$BT]" "$CMDS/$cmd.md" 2>/dev/null | cut -d: -f1 || true)"
   [ -n "$ln" ] || return 0
   awk -v from="$ln" 'NR<from{next} NR>from && (/^- \*\*/ || /^## / || /^[0-9]+\. \*\*/){exit} NR>=from{print}' "$CMDS/$cmd.md"
 }
 
 strip_md() { sed -e 's/\*\*//g' -e 's/\*//g' -e 's/`//g' -e 's/^[ >-]\{1,3\}//' -e 's/^[[:space:]]*//'; }
 
+# scope_tokens <cmd> <global|project> — comma-joined form tokens of that scope from the
+# scope-forms map (display only; scope_of stays the single classification authority).
+scope_tokens() {
+  printf '%s' "$(fmof "$CMDS/$1.md" scope-forms)" | tr ',' '\n' | awk -F= -v s="$2" '
+    { k=$1; sub(/^[ \t]+/,"",k); sub(/[ \t]+$/,"",k); v=$2; sub(/^[ \t]+/,"",v); sub(/[ \t]+$/,"",v)
+      if (v==s && k!="") { out=out sep k; sep=", " } } END { printf "%s", out }'
+}
+
 render_command() {
-  [ $# -ge 1 ] || die "usage: command <name> [<slug>] [--full|--json|--maintainer] → fix: bare /pw-help lists every command"
-  local name slug="" flags="" a full=0 json=0 mant=0
-  name="$1"; shift
-  for a in "$@"; do
+  local name="" slug="" a full=0 json=0 mant=0
+  while [ $# -gt 0 ]; do
+    a="$1"; shift
     case "$a" in
+      --name) [ $# -ge 1 ] || die "command: --name needs a value → fix: /pw-help command --name <name> [--project <slug>]"; name="$1"; shift ;;
+      --name=*) name="${a#*=}" ;;
+      --project) [ $# -ge 1 ] || die "command: --project needs a value → fix: /pw-help command --name <name> [--project <slug>]"; slug="$1"; shift ;;
+      --project=*) slug="${a#*=}" ;;
       --full) full=1 ;;
       --json) json=1 ;;
       --maintainer) mant=1 ;;
-      -*) flags="$flags $a" ;;
-      *) [ -n "$name" ] && slug="$a" || name="$a" ;;
+      -*) die "command: unknown option: $a → fix: /pw-help command --name <name> [--project <slug>] [--full|--json|--maintainer]" ;;
+      *) _pw_positional "$a" "operator words first, values named → /pw-help command --name <name> [--project <slug>]" ;;
     esac
   done
+  [ -n "$name" ] || die "command: --name is required → fix: /pw-help command --name <name> [--project <slug>]"
   local c; c="$(canon "$name")"
   local file="$CMDS/$c.md"
   [ -f "$file" ] || die "no such command: $(canon "$name") → fix: $(did_you_mean "$c")"
-  local desc args agn
+  local desc args agn sc
   desc="$(fmof "$file" description)"; args="$(fmof "$file" args)"; agn="$(fmof "$file" agent)"
+  sc="$(fmof "$file" scope)"
+  case "$sc" in global|project|mixed) ;; *) die "BUG: commands/$c.md scope must be global|project|mixed (got '${sc:-missing}') → fix: add the scope: line" ;; esac
 
   if [ "$full" = 1 ]; then
     awk 'c==2{print} $0=="---"{c++}' "$file" | sub
@@ -808,60 +947,85 @@ render_command() {
     local o_name o_args o_use o_fac o_scr bloc jops="" sep=""
     while IFS="$TABS" read -r o_name o_args o_use o_fac o_scr; do
       [ -n "$o_name" ] || continue
-      jops="$jops$sep{\"name\":\"$(jstr "$o_name")\",\"args\":\"$(jstr "$o_args")\",\"use\":\"$(jstr "$o_use")\",\"facet\":\"$(jstr "$o_fac")\"}"
+      jops="$jops$sep{\"name\":\"$(jstr "$o_name")\",\"scope\":\"$(scope_of "$c" "$o_name")\",\"args\":\"$(jstr "$o_args")\",\"use\":\"$(jstr "$o_use")\",\"facet\":\"$(jstr "$o_fac")\"}"
       sep=", "
     done <<E
 $ops_lines
 E
-    printf '{"cmd":"%s","args":"%s","summary":"%s","agent":%s,"ops":[%s],"scripts":[%s]}
+    printf '{"cmd":"%s","args":"%s","summary":"%s","scope":"%s","agent":%s,"ops":[%s],"scripts":[%s]}
 ' \
-      "$(jstr "$c")" "$(jstr "$args")" "$(jstr "$desc")" \
+      "$(jstr "$c")" "$(jstr "$args")" "$(jstr "$desc")" "$(jstr "$sc")" \
       "$( [ -n "$agn" ] && printf '"%s"' "$(jstr "$agn")" || printf 'null' )" \
       "$jops" "$(scripts_of "$c" | sed 's/.*/"&"/' | paste -sd, - )"
     return 0
   fi
 
+  local sl="${slug:-<project-slug>}"
   { printf '/pw-%s - %s\n' "${c#pw-}" "$desc"; } | flowline 98
   { printf 'args: %s\n' "$args"; } | flowline 98
   [ -n "$agn" ] && { printf 'agent lane: %s\n' "$agn"; } | flowline 98
   [ -n "$slug" ] && { printf 'project: %s\n' "$slug"; } | flowline 98
+  if [ "$sc" = mixed ]; then
+    { printf 'scope: mixed (global forms: %s | project forms: %s)\n' "$(scope_tokens "$c" global)" "$(scope_tokens "$c" project)"; } | flowline 98
+  else
+    { printf 'scope: %s\n' "$sc"; } | flowline 98
+  fi
   echo
-  # (default) flow line — args with the operator-selector group removed, slug-filled.
+  # (default) flow line — the no-operator invocation with the project substituted. On a
+  # mixed command it renders INSIDE its declared scope group (never floating between the
+  # two); on a single-scope command it prints before the operator list.
+  local mixed=0; [ "$sc" = mixed ] && mixed=1
+  local default_line="" dflt_use="" dsc=""
   if has_default "$c"; then
-    local dargs
-    dargs="$(printf '%s' "$args" | sed -E -e 's/<[^<>]*\|[^<>]*>//g' -e 's/\[[^][]*\|[^][]*\]//g' -e 's/^([ ]*<project-slug>[ ]*|[ ]*<slug>[ ]*)//' -e 's/  +/ /g' -e 's/[ ;.]+$//')"
-    printf '  (default)  /pw-%s %s %s\n' "${c#pw-}" "${slug:-<project-slug>}" "$dargs" | flowline 98
-    printf '    Use:     the no-operator default flow - see the args line above\n'
+    dsc="$sc"
+    if [ "$sc" = mixed ]; then
+      case "$(fmof "$file" scope-forms)" in *default=*) dsc="$(scope_of "$c" default)" ;; *) dsc="" ;; esac
+    fi
+    if [ "$c" = pw-help ]; then
+      default_line="  (default)  /pw-help"
+    elif [ -n "$dsc" ]; then
+      default_line="$(printf '  (default)  /pw-%s --project %s' "${c#pw-}" "$sl")"
+    fi
+    [ -n "$default_line" ] && dflt_use="    Use:     the no-operator default flow - see the args line above"
+  fi
+  local default_done=0
+  if [ -n "$default_line" ] && [ "$mixed" = 0 ]; then
+    printf '%s\n' "$default_line" | flowline 98
+    printf '%s\n' "$dflt_use"
+    default_done=1
   fi
   local bname bargs buse bfac bscript sp2 par usep
-  # Scope boundary (owner 09-24): on a slug-leading command, an operator whose own
-  # bullet invokes the command WITHOUT the slug (e.g. /pw-config global show) is a
-  # machine-wide operator. Group the blocks under explicit headers and drop the
-  # slug from the example line, so the per-project vs global split is rendered,
-  # never inferred from a flat same-tier list.
-  local op_scope="" osc sname sline nproj=0 nmach=0 mixed="" prev_sc="" bsc
-  case "$args" in '<project-slug>'*|'<slug>'*)
-    while IFS="$TABS" read -r sname _sa _su _sf _ss; do
-      [ -n "$sname" ] || continue
-      sline="$(cmd_block "$c" "$sname" | sed -n '1p' || true)"
-      osc=project
-      if [ -n "$sline" ] && printf '%s' "$sline" | grep -qF "/$c" \
-         && ! printf '%s' "$sline" | grep -q 'slug>'; then osc=machine; fi
-      op_scope="$op_scope$sname$TABS$osc"$'\n'
-      if [ "$osc" = machine ]; then nmach=$((nmach+1)); else nproj=$((nproj+1)); fi
-    done <<E
+  # Scope split (plan 42): the command's DECLARED scope-forms classify every operator;
+  # mixed commands render both groups under the same two labels the overview uses —
+  # never a flat same-tier list, never shape inference. Global forms group first,
+  # mirroring the overview's section order.
+  local mixed_gl="" mixed_pj="" _l _n2
+  if [ "$mixed" = 1 ]; then
+    while IFS= read -r _l; do
+      [ -n "$_l" ] || continue
+      _n2="${_l%%"$TABS"*}"
+      if [ "$(scope_of "$c" "$_n2")" = global ]; then mixed_gl="$mixed_gl$_l
+"; else mixed_pj="$mixed_pj$_l
+"; fi
+    done <<EOSPLIT
 $ops_lines
-E
-  ;; esac
-  [ "$nmach" -gt 0 ] && [ "$nproj" -gt 0 ] && mixed=1
+EOSPLIT
+    ops_lines="${mixed_gl}${mixed_pj}"
+  fi
+  local prev_sc="" bsc
   while IFS="$TABS" read -r bname bargs buse bfac bscript; do
     [ -n "$bname" ] || continue
-    bsc="$(printf '%s\n' "$op_scope" | awk -F'\t' -v n="$bname" '$1==n{print $2; exit}' || true)"
-    if [ -n "$mixed" ] && [ -n "$bsc" ] && [ "$bsc" != "$prev_sc" ]; then
-      if [ "$bsc" = machine ]; then
-        printf '\n  global operators - typed WITHOUT a <project-slug> (machine floors & validators):\n'
+    bsc="$(scope_of "$c" "$bname")"
+    if [ "$mixed" = 1 ] && [ -n "$bsc" ] && [ "$bsc" != "$prev_sc" ]; then
+      if [ "$bsc" = global ]; then
+        printf '\n  Global Operations - no existing workflow project required:\n'
       else
-        printf '\n  per-project operators - typed as /pw-%s <project-slug> ...:\n' "${c#pw-}"
+        printf '\n  Project Operations - select --project <project-slug>:\n'
+      fi
+      if [ "$default_done" = 0 ] && [ -n "$default_line" ] && [ "$bsc" = "$dsc" ]; then
+        printf '%s\n' "$default_line" | flowline 98
+        printf '%s\n' "$dflt_use"
+        default_done=1
       fi
       prev_sc="$bsc"
     fi
@@ -885,25 +1049,55 @@ E
     printf '%s\n' "$buse" | user_prose | ov_wrap "    Does:   " "             + "
     printf '%s\n' "$bloc" | awk '/DOCTRINE|HUMAN-TRIGGERED ONLY/{print "    " $0}' | head -2 | flowline 98 || true
     { printf '%s\n' "$bloc" | grep -oE 'A[12] [a-zA-Z][^`)”]*' | head -1 | sed 's/^/    Shape:  /' | flowline 98; } || true
-    # the runnable example: /pw-help is the C1 exception — its subject is the bundle,
-    # so no <project-slug> slot; every other command leads with the slug.
+    # the runnable example: operator words first, args already carry the named grammar —
+    # substitute the real project when one was given on the command line.
     local ex
-    if [ "$c" = pw-help ]; then ex="/pw-help $bargs"
-    elif [ "$bsc" = machine ]; then ex="/pw-${c#pw-} $bargs"
-    else ex="/pw-${c#pw-} ${slug:-<project-slug>} $bargs"
-    fi
+    ex="/pw-${c#pw-} $bargs"
+    ex="${ex//<project-slug>/$sl}"
+    ex="${ex//<slug>/$sl}"
     printf '    $ %s\n' "$ex" | sed -e 's/[ ]*$//' | flowline 98
   done <<E
 $ops_lines
 E
-  [ -n "$ops_lines" ] || printf '  (single flow - no operator dispatch on this command)\n'
+  # a mixed command's declared default scope may have no surfaced operator to open its
+  # group — render that group + the default line so the default form is never invisible.
+  if [ -n "$default_line" ] && [ "$default_done" = 0 ]; then
+    if [ "$mixed" = 1 ]; then
+      if [ "$dsc" = global ]; then
+        printf '\n  Global Operations - no existing workflow project required:\n'
+      else
+        printf '\n  Project Operations - select --project <project-slug>:\n'
+      fi
+    fi
+    printf '%s\n' "$default_line" | flowline 98
+    printf '%s\n' "$dflt_use"
+  fi
+  if [ -n "$ops_lines" ]; then
+    :
+  elif [ "$mixed" = 1 ]; then
+    # flag-selector mixed commands (pw-doctor, pw-research): the FORMS are the args lines,
+    # so render one runnable example per declared scope section.
+    local fargs
+    if has_scope_form "$c" global; then
+      printf '\n  Global Operations - no existing workflow project required:\n'
+      fargs="$(scope_args "$c" global)"; fargs="${fargs//<project-slug>/$sl}"; fargs="${fargs//<slug>/$sl}"
+      printf '    $ /pw-%s %s\n' "${c#pw-}" "$fargs" | flowline 98
+    fi
+    if has_scope_form "$c" project; then
+      printf '\n  Project Operations - select --project <project-slug>:\n'
+      fargs="$(scope_args "$c" project)"; fargs="${fargs//<project-slug>/$sl}"; fargs="${fargs//<slug>/$sl}"
+      printf '    $ /pw-%s %s\n' "${c#pw-}" "$fargs" | flowline 98
+    fi
+  else
+    printf '  (single flow - no operator dispatch on this command)\n'
+  fi
   echo
   local script sp nops
   if [ "$mant" = 1 ]; then
   for script in $(own_first "$c" $(scripts_of "$c")); do
     sp="$(script_path "$script" 2>/dev/null || true)"; [ -n "$sp" ] || continue
     nops="$(ops_of "$sp" | wc -l | tr -d ' ')"
-    printf 'entity script: %s (%s operators - read all: /pw-help operators %s)\n' "${sp#$PW_HOME/}" "$nops" "${script%.sh}" | flowline 98
+    printf 'entity script: %s (%s operators - read all: /pw-help operators --name %s)\n' "${sp#$PW_HOME/}" "$nops" "${script%.sh}" | flowline 98
     while IFS= read -r o; do
       [ -n "$o" ] || continue
       f="$(facet_of "$sp" "$o")"
@@ -913,7 +1107,7 @@ $(ops_of "$sp")
 EO
   done
   fi
-  [ "$mant" = 1 ] || { printf '  (user view - detail: command %s --maintainer, or operators %s)\n' "$c" "$c" | flowline 98; }
+  [ "$mant" = 1 ] || { printf '  (user view - detail: command --name %s --maintainer, or operators --name %s)\n' "$c" "$c" | flowline 98; }
   local dpaths dpl
   dpaths="$(grep -oE '(tooling/)?docs/[A-Za-z0-9._/-]+\.md' "$file" | sort -u || true)"
   while IFS= read -r dpl; do
@@ -939,8 +1133,20 @@ EDOC
 
 # --- operators (deep dump) --------------------------------------------------------------
 render_operators() {
-  [ $# -ge 1 ] || die "usage: operators <name> [<operator>] → fix: bare /pw-help lists every command"
-  local name="$1" op="${2:-}" c sp scripts="" s found="" facet
+  local name="" op="" a c sp scripts="" s found="" facet
+  while [ $# -gt 0 ]; do
+    a="$1"; shift
+    case "$a" in
+      --name) [ $# -ge 1 ] || die "operators: --name needs a value → fix: /pw-help operators --name <name> [--operator <op>]"; name="$1"; shift ;;
+      --name=*) name="${a#*=}" ;;
+      --operator) [ $# -ge 1 ] || die "operators: --operator needs a value → fix: /pw-help operators --name <name> [--operator <op>]"; op="$1"; shift ;;
+      --operator=*) op="${a#*=}" ;;
+      -h|--help) usage; exit 0 ;;
+      -*) die "operators: unknown option: $a → fix: /pw-help operators --name <name> [--operator <op>]" ;;
+      *) _pw_positional "$a" "operator words first, values named → /pw-help operators --name <name> [--operator <op>]" ;;
+    esac
+  done
+  [ -n "$name" ] || die "operators: --name is required → fix: /pw-help operators --name <name> [--operator <op>]"
   c="$(canon "$name")"
   if [ -f "$CMDS/$c.md" ]; then
     for sp in $(scripts_of "$c"); do
@@ -955,7 +1161,7 @@ render_operators() {
     die "no such command or script: $c → fix: $(did_you_mean "$c")"
   fi
   # agent-lane commands have no scripts; the how-to lives in the command view.
-  [ -n "$scripts" ] || die "$c is an agent-lane command - no entity/toolchain scripts -> fix: /pw-help command $c"
+  [ -n "$scripts" ] || die "$c is an agent-lane command - no entity/toolchain scripts -> fix: /pw-help command --name $c"
   if [ -n "$op" ]; then
     while IFS= read -r s; do
       [ -n "$s" ] || continue
@@ -965,11 +1171,10 @@ render_operators() {
       para_of "$s" "$op" | fold -s -w 92 | sed 's/^/    /'
       facet="$(facet_of "$s" "$op")"
       [ -n "$facet" ] && printf '    (facet: %s)\n' "$facet"
-      [ -n "$facet" ] && printf '    (facet: %s)\n' "$facet"
     done <<E
 $scripts
 E
-    [ -n "$found" ] || die "no such operator \"$op\" in $c → fix: /pw-help operators $c lists all operators"
+    [ -n "$found" ] || die "no such operator \"$op\" in $c → fix: /pw-help operators --name $c lists all operators"
   else
     while IFS= read -r s; do
       [ -n "$s" ] || continue
@@ -985,17 +1190,23 @@ E
 
 # --- workflow ---------------------------------------------------------------------------
 render_workflow() {
-  local json=0; [ "${1:-}" = "--json" ] && json=1
+  local json=0 a
+  for a in "$@"; do
+    case "$a" in
+      --json) json=1 ;;
+      *) die "workflow: unknown option: $a → fix: /pw-help workflow [--json]" ;;
+    esac
+  done
   local phase line gate first=1
   [ "$json" = 1 ] && printf '{"phases":['
   for phase in $PW_VALID_PHASES; do
     case "$phase" in
-      context)   line="/pw-new · /pw-adopt · /pw-context prepare <brief> (or fill context/ + add-input rows)" ; gate="" ;;
-      analysis)  line="/pw-research (optional) · /pw-analyze" ; gate="analysis/review/<topic>.review.md sign-off" ;;
-      breakdown) line="/pw-breakdown" ; gate="THE hard gate: task/review/PLAN.review.md (+ per-task reviews)" ;;
-      executing) line="/pw-execute · /pw-verify · /pw-sync" ; gate="worktree sub-agents, verified commits" ;;
-      review)    line="/pw-ship · comment loop back through /pw-review · re-sync when the base moves" ; gate="MR open + comments folded into the review docs" ;;
-      done)      line="/pw-close" ; gate="teardown, learnings, Status: done" ;;
+      context)   line="/pw-new --project <slug> · /pw-adopt --project <slug> · /pw-context prepare --project <slug> [--brief <prose…>] (or fill context/ + add-input rows)" ; gate="" ;;
+      analysis)  line="/pw-research (optional) · /pw-analyze --project <slug>" ; gate="analysis/review/<topic>.review.md sign-off" ;;
+      breakdown) line="/pw-breakdown --project <slug>" ; gate="THE hard gate: task/review/PLAN.review.md (+ per-task reviews)" ;;
+      executing) line="/pw-execute --project <slug> · /pw-verify (any target) · /pw-sync --project <slug>" ; gate="worktree sub-agents, verified commits" ;;
+      review)    line="/pw-ship --project <slug> · comment loop back through /pw-review · re-sync when the base moves" ; gate="MR open + comments folded into the review docs" ;;
+      done)      line="/pw-close --project <slug>" ; gate="teardown, learnings, Status: done" ;;
       *)         line="?" ; gate="" ;;
     esac
     if [ "$json" = 1 ]; then
@@ -1011,7 +1222,7 @@ render_workflow() {
   else
     echo
     echo "side-loop   /pw-rfc after any gate-approved content"
-    echo "any-time    /pw-status · /pw-help · /pw-doctor"
+    echo "any-time    /pw-status (project or --all) · /pw-help · /pw-doctor"
     stamp
   fi
 }
@@ -1030,12 +1241,23 @@ find_surfaces() { # "<label>\t<root>" sources. Default (USER) domain: the comman
 }
 
 render_find() {
-  local json=0 mant=0 a phrase
-  set -f
-  local -a args=(); for a in "$@"; do case "$a" in --json) json=1 ;; --maintainer) mant=1 ;; *) args=("${args[@]+"${args[@]}"}" "$a") ;; esac; done
-  set +f
-  [ "${#args[@]}" -gt 0 ] || die "find: no search term -> fix: /pw-help find sign-off (one literal phrase)"
-  phrase="${args[*]}"
+  local json=0 mant=0 phrase="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --term=*) v="${a#*=}"; a="--term" ;; esac
+    case "$a" in
+      --term)
+        while [ $# -gt 0 ]; do case "$1" in --*) break ;; esac; v="${v:+$v }$1"; shift; done
+        [ -n "$v" ] || die "find: --term requires a value → fix: /pw-help find --term <term…> (one literal phrase)"
+        phrase="${phrase:+$phrase }$v" ;;
+      --json) json=1 ;;
+      --maintainer) mant=1 ;;
+      -h|--help) usage; exit 0 ;;
+      -*) die "find: unknown option: $a → fix: /pw-help find --term <term…> [--json] [--maintainer]" ;;
+      *) _pw_positional "$a" "the search term is named → /pw-help find --term <term…>" ;;
+    esac
+  done
+  [ -n "$phrase" ] || die "find: no search term → fix: /pw-help find --term <term…> (one literal phrase)"
   local label root hits
   hits="$(mktemp)"
   while IFS="$TABS" read -r label root; do
@@ -1083,7 +1305,7 @@ PYNORM
       [ "$mant" = 1 ] || pth="${pth#tooling/}"
       printf '  %-12s %s:%s  %s\n' "$surf" "$pth" "$ln" "$txt" | flowline 98
     done < "$norm"
-    [ "$n" -le 20 ] || printf '  (%s more - narrow the phrase, or the how-to view: /pw-help command <name>)\n' "$((total-20))"
+    [ "$n" -le 20 ] || printf '  (%s more - narrow the phrase, or the how-to view: /pw-help command --name <name>)\n' "$((total-20))"
   fi
   rm -f "$hits" "$norm"
   stamp
@@ -1093,7 +1315,7 @@ PYNORM
 
 # --- project-specific view ------------------------------------------------------------------
 # proj_dir mirrors the sibling entities' helper (die text in pw-help voice, full names).
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "project not found under $PROJECTS_DIR/$1 -> fix: scaffold it with /pw-new $1, or check /pw-status $1"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "project not found under $PROJECTS_DIR/$1 -> fix: scaffold it with /pw-new --project $1, or check /pw-status --project $1"; printf '%s' "$d"; }
 
 # review_state <slug> <rel> — "<decision>|<actor>|<open-count>" via the read operators only.
 # Decision and actor come from the shared mdlib latest-ROW readers: the Sign-off table's
@@ -1108,7 +1330,7 @@ review_state() {
   dec="$(_signoff_latest_decision "$f" 2>/dev/null)" || dec=""
   actor="$(_signoff_latest_actor "$f" 2>/dev/null)" || actor=""
   [ -n "$dec" ] || dec="none yet"
-  cnt="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$RV" count "$slug" "$rel" 2>/dev/null)" || cnt="open=?"
+  cnt="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$RV" count --project "$slug" --file "$rel" 2>/dev/null)" || cnt="open=?"
   printf '%s|%s|%s' "$dec" "$actor" "$(printf '%s' "$cnt" | sed -e 's/^open=//' -e 's/ resolved=[0-9]*//' -e 's/ items=[0-9]*//')"
 }
 
@@ -1138,36 +1360,36 @@ render_project_next() {
   local lines l first=1 a
   case "$phase" in
     context)
-      lines="/pw-context $slug prepare <your brief>              assisted: draft the brief + register inputs/repos from what you say
-/pw-context $slug req-init                           manual: create the brief, fill it, then register rows with add-input/add-repo
-/pw-analyze $slug                                      create analysis/<topic>.md (+ its review sibling)" ;;
+      lines="/pw-context prepare --project $slug                    assisted: draft the brief + register inputs/repos from what you say
+/pw-context req-init --project $slug                           manual: create the brief, fill it, then register rows with add-input/add-repo
+/pw-analyze --project $slug                                    create analysis/<topic>.md (+ its review sibling)" ;;
     analysis)
-      lines="/pw-review $slug ...                                   item/answer/sign-off your analysis reviews (targets above)
-/pw-breakdown $slug                                      approved analysis -> task/PLAN.md + T0n files" ;;
+      lines="/pw-review --project $slug                                    item/answer/sign-off your analysis reviews (targets above)
+/pw-breakdown --project $slug                                  approved analysis -> task/PLAN.md + T0n files" ;;
     breakdown)
       if [ -z "$plan" ]; then
-        lines="/pw-breakdown $slug                                      no task/PLAN.md yet: get the analysis gates approved first (see targets + fix hints)"
+        lines="/pw-breakdown --project $slug                            no task/PLAN.md yet: get the analysis gates approved first (see targets + fix hints)"
       elif [ -z "$planrev" ]; then
-        lines="/pw-review $slug init-all                                review file for PLAN.md missing - create it first
-       (then: item / answer / signoff on task/review/PLAN.review.md, then /pw-execute $slug)"
+        lines="/pw-review init-all --project $slug                        review file for PLAN.md missing - create it first
+       (then: item / answer / signoff on task/review/PLAN.review.md, then /pw-execute --project $slug)"
       else
-        lines="/pw-review $slug item $planrev §2 <your ask>   file a review item (auto Rn)
-/pw-review $slug signoff $planrev <your decision>   HUMAN-TRIGGERED ONLY (C4)
+        lines="/pw-review item --project $slug --file $planrev --section §2 --text <your ask>   file a review item (auto Rn)
+/pw-review signoff --project $slug --file $planrev --decision <your decision>   HUMAN-TRIGGERED ONLY (C4)
        (decision is one of: approved | changes-requested | in-review)
-/pw-execute $slug                                              after the plan gate approves"
+/pw-execute --project $slug                                    after the plan gate approves"
       fi ;;
     executing)
-      lines="/pw-verify   T0n                                        independent check of ONE change
-/pw-sync $slug                                               merge when the base branch moved
-/pw-ship $slug                                               push verified task branches + open MRs" ;;
+      lines="/pw-verify --task T0n                                     independent check of ONE change
+/pw-sync --project $slug                                     merge when the base branch moved
+/pw-ship --project $slug                                     push verified task branches + open MRs" ;;
     review)
-      lines="/pw-review $slug                                       apply comments folded back from the MR
-/pw-ship $slug comments                                     pull new MR comments in
-/pw-sync $slug                                               re-sync when the base moves" ;;
+      lines="/pw-review --project $slug                                    apply comments folded back from the MR
+/pw-ship comments --project $slug                            pull new MR comments in
+/pw-sync --project $slug                                     re-sync when the base moves" ;;
     done)
-      lines="/pw-close $slug                                         teardown, learnings, Status: done" ;;
+      lines="/pw-close --project $slug                                      teardown, learnings, Status: done" ;;
     *)
-      lines="/pw-status $slug                                        (phase token unparseable - check the README.md Status: line)" ;;
+      lines="/pw-status --project $slug                                    (phase token unparseable - check the README.md Status: line)" ;;
   esac
   if [ "$mode" = json ]; then
     { local done2=0; while IFS= read -r l; do [ "$done2" = 1 ] && printf ','; done2=1; printf '"%s"' "$(jstr "$l")"; done <<EXN
@@ -1192,7 +1414,7 @@ render_project_cmd() {
       rvf="analysis/review/${rel#analysis/}"; rvf="${rvf%.md}.review.md"
       [ -f "$d/$rvf" ] && { st="$(review_state "$slug" "$rvf")"; review_line "$rvf" "$st"; } || true
     done
-    [ -n "$planrev$adocs" ] || echo "    (no review files yet - run: /pw-review $slug init-all)"
+    [ -n "$planrev$adocs" ] || echo "    (no review files yet - run: /pw-review init-all --project $slug)"
     echo "  items:"
     local revlist="$planrev" arel shown=0
     for arel in $adocs; do rvf="analysis/review/${arel#analysis/}"; rvf="${rvf%.md}.review.md"; [ -f "$d/$rvf" ] && revlist="$revlist $rvf" || true; done
@@ -1204,35 +1426,58 @@ render_project_cmd() {
     done
     [ "$shown" = 1 ] || echo "      (no open items / pending questions in the review files found)"
     echo "  runnable:"
-    printf '    /pw-review %s item %s §3 <your ask>\n' "$slug" "${planrev:-task/review/PLAN.review.md}"
-    printf '    /pw-review %s signoff %s <your decision>   HUMAN-TRIGGERED ONLY (C4)\n' "$slug" "${planrev:-task/review/PLAN.review.md}"
+    printf '    /pw-review item --project %s --file %s --section §3 --text <your ask>\n' "$slug" "${planrev:-task/review/PLAN.review.md}"
+    printf '    /pw-review signoff --project %s --file %s --decision <your decision>   HUMAN-TRIGGERED ONLY (C4)\n' "$slug" "${planrev:-task/review/PLAN.review.md}"
     printf '           (decision is one of: approved | changes-requested | in-review)\n'
     local cfgs
-    cfgs="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$CFG" project get "$slug" ai-review 2>/dev/null | tr '\n' ' ')"
+    cfgs="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$CFG" get --project "$slug" --key ai-review 2>/dev/null | tr '\n' ' ')"
     [ -n "$cfgs" ] || cfgs="-"
-    printf '    /pw-review %s ai          second opinion (modes: %s)\n' "$slug" "$cfgs" | flowline 98
-    printf '    /pw-config %s set ai-review analysis <approved mode>   (off|advisory|auto)\n' "$slug"
+    printf '    /pw-review ai --project %s --surface <analysis|plan|task-plan|task-exec|ship|rfc|close>   second opinion (modes: %s)\n' "$slug" "$cfgs" | flowline 98
+    printf '    /pw-config set --project %s --key ai-review --set <surface>=<advisory|auto>   (legacy off reads as advisory; scheduling: --key review-trigger)\n' "$slug" | flowline 98
     stamp; return 0
   fi
   echo "/pw-${c#pw-} for $slug (phase: $phase)"
-  local op args2 use2 fac2 s5
+  local op args2 use2 fac2 s5 psc shown_cmd=0
   while IFS="$TABS" read -r op args2 use2 fac2 s5; do
     [ -n "$op" ] || continue
-    printf '    /pw-%s %s %s\n' "${c#pw-}" "$slug" "$args2"
+    psc="$(scope_of "$c" "$op")"
+    [ "$psc" = project ] || continue
+    args2="${args2//<project-slug>/$slug}"
+    args2="${args2//<slug>/$slug}"
+    printf '    /pw-%s %s\n' "${c#pw-}" "$args2"
+    shown_cmd=1
   done <<EPCC
 $(ops_surfaced "$c")
 EPCC
+  [ "$shown_cmd" = 1 ] || printf '    (no project-scoped operators on this command; see: /pw-help command --name %s)\n' "$c"
+  local gtok gstr
+  gtok="$(scope_tokens "$c" global)"
+  if [ -n "$gtok" ]; then
+    gstr="$(printf '%s' "$gtok" | sed 's/, / · /g')"
+    printf '    global forms (no project): %s   detail: /pw-help command --name %s\n' "$gstr" "$c" | flowline 98
+  fi
   stamp
 }
 
 render_project() {
-  [ $# -ge 1 ] || die "usage: project <slug> [<name>] [--json] -> fix: bare /pw-help overview for the global view"
-  local slug="$1"; shift || true
-  local name="${1:-}" a json=0
-  [ "$name" = "--json" ] && { json=1; name=""; }
+  local slug="" name="" json=0 a
+  while [ $# -gt 0 ]; do
+    a="$1"; shift
+    case "$a" in
+      --project) [ $# -ge 1 ] || die "project: --project needs a value → fix: /pw-help project --project <slug> [--name <command>]"; slug="$1"; shift ;;
+      --project=*) slug="${a#*=}" ;;
+      --name) [ $# -ge 1 ] || die "project: --name needs a value → fix: /pw-help project --project <slug> [--name <command>]"; name="$1"; shift ;;
+      --name=*) name="${a#*=}" ;;
+      --json) json=1 ;;
+      -h|--help) usage; exit 0 ;;
+      -*) die "project: unknown option: $a → fix: /pw-help project --project <slug> [--name <command>] [--json]" ;;
+      *) _pw_positional "$a" "the project is named → /pw-help project --project <slug> [--name <command>]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "project: --project is required → fix: /pw-help project --project <slug> [--name <command>]"
   local d; d="$(proj_dir "$slug")"
   local raw tok
-  raw="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" phase "$slug" 2>/dev/null)" || raw="?"
+  raw="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" phase --project "$slug" 2>/dev/null)" || raw="?"
   tok="$(pw_phase_token "$raw")"
   local plan="" planrev="" adocs="" trevs="" tids f rel rvf
   [ -f "$d/task/PLAN.md" ] && plan="task/PLAN.md" || true
@@ -1266,7 +1511,7 @@ render_project() {
   echo "most likely next:"
   render_project_next "$slug" "$tok" "$plan" "$planrev" "$d" plain
   echo "any-time for this project:"
-  echo "  /pw-status $slug  ·  /pw-context $slug prepare <brief> (or add-input/add-repo rows)"
+  echo "  /pw-status --project $slug  ·  /pw-context prepare --project $slug (or add-input/add-repo rows)"
   echo "targets found on disk:"
   local trow printed=0
   trow() { split_state "$3"
@@ -1279,38 +1524,49 @@ render_project() {
   if [ -n "$plan" ]; then
     printed=1
     if [ -n "$planrev" ]; then st="$(review_state "$slug" "$planrev")"; trow "task/PLAN.md" "$planrev" "$st"
-    else printf '  %-26s -> %s\n' "task/PLAN.md" "(no review file yet - run: /pw-review $slug init-all)" | flowline 99; fi
+    else printf '  %-26s -> %s\n' "task/PLAN.md" "(no review file yet - run: /pw-review init-all --project $slug)" | flowline 99; fi
   fi
   for rel in $adocs; do
     printed=1
     rvf="analysis/review/${rel#analysis/}"; rvf="${rvf%.md}.review.md"
     if [ -f "$d/$rvf" ]; then st="$(review_state "$slug" "$rvf")"; trow "$rel" "$rvf" "$st"
-    else { printf '  %s -> %s\n' "$rel" "(review file missing - run: /pw-review $slug init-all)"; } | flowline 99; fi
+    else { printf '  %s -> %s\n' "$rel" "(review file missing - run: /pw-review init-all --project $slug)"; } | flowline 99; fi
   done
   if [ -n "$trevs" ]; then printed=1; printf '  %-26s -> %s\n' "task/T0n.md (x$(printf '%s' "$trevs" | wc -w | tr -d ' '))" "task/review/T0n.review.md" | flowline 99; fi
   [ "$printed" = 1 ] || echo "  (nothing in analysis/ or task/ yet - start with /pw-new or /pw-adopt)"
-  echo "  per-command detail with real targets: /pw-help project $slug <name>"
+  echo "  per-command detail with real targets: /pw-help project --project $slug --name <command>"
   stamp
 }
 
 usage() {
   cat <<'EOF'
-usage: pw-help.sh <operator> [args] [--json]
+usage: pw-help.sh [<operator>] [flags]
 
-  overview                    one line per command and per exposed operator
-  command <name> [<slug>]     how-to manual for one command (--full = verbatim file)
-  project <slug> [<name>]     what applies to THIS project right now, with real targets
-  operators <name> [<op>]     verbatim usage-header dump (or one operator deep-dive)
-  workflow                    the phase spine with gates
-  find <term...> [--json]     literal phrase search across the tooling surface
-  --selftest                  run the isolated harness case
+  overview [--json]                      one line per command and per exposed operator,
+                                         grouped as Global vs Project operations
+  command --name <name> [--project <project-slug>] [--full|--json|--maintainer]
+                                         how-to manual for one command (--full = verbatim file)
+  project --project <project-slug> [--name <command>] [--json]
+                                         what applies to THIS project right now, real targets
+  operators --name <name> [--operator <op>]
+                                         verbatim usage-header dump (or one-operator deep dive)
+  workflow [--json]                      the phase spine with gates
+  find --term <term…> [--json] [--maintainer]
+                                         literal phrase search across the tooling surface
+  --selftest                             run the isolated harness case
+
+Grammar: operator words first, every value named (--project selects the project);
+unknown flags and stray positionals fail closed. The bare /pw-help shows the overview.
 EOF
 }
 
 if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then usage; exit 0; fi
 
 op0="${1:-overview}"
-(( $# > 0 )) && shift || true   # bare /pw-help: $#=0 must not trip set -e on shift
+case "$op0" in
+  -*) op0=overview ;;   # a leading flag keeps the default overview (e.g. bare /pw-help --json)
+  *) (( $# > 0 )) && shift || true ;;   # bare /pw-help: $#=0 must not trip set -e on shift
+esac
 case "$op0" in
   overview)   render_overview "$@" ;;
   command)    render_command "$@" ;;
@@ -1318,5 +1574,5 @@ case "$op0" in
   operators)  render_operators "$@" ;;
   find)       render_find "$@" ;;
   workflow)   render_workflow "$@" ;;
-  *)         usage >&2; die "unknown operator: $op0 → fix: bare /pw-help lists every command" ;;
+  *)          usage >&2; die "unknown operator: $op0 → fix: /pw-help (bare, shows the overview)" ;;
 esac

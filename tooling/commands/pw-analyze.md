@@ -1,22 +1,24 @@
 ---
 description: Analyze a project's context/ into an analysis doc
-args: <project-slug> [focus] [--ignore-fetch-errors]
+args: "--project <project-slug> [--focus <prose…>] [--ignore-fetch-errors]"
+scope: project
 ---
-Invoke the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; an optional
-second token scopes the analysis to a topic; `--ignore-fetch-errors` — see step 1 — may appear
-anywhere after the slug).
+Invoke the `project-workflow` skill. Arguments: {{ARGS}} — `--project <project-slug>` selects the
+project; an optional `--focus <prose…>` scopes the analysis to a topic (its value runs until the
+next `--flag` token); `--ignore-fetch-errors` — see step 1 — may appear anywhere. A value that
+starts with `--` passes as `--flag=value`; unknown flags and stray positional values fail closed.
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
 <!-- Pre-flight: deterministic gate, then mechanical context fetch. -->
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh analyze <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh analyze --project <slug> || exit 1
 ```
 **Reading the pre-flight:** `pw-preflight.sh analyze` checks a legal phase plus `context/INDEX.md`
 existing with at least one input row. Non-zero + `pw-preflight:` line = STOP and relay it (its
 `→ fix:` names the fill/research step). Then, before agent reasoning:
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-context.sh fetch <slug> [--ignore-errors]
+{{PW_HOME}}/tooling/scripts/entities/pw-context.sh fetch --project <slug> [--ignore-errors]
 ```
 **Reading the fetch script:** each `Fetching:` block is already-fetched content — cite it, never
 re-fetch. Rows it can't CLI-fetch print as agent-handled (`Lark URL — agent handles via platform
@@ -88,7 +90,7 @@ decisions (options not converged, Q0 rules, the final doc) stay yours.
 2. **Draft via `pw-analyst` when a sub-agent is available** (same provider) — hand it the seed +   the doc path; it returns a draft following the rules below; **you review, edit, and own the
    final doc** (decisions: options laid out without convergence, the pick stays yours, §4 rules).
    Record lane model resolution per dashboard `AI Models: analyst=…` (unset = provider default) and
-   log the spawn (`pw-status.sh log … analyst "drafted analysis/<topic>.md · session=<id> …"`).
+   log the spawn (`pw-status.sh log --project <slug> --actor analyst --message "drafted analysis/<topic>.md · session=<id> …"`).
    Otherwise (or on a thin project where drafting inline is cheaper), write it yourself under the
    same rules. Either way the shape is enforced by this file:
    Write an analysis to `<project>/analysis/` using `{{PW_HOME}}/template/analysis/_TEMPLATE.md`:
@@ -106,8 +108,8 @@ decisions (options not converged, Q0 rules, the final doc) stay yours.
    - **If this project's work is really several large, mostly-independent problem areas**, don't
      force them into one flat §4 — see the template's own "MULTIPLE LARGE SOLUTION AREAS" comment
      right after §4's `**Chosen approach:**` line for the two supported shapes (named groupings
-     within one doc, or a separate `analysis/<topic>.md` per area via a second `/pw-analyze <slug>
-     <area>` run) and how to pick between them. **Concrete trigger, not a vibe:** once §4 would
+     within one doc, or a separate `analysis/<topic>.md` per area via a second
+     `/pw-analyze --project <slug> --focus <area>` run) and how to pick between them. **Concrete trigger, not a vibe:** once §4 would
      need a 5th option/area slot, or this doc crosses roughly 500–600 lines (`wc -l`), that's the
      signal to split — don't wait for it to "feel" large.
    - **Keep a lightweight heading index current as you write** — a short bullet list near the top
@@ -146,37 +148,38 @@ decisions (options not converged, Q0 rules, the final doc) stay yours.
    breakdown can default execution to the same agent (no mid-workflow switching).
 5. **Create the review file (idempotent — do this even if you think one may already exist).**
    ```bash
-   {{PW_HOME}}/tooling/scripts/entities/pw-review.sh init <slug> analysis/review/<topic>.review.md analysis/<topic>.md
+   {{PW_HOME}}/tooling/scripts/entities/pw-review.sh init --project <slug> --file analysis/review/<topic>.review.md --doc analysis/<topic>.md
    ```
    No-ops if it's already there (never clobbers my items/history); otherwise creates it verbatim
    from the template (in-review, empty, with its permanent format hints intact) so I don't have to
    copy it myself. (Batch catch-up is phase-scoped:
-   `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init-all <slug>` creates the missing reviews for the
-   project's CURRENT dashboard phase only, and `pw-review.sh init-docs <slug> <artifact-rel-path>…`
-   creates exactly the docs listed — neither ever spawns earlier- or later-phase reviews as a side
+   `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init-all --project <slug>` creates the missing
+   reviews for the project's CURRENT dashboard phase only, and `pw-review.sh init-docs --project
+   <slug> --file <artifact-rel-path> [--file <artifact-rel-path>]…` creates exactly the docs listed — neither ever spawns earlier- or later-phase reviews as a side
    effect; my review items/answers/sign-off rows are written deterministically via the
-   `/pw-review <slug> item|answer|signoff` operators — never hand-copied template blocks.)
+   `/pw-review item|answer|signoff --project <slug>` operators — never hand-copied template blocks.)
 6. **MANDATORY final step — do NOT skip.** Set the dashboard one-liner + Status + audit log via the
    helper (never hand-edit these lines). Run all three, then confirm the dashboard now shows
    `Status: analysis`:
    ```bash
-   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh oneliner <slug> "<one-sentence description of this project>"
-   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh status  <slug> analysis
-   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh log     <slug> analyze "wrote analysis/<topic>.md (N open questions)"
+   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh oneliner --project <slug> --text "<one-sentence description of this project>"
+   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh status --project <slug> --phase analysis
+   {{PW_HOME}}/tooling/scripts/entities/pw-status.sh log --project <slug> --actor analyze --message "wrote analysis/<topic>.md (N open questions)"
    ```
 
 **Completion review — only when this project configured it (never assumed).** After the analysis doc
 and its lint pass, read the `analysis` axis (`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh
-project get <slug> review-trigger` and `… ai-review`) and, ONLY when the trigger is `completion`
+get --project <slug> --key review-trigger` and `… --key ai-review`) and, ONLY when the trigger is
+`completion`
 and the outcome is callable (`advisory` default; a legacy `off` row reads as advisory), run the
-`/pw-review <slug> ai analysis` flow BEFORE your summary — a fresh reviewer only (never inline in
+`/pw-review ai --project <slug> --surface analysis` flow BEFORE your summary — a fresh reviewer only (never inline in
 this session), bounded repairs only when `review-repair analysis=bounded` and within
 `review-rounds` passes. Reviewer outage or an unverified cross-provider route: record the skip in
 one line and continue. This never signs off by itself (advisory), never fails the analysis, and
 never starts `/pw-breakdown` — that stays my explicit next command.
 
 Stop after writing and summarize it for review. Explain the QnA flow: I answer each `Qn` in the
-review file with `↳ you: <answer>`, then `/pw-review <slug>` folds my answers back into the
+review file with `↳ you: <answer>`, then `/pw-review --project <slug>` folds my answers back into the
 analysis. The review file (`analysis/review/<topic>.review.md`) is already there for me — I just
 add items (see the `> **Add an item:**` hint in it) and approve the gate via its Sign-off row
 before `/pw-breakdown`.

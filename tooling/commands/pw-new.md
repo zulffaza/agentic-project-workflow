@@ -1,13 +1,17 @@
 ---
 description: Scaffold a new agentic-workflow project from the bundle template
-args: <project-slug>
+args: "--project <project-slug>"
+scope: project
 ---
-Scaffold a new project for the phased multi-repo workflow. Arguments: {{ARGS}} (first token is
-the project slug).
+Scaffold a new project for the phased multi-repo workflow. Arguments: {{ARGS}} — the project is
+named `--project <project-slug>`; nothing is positional.
+
+- **`/pw-new --project <project-slug>`** — scaffold that project, then give me the onboarding
+  orientation below.
 
 Run:
 ```bash
-{{PW_HOME}}/tooling/scripts/toolchain/scaffold.sh {{ARGS}}
+{{PW_HOME}}/tooling/scripts/toolchain/scaffold.sh --project <slug>
 ```
 
 Then confirm the structure was created and give me a **full onboarding orientation** so I can use
@@ -34,7 +38,7 @@ the project without reading the whole base guide. Cover, concisely:
 6. **The immediate next 2 actions**, spelled out:
    - add inputs to `projects/<slug>/context/` and fill `context/INDEX.md` (a row per input +
      the first-guess "repos in scope" table),
-   - then run **`/pw-analyze <slug>`**.
+   - then run **`/pw-analyze --project <slug>`**.
 
 Keep it a scannable orientation (headers/bullets), not a wall of text. Point to
-`{{PW_HOME}}/README.md` for the full guide and `/pw-status <slug>` to check state any time.
+`{{PW_HOME}}/README.md` for the full guide and `/pw-status --project <slug>` to check state any time.

@@ -2,15 +2,22 @@
 # ============================================================================
 # pw-ship.sh — the ship/MR entity: everything /pw-ship and /pw-sync query or mutate.
 #
-#   pw-ship.sh resolve            <slug>
-#   pw-ship.sh exec               <slug> <task-id> <description-file>
-#   pw-ship.sh monitor            <slug> <task-id> [--timeout <minutes>] [--interval <seconds>]
-#   pw-ship.sh mr-state           <slug> <task-id>
-#   pw-ship.sh mr-state-batch     <slug> [task-ids...]
-#   pw-ship.sh comment-seen       <slug> <task-id> <thread-id> <kind:resolvable|unresolvable> <replied:yes|no> [note...]
-#   pw-ship.sh dashboard-mr-state <slug> <task-id> <state>
-#   pw-ship.sh history            <slug> <invocation|pending|init|begin|checkpoint|freeze|deliver> [MR-url] [options]
-#   pw-ship.sh request-review     <slug> [all | task-ids…] [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]
+#   pw-ship.sh resolve            --project <slug>
+#   pw-ship.sh exec               --project <slug> --task <task-id> --file <description-file>
+#   pw-ship.sh monitor            --project <slug> --task <task-id> [--timeout <minutes>] [--interval <seconds>]
+#   pw-ship.sh mr-state           --project <slug> --task <task-id>
+#   pw-ship.sh mr-state-batch     --project <slug> [--task <task-id>]…
+#   pw-ship.sh comment-seen       --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no> [--note <text…>]
+#   pw-ship.sh dashboard-mr-state --project <slug> --task <task-id> --state <state>
+#   pw-ship.sh history            --project <slug> --operation <invocation|pending|init|begin|checkpoint|freeze|deliver> [--mr <MR-url>] [--options <text…>]
+#   pw-ship.sh request-review     --project <slug> [--all | --task <task-id>]… [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]
+#
+# Named-argument grammar: operation words first, every value named; --project
+# selects the project in every project form. Scalar values are ONE token (quote
+# spaces); prose values (--note, --to) run until the next --flag token. --options
+# must be last and forwards every remaining token to the history helper (its own
+# --file/--attempt/--limit flags ride there unchanged). A literal value that
+# starts with -- is passed as --flag=value.
 #
 # Facets (S1b): READ  = resolve, mr-state, mr-state-batch, monitor, request-review
 #               WRITE = exec, comment-seen, dashboard-mr-state
@@ -33,7 +40,7 @@
 # mr-state — query the forge for one task's MR state: prints open|merged|closed|
 #   unknown (exit 1 + "unknown" for any lookup failure — never dies on runtime
 #   misses, only usage errors).
-# mr-state-batch — mr-state for many tasks (all PLAN tasks when no ids given).
+# mr-state-batch — mr-state for many tasks (all PLAN tasks when no --task is given).
 #   Output: T01|open  T02|merged  T03|closed  T04|unknown
 # comment-seen — upsert ONE row per MR-comment thread into the task review file's
 #   "## MR comment tracking" table (keyed hidden marker; idempotent reruns; the
@@ -87,37 +94,61 @@ PW_HOME="$(cd "$HERE/../../.." && pwd)"
 . "$HERE/../lib/pw-mdlib.sh"
 . "$HERE/../lib/pw-shiplib.sh"
 ST="$HERE/pw-status.sh"
-# -h/--help before positional parsing: without this, "-h" would be taken as a slug/arg.
+# -h/--help before operator parsing: without this, "-h" would fall into the operator case.
 case "${1:-}" in -h|--help) pw_usage ;; esac
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
 
 die() { echo "pw-ship: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new $1)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
 
 # ================= READ facet =================================================
 
 cmd_history() {
-  [ $# -ge 2 ] || die "usage: history <slug> <operation> [MR-url] [options] → fix: see --help"
-  local slug="$1"; shift
+  local slug="" operation="" mr="" a v; local -a opts=()
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*)   v="${a#*=}"; a="--project" ;;
+      --operation=*) v="${a#*=}"; a="--operation" ;;
+      --mr=*)        v="${a#*=}"; a="--mr" ;;
+    esac
+    case "$a" in
+      --project|--operation|--mr)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --operation) operation="$v" ;; --mr) mr="$v" ;; esac ;;
+      --options)
+        # Takes EVERY remaining token and forwards them verbatim (the helper's own flags like
+        # --file/--attempt/--limit ride here); --options=value carries one literal token.
+        while [ $# -gt 0 ]; do opts[${#opts[@]}]="$1"; shift; done
+        [ ${#opts[@]} -gt 0 ] || die "history: --options requires a value → fix: --options <text…> (must be last; forwarded to the history helper)"
+        ;;
+      --options=*) opts[${#opts[@]}]="${a#*=}" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "history --project <slug> --operation <op> [--mr <url>] [--options <text…>]" ;;
+      *) _pw_positional "$a" "history --project <slug> --operation <op> [--mr <url>] [--options <text…>]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "history: --project is required → fix: history --project <slug> --operation <op> [--mr <url>] [--options <text…>]"
+  [ -n "$operation" ] || die "history: --operation is required → fix: history --project <slug> --operation <invocation|pending|init|begin|checkpoint|freeze|deliver>"
   [[ "$slug" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "unsafe project slug → fix: use a project name, not a path"
   local d ts="" mappings="" registered=no taskfile url; d="$(proj_dir "$slug")"
-  if [ "$1" = begin ]; then
+  if [ "$operation" = begin ]; then
     ts="$(pw_now_wib)" || die "cannot format history timestamp → fix: check the date command"
   fi
   if [ -n "${PW_FORGE_HOSTS[0]:-}" ]; then mappings="$(printf '%s\n' "${PW_FORGE_HOSTS[@]}")"; fi
-  case "$1" in
+  case "$operation" in
     init|begin)
       for taskfile in "$d"/task/T*.md; do
         [ -f "$taskfile" ] || continue
         url="$(pw_task_mr_url "$taskfile")"
-        [ "$url" != "${2:-}" ] || { registered=yes; break; }
+        [ "$url" != "$mr" ] || { registered=yes; break; }
       done
       if [ "$registered" = no ] && [ -f "$d/README.md" ]; then
         # Legacy dashboards can own the URL when a task Result has no MR field.
         while IFS= read -r url; do
-          [ "$url" != "${2:-}" ] || { registered=yes; break; }
+          [ "$url" != "$mr" ] || { registered=yes; break; }
         done < <(awk -F'|' '
           /^\|/ {
             candidate=0
@@ -128,7 +159,7 @@ cmd_history() {
           }' "$d/README.md" | grep -oE 'https?://[^ )>|"`]+' || true)
       fi ;;
   esac
-  pw_ship_history "$d" "$ts" "$mappings" "$registered" "$@"
+  pw_ship_history "$d" "$ts" "$mappings" "$registered" "$operation" "$mr" ${opts[@]+"${opts[@]}"}
 }
 
 # request-review — read-only: all or selected open project MRs -> one copyable review request.
@@ -137,74 +168,70 @@ cmd_history() {
 # Performs no forge writes and no project writes; a missing/conflicting MR evidence set stops
 # before the final message so the requested scope stays clear.
 cmd_request_review() {
-  [ $# -ge 1 ] || die "usage: request-review <slug> [all | task-ids…] [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]"
-  local slug="$1"; shift
-  [[ "$slug" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "request-review: unsafe project slug → fix: use a project name, not a path"
-  local d plan; d="$(proj_dir "$slug")"; plan="$d/task/PLAN.md"
-  [ -f "$plan" ] || die "request-review: PLAN.md not found ($plan) → fix: run /pw-breakdown $slug to produce it"
-
-  local selector_all=0 saw_flag=0; local -a sel_ids=()
+  local slug="" a v
+  local selector_all=0 to_seen=0; local -a sel_ids=()
   local to_names="team" summary=0 mr_summary=0 note=0 no_reviewers=0 prose=""
-  local part tok seg sw
+  local part tok
   while [ $# -gt 0 ]; do
-    case "$1" in
-      --to)
-        [ "$to_names" = "team" ] || die "request-review: --to repeated → fix: pass --to once"
-        saw_flag=1; shift; seg=""
-        while [ $# -gt 0 ]; do
-          case "$1" in --*) break ;; esac
-          seg="$seg $1"; shift
-        done
-        to_names="$(printf '%s' "$seg" | pw_trim)"; [ -n "$to_names" ] || to_names="team"
-        ;;
-      --summary|--mr-summary|--note|--no-reviewers)
-        saw_flag=1
-        sw="$1"
-        case "$sw" in
-          --summary) [ "$summary" = 0 ] || die "request-review: --summary repeated → fix: pass each switch once"; summary=1 ;;
-          --mr-summary) [ "$mr_summary" = 0 ] || die "request-review: --mr-summary repeated → fix: pass each switch once"; mr_summary=1 ;;
-          --note) [ "$note" = 0 ] || die "request-review: --note repeated → fix: pass each switch once"; note=1 ;;
-          --no-reviewers) [ "$no_reviewers" = 0 ] || die "request-review: --no-reviewers repeated → fix: pass each switch once"; no_reviewers=1 ;;
-        esac
-        shift
-        case "${1:-}" in ""|--*) : ;; *) die "request-review: unexpected value after $sw → fix: switches take no argument (only --to and --prose do)" ;; esac
-        ;;
-      --prose)
-        [ -z "$prose" ] || die "request-review: --prose repeated → fix: pass --prose once"
-        shift; [ $# -gt 0 ] || die "request-review: --prose needs a JSON file path"
-        prose="$1"; shift ;;
-      --skip-build-check)
-        die "request-review: --skip-build-check is a ship-mode option → fix: message generation never polls CI; omit the flag" ;;
-      --*)
-        die "request-review: unknown option '$1' → fix: flags are --to, --summary, --mr-summary, --note, --no-reviewers, --prose" ;;
-      *)
-        [ "$saw_flag" = 0 ] || die "request-review: unexpected token '$1' after a flag → fix: keep the selector (all or task ids) before the flags"
-        case "$1" in
-          comments|stack|describe|sync) die "request-review: '$1' is a ship/comment operator → fix: use message flags only (this mode never pushes or comments)" ;;
-        esac
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+      --to=*)      v="${a#*=}"; a="--to" ;;
+      --prose=*)   v="${a#*=}"; a="--prose" ;;
+    esac
+    case "$a" in
+      --project)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      --all)
+        [ "$selector_all" = 0 ] || _pw_dup --all
+        [ ${#sel_ids[@]} -eq 0 ] || die "request-review: cannot combine 'all' with task ids → fix: pass one selector form"
+        selector_all=1 ;;
+      --task)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --task; v="$1"; shift; }
+        [ "$selector_all" = 0 ] || die "request-review: cannot combine 'all' with task ids → fix: pass one selector form"
         local oldifs="$IFS"; IFS=','
-        for part in $1; do
+        for part in $v; do
           tok="$(printf '%s' "$part" | pw_trim)"
           [ -n "$tok" ] || continue
-          case "$tok" in
-            all)
-              [ "$selector_all" = 0 ] || die "request-review: 'all' repeated → fix: pass one selector"
-              [ ${#sel_ids[@]} -eq 0 ] || die "request-review: cannot combine 'all' with task ids → fix: pass one selector form"
-              selector_all=1 ;;
-            T[0-9]*)
-              pw_task_id_ok "$tok" || die "request-review: invalid task id '$tok' → fix: task ids look like T01"
-              sel_ids[${#sel_ids[@]}]="$tok" ;;
-            *)
-              die "request-review: invalid selector '$tok' → fix: use 'all' or task ids like T01 T03" ;;
-          esac
+          pw_task_id_ok "$tok" || die "request-review: invalid task id '$tok' → fix: task ids look like T01"
+          sel_ids[${#sel_ids[@]}]="$tok"
         done
-        IFS="$oldifs"
-        shift ;;
+        IFS="$oldifs" ;;
+      --to)
+        [ "$to_seen" = 0 ] || _pw_dup --to
+        to_seen=1
+        if [ -z "$v" ]; then
+          while [ $# -gt 0 ]; do case "$1" in --*) break ;; esac; v="${v:+$v }$1"; shift; done
+        fi
+        [ -n "$v" ] || v="team"
+        to_names="$v" ;;
+      --summary) [ "$summary" = 0 ] || _pw_dup --summary; summary=1 ;;
+      --mr-summary) [ "$mr_summary" = 0 ] || _pw_dup --mr-summary; mr_summary=1 ;;
+      --note) [ "$note" = 0 ] || _pw_dup --note; note=1 ;;
+      --no-reviewers) [ "$no_reviewers" = 0 ] || _pw_dup --no-reviewers; no_reviewers=1 ;;
+      --prose)
+        [ -z "$prose" ] || _pw_dup --prose
+        [ -n "$v" ] || { [ $# -ge 1 ] || die "request-review: --prose needs a JSON file path"; v="$1"; shift; }
+        prose="$v" ;;
+      --skip-build-check)
+        die "request-review: --skip-build-check is a ship-mode option → fix: message generation never polls CI; omit the flag" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "request-review --project <slug> [--all | --task <T0n>]… [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]" ;;
+      *)
+        case "$a" in
+          comments|stack|describe|sync) die "request-review: '$a' is a ship/comment operator → fix: use message flags only (this mode never pushes or comments)" ;;
+        esac
+        _pw_positional "$a" "request-review --project <slug> [--all | --task <T0n>]… [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]" ;;
     esac
   done
+  [ -n "$slug" ] || die "request-review: --project is required → fix: request-review --project <slug> [--all | --task <T0n>]… [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]"
   if [ "$selector_all" = 1 ] && [ ${#sel_ids[@]} -gt 0 ]; then
     die "request-review: cannot combine 'all' with task ids → fix: pass one selector form"
   fi
+  [[ "$slug" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "request-review: unsafe project slug → fix: use a project name, not a path"
+  local d plan; d="$(proj_dir "$slug")"; plan="$d/task/PLAN.md"
+  [ -f "$plan" ] || die "request-review: PLAN.md not found ($plan) → fix: run /pw-breakdown --project $slug to produce it"
 
   # Effective frame file: resolved and validated in full before any forge query or AI work.
   local frame err; frame="$(pw_review_template_path)"; err="$(pw_review_template_error "$frame")"
@@ -212,7 +239,7 @@ cmd_request_review() {
     case "$err" in
       "file not found"*)
         if [ "$(pw_review_template_source)" = "default" ]; then
-          die "request-review: review-frame template missing: $frame → fix: run /pw-doctor --fix to seed the default frame"
+          die "request-review: review-frame template missing: $frame → fix: run /pw-doctor --project $slug --fix to seed the default frame"
         fi
         die "request-review: configured review-frame template missing: $frame → fix: create the file or correct PW_REVIEW_REQUEST_TEMPLATE_FILE in pw.config.sh" ;;
       *)
@@ -281,14 +308,25 @@ cmd_request_review() {
 }
 
 cmd_resolve() {
-  [ $# -eq 1 ] || die "usage: resolve <slug>"
+  local slug="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --project=*) v="${a#*=}"; a="--project" ;; esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "resolve --project <slug>" ;;
+      *) _pw_positional "$a" "resolve --project <slug>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "resolve: --project is required → fix: resolve --project <slug>"
 
-  SLUG="$1"
+  SLUG="$slug"
   D="$(proj_dir "$SLUG")"
   PLAN="$D/task/PLAN.md"
   INDEX="$D/context/INDEX.md"
 
-  [ -f "$PLAN" ] || die "PLAN.md not found ($PLAN) — run /pw-breakdown <slug> to produce it"
+  [ -f "$PLAN" ] || die "PLAN.md not found ($PLAN) — run /pw-breakdown --project $slug to produce it"
 
   # (ticket resolution is per-task from the task file's `Ticket:` field — below)
 
@@ -349,7 +387,7 @@ cmd_resolve() {
 # treat stdout "unknown" as mr-state-unknown and skip — this helper never die()s on a runtime
 # lookup failure, only on a usage error. Resolves the forge per repo (same as /pw-ship does) —
 # never hardcodes a host.
-#   mr-state <slug> <task-id>
+#   mr-state --project <slug> --task <task-id>
 # MR URL is taken from the task's "## Result → MR:" line if present, else from the dashboard
 # Merge-requests table (Task · MR · Target rows). Requires an existing worktree for the task so
 # the forge CLI can be run from inside the repo (glab needs repo context to resolve :id).
@@ -487,23 +525,55 @@ _mr_state_impl() {
 }
 
 cmd_mr_state() {
-  [ $# -eq 2 ] || die "usage: mr-state <slug> <task-id>"
-  _mr_state_impl "$1" "$2"
+  local slug="" task="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+    esac
+    case "$a" in
+      --project|--task)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --task) task="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "mr-state --project <slug> --task <task-id>" ;;
+      *) _pw_positional "$a" "mr-state --project <slug> --task <task-id>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "mr-state: --project is required → fix: mr-state --project <slug> --task <task-id>"
+  [ -n "$task" ] || die "mr-state: --task is required → fix: mr-state --project <slug> --task <task-id>"
+  _mr_state_impl "$slug" "$task"
 }
 
 cmd_mr_state_batch() {
-  [ $# -ge 1 ] || die "usage: mr-state-batch <slug> [task-ids...]"
+  local slug="" a v; local -a TASK_IDS=()
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+    esac
+    case "$a" in
+      --project)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      --task)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --task; v="$1"; shift; }
+        TASK_IDS[${#TASK_IDS[@]}]="$v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "mr-state-batch --project <slug> [--task <task-id>]…" ;;
+      *) _pw_positional "$a" "mr-state-batch --project <slug> [--task <task-id>]…" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "mr-state-batch: --project is required → fix: mr-state-batch --project <slug> [--task <task-id>]…"
 
-  SLUG="$1"
-  shift
-  TASK_IDS=("$@")
-
+  SLUG="$slug"
   D="$(proj_dir "$SLUG")"
   PLAN="$D/task/PLAN.md"
 
-  [ -f "$PLAN" ] || die "PLAN.md not found ($PLAN) — run /pw-breakdown <slug> to produce it"
+  [ -f "$PLAN" ] || die "PLAN.md not found ($PLAN) — run /pw-breakdown --project $slug to produce it"
 
-  # If no task IDs specified, use all tasks from PLAN
+  # If no --task specified, use all tasks from PLAN
   if [ ${#TASK_IDS[@]} -eq 0 ]; then
     while IFS='|' read -r task_id _status; do
       [ -n "$task_id" ] && TASK_IDS+=("$task_id")
@@ -522,30 +592,33 @@ cmd_mr_state_batch() {
 cmd_monitor() {
   TIMEOUT_MIN="${PW_PIPELINE_TIMEOUT:-15}"
   INTERVAL_SEC="${PW_PIPELINE_INTERVAL:-30}"
-  SLUG=""
-  TASK_ID=""
+  local slug="" task="" a v
 
   # Parse arguments
   while [ $# -gt 0 ]; do
-    case "$1" in
-      --timeout) shift; TIMEOUT_MIN="${1:-$TIMEOUT_MIN}"; shift ;;
-      --timeout=*) TIMEOUT_MIN="${1#--timeout=}" ;;
-      --interval) shift; INTERVAL_SEC="${1:-$INTERVAL_SEC}"; shift ;;
-      --interval=*) INTERVAL_SEC="${1#--interval=}" ;;
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*)  v="${a#*=}"; a="--project" ;;
+      --task=*)     v="${a#*=}"; a="--task" ;;
+      --timeout=*)  v="${a#*=}"; a="--timeout" ;;
+      --interval=*) v="${a#*=}"; a="--interval" ;;
+    esac
+    case "$a" in
+      --project|--task|--timeout|--interval)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project) slug="$v" ;; --task) task="$v" ;;
+          --timeout) TIMEOUT_MIN="$v" ;; --interval) INTERVAL_SEC="$v" ;;
+        esac ;;
       -h|--help) pw_usage ;;
-      -*) die "unknown option: $1" ;;
-      *)
-        if [ -z "$SLUG" ]; then
-          SLUG="$1"
-        elif [ -z "$TASK_ID" ]; then
-          TASK_ID="$1"
-        fi
-        shift
-        ;;
+      -*) _pw_unknown "$a" "monitor --project <slug> --task <task-id> [--timeout <minutes>] [--interval <seconds>]" ;;
+      *) _pw_positional "$a" "monitor --project <slug> --task <task-id> [--timeout <minutes>] [--interval <seconds>]" ;;
     esac
   done
 
-  [ -n "$SLUG" ] && [ -n "$TASK_ID" ] || die "usage: monitor <slug> <task-id> [--timeout <minutes>] [--interval <seconds>]"
+  [ -n "$slug" ] && [ -n "$task" ] || die "monitor: --project and --task are required → fix: monitor --project <slug> --task <task-id> [--timeout <minutes>] [--interval <seconds>]"
+  SLUG="$slug"
+  TASK_ID="$task"
 
   D="$(proj_dir "$SLUG")"
   TASK_FILE="$D/task/$TASK_ID.md"
@@ -750,11 +823,30 @@ _record_build_check() {
 }
 
 cmd_exec() {
-  [ $# -eq 3 ] || die "usage: exec <slug> <task-id> <description-file>"
+  local slug="" task="" file="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+      --file=*)    v="${a#*=}"; a="--file" ;;
+    esac
+    case "$a" in
+      --project|--task|--file)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --task) task="$v" ;; --file) file="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "exec --project <slug> --task <task-id> --file <description-file>" ;;
+      *) _pw_positional "$a" "exec --project <slug> --task <task-id> --file <description-file>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "exec: --project is required → fix: exec --project <slug> --task <task-id> --file <description-file>"
+  [ -n "$task" ] || die "exec: --task is required → fix: exec --project <slug> --task <task-id> --file <description-file>"
+  [ -n "$file" ] || die "exec: --file is required → fix: exec --project <slug> --task <task-id> --file <description-file>"
 
-  SLUG="$1"
-  TASK_ID="$2"
-  DESC_FILE="$3"
+  SLUG="$slug"
+  TASK_ID="$task"
+  DESC_FILE="$file"
 
   D="$(proj_dir "$SLUG")"
   TASK_FILE="$D/task/$TASK_ID.md"
@@ -793,7 +885,7 @@ cmd_exec() {
     [ -n "$TARGET_BRANCH" ] || die "cannot resolve the stack target for $TASK_ID → fix: /pw-doctor --project $SLUG (stack topology)"
     case "$TARGET_BRANCH" in ''|*[!A-Za-z0-9._/-]*|-*) die "refusing unsafe stack target branch '$TARGET_BRANCH' for $TASK_ID";; esac
     _stack_stale "$D" "$TASK_ID" \
-      && die "task $TASK_ID's verification tuple is stale (head/parent/target changed) → fix: re-verify (/pw-execute $SLUG $TASK_ID) before shipping"
+      && die "task $TASK_ID's verification tuple is stale (head/parent/target changed) → fix: re-verify (/pw-execute --project $SLUG --task $TASK_ID) before shipping"
     if [ -f "$D/task/stack-ops.tsv" ]; then
       local _opkey _okind _opanc _oev _oexp _ocreated _ostages _ostate _clos
       _clos=" $(_stack_closure_ids "$D" "$TASK_ID" | tr '\n' ' ') "
@@ -811,7 +903,7 @@ cmd_exec() {
     # old unconditional ancestor match wrongly failed a fully-landed stack ("no ancestor matches").
     if [ "$TARGET_BRANCH" = "$BASE" ]; then
       git -C "$REPO_DIR" rev-parse --verify "origin/$BASE" >/dev/null 2>&1 \
-        || die "ultimate target '$BASE' is not published on origin for $TASK_ID → fix: publish/finish the stack landing first (/pw-ship $SLUG)"
+        || die "ultimate target '$BASE' is not published on origin for $TASK_ID → fix: publish/finish the stack landing first (/pw-ship --project $SLUG)"
     else
       local _anc _abr _av _ohead _lhead _matched=0
       while IFS= read -r _anc; do
@@ -821,13 +913,13 @@ cmd_exec() {
         _matched=1
         _av="$(pw_stack_state_get "$D" "$_anc" verified_head)"
         [ -n "$_av" ] \
-          || die "parent $_anc has no verified binding for target '$TARGET_BRANCH' → fix: re-run /pw-ship $SLUG $_anc so the parent ships with a verified binding before this child"
+          || die "parent $_anc has no verified binding for target '$TARGET_BRANCH' → fix: re-run /pw-ship --project $SLUG --task $_anc so the parent ships with a verified binding before this child"
         _ohead="$(git -C "$REPO_DIR" rev-parse "origin/$TARGET_BRANCH" 2>/dev/null || true)"
         [ "$_ohead" = "$_av" ] \
-          || die "parent target '$TARGET_BRANCH' on origin is not at $_anc's verified head (${_av:0:8}) → fix: push the verified parent first (/pw-ship $SLUG $_anc)"
+          || die "parent target '$TARGET_BRANCH' on origin is not at $_anc's verified head (${_av:0:8}) → fix: push the verified parent first (/pw-ship --project $SLUG --task $_anc)"
         _lhead="$(git -C "$REPO_DIR" rev-parse "$TARGET_BRANCH" 2>/dev/null || true)"
         [ "$_lhead" = "$_av" ] \
-          || die "local parent branch '$TARGET_BRANCH' is not at $_anc's verified head (${_av:0:8}) → fix: re-run the parent's execution/verify (/pw-execute $SLUG $_anc)"
+          || die "local parent branch '$TARGET_BRANCH' is not at $_anc's verified head (${_av:0:8}) → fix: re-run the parent's execution/verify (/pw-execute --project $SLUG --task $_anc)"
         break
       done <<EOF
 $(pw_stack_chain "$D" "$TASK_ID" 2>/dev/null || true)
@@ -919,7 +1011,7 @@ EOF
         printf '\n## Result\n\n- MR: %s\n' "$MR_URL" >> "$TASK_FILE"
       fi
       if grep -q '<!-- pw-mr-summary:start -->' "$DESC_FILE"; then
-        cmd_history "$SLUG" init "$MR_URL" --file "$DESC_FILE" \
+        cmd_history --project "$SLUG" --operation init --mr "$MR_URL" --options --file "$DESC_FILE" \
           || die "MR created but initial ownership snapshot is pending → fix: retain the creation body and retry its history init after fixing readback"
       fi
     else
@@ -933,7 +1025,7 @@ EOF
 
   # Update dashboard (only reached on creation-success or existing-MR paths). Subshell: a die()
   # here must not exit the script — the pre-merge subprocess form only ever killed the child.
-  ( cmd_dashboard_mr_state "$SLUG" "$TASK_ID" "open" ) 2>/dev/null || true
+  ( cmd_dashboard_mr_state --project "$SLUG" --task "$TASK_ID" --state "open" ) 2>/dev/null || true
 
   # Persist the effective target for a stacked task so promotion/cascade can compare observed
   # vs recorded targets. Best-effort (a state write failure never fails an otherwise-good ship).
@@ -992,15 +1084,45 @@ _ship_comment_section_ensure() {
 # skipped forever (looks perpetually "not resolved" on the forge, so a naive resolved-filter treats
 # it as not-actionable) or gets re-processed/re-replied-to every single run (no forge-side flag
 # ever flips to stop it recurring).
-#   comment-seen <slug> <task-id> <thread-id> <kind:resolvable|unresolvable> <replied:yes|no> [note...]
+#   comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no> [--note <text…>]
 cmd_comment_seen() {
-  [ $# -ge 5 ] || die "usage: comment-seen <slug> <task-id> <thread-id> <kind:resolvable|unresolvable> <replied:yes|no> [note...]"
-  local slug="$1" task="$2" thread="$3" kind="$4" replied="$5"; shift 5; local note="$*"
+  local slug="" task="" thread="" kind="" replied="" note="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+      --thread=*)  v="${a#*=}"; a="--thread" ;;
+      --kind=*)    v="${a#*=}"; a="--kind" ;;
+      --replied=*) v="${a#*=}"; a="--replied" ;;
+      --note=*)    v="${a#*=}"; a="--note" ;;
+    esac
+    case "$a" in
+      --project|--task|--thread|--kind|--replied)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project) slug="$v" ;; --task) task="$v" ;; --thread) thread="$v" ;;
+          --kind) kind="$v" ;; --replied) replied="$v" ;;
+        esac ;;
+      --note)
+        while [ $# -gt 0 ]; do case "$1" in --*) break ;; esac; v="${v:+$v }$1"; shift; done
+        [ -n "$v" ] || die "comment-seen: --note requires a value → fix: --note <text…> (runs until the next --flag)"
+        note="$v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no> [--note <text…>]" ;;
+      *) _pw_positional "$a" "comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no> [--note <text…>]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "comment-seen: --project is required → fix: comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no>"
+  [ -n "$task" ] || die "comment-seen: --task is required → fix: comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no>"
+  [ -n "$thread" ] || die "comment-seen: --thread is required → fix: pass the MR discussion/thread id"
+  [ -n "$kind" ] || die "comment-seen: --kind is required → fix: --kind <resolvable|unresolvable>"
+  [ -n "$replied" ] || die "comment-seen: --replied is required → fix: --replied <yes|no>"
   case "$kind" in resolvable|unresolvable) ;; *) die "kind must be 'resolvable' or 'unresolvable' (got '$kind')" ;; esac
   case "$replied" in yes|no) ;; *) die "replied must be 'yes' or 'no' (got '$replied')" ;; esac
   local d; d="$(proj_dir "$slug")"
   local f="$d/task/review/$task.review.md"
-  [ -f "$f" ] || die "no review file: task/review/$task.review.md (run '/pw-review $slug init task/$task.md' first)"
+  [ -f "$f" ] || die "no review file: task/review/$task.review.md (run '/pw-review init --project $slug --file task/review/$task.review.md --doc task/$task.md' first)"
   _ship_comment_section_ensure "$f"
   local marker="<!-- pw-mr-comment:$thread -->"
   local shortid="${thread:0:8}"
@@ -1020,22 +1142,40 @@ cmd_comment_seen() {
     ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
     grep -Fq "$marker" "$f" || printf '%s\n' "$row" >> "$f"
   fi
-  "$ST" log "$slug" ship "comment-seen $task/$thread ($kind): replied=$replied"
+  "$ST" log --project "$slug" --actor ship --message "comment-seen $task/$thread ($kind): replied=$replied"
   echo "$slug: ship comment-seen $task/$thread ($kind) -> replied=$replied"
 }
 
 # Update an MR's state in the dashboard README.md MR table.
-#   dashboard-mr-state <slug> <task-id> <state>
+#   dashboard-mr-state --project <slug> --task <task-id> --state <state>
 cmd_dashboard_mr_state() {
-  [ $# -eq 3 ] || die "usage: dashboard-mr-state <slug> <task-id> <state>"
-  local slug="$1" task="$2" state="$3"
+  local slug="" task="" state="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+      --state=*)   v="${a#*=}"; a="--state" ;;
+    esac
+    case "$a" in
+      --project|--task|--state)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --task) task="$v" ;; --state) state="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "dashboard-mr-state --project <slug> --task <task-id> --state <state>" ;;
+      *) _pw_positional "$a" "dashboard-mr-state --project <slug> --task <task-id> --state <state>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "dashboard-mr-state: --project is required → fix: dashboard-mr-state --project <slug> --task <task-id> --state <state>"
+  [ -n "$task" ] || die "dashboard-mr-state: --task is required → fix: dashboard-mr-state --project <slug> --task <task-id> --state <state>"
+  [ -n "$state" ] || die "dashboard-mr-state: --state is required → fix: dashboard-mr-state --project <slug> --task <task-id> --state <state>"
   local d; d="$(proj_dir "$slug")"
   local readme="$d/README.md"
   [ -f "$readme" ] || die "no README.md in project $slug"
 
   _dashboard_update "$readme" 'Task' 'State' "$task" "$state" \
     || die "dashboard-mr-state: could not update $task in the Merge requests table (see above)"
-  "$ST" log "$slug" sync "dashboard: $task MR state -> $state"
+  "$ST" log --project "$slug" --actor sync --message "dashboard: $task MR state -> $state"
 }
 
 # ================= STACK facet (plan 35) ======================================
@@ -1295,11 +1435,22 @@ EOF
   echo "promote|$target"; return 0
 }
 
-# stack-validate <slug> — fail-closed topology check: no cycle, known same-repo parent, one
+# stack-validate --project <slug> — fail-closed topology check: no cycle, known same-repo parent, one
 # ultimate destination, distinct branches, parent present in depends_on.
 cmd_stack_validate() {
-  [ $# -eq 1 ] || die "usage: stack-validate <slug>"
-  local slug="$1" d; d="$(proj_dir "$slug")"
+  local slug="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --project=*) v="${a#*=}"; a="--project" ;; esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "stack-validate --project <slug>" ;;
+      *) _pw_positional "$a" "stack-validate --project <slug>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "stack-validate: --project is required → fix: stack-validate --project <slug>"
+  local d; d="$(proj_dir "$slug")"
   local bad=0 f t p pf repo base prepo pbase cycle deps
   cycle="$(pw_stack_cycle "$d" 2>/dev/null || true)"
   if [ -n "$cycle" ]; then
@@ -1329,12 +1480,23 @@ cmd_stack_validate() {
   return 1
 }
 
-# stack <slug> — read-only topology + health preview. One row per stack task:
+# stack --project <slug> — read-only topology + health preview. One row per stack task:
 #   task|parent|target|branch|base|landed|freshness|debt
 # plus a root-first line and any warnings. Never writes.
 cmd_stack() {
-  [ $# -eq 1 ] || die "usage: stack <slug>"
-  local slug="$1" d; d="$(proj_dir "$slug")"
+  local slug="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --project=*) v="${a#*=}"; a="--project" ;; esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "stack --project <slug>" ;;
+      *) _pw_positional "$a" "stack --project <slug>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "stack: --project is required → fix: stack --project <slug>"
+  local d; d="$(proj_dir "$slug")"
   pw_stack_state_validate "$d" || die "stack state invalid (see the reason above) → fix: repair task/stack.tsv before reading the stack"
   local tasks; tasks="$(_stack_tasks "$d")"
   if [ -z "$tasks" ]; then
@@ -1367,18 +1529,37 @@ EOF
   return 0
 }
 
-# stack-plan <slug> [task-ids…] — the root-first publication order with effective targets and
-# readiness. One line: task|repo|branch|target|parent|ready|reason. A stacked child is ready only
-# when its target branch already exists on origin (parent published first). No ids = every task.
+# stack-plan --project <slug> [--task <task-id>]… — the root-first publication order with effective
+# targets and readiness. One line: task|repo|branch|target|parent|ready|reason. A stacked child is
+# ready only when its target branch already exists on origin (parent published first). No --task
+# given = every task.
 cmd_stack_plan() {
-  [ $# -ge 1 ] || die "usage: stack-plan <slug> [task-ids…]"
-  local slug="$1"; shift
+  local slug="" a v ids="" saw_ids=0
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+    esac
+    case "$a" in
+      --project)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      --task)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --task; v="$1"; shift; }
+        saw_ids=1
+        pw_task_id_ok "$v" && ids="$ids$v
+" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "stack-plan --project <slug> [--task <task-id>]…" ;;
+      *) _pw_positional "$a" "stack-plan --project <slug> [--task <task-id>]…" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "stack-plan: --project is required → fix: stack-plan --project <slug> [--task <task-id>]…"
   local d; d="$(proj_dir "$slug")"
   pw_stack_state_validate "$d" || die "stack state invalid (see the reason above) → fix: repair task/stack.tsv before planning"
   local sel=""
-  if [ $# -gt 0 ]; then
-    local id; for id in "$@"; do pw_task_id_ok "$id" && sel="$sel$id
-"; done
+  if [ "$saw_ids" = 1 ]; then
+    sel="$ids"
   elif [ -f "$d/task/PLAN.md" ]; then
     local t _s; while IFS='|' read -r t _s; do [ -n "$t" ] && sel="$sel$t
 "; done < <(pw_plan_pairs "$d/task/PLAN.md")
@@ -1427,49 +1608,85 @@ EOF
   return 0
 }
 
-# stack-record <slug> <task-id> <col=value>… — write the ship-owned binding/state row. Verification
-# columns are REFUSED: only stack-verify may bind them (after a real `## Verify`), so no caller can
-# certify unverified data through this generic setter.
+# stack-record --project <slug> --task <task-id> --set <col=value> [--set <col=value>]… — write the
+# ship-owned binding/state row. Verification columns are REFUSED: only stack-verify may bind them
+# (after a real `## Verify`), so no caller can certify unverified data through this generic setter.
 cmd_stack_record() {
-  [ $# -ge 3 ] || die "usage: stack-record <slug> <task-id> <col=value>…"
-  local slug="$1" t="$2"; shift 2
-  pw_task_id_ok "$t" || die "invalid task id: $t"
+  local slug="" task="" a v; local -a sets=()
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+      --set=*)     v="${a#*=}"; a="--set" ;;
+    esac
+    case "$a" in
+      --project|--task|--set)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project) slug="$v" ;; --task) task="$v" ;;
+          --set) sets[${#sets[@]}]="$v" ;;
+        esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "stack-record --project <slug> --task <task-id> [--set <col=value>]…" ;;
+      *) _pw_positional "$a" "stack-record --project <slug> --task <task-id> [--set <col=value>]…" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "stack-record: --project is required → fix: stack-record --project <slug> --task <task-id> [--set <col=value>]…"
+  [ -n "$task" ] || die "stack-record: --task is required → fix: stack-record --project <slug> --task <task-id> [--set <col=value>]…"
+  [ ${#sets[@]} -ge 1 ] || die "stack-record: at least one --set <col=value> is required → fix: stack-record --project <slug> --task <task-id> --set <col=value>"
+  pw_task_id_ok "$task" || die "invalid task id: $task"
   local d; d="$(proj_dir "$slug")"
   local kv c
-  for kv in "$@"; do
+  for kv in ${sets[@]+"${sets[@]}"}; do
     c="${kv%%=*}"
     case "$c" in
       verified_head|verified_parent|verified_target|verified_at|verified_evidence|freshness|ci_sha|ci_target|landed|landed_into)
         die "stack-record cannot set '$c' → fix: bind verification with the execute/ship flow (verification after ## Verify, landing after proof); no unverified/guessed state is accepted";;
     esac
   done
-  pw_stack_state_upsert "$d" "$t" "$@" || die "stack-record failed → fix: check the column names against the stack-state column registry (PW_STACK_COLS)"
-  echo "$slug: stack state recorded for $t"
+  pw_stack_state_upsert "$d" "$task" ${sets[@]+"${sets[@]}"} || die "stack-record failed → fix: check the column names against the stack-state column registry (PW_STACK_COLS)"
+  echo "$slug: stack state recorded for $task"
 }
 
-# stack-verify <slug> <task-id> <evidence-path> [--head <sha>] [--ci-sha <sha|pending|skipped|failed|unknown>] [--ci-target <branch>]
+# stack-verify --project <slug> --task <task-id> --evidence <path> [--head <sha>] [--ci-sha <sha|pending|skipped|failed|unknown>] [--ci-target <branch>]
 # Deterministic verification binding. Run AFTER the task's real `## Verify` passes: binds the current
 # child head + consumed parent verified commit + effective target + evidence path/time, so freshness
 # is a live tuple comparison, not a manual flag. Refuses when the parent is unverified or its commit
 # is absent from the child branch (integration must happen first). The whole tuple — including the
 # CI disposition — is written in ONE atomic record write; nothing here is best-effort.
 cmd_stack_verify() {
-  [ $# -ge 3 ] || die "usage: stack-verify <slug> <task-id> <evidence-path> [--head <sha>] [--ci-sha <sha>] [--ci-target <branch>]"
-  local slug="$1" t="$2" ev="$3"; shift 3
+  local slug="" t="" ev="" head="" ci_sha="" ci_target="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*)   v="${a#*=}"; a="--project" ;;
+      --task=*)      v="${a#*=}"; a="--task" ;;
+      --evidence=*)  v="${a#*=}"; a="--evidence" ;;
+      --head=*)      v="${a#*=}"; a="--head" ;;
+      --ci-sha=*)    v="${a#*=}"; a="--ci-sha" ;;
+      --ci-target=*) v="${a#*=}"; a="--ci-target" ;;
+    esac
+    case "$a" in
+      --project|--task|--evidence|--head|--ci-sha|--ci-target)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project) slug="$v" ;; --task) t="$v" ;; --evidence) ev="$v" ;;
+          --head) head="$v" ;; --ci-sha) ci_sha="$v" ;; --ci-target) ci_target="$v" ;;
+        esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "stack-verify --project <slug> --task <task-id> --evidence <path> [--head <sha>] [--ci-sha <sha>] [--ci-target <branch>]" ;;
+      *) _pw_positional "$a" "stack-verify --project <slug> --task <task-id> --evidence <path> [--head <sha>] [--ci-sha <sha>] [--ci-target <branch>]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "stack-verify: --project is required → fix: stack-verify --project <slug> --task <task-id> --evidence <path> [--head <sha>] [--ci-sha <sha>] [--ci-target <branch>]"
+  [ -n "$t" ] || die "stack-verify: --task is required → fix: stack-verify --project <slug> --task <task-id> --evidence <path>"
+  [ -n "$ev" ] || die "stack-verify: --evidence is required → fix: stack-verify --project <slug> --task <task-id> --evidence <path>"
   pw_task_id_ok "$t" || die "invalid task id: $t"
   [ -f "$ev" ] || die "evidence path not found: $ev → fix: run the task's ## Verify and pass its captured output file"
   [ -s "$ev" ] || die "evidence path is empty: $ev → fix: capture the real Verify output (an empty file proves nothing)"
   [ -n "$(tr -d '[:space:]' < "$ev" 2>/dev/null || true)" ] \
     || die "evidence file has no content beyond whitespace: $ev → fix: capture the real Verify output"
-  local head="" ci_sha="" ci_target=""
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --head) head="${2:-}"; shift 2 ;;
-      --ci-sha) ci_sha="${2:-}"; shift 2 ;;
-      --ci-target) ci_target="${2:-}"; shift 2 ;;
-      *) die "unknown stack-verify arg '$1'" ;;
-    esac
-  done
   local d; d="$(proj_dir "$slug")"
   pw_stack_state_validate "$d" || die "stack state invalid (see the reason above) → fix: repair task/stack.tsv before binding a verification"
   local repo branch base; repo="$(_stack_repo_of "$d" "$t")"; branch="$(_stack_branch_of "$d" "$t")"; base="$(_stack_base_of "$d" "$t")"
@@ -1484,9 +1701,9 @@ cmd_stack_verify() {
   parent_task="$(pw_stack_parent_id "$d" "$t")"
   if [ -n "$parent_task" ]; then
     vp="$(pw_stack_state_get "$d" "$parent_task" verified_head 2>/dev/null || true)"
-    [ -n "$vp" ] || die "parent $parent_task has no verification binding → fix: execute and ship the parent first (/pw-execute $SLUG $parent_task, then /pw-ship $SLUG $parent_task) — its verified binding must exist before this record"
+    [ -n "$vp" ] || die "parent $parent_task has no verification binding → fix: execute and ship the parent first (/pw-execute --project $SLUG --task $parent_task, then /pw-ship --project $SLUG --task $parent_task) — its verified binding must exist before this record"
     git -C "$rd" merge-base --is-ancestor "$vp" "$branch" 2>/dev/null \
-      || die "branch $branch does not contain parent $parent_task's verified commit ${vp:0:12} → fix: /pw-sync $slug $t (integrate the updated parent) before binding"
+      || die "branch $branch does not contain parent $parent_task's verified commit ${vp:0:12} → fix: /pw-sync --project $slug --task $t (integrate the updated parent) before binding"
   fi
   local target; target="$(pw_stack_effective_target "$d" "$t" "$base")" \
     || die "cannot resolve the effective target for $t → fix: check the stack topology (/pw-doctor --project $slug)"
@@ -1521,12 +1738,29 @@ cmd_stack_verify() {
   echo "$slug: $t verified at ${cur_head:0:12} (parent ${vp:0:8}, target $target, ci ${ci_sha}@${ci_target}, evidence $ev)"
 }
 
-# stack-fresh / stack-stale <slug> <task-id> — explicit debt toggle (force stale, or clear the flag).
-# The flag alone never certifies: _stack_stale still compares the recorded tuple against live Git.
+# stack-fresh / stack-stale --project <slug> --task <task-id> — explicit debt toggle (force stale, or
+# clear the flag). The flag alone never certifies: _stack_stale still compares the recorded tuple
+# against live Git.
 cmd_stack_freshness() {
-  [ $# -eq 3 ] || die "usage: stack-fresh|stack-stale <slug> <task-id>"
-  local slug="$1" t="$2" val="$3"
-  [ -n "$t" ] || die "usage: stack-fresh|stack-stale <slug> <task-id>"
+  local val="$1"; shift
+  local slug="" t="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+    esac
+    case "$a" in
+      --project|--task)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --task) t="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "stack-fresh|stack-stale --project <slug> --task <task-id>" ;;
+      *) _pw_positional "$a" "stack-fresh|stack-stale --project <slug> --task <task-id>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "stack-fresh|stack-stale: --project is required → fix: stack-fresh|stack-stale --project <slug> --task <task-id>"
+  [ -n "$t" ] || die "stack-fresh|stack-stale: --task is required → fix: stack-fresh|stack-stale --project <slug> --task <task-id>"
   pw_task_id_ok "$t" || die "invalid task id: $t"
   case "$val" in fresh|stale) : ;; *) die "unknown freshness '$val'" ;; esac
   local d; d="$(proj_dir "$slug")"
@@ -1534,18 +1768,41 @@ cmd_stack_freshness() {
   echo "$slug: $t freshness -> $val"
 }
 
-# stack-land <slug> <task-id> <merge_sha|-> <landed_into> [merge|ff|squash|rebase|closed|unknown]
+# stack-land --project <slug> --task <task-id> --merge-sha <sha|-> --landed-into <branch> [--kind <merge|ff|squash|rebase|closed|unknown>]
 # Observe AND VERIFY a parent's landing before promoting children: merge/ff is proven by real Git
 # ancestry into the destination branch; squash/rebase/closed require corroborating forge MR state.
 # Stored as "<kind>:<branch>"; an unprovable/unknown landing is refused (landed=yes is never trusted).
 cmd_stack_land() {
-  [ $# -ge 4 ] || die "usage: stack-land <slug> <task-id> <merge_sha|-> <landed_into> [kind]"
-  local slug="$1" t="$2" msha="$3" into="$4" kind="${5:-merge}"
+  local slug="" t="" msha="" into="" kind="merge" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*)     v="${a#*=}"; a="--project" ;;
+      --task=*)        v="${a#*=}"; a="--task" ;;
+      --merge-sha=*)   v="${a#*=}"; a="--merge-sha" ;;
+      --landed-into=*) v="${a#*=}"; a="--landed-into" ;;
+      --kind=*)        v="${a#*=}"; a="--kind" ;;
+    esac
+    case "$a" in
+      --project|--task|--merge-sha|--landed-into|--kind)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project) slug="$v" ;; --task) t="$v" ;; --merge-sha) msha="$v" ;;
+          --landed-into) into="$v" ;; --kind) kind="$v" ;;
+        esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "stack-land --project <slug> --task <task-id> --merge-sha <sha|-> --landed-into <branch> [--kind <merge|ff|squash|rebase|closed|unknown>]" ;;
+      *) _pw_positional "$a" "stack-land --project <slug> --task <task-id> --merge-sha <sha|-> --landed-into <branch> [--kind <merge|ff|squash|rebase|closed|unknown>]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "stack-land: --project is required → fix: stack-land --project <slug> --task <task-id> --merge-sha <sha|-> --landed-into <branch>"
+  [ -n "$t" ] || die "stack-land: --task is required → fix: stack-land --project <slug> --task <task-id> --merge-sha <sha|-> --landed-into <branch>"
+  [ -n "$msha" ] || die "stack-land: --merge-sha is required → fix: pass the merge commit sha, or - when there is no merge commit"
   pw_task_id_ok "$t" || die "invalid task id: $t"
   case "$kind" in merge|ff|fast-forward|squash|rebase|closed|unknown) : ;; *) die "unknown landing kind '$kind' → fix: one of merge|ff|squash|rebase|closed|unknown" ;; esac
   local d; d="$(proj_dir "$slug")"
   pw_stack_state_validate "$d" || die "stack state invalid (see the reason above) → fix: repair task/stack.tsv before recording a landing"
-  { [ -n "$into" ] && [ "$into" != "-" ]; } || die "stack-land: <landed_into> branch is required → fix: name the branch the MR merged into"
+  { [ -n "$into" ] && [ "$into" != "-" ]; } || die "stack-land: --landed-into branch is required → fix: name the branch the MR merged into"
   case "$into" in *[!A-Za-z0-9._/-]*) die "stack-land: invalid destination branch '$into'" ;; esac
   _stack_verify_landing "$slug" "$d" "$t" "$msha" "$into" "$kind" \
     || die "stack-land: landing for $t NOT proven (no record written) → fix: observe the real forge MR state + destination branch before promoting children"
@@ -1567,27 +1824,59 @@ cmd_stack_land() {
   echo "$slug: $t landed ($kind into $into, verified)"
 }
 
-# stack-promote <slug> <task-id> — post-landing verdict: promote|<target> / noop / block|<reason>.
+# stack-promote --project <slug> --task <task-id> — post-landing verdict: promote|<target> / noop / block|<reason>.
 cmd_stack_promote() {
-  [ $# -eq 2 ] || die "usage: stack-promote <slug> <task-id>"
-  local slug="$1" t="$2"; pw_task_id_ok "$t" || die "invalid task id: $t"
+  local slug="" t="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+    esac
+    case "$a" in
+      --project|--task)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --task) t="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "stack-promote --project <slug> --task <task-id>" ;;
+      *) _pw_positional "$a" "stack-promote --project <slug> --task <task-id>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "stack-promote: --project is required → fix: stack-promote --project <slug> --task <task-id>"
+  [ -n "$t" ] || die "stack-promote: --task is required → fix: stack-promote --project <slug> --task <task-id>"
+  pw_task_id_ok "$t" || die "invalid task id: $t"
   local d; d="$(proj_dir "$slug")"
   pw_stack_state_validate "$d" || die "stack state invalid (see the reason above) → fix: repair task/stack.tsv before promotion"
   _stack_promote_verdict "$slug" "$d" "$t"
 }
 
-# stack-retarget <slug> <task-id> [--apply] — publish a promoted child's MR to its updated effective
-# target via the forge. Default is a dry-run preview; --apply is the explicit publication
-# authorization. Robust persistence (plan 35 rev 2): the pending recovery row is written FIRST and
-# the forge write only happens after a fresh fetch + destination/state/head inspection; the observed
-# target and head are read back after the write; local state/dashboard/mirror failures FAIL LOUD and
-# keep the row pending, so a remote success with a broken local mirror resumes without a second
-# forge write (the observed target already equals the desired one → safe no-op retry).
+# stack-retarget --project <slug> --task <task-id> [--apply] — publish a promoted child's MR to its
+# updated effective target via the forge. Default is a dry-run preview; --apply is the explicit
+# publication authorization. Robust persistence (plan 35 rev 2): the pending recovery row is written
+# FIRST and the forge write only happens after a fresh fetch + destination/state/head inspection; the
+# observed target and head are read back after the write; local state/dashboard/mirror failures FAIL
+# LOUD and keep the row pending, so a remote success with a broken local mirror resumes without a
+# second forge write (the observed target already equals the desired one → safe no-op retry).
 cmd_stack_retarget() {
-  [ $# -ge 2 ] || die "usage: stack-retarget <slug> <task-id> [--apply]"
-  local slug="$1" t="$2"; shift 2
-  local apply=0
-  while [ $# -gt 0 ]; do case "$1" in --apply) apply=1; shift ;; *) die "unknown stack-retarget arg '$1'" ;; esac; done
+  local slug="" t="" apply=0 a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+    esac
+    case "$a" in
+      --project|--task)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --task) t="$v" ;; esac ;;
+      --apply) apply=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "stack-retarget --project <slug> --task <task-id> [--apply]" ;;
+      *) _pw_positional "$a" "stack-retarget --project <slug> --task <task-id> [--apply]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "stack-retarget: --project is required → fix: stack-retarget --project <slug> --task <task-id> [--apply]"
+  [ -n "$t" ] || die "stack-retarget: --task is required → fix: stack-retarget --project <slug> --task <task-id> [--apply]"
   pw_task_id_ok "$t" || die "invalid task id: $t"
   local d; d="$(proj_dir "$slug")"
   pw_stack_state_validate "$d" || die "stack state invalid (see the reason above) → fix: repair task/stack.tsv before retargeting"
@@ -1624,9 +1913,9 @@ cmd_stack_retarget() {
     return 0
   fi
   local mr; mr="$(pw_task_mr_url "$d/task/$t.md" 2>/dev/null || true)"
-  case "$mr" in http*) : ;; *) die "stack-retarget: no MR URL for $t → fix: /pw-ship $slug $t first" ;; esac
+  case "$mr" in http*) : ;; *) die "stack-retarget: no MR URL for $t → fix: /pw-ship --project $slug --task $t first" ;; esac
   local repo_dir; repo_dir="$(_stack_task_repo_dir "$d" "$t")"
-  [ -n "$repo_dir" ] || die "stack-retarget: no worktree for $t → fix: /pw-execute $slug $t"
+  [ -n "$repo_dir" ] || die "stack-retarget: no worktree for $t → fix: /pw-execute --project $slug --task $t"
   local host forge iid; host="$(_stack_host_of "$repo_dir")"; forge="$(_stack_forge_of "$host")"; iid="$(_stack_mr_iid "$forge" "$mr")"
   [ -n "$iid" ] || die "stack-retarget: cannot parse the MR id from $mr"
   # Fresh refs + published destination BEFORE any forge write: retargeting onto a branch origin does
@@ -1636,7 +1925,7 @@ cmd_stack_retarget() {
   git -C "$repo_dir" rev-parse --verify "origin/$target" >/dev/null 2>&1 \
     || die "stack-retarget: destination '$target' is not published on origin → fix: settle/publish the promotion target before retargeting children"
   if [ "$havep" = 0 ]; then
-    cmd_stack_op "$slug" create "$opkey" promote "$t" "retarget" "retarget=pending" "$target" >/dev/null \
+    cmd_stack_op --project "$slug" create --key "$opkey" --kind promote --ancestor "$t" --event retarget --stages "retarget=pending" --expected "$target" >/dev/null \
       || die "stack-retarget: could not record the pending recovery row → fix: repair task/stack-ops.tsv (nothing was written to the forge)"
   fi
   local view st_before tg_before head_before
@@ -1673,10 +1962,10 @@ cmd_stack_retarget() {
   # Local state + mirrors: no suppression — a remote success with a local failure stays visible
   # pending debt and re-running completes it WITHOUT another forge write.
   pw_stack_state_upsert "$d" "$t" target="$target" \
-    || die "stack-retarget: published on the forge but the local state write failed → fix: re-run /pw-ship $slug stack-retarget $t --apply to finish the local mirror (no duplicate forge write)"
+    || die "stack-retarget: published on the forge but the local state write failed → fix: re-run /pw-ship stack-retarget --project $slug --task $t --apply to finish the local mirror (no duplicate forge write)"
   _dashboard_update "$d/README.md" 'Task' 'Target branch' "$t" "$target" >/dev/null 2>&1 \
     || die "stack-retarget: published on the forge but the dashboard mirror failed → fix: re-run stack-retarget --apply (idempotent; no duplicate forge write)"
-  cmd_stack_op "$slug" set "$opkey" "retarget=done" >/dev/null \
+  cmd_stack_op --project "$slug" set --key "$opkey" --state "retarget=done" >/dev/null \
     || die "stack-retarget: completed but the recovery row could not be marked done → fix: re-run stack-retarget --apply (idempotent)"
   echo "promote|$target"
   echo "$slug: $t MR retargeted to $target (head ${head_after:0:8}${tg_before:+; was $tg_before})"
@@ -1708,20 +1997,49 @@ _stack_ops_validate() {
 }
 
 cmd_stack_op() {
-  [ $# -ge 2 ] || die "usage: stack-op <slug> <list|create|set|clear> [args…]"
-  local slug="$1" sub="$2"; shift 2
+  local slug="" sub="" key="" kind="" anc="" ev="" stages="" expected="-" add="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*)  v="${a#*=}"; a="--project" ;;
+      --key=*)      v="${a#*=}"; a="--key" ;;
+      --kind=*)     v="${a#*=}"; a="--kind" ;;
+      --ancestor=*) v="${a#*=}"; a="--ancestor" ;;
+      --event=*)    v="${a#*=}"; a="--event" ;;
+      --stages=*)   v="${a#*=}"; a="--stages" ;;
+      --expected=*) v="${a#*=}"; a="--expected" ;;
+      --state=*)    v="${a#*=}"; a="--state" ;;
+    esac
+    case "$a" in
+      --project|--key|--kind|--ancestor|--event|--stages|--expected|--state)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project) slug="$v" ;; --key) key="$v" ;; --kind) kind="$v" ;;
+          --ancestor) anc="$v" ;; --event) ev="$v" ;; --stages) stages="$v" ;;
+          --expected) expected="$v" ;; --state) add="$v" ;;
+        esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "stack-op --project <slug> list | create --key <k> --kind <k> --ancestor <a> --event <e> --stages <s> [--expected <e>] | set --key <k> --state <stage=state[,…]> | clear --key <k>" ;;
+      *) if [ -z "$sub" ]; then sub="$a"; else _pw_positional "$a" "stack-op --project <slug> list|create|set|clear …"; fi ;;
+    esac
+  done
+  [ -n "$slug" ] || die "stack-op: --project is required → fix: stack-op --project <slug> list | create … | set … | clear …"
+  case "$sub" in
+    list|create|set|clear) : ;;
+    "") die "stack-op: an operation word is required → fix: stack-op --project <slug> list | create | set | clear" ;;
+    *) die "unknown stack-op subcommand '$sub' → fix: list|create|set|clear" ;;
+  esac
   local d; d="$(proj_dir "$slug")"; local f; f="$(_command_stack_op_file "$d")"
   _stack_ops_validate "$f" || die "stack ops record invalid (see the reason above) → fix: repair task/stack-ops.tsv before list/create/set/clear"
   local hdr='key	kind	ancestor	event	expected	created	stages	state'
   case "$sub" in
     list)
-      local key="${1:-}"
       [ -f "$f" ] || { echo "no pending stack operations"; return 0; }
       if [ -n "$key" ]; then awk -F'\t' -v k="$key" 'NR>1 && $1==k' "$f"; else awk 'NR>1' "$f"; fi
       ;;
     create)
-      [ $# -ge 5 ] || die "usage: stack-op <slug> create <key> <kind> <ancestor> <event> <stages> [expected]"
-      local key="$1" kind="$2" anc="$3" ev="$4" stages="$5" expected="${6:--}"
+      [ -n "$key" ] && [ -n "$kind" ] && [ -n "$anc" ] && [ -n "$ev" ] && [ -n "$stages" ] \
+        || die "usage: stack-op --project <slug> create --key <key> --kind <kind> --ancestor <task-id> --event <event> --stages <stages> [--expected <expected>]"
       case "$kind" in cascade|sync|promote|adopt) : ;; *) die "unknown op kind '$kind' → fix: cascade|sync|promote|adopt" ;; esac
       pw_task_id_ok "$anc" || die "invalid ancestor task id: $anc"
       _stack_val_bad "$key" && die "stack-op create: key has a reserved character (pipe/TAB/newline)"
@@ -1751,9 +2069,8 @@ cmd_stack_op() {
       echo "$slug: stack op $key ($st)"
       ;;
     set)
-      [ $# -ge 2 ] || die "usage: stack-op <slug> set <key> <stage=state>[,…]"
-      local key="$1" add="$2"
-      [ -f "$f" ] || die "no stack ops recorded → fix: stack-op $slug create … first"
+      [ -n "$key" ] && [ -n "$add" ] || die "usage: stack-op --project <slug> set --key <key> --state <stage=state>[,…]"
+      [ -f "$f" ] || die "no stack ops recorded → fix: stack-op --project $slug create … first"
       _stack_val_bad "$key" && die "stack-op set: key has a reserved character (pipe/TAB/newline)"
       _stack_val_bad "$add" && die "stack-op set: stages have a reserved character (pipe/TAB/newline)"
       [ -L "$f" ] && die "stack-op: refusing to write through symlink $f"
@@ -1787,8 +2104,7 @@ cmd_stack_op() {
       echo "$slug: stack op $key stages updated"
       ;;
     clear)
-      [ $# -ge 1 ] || die "usage: stack-op <slug> clear <key>"
-      local key="$1"
+      [ -n "$key" ] || die "usage: stack-op --project <slug> clear --key <key>"
       [ -f "$f" ] || { echo "no stack ops recorded"; return 0; }
       _stack_val_bad "$key" && die "stack-op clear: key has a reserved character (pipe/TAB/newline)"
       [ -L "$f" ] && die "stack-op: refusing to write through symlink $f"
@@ -1805,12 +2121,29 @@ cmd_stack_op() {
   esac
 }
 
-# stack-debt <slug> [task-ids…] — rc 1 + the pending ops when any operation touching the selected
-# set (or its stack closure) is not done. The gate ship/comment/sync/close call before outward
-# work, so a resumed run never duplicates a half-finished cascade.
+# stack-debt --project <slug> [--task <task-id>]… — rc 1 + the pending ops when any operation
+# touching the selected set (or its stack closure) is not done. The gate ship/comment/sync/close
+# call before outward work, so a resumed run never duplicates a half-finished cascade.
 cmd_stack_debt() {
-  [ $# -ge 1 ] || die "usage: stack-debt <slug> [task-ids…]"
-  local slug="$1"; shift
+  local slug="" a v; local -a ids=()
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+    esac
+    case "$a" in
+      --project)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      --task)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --task; v="$1"; shift; }
+        ids[${#ids[@]}]="$v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "stack-debt --project <slug> [--task <task-id>]…" ;;
+      *) _pw_positional "$a" "stack-debt --project <slug> [--task <task-id>]…" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "stack-debt: --project is required → fix: stack-debt --project <slug> [--task <task-id>]…"
   local d; d="$(proj_dir "$slug")"; local f; f="$(_command_stack_op_file "$d")"
   [ -f "$f" ] || return 0
   _stack_ops_validate "$f" || die "stack ops record invalid (see the reason above) → fix: repair task/stack-ops.tsv before a debt check"
@@ -1820,9 +2153,9 @@ cmd_stack_debt() {
     [ "$key" = "key" ] && continue
     [ -n "$key" ] || continue
     [ "$state" = "done" ] && continue
-    if [ $# -gt 0 ]; then
+    if [ ${#ids[@]} -gt 0 ]; then
       matched=0
-      for id in "$@"; do [ "$id" = "$anc" ] && matched=1; done
+      for id in ${ids[@]+"${ids[@]}"}; do [ "$id" = "$anc" ] && matched=1; done
       [ "$matched" = 1 ] || continue
     fi
     hits="$hits$key|$kind|$anc|$state|$stages
@@ -1835,14 +2168,33 @@ cmd_stack_debt() {
   return 0
 }
 
-# stack-adopt <slug> [--apply] [task-ids…] — read each open MR's actual target and infer the
-# stack edge (target == another task's branch). Default is a DRY RUN (no writes); --apply imports
-# only proven edges and normalizes the task's Base branch to the ultimate destination.
+# stack-adopt --project <slug> [--apply] [--task <task-id>]… — read each open MR's actual target and
+# infer the stack edge (target == another task's branch). Default is a DRY RUN (no writes); --apply
+# imports only proven edges and normalizes the task's Base branch to the ultimate destination.
 cmd_stack_adopt() {
-  [ $# -ge 1 ] || die "usage: stack-adopt <slug> [--apply] [task-ids…]"
-  local slug="$1"; shift
-  local apply=0 id; local ids=""
-  for id in "$@"; do case "$id" in --apply) apply=1 ;; T[0-9]*) ids="$ids $id" ;; *) die "unknown stack-adopt arg '$id'" ;; esac; done
+  local slug="" apply=0 a v ids=""
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+    esac
+    case "$a" in
+      --project)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      --apply) apply=1 ;;
+      --task)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --task; v="$1"; shift; }
+        case "$v" in
+          T[0-9]*) ids="$ids $v" ;;
+          *) die "stack-adopt: invalid task id '$v' → fix: task ids look like T01 (repeat --task per id)" ;;
+        esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "stack-adopt --project <slug> [--apply] [--task <task-id>]…" ;;
+      *) _pw_positional "$a" "stack-adopt --project <slug> [--apply] [--task <task-id>]…" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "stack-adopt: --project is required → fix: stack-adopt --project <slug> [--apply] [--task <task-id>]…"
   local d; d="$(proj_dir "$slug")"
   local sel
   if [ -n "$ids" ]; then
@@ -1956,14 +2308,37 @@ _stack_task_field_put() {
   return 0
 }
 
-# stack-inherited <slug> <task-id> <parent-id> <parent-sha> — deterministic inherited-update writer.
-# Records that <task> absorbed <parent>'s upstream fix during a cascade: one keyed
-# `- **Inherited:**` bullet in the task's ## Result plus a LOG line. It NEVER writes reviewer-comment
-# text or replies — inherited evidence stays distinct from comment rounds (plan 33 history interop),
-# so a descendant that received only an inherited update never shows a fabricated reviewer request.
+# stack-inherited --project <slug> --task <task-id> --parent <parent-id> --parent-sha <sha> —
+# deterministic inherited-update writer. Records that <task> absorbed <parent>'s upstream fix during
+# a cascade: one keyed `- **Inherited:**` bullet in the task's ## Result plus a LOG line. It NEVER
+# writes reviewer-comment text or replies — inherited evidence stays distinct from comment rounds
+# (plan 33 history interop), so a descendant that received only an inherited update never shows a
+# fabricated reviewer request.
 cmd_stack_inherited() {
-  [ $# -eq 4 ] || die "usage: stack-inherited <slug> <task-id> <parent-id> <parent-sha>"
-  local slug="$1" t="$2" p="$3" sha="$4"
+  local slug="" t="" p="" sha="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*)    v="${a#*=}"; a="--project" ;;
+      --task=*)       v="${a#*=}"; a="--task" ;;
+      --parent=*)     v="${a#*=}"; a="--parent" ;;
+      --parent-sha=*) v="${a#*=}"; a="--parent-sha" ;;
+    esac
+    case "$a" in
+      --project|--task|--parent|--parent-sha)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project) slug="$v" ;; --task) t="$v" ;; --parent) p="$v" ;; --parent-sha) sha="$v" ;;
+        esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "stack-inherited --project <slug> --task <task-id> --parent <parent-id> --parent-sha <sha>" ;;
+      *) _pw_positional "$a" "stack-inherited --project <slug> --task <task-id> --parent <parent-id> --parent-sha <sha>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "stack-inherited: --project is required → fix: stack-inherited --project <slug> --task <task-id> --parent <parent-id> --parent-sha <sha>"
+  [ -n "$t" ] || die "stack-inherited: --task is required → fix: stack-inherited --project <slug> --task <task-id> --parent <parent-id> --parent-sha <sha>"
+  [ -n "$p" ] || die "stack-inherited: --parent is required → fix: stack-inherited --project <slug> --task <task-id> --parent <parent-id> --parent-sha <sha>"
+  [ -n "$sha" ] || die "stack-inherited: --parent-sha is required → fix: pass the parent's recorded verified head"
   pw_task_id_ok "$t" || die "invalid task id: $t"
   pw_task_id_ok "$p" || die "invalid parent task id: $p"
   printf '%s' "$sha" | grep -Eq '^[0-9a-fA-F]{7,64}$' || die "invalid parent sha '$sha' → fix: pass the parent's recorded verified head"
@@ -1989,7 +2364,7 @@ cmd_stack_inherited() {
       || { rm -f "$tmp"; die "stack-inherited: rewrite failed for $tf"; }
   fi
   mv "$tmp" "$tf" || { rm -f "$tmp"; die "stack-inherited: install failed for $tf"; }
-  "$ST" log "$slug" ship "stack-inherited $t <- $p @ $short (inherited update; no reviewer request)" >/dev/null 2>&1 || true
+  "$ST" log --project "$slug" --actor ship --message "stack-inherited $t <- $p @ $short (inherited update; no reviewer request)" >/dev/null 2>&1 || true
   echo "$slug: $t inherited update from $p @ $short recorded"
 }
 
@@ -2009,7 +2384,7 @@ _stage_done() {
   case "$(_stage_state "$1" "$2")" in done|skipped) return 0 ;; *) return 1 ;; esac
 }
 
-# stack-cascade <slug> <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>]
+# stack-cascade --project <slug> --task <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>]
 # Deterministic descendant propagation after an upstream fix: for each transitive stack descendant,
 # parent-first, it drives the mechanical stages — integrate (merge the immediate parent's recorded
 # verified head), verify (bind through stack-verify after the caller-supplied verification command
@@ -2023,17 +2398,32 @@ _stage_done() {
 # the shared clone. The describe stage exists only for shipped descendants and is completed by the
 # command layer after the history delivery, so a description update cannot vanish.
 cmd_stack_cascade() {
-  [ $# -ge 2 ] || die "usage: stack-cascade <slug> <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>]"
-  local slug="$1" root="$2"; shift 2
-  local push=0 vcmd="" evdir=""
+  local slug="" root="" push=0 vcmd="" evdir="" a v
   while [ $# -gt 0 ]; do
-    case "$1" in
-      --push) push=1; shift ;;
-      --verify-cmd) vcmd="${2:-}"; shift 2 ;;
-      --evidence-dir) evdir="${2:-}"; shift 2 ;;
-      *) die "unknown stack-cascade arg '$1'" ;;
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*)      v="${a#*=}"; a="--project" ;;
+      --task=*)         v="${a#*=}"; a="--task" ;;
+      --verify-cmd=*)   v="${a#*=}"; a="--verify-cmd" ;;
+      --evidence-dir=*) v="${a#*=}"; a="--evidence-dir" ;;
+    esac
+    case "$a" in
+      --project)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      --task)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --task; v="$1"; shift; }; root="$v" ;;
+      --verify-cmd)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --verify-cmd; v="$1"; shift; }; vcmd="$v" ;;
+      --evidence-dir)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --evidence-dir; v="$1"; shift; }; evdir="$v" ;;
+      --push) push=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "stack-cascade --project <slug> --task <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>]" ;;
+      *) _pw_positional "$a" "stack-cascade --project <slug> --task <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>]" ;;
     esac
   done
+  [ -n "$slug" ] || die "stack-cascade: --project is required → fix: stack-cascade --project <slug> --task <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>]"
+  [ -n "$root" ] || die "stack-cascade: --task is required → fix: stack-cascade --project <slug> --task <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>]"
   pw_task_id_ok "$root" || die "invalid task id: $root"
   local d; d="$(proj_dir "$slug")"
   pw_stack_state_validate "$d" || die "stack state invalid (see the reason above) → fix: repair task/stack.tsv before a cascade"
@@ -2060,7 +2450,7 @@ cmd_stack_cascade() {
   if [ -f "$d/task/stack-ops.tsv" ] && awk -F'\t' -v k="$opkey" '$1==k{p=1} END{exit !p}' "$d/task/stack-ops.tsv"; then
     stages="$(_op_stages_of "$slug" "$opkey")"   # RESUME: never reset persisted stages
   else
-    cmd_stack_op "$slug" create "$opkey" cascade "$root" "cascade" "$stages" "$rsha" >/dev/null \
+    cmd_stack_op --project "$slug" create --key "$opkey" --kind cascade --ancestor "$root" --event cascade --stages "$stages" --expected "$rsha" >/dev/null \
       || die "stack-cascade: could not record the pending recovery row (nothing was changed)"
   fi
   local evbase; evbase="${evdir:-$d/task/.cascade-evidence}"; mkdir -p "$evbase"
@@ -2083,7 +2473,7 @@ cmd_stack_cascade() {
     # A descendant of a blocked task is blocked with no further write (subtree rule).
     if [ "$pd" != "$root" ]; then
       case "$blocked" in
-        *" $pd "*) cmd_stack_op "$slug" set "$opkey" "$D:integrate=blocked" >/dev/null || die "stack-cascade: stage write failed"; blocked="$blocked$D "; failed=1; continue ;;
+        *" $pd "*) cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:integrate=blocked" >/dev/null || die "stack-cascade: stage write failed"; blocked="$blocked$D "; failed=1; continue ;;
       esac
     fi
     psha="$(pw_stack_state_get "$d" "$pd" verified_head)"
@@ -2109,7 +2499,7 @@ cmd_stack_cascade() {
         case "$stages" in *"$D:$st="*) sk="$sk$D:$st=skipped;" ;; esac
       done
       if [ -n "$sk" ]; then
-        cmd_stack_op "$slug" set "$opkey" "${sk%;}" >/dev/null || die "stack-cascade: stage write failed"
+        cmd_stack_op --project "$slug" set --key "$opkey" --state "${sk%;}" >/dev/null || die "stack-cascade: stage write failed"
         stages="$(_op_stages_of "$slug" "$opkey")"
       fi
       echo "stack-cascade: $D is unstarted (no branch) — recorded prerequisite $pd @ $(printf '%s' "$psha" | cut -c1-12); it consumes that head at spawn" >&2
@@ -2128,7 +2518,7 @@ cmd_stack_cascade() {
       mkdir -p "$(dirname "$wtpath")" || die "stack-cascade: cannot create $wtpath"
       if [ "$lex" = 1 ]; then
         git -C "$rd" worktree add "$wtpath" "$dbranch" >/dev/null 2>&1 \
-          || die "stack-cascade: cannot rehydrate the $D worktree at $wtpath → fix: /pw-execute $slug $D (is branch $dbranch checked out elsewhere?)"
+          || die "stack-cascade: cannot rehydrate the $D worktree at $wtpath → fix: /pw-execute --project $slug --task $D (is branch $dbranch checked out elsewhere?)"
       else
         git -C "$rd" worktree add --track -b "$dbranch" "$wtpath" "origin/$dbranch" >/dev/null 2>&1 \
           || die "stack-cascade: cannot rehydrate the $D worktree from origin/$dbranch → fix: check the published branch state"
@@ -2141,30 +2531,30 @@ cmd_stack_cascade() {
       if ! git -C "$workdir" merge-base --is-ancestor "$psha" HEAD 2>/dev/null; then
         if ! git -C "$workdir" -c user.email=stack@pw -c user.name=stack merge -q --no-edit -m "stack cascade: merge $pd @ $(printf '%s' "$psha" | cut -c1-12) into $D" "$psha"; then
           git -C "$workdir" merge --abort >/dev/null 2>&1 || true
-          cmd_stack_op "$slug" set "$opkey" "$D:integrate=blocked" >/dev/null || die "stack-cascade: stage write failed"
+          cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:integrate=blocked" >/dev/null || die "stack-cascade: stage write failed"
           blocked="$blocked$D "; failed=1
           echo "stack-cascade: $D integration conflicted with $pd — local state kept, subtree blocked (resolve per /pw-sync, then re-run to resume)" >&2
           continue
         fi
       fi
-      cmd_stack_op "$slug" set "$opkey" "$D:integrate=done" >/dev/null || die "stack-cascade: stage write failed"
+      cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:integrate=done" >/dev/null || die "stack-cascade: stage write failed"
       stages="$(_op_stages_of "$slug" "$opkey")"
     fi
     # --- verify: the caller's Verify command must pass; binding goes through stack-verify ---
     if ! _stage_done "$stages" "$D:verify"; then
       local dh; dh="$(git -C "$workdir" rev-parse HEAD)"
       if [ -z "$vcmd" ]; then
-        echo "stack-cascade: $D integrated; no --verify-cmd supplied → run its ## Verify, bind with 'stack-verify $slug $D <evidence>', then re-run this cascade to resume (stages retained)" >&2
+        echo "stack-cascade: $D integrated; no --verify-cmd supplied → run its ## Verify, bind with 'stack-verify --project $slug --task $D --evidence <evidence>', then re-run this cascade to resume (stages retained)" >&2
         pending_any=1
         break
       fi
       local evf; evf="$evbase/$D-verify-$(printf '%s' "$dh" | cut -c1-7).log"
       if ( cd "$workdir" && bash -c "$vcmd" ) >"$evf" 2>&1 \
-         && "$HERE/pw-ship.sh" stack-verify "$slug" "$D" "$evf" --head "$dh" >/dev/null 2>>"$evf"; then
-        cmd_stack_op "$slug" set "$opkey" "$D:verify=done" >/dev/null || die "stack-cascade: stage write failed"
+         && "$HERE/pw-ship.sh" stack-verify --project "$slug" --task "$D" --evidence "$evf" --head "$dh" >/dev/null 2>>"$evf"; then
+        cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:verify=done" >/dev/null || die "stack-cascade: stage write failed"
         stages="$(_op_stages_of "$slug" "$opkey")"
       else
-        cmd_stack_op "$slug" set "$opkey" "$D:verify=blocked" >/dev/null || die "stack-cascade: stage write failed"
+        cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:verify=blocked" >/dev/null || die "stack-cascade: stage write failed"
         blocked="$blocked$D "; failed=1
         echo "stack-cascade: $D failed verification — local commit kept, nothing pushed, subtree blocked (see $evf)" >&2
         continue
@@ -2172,9 +2562,9 @@ cmd_stack_cascade() {
     fi
     # --- record: inherited-update evidence (never a reviewer comment) ---
     if ! _stage_done "$stages" "$D:record"; then
-      "$HERE/pw-ship.sh" stack-inherited "$slug" "$D" "$pd" "$psha" >/dev/null \
+      "$HERE/pw-ship.sh" stack-inherited --project "$slug" --task "$D" --parent "$pd" --parent-sha "$psha" >/dev/null \
         || die "stack-cascade: could not record the inherited update for $D (stages retained)"
-      cmd_stack_op "$slug" set "$opkey" "$D:record=done" >/dev/null || die "stack-cascade: stage write failed"
+      cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:record=done" >/dev/null || die "stack-cascade: stage write failed"
       stages="$(_op_stages_of "$slug" "$opkey")"
     fi
     # --- push: already-shipped descendants only, and only under explicit --push authorization ---
@@ -2189,13 +2579,13 @@ cmd_stack_cascade() {
         remote_head="$(git -C "$workdir" ls-remote origin "refs/heads/$dbranch" 2>/dev/null | awk '{print $1}' || true)"
         if [ "$remote_head" != "$db" ]; then
           if ! git -C "$workdir" push -q origin "$dbranch"; then
-            cmd_stack_op "$slug" set "$opkey" "$D:push=blocked" >/dev/null || true
+            cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:push=blocked" >/dev/null || true
             blocked="$blocked$D "; failed=1
             echo "stack-cascade: $D push failed (normal push, no force) — subtree blocked; re-preview before retrying" >&2
             continue
           fi
         fi
-        cmd_stack_op "$slug" set "$opkey" "$D:push=done" >/dev/null || die "stack-cascade: stage write failed"
+        cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:push=done" >/dev/null || die "stack-cascade: stage write failed"
         stages="$(_op_stages_of "$slug" "$opkey")"
       fi
     fi
@@ -2230,8 +2620,8 @@ case "${1:-}" in
   stack-validate)     shift; cmd_stack_validate "$@" ;;
   stack-plan)         shift; cmd_stack_plan "$@" ;;
   stack-record)       shift; cmd_stack_record "$@" ;;
-  stack-fresh)        shift; [ $# -eq 2 ] || die "usage: stack-fresh <slug> <task-id>"; cmd_stack_freshness "$1" "$2" fresh ;;
-  stack-stale)        shift; [ $# -eq 2 ] || die "usage: stack-stale <slug> <task-id>"; cmd_stack_freshness "$1" "$2" stale ;;
+  stack-fresh)        shift; cmd_stack_freshness fresh "$@" ;;
+  stack-stale)        shift; cmd_stack_freshness stale "$@" ;;
   stack-land)         shift; cmd_stack_land "$@" ;;
   stack-promote)      shift; cmd_stack_promote "$@" ;;
   stack-verify)       shift; cmd_stack_verify "$@" ;;

@@ -26,8 +26,8 @@ Once installed, run workflow commands in your agent session. In Codex, select th
 Examples use the shared `/pw-*` names throughout these guides.
 
 ```text
-/pw-new delivery-note
-/pw-help project delivery-note
+/pw-new --project delivery-note
+/pw-help project --project delivery-note
 ```
 
 The first command creates a project. The second shows its phase, review state, and suggested commands.
@@ -39,10 +39,10 @@ Next, [add your inputs and repositories](docs/WALKTHROUGH.md#drop-context), then
 If work exists on a branch, continue that branch through the workflow:
 
 ```text
-/pw-adopt delivery-note storefront feature/delivery-note
+/pw-adopt --project delivery-note --repo storefront --branch feature/delivery-note
 ```
 
-An optional MR URL connects existing review work. The trailing `review` intent handles an existing MR directly.
+An optional MR URL (`--mr <url>`) connects existing review work. The `--intent review-only` flag handles an existing MR directly.
 See [adoption](docs/ADOPTION.md) for both paths and multiple branches.
 
 ## The 6 core stages at a glance
@@ -69,11 +69,11 @@ Optional controls have separate purposes:
 | Your question | Run in your agent session |
 |---|---|
 | What commands exist? | `/pw-help` |
-| What do I run next? | `/pw-help project delivery-note` |
-| What happened in this project? | `/pw-status delivery-note` |
+| What do I run next? | `/pw-help project --project delivery-note` |
+| What happened in this project? | `/pw-status --project delivery-note` |
 | Which projects need attention? | `/pw-status --all` |
-| How do I use one command? | `/pw-help command pw-review delivery-note` |
-| Where is a feature documented? | `/pw-help find acceptance` |
+| How do I use one command? | `/pw-help command --name pw-review --project delivery-note` |
+| Where is a feature documented? | `/pw-help find --term acceptance` |
 
 Replace `delivery-note` with your project name. These help and status commands only read state.
 `/pw-status --all` prints one read-only table of every project under the projects root;
@@ -103,7 +103,7 @@ add `--attention` to keep only rows that need inspection.
 | PLAN approval | Repository/base branch, dependencies, task boundaries, and runnable verification checks |
 | Task acceptance | Actual diff, verification output, unresolved feedback, and publication/review status |
 
-Use `/pw-status <slug>` to find task and MR links. Ask the agent to show a task's local diff if it is not published yet.
+Use `/pw-status --project <slug>` to find task and MR links. Ask the agent to show a task's local diff if it is not published yet.
 
 ## Why it's shaped this way
 

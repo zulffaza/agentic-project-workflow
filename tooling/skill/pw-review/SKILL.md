@@ -40,8 +40,8 @@ fresh is that it doesn't.
 ## External reports (a handoff packet from another session)
 
 When you are handed a `review/ai/<pass-id>/` packet instead of an artifact directly — the manual
-handoff flow (`/pw-review <slug> prepare` → a fresh session anywhere → `/pw-review <slug> import
---report <file.json>`): follow that packet's `request.md`, read ONLY its `snapshot/` copies plus
+handoff flow (`/pw-review prepare --project <slug>` → a fresh session anywhere → `/pw-review import
+--project <slug> --report <file.json>`): follow that packet's `request.md`, read ONLY its `snapshot/` copies plus
 the declared criteria/ledger, and return ONE schema-conforming report (`pw-review-report/1`) as
 JSON — in chat or at an authorized file path OUTSIDE the project. Do not file items yourself, do
 not edit any project file, do not approve anything: the producing session validates and imports
@@ -58,13 +58,13 @@ reindexes `## Contents` for you; ids stay monotonic even across archives):
 
 ```sh
 # one concrete ask per item; --actor pw-reviewer is what keeps your items visually distinct
-tooling/scripts/entities/pw-review.sh add-item <slug> <review-rel-path> \
+tooling/scripts/entities/pw-review.sh add-item --project <slug> --file <review-rel-path> \
   --section '<§section or anchor>' --actor pw-reviewer --stdin <<'EOF'
 <your ask — verbatim, quote-safe, multi-line ok>
 EOF
 
 # a genuinely ambiguous, judgment-blocking question (not a hedge on a real finding):
-tooling/scripts/entities/pw-review.sh add-question <slug> <review-rel-path> \
+tooling/scripts/entities/pw-review.sh add-question --project <slug> --file <review-rel-path> \
   --section '<§section>' --actor pw-reviewer --stdin <<'EOF'
 <the question>
 EOF
@@ -82,7 +82,7 @@ EOF
 - Never edit or delete existing item/question text (human- or agent-authored) — you only ever
   *add* new items/questions, or (if you're the one applying fixes elsewhere in the pipeline —
   that's a different role, `/pw-review`'s apply flow, not this skill) reply and flip status via
-  `pw-review.sh resolve <slug> <path> <Rn|Qn> --stdin` (flips the SAME heading's tag +
+  `pw-review.sh resolve --project <slug> --file <path> --item <Rn|Qn> --stdin` (flips the SAME heading's tag +
   marker together, appends the styled `↳ agent:` reply, reindexes; on a `Qn` it refuses unless
   the human's `↳ you:` line already exists).
 
@@ -94,7 +94,7 @@ marker — tooling keys off it, not the tag text.
 
 ## Read only what you need — never the whole file to find one section
 
-With bundle access, orient first via the script — `tooling/scripts/entities/pw-review-read.sh scan <slug>
+With bundle access, orient first via the script — `tooling/scripts/entities/pw-review-read.sh scan --project <slug>
 [--phase <phase>]` prints open/resolved/pending counts + last sign-off state per review file, so
 you target the files worth reading at all (a standalone agent without the bundle greps
 `[OPEN]`/`[PENDING]` instead). Then, before reading the artifact end-to-end, check the review
@@ -135,7 +135,7 @@ repeating.
 **Pass entry — `start` — comes after real findings, never before.** Record your pass with:
 
 ```sh
-tooling/scripts/entities/pw-review.sh start <slug> <review-rel-path> --phase <phase> \
+tooling/scripts/entities/pw-review.sh start --project <slug> --file <review-rel-path> --phase <phase> \
   --provider <actual-provider> --model <actual-model>   # identity as the RUNTIME reports it
 ```
 
@@ -155,8 +155,8 @@ whether a pass starts at all — lives on the separate `review-trigger` axis, an
 on `review-repair`; neither changes your own allowed outcome):
 
 ```sh
-tooling/scripts/entities/pw-config.sh ai-review <slug>                    # prints all 8 surfaces' effective modes
-tooling/scripts/entities/pw-config.sh ai-review <slug> <surface> <mode>    # advisory | auto
+tooling/scripts/entities/pw-config.sh get --project <slug> --key ai-review               # prints all 8 surfaces' effective modes
+tooling/scripts/entities/pw-config.sh set --project <slug> --key ai-review --set <surface>=<mode>  # advisory | auto
 ```
 
 - **`advisory`** (the default, and what a legacy stored `off` row reads as): file your
@@ -167,7 +167,7 @@ tooling/scripts/entities/pw-config.sh ai-review <slug> <surface> <mode>    # adv
 - **`auto`**: same filing step, but if — and only if — your pass leaves **zero** [OPEN] items and
   **zero** [PENDING] questions, you may call:
   ```sh
-  tooling/scripts/entities/pw-review.sh auto-signoff <slug> <review-rel-path> <surface> \
+  tooling/scripts/entities/pw-review.sh auto-signoff --project <slug> --file <review-rel-path> --phase <surface> \
     --provider <actual-provider> --model <actual-model>
   ```
   A clean auto pass may approve **directly** through this call — never after first fabricating a
@@ -192,7 +192,7 @@ The `.review.md` is the actionable record (items, gate). `REVIEWER-NOTES.md` (pr
 narrative one — what you checked and why you decided what you decided. Always leave an entry:
 
 ```sh
-tooling/scripts/entities/pw-review.sh note-init <slug>   # idempotent — creates the file with its header if missing
+tooling/scripts/entities/pw-review.sh note-init --project <slug>   # idempotent — creates the file with its header if missing
 ```
 
 Record your actual run identity in the Verdict bullet (`unknown` when the runtime cannot confirm

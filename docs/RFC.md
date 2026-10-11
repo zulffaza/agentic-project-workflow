@@ -40,8 +40,8 @@ Each wave has its own gate, and they're deliberately **not the same kind of gate
 
 | Wave | Command | Gate | Fills |
 |---|---|---|---|
-| 1 | `/pw-rfc <slug> [--target <ref>]` | analysis §4 has a chosen approach — **Sign-off does NOT need to read `approved` yet** | Background · Requirements + Out of Scope · Solution — chosen approach (+ diagrams) · Dependencies · (Rollout/Rollback Plan, only if you ask) |
-| 2 | `/pw-rfc <slug> milestone` | `task/PLAN.md` `approved` | Milestone (from the PLAN's DAG groups + task table + SP/timeline) · Conclusion |
+| 1 | `/pw-rfc --project <slug> [--target <ref>]` | analysis §4 has a chosen approach — **Sign-off does NOT need to read `approved` yet** | Background · Requirements + Out of Scope · Solution — chosen approach (+ diagrams) · Dependencies · (Rollout/Rollback Plan, only if you ask) |
+| 2 | `/pw-rfc milestone --project <slug>` | `task/PLAN.md` `approved` | Milestone (from the PLAN's DAG groups + task table + SP/timeline) · Conclusion |
 
 **Wave 1 publishes a draft, not a decision.** RFC-approved and analysis-approved are the same fact
 (see below) — so requiring you to privately approve the analysis locally *before* the people the
@@ -162,13 +162,13 @@ where this is enforced.
 ## The comment loop — read-only outward, always
 
 Unlike the MR-comment flow (see [Review & feedback → the MR review flow](./REVIEW.md#2-the-mr-review-flow-post-ship)),
-`/pw-rfc <slug> comments` **never writes back** to the external platform. It only pulls:
+`/pw-rfc comments --project <slug>` **never writes back** to the external platform. It only pulls:
 
 ```
 you/a teammate comments on the RFC doc (thread on some section)
         │
         ▼
-/pw-rfc <slug> comments
+/pw-rfc comments --project <slug>
         │
         ├─ 1. FETCH open threads   (the backend's list_comments — read-only)
         └─ 2. MIRROR into the project dir
@@ -182,7 +182,7 @@ you/a teammate comments on the RFC doc (thread on some section)
 You then run the **existing** `/pw-review` to apply fixes to the analysis locally — its `↳ agent:`
 reply on each item is the durable record of what changed (no new review machinery). **You reply to
 and resolve the actual thread on the platform yourself**, using that local record as your
-reference. Re-run `/pw-rfc <slug>` (or `milestone`) afterward to push the revised sections. Under
+reference. Re-run `/pw-rfc --project <slug>` (or `milestone`) afterward to push the revised sections. Under
 the `markdown` backend, `comments` is a clear no-op — there's nothing external to read.
 
 ## Doc hygiene — a filled RFC must never look half-finished

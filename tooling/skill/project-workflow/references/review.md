@@ -6,7 +6,7 @@ Human feedback on any doc lives in a review file under a **`review/` subdir** be
 `task/T0n.md`→`task/review/T0n.review.md` (from `agentic-project-workflow/template/_REVIEW.template.md`).
 Rules you MUST follow:
 
-- **Orient with the scan script first:** `{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh scan <slug>
+- **Orient with the scan script first:** `{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh scan --project <slug>
   [--phase <phase>]` prints one line per review file — open/resolved/pending counts + the
   latest Sign-off decision and its `By` actor — so you go straight to the files with live `[OPEN]` items instead of
   grep-walking `review/` (same scan `/pw-review` pre-flight and `pw-status.sh` use).
@@ -28,7 +28,7 @@ Rules you MUST follow:
   files exist whenever the human wants to send *any* feedback on a task — either **before**
   execution (critiquing the planned steps) or **after** (rejecting a result). If a task is flipped
   to `verify-failed` but has **no** review file, create it deterministically (`pw-review.sh
-  init-docs <slug> task/T0n.md`, or `pw-review.sh init-all <slug>` for every review file missing
+  init-docs --project <slug> --file task/T0n.md`, or `pw-review.sh init-all --project <slug>` for every review file missing
   in the CURRENT dashboard phase),
   write the human's chat feedback as items via `pw-review.sh add-item`, then apply it —
   don't silently do nothing (a frequent confusion). If there's no feedback anywhere, ask.
@@ -41,7 +41,7 @@ Rules you MUST follow:
   of that item's edits in one coherent pass, then run consistency checks once — one combined
   `grep -rnE 'pat1|pat2|pat3'` pass, not N serial single-pattern greps.
 - Apply each `[OPEN]` item, append a `↳ agent:` reply, flip it to `[RESOLVED]` — deterministically
-  via `pw-review.sh resolve <slug> <review-rel-path> <Rn> --reply <what changed>` (flips the
+  via `pw-review.sh resolve --project <slug> --file <review-rel-path> --item <Rn> --reply <what changed>` (flips the
   SAME heading's tag + marker together, appends the styled reply, reindexes; never a second
   heading). **Never edit or delete the human's comment text** — it's the source of truth for what
   was asked (resolve is append-or-flip only, mutation-tested).
@@ -57,23 +57,23 @@ Rules you MUST follow:
   the section + what changed), never a bare "fixed"/"done". No diff expected; the summary is it.
 - After a review pass, **recap the resolved items back in chat** (one line each) so the human
   sees the changes without opening the file.
-- Refresh the `## Contents` table after resolving anything (`pw-review.sh reindex <slug>
-  <review-rel-path>`) — a heading's status just changed. (`pw-review.sh resolve/add-item/
+- Refresh the `## Contents` table after resolving anything (`pw-review.sh reindex --project <slug>
+  --file <review-rel-path>`) — a heading's status just changed. (`pw-review.sh resolve/add-item/
   add-question` reindex automatically — only hand-edits need the manual reindex.) Once 3+ items/questions are resolved
-  since the last archive, or the file's past ~150 lines, run `pw-review.sh archive <slug>
-  <review-rel-path>` to move them verbatim into `<topic>.archive.md` — never touches `[OPEN]`/
+  since the last archive, or the file's past ~150 lines, run `pw-review.sh archive --project <slug>
+  --file <review-rel-path>` to move them verbatim into `<topic>.archive.md` — never touches `[OPEN]`/
   `[PENDING]` or the Sign-off table (provably gate-safe, see `pw-review.sh`'s archive comment).
 - **Opportunistically seed a configured memory tool** (skip silently if `PW_MEMORY=none`) when a
   fix is durable/generalizable — reuse the item's own `↳ agent:` reply (or, for an analysis fix,
   the §5.1 Decisions-log line) verbatim as the payload, never new authoring.
 - **Never** write an `approved` Sign-off row outside the guarded auto path — only the human
   approves (date-time to the minute). The human's own deterministic path is
-  `/pw-review <slug> signoff <path> <decision>` — **human-triggered only (C4): never invoke it on
+  `/pw-review signoff --project <slug> --file <path> --decision <decision>` — **human-triggered only (C4): never invoke it on
   your own initiative**, never on a batched-fix pass's behalf, even when every item looks
   resolved. Agents record **operational** rows only through the entity's transition writers: a
   first real item/answer after an approval appends one attributed `in-review` row
   (`pw-review (feedback)`, written by the item/answer writer itself), and `pw-review.sh start
-  <slug> <review-rel-path>` before a repair pass appends `changes-requested` attributed
+  --project <slug> --file <review-rel-path>` before a repair pass appends `changes-requested` attributed
   `pw-review (repair)` — only when that file has genuinely eligible open work (stub-only,
   resolved/archived-only, malformed-only, or waiting-human-only sets add NO row); no-op calls,
   failed writes, and retries of the active pass never duplicate or toggle state, and later item
@@ -86,14 +86,14 @@ Rules you MUST follow:
   `Status: verify-failed`; re-run it in its worktree and re-verify.
 - **Open questions (QnA):** when you can't resolve something during analysis, don't guess — list
   it in the doc (`Qn`) AND seed a `Qn` row in the review file's "## Open questions" section via
-  `pw-review.sh add-question <slug> <review-rel-path> --section <§anchor> --text <question>`
+  `pw-review.sh add-question --project <slug> --file <review-rel-path> --section <§anchor> --text <question>`
   (next Qn, timestamp, marker, reindex — never a hand-copied heading). The
-  human answers with `↳ you:` (deterministically: `/pw-review <slug> answer <path> Qn <text>`);
+  human answers with `↳ you:` (deterministically: `/pw-review answer --project <slug> --file <path> --question Qn --text <text>`);
   the next `/pw-review` folds the answer into the doc and flips the
   row to [ANSWERED] (`pw-review.sh resolve … Qn` — refuses unless the `↳ you:` line exists).
   Report unanswered `Qn` as blocking.
-- **MR feedback:** review comments left on the *MR itself* are handled by `/pw-ship <slug> [task-ids]
-  comments` (fetch via `glab`/`gh`, fix in the worktree, reply on the thread). **Task IDs are
+- **MR feedback:** review comments left on the *MR itself* are handled by `/pw-ship comments --project <slug> [--task <T0n>]…`
+  (fetch via `glab`/`gh`, fix in the worktree, reply on the thread). **Task IDs are
   optional — with none it sweeps EVERY open MR** in the project in one run (serially). Always
   **mirror the change into the internal record** (task `## Result` + `task/review/` + `LOG.md`); the
   project dir stays the source of truth even for MR-driven fixes.
@@ -108,7 +108,7 @@ Rules you MUST follow:
     then it stops and surfaces the failure). Pass `--skip-build-check` to opt out of the whole
     check + fix loop for a given run. Mechanics + per-forge invocation: `tooling/docs/forges.md`;
     the loop contract: `tooling/commands/pw-ship.md` "Build-check fix loop".
-  - **MR state is checked first** (`pw-ship.sh mr-state <slug> <T0n>`): `merged` → accept the task,
+  - **MR state is checked first** (`pw-ship.sh mr-state --project <slug> --task <T0n>`): `merged` → accept the task,
     update the dashboard, remove the worktree, and skip; `closed`/`unknown` → note and skip; only
     `open` MRs are actually processed.
   - **⚠️ Never filter by diff-position to decide what's actionable.** GitHub needs two endpoints
@@ -125,9 +125,9 @@ Rules you MUST follow:
     open forever even after being fixed.
   - **Idempotency for `resolvable: false` comments is local, not the forge's** — those can never
     report `resolved: true` no matter what. After replying to *any* thread, call
-    `pw-ship.sh comment-seen <slug> <T0n> <thread-id> <resolvable|unresolvable> yes` — this
+    `pw-ship.sh comment-seen --project <slug> --task <T0n> --thread <thread-id> --kind <resolvable|unresolvable> --replied yes` — this
     upserts a row in `task/review/T0n.review.md`'s `## MR comment tracking` table, which the next
-    `/pw-ship … comments` run checks before treating a thread as new. Same pattern as
+    `/pw-ship comments --project <slug>` run checks before treating a thread as new. Same pattern as
     `pw-rfc.sh comment-seen` for RFC-platform comments.
   - **⚠️ Use `/notes` as the primary source for GitLab, NOT `/discussions`.**
     The `/discussions` endpoint has persistent indexing lag — notes can be visible in the GitLab
@@ -148,15 +148,15 @@ Rules you MUST follow:
 Every review point above defaults to human-only and no pass starts by itself. FOUR per-project axes
 control the feature (surfaces: `context`, `analysis`, `plan`, `task-plan`, `task-exec`, `ship`,
 `rfc`, `close`) — **the human-facing surface for viewing/setting them is `/pw-config`
-(`project get/set ai-review | review-trigger | review-repair | review-rounds`), never the raw
-`pw-config.sh ai-review` verb** (bare `ai-review`/`ai-model` are deprecated shims kept for old
+(`get`/`set --key ai-review | review-trigger | review-repair | review-rounds`), never the raw
+`pw-config.sh` verb** (bare `ai-review`/`ai-model` are deprecated shims kept for old
 callers; configuration is not a review operation — do not resurrect it under `/pw-review`):
 
 - **`ai-review <surface>=advisory|auto`** — the OUTCOME only. `advisory` (the default; a legacy
   stored `off` and an unset row both read as advisory) files items/questions and leaves approval
   with the human; `auto` may additionally self-approve a genuinely clean MANAGED pass.
 - **`review-trigger <surface>=manual|completion`** — WHEN a pass starts. `manual` (default) =
-  only an explicit `/pw-review <slug> ai …`; `completion` = also after a succeeded producing
+  only an explicit `/pw-review ai --project <slug> …`; `completion` = also after a succeeded producing
   command's verification (context prepare, analysis, breakdown, execute per task, ship, rfc
   content, close). `completion` never disables explicit requests.
 - **`review-repair <surface>=manual|bounded`** — whether a completion review may run the bounded
@@ -167,20 +167,20 @@ callers; configuration is not a review operation — do not resurrect it under `
 
 `all=<value>` on any axis sets every surface, with explicitly named surfaces overriding the
 baseline regardless of argument order. Delegate a surface's review to the `pw-reviewer` sub-agent
-via `/pw-review <slug> ai [surface|Tid(s)|path]` (a list of task ids = one reviewer pass per task)
-— or, for a manual/foreign reviewer session, freeze a packet with `/pw-review <slug> prepare
-<scope>` and import the returned schema report with `import --report <file.json>`; the import is
+via `/pw-review ai --project <slug> [--surface <surface> | --task <T0n>… | --file <path>]` (a list of task ids = one reviewer pass per task)
+— or, for a manual/foreign reviewer session, freeze a packet with `/pw-review prepare --project <slug>
+[--task <T0n> | --surface <surface> | --file <path>]` and import the returned schema report with `import --report <file.json>`; the import is
 ADVISORY ONLY (no approval row, no repair, even in `auto`) and replay-safe:
 
 - `advisory` — `pw-reviewer` files items exactly like a human would, tagged `(pw-reviewer,
   <timestamp>)` instead of `(you, …)`. A human still writes the Sign-off row; process its items via
   the normal apply-comments flow above, no different from a human's.
 - `auto` — same filing, but if the pass leaves nothing `[OPEN]`/`[PENDING]`, `pw-reviewer` may call
-  `pw-review.sh auto-signoff <slug> <review-rel-path> <surface> --provider <actual> --model <actual>`
+  `pw-review.sh auto-signoff --project <slug> --file <review-rel-path> --phase <surface> --provider <actual> --model <actual>`
   itself — the ONE tool-enforced exception to "only a human clears a gate", re-checked by the tool
   (mode, zero open items in that file, artifact/lane match, and no standing human rejection), not
   taken on trust.
-  Pass entry for an independent AI pass is `pw-review.sh start <slug> <review-rel-path> --phase
+  Pass entry for an independent AI pass is `pw-review.sh start --project <slug> --file <review-rel-path> --phase
   <surface> --provider <actual-provider> --model <actual-model>`: it records `changes-requested`
   (attributed `pw-reviewer (<mode>; provider=…; model=…)`) only after the pass has persisted real
   findings — a pass that starts empty and finds nothing files notes only and leaves Sign-off

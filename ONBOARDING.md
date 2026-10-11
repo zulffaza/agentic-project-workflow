@@ -113,7 +113,7 @@ In Codex, select the installed `pw-*` skill corresponding to the command. The gu
 The bundle installs Codex commands as explicit-invocation skills under `~/.codex/skills/`; it seeds no Codex sub-agents.
 
 Next, complete the [first-project walkthrough](docs/WALKTHROUGH.md).
-Use `/pw-help project <slug>` whenever you need the next command for an existing project.
+Use `/pw-help project --project <slug>` whenever you need the next command for an existing project.
 
 ## What bootstrap did
 
@@ -124,7 +124,7 @@ Use `/pw-help project <slug>` whenever you need the next command for an existing
 | `/pw-*` commands or command skills | The workflow interface for each enabled, detected provider |
 | Seeded agents, where supported | Orchestrator, executor, reviewer, researcher, analyst, and task writer roles |
 | `pw-env.sh` | Paths for the bundle, projects, and repositories |
-| `user/templates/review-request.md` | The editable message layout `/pw-ship … request-review` reads implicitly (seeded once; never overwritten) |
+| `user/templates/review-request.md` | The editable message layout `/pw-ship request-review --project <slug>` reads implicitly (seeded once; never overwritten) |
 | `user/prompts/review-request-summary.md` | The editable writing instructions for the optional `--summary` / `--mr-summary` prose |
 | `user/prompts/review-request-note.md` | The editable writing instructions for the optional `--note` prose |
 
@@ -193,25 +193,25 @@ Follow the [walkthrough](docs/WALKTHROUGH.md) for the complete sequence.
 
 | Command | When to use it |
 |---|---|
-| `/pw-new <slug>` | Scaffold a project |
-| `/pw-context <slug> <operator> …` | [Prepare requirements and context, or add inputs and repositories](docs/RECIPES.md#add-context-or-continue-existing-work) |
-| `/pw-analyze <slug>` | Turn context into an analysis |
-| `/pw-review <slug>` | Apply recorded feedback for the current phase |
-| `/pw-breakdown <slug>` | Turn approved analysis into PLAN and tasks |
-| `/pw-execute <slug>` | Resume outstanding work, commit, and verify |
-| `/pw-ship <slug>` | Push verified branches and open MRs |
-| `/pw-sync <slug>` | Refresh open MR branches against updated targets |
-| `/pw-close <slug>` | Check acceptance, clean eligible worktrees, and record learning |
+| `/pw-new --project <slug>` | Scaffold a project |
+| `/pw-context <op> --project <slug> …` | [Prepare requirements and context, or add inputs and repositories](docs/RECIPES.md#add-context-or-continue-existing-work) |
+| `/pw-analyze --project <slug>` | Turn context into an analysis |
+| `/pw-review --project <slug>` | Apply recorded feedback for the current phase |
+| `/pw-breakdown --project <slug>` | Turn approved analysis into PLAN and tasks |
+| `/pw-execute --project <slug>` | Resume outstanding work, commit, and verify |
+| `/pw-ship --project <slug>` | Push verified branches and open MRs |
+| `/pw-sync --project <slug>` | Refresh open MR branches against updated targets |
+| `/pw-close --project <slug>` | Check acceptance, clean eligible worktrees, and record learning |
 
 Commands to keep nearby:
 
 | Command | Purpose |
 |---|---|
-| `/pw-status <slug>` | Show progress, blockers, and next steps |
-| `/pw-help project <slug>` | Show commands suited to the project's current state |
-| `/pw-help command pw-review <slug>` | Explain review syntax with project-specific paths |
+| `/pw-status --project <slug>` | Show progress, blockers, and next steps |
+| `/pw-help project --project <slug>` | Show commands suited to the project's current state |
+| `/pw-help command --name pw-review --project <slug>` | Explain review syntax with project-specific paths |
 | `/pw-doctor [--fix]` | Check installation sync; add `--fix` to repair it |
-| `/pw-rfc <slug>` | Publish an optional RFC document |
+| `/pw-rfc --project <slug>` | Publish an optional RFC document |
 
 ### Record feedback and approval
 
@@ -219,22 +219,22 @@ Commands to keep nearby:
 Use `--section` and `--text` with `item` to make the location and request clear:
 
 ```text
-/pw-review <slug> item task/review/PLAN.review.md --section Verification --text Add tests for existing orders
+/pw-review item --project <slug> --file task/review/PLAN.review.md --section Verification --text Add tests for existing orders
 ```
 
-- `task/review/PLAN.review.md` is the project-relative review file that receives your feedback.
+- `--file task/review/PLAN.review.md` names the project-relative review file that receives your feedback.
 - `--section` names the heading or anchor in the **reviewed artifact**, such as `Verification` or `Execution strategy`.
 - `--text` contains the change you want the agent to make. Both values can contain spaces.
 
-The command records an item. Run `/pw-review <slug> task/review/PLAN.review.md` to apply it to PLAN only.
+The command records an item. Run `/pw-review --project <slug> --file task/review/PLAN.review.md` to apply it to PLAN only.
 Read the revision before recording approval.
 
 | Review action | Command |
 |---|---|
-| Create a review for an existing artifact | `/pw-review <slug> init <artifact-path>` |
-| Create missing reviews for the current phase | `/pw-review <slug> init-all` |
-| Answer an existing question | `/pw-review <slug> answer <review-path> Q2 <answer>` |
-| Record your approval | `/pw-review <slug> signoff <review-path> approved` |
+| Create a review for an existing artifact | `/pw-review init --project <slug> --file <artifact-path>` |
+| Create missing reviews for the current phase | `/pw-review init-all --project <slug>` |
+| Answer an existing question | `/pw-review answer --project <slug> --file <review-path> --question Q2 --text <answer>` |
+| Record your approval | `/pw-review signoff --project <slug> --file <review-path> --decision approved` |
 
 Your first new item after approval queues a fresh review cycle automatically.
 See [review parameters and scopes](docs/REVIEW.md#add-feedback-with-section-and-text) for multi-word examples and scope selection.
@@ -243,7 +243,7 @@ See [review parameters and scopes](docs/REVIEW.md#add-feedback-with-section-and-
 
 - Review the analysis before breakdown. **PLAN approval is the hard execution gate**; per-task reviews are optional.
 - Execution stops at local commits and verification. `/pw-ship` publishes them.
-- A bare `/pw-execute <slug>` resumes outstanding work. Add `--wave` to stop after the current ready group.
+- A bare `/pw-execute --project <slug>` resumes outstanding work. Add `--wave` to stop after the current ready group.
 - Read task diffs and results before asking the agent to accept them. Acceptance is separate from PLAN approval.
 
 See [execution options](docs/EXECUTION.md) for routing, waves, and optional automatic acceptance.

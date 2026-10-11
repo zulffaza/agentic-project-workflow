@@ -12,8 +12,8 @@ The review-doc entity: write side, `scan`, and the lifecycle/gate reads (`gate|c
  — all operators of `pw-review.sh`.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-review.sh init <slug> <review-rel> <doc-rel>    # legacy single-file triple (kept)
-$PW_HOME/tooling/scripts/entities/pw-review.sh init-docs <slug> <artifact-rel> [<artifact-rel>…]
+$PW_HOME/tooling/scripts/entities/pw-review.sh init --project <slug> --file <review-rel> --doc <doc-rel>    # legacy single-file triple (kept)
+$PW_HOME/tooling/scripts/entities/pw-review.sh init-docs --project <slug> --file <artifact-rel> [--file <artifact-rel>…]
     # review files for EXACTLY the named artifacts (one is a valid list). The full list is
     # VALIDATED FIRST — missing docs, template/README targets, unsupported artifacts, and
     # out-of-project paths reject everything and create nothing; paths normalize + dedupe,
@@ -22,7 +22,7 @@ $PW_HOME/tooling/scripts/entities/pw-review.sh init-docs <slug> <artifact-rel> [
     # ONLY its file (no gate reopen, no repair). Idempotent: a rerun finishes missing files
     # without replacing existing review content or history; a later per-file write failure
     # reports created / skipped / failed targets separately.
-$PW_HOME/tooling/scripts/entities/pw-review.sh init-all <slug>
+$PW_HOME/tooling/scripts/entities/pw-review.sh init-all --project <slug>
     # creates the missing review files for the project's ACTUAL CURRENT dashboard phase — read
     # from the dashboard Status: at invocation, never inferred from which dirs hold files:
     #   context    → nothing implicit (explain the context commands)
@@ -34,7 +34,7 @@ $PW_HOME/tooling/scripts/entities/pw-review.sh init-all <slug>
     # stops with a command-based recovery hint. Never creates earlier/later-phase reviews and
     # never deletes previously generated ones; existing files untouched.
 
-$PW_HOME/tooling/scripts/entities/pw-review.sh start <slug> <review-rel> [--phase <analysis|plan|task-plan|task-exec|ship>] [--provider <actual-provider>] [--model <actual-model>] [--confirm-earlier]
+$PW_HOME/tooling/scripts/entities/pw-review.sh start --project <slug> --file <review-rel> [--phase <analysis|plan|task-plan|task-exec|ship>] [--provider <actual-provider>] [--model <actual-model>] [--confirm-earlier]
     # pass-entry transition: appends ONE changes-requested row before the work set, and ONLY
     # when this file genuinely has eligible work — a real actionable OPEN item, or an answered
     # question awaiting incorporation. Template stubs, resolved/archived rows, settled
@@ -54,7 +54,7 @@ $PW_HOME/tooling/scripts/entities/pw-review.sh start <slug> <review-rel> [--phas
     # than the current dashboard phase, --confirm-earlier is required: without it the gate is
     # left untouched (the feedback itself can still be recorded; its open state blocks the
     # next phase from consuming the stale approval). start can NEVER write approved.
-$PW_HOME/tooling/scripts/entities/pw-review.sh signoff <slug> <review-rel-path> <decision> [--by <name>]
+$PW_HOME/tooling/scripts/entities/pw-review.sh signoff --project <slug> --file <review-rel-path> --decision <decision> [--by <name>]
     # append a Sign-off row: decision ∈ approved | changes-requested | in-review.
     # HUMAN-TRIGGERED ONLY (C4) — an agent runs this only verbatim on the user's explicit
     # instruction, never on its own initiative, and the row stays attributed to the human
@@ -64,7 +64,7 @@ $PW_HOME/tooling/scripts/entities/pw-review.sh signoff <slug> <review-rel-path> 
     # Append-only: existing rows are history and are never edited or deleted. The first
     # sign-off replaces the template's lone "| | | in-review |" placeholder row.
 
-$PW_HOME/tooling/scripts/entities/pw-review.sh add-item <slug> <review-rel-path> --section <§anchor> (--text <ask…> | --stdin) [--actor <name>]
+$PW_HOME/tooling/scripts/entities/pw-review.sh add-item --project <slug> --file <review-rel-path> --section <§anchor> (--text <ask…> | --stdin) [--actor <name>]
     # append the next Rn block at the end of ## Items: heading + timestamp + (actor,…) +
     # <!-- pw-item-status: open --> marker + body + --- rule, then reindex ## Contents.
     # Fills the template's unfilled R-stub in place (no phantom duplicate R1).
@@ -76,18 +76,18 @@ $PW_HOME/tooling/scripts/entities/pw-review.sh add-item <slug> <review-rel-path>
     # Repeated feedback inside an already-queued `in-review` cycle adds no row, and writes
     # belonging to an active pass (the writer is the pass itself) never toggle its state.
 
-$PW_HOME/tooling/scripts/entities/pw-review.sh answer <slug> <review-rel-path> <Qid> (--text <answer…> | --stdin)
+$PW_HOME/tooling/scripts/entities/pw-review.sh answer --project <slug> --file <review-rel-path> --question <Qid> (--text <answer…> | --stdin)
     # append your "> ↳ **you** (<now>): …" line under question Qid — same quoted block, blank
     # quoted ">" separator between consecutive ↳ lines. Refuses missing/[ANSWERED] questions.
     # Does NOT flip the status: the agent folds the answer into the doc and flips it (doctrine).
     # A first answer after an approval triggers the same `pw-review (feedback)` `in-review` row
     # a new item does; later answers in the queued cycle add none.
 
-$PW_HOME/tooling/scripts/entities/pw-review.sh add-question <slug> <review-rel-path> --section <§anchor> (--text <q…> | --stdin) [--actor <name>]
+$PW_HOME/tooling/scripts/entities/pw-review.sh add-question --project <slug> --file <review-rel-path> --section <§anchor> (--text <q…> | --stdin) [--actor <name>]
     # agent-side: append the next Qn block ([PENDING] + open marker) at the end of
     # ## Open questions, then reindex. Fills the template's Q-stub in place.
 
-$PW_HOME/tooling/scripts/entities/pw-review.sh resolve <slug> <review-rel-path> <Rid|Qid> (--reply <text…> | --stdin)
+$PW_HOME/tooling/scripts/entities/pw-review.sh resolve --project <slug> --file <review-rel-path> --item <Rid|Qid> (--reply <text…> | --stdin)
     # agent-side: flip the SAME heading in place ([OPEN]→[RESOLVED] / [PENDING]→[ANSWERED],
     # tag + marker together — never a second heading) and append the quoted
     # "> ↳ **agent** (<now>): …" reply below the ask/answer, then reindex.
@@ -95,9 +95,10 @@ $PW_HOME/tooling/scripts/entities/pw-review.sh resolve <slug> <review-rel-path> 
     # Human text is never edited or deleted (mutation-tested).
 ```
 
-**Free-text arguments (A-rules, [`../conventions.md`](../conventions.md)):** `--text` consumes
-the rest of the line unquoted (A1); `--stdin` takes a heredoc — preferred for text with quotes,
-backticks, or newlines (A3). Text is stored VERBATIM; lines starting with `## `/`### ` are
+**Free-text arguments (A-rules, [`../conventions.md`](../conventions.md)):** `--text` is a prose
+value — it runs until the next `--flag` token, so prose stays unquoted (A3); `--stdin` takes a
+heredoc (A4) — preferred for text with quotes,
+backticks, or newlines. Text is stored VERBATIM; lines starting with `## `/`### ` are
 refused (they would corrupt the heading scan).
 
 **Output:** one confirmation line per write (`<slug>: <path> → R2 added (§4, you, …)`). Errors go
@@ -107,10 +108,10 @@ heading-changing operator reindexes `## Contents` and appends a LOG.md line auto
 never re-run `pw-review.sh reindex` or `log` afterwards by hand.
 
 **Lifecycle + gate reads** (merged from the old `pw-lib.sh review *` block — same semantics,
-`review` prefix dropped): `init <slug> <review-rel> <doc-rel>` (legacy triple, kept for
-mechanical callers) and `init-docs <slug> <artifact-rel>…` (validated selected list) create
-review files verbatim from the template (idempotent — never clobbers); `init-all <slug>` does
-the current dashboard phase only; `note-init <slug>` the REVIEWER-NOTES.md header; `gate`
+`review` prefix dropped): `init --project <slug> --file <review-rel> --doc <doc-rel>` (legacy triple, kept for
+mechanical callers) and `init-docs --project <slug> --file <artifact-rel>…` (validated selected list) create
+review files verbatim from the template (idempotent — never clobbers); `init-all --project <slug>` does
+the current dashboard phase only; `note-init --project <slug>` the REVIEWER-NOTES.md header; `gate`
 prints the latest meaningful Sign-off decision (exit 0 iff that approval is CONSUMABLE: the latest
 row reads approved — either legacy decoration included — **and** no real unresolved item remains
 **and** no explicit human `changes-requested` is still standing; a blocked-but-approved state
@@ -131,13 +132,13 @@ actual run metadata (`unknown` when unconfirmed), never a human row, and honors
 unresolved comments block the consuming command through `has-open` (a fix routed from RFC
 feedback acts on the analysis document's OWN review gate).
 
-**Handoff operators (advisory external reports).** `prepare <slug> <scope> [--refresh] [--repair]
+**Handoff operators (advisory external reports).** `prepare --project <slug> (--task <T0n> | --surface <name> | --file <rel>) [--refresh] [--repair]
 [--pass-id <id>] [--print]` freezes ONE review unit into `review/ai/<pass-id>/` — `manifest.json`
 (surface, artifact, round/budget, reviewed-identity `fingerprint`, recorded inputs/code evidence,
 existing-item ledger, state), a byte-identical `snapshot/` of the reviewed inputs, and a neutral
 `request.md` — WITHOUT launching any model; an existing packet for the same unit is shown, never
 overwritten, and `--repair` is refused past the README's `Review Budget` rounds.
-`import <slug> --report <file.json> [--pass <id>]` validates ONE external report against its
+`import --project <slug> --report <file.json> [--pass <id>]` validates ONE external report against its
 prepared manifest (schema `pw-review-report/1`, project/pass binding, freshness fingerprint —
 content inputs AND recorded worktree head/patch digest for task surfaces) and files its
 findings/questions through the same item/question writers, credited `pw-reviewer (external)`;
@@ -182,11 +183,11 @@ decision together with its `By` actor, read through one shared latest-row reader
 Structured summary of every review file's item counts and sign-off state.
 The read facet owns `gate`, `has-open`, `count`, `eligible`, `scan`, and `passes`
 (the prepare/import packet inventory).
-Legacy `pw-review.sh` read calls forward here with their argument shapes preserved.
+Legacy `pw-review.sh` read calls forward here with their named-argument shapes preserved.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-review-read.sh scan <slug>                  # all review files
-$PW_HOME/tooling/scripts/entities/pw-review-read.sh scan <slug> --phase analysis # or: plan | task-plan | task-exec | ship
+$PW_HOME/tooling/scripts/entities/pw-review-read.sh scan --project <slug>                  # all review files
+$PW_HOME/tooling/scripts/entities/pw-review-read.sh scan --project <slug> --phase analysis # or: plan | task-plan | task-exec | ship
 ```
 
 `--phase` names are **review lanes**, not dashboard phases: `task-plan` resolves to the task
@@ -208,7 +209,7 @@ formats, `approved` with the legacy checkmark) display exactly as recorded. A bl
 latest state shows as unapproved. `No review files found` + exit `0` is a valid empty state
 (project too early for reviews).
 
-Counts come from `pw-review-read.sh count <slug> <rel>` — the single heading-level detector the
+Counts come from `pw-review-read.sh count --project <slug> --file <rel>` — the single heading-level detector the
 gates use: template guidance text, worked examples inside comments, and UNFILLED `<…>` placeholder
 stubs can never inflate them (2026-09-16 fix).
 
@@ -219,34 +220,35 @@ stubs can never inflate them (2026-09-16 fix).
 
 ## pw-context.sh
 
-The context-doc entity. Human entry point: `/pw-context <slug> <operator> …`.
+The context-doc entity. Human entry point: `/pw-context`, one row operator at a time — e.g.
+`/pw-context add-repo --project <slug> --repo <r> --base <b> --why <text…>`.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-context.sh req-init <slug>
+$PW_HOME/tooling/scripts/entities/pw-context.sh req-init --project <slug>
     # create context/REQUIREMENTS.md from context/_REQUIREMENTS.template.md (idempotent —
     # an existing brief is never touched). Prints the add-input reminder for its provenance row.
 
-$PW_HOME/tooling/scripts/entities/pw-context.sh add-input <slug> --file <f> --what <w> --source <s> [--trust <t>]
+$PW_HOME/tooling/scripts/entities/pw-context.sh add-input --project <slug> --file <f> --what <w> --source <s> [--trust <t>]
     # append one row to context/INDEX.md's inputs table: | <f> | <w> | <s> | <today> | <t|—> |.
-    # A2 flag-segment parsing is NATIVE: each value runs until the next --flag token, so
-    # unquoted prose works ("--what Migration RFC excerpt --source Lark doc docs/xxxx").
+    # Prose values parse NATIVELY: each value runs until the next --flag token (the
+    # named-argument grammar), so unquoted prose works ("--what Migration RFC excerpt --source Lark doc docs/xxxx").
     # The template's empty placeholder row is replaced by the first real row; `_e.g._`
     # example rows are never touched. "|" in values is escaped.
 
-$PW_HOME/tooling/scripts/entities/pw-context.sh add-repo <slug> <repo> <base> <why…>
+$PW_HOME/tooling/scripts/entities/pw-context.sh add-repo --project <slug> --repo <repo> --base <base> --why <why…>
     # append one row to the "Repos in scope" table: | `<repo>` | `<base>` | <why> |.
-    # A1 rest-of-line: everything after <base> is the why, unquoted.
+    # --why is a prose value: everything up to the next --flag token is the why, unquoted.
     # NEVER touches /pw-adopt's <!-- pw-adopt-scope:… --> marker rows — appends below them.
 
-$PW_HOME/tooling/scripts/entities/pw-context.sh ensure-input <slug> --file <f> --what <w> --source <s> [--trust <t>]
+$PW_HOME/tooling/scripts/entities/pw-context.sh ensure-input --project <slug> --file <f> --what <w> --source <s> [--trust <t>]
     # keyed upsert for the inputs table — assisted preparation's repeat-run path (/pw-context
-    # <slug> prepare): identity = the normalized "File / link" cell (trim, one surrounding
+    # prepare --project <slug>): identity = the normalized "File / link" cell (trim, one surrounding
     # backtick pair, \| unescape, whitespace collapse — URL query parameters and case
     # preserved). No row → append; one row → update what/source/trust in place keeping the
     # original date; identical content → no write at all; duplicate rows that disagree →
     # conflict report, nothing written. Phase context only.
 
-$PW_HOME/tooling/scripts/entities/pw-context.sh ensure-repo <slug> <repo> <base> <why…>
+$PW_HOME/tooling/scripts/entities/pw-context.sh ensure-repo --project <slug> --repo <repo> --base <base> --why <why…>
     # keyed upsert for the "Repos in scope" table: identity = normalized (repo, base). No row
     # → append; one row → update the why in place; identical → no write. The same repo on a
     # DIFFERENT base stays a separate row; /pw-adopt marker rows are never touched. Duplicate
@@ -271,7 +273,7 @@ can take are printed for the agent, never as errors:
   / platform skill)`
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-context.sh fetch <slug> [--ignore-errors]   # --ignore-errors mirrors
+$PW_HOME/tooling/scripts/entities/pw-context.sh fetch --project <slug> [--ignore-errors]   # --ignore-errors mirrors
                                                                # /pw-analyze's --ignore-fetch-errors
 ```
 
@@ -292,7 +294,7 @@ For `/pw-adopt` on a repo that already has in-flight branches: snapshots the git
 resolves the base branch (explicit MR target → forge lookup via `gh`/`glab` → repo default).
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-context.sh adopt-snapshot <slug> <repo> <branch> [mr-url]
+$PW_HOME/tooling/scripts/entities/pw-context.sh adopt-snapshot --project <slug> --repo <repo> --branch <branch> [--mr <url>]
 ```
 
 **Output** — flat `key: value`:
@@ -306,7 +308,7 @@ commits: 7
 files-changed: 12
 ```
 
-`base:` parenthesizes **how** it was resolved (`mr-target` / `default`) — pass the `mr-url`
+`base:` parenthesizes **how** it was resolved (`mr-target` / `default`) — pass `--mr`
 whenever you have one, so the base is the real MR target, not guesswork. Zero-commit / zero-file
 snapshots are legitimate (branch just created); it's data for the adopt agent, not a green light.
 
@@ -346,7 +348,7 @@ one hidden-marker-keyed row per unit in "Repos in scope"), and sets the dashboar
 pointer. `/pw-adopt` drives it once per adopted branch.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-context.sh adopt <slug> <repo> <branch> <base> [mr-url]
+$PW_HOME/tooling/scripts/entities/pw-context.sh adopt --project <slug> --repo <repo> --branch <branch> --base <base> [--mr <url>]
 ```
 
 Re-adopting the same `repo@branch` updates that unit's Base/MR lines in place; prose under the

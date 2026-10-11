@@ -11,8 +11,8 @@ The `log` writer stamps English WIB date-times. Its last-entry duplicate guard a
 Invalid, date-only, or future timestamps never suppress a new entry. Existing history is not rewritten.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-status.sh <slug>                  # full report
-$PW_HOME/tooling/scripts/entities/pw-status.sh <slug> --skip-cli-check # omit the forge/CLI auth section
+$PW_HOME/tooling/scripts/entities/pw-status.sh --project <slug>          # full report
+$PW_HOME/tooling/scripts/entities/pw-status.sh --project <slug> --skip-cli-check # omit the forge/CLI auth section
 $PW_HOME/tooling/scripts/entities/pw-status.sh --all [--attention] [--phase <phase>] [--json]
 $PW_HOME/tooling/scripts/entities/pw-status.sh --selftest              # isolated temp-project smoke test
 ```
@@ -69,14 +69,14 @@ from scripts that run frequently.
 Checks **all** gates for one command and fails fast — run it before invoking the phase agent.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-preflight.sh analyze      <slug>   # phase context|analysis + context/INDEX.md exists with ≥1 filled input row
-$PW_HOME/tooling/scripts/entities/pw-preflight.sh prepare      <slug>   # phase context only — assisted preparation accepts an EMPTY scaffolded context (no input rows required; analyze keeps its gate)
-$PW_HOME/tooling/scripts/entities/pw-preflight.sh execute      <slug>   # PLAN approved, phase valid, scope/model resolvable (allowlist + availability gate)
-$PW_HOME/tooling/scripts/entities/pw-preflight.sh breakdown    <slug>   # analysis reviews approved (approval discovery excludes RFC staging — only its Sign-off-bearing files), RFC open items resolved
-$PW_HOME/tooling/scripts/entities/pw-preflight.sh ship         <slug>   # shippable tasks exist, verify passed
-$PW_HOME/tooling/scripts/entities/pw-preflight.sh comments     <slug>   # ≥1 task has a linked MR (for /pw-ship <slug> comments — no 'done' requirement)
-$PW_HOME/tooling/scripts/entities/pw-preflight.sh close        <slug>   # all tasks accepted
-$PW_HOME/tooling/scripts/entities/pw-preflight.sh review <slug> [phase] # review files exist for phase: analysis|plan|task-plan|task-exec
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh analyze      --project <slug>   # phase context|analysis + context/INDEX.md exists with ≥1 filled input row
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh prepare      --project <slug>   # phase context only — assisted preparation accepts an EMPTY scaffolded context (no input rows required; analyze keeps its gate)
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh execute      --project <slug>   # PLAN approved, phase valid, scope/model resolvable (allowlist + availability gate)
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh breakdown    --project <slug>   # analysis reviews approved (approval discovery excludes RFC staging — only its Sign-off-bearing files), RFC open items resolved
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh ship         --project <slug>   # shippable tasks exist, verify passed
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh comments     --project <slug>   # ≥1 task has a linked MR (for /pw-ship comments --project <slug> — no 'done' requirement)
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh close        --project <slug>   # all tasks accepted
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh review --project <slug> [--lane <lane>] # review files exist for phase: analysis|plan|task-plan|task-exec
 ```
 
 **Output:** silent on success (exit `0`). On failure, exit `1` with one `pw-preflight: …` line —
@@ -84,13 +84,13 @@ it names the gate *and* the fix, e.g.:
 
 ```
 pw-preflight: PLAN review gate not approved
-  → fix: approve it in <project>/task/review/PLAN.review.md (## Sign-off row) or run /pw-review <slug>
+  → fix: approve it in <project>/task/review/PLAN.review.md (## Sign-off row) or run /pw-review --project <slug>
 ```
 
 **Reading failures:** every message is terminal for that command — do the named action, re-run.
 Unknown command argument → usage line, also exit 1.
 
-**When to use:** first step of `/pw-analyze`, `/pw-context <slug> prepare`, `/pw-execute`,
+**When to use:** first step of `/pw-analyze --project <slug>`, `/pw-context prepare --project <slug>`, `/pw-execute`,
 `/pw-breakdown`, `/pw-ship`, `/pw-close`, `/pw-review`. Any agent invoked *without* a command
 re-runs the same pre-flight itself.
 
@@ -179,7 +179,7 @@ shims** onto `project …` (same engine + stderr pointer) for pre-existing calle
 axes have no bare shims.
 `project ensure` also persists the legacy-`off` → `advisory` migration and creates the
 `Review Trigger:`/`Review Repair:`/`Review Budget:` lines; reads normalize `off` without writing.
-`/pw-config <slug> …` is the human-facing surface — prefer it over calling the script, and note
+`/pw-config … --project <slug>` is the human-facing surface — prefer it over calling the script, and note
 configuration is no longer a `/pw-review` sub-verb.
 
 **`model-resolve`** proves a model *exists right now* (model-check only proves it's *permitted*):
@@ -207,7 +207,7 @@ decision hints are phrased for the **user surface**: `/pw-*` commands or the hum
 `pw.config.sh`, never raw script paths (a T4 canary greps the hint literals to prove it).
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-project-doctor.sh <slug> [--fix | --guidance [--apply]]
+$PW_HOME/tooling/scripts/entities/pw-project-doctor.sh --project <slug> [--fix | --guidance [--apply]]
 ```
 
 ### --guidance: scoped workflow-guidance prose repair

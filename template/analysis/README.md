@@ -22,9 +22,9 @@ text. Only you approve (guarded AI `auto` mode aside). See `../README.md` → "R
 
 | You want to… | Use |
 |---|---|
-| Start a review for this doc | `/pw-review <slug> init analysis/<topic>.md` |
-| Add feedback | `/pw-review <slug> item analysis/review/<topic>.review.md §<section> <your comment>` |
-| Answer the agent's questions | `/pw-review <slug> answer analysis/review/<topic>.review.md Q<n> <your answer>` |
-| Have the agent apply approved fixes | `/pw-review <slug> analysis/review/<topic>.review.md` |
-| Ask for an independent AI pass | `/pw-review <slug> ai analysis` |
-| Approve (human-only) | `/pw-review <slug> signoff analysis/review/<topic>.review.md approved` |
+| Start a review for this doc | `/pw-review init --project <slug> --file analysis/<topic>.md` |
+| Add feedback | `/pw-review item --project <slug> --file analysis/review/<topic>.review.md --section §<section> --text <your comment>` |
+| Answer the agent's questions | `/pw-review --project <slug> answer analysis/review/<topic>.review.md Q<n> <your answer>` |
+| Have the agent apply approved fixes | `/pw-review --project <slug> --file analysis/review/<topic>.review.md` |
+| Ask for an independent AI pass | `/pw-review ai --project <slug> --surface analysis` |
+| Approve (human-only) | `/pw-review signoff --project <slug> --file analysis/review/<topic>.review.md --decision approved` |

@@ -12,7 +12,7 @@ reports them — neutral identity facts you carry into your rows), and, if it ex
 `REVIEWER-NOTES.md`; judge the artifact and nothing else.
 
 > Reuse-first / isolation is the whole point: you are spawned **fresh**, in-process, by whoever is
-> running `/pw-review <slug> ai …` (Claude Task `subagent_type`; kilo `mode: subagent` — a provider
+> running `/pw-review ai --project <slug> …` (Claude Task `subagent_type`; kilo `mode: subagent` — a provider
 > can only spawn its own). You must NOT be given this session's own reasoning about how the
 > artifact was produced, its chat history, or anything beyond what you were explicitly handed —
 > that shared context is exactly what would turn you into an echo of the producer instead of a
@@ -29,7 +29,7 @@ reports them — neutral identity facts you carry into your rows), and, if it ex
 Before reading any review file, get the whole review state in one zero-token call:
 
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh scan <slug> [--phase <phase>]
+{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh scan --project <slug> [--phase <phase>]
 ```
 
 One line per review file: open/resolved/pending counts and the latest Sign-off decision with its
@@ -66,13 +66,13 @@ Hard rules:
   writes never toggle the recorded pass state back. **Write them deterministically, never
   hand-copied heading blocks:**
   ```bash
-  {{PW_HOME}}/tooling/scripts/entities/pw-review.sh add-item <slug> <review-rel-path> \
+  {{PW_HOME}}/tooling/scripts/entities/pw-review.sh add-item --project <slug> --file <review-rel-path> \
     --section '<§anchor>' --actor pw-reviewer --stdin   # the ask via heredoc — verbatim, quote-safe
   ```
   (next Rn, timestamp, `pw-item-status` marker, `---` rule, and the `## Contents` reindex are all
   handled; `--actor pw-reviewer` is the tag above). Seed `## Open questions` rows the same way a
   producer agent would if something is genuinely ambiguous, not just to hedge — via
-  `pw-review.sh add-question <slug> <path> --section '<§anchor>' --stdin` (default actor is
+  `pw-review.sh add-question --project <slug> --file <path> --section '<§anchor>' --stdin` (default actor is
   `agent`; pass `--actor pw-reviewer` to keep your tag).
 - **Before filing anything, check the review file for an existing item on the SAME `§section or
   anchor` you're about to use — this is what stops a never-ending loop:**
@@ -91,8 +91,8 @@ Hard rules:
       `auto-signoff` blocked by the tool's own check, not by your promise to skip it; don't rely on
       remembering not to call it.
 - **Never write the Sign-off row by hand, and a human gate decision is never yours to make.**
-  Check this project's AI Review mode for your phase (`pw-config.sh ai-review <slug>`).
-  **Pass entry:** record your pass with `pw-review.sh start <slug> <review-rel-path> --phase
+  Check this project's AI Review mode for your phase (`pw-config.sh get --project <slug> --key ai-review`).
+  **Pass entry:** record your pass with `pw-review.sh start --project <slug> --file <review-rel-path> --phase
   <phase> --provider <actual-provider> --model <actual-model>` — and only once it has real
   persisted findings. A pass that starts empty and finds nothing files no `changes-requested`
   row and leaves Sign-off exactly as it was; that verdict belongs in `REVIEWER-NOTES.md`. Pass
@@ -101,7 +101,7 @@ Hard rules:
   the spawning session's model, or a guess. **Then:** in `advisory` mode, stop after filing
   items — a human decides, even when every finding is resolved, and a clean advisory pass
   changes no Sign-off state. In `auto` mode, if (and only if) your pass leaves nothing [OPEN] or
-  [PENDING], you may call `pw-review.sh auto-signoff <slug> <review-rel-path> <phase>
+  [PENDING], you may call `pw-review.sh auto-signoff --project <slug> --file <review-rel-path> --phase <phase>
   --provider <actual-provider> --model <actual-model>` straight away — never after fabricating a
   `changes-requested` row for an empty pass. It independently re-checks every condition (mode,
   open counts, the artifact actually belonging to this lane, and no standing explicit human
@@ -111,7 +111,7 @@ Hard rules:
   from an EARLIER phase, repairing or reopening its gate needs the human's explicit confirmation
   first (`--confirm-earlier`); otherwise record your findings and leave that gate untouched.
 - **Always leave a `REVIEWER-NOTES.md` entry** (create it first via `pw-review.sh note-init
-  <slug>` if it doesn't exist): phase, artifact, mode, your actual provider/model (`unknown` when
+  --project <slug>` if it doesn't exist): phase, artifact, mode, your actual provider/model (`unknown` when
   unconfirmed — consistent with what your rows show), verdict, and a **Reasoning** field as 2-4
   short bullets — never a paragraph — (what you actually checked, what stood out, why you decided
   what you decided), plus an optional **Lessons** bullet ONLY when something is genuinely

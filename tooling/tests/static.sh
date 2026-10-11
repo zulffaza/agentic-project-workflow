@@ -175,8 +175,8 @@ static_t4() {
   hits="$(grep -lE 'pw-review\.sh signoff|pw-review-edit\.sh' "$TOOL"/agents/*.md 2>/dev/null | tr '\n' ' ')"
   [ -z "$hits" ] && pwtest_ok "T4 canary: no agent file invokes signoff" \
     || pwtest_bad "T4 canary: no agent file invokes signoff" "C4 violation in: $hits — only a human triggers a gate decision (agent path: pw-review.sh auto-signoff)"
-  grep -qF 'pw-review.sh init-docs <slug> <artifact-rel-path>' "$TOOL/commands/pw-review.md" \
-    && grep -qF '/pw-review <slug> init <artifact-path>' "$TOOL/commands/pw-review.md" \
+  grep -qF 'pw-review.sh init-docs --project <slug> --file <artifact-rel-path>' "$TOOL/commands/pw-review.md" \
+    && grep -qF '/pw-review init --project <project-slug> --file <artifact-rel-path>' "$TOOL/commands/pw-review.md" \
     && pwtest_ok "T4 canary: selected document command maps to list initialization" \
     || pwtest_bad "T4 canary: selected document command mapping" "public init must accept artifact paths and call init-docs, not the legacy review/doc pair API"
   grep -qF "The reviewer must confirm its own execution identity." "$TOOL/commands/pw-review.md" \
@@ -315,7 +315,7 @@ static_t4() {
   # (l) the commands bind verification/landing through the deterministic operators: stack-verify is
   # the only verification writer the execution path names, promotion uses stack-retarget, and no
   # command asks the generic stack-record to certify a verified_head.
-  grep -qF 'stack-verify <slug> <T0n>' "$TOOL/commands/pw-execute.md" \
+  grep -qF 'stack-verify --project <slug> --task <T0n>' "$TOOL/commands/pw-execute.md" \
     && grep -qF 'stack-retarget' "$TOOL/commands/pw-sync.md" \
     && ! grep -qE 'stack-record [^`]*verified_head=' "$TOOL/commands/pw-execute.md" \
     && pwtest_ok "T4 canary: commands bind verification via stack-verify and promote via stack-retarget" \

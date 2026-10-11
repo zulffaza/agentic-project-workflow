@@ -3,19 +3,19 @@
 ## Execution phase
 
 **Pre-flight before anything else:**
-`{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh execute <slug>` + `pw-doc.sh lint plan <slug>` +
-`pw-doc.sh lint task <slug> --all` (each `|| exit 1`). `/pw-execute` runs these itself — when you
+`{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh execute --project <slug>` + `pw-doc.sh lint --kind plan --project <slug>` +
+`pw-doc.sh lint --kind task --project <slug> --all` (each `|| exit 1`). `/pw-execute` runs these itself — when you
 reach execution WITHOUT the command (direct orchestrator spawn, skill-only session), run the same
 three; a nonzero exit is a hard stop: relay its stderr line, don't reason onward. (These, plus
 `pw-worktree.sh create` / `pw-review-read.sh scan` / `pw-status.sh` below, are what keep the
 scriptless legacy path from diverging — `tooling/docs/scripts/README.md`.) After the gates pass,
-run `pw-status.sh provider-audit <slug>` once as a **warning** pass (non-blocking here; it is
+run `pw-status.sh provider-audit --project <slug>` once as a **warning** pass (non-blocking here; it is
 blocking inside `/pw-ship`/`/pw-close`): `stale-provider`/`unbound` rows name exactly what to
 re-pin before spawning.
 
 Before resolving scope, after each task starts or returns, and after each repair/re-verification
-changes a task file, run `pw-doc.sh sync <slug> --plan-only`, then
-`pw-doc.sh sync <slug> --dashboard-only`. Stop on sync failure and re-read the PLAN before
+changes a task file, run `pw-doc.sh sync --project <slug> --plan-only`, then
+`pw-doc.sh sync --project <slug> --dashboard-only`. Stop on sync failure and re-read the PLAN before
 scheduling dependents or reporting completion. Task files supply execution Status/Time/Result;
 synchronization does not promote `done` to `accepted`.
 
@@ -38,11 +38,11 @@ invocation** — don't stop after fixing/re-running just one task if more are re
 failure confirmed **pre-existing/environmental** (reproduces on the untouched base) still reaches
 `Status: done` with the caveat noted, and does NOT block the DAG; only a **real regression** blocks
 that task's own dependents — every other independent task still proceeds. An explicit single-task
-re-run (`/pw-execute <slug> T0n`, after the human rejects one task — see `references/review.md`)
+re-run (`/pw-execute --project <slug> --task T0n`, after the human rejects one task — see `references/review.md`)
 is the one case that *does* stop after just that task.
 
 **Last step, mandatory:** log each spawn/commit via `pw-status.sh log`; when every task in scope is
-`done` (or blocked only by a `verify-failed` dependency), `pw-status.sh status <slug> review`. See
+`done` (or blocked only by a `verify-failed` dependency), `pw-status.sh status --project <slug> --phase review`. See
 `references/conventions-and-gotchas.md` for the helper contract.
 
 ## Model / agent per task + provider routing
@@ -86,7 +86,7 @@ discovery bullet below).
                                 # arguments: `kilo models kilo/alibaba-token-plan` ERRORS.
   ```
   Pick an id from that actual output; resolve a row to its canonical bind id with
-  `pw-config.sh model-resolve <provider> <model-id>` (it also enforces the prefix scope).
+  `pw-config.sh model-resolve --provider <provider> --model <model-id>` (it also enforces the prefix scope).
   Claude has no live catalog to query — its fixed alias set (`opus`/`sonnet`/`haiku`/`fable` +
   pinned full names) is already fully documented in the
   registry and `docs/EXECUTION.md`'s table, so there's nothing to discover there.
@@ -99,7 +99,7 @@ discovery bullet below).
   unless the human configured one. Before finalizing a task's `Execute with:` during breakdown,
   AND again right before invoking it during execution, run:
   ```bash
-  pw-config.sh model-check <provider> <model-id>
+  pw-config.sh model-check --provider <provider> --model <model-id>
   ```
   Empty/unset allowlist → always passes (the default — every model allowed). A configured
   allowlist that refuses your choice means pick a different allowed model — never override it or
@@ -120,8 +120,8 @@ discovery bullet below).
 - The orchestrator spawns (or shells out to) whatever `Execute with:` names — a `provider:model`  (the default: run the model with the task file as the work order, no named def), the shipped
   `pw-executor`, or a same-provider custom def. Six agents ship and are seeded per provider from
   `tooling/agents/`: `pw-orchestrator`, `pw-executor`, `pw-researcher`, `pw-analyst`,
-  `pw-writer-task`, `pw-reviewer` (the reviewer is optional — spawned only by `/pw-review <slug>
-  ai …`); add another def only for a genuinely new recurring role. Ad-hoc (non-pw) *implementation*
+  `pw-writer-task`, `pw-reviewer` (the reviewer is optional — spawned only by `/pw-review ai --project <slug>
+  …`); add another def only for a genuinely new recurring role. Ad-hoc (non-pw) *implementation*
   is not a second executor def (Option A): that work belongs to the main agent or `pw-executor`
   where a task file exists.
 - **Agent vs sub-agent — the distinction is load-bearing across providers.** A **sub-agent** is
@@ -181,7 +181,7 @@ spawn):  task field `Route:` > PLAN `- Routing:` line > pw.config.sh PW_ROUTE_DE
 Values: auto | subagent | headless.
 
 0. AVAILABILITY GATE first — on EVERY path, including resume:
-   pw-config.sh model-resolve <provider> <model-id>
+   pw-config.sh model-resolve --provider <provider> --model <model-id>
    exit 1 = not in the live catalog; exit 2 = outside the PW_<P>_API_PROVIDERS prefix scope
    (a row pinning a provider since removed). Either → hard stop on this task, relay the fix
    line; never blind-spawn. It fails open on "can't check" — a refusal is a positive call.
@@ -193,7 +193,7 @@ Values: auto | subagent | headless.
          printed (`-m` gets the exact catalog line, never the raw row text — the `kilo/` prefix
          on it marks the GATEWAY-nested line vs a direct provider's `alibaba-token-plan/<m>`);
          RESUME first iff a recorded `Session:` id exists AND
-         `pw-session.sh session-check <provider> <id>` exits 0 ("live" is script-decided, never
+         `pw-session.sh session-check --provider <provider> --session <id>` exits 0 ("live" is script-decided, never
          agent-guessed; exit 2 reads as not-resumable) AND the row is unchanged since recorded.
 2. Route overrides:
    subagent — force in-process; error if row provider ≠ orchestrator provider; model-degraded
@@ -263,7 +263,7 @@ It's how a later **fix** routes per the ladder rather than re-derives:
 - Session ids are **machine-local** pointers — never into MR text; PLAN/dashboard/worktrees stay
   the durable cross-machine state, and the recorded seed is the cold-spawn fallback. Liveness of
   any id is `pw-session.sh session-check`'s answer, never a guess.
-- **Provider consistency:** `pw-status.sh provider-audit <slug> [task-ids…]` (report-only)
+- **Provider consistency:** `pw-status.sh provider-audit --project <slug> [--task <T0n>]…` (report-only)
   compares each row's expected provider/model against the ledger's used pair + the live catalog,
   printing `verdict=ok|mismatch|stale-provider|unbound|never-run` — run it in `/pw-ship` and
   `/pw-execute` preflight warnings and in `/pw-close`'s recap.
@@ -299,7 +299,7 @@ idempotent re-attach built in; the worktree path is its LAST output line (captur
 executor handoff):
 
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh create <project-slug> <task-id> <repo> <base-branch>
+{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh create --project <project-slug> --task <task-id> --repo <repo> --base <base-branch>
 ```
 
 The raw equivalent (what the script does — manual use only if the script is unavailable):

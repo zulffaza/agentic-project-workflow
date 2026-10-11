@@ -2,8 +2,8 @@
 # ============================================================================
 # pw-status.sh — deterministic project status report (replaces /pw-status agent)
 #
-#   pw-status.sh <slug>                  full status report
-#   pw-status.sh <slug> --skip-cli-check skip CLI auth status check
+#   pw-status.sh --project <slug>        full status report
+#   pw-status.sh --project <slug> --skip-cli-check   skip CLI auth status check
 #   pw-status.sh --all [--attention] [--phase <phase>] [--json]
 #       READ-ONLY cross-project overview across the projects root: one row per
 #       discovered project — phase, attention conditions, accepted tasks, last
@@ -16,14 +16,16 @@
 #   pw-status.sh --selftest              run isolated self-test
 #
 #   Project-state setters (the dashboard/LOG.md entity; merged from pw-lib, plan 20):
-#   log <slug> <actor> <msg...> · status <slug> <phase> [--rewind] · oneliner <slug> <text...>
-#   adopted <slug> <text...> · phase <slug> · dashboard-task-status <slug> <task-id> <status>
-#   task-accept <slug> <task-id>   (one call sets all three acceptance holders: task file +
-#                                   PLAN row + dashboard row; best-effort dashboard; one LOG line)
-#   stack <slug>   read-only stacked-MR topology/health report (parent|target|landed|freshness
+#   log --project <slug> --actor <a> --message <text…> · status --project <slug> --phase <phase> [--rewind]
+#   oneliner --project <slug> --text <text…> · adopted --project <slug> --text <text…>
+#   phase --project <slug> · dashboard-task-status --project <slug> --task <task-id> --status <status>
+#   task-accept --project <slug> --task <task-id>   (one call sets all three acceptance holders:
+#                                   task file + PLAN row + dashboard row; best-effort dashboard;
+#                                   one LOG line)
+#   stack --project <slug>   read-only stacked-MR topology/health report (parent|target|landed|freshness
 #                  per stack task, plus stale/pending counts); "no stacks" for legacy projects.
 #
-#   provider-audit <slug> [task-ids…]
+#   provider-audit --project <slug> [--task <task-id>]…
 #       REPORT-ONLY consistency audit of `Execute with:` rows vs. what actually ran:
 #       per task prints T0n|expected=…|used=…|via=…|route=…|verdict=ok|mismatch|stale-provider|unbound|never-run.
 #       "expected" is validated against the live catalog via pw-config.sh model-resolve, so a
@@ -50,7 +52,7 @@ PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 OVTAB="$(printf '\t')"
 
 die() { echo "pw-status: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new $1)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
 
 # --- latest-row sign-off readers (report display; shared mdlib primitives — NEVER a
 # whole-file "approved" grep: a historical approved row survives a reopen and would hide a
@@ -135,10 +137,32 @@ phase_rank() {
 # cmd_log runs as a trailing step inside many other commands and must not abort the caller's real
 # work over an audit-trail nicety. A parse failure on the last line (unexpected format, clock
 # skew) fails OPEN — always logs — rather than risk silently dropping a genuinely new entry.
+#   log --project <slug> --actor <a> --message <text…>
 cmd_log() {
-  [ $# -ge 3 ] || die "usage: log <slug> <actor> <msg...>"
-  local slug="$1" actor="$2"; shift 2
-  local msg="$*"
+  local slug="" actor="" msg="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --actor=*)   v="${a#*=}"; a="--actor" ;;
+      --message=*) v="${a#*=}"; a="--message" ;;
+    esac
+    case "$a" in
+      --project|--actor)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --actor) actor="$v" ;; esac ;;
+      --message)
+        while [ $# -gt 0 ]; do case "$1" in --*) break ;; esac; v="${v:+$v }$1"; shift; done
+        [ -n "$v" ] || die "log: --message requires a value → fix: --message <text…>"
+        msg="$v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "log --project <slug> --actor <a> --message <text…>" ;;
+      *) _pw_positional "$a" "log --project <slug> --actor <a> --message <text…>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "log: --project is required → fix: log --project <slug> --actor <a> --message <text…>"
+  [ -n "$actor" ] || die "log: --actor is required → fix: name the actor (you | a tool name)"
+  [ -n "$msg" ] || die "log: --message is required → fix: one short line"
   local d; d="$(proj_dir "$slug")"
   local f="$d/LOG.md"
   local window="${PW_LOG_DEDUP_WINDOW_MIN:-5}"
@@ -165,11 +189,25 @@ cmd_log() {
 }
 
 cmd_status() {
-  local rewind=0 args=()
-  for a in "$@"; do case "$a" in --rewind) rewind=1 ;; *) args+=("$a") ;; esac; done
-  set -- "${args[@]}"
-  [ $# -eq 2 ] || die "usage: status <slug> <phase> [--rewind]   (phase: $PW_VALID_PHASES)"
-  local slug="$1" phase="$2"
+  local rewind=0 slug="" phase="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --phase=*)   v="${a#*=}"; a="--phase" ;;
+    esac
+    case "$a" in
+      --project|--phase)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --phase) phase="$v" ;; esac ;;
+      --rewind) rewind=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "status --project <slug> --phase <phase> [--rewind]" ;;
+      *) _pw_positional "$a" "status --project <slug> --phase <phase> [--rewind]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "status: --project is required → fix: status --project <slug> --phase <phase> [--rewind]   (phase: $PW_VALID_PHASES)"
+  [ -n "$phase" ] || die "status: --phase is required → fix: status --project <slug> --phase <phase> [--rewind]   (phase: $PW_VALID_PHASES)"
   case " $PW_VALID_PHASES " in *" $phase "*) ;; *) die "invalid phase '$phase' (allowed: $PW_VALID_PHASES)";; esac
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
@@ -177,26 +215,44 @@ cmd_status() {
   # Monotonic guard: refuse an accidental backward move (e.g. a stray reset to 'context' after
   # analysis) unless the caller explicitly rewinds. This is the deterministic fix for phases
   # silently sliding backward when a command mis-fires.
-  local cur; cur="$(cmd_phase "$slug")"
+  local cur; cur="$(cmd_phase --project "$slug")"
   local cr tr; cr="$(phase_rank "$cur")"; tr="$(phase_rank "$phase")"
   if [ "$rewind" -eq 0 ] && [ "$tr" -ge 0 ] && [ "$cr" -ge 0 ] && [ "$tr" -lt "$cr" ]; then
     die "refusing to move Status backward: $cur → $phase. If you really mean to rewind a phase, pass --rewind."
   fi
   awk -v p="$phase" '!d && /^- \*\*Status:\*\*/ {print "- **Status:** " p; d=1; next} {print}' \
     "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-  cmd_log "$slug" status "Status -> $phase$([ "$rewind" -eq 1 ] && echo ' (rewind)')"
+  cmd_log --project "$slug" --actor status --message "Status -> $phase$([ "$rewind" -eq 1 ] && echo ' (rewind)')"
   echo "$slug: Status -> $phase"
 }
 
 cmd_oneliner() {
-  [ $# -ge 2 ] || die "usage: oneliner <slug> <text...>"
-  local slug="$1"; shift; local text="$*"
+  local slug="" text="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --text=*)    v="${a#*=}"; a="--text" ;;
+    esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      --text)
+        while [ $# -gt 0 ]; do case "$1" in --*) break ;; esac; v="${v:+$v }$1"; shift; done
+        [ -n "$v" ] || die "oneliner: --text requires a value → fix: --text <text…>"
+        text="$v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "oneliner --project <slug> --text <text…>" ;;
+      *) _pw_positional "$a" "oneliner --project <slug> --text <text…>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "oneliner: --project is required → fix: oneliner --project <slug> --text <text…>"
+  [ -n "$text" ] || die "oneliner: --text is required → fix: one line describing the project"
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
   grep -q '^- \*\*One-liner:\*\*' "$f" || die "no '- **One-liner:**' line in $f"
   awk -v t="$text" '!d && /^- \*\*One-liner:\*\*/ {print "- **One-liner:** " t; d=1; next} {print}' \
     "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-  cmd_log "$slug" analyze "One-liner set"
+  cmd_log --project "$slug" --actor analyze --message "One-liner set"
   echo "$slug: One-liner set"
 }
 
@@ -204,8 +260,26 @@ cmd_oneliner() {
 # Adopted line — insert one right after the One-liner if absent, else replace its text. Idempotent,
 # so /pw-adopt can call it after adding each unit (the caller passes the current count/pointer text).
 cmd_adopted() {
-  [ $# -ge 2 ] || die "usage: adopted <slug> <text...>"
-  local slug="$1"; shift; local text="$*"
+  local slug="" text="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --text=*)    v="${a#*=}"; a="--text" ;;
+    esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      --text)
+        while [ $# -gt 0 ]; do case "$1" in --*) break ;; esac; v="${v:+$v }$1"; shift; done
+        [ -n "$v" ] || die "adopted: --text requires a value → fix: --text <text…>"
+        text="$v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "adopted --project <slug> --text <text…>" ;;
+      *) _pw_positional "$a" "adopted --project <slug> --text <text…>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "adopted: --project is required → fix: adopted --project <slug> --text <text…>"
+  [ -n "$text" ] || die "adopted: --text is required → fix: the pointer line under Adopted:"
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
   if grep -q '^- \*\*Adopted:\*\*' "$f"; then
@@ -216,14 +290,25 @@ cmd_adopted() {
     awk -v t="$text" '{print} !d && /^- \*\*One-liner:\*\*/ {print "- **Adopted:** " t; d=1}' \
       "$f" > "$f.tmp" && mv "$f.tmp" "$f"
   fi
-  cmd_log "$slug" adopt "Adopted pointer set: $text"
+  cmd_log --project "$slug" --actor adopt --message "Adopted pointer set: $text"
   echo "$slug: Adopted -> $text"
 }
 
 cmd_phase() {
-  [ $# -eq 1 ] || die "usage: phase <slug>"
-  local f; f="$(proj_dir "$1")/README.md"
-  [ -f "$f" ] || die "no README.md in project $1"
+  local slug="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --project=*) v="${a#*=}"; a="--project" ;; esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "phase --project <slug>" ;;
+      *) _pw_positional "$a" "phase --project <slug>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "phase: --project is required → fix: phase --project <slug>"
+  local f; f="$(proj_dir "$slug")/README.md"
+  [ -f "$f" ] || die "no README.md in project $slug"
   grep -m1 '^- \*\*Status:\*\*' "$f" | sed 's/^- \*\*Status:\*\*[[:space:]]*//'
 }
 
@@ -237,10 +322,26 @@ cmd_phase() {
 #      still-untouched placeholder table self-heals here)
 # Idempotent: when every holder already says accepted → exit 0 with no duplicate LOG entry;
 # otherwise ONE log line covers the whole sync. Used when the MR is already merged.
-#   task-accept <slug> <task-id>
+#   task-accept --project <slug> --task <task-id>
 cmd_task_accept() {
-  [ $# -eq 2 ] || die "usage: task-accept <slug> <task-id>"
-  local slug="$1" task="$2"
+  local slug="" task="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+    esac
+    case "$a" in
+      --project|--task)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --task) task="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "task-accept --project <slug> --task <task-id>" ;;
+      *) _pw_positional "$a" "task-accept --project <slug> --task <task-id>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "task-accept: --project is required → fix: task-accept --project <slug> --task <task-id>"
+  [ -n "$task" ] || die "task-accept: --task is required → fix: task-accept --project <slug> --task <task-id>"
   local d; d="$(proj_dir "$slug")"
   local taskfile="$d/task/$task.md"
   [ -f "$taskfile" ] || die "no task file: task/$task.md"
@@ -284,7 +385,7 @@ cmd_task_accept() {
   fi
 
   if [ "$changed" -eq 1 ]; then
-    cmd_log "$slug" sync "$task: MR already merged, marked as accepted (task file + PLAN row + dashboard)"
+    cmd_log --project "$slug" --actor sync --message "$task: MR already merged, marked as accepted (task file + PLAN row + dashboard)"
     echo "$slug: $task marked as accepted (MR already merged)"
   else
     echo "$slug: $task already accepted in every holder — nothing to do"
@@ -292,17 +393,35 @@ cmd_task_accept() {
 }
 
 # Update a task's status in the dashboard README.md task status table.
-#   dashboard-task-status <slug> <task-id> <status>
+#   dashboard-task-status --project <slug> --task <task-id> --status <status>
 cmd_dashboard_task_status() {
-  [ $# -eq 3 ] || die "usage: dashboard-task-status <slug> <task-id> <status>"
-  local slug="$1" task="$2" status="$3"
+  local slug="" task="" status="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+      --status=*)  v="${a#*=}"; a="--status" ;;
+    esac
+    case "$a" in
+      --project|--task|--status)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --task) task="$v" ;; --status) status="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "dashboard-task-status --project <slug> --task <task-id> --status <status>" ;;
+      *) _pw_positional "$a" "dashboard-task-status --project <slug> --task <task-id> --status <status>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "dashboard-task-status: --project is required → fix: dashboard-task-status --project <slug> --task <task-id> --status <status>"
+  [ -n "$task" ] || die "dashboard-task-status: --task is required → fix: dashboard-task-status --project <slug> --task <task-id> --status <status>"
+  [ -n "$status" ] || die "dashboard-task-status: --status is required → fix: dashboard-task-status --project <slug> --task <task-id> --status <status>"
   local d; d="$(proj_dir "$slug")"
   local readme="$d/README.md"
   [ -f "$readme" ] || die "no README.md in project $slug"
 
   _dashboard_update "$readme" 'ID' 'Status' "$task" "$status" \
     || die "dashboard-task-status: could not update $task in the Task status table (see above)"
-  cmd_log "$slug" sync "dashboard: $task status -> $status"
+  cmd_log --project "$slug" --actor sync --message "dashboard: $task status -> $status"
 }
 
 
@@ -328,13 +447,26 @@ _pw_audit_rows() {
 }
 
 cmd_provider_audit() {
-  [ $# -ge 1 ] || die "usage: provider-audit <slug> [task-ids…]   (report-only; exit 0 iff every row is ok/never-run)"
-  local slug="$1"; shift
+  local slug="" ids="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+    esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      --task)    [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --task;    v="$1"; shift; }; ids="$ids $v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "provider-audit --project <slug> [--task <task-id>]…" ;;
+      *) _pw_positional "$a" "provider-audit --project <slug> [--task <task-id>]…" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "provider-audit: --project is required → fix: provider-audit --project <slug> [--task <task-id>]…   (report-only; exit 0 iff every row is ok/never-run)"
   local d; d="$(proj_dir "$slug")"
   local plan="$d/task/PLAN.md"
-  [ -f "$plan" ] || die "no task/PLAN.md in $slug → fix: run /pw-breakdown $slug first"
+  [ -f "$plan" ] || die "no task/PLAN.md in $slug → fix: run /pw-breakdown --project $slug first"
   local logf="$d/LOG.md"
-  local ids="$*"
   local bad=0 rc id exec prov model route expected used via verdict mr_err lline au _seen _p
   while IFS='|' read -r id exec; do
     [ -n "$id" ] || continue
@@ -360,7 +492,7 @@ cmd_provider_audit() {
     verdict="ok"
     if [ -n "$prov" ]; then
       rc=0
-      mr_err="$("$HERE/pw-config.sh" model-resolve "$prov" "$model" 2>&1 >/dev/null)" || rc=$?
+      mr_err="$("$HERE/pw-config.sh" model-resolve --provider "$prov" --model "$model" 2>&1 >/dev/null)" || rc=$?
       case "$rc" in
         1) verdict="unbound" ;;
         2) verdict="stale-provider" ;;
@@ -402,9 +534,20 @@ EOF
 # stack <slug> — read-only stack report (plan 35): the topology/health rows from the ship entity
 # plus stale/debt counts. No stacks = legacy independent behavior. Mutates nothing.
 cmd_stack() {
-  [ $# -eq 1 ] || die "usage: stack <slug>"
-  local slug="$1" d; d="$(proj_dir "$slug")"
-  local rows; rows="$("$HERE/pw-ship.sh" stack "$slug" 2>/dev/null || true)"
+  local slug="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --project=*) v="${a#*=}"; a="--project" ;; esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "stack --project <slug>" ;;
+      *) _pw_positional "$a" "stack --project <slug>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "stack: --project is required → fix: stack --project <slug>"
+  local d; d="$(proj_dir "$slug")"
+  local rows; rows="$("$HERE/pw-ship.sh" stack --project "$slug" 2>/dev/null || true)"
   local n; n="$(printf '%s\n' "$rows" | awk -F'|' 'NR>1 && $1 ~ /^T[0-9]/ {c++} END{print c+0}')"
   if [ "${n:-0}" -eq 0 ]; then echo "$slug: no stacks (legacy independent behavior)"; return 0; fi
   printf '%s\n' "$rows"
@@ -654,8 +797,8 @@ EOF
   [ "$attn" = 1 ] && aflag=0 || aflag=1
   if _overview_slug_ok "$slug"; then
     case "$phase" in
-      executing|review|done) inspect="/pw-status $slug" ;;
-      *) inspect="/pw-help project $slug" ;;
+      executing|review|done) inspect="/pw-status --project $slug" ;;
+      *) inspect="/pw-help project --project $slug" ;;
     esac
   fi
 
@@ -675,7 +818,7 @@ cmd_all() {
       --json) json=1; shift ;;
       -h|--help) pw_usage ;;
       -*) die "unknown option for --all: $1 → fix: /pw-status --all [--attention] [--phase <phase>] [--json]" ;;
-      *) die "unexpected argument '$1' with --all → fix: --all scans every project; a slug belongs to the single-project form (/pw-status <slug>)" ;;
+      *) die "unexpected argument '$1' with --all → fix: --all scans every project; a project belongs to the single-project form (/pw-status --project <slug>)" ;;
     esac
   done
   case "$phase_filter" in
@@ -769,8 +912,8 @@ cmd_all() {
     printf 'Phase is recorded workflow state. Accepted does not mean merged.\n'
     if [ "$unread" -gt 0 ] || [ "$malformed" -gt 0 ]; then
       printf '\nPartial scan — records that need attention:\n'
-      awk -F"$OVTAB" '($17==1 || $18==1) { printf "  - %s: %s\n", $3, ($15=="" ? "(unreadable — inspect with /pw-status <slug>)" : $15) }' "$sorted"
-      printf '→ fix: repair the flagged records (detail: /pw-status <slug>), then re-run /pw-status --all.\n'
+      awk -F"$OVTAB" '($17==1 || $18==1) { printf "  - %s: %s\n", $3, ($15=="" ? "(unreadable — inspect with /pw-status --project <slug>)" : $15) }' "$sorted"
+      printf '→ fix: repair the flagged records (detail: /pw-status --project <slug>), then re-run /pw-status --all.\n'
     fi
   fi
 
@@ -795,13 +938,16 @@ SKIP_CLI_CHECK=0
 SELFTEST=0
 SLUG=""
 
-for arg in "$@"; do
+while [ $# -gt 0 ]; do
+  arg="$1"; shift; v=""
+  case "$arg" in --project=*) v="${arg#*=}"; arg="--project" ;; esac
   case "$arg" in
+    --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; SLUG="$v" ;;
     --skip-cli-check) SKIP_CLI_CHECK=1 ;;
     --selftest) SELFTEST=1 ;;
     -h|--help) pw_usage ;;
-    -*) die "unknown option: $arg (try --help)" ;;
-    *) SLUG="$arg" ;;
+    -*) _pw_unknown "$arg" "/pw-status --project <slug> [--skip-cli-check]" ;;
+    *) _pw_positional "$arg" "the report form is /pw-status --project <slug> [--skip-cli-check]" ;;
   esac
 done
 
@@ -854,7 +1000,7 @@ EOF
   SKIP_CLI_CHECK=1
 fi
 
-[ -n "$SLUG" ] || die "usage: pw-status.sh <slug> [--skip-cli-check] [--selftest]"
+[ -n "$SLUG" ] || die "usage: pw-status.sh --project <slug> [--skip-cli-check] [--selftest]"
 
 D="$(proj_dir "$SLUG")"
 README="$D/README.md"
@@ -865,11 +1011,11 @@ LOG="$D/LOG.md"
 
 # Current phase — canonical token only (C19): a drifted README `- **Status:**` line must
 # never print as prose as if it were a phase name here.
-PHASE_RAW="$(cmd_phase "$SLUG")"
+PHASE_RAW="$(cmd_phase --project "$SLUG")"
 PHASE="$(pw_phase_token "${PHASE_RAW:-missing}")"
 echo "## Phase: $PHASE"
 if [ "${PHASE_RAW:-}" != "$PHASE" ] && [ -n "${PHASE_RAW:-}" ]; then
-  printf '  ⚠ README phase line has prose around the token:\n    %s — repair with: pw-status.sh status <slug> %s\n' "$PHASE_RAW" "$PHASE"
+  printf '  ⚠ README phase line has prose around the token:\n    %s — repair with: pw-status.sh status --project <slug> --phase %s\n' "$PHASE_RAW" "$PHASE"
 fi
 echo
 
@@ -955,7 +1101,7 @@ if [ -n "$_axis" ]; then
   done
   echo "outcome:${_norm}"
   if [ "$_legacy_off" = 1 ]; then
-    echo "  (stored legacy off reads as effective advisory — persist with: /pw-config $SLUG project ensure)"
+    echo "  (stored legacy off reads as effective advisory — persist with: /pw-config ensure --project $SLUG)"
   fi
 else
   echo "outcome: — (line absent; effective default: advisory per surface)"

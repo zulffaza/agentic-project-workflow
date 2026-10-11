@@ -3,15 +3,18 @@
 # pw-worktree.sh — the worktree entity: create, remove, and teardown of the
 # per-task worktrees under <project>/worktree/.
 #
-#   pw-worktree.sh create   <slug> <task-id> <repo> <base-branch>
+#   pw-worktree.sh create --project <slug> --task <task-id> --repo <repo> --base <base-branch>
 #       Isolated worktree for one task; branch agent/<slug>/<T0n>-<slug>;
 #       prints the worktree path. (was pw-worktree-create.sh)
-#   pw-worktree.sh remove   <slug> <task-id>
+#   pw-worktree.sh remove --project <slug> --task <task-id>
 #       Safely remove one task's worktree (was pw-lib.sh worktree-remove).
-#   pw-worktree.sh teardown <project-dir> [all|<task-id>] [worktree-path]
+#   pw-worktree.sh teardown --dir <project-dir> [--task <task-id> | --all] [--worktree <path>] [--yes]
 #       /pw-close teardown with the safety guards: refuses the worktree you're
 #       standing in and any dirty one; exit 1 = skipped with a printed reason.
 #       (was pw-teardown.sh)
+#
+# Named-argument grammar: operation words first, every value named; --project
+# selects the project. Scalar values are ONE token (quote spaces).
 #
 # Merged plan 20 (one entity, three entry points -> one script; S1/S4).
 # ============================================================================
@@ -28,15 +31,31 @@ REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
 ST="$HERE/pw-status.sh"
 
 die() { echo "pw-worktree: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new $1)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
 
 cmd_create() {
-[ $# -eq 4 ] || die "usage: pw-worktree.sh create <slug> <task-id> <repo> <base-branch>"
-
-SLUG="$1"
-TASK_ID="$2"
-REPO="$3"
-BASE_BRANCH="$4"
+local a v
+while [ $# -gt 0 ]; do
+  a="$1"; shift; v=""
+  case "$a" in
+    --project=*) v="${a#*=}"; a="--project" ;;
+    --task=*)    v="${a#*=}"; a="--task" ;;
+    --repo=*)    v="${a#*=}"; a="--repo" ;;
+    --base=*)    v="${a#*=}"; a="--base" ;;
+  esac
+  case "$a" in
+    --project|--task|--repo|--base)
+      [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+      case "$a" in --project) SLUG="$v" ;; --task) TASK_ID="$v" ;; --repo) REPO="$v" ;; --base) BASE_BRANCH="$v" ;; esac ;;
+    -h|--help) pw_usage ;;
+    -*) _pw_unknown "$a" "create --project <slug> --task <T0n> --repo <r> --base <base-branch>" ;;
+    *) _pw_positional "$a" "create --project <slug> --task <T0n> --repo <r> --base <base-branch>" ;;
+  esac
+done
+[ -n "${SLUG:-}" ] || die "create: --project is required → fix: create --project <slug> --task <T0n> --repo <r> --base <base-branch>"
+[ -n "${TASK_ID:-}" ] || die "create: --task is required → fix: pass the task id (T0n)"
+[ -n "${REPO:-}" ] || die "create: --repo is required → fix: pass the repo dir name"
+[ -n "${BASE_BRANCH:-}" ] || die "create: --base is required → fix: pass the base branch"
 
 D="$(proj_dir "$SLUG")"
 REPO_DIR="$REPOS_DIR/$REPO"
@@ -68,12 +87,12 @@ if [ -n "$STACK_PARENT" ]; then
   [ -n "$CONSUMED_PARENT_BRANCH" ] || die "stack parent $STACK_PARENT has no Branch field → fix: complete the parent task file first"
   [ "$CONSUMED_PARENT_BRANCH" != "$BRANCH_NAME" ] || die "task $TASK_ID cannot stack on itself (same branch) → fix: correct the 'Stacked on:' field"
   git -C "$REPO_DIR" rev-parse --verify "$CONSUMED_PARENT_BRANCH" >/dev/null 2>&1 \
-    || die "parent branch '$CONSUMED_PARENT_BRANCH' ($STACK_PARENT) not found locally in $REPO → fix: execute the parent first (/pw-execute $SLUG $STACK_PARENT)"
+    || die "parent branch '$CONSUMED_PARENT_BRANCH' ($STACK_PARENT) not found locally in $REPO → fix: execute the parent first (/pw-execute --project $SLUG --task $STACK_PARENT)"
   PARENT_HEAD="$(git -C "$REPO_DIR" rev-parse "$CONSUMED_PARENT_BRANCH" 2>/dev/null || true)"
   VPARENT="$(pw_stack_state_get "$D" "$STACK_PARENT" verified_head 2>/dev/null || true)"
-  [ -n "$VPARENT" ] || die "parent $STACK_PARENT has no verified commit binding → fix: execute + verify the parent first (/pw-execute $SLUG $STACK_PARENT)"
+  [ -n "$VPARENT" ] || die "parent $STACK_PARENT has no verified commit binding → fix: execute + verify the parent first (/pw-execute --project $SLUG --task $STACK_PARENT)"
   [ "$VPARENT" = "$PARENT_HEAD" ] \
-    || die "parent $STACK_PARENT head changed after verification (verified ${VPARENT:0:8}, now ${PARENT_HEAD:0:8}) → fix: re-verify the parent (/pw-execute $SLUG $STACK_PARENT)"
+    || die "parent $STACK_PARENT head changed after verification (verified ${VPARENT:0:8}, now ${PARENT_HEAD:0:8}) → fix: re-verify the parent (/pw-execute --project $SLUG --task $STACK_PARENT)"
   PARENT_SHA="$VPARENT"
 fi
 
@@ -94,11 +113,11 @@ if git -C "$REPO_DIR" rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
     RECORDED="$(pw_stack_state_get "$D" "$TASK_ID" consumed_parent_sha 2>/dev/null || true)"
     [ -n "$RECORDED" ] || RECORDED="$(pw_stack_state_get "$D" "$TASK_ID" fork_sha 2>/dev/null || true)"
     [ -n "$RECORDED" ] \
-      || die "stacked branch $BRANCH_NAME has no recorded parent binding → fix: re-create it (/pw-execute $SLUG $TASK_ID after verifying $STACK_PARENT); a stacked branch is never attached without its verification identity"
+      || die "stacked branch $BRANCH_NAME has no recorded parent binding → fix: re-create it (/pw-execute --project $SLUG --task $TASK_ID after verifying $STACK_PARENT); a stacked branch is never attached without its verification identity"
     git -C "$REPO_DIR" merge-base --is-ancestor "$RECORDED" "$BRANCH_NAME" 2>/dev/null \
-      || die "stacked branch $BRANCH_NAME is stale — it does not contain its recorded parent commit ${RECORDED:0:8} → fix: /pw-sync $SLUG $TASK_ID (merge the updated parent, re-verify, push)"
+      || die "stacked branch $BRANCH_NAME is stale — it does not contain its recorded parent commit ${RECORDED:0:8} → fix: /pw-sync --project $SLUG --task $TASK_ID (merge the updated parent, re-verify, push)"
     git -C "$REPO_DIR" merge-base --is-ancestor "$VPARENT" "$BRANCH_NAME" 2>/dev/null \
-      || die "stacked branch $BRANCH_NAME predates $STACK_PARENT's current verified head ${VPARENT:0:8} → fix: /pw-sync $SLUG $TASK_ID (merge the updated parent, re-verify, push)"
+      || die "stacked branch $BRANCH_NAME predates $STACK_PARENT's current verified head ${VPARENT:0:8} → fix: /pw-sync --project $SLUG --task $TASK_ID (merge the updated parent, re-verify, push)"
   fi
   git -C "$REPO_DIR" worktree add "$WORKTREE_PATH" "$BRANCH_NAME" || die "failed to attach worktree"
 elif [ -n "$STACK_PARENT" ]; then
@@ -109,7 +128,7 @@ elif [ -n "$STACK_PARENT" ]; then
     fork_sha="$PARENT_SHA" consumed_parent_sha="$PARENT_SHA" \
     consumed_parent_branch="$CONSUMED_PARENT_BRANCH" target="$CONSUMED_PARENT_BRANCH" \
     freshness=fresh || die "failed to record the stack fork binding"
-  "$ST" log "$SLUG" execute "$TASK_ID: forked from $STACK_PARENT @ ${PARENT_SHA:0:8} (stacked on $CONSUMED_PARENT_BRANCH)" >/dev/null 2>&1 || true
+  "$ST" log --project "$SLUG" --actor execute --message "$TASK_ID: forked from $STACK_PARENT @ ${PARENT_SHA:0:8} (stacked on $CONSUMED_PARENT_BRANCH)" >/dev/null 2>&1 || true
 else
   # Create new branch from base (legacy independent behavior)
   echo "Creating worktree with new branch $BRANCH_NAME from origin/$BASE_BRANCH..."
@@ -121,11 +140,35 @@ echo "$WORKTREE_PATH"
 }
 
 cmd_teardown() {
-projdir="${1:-}"
-YES=0; [ "${2:-}" = "--yes" ] && YES=1
-target="${3:-}"
-[ -n "$projdir" ] && [ -d "$projdir" ] || { echo "usage: teardown <project-dir> [--yes] [worktree-path]" >&2; exit 2; }
-projdir="$(cd "$projdir" && pwd)"
+local dir="" YES=0 ALL=0 TASK="" WPATH="" a v
+while [ $# -gt 0 ]; do
+  a="$1"; shift; v=""
+  case "$a" in
+    --dir=*)      v="${a#*=}"; a="--dir" ;;
+    --task=*)     v="${a#*=}"; a="--task" ;;
+    --worktree=*) v="${a#*=}"; a="--worktree" ;;
+  esac
+  case "$a" in
+    --dir|--task|--worktree)
+      [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+      case "$a" in --dir) dir="$v" ;; --task) TASK="$v" ;; --worktree) WPATH="$v" ;; esac ;;
+    --yes) YES=1 ;;
+    --all) ALL=1 ;;
+    -h|--help) pw_usage ;;
+    -*) _pw_unknown "$a" "teardown --dir <project-dir> [--task <T0n> | --all] [--worktree <path>] [--yes]" ;;
+    *) _pw_positional "$a" "teardown --dir <project-dir> [--task <T0n> | --all] [--worktree <path>] [--yes]" ;;
+  esac
+done
+[ -n "$dir" ] || die "teardown: --dir is required → fix: teardown --dir <project-dir> [--task <T0n> | --all] [--worktree <path>] [--yes]"
+[ -d "$dir" ] || die "teardown: no such project dir: $dir → fix: pass the project directory (teardown --dir <project-dir>)"
+if [ -n "$TASK" ] && [ -n "$WPATH" ]; then
+  die "teardown: --task and --worktree select the same single target → fix: pass one of them (--task <T0n> or --worktree <path>)"
+fi
+if [ "$ALL" -eq 1 ] && [ -n "$TASK$WPATH" ]; then
+  die "teardown: --all conflicts with --task/--worktree → fix: pass --all alone, or one single target"
+fi
+
+projdir="$(cd "$dir" && pwd)"
 wtroot="$projdir/worktree"
 here="$PWD"
 
@@ -134,7 +177,16 @@ here="$PWD"
 removed=0 skipped_cwd=0 skipped_dirty=0
 
 # A worktree is a leaf dir under worktree/ that git recognises (has a .git file/dir).
-# Single-target mode: only the named worktree, which must be under wtroot; else every worktree.
+# Single-target mode (--task resolves the task's worktree dir, --worktree takes a path):
+# only that worktree, which must be under wtroot; else (--all / no target) every worktree.
+target=""
+if [ -n "$TASK" ]; then
+  pw_task_id_ok "$TASK" || die "teardown: --task must be a task id (T0n) → fix: pass the task id, e.g. --task T01"
+  target="$(find "$wtroot" -maxdepth 3 -type d -name "$TASK-*" 2>/dev/null | head -1)"
+  [ -n "$target" ] || die "teardown: no worktree found for $TASK under $wtroot → fix: check the task id (worktree dirs are named <T0n>-<slug>)"
+elif [ -n "$WPATH" ]; then
+  target="$WPATH"
+fi
 if [ -n "$target" ]; then
   case "$target" in
     /*) ;;
@@ -191,10 +243,23 @@ exit 0
 }
 
 # Safely remove a task's worktree (used when MR is already merged).
-#   worktree-remove <slug> <task-id>
+#   remove --project <slug> --task <task-id>
 cmd_remove() {
-  [ $# -eq 2 ] || die "usage: remove <slug> <task-id>"
-  local slug="$1" task="$2"
+  local slug="" task="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --project=*) v="${a#*=}"; a="--project" ;; --task=*) v="${a#*=}"; a="--task" ;; esac
+    case "$a" in
+      --project|--task)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --task) task="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "remove --project <slug> --task <T0n>" ;;
+      *) _pw_positional "$a" "remove --project <slug> --task <T0n>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "remove: --project is required → fix: remove --project <slug> --task <T0n>"
+  [ -n "$task" ] || die "remove: --task is required → fix: remove --project <slug> --task <T0n>"
   local d; d="$(proj_dir "$slug")"
   local wt="$d/worktree"
 
@@ -203,12 +268,12 @@ cmd_remove() {
   task_wt="$(find "$wt" -maxdepth 3 -type d -name "$task-*" 2>/dev/null | head -1)"
   [ -n "$task_wt" ] && [ -d "$task_wt" ] || { echo "no worktree found for $task"; return 1; }
 
-  # Delegate to pw-teardown.sh — the single owner of the safety guards (refuses the worktree
+  # Delegate to teardown — the single owner of the safety guards (refuses the worktree
   # you're standing in, refuses one with uncommitted changes). Never passes --yes: a dirty worktree
   # must be committed/stashed first, exactly as /pw-close requires. Exit 1 from teardown means it
   # skipped the worktree (reason already printed) — don't log "removed".
-  cmd_teardown "$d" "" "$task_wt" || return 1
-  ST log "$slug" sync "$task: worktree removed (MR already merged)"
+  cmd_teardown --dir "$d" --worktree "$task_wt" || return 1
+  "$ST" log --project "$slug" --actor sync --message "$task: worktree removed (MR already merged)"
   echo "$slug: $task worktree removed"
 }
 

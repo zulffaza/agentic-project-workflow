@@ -15,69 +15,70 @@
 # in-review/changes-requested bookkeeping rows with distinct actors; `approved`
 # stays human by default, with the guarded auto mode preserved.
 #
-#   pw-review.sh init         <slug> <review-rel-path> <doc-rel-path>
+#   pw-review.sh init         --project <slug> --file <review-rel-path> --doc <doc-rel-path>
 #       Legacy internal per-file contract (unchanged shape): create one review
 #       file verbatim from the canonical template if missing (idempotent —
 #       existing items/replies/Sign-off history never clobbered). Publication is
 #       lock-guarded, symlink-checked, and no-clobber; the title substitution
 #       escapes sed replacement metacharacters.
-#   pw-review.sh init-docs    <slug> <artifact-rel-path> [<artifact-rel-path> ...]
+#   pw-review.sh init-docs    --project <slug> --file <artifact-rel-path> [--file <artifact-rel-path> …]
 #       Selected-document initialization: validate the FULL list first (missing,
 #       README/template/RFC targets, unsupported families, path/symlink escapes
 #       all reject the whole list with nothing created), normalize + deduplicate,
 #       then reuse the internal init contract per target. Duplicate paths and
 #       reruns finish only the missing files; a per-file write failure reports
 #       created/skipped/failed separately and exits 2.
-#   pw-review.sh init-all     <slug>
+#   pw-review.sh init-all     --project <slug>
 #       Current-phase-only batch: reads the dashboard phase at invocation time
 #       (context/done create nothing; analysis → analysis topics only, RFC
 #       excluded; breakdown → PLAN + T0n; executing/review → current T0n
 #       results; missing/unknown phase fails closed — never a project-wide scan).
 #       Idempotent, never overwrites or deletes existing reviews. Exit 0 on a
 #       complete run, 2 when a creation failed (per-file results reported).
-#   pw-review.sh gate         <slug> <review-rel-path>
+#   pw-review.sh gate         --project <slug> --file <review-rel-path>
 #       Print the latest Sign-off decision VERBATIM; exit 0 iff the approval is
 #       CONSUMABLE: latest row approved AND zero real open items AND no active
 #       human rejection. Unknown/malformed tables fail closed.
-#   pw-review.sh has-open     <slug> <review-rel-path>
+#   pw-review.sh has-open     --project <slug> --file <review-rel-path>
 #       Print yes/no + exit 0/1 (missing file -> "no" + exit 1, never an error).
-#   pw-review.sh count        <slug> <review-rel-path>
+#   pw-review.sh count        --project <slug> --file <review-rel-path>
 #       "open=N resolved=M items=K" — THE single source of truth for any
 #       "how many open?" display (same detector the gates trust).
-#   pw-review.sh eligible     <slug> <review-rel-path>
+#   pw-review.sh eligible     --project <slug> --file <review-rel-path>
 #       Read-only pass-eligibility report: "eligible=N open=A foldin=B
 #       awaiting=C unactionable=D" — real actionable work only (stubs, resolved,
 #       archived, malformed, and waiting-human-only rows are not eligible);
 #       exit 0 iff N>0.
-#   pw-review.sh prepare      <slug> <scope> [--refresh] [--repair] [--pass-id <id>] [--print]
+#   pw-review.sh prepare      --project <slug> (--task <T0n> | --surface <name> | --file <rel>) [--refresh] [--repair] [--pass-id <id>] [--print]
 #       Freeze ONE review unit into review/ai/<pass-id>/ (manifest + snapshot/ +
-#       request.md) WITHOUT launching a model. Scope: T0n | context|analysis|plan|
-#       task-plan|task-exec|ship|rfc|close | artifact path. An existing packet for the
-#       same unit shows instead of overwriting; --refresh = another paid identity,
-#       --repair = bounded-cycle round (refused past review-rounds).
-#   pw-review.sh import       <slug> --report <report.json> [--pass <id>]
+#       request.md) WITHOUT launching a model. Exactly one unit selector: --task T0n |
+#       --surface context|analysis|plan|task-plan|task-exec|ship|rfc|close | --file
+#       artifact path. An existing packet for the same unit shows instead of
+#       overwriting; --refresh = another paid identity, --repair = bounded-cycle
+#       round (refused past review-rounds).
+#   pw-review.sh import       --project <slug> --report <report.json> [--pass <id>]
 #       Validate an external reviewer report against its prepared manifest (schema,
 #       pass/project binding, freshness fingerprint) and import findings/questions
 #       once per pass (replay-safe; stale reports are retained but change nothing).
 #       Imports are ADVISORY only: no approval row, no repair, no publication.
-#   pw-review.sh passes       <slug> [--json]
+#   pw-review.sh passes       --project <slug> [--json]
 #       Read-only: one line per review/ai/ pass (surface, state, artifact, verdict).
-#   pw-review.sh scan         <slug> [--phase <phase>]
+#   pw-review.sh scan         --project <slug> [--phase <phase>]
 #       Read-only project-wide summary, one line per review file, showing the
 #       latest decision AND its actor from the shared readers. Lanes: analysis
 #       (topic reviews, RFC staging excluded), plan (PLAN), task-plan /
 #       task-exec / ship (the task review artifacts).
-#   pw-review.sh reindex      <slug> <review-rel-path>
+#   pw-review.sh reindex      --project <slug> --file <review-rel-path>
 #       (Re)build the heading-anchored "## Contents" table (auto-run by every
 #       heading-changing operator here).
-#   pw-review.sh archive      <slug> <review-rel-path>
+#   pw-review.sh archive      --project <slug> --file <review-rel-path>
 #       Move fully-[RESOLVED]/[ANSWERED] blocks verbatim to the .archive.md
 #       sibling with pointer rows; gate mechanisms provably unaffected. The empty
 #       resolved set creates NO sibling/header and changes NO bytes (pure no-op).
 #       The sibling path gets the same containment + symlink guard as the review
 #       file; blocks are fenced with pw-archived-block markers so a failed-publish
 #       retry re-appends nothing and duplicates nothing.
-#   pw-review.sh start        <slug> <review-rel-path> [--phase <analysis|plan|task-plan|task-exec|ship>]
+#   pw-review.sh start        --project <slug> --file <review-rel-path> [--phase <analysis|plan|task-plan|task-exec|ship>]
 #                                 [--provider <actual-id>] [--model <actual-id>] [--confirm-earlier]
 #       Pass entry. Without --phase this is the normal repair pass, attributed
 #       "pw-review (repair)". With --phase it is an independent AI pass; the
@@ -90,13 +91,13 @@
 #       Repairing an artifact whose phase was already consumed (dashboard phase
 #       ahead of the artifact lane) requires --confirm-earlier; unknown/missing
 #       dashboard phase and malformed Sign-off tables fail closed before writes.
-#   pw-review.sh reopen       <slug> <review-rel-path> [--confirm-earlier]
+#   pw-review.sh reopen       --project <slug> --file <review-rel-path> [--confirm-earlier]
 #       Append a fresh in-review row when a fix lands AFTER approval (never
 #       deletes history); harmless no-op when already open. An approval from an
 #       earlier, already-consumed phase requires --confirm-earlier.
-#   pw-review.sh note-init    <slug>
+#   pw-review.sh note-init    --project <slug>
 #       Create REVIEWER-NOTES.md with its header if missing (idempotent).
-#   pw-review.sh auto-signoff <slug> <review-rel-path> <phase> [--provider <actual-id>]
+#   pw-review.sh auto-signoff --project <slug> --file <review-rel-path> --phase <phase> [--provider <actual-id>]
 #                                 [--model <actual-id>] [--confirm-earlier]
 #       The ONE tool-enforced exception to "only a human clears a gate": refuses
 #       unless this project's AI Review mode for <phase> is 'auto' (re-checked
@@ -104,19 +105,20 @@
 #       that phase's lane (RFC staging never) AND zero real open items AND no
 #       explicit human changes-requested is still active. The row names the
 #       actual reviewer (identity defaults to unknown).
-#   pw-review.sh signoff      <slug> <review-rel-path> <approved|changes-requested|in-review> [--by <name>]
+#   pw-review.sh signoff      --project <slug> --file <review-rel-path> --decision <approved|changes-requested|in-review> [--by <name>]
 #       DOCTRINE (C4): human-triggered only — an agent runs this ONLY verbatim
 #       on the user's explicit instruction, never on its own initiative. --by
 #       must name a HUMAN: reserved machine actors (pw-reviewer (…), pw-review
 #       (repair/feedback/auto-reopen)) are written only by their guarded code
 #       paths and rejected here; legacy rows with those labels stay readable.
-#   pw-review.sh add-item     <slug> <review-rel-path> --section <§anchor> (--text <ask...> | --stdin) [--actor <name>]
-#   pw-review.sh answer       <slug> <review-rel-path> <Qid> (--text <answer...> | --stdin)
-#   pw-review.sh add-question <slug> <review-rel-path> --section <§anchor> (--text <q...> | --stdin) [--actor <name>]
-#   pw-review.sh resolve      <slug> <review-rel-path> <Rid|Qid> (--reply <text...> | --stdin)
+#   pw-review.sh add-item     --project <slug> --file <review-rel-path> --section <§anchor> (--text <ask…> | --stdin) [--actor <name>]
+#   pw-review.sh answer       --project <slug> --file <review-rel-path> --question <Qid> (--text <answer…> | --stdin)
+#   pw-review.sh add-question --project <slug> --file <review-rel-path> --section <§anchor> (--text <q…> | --stdin) [--actor <name>]
+#   pw-review.sh resolve      --project <slug> --file <review-rel-path> --item <Rid|Qid> (--reply <text…> | --stdin)
 #       Deterministic block editing: next Rn/Qn id, timestamps, pw-item-status
 #       markers, --- rules, auto-reindex. Free text per the A-rules (one
-#       rest-of-line --text slot or --stdin heredoc, VERBATIM). Human text is
+#       --text/--reply slot running until the next --flag token, or a --stdin
+#       heredoc, VERBATIM; the two are mutually exclusive). Human text is
 #       never edited or deleted; resolve flips the SAME heading in place.
 #       add-item and answer are the human-feedback cycle: the first one after a
 #       stale 'approved' (or after an explicit HUMAN changes-requested) queues
@@ -130,6 +132,11 @@
 # legacy "approved ✅" decoration, and the template's unfilled placeholder —
 # historical text is never rewritten. Unrelated writers (LOG, scaffold,
 # context) keep their formats (review-local scope).
+#
+# Named-argument grammar: operation words first, every value named; --project
+# selects the project in every project form. Scalar values are ONE token (quote
+# spaces); prose values (--text/--reply) run until the next --flag token. A
+# literal value that starts with -- is passed as --flag=value.
 #
 # Exit codes: 0 success · 1 read-side "not approved / no eligible work" (gate,
 # has-open, eligible, count-on-missing) · 2 usage/state error (stderr carries a
@@ -165,7 +172,7 @@ proj_dir() {
     ''|.|..|*/*|*$'\n'*|*$'\r'*|*$'\t'*)
       die "invalid project slug: '$slug' → fix: use exactly one project directory name (no paths, no traversal)" ;;
   esac
-  [ -d "$PROJECTS_DIR/$slug" ] || die "no such project: $1 ($PROJECTS_DIR/$slug) → fix: check the slug under the projects dir (new project? create it with: /pw-new $1)"
+  [ -d "$PROJECTS_DIR/$slug" ] || die "no such project: $1 ($PROJECTS_DIR/$slug) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"
   base="$(cd "$PROJECTS_DIR" 2>/dev/null && pwd -P)" || die "cannot resolve the projects directory: $PROJECTS_DIR → fix: check PW_PROJECTS_DIR exists"
   d="$(cd "$PROJECTS_DIR/$slug" && pwd -P)" || die "cannot resolve project directory: $slug"
   case "$d/" in
@@ -195,7 +202,7 @@ _dash_lane_state() {
   local slug="$1" rel="$2" lane
   lane="$(pw_review_lane "$rel")"
   [ "$lane" = rfccontent ] && { echo ok; return 0; }
-  local raw tok; raw="$("$ST" phase "$slug" 2>/dev/null || true)"; tok="$(pw_phase_token "${raw:-missing}")"
+  local raw tok; raw="$("$ST" phase --project "$slug" 2>/dev/null || true)"; tok="$(pw_phase_token "${raw:-missing}")"
   pw_phase_valid "$tok" || { echo unknown; return 0; }
   local dr lr
   dr="$(pw_dash_rank "$tok")"; lr="$(pw_review_lane_rank "$lane")"
@@ -219,19 +226,37 @@ review_file() {
   pw_review_contain "$d" "$2" >/dev/null || die "invalid review path: $2 → fix: use a project-relative path inside the project"
   local f="$d/$2"
   [ -L "$f" ] && die "refusing symlinked review file: $2 → fix: operate on the real file (symlinks can silently redirect writes outside the project)"
-  [ -f "$f" ] || die "no such review file: $2 → fix: create it with: /pw-review $1 init-all (or /pw-review $1 init <artifact-path>)"
+  [ -f "$f" ] || die "no such review file: $2 → fix: create it with: /pw-review init-all --project $1 (or /pw-review init --project $1 --file <review-rel> --doc <doc-rel>)"
   grep -q '^## Sign-off' "$f" || grep -q '^## Items' "$f" \
-    || die "$2 has neither '## Items' nor '## Sign-off' — not a valid review file → fix: move the invalid copy aside, then recreate it with /pw-review $1 init"
+    || die "$2 has neither '## Items' nor '## Sign-off' — not a valid review file → fix: move the invalid copy aside, then recreate it with /pw-review init --project $1 --file <review-rel> --doc <doc-rel>"
   printf '%s' "$f"
 }
 
 # ---------------------------------------------------------------- init (legacy per-file contract)
 cmd_init() {
-  [ $# -eq 3 ] || die "usage: init <slug> <review-rel-path> <doc-rel-path>"
-  local slug="$1" rel="$2" docrel="$3"
+  local slug="" rel="" docrel="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --file=*)    v="${a#*=}"; a="--file" ;;
+      --doc=*)     v="${a#*=}"; a="--doc" ;;
+    esac
+    case "$a" in
+      --project|--file|--doc)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --file) rel="$v" ;; --doc) docrel="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "init --project <slug> --file <review-rel-path> --doc <doc-rel-path>" ;;
+      *) _pw_positional "$a" "init --project <slug> --file <review-rel-path> --doc <doc-rel-path>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "init: --project is required → fix: init --project <slug> --file <review-rel-path> --doc <doc-rel-path>"
+  [ -n "$rel" ] || die "init: --file is required → fix: the review file's project-relative path"
+  [ -n "$docrel" ] || die "init: --doc is required → fix: the reviewed document's project-relative path"
   local d; d="$(proj_dir "$slug")" || return 2
   pw_review_contain "$d" "$rel" >/dev/null || die "invalid review path: $rel → fix: keep it project-relative (review files live under analysis/review/ or task/review/)"
-  _init_one "$slug" "$d" "$rel" "$docrel" || die "init failed for $rel (see stderr) → fix: re-run /pw-review $slug init $docrel after checking the project dir"
+  _init_one "$slug" "$d" "$rel" "$docrel" || die "init failed for $rel (see stderr) → fix: re-run /pw-review init --project $slug --file $rel --doc $docrel after checking the project dir"
 }
 
 # _init_one <slug> <projdir> <reviewrel> <docrel> → rc-only worker shared by
@@ -272,15 +297,36 @@ _init_one() {
 
 # ---------------------------------------------------------------- init-docs (selected-document list)
 cmd_init_docs() {
-  [ $# -ge 2 ] || die "usage: init-docs <slug> <artifact-rel-path> [<artifact-rel-path> ...] → fix: pass project-relative paths of the documents to review (analysis/<topic>.md, task/PLAN.md, task/T0n.md)"
-  local slug="$1"; shift
+  local slug="" a v
+  local -a paths=()
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --file=*)    v="${a#*=}"; a="--file" ;;
+    esac
+    case "$a" in
+      --project)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }
+        slug="$v" ;;
+      --file)
+        # scalar: ONE token per occurrence; repeats build the selected list
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --file; v="$1"; shift; }
+        paths+=("$v") ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "init-docs --project <slug> --file <artifact-rel-path> [--file <artifact-rel-path> …]" ;;
+      *) _pw_positional "$a" "init-docs --project <slug> --file <artifact-rel-path> [--file <artifact-rel-path> …]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "init-docs: --project is required → fix: init-docs --project <slug> --file <artifact-rel-path> [--file <artifact-rel-path> …]"
+  [ "${#paths[@]}" -ge 1 ] || die "init-docs: --file is required → fix: pass project-relative paths of the documents to review (analysis/<topic>.md, task/PLAN.md, task/T0n.md)"
   local d; d="$(proj_dir "$slug")" || return 2
   # Pass 1: validate the FULL list before creating anything; normalize + dedupe on the
   # derived review path. Every rejection is collected so one bad entry reports alongside
   # the rest, and NOTHING is written when the list is invalid.
   local -a plan=() seen=() errs=()
   local p line s dup bad=0
-  for p in "$@"; do
+  for p in "${paths[@]}"; do
     if line="$(pw_review_reviewrel "$d" "$p" 2>&1)"; then
       :
     else
@@ -313,16 +359,27 @@ cmd_init_docs() {
 
 # ---------------------------------------------------------------- init-all (current phase only)
 cmd_init_all() {
-  [ $# -eq 1 ] || die "usage: init-all <slug>"
-  local slug="$1" d; d="$(proj_dir "$slug")" || return 2
-  local raw tok; raw="$("$ST" phase "$slug" 2>/dev/null || true)"; tok="$(pw_phase_token "${raw:-missing}")"
+  local slug="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --project=*) v="${a#*=}"; a="--project" ;; esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "init-all --project <slug>" ;;
+      *) _pw_positional "$a" "init-all --project <slug>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "init-all: --project is required → fix: init-all --project <slug>"
+  local d; d="$(proj_dir "$slug")" || return 2
+  local raw tok; raw="$("$ST" phase --project "$slug" 2>/dev/null || true)"; tok="$(pw_phase_token "${raw:-missing}")"
   pw_phase_valid "$tok" || die "dashboard phase is '$tok' — cannot scope init-all → fix: $(pw_phase_hint | sed "s/<slug>/$slug/")"
   case "$tok" in
     context)
       echo "$slug: phase 'context' — no review files to initialize yet (/pw-analyze $slug produces the first reviewable analysis)"
       return 0 ;;
     done)
-        echo "$slug: phase 'done' — init-all creates nothing here → fix: select explicitly (/pw-review $slug init <artifact-path>) or rewind the dashboard first (/pw-status $slug rewind <phase>)"
+        echo "$slug: phase 'done' — init-all creates nothing here → fix: select explicitly (/pw-review init --project $slug --file <review-rel> --doc <doc-rel>) or rewind the dashboard first (/pw-status rewind --project $slug --phase <phase>)"
       return 0 ;;
   esac
   local -a docs=()
@@ -363,7 +420,7 @@ cmd_init_all() {
     fi
   done
   echo "$slug: init-all (phase $tok) — $created created, $present already present, $failed failed"
-  [ "$failed" -eq 0 ] || die "init-all: $failed target(s) failed → fix: re-run /pw-review $slug init-all or init the file directly and read the FAILED lines above"
+  [ "$failed" -eq 0 ] || die "init-all: $failed target(s) failed → fix: re-run /pw-review init-all --project $slug or init the file directly and read the FAILED lines above"
 }
 
 # ---------------------------------------------------------------- signoff (human-triggered, C4)
@@ -381,15 +438,31 @@ _signoff_body() {
 }
 
 cmd_signoff() {
-  local slug="$1" rel="$2" decision="$3" by="you"
-  shift 3
+  local slug="" rel="" decision="" by="you" a v
   while [ $# -gt 0 ]; do
-    case "$1" in
-      --by) [ $# -ge 2 ] || die "--by requires an argument"; by="$2"; shift 2 ;;
-      --by=*) by="${1#--by=}"; shift ;;
-      *) die "signoff: unknown option: $1 (try --help)" ;;
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*)  v="${a#*=}"; a="--project" ;;
+      --file=*)     v="${a#*=}"; a="--file" ;;
+      --decision=*) v="${a#*=}"; a="--decision" ;;
+      --by=*)       v="${a#*=}"; a="--by" ;;
+    esac
+    case "$a" in
+      --project|--file|--decision|--by)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project)  slug="$v" ;;
+          --file)     rel="$v" ;;
+          --decision) decision="$v" ;;
+          --by)       by="$v" ;;
+        esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "signoff --project <slug> --file <review-rel-path> --decision <approved|changes-requested|in-review> [--by <name>]" ;;
+      *) _pw_positional "$a" "signoff --project <slug> --file <review-rel-path> --decision <approved|changes-requested|in-review> [--by <name>]" ;;
     esac
   done
+  [ -n "$slug" ] || die "signoff: --project is required → fix: signoff --project <slug> --file <review-rel-path> --decision <approved|changes-requested|in-review> [--by <name>]"
+  [ -n "$rel" ]  || die "signoff: --file is required → fix: the review file's project-relative path"
   case "$decision" in
     approved|changes-requested|in-review) ;;
     *) die "invalid decision '$decision' → fix: use exactly one of: approved | changes-requested | in-review" ;;
@@ -407,7 +480,7 @@ cmd_signoff() {
   grep -q '^## Sign-off' "$f" || die "$rel has no '## Sign-off' section → fix: not a gate-bearing review file; nothing to sign off"
   SIGNOFF_BY="$by" SIGNOFF_DECISION="$decision" SIGNOFF_REL="$rel"
   staged_or_die "$f" _signoff_body
-  PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" log "$slug" "$by" "signed off $rel: $decision (via pw-review.sh)" >/dev/null
+  PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" log --project "$slug" --actor "$by" --message "signed off $rel: $decision (via pw-review.sh)" >/dev/null
   echo "$slug: $rel → Sign-off row appended: $decision (by $by)"
   if [ "$decision" = "approved" ] && _review_has_open_marker "$f"; then
     echo "$slug: NOTE — approval recorded, but $rel still has unresolved items/questions: every approval-consuming gate stays BLOCKED (_review_approval_valid) until they are resolved or archived."
@@ -434,28 +507,69 @@ _next_id() {
   echo $((max+1))
 }
 
-# _read_text → TEXT from --text rest-of-line or --stdin (A3 verbatim handoff)
-_TEXT="" _TEXT_SET=0
-_read_text_opts() { # parses trailing opts of add-item/add-question; sets SECTION ACTOR TEXT
+# Named-grammar flag collector for the block-editing writers (add-item / add-question /
+# answer / resolve): scalar flags take one token; the op's text flag (--text / --reply)
+# and --stdin are mutually exclusive and both carry the text VERBATIM — the text flag
+# runs until the next --flag token (one pre-quoted argv still works verbatim);
+# --flag=value carries one literal value.
+# _parse_edit_flags <op> <text-flag> <extra-scalars-csv> <shape> <actor-default> <heading-guard 0|1> "$@"
+#   → MP_PROJECT MP_FILE MP_SECTION MP_ACTOR MP_QUESTION MP_ITEM MP_TEXT MP_TEXTSET
+MP_PROJECT="" MP_FILE="" MP_SECTION="" MP_ACTOR="" MP_QUESTION="" MP_ITEM="" MP_TEXT="" MP_TEXTSET=0
+_parse_edit_flags() {
+  local _op="$1" _tf="$2" _extra="$3" _shape="$4" _adef="$5" _hd="$6"; shift 6
+  MP_PROJECT=""; MP_FILE=""; MP_SECTION=""; MP_ACTOR="$_adef"; MP_QUESTION=""; MP_ITEM=""; MP_TEXT=""; MP_TEXTSET=0
+  local a v
   while [ $# -gt 0 ]; do
-    case "$1" in
-      --section) [ $# -ge 2 ] || die "--section requires an argument"; SECTION="$2"; shift 2 ;;
-      --section=*) SECTION="${1#--section=}"; shift ;;
-      --actor) [ $# -ge 2 ] || die "--actor requires an argument"; ACTOR="$2"; shift 2 ;;
-      --actor=*) ACTOR="${1#--actor=}"; shift ;;
-      --text) shift; TEXT="$*"; _TEXT_SET=1; break ;;
-      --stdin) TEXT="$(cat)"; _TEXT_SET=1; shift ;;
-      *) die "unknown option: $1 (try --help)" ;;
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*)  v="${a#*=}"; a="--project" ;;
+      --file=*)     v="${a#*=}"; a="--file" ;;
+      --section=*)  v="${a#*=}"; a="--section" ;;
+      --actor=*)    v="${a#*=}"; a="--actor" ;;
+      --question=*) v="${a#*=}"; a="--question" ;;
+      --item=*)     v="${a#*=}"; a="--item" ;;
+    esac
+    case "$a" in
+      --project|--file)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) MP_PROJECT="$v" ;; --file) MP_FILE="$v" ;; esac ;;
+      --section|--actor|--question|--item)
+        case ",$_extra," in *",$a,"*) ;; *) _pw_unknown "$a" "$_shape" ;; esac
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --section)  MP_SECTION="$v" ;;
+          --actor)    MP_ACTOR="$v" ;;
+          --question) MP_QUESTION="$v" ;;
+          --item)     MP_ITEM="$v" ;;
+        esac ;;
+      "$_tf"=*)
+        [ "$MP_TEXTSET" = 0 ] || die "$_op: pass exactly one of $_tf or --stdin → fix: $_tf <text…> (runs until the next --flag) or --stdin (heredoc)"
+        MP_TEXT="${a#*=}"; MP_TEXTSET=1 ;;
+      "$_tf")
+        [ "$MP_TEXTSET" = 0 ] || die "$_op: pass exactly one of $_tf or --stdin → fix: $_tf <text…> (runs until the next --flag) or --stdin (heredoc)"
+        while [ $# -gt 0 ]; do case "$1" in --*) break ;; esac; v="${v:+$v }$1"; shift; done
+        [ -n "$v" ] || die "$_op: $_tf requires a value → fix: $_tf <text…> (runs until the next --flag) or --stdin (heredoc)"
+        MP_TEXT="$v"; MP_TEXTSET=1 ;;
+      --stdin)
+        [ "$MP_TEXTSET" = 0 ] || die "$_op: pass exactly one of $_tf or --stdin → fix: $_tf <text…> (runs until the next --flag) or --stdin (heredoc)"
+        MP_TEXT="$(cat)"; MP_TEXTSET=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "$_shape" ;;
+      *) _pw_positional "$a" "$_shape" ;;
     esac
   done
-  [ "$_TEXT_SET" = 1 ] || die "no text given → fix: pass --text <the ask, rest of line unquoted> or --stdin (heredoc)"
-  [ -n "$(printf '%s' "$TEXT" | tr -d '[:space:]')" ] || die "text is empty → fix: --text/--stdin must carry the actual ask/answer"
-  # Any line starting as a 2+ level markdown heading is injected structure: item bodies are
-  # written verbatim, so a `#### R9 … [OPEN] … pw-item-status: open` line would plant a real
-  # approval blocker (the gate fails closed on heading levels 3+ — it blocks; only canonical
-  # `### ` items are work). The old guard covered only levels 2-3 and let level 4+ through.
-  printf '%s\n' "$TEXT" | grep -qE '^#{2,} ' \
-    && die "text must not contain lines starting with a markdown heading (## or deeper would corrupt the heading scan) → fix: indent or quote the line"
+  [ -n "$MP_PROJECT" ] || die "$_op: --project is required → fix: $_shape"
+  [ -n "$MP_FILE" ] || die "$_op: --file is required → fix: the review file's project-relative path"
+  [ "$MP_TEXTSET" = 1 ] || die "$_op: no text given → fix: pass $_tf <text…> (runs until the next --flag) or --stdin (heredoc)"
+  [ -n "$(printf '%s' "$MP_TEXT" | tr -d '[:space:]')" ] || die "$_op: text is empty → fix: $_tf/--stdin must carry the actual text"
+  if [ "$_hd" = 1 ]; then
+    # Any line starting as a 2+ level markdown heading is injected structure: item bodies are
+    # written verbatim, so a `#### R9 … [OPEN] … pw-item-status: open` line would plant a real
+    # approval blocker (the gate fails closed on heading levels 3+ — it blocks; only canonical
+    # `### ` items are work). The old guard covered only levels 2-3 and let level 4+ through.
+    printf '%s\n' "$MP_TEXT" | grep -qE '^#{2,} ' \
+      && die "text must not contain lines starting with a markdown heading (## or deeper would corrupt the heading scan) → fix: indent or quote the line"
+  fi
   return 0
 }
 
@@ -527,7 +641,7 @@ _feedback_transition() {
       return 0 ;;
   esac
   if [ "$_FT_UNKNOWN" = 1 ]; then
-    echo "pw-review: NOTE: dashboard phase is missing or non-canonical — feedback recorded, state transition skipped fail-closed → fix: repair the dashboard Status line (/pw-status $slug shows the current phase)" >&2
+    echo "pw-review: NOTE: dashboard phase is missing or non-canonical — feedback recorded, state transition skipped fail-closed → fix: repair the dashboard Status line (/pw-status --project $slug shows the current phase)" >&2
     return 0
   fi
   local ts; ts="$(pw_now_wib)" || return 1
@@ -571,9 +685,9 @@ _add_item_body() {
 }
 
 cmd_add_item() {
-  local slug="$1" rel="$2"; shift 2
-  local SECTION="" ACTOR="you" TEXT=""
-  _read_text_opts "$@"
+  _parse_edit_flags add-item --text "--section,--actor" "add-item --project <slug> --file <review-rel-path> --section <§anchor> (--text <ask…> | --stdin) [--actor <name>]" you 1 "$@"
+  local slug="$MP_PROJECT" rel="$MP_FILE"
+  local SECTION="$MP_SECTION" ACTOR="$MP_ACTOR" TEXT="$MP_TEXT"
   [ -n "$SECTION" ] || die "add-item: --section <§anchor> is required → fix: anchor the item to a doc section, e.g. --section '§3 Affected repos'"
   pw_meta_check "--section" "$SECTION" || die "--section must be a single-line anchor without tabs or pipes → fix: e.g. --section '§3 Affected repos'"
   pw_meta_check "--actor" "$ACTOR"     || die "--actor must be a single-line name without tabs or pipes → fix: name the human or the agent role only"
@@ -654,9 +768,9 @@ _answer_body() {
 }
 
 cmd_answer() {
-  local slug="$1" rel="$2" qid="$3"; shift 3
-  local TEXT=""
-  _read_text_opts "$@"
+  _parse_edit_flags answer --text "--question" "answer --project <slug> --file <review-rel-path> --question <Qid> (--text <answer…> | --stdin)" "" 1 "$@"
+  local slug="$MP_PROJECT" rel="$MP_FILE" qid="$MP_QUESTION" TEXT="$MP_TEXT"
+  [ -n "$qid" ] || die "answer: --question is required → fix: answer --project <slug> --file <review-rel-path> --question <Qid> (--text <answer…> | --stdin)"
   case "$qid" in Q[0-9]*) ;; *) die "answer: question id must look like Q2 (got '$qid')" ;; esac
   local f; f="$(review_file "$slug" "$rel")" || return 2
   ANS_REL="$rel" ANS_TEXT="$TEXT"
@@ -702,9 +816,9 @@ _add_question_body() {
 }
 
 cmd_add_question() {
-  local slug="$1" rel="$2"; shift 2
-  local SECTION="" ACTOR="agent" TEXT=""
-  _read_text_opts "$@"
+  _parse_edit_flags add-question --text "--section,--actor" "add-question --project <slug> --file <review-rel-path> --section <§anchor> (--text <q…> | --stdin) [--actor <name>]" agent 1 "$@"
+  local slug="$MP_PROJECT" rel="$MP_FILE"
+  local SECTION="$MP_SECTION" ACTOR="$MP_ACTOR" TEXT="$MP_TEXT"
   [ -n "$SECTION" ] || die "add-question: --section <§anchor> is required"
   pw_meta_check "--section" "$SECTION" || die "--section must be a single-line anchor without tabs or pipes → fix: e.g. --section '§4 Approach'"
   pw_meta_check "--actor" "$ACTOR"     || die "--actor must be a single-line name without tabs or pipes"
@@ -735,7 +849,7 @@ _resolve_body() {
   local bend; bend="$(_block_end "$blanked" "$hl")"
   if [ "${id#Q}" != "$id" ]; then
     awk -v s="$hl" -v e="$bend" 'NR>=s && NR<=e' "$blanked" | grep -q '↳ \*\*you\*\*' \
-      || { rm -f "$blanked"; echo "pw-review: $id has no '↳ **you**' answer yet → fix: the human answers first (/pw-review <slug> answer <review-path> <Qid> <answer>); the agent only folds + flips afterwards" >&2; return 1; }
+      || { rm -f "$blanked"; echo "pw-review: $id has no '↳ **you**' answer yet → fix: the human answers first (/pw-review answer --project <slug> --file <review-path> --question <Qid> --text <answer…>); the agent only folds + flips afterwards" >&2; return 1; }
   fi
   local ts; ts="$(now_ts)" || { rm -f "$blanked"; return 1; }
   local hline newtag newmark
@@ -770,17 +884,9 @@ _resolve_body() {
 }
 
 cmd_resolve() {
-  local slug="$1" rel="$2" id="$3"; shift 3
-  local TEXT=""
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --reply) shift; TEXT="$*"; _TEXT_SET=1; break ;;
-      --stdin) TEXT="$(cat)"; _TEXT_SET=1; shift ;;
-      *) die "resolve: unknown option: $1 (try --help)" ;;
-    esac
-  done
-  [ "${_TEXT_SET:-0}" = 1 ] || die "resolve: no reply given → fix: pass --reply <what changed, rest of line> or --stdin"
-  [ -n "$(printf '%s' "$TEXT" | tr -d '[:space:]')" ] || die "resolve: reply is empty → fix: the reply must say what changed (never a bare 'fixed'/'done')"
+  _parse_edit_flags resolve --reply "--item" "resolve --project <slug> --file <review-rel-path> --item <Rid|Qid> (--reply <text…> | --stdin)" "" 0 "$@"
+  local slug="$MP_PROJECT" rel="$MP_FILE" id="$MP_ITEM" TEXT="$MP_TEXT"
+  [ -n "$id" ] || die "resolve: --item is required → fix: resolve --project <slug> --file <review-rel-path> --item <Rid|Qid> (--reply <text…> | --stdin)"
   case "$id" in R[0-9]*|Q[0-9]*) ;; *) die "resolve: id must look like R3 or Q2 (got '$id')" ;; esac
   local f; f="$(review_file "$slug" "$rel")" || return 2
   RS_TEXT="$TEXT" RS_REL="$rel"
@@ -819,19 +925,30 @@ _reopen_body() {
 }
 
 cmd_reopen() {
-  local slug="$1" rel="$2" confirm=0
-  shift 2
+  local slug="" rel="" confirm=0 a v
   while [ $# -gt 0 ]; do
-    case "$1" in
-      --confirm-earlier) confirm=1; shift ;;
-      *) die "reopen: unknown option: $1 (try --help)" ;;
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --file=*)    v="${a#*=}"; a="--file" ;;
+    esac
+    case "$a" in
+      --project|--file)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --file) rel="$v" ;; esac ;;
+      --confirm-earlier) confirm=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "reopen --project <slug> --file <review-rel-path> [--confirm-earlier]" ;;
+      *) _pw_positional "$a" "reopen --project <slug> --file <review-rel-path> [--confirm-earlier]" ;;
     esac
   done
+  [ -n "$slug" ] || die "reopen: --project is required → fix: reopen --project <slug> --file <review-rel-path> [--confirm-earlier]"
+  [ -n "$rel" ] || die "reopen: --file is required → fix: the review file's project-relative path"
   local d; d="$(proj_dir "$slug")" || return 2
   pw_review_contain "$d" "$rel" >/dev/null || die "invalid review path: $rel → fix: keep it project-relative"
   local f="$d/$rel"
   [ -L "$f" ] && die "refusing symlinked review file: $rel → fix: operate on the real file (symlinks can silently redirect writes outside the project)"
-  [ -f "$f" ] || die "no such review file: $rel → fix: create it with: /pw-review $slug init <artifact-path>"
+  [ -f "$f" ] || die "no such review file: $rel → fix: create it with: /pw-review init --project $slug --file <review-rel> --doc <doc-rel>"
   local decision; decision="$(_signoff_latest_decision "$f")" \
     || die "no Sign-off table rows found in $rel — not a valid review file → fix: restore the table from template/_REVIEW.template.md"
   if ! _decision_is_approved "$decision"; then
@@ -839,7 +956,7 @@ cmd_reopen() {
     return 0
   fi
   local st; st="$(_dash_lane_state "$slug" "$rel")"
-  [ "$st" = unknown ] && die "dashboard phase is missing or non-canonical — cannot judge whether this approval was already consumed → fix: repair the dashboard Status line (/pw-status $slug shows the current phase)"
+  [ "$st" = unknown ] && die "dashboard phase is missing or non-canonical — cannot judge whether this approval was already consumed → fix: repair the dashboard Status line (/pw-status --project $slug shows the current phase)"
   [ "$st" = earlier ] && [ "$confirm" != 1 ] && die "$rel is approved and its phase was consumed by a LATER dashboard phase — reopening it rewinds a gate work already depends on → fix: get the human's explicit confirmation, then re-run with --confirm-earlier"
   REOPEN_REL="$rel"
   staged_or_die "$f" _reopen_body
@@ -861,7 +978,7 @@ AS_BY=""; AS_REL=""
 _auto_signoff_body() {
   local f="$1"
   _review_has_open_marker "$f" && { echo "pw-review: refusing auto-signoff: $AS_REL still has an unresolved [OPEN] item or [PENDING] question" >&2; return 1; }
-  _signoff_human_rejection_active "$f" && { echo "pw-review: refusing auto-signoff: an explicit human changes-requested is still active in $AS_REL → fix: only the human withdraws it (/pw-review <slug> signoff <review-path> in-review --by <name>, on explicit instruction)" >&2; return 1; }
+  _signoff_human_rejection_active "$f" && { echo "pw-review: refusing auto-signoff: an explicit human changes-requested is still active in $AS_REL → fix: only the human withdraws it (/pw-review signoff --project <slug> --file <review-path> --decision in-review --by <name>, on explicit instruction)" >&2; return 1; }
   local ts; ts="$(pw_now_wib)" || return 1
   pw_signoff_row_put "$f" "$ts" "$AS_BY" approved \
     || { echo "pw-review: no Sign-off table rows found in $AS_REL → fix: restore the table from template/_REVIEW.template.md" >&2; return 1; }
@@ -870,19 +987,35 @@ _auto_signoff_body() {
 }
 
 cmd_auto_signoff() {
-  [ $# -ge 3 ] || die "usage: auto-signoff <slug> <review-rel-path> <phase> [--provider <id>] [--model <id>] [--confirm-earlier]   (phase: $AI_REVIEW_PHASES)"
-  local slug="$1" rel="$2" phase="$3"; shift 3
-  local provider="" model="" confirm=0
+  local slug="" rel="" phase="" provider="" model="" confirm=0 a v
   while [ $# -gt 0 ]; do
-    case "$1" in
-      --provider) [ $# -ge 2 ] || die "--provider requires an argument"; provider="$2"; shift 2 ;;
-      --provider=*) provider="${1#--provider=}"; shift ;;
-      --model) [ $# -ge 2 ] || die "--model requires an argument"; model="$2"; shift 2 ;;
-      --model=*) model="${1#--model=}"; shift ;;
-      --confirm-earlier) confirm=1; shift ;;
-      *) die "auto-signoff: unknown option: $1 (try --help)" ;;
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*)  v="${a#*=}"; a="--project" ;;
+      --file=*)     v="${a#*=}"; a="--file" ;;
+      --phase=*)    v="${a#*=}"; a="--phase" ;;
+      --provider=*) v="${a#*=}"; a="--provider" ;;
+      --model=*)    v="${a#*=}"; a="--model" ;;
+    esac
+    case "$a" in
+      --project|--file|--phase|--provider|--model)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project)  slug="$v" ;;
+          --file)     rel="$v" ;;
+          --phase)    phase="$v" ;;
+          --provider) provider="$v" ;;
+          --model)    model="$v" ;;
+        esac ;;
+      --confirm-earlier) confirm=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "auto-signoff --project <slug> --file <review-rel-path> --phase <phase> [--provider <id>] [--model <id>] [--confirm-earlier]   (phase: $AI_REVIEW_PHASES)" ;;
+      *) _pw_positional "$a" "auto-signoff --project <slug> --file <review-rel-path> --phase <phase> [--provider <id>] [--model <id>] [--confirm-earlier]   (phase: $AI_REVIEW_PHASES)" ;;
     esac
   done
+  [ -n "$slug" ] || die "auto-signoff: --project is required → fix: auto-signoff --project <slug> --file <review-rel-path> --phase <phase>   (phase: $AI_REVIEW_PHASES)"
+  [ -n "$rel" ] || die "auto-signoff: --file is required → fix: the review file's project-relative path"
+  [ -n "$phase" ] || die "auto-signoff: --phase is required → fix: auto-signoff --project <slug> --file <review-rel-path> --phase <phase>   (phase: $AI_REVIEW_PHASES)"
   case " $AI_REVIEW_PHASES " in *" $phase "*) ;; *) die "invalid phase '$phase' (allowed: $AI_REVIEW_PHASES)" ;; esac
   local d; d="$(proj_dir "$slug")" || return 2
   pw_review_contain "$d" "$rel" >/dev/null || die "invalid review path: $rel → fix: keep it project-relative"
@@ -894,9 +1027,9 @@ cmd_auto_signoff() {
   pw_review_phase_lane_ok "$phase" "$lane" \
     || die "lane mismatch: $rel belongs to the '$lane' lane, not '$phase' → fix: pass the surface that owns this artifact (context↔context readiness, analysis↔analysis topics, plan↔PLAN, task-plan/task-exec/ship↔task docs+results, rfc↔rfc/RFC.md content, close↔the CLOSE record)"
   local mode; mode="$(_ai_review_mode_of "$slug" "$phase")"
-  [ "$mode" = "auto" ] || die "refusing auto-signoff: this project's AI Review mode for '$phase' is '$mode', not 'auto' (pw-config.sh project set $slug ai-review $phase=auto to enable)"
+  [ "$mode" = "auto" ] || die "refusing auto-signoff: this project's AI Review mode for '$phase' is '$mode', not 'auto' (/pw-config set --project $slug --key ai-review --set $phase=auto to enable)"
   local st; st="$(_dash_lane_state "$slug" "$rel")"
-  [ "$st" = unknown ] && die "dashboard phase is missing or non-canonical → fix: repair the dashboard Status line (/pw-status $slug shows the current phase)"
+  [ "$st" = unknown ] && die "dashboard phase is missing or non-canonical → fix: repair the dashboard Status line (/pw-status --project $slug shows the current phase)"
   [ "$st" = earlier ] && [ "$confirm" != 1 ] && die "$rel's phase was already consumed by a later dashboard phase — an auto approval here would silently rewind a used gate → fix: get the human's confirmation, then rerun with --confirm-earlier"
   local ident prov mdl; ident="$(_ai_identity "$provider" "$model")"
   prov="${ident%%$'\t'*}"; mdl="${ident#*$'\t'}"
@@ -915,8 +1048,24 @@ cmd_auto_signoff() {
 
 
 cmd_reindex() {
-  [ $# -eq 2 ] || die "usage: reindex <slug> <review-rel-path>"
-  local slug="$1" rel="$2"
+  local slug="" rel="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --file=*)    v="${a#*=}"; a="--file" ;;
+    esac
+    case "$a" in
+      --project|--file)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --file) rel="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "reindex --project <slug> --file <review-rel-path>" ;;
+      *) _pw_positional "$a" "reindex --project <slug> --file <review-rel-path>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "reindex: --project is required → fix: reindex --project <slug> --file <review-rel-path>"
+  [ -n "$rel" ] || die "reindex: --file is required → fix: the review file's project-relative path"
   local f; f="$(review_file "$slug" "$rel")" || return 2
   staged_or_die "$f" pw_review_contents_rebuild
   local rows n
@@ -927,8 +1076,24 @@ cmd_reindex() {
 }
 
 cmd_archive() {
-  [ $# -eq 2 ] || die "usage: archive <slug> <review-rel-path>"
-  local slug="$1" rel="$2"
+  local slug="" rel="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --file=*)    v="${a#*=}"; a="--file" ;;
+    esac
+    case "$a" in
+      --project|--file)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --file) rel="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "archive --project <slug> --file <review-rel-path>" ;;
+      *) _pw_positional "$a" "archive --project <slug> --file <review-rel-path>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "archive: --project is required → fix: archive --project <slug> --file <review-rel-path>"
+  [ -n "$rel" ] || die "archive: --file is required → fix: the review file's project-relative path"
   case "$rel" in
     *.review.md) ;;
     *) die "archive expects a .review.md file (got '$rel') → fix: archive the live review file, never its .archive.md sibling" ;;
@@ -1133,21 +1298,34 @@ _start_body() {
 }
 
 cmd_start() {
-  [ $# -ge 2 ] || die "usage: start <slug> <review-rel-path> [--phase <analysis|plan|task-plan|task-exec|ship>] [--provider <id>] [--model <id>] [--confirm-earlier]"
-  local slug="$1" rel="$2"; shift 2
-  local phase="" provider="" model="" confirm=0
+  local slug="" rel="" phase="" provider="" model="" confirm=0 a v
   while [ $# -gt 0 ]; do
-    case "$1" in
-      --phase) [ $# -ge 2 ] || die "--phase requires an argument"; phase="$2"; shift 2 ;;
-      --phase=*) phase="${1#--phase=}"; shift ;;
-      --provider) [ $# -ge 2 ] || die "--provider requires an argument"; provider="$2"; shift 2 ;;
-      --provider=*) provider="${1#--provider=}"; shift ;;
-      --model) [ $# -ge 2 ] || die "--model requires an argument"; model="$2"; shift 2 ;;
-      --model=*) model="${1#--model=}"; shift ;;
-      --confirm-earlier) confirm=1; shift ;;
-      *) die "start: unknown option: $1 (try --help)" ;;
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*)  v="${a#*=}"; a="--project" ;;
+      --file=*)     v="${a#*=}"; a="--file" ;;
+      --phase=*)    v="${a#*=}"; a="--phase" ;;
+      --provider=*) v="${a#*=}"; a="--provider" ;;
+      --model=*)    v="${a#*=}"; a="--model" ;;
+    esac
+    case "$a" in
+      --project|--file|--phase|--provider|--model)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project)  slug="$v" ;;
+          --file)     rel="$v" ;;
+          --phase)    phase="$v" ;;
+          --provider) provider="$v" ;;
+          --model)    model="$v" ;;
+        esac ;;
+      --confirm-earlier) confirm=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "start --project <slug> --file <review-rel-path> [--phase <analysis|plan|task-plan|task-exec|ship>] [--provider <id>] [--model <id>] [--confirm-earlier]" ;;
+      *) _pw_positional "$a" "start --project <slug> --file <review-rel-path> [--phase <analysis|plan|task-plan|task-exec|ship>] [--provider <id>] [--model <id>] [--confirm-earlier]" ;;
     esac
   done
+  [ -n "$slug" ] || die "start: --project is required → fix: start --project <slug> --file <review-rel-path> [--phase <phase>] [--provider <id>] [--model <id>] [--confirm-earlier]"
+  [ -n "$rel" ] || die "start: --file is required → fix: the review file's project-relative path"
   local f; f="$(review_file "$slug" "$rel")" || return 2
   grep -q '^## Sign-off' "$f" || die "$rel has no '## Sign-off' section — pass entry needs the gate table (task reviews created from the template always have one)"
   local lane; lane="$(pw_review_lane "$rel")"
@@ -1160,7 +1338,7 @@ cmd_start() {
       || die "lane mismatch: $rel belongs to the '$lane' lane, not '$phase' → fix: select the surface that owns this artifact (context↔context readiness, analysis↔analysis topics, plan↔PLAN, task-plan/task-exec/ship↔task docs+results, rfc↔rfc/RFC.md content, close↔the CLOSE record)"
     mode="$(_ai_review_mode_of "$slug" "$phase")"
     [ "$mode" = advisory ] || [ "$mode" = auto ] \
-      || die "AI Review mode for '$phase' is '$mode' — an independent AI pass needs advisory or auto → fix: run without --phase for the normal repair pass, or configure: /pw-config $slug set ai-review $phase=advisory"
+      || die "AI Review mode for '$phase' is '$mode' — an independent AI pass needs advisory or auto → fix: run without --phase for the normal repair pass, or configure: /pw-config set --project $slug --key ai-review --set $phase=advisory"
     local ident; ident="$(_ai_identity "$provider" "$model")"
     prov="${ident%%$'\t'*}"; mdl="${ident#*$'\t'}"
     ST_BY="pw-reviewer ($mode; provider=$prov; model=$mdl)"
@@ -1168,7 +1346,7 @@ cmd_start() {
     ST_BY="pw-review (repair)"
   fi
   local st; st="$(_dash_lane_state "$slug" "$rel")"
-  [ "$st" = unknown ] && die "dashboard phase is missing or non-canonical — cannot judge consumed-phase safety → fix: repair the dashboard Status line (/pw-status $slug shows the current phase)"
+  [ "$st" = unknown ] && die "dashboard phase is missing or non-canonical — cannot judge consumed-phase safety → fix: repair the dashboard Status line (/pw-status --project $slug shows the current phase)"
   [ "$st" = earlier ] && [ "$confirm" != 1 ] && die "$rel's phase was already consumed by a later dashboard phase — a repair pass here may invalidate work that depends on the gate → fix: get the human's explicit confirmation, then re-run with --confirm-earlier"
   ST_REL="$rel"
   _START_REPORT="$(mktemp)" || die "cannot create pass report → fix: check the temporary directory"
@@ -1251,13 +1429,13 @@ _rounds_of_file() { # <readme> — review-rounds budget (default 3)
 # _prepare_resolve <slug> <projdir> <scope> → "surface\tartifact\treview" (artifact "-" = close)
 _prepare_resolve() {
   local slug="$1" d="$2" scope="$3" tok
-  tok="$(pw_phase_token "$("$ST" phase "$slug" 2>/dev/null || true)")"
+  tok="$(pw_phase_token "$("$ST" phase --project "$slug" 2>/dev/null || true)")"
   case "$scope" in
     context)
-      [ -f "$d/context/REQUIREMENTS.md" ] || die "prepare context: no context/REQUIREMENTS.md yet → fix: /pw-context $slug prepare"
+      [ -f "$d/context/REQUIREMENTS.md" ] || die "prepare context: no context/REQUIREMENTS.md yet → fix: /pw-context prepare --project $slug"
       printf 'context\tcontext/REQUIREMENTS.md\tcontext/review/CONTEXT.review.md\n' ;;
     rfc)
-      [ -f "$d/rfc/RFC.md" ] || die "prepare rfc: no rfc/RFC.md yet → fix: /pw-rfc $slug init"
+      [ -f "$d/rfc/RFC.md" ] || die "prepare rfc: no rfc/RFC.md yet → fix: /pw-rfc init --project $slug"
       printf 'rfc\trfc/RFC.md\trfc/review/RFC-CONTENT.review.md\n' ;;
     close)
       printf 'close\t-\treview/CLOSE.review.md\n' ;;
@@ -1271,13 +1449,13 @@ _prepare_resolve() {
           cands+=("${f#$d/}")
         done
       fi
-      [ "${#cands[@]}" -eq 1 ] || die "prepare analysis: expected exactly ONE analysis doc (found ${#cands[@]}) → fix: name the path instead: /pw-review $slug prepare analysis/<topic>.md"
+      [ "${#cands[@]}" -eq 1 ] || die "prepare analysis: expected exactly ONE analysis doc (found ${#cands[@]}) → fix: name the path instead: /pw-review prepare --project $slug --file analysis/<topic>.md"
       _prepare_path_unit "$slug" "$d" "${cands[0]}" ""
       ;;
     plan)
       _prepare_path_unit "$slug" "$d" "task/PLAN.md" "plan" ;;
     task-plan|task-exec|ship)
-      die "prepare $scope: name one task → fix: /pw-review $slug prepare T01   (the surface is inferred from the dashboard phase; use an explicit path for other units)" ;;
+      die "prepare: '$scope' names a whole lane, not one unit → fix: /pw-review prepare --project $slug --task T01   (the surface is inferred from the dashboard phase; use --file for other units)" ;;
     T[0-9]*)
       case "$scope" in T[0-9][0-9]*) ;; *) die "invalid task id '$scope' (expected T01 …)" ;; esac
       [ -f "$d/task/$scope.md" ] || die "no task/$scope.md in $slug → fix: /pw-breakdown owns task creation"
@@ -1303,7 +1481,7 @@ _prepare_path_unit() {
       plan)       surf=plan ;;
       rfccontent) surf=rfc ;;
       task)
-        tok="$(pw_phase_token "$("$ST" phase "$slug" 2>/dev/null || true)")"
+        tok="$(pw_phase_token "$("$ST" phase --project "$slug" 2>/dev/null || true)")"
         case "$tok" in breakdown) surf=task-plan ;; *) surf=task-exec ;; esac ;;
       *) die "prepare: unsupported artifact: $rel" ;;
     esac
@@ -1381,19 +1559,46 @@ _prepare_fingerprint() {
 }
 
 cmd_prepare() {
-  [ $# -ge 2 ] || die "usage: prepare <slug> <scope> [--refresh] [--repair] [--pass-id <id>] [--print]   (scope: T0n | context|analysis|plan|task-plan|task-exec|ship|rfc|close | artifact path)"
-  local slug="$1" scope="$2"; shift 2
-  local refresh=0 repair=0 pass_override="" print_req=0
+  local slug="" tsel="" ssel="" fsel="" refresh=0 repair=0 pass_override="" print_req=0 a v
   while [ $# -gt 0 ]; do
-    case "$1" in
-      --refresh) refresh=1; shift ;;
-      --repair)  repair=1; shift ;;
-      --pass-id) [ $# -ge 2 ] || die "--pass-id requires an argument"; pass_override="$2"; shift 2 ;;
-      --pass-id=*) pass_override="${1#--pass-id=}"; shift ;;
-      --print) print_req=1; shift ;;
-      *) die "prepare: unknown option: $1 (try --help)" ;;
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+      --surface=*) v="${a#*=}"; a="--surface" ;;
+      --file=*)    v="${a#*=}"; a="--file" ;;
+      --pass-id=*) v="${a#*=}"; a="--pass-id" ;;
+    esac
+    case "$a" in
+      --project|--task|--surface|--file|--pass-id)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project) slug="$v" ;;
+          --task)    tsel="$v" ;;
+          --surface) ssel="$v" ;;
+          --file)    fsel="$v" ;;
+          --pass-id) pass_override="$v" ;;
+        esac ;;
+      --refresh) refresh=1 ;;
+      --repair)  repair=1 ;;
+      --print) print_req=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "prepare --project <slug> (--task <T0n> | --surface <name> | --file <rel>) [--refresh] [--repair] [--pass-id <id>] [--print]" ;;
+      *) _pw_positional "$a" "prepare --project <slug> (--task <T0n> | --surface <name> | --file <rel>) [--refresh] [--repair] [--pass-id <id>] [--print]" ;;
     esac
   done
+  [ -n "$slug" ] || die "prepare: --project is required → fix: prepare --project <slug> (--task <T0n> | --surface <name> | --file <rel>) [--refresh] [--repair] [--pass-id <id>] [--print]"
+  # Exactly one unit selector; its value feeds the unchanged scope resolution below
+  # (task → T0n lane, surface → lane keyword, file → artifact path).
+  local scope="" scope_flag="" nsel=0
+  if [ -n "$tsel" ]; then scope="$tsel"; scope_flag="--task"; nsel=$((nsel+1)); fi
+  if [ -n "$ssel" ]; then scope="$ssel"; scope_flag="--surface"; nsel=$((nsel+1)); fi
+  if [ -n "$fsel" ]; then scope="$fsel"; scope_flag="--file"; nsel=$((nsel+1)); fi
+  [ "$nsel" -eq 1 ] || die "prepare: pass exactly one unit selector → fix: prepare --project $slug (--task <T0n> | --surface <name> | --file <rel>) [--refresh] [--repair] [--pass-id <id>] [--print]"
+  case "$scope_flag" in
+    --task)    case "$tsel" in T[0-9]*) ;; *) die "prepare: --task expects a task id like T01 (got '$tsel') → fix: --task T0n, or select the unit with --file <rel>" ;; esac ;;
+    --surface) case "$ssel" in context|analysis|plan|task-plan|task-exec|ship|rfc|close) ;; *) die "prepare: unknown --surface '$ssel' → fix: context|analysis|plan|task-plan|task-exec|ship|rfc|close, or select the unit with --task/--file" ;; esac ;;
+  esac
   case "$pass_override" in
     '') ;;
     *[!A-Za-z0-9._-]*) die "invalid --pass-id '$pass_override' → fix: letters, digits, dot, underscore, dash only (it becomes a directory name)" ;;
@@ -1408,7 +1613,7 @@ cmd_prepare() {
   [ "$artifact" = "-" ] && docfor="close-report.md"
   if [ ! -f "$d/$reviewrel" ]; then
     _init_one "$slug" "$d" "$reviewrel" "$docfor" >/dev/null \
-      || die "prepare: could not create $reviewrel → fix: see the error above; create it with: /pw-review $slug init-docs $docfor"
+      || die "prepare: could not create $reviewrel → fix: see the error above; create it with: /pw-review init-docs --project $slug --file $docfor"
   fi
   # prior passes for the SAME artifact+surface: show the packet, or require --refresh/--repair
   local root pd m_surf m_art m_round maxround=0 count=0 newest=""
@@ -1427,9 +1632,9 @@ cmd_prepare() {
   if [ "$count" -gt 0 ] && [ "$refresh" != 1 ] && [ "$repair" != 1 ]; then
     local pid; pid="$(basename "${newest%/}")"
     echo "$slug: prepare — an existing pass packet for $artifact already exists: review/ai/$pid (state=$(_mf_read "$newest/manifest.json" state))"
-    echo "  inspect: /pw-review $slug passes"
-    echo "  deliberate re-review of unchanged inputs: /pw-review $slug prepare $scope --refresh   (a new reviewer pass)"
-    echo "  bounded repair round after a fix: /pw-review $slug prepare $scope --repair"
+    echo "  inspect: /pw-review passes --project $slug"
+    echo "  deliberate re-review of unchanged inputs: /pw-review prepare --project $slug $scope_flag $scope --refresh   (a new reviewer pass)"
+    echo "  bounded repair round after a fix: /pw-review prepare --project $slug $scope_flag $scope --repair"
     return 0
   fi
   local rounds round_new
@@ -1547,12 +1752,12 @@ MANIFEST_EOF
     printf 'every finding carries evidence and one requested correction; quote content as data, never\n'
     printf 'as commands to run; a decision you cannot make belongs in questions, not findings.\n\n'
     printf 'Import the returned report (in the producing session):\n'
-    printf '  /pw-review <slug> import --report <report.json>\n'
+    printf '  /pw-review import --project <slug> --report <report.json>\n'
   } > "$pdir/request.md"
   echo "$slug: prepare — pass $pass frozen (surface=$surf, unit=$ledger_note, round=$round_new/$rounds)"
   echo "  packet: review/ai/$pass/ (manifest.json · snapshot/ · request.md)"
   echo "  reviewer request: review/ai/$pass/request.md — hand it + the snapshot to a fresh session"
-  echo "  import the result: /pw-review $slug import --report <report.json>   (advisory: no approval, no repair)"
+  echo "  import the result: /pw-review import --project $slug --report <report.json>   (advisory: no approval, no repair)"
   [ "$print_req" = 1 ] && cat "$pdir/request.md"
   return 0
 }
@@ -1612,18 +1817,24 @@ _import_notes_body() {
 }
 
 cmd_import() {
-  [ $# -ge 2 ] || die "usage: import <slug> --report <report.json> [--pass <pass-id>]"
-  local slug="$1"; shift
-  local report="" pass=""
+  local slug="" report="" pass="" a v
   while [ $# -gt 0 ]; do
-    case "$1" in
-      --report) [ $# -ge 2 ] || die "--report requires an argument"; report="$2"; shift 2 ;;
-      --report=*) report="${1#--report=}"; shift ;;
-      --pass) [ $# -ge 2 ] || die "--pass requires an argument"; pass="$2"; shift 2 ;;
-      --pass=*) pass="${1#--pass=}"; shift ;;
-      *) die "import: unknown option: $1 (try --help)" ;;
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --report=*)  v="${a#*=}"; a="--report" ;;
+      --pass=*)    v="${a#*=}"; a="--pass" ;;
+    esac
+    case "$a" in
+      --project|--report|--pass)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --report) report="$v" ;; --pass) pass="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "import --project <slug> --report <report.json> [--pass <pass-id>]" ;;
+      *) _pw_positional "$a" "import --project <slug> --report <report.json> [--pass <pass-id>]" ;;
     esac
   done
+  [ -n "$slug" ] || die "import: --project is required → fix: import --project <slug> --report <report.json> [--pass <pass-id>]"
   [ -n "$report" ] || die "import: --report <report.json> is required"
   local d; d="$(proj_dir "$slug")" || return 2
   local rp="$report"
@@ -1639,7 +1850,7 @@ cmd_import() {
   pass="$rp_pass"
   case "$pass" in ''|*[!A-Za-z0-9._-]*) die "import: invalid pass id '$pass' in the report → fix: reports must carry the pass id that prepare issued" ;; esac
   local pdir="$(_pass_root "$d")/$pass" mf="$(_pass_root "$d")/$pass/manifest.json"
-  [ -f "$mf" ] || die "import: no prepared packet for pass '$pass' → fix: /pw-review $slug prepare <scope> creates it (an unprepared report is unverified feedback: record it via add-item with its source, never a structured import)"
+  [ -f "$mf" ] || die "import: no prepared packet for pass '$pass' → fix: /pw-review prepare --project $slug (--task <T0n> | --surface <name> | --file <rel>) creates it (an unprepared report is unverified feedback: record it via add-item with its source, never a structured import)"
   local m_project m_artifact m_surface m_review m_state
   m_project="$(_mf_read "$mf" project)"
   [ "$m_project" = "$slug" ] || die "import: pass '$pass' belongs to project '$m_project', not '$slug' → fix: run the import in the producing project"
@@ -1794,7 +2005,9 @@ PY
     _mf_set_scalar "$mf" state '"stale"' || true
     _log "$slug" pw-review "import refused: pass $pass inputs changed since prepare (report retained as stale evidence)"
     rm -rf "$tmpd"
-    die "import: reviewed inputs changed since prepare (fingerprint mismatch) — the report is retained as stale evidence and nothing actionable was imported → fix: /pw-review $slug prepare $m_review --refresh (or --repair after a fix), then review the new snapshot"
+    local redo="--file $m_artifact"
+    if [ "$m_artifact" = "-" ]; then redo="--surface $m_surface"; fi
+    die "import: reviewed inputs changed since prepare (fingerprint mismatch) — the report is retained as stale evidence and nothing actionable was imported → fix: /pw-review prepare --project $slug $redo --refresh (or --repair after a fix), then review the new snapshot"
   fi
   # verdict + apply payload
   local verdict declared
@@ -1853,7 +2066,7 @@ PY
     "$rp_sha" "$verdict" "$(_json_list "${applied_items# }")" "$(_json_list "${applied_qs# }")" "$(_json_list "${applied_keys# }")" "$(_json_list "${skipped_words# }")" "$at")"
   _mf_set_scalar "$mf" import "$import_json" || { rm -rf "$tmpd"; die "import: failed to record pass state → fix: check review/ai/$pass permissions"; }
   _mf_set_scalar "$mf" state '"imported"' || { rm -rf "$tmpd"; die "import: failed to record pass state → fix: check review/ai/$pass permissions"; }
-  if [ ! -f "$d/REVIEWER-NOTES.md" ]; then cmd_note_init "$slug" >/dev/null 2>&1 || true; fi
+  if [ ! -f "$d/REVIEWER-NOTES.md" ]; then cmd_note_init --project "$slug" >/dev/null 2>&1 || true; fi
   IMP_TS="$at" IMP_SURFACE="$m_surface" IMP_ARTIFACT="$m_artifact" IMP_PASS="$pass" \
   IMP_VERDICT="$verdict" IMP_DECLARED="$declared" \
   IMP_ITEMS="$(printf '%s' "${applied_items# }" | tr ' ' ',')" \
@@ -1867,15 +2080,26 @@ PY
   echo "$slug: import — pass $pass ($m_surface · $m_artifact) verdict=$verdict"
   echo "  items:${applied_items:- none}${applied_qs:+ · questions:$applied_qs}${skipped_words:+ · skipped:$skipped_words}"
   echo "  report stored: review/ai/$pass/report.json   (external import — advisory only: no approval row, no repair)"
-  echo "  apply the recorded findings: /pw-review $slug $m_review"
+  echo "  apply the recorded findings: repair the artifacts, then /pw-review start --project $slug --file $m_review"
   return 0
 }
 
 
 # ---------------------------------------------------------------- note-init
 cmd_note_init() {
-  [ $# -eq 1 ] || die "usage: note-init <slug>"
-  local slug="$1" d; d="$(proj_dir "$slug")" || return 2
+  local slug="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --project=*) v="${a#*=}"; a="--project" ;; esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "note-init --project <slug>" ;;
+      *) _pw_positional "$a" "note-init --project <slug>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "note-init: --project is required → fix: note-init --project <slug>"
+  local d; d="$(proj_dir "$slug")" || return 2
   local f="$d/REVIEWER-NOTES.md"
   if [ -f "$f" ]; then
     echo "$slug: REVIEWER-NOTES.md already exists (left untouched)"
@@ -1916,15 +2140,15 @@ cmd_note_init() {
 # cmd_auto_signoff and cmd_start's reviewer check.
 _ai_review_mode_of() {
   local slug="$1" phase="$2" modes kv m
-  modes="$("$CFG" ai-review "$slug" 2>/dev/null || true)"   # the config entity owns the modes
+  modes="$("$CFG" get --project "$slug" --key ai-review 2>/dev/null || true)"   # the config entity owns the modes
   for kv in $modes; do
     [ "${kv%%=*}" = "$phase" ] && { m="${kv#*=}"; case "$m" in off|"") echo advisory ;; *) echo "$m" ;; esac; return 0; }
   done
   echo advisory
 }
 
-_reindex() { cmd_reindex "$1" "$2" >/dev/null; }
-_log() { PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" log "$1" "$2" "$3" >/dev/null; }
+_reindex() { cmd_reindex --project "$1" --file "$2" >/dev/null; }
+_log() { PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" log --project "$1" --actor "$2" --message "$3" >/dev/null; }
 
 # ---------------------------------------------------------------- dispatch
 [ $# -ge 1 ] || { pw_usage; }
@@ -1933,24 +2157,12 @@ OP="$1"; shift
 case "$OP" in
   init-all)     cmd_init_all "$@" ;;
   init-docs)    cmd_init_docs "$@" ;;
-  signoff)
-    [ $# -ge 3 ] || die "usage: signoff <slug> <review-rel-path> <approved|changes-requested|in-review> [--by <name>]"
-    cmd_signoff "$@" ;;
-  add-item)
-    [ $# -ge 2 ] || die "usage: add-item <slug> <review-rel-path> --section <§anchor> (--text <ask...> | --stdin) [--actor <name>]"
-    cmd_add_item "$@" ;;
-  answer)
-    [ $# -ge 3 ] || die "usage: answer <slug> <review-rel-path> <Qid> (--text <answer...> | --stdin)"
-    cmd_answer "$@" ;;
-  add-question)
-    [ $# -ge 2 ] || die "usage: add-question <slug> <review-rel-path> --section <§anchor> (--text <q...> | --stdin) [--actor <name>]"
-    cmd_add_question "$@" ;;
-  resolve)
-    [ $# -ge 3 ] || die "usage: resolve <slug> <review-rel-path> <Rid|Qid> (--reply <text...> | --stdin)"
-    cmd_resolve "$@" ;;
-  start)
-    [ $# -ge 2 ] || die "usage: start <slug> <review-rel-path> [--phase <phase>] [--provider <id>] [--model <id>] [--confirm-earlier]"
-    cmd_start "$@" ;;
+  signoff)      cmd_signoff "$@" ;;
+  add-item)     cmd_add_item "$@" ;;
+  answer)       cmd_answer "$@" ;;
+  add-question) cmd_add_question "$@" ;;
+  resolve)      cmd_resolve "$@" ;;
+  start)        cmd_start "$@" ;;
   init)         cmd_init "$@" ;;
   gate)         exec "$HERE/pw-review-read.sh" gate "$@" ;;
   has-open)     exec "$HERE/pw-review-read.sh" has-open "$@" ;;

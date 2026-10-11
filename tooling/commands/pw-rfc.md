@@ -1,6 +1,7 @@
 ---
 description: Optional side-loop — publish approved analysis/plan content to an RFC doc (any configured backend, or a local-only doc by default)
-args: <project-slug> [--target <ref>] [milestone|comments]
+args: "[milestone | comments] --project <project-slug> [--target <ref>]"
+scope: project
 ---
 Follow the `project-workflow` skill, and invoke the **`pw-rfc` skill** for the section-by-section
 authoring guide (which analysis/task content feeds which section, the multi-solution-area case, the
@@ -9,9 +10,16 @@ authoring guide (which analysis/task content feeds which section, the multi-solu
 canonical section schema, the gating rule, and the concrete per-backend invocation. **This command
 never hardcodes a platform**; every external call is resolved through those two files.
 
-Arguments: {{ARGS}} — first token = project slug; optional `--target <ref>` sets/overrides the
-external doc ref for this and future runs; trailing `milestone` = Wave 2; trailing `comments` =
-read-only comment pull. With neither trailing keyword, this is Wave 1 (default).
+Arguments: {{ARGS}} — `--project <project-slug>` selects the project; optional `--target <ref>`
+sets/overrides the external doc ref for this and future runs. The operator word selects the wave
+(none = Wave 1, the default):
+
+- **`/pw-rfc --project <project-slug> [--target <ref>]`** — Wave 1 (default): publish the approved
+  analysis content.
+- **`/pw-rfc milestone --project <project-slug>`** — Wave 2: fill Milestone + Conclusion from an
+  approved `task/PLAN.md`, then the same publish steps.
+- **`/pw-rfc comments --project <project-slug>`** — read-only pull of external review threads into
+  the review loop; it never writes to the external platform.
 
 Project dir: `{{PW_PROJECTS}}/<slug>`. **This is a side-loop, not a phase** — it never sets the
 dashboard `Status:` (only `pw-status.sh log`, for the audit trail). Each wave has its own gate, and
@@ -21,16 +29,16 @@ needs `task/PLAN.md` `approved`, since there's no meaningful "draft milestone" t
 over. Never block a phase or refuse to run because a backend is unset/unreachable — that's a
 config choice, not an error.
 
-<!-- For comments subcommand: fetch RFC comments mechanically -->
+<!-- For the comments operator: fetch RFC comments mechanically -->
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-rfc.sh comments <slug>
+{{PW_HOME}}/tooling/scripts/entities/pw-rfc.sh comments --project <slug>
 ```
 **Reading it:** one summary line — `RFC comments: N new, N updated, N resolved externally`
 (items are appended to `analysis/review/RFC.review.md` by the script; `backend=markdown` prints
 "no external comments to fetch" — that's success, exit 0). Then recap the new items and remind
 the user to triage via `/pw-review`. Exit 2 messages (`rfc/META.md not found` / `no Target:` /
 `lark-cli not found`) are publish-setup state, not review findings — point the user at
-`/pw-rfc … publish` or `pw.config.sh` (`tooling/docs/scripts/workflow-automation.md`).
+`/pw-rfc --project <slug>` or `pw.config.sh` (`tooling/docs/scripts/workflow-automation.md`).
 
 ## Resolve the backend + target (every invocation — read-only computation, no gate check yet)
 This step only **computes** values and, if you explicitly gave `--target`, **records** it — it
@@ -43,7 +51,7 @@ target question it doesn't need yet.
 2. **Target ref**, in this order: this run's `--target` flag → `rfc/META.md`'s persisted `Target:`
    (if the project already has one) → the backend's own configured default, if any (per
    `rfc-backends.md`) → none. Under `markdown` there is no external target — skip this. If
-   `--target` was given, persist it now: `{{PW_HOME}}/tooling/scripts/entities/pw-rfc.sh target <slug> <ref>`
+   `--target` was given, persist it now: `{{PW_HOME}}/tooling/scripts/entities/pw-rfc.sh target --project <slug> --ref <ref>`
    (this only records where a *future* publish would go — it's bookkeeping, not RFC content, so
    it's fine to record even if this invocation's gate ends up refusing below).
 3. `rfc init` (creating the local doc + metadata) happens **inside each wave below, after its gate
@@ -55,7 +63,7 @@ target question it doesn't need yet.
    before that would mean bothering you about *where* to publish something that might never even
    be approved to publish at all.
 
-## Wave 1 (default — no trailing keyword)
+## Wave 1 (default — no operator word)
 1. **Gate:** every real `analysis/<topic>.md`'s §4 `**Chosen approach:**` must be filled in (not
    `_pending your review_`) — a project may have more than one analysis doc (large,
    mostly-independent solution areas; see the analysis template's "MULTIPLE LARGE SOLUTION AREAS"
@@ -67,7 +75,7 @@ target question it doesn't need yet.
    the entire point of using RFC for cross-team input. It is normal and expected for Wave 1 to
    publish a still-`in-review` doc. If any doc's §4 isn't decided yet, **refuse and say so** — do
    nothing else, and do not create `rfc/RFC.md`.
-2. Gate passed: `{{PW_HOME}}/tooling/scripts/entities/pw-rfc.sh init <slug> <backend>` — idempotent; creates
+2. Gate passed: `{{PW_HOME}}/tooling/scripts/entities/pw-rfc.sh init --project <slug> --backend <backend>` — idempotent; creates
    `rfc/RFC.md` from the template and stamps `rfc/META.md`'s `Backend:` with the **real** resolved
    backend from step 1 above (not a default guess), no-ops (and never clobbers) on a later run.
 3. Fill Background, Requirements + Out of Scope, Solution (the **chosen** approach as "Approach
@@ -112,20 +120,20 @@ target question it doesn't need yet.
    whole-doc overwrite**, ever. First publish on a project with no doc yet: `create_from_template`
    **at the resolved target** (never a location I wasn't asked about), capture the resulting ref,
    persist it (`pw-rfc.sh target`). Otherwise: `update_section` per changed section only.
-7. Record: `pw-rfc.sh state <slug> Wave1Published yes`,
-   `pw-rfc.sh dashboard <slug> "<one-line status + link if published>"`,
-   `pw-status.sh log <slug> rfc "Wave 1 published (<backend>)"`.
+7. Record: `pw-rfc.sh state --project <slug> --field Wave1Published --value yes`,
+   `pw-rfc.sh dashboard --project <slug> --text "<one-line status + link if published>"`,
+   `pw-status.sh log --project <slug> --actor rfc --message "Wave 1 published (<backend>)"`.
 8. **Recap:** which sections were filled, whether/where it published, and any diagram that degraded
    to a placeholder.
 
-**If a trailing argument is literally `milestone`, this is Wave 2 — fill Milestone + Conclusion from an approved
-PLAN.md (gate below); if it is literally `comments`, this is the read-only pull of external review
-threads into the review loop. The default flow (no selector token) is Wave 1.**
+**The operator word `milestone` is Wave 2 — fill Milestone + Conclusion from an approved
+PLAN.md (gate below); `comments` is the read-only pull of external review threads into the review
+loop. The default flow (no operator word) is Wave 1.**
 
 ## `milestone` (Wave 2)
 1. **Gate:** if `task/PLAN.md` isn't `approved` (its review file's Sign-off row), **refuse and
    report why** — do nothing else.
-2. Gate passed: `{{PW_HOME}}/tooling/scripts/entities/pw-rfc.sh init <slug> <backend>` if `rfc/RFC.md` doesn't
+2. Gate passed: `{{PW_HOME}}/tooling/scripts/entities/pw-rfc.sh init --project <slug> --backend <backend>` if `rfc/RFC.md` doesn't
    exist yet (idempotent — normally a no-op here since Wave 1 already ran, but covers the case
    where `milestone` is run without ever running Wave 1).
 3. **Before filling Milestone, ask me explicitly whether I want Milestone detail in this RFC at
@@ -158,10 +166,10 @@ threads into the review loop. The default flow (no selector token) is Wave 1.**
    - **Resolved on the platform, already tracked as resolved** — nothing to do, already noted.
    - **Unresolved, not tracked yet** — a genuinely new thread: create
      `analysis/review/RFC.review.md` if it doesn't exist yet
-     (`{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init <slug> analysis/review/RFC.review.md
-     analysis/<topic>.md`), then append a **new** item — quote the comment, name the author, link
+     (`{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init --project <slug> --file analysis/review/RFC.review.md
+     --doc analysis/<topic>.md`), then append a **new** item — quote the comment, name the author, link
      the thread, note the canonical section it's anchored to. Write the item deterministically
-     via `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh add-item <slug> analysis/review/RFC.review.md
+     via `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh add-item --project <slug> --file analysis/review/RFC.review.md
      --section <anchor> --actor pw-reviewer --stdin` (heredoc = the quoted comment + author +
      thread link) — never a hand-copied heading block.
    - **Unresolved, tracked, and its current reply count is HIGHER than what's recorded** — new
@@ -172,11 +180,11 @@ threads into the review loop. The default flow (no selector token) is Wave 1.**
    - **Unresolved, tracked, reply count unchanged** — nothing to do, already surfaced.
 4. **Never reply to, resolve, or otherwise write into the external thread — that's mine to do.**
    After handling each thread, record its current state:
-   `pw-rfc.sh comment-seen <slug> <thread-id> <reply-count> <solved:yes|no>`.
+   `pw-rfc.sh comment-seen --project <slug> --thread <thread-id> --replies <reply-count> --solved <yes|no>`.
 5. **Recap:** how many genuinely new items were pulled, how many existing items got new replies
    appended, how many were noted as resolved externally, and remind me to run `/pw-review` to
    apply any of this to the analysis locally (its `↳ agent:` reply is the durable record of what
-   changed), then re-run `/pw-rfc <slug>` (or `milestone`) to push the revision.
+   changed), then re-run `/pw-rfc --project <slug>` (or `/pw-rfc milestone --project <slug>`) to push the revision.
 
 ## What this command never does
 - Never sets the dashboard `Status:` or advances/rewinds a phase.
@@ -191,9 +199,9 @@ threads into the review loop. The default flow (no selector token) is Wave 1.**
 
 **Local RFC content review — only when configured.** When this run finalized `rfc/RFC.md` content
 for a wave (before its external publish, or when I ask for review of the local draft), read the
-`rfc` axis (`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh project get <slug> review-trigger`
-and `… ai-review`) and, ONLY when the trigger is `completion` and the outcome is callable
-(`advisory` default; a legacy `off` row reads as advisory), run the `/pw-review <slug> ai rfc` flow
+`rfc` axis (`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh get --project <slug> --key review-trigger`
+and `… --key ai-review`) and, ONLY when the trigger is `completion` and the outcome is callable
+(`advisory` default; a legacy `off` row reads as advisory), run the `/pw-review ai --project <slug> --surface rfc` flow
 against the LOCAL content record (`rfc/review/RFC-CONTENT.review.md`) — a fresh reviewer only,
 bounded repairs only when `review-repair rfc=bounded` within `review-rounds` passes. This is
 distinct from the fetched-comment staging (`analysis/review/RFC.review.md`), which keeps its own

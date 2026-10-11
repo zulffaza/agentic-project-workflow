@@ -1,13 +1,22 @@
 ---
 description: Independent, fresh-context verification of one change (the §3.4 stand-alone verifier) — "verify this branch/commit/MR separately", never a re-derive of the producer's reasoning
-args: "<repo-ref | worktree-path | task> [--commit <sha>] [note]"
+args: "--repo-ref <repo@ref>  |  --worktree <path>  |  --task <T0n|task-file> [--commit <sha>] [--note <prose…>]"
+scope: global
 ---
 Invoke the `project-workflow` skill only if the target is a pw project; otherwise work plainly —
-the contract is the same. You are handed **one target of verification** (a repo@branch/SHA, a
-worktree path, or a task file with its `## Verify` block as the definition-of-done), **one
+the contract is the same. Arguments: {{ARGS}} — exactly one target form:
+
+- **`/pw-verify --repo-ref <repo@ref>`** — a repo@branch/SHA target.
+- **`/pw-verify --worktree <path>`** — a worktree path.
+- **`/pw-verify --task <T0n|task-file>`** — a task file with its `## Verify` block as the definition-of-done.
+
+Optional on any form: `[--commit <sha>]` pins the exact commit to verify, `[--note <prose…>]` adds
+a note (a prose flag — it runs until the next `--flag` token).
+
+You are handed **one target of verification**, **one
 question to answer** (does this change actually do what its verify block / commit claim, against
 real state — build/test/lint/behavior where runnable), and the model row for the `verifier` lane
-(`pw-config.sh ai-model <slug>` if a dashboard exists — unset = provider default; record
+(`pw-config.sh ai-model --project <slug>` if a dashboard exists — unset = provider default; record
 `Model used:` where your provider can report it).
 
 Rules (this is the stand-alone lane, *not* an executor's self-check):

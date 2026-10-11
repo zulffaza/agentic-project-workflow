@@ -9,30 +9,30 @@
 battery_rows() {
   local s
   for s in "$S1" "$S2" "$S3"; do
-    printf 'status %s\tpw-status.sh\t%s --skip-cli-check\n'        "$s" "$s"
-    printf 'review-scan %s\tpw-review.sh\tscan %s\n'               "$s" "$s"
-    printf 'lint-all %s\tpw-doc.sh\tlint all %s\n'                 "$s" "$s"
-    printf 'lint-plan %s\tpw-doc.sh\tlint plan %s\n'               "$s" "$s"
-    printf 'lint-dashboard %s\tpw-doc.sh\tlint dashboard %s\n'     "$s" "$s"
-    printf 'lint-analysis %s\tpw-doc.sh\tlint analysis %s\n'       "$s" "$s"
-    printf 'lint-review %s\tpw-doc.sh\tlint review %s task/review/PLAN.review.md\n' "$s" "$s"
-    printf 'lint-task-t01 %s\tpw-doc.sh\tlint task %s T01\n'       "$s" "$s"
-    printf 'summary-plan %s\tpw-doc.sh\tsummary plan %s\n'         "$s" "$s"
-    printf 'summary-project %s\tpw-doc.sh\tsummary project %s\n'   "$s" "$s"
-    printf 'summary-task %s\tpw-doc.sh\tsummary task %s T01\n'     "$s" "$s"
-    printf 'summary-analysis %s\tpw-doc.sh\tsummary analysis %s\n' "$s" "$s"
-    printf 'resolve %s\tpw-ship.sh\tresolve %s\n'               "$s" "$s"
-    printf 'batch %s\tpw-ship.sh\tmr-state-batch %s\n'        "$s" "$s"
+    printf 'status %s\tpw-status.sh\t--project %s --skip-cli-check\n'        "$s" "$s"
+    printf 'review-scan %s\tpw-review.sh\tscan --project %s\n'               "$s" "$s"
+    printf 'lint-all %s\tpw-doc.sh\tlint --kind all --project %s\n'                 "$s" "$s"
+    printf 'lint-plan %s\tpw-doc.sh\tlint --kind plan --project %s\n'               "$s" "$s"
+    printf 'lint-dashboard %s\tpw-doc.sh\tlint --kind dashboard --project %s\n'     "$s" "$s"
+    printf 'lint-analysis %s\tpw-doc.sh\tlint --kind analysis --project %s\n'       "$s" "$s"
+    printf 'lint-review %s\tpw-doc.sh\tlint --kind review --project %s --file task/review/PLAN.review.md\n' "$s" "$s"
+    printf 'lint-task-t01 %s\tpw-doc.sh\tlint --kind task --project %s --file T01\n'       "$s" "$s"
+    printf 'summary-plan %s\tpw-doc.sh\tsummary --kind plan --project %s\n'         "$s" "$s"
+    printf 'summary-project %s\tpw-doc.sh\tsummary --kind project --project %s\n'   "$s" "$s"
+    printf 'summary-task %s\tpw-doc.sh\tsummary --kind task --project %s --file T01\n'     "$s" "$s"
+    printf 'summary-analysis %s\tpw-doc.sh\tsummary --kind analysis --project %s\n' "$s" "$s"
+    printf 'resolve %s\tpw-ship.sh\tresolve --project %s\n'               "$s" "$s"
+    printf 'batch %s\tpw-ship.sh\tmr-state-batch --project %s\n'        "$s" "$s"
     # stacked-MR read-only previews (plan 35): no stacks on any fixture → rc 0, "no stacks"
-    printf 'stack-preview %s\tpw-ship.sh\tstack %s\n'         "$s" "$s"
-    printf 'stack-validate %s\tpw-ship.sh\tstack-validate %s\n' "$s" "$s"
-    printf 'stack-plan %s\tpw-ship.sh\tstack-plan %s\n'       "$s" "$s"
-    printf 'stack-report %s\tpw-status.sh\tstack %s\n'        "$s" "$s"
-    printf 'rfc %s\tpw-rfc.sh\tcomments %s\n'                      "$s" "$s"
-    printf 'adopt %s\tpw-context.sh\tadopt-snapshot %s api agent/%s/T01-thing\n' "$s" "$s" "$s"
-    printf 'help project %s\tpw-help.sh\tproject %s\n'      "$s" "$s"
-    printf 'help project-review %s\tpw-help.sh\tproject %s pw-review\n' "$s" "$s"
-    printf 'provider-audit %s\tpw-status.sh\tprovider-audit %s\n' "$s" "$s"
+    printf 'stack-preview %s\tpw-ship.sh\tstack --project %s\n'         "$s" "$s"
+    printf 'stack-validate %s\tpw-ship.sh\tstack-validate --project %s\n' "$s" "$s"
+    printf 'stack-plan %s\tpw-ship.sh\tstack-plan --project %s\n'       "$s" "$s"
+    printf 'stack-report %s\tpw-status.sh\tstack --project %s\n'        "$s" "$s"
+    printf 'rfc %s\tpw-rfc.sh\tcomments --project %s\n'                      "$s" "$s"
+    printf 'adopt %s\tpw-context.sh\tadopt-snapshot --project %s --repo api --branch agent/%s/T01-thing\n' "$s" "$s" "$s"
+    printf 'help project %s\tpw-help.sh\tproject --project %s\n'      "$s" "$s"
+    printf 'help project-review %s\tpw-help.sh\tproject --project %s --name pw-review\n' "$s" "$s"
+    printf 'provider-audit %s\tpw-status.sh\tprovider-audit --project %s\n' "$s" "$s"
   done
   # cross-project overview (--all): one read-only scan over the whole fixture root.
   # S3's prose phase line is the pinned partial-scan case (rc 1 + remediation).
@@ -42,50 +42,50 @@ battery_rows() {
   # prepare rows run on the mid-lifecycle fixtures; the import refusal row is fixture-agnostic
   # (a path that never exists → the missing-report refusal).
   for s in "$S2" "$S3"; do
-    printf 'review-prepare %s\tpw-review.sh\tprepare %s task/PLAN.md --pass-id p-batt\n' "$s" "$s"
-    printf 'review-passes %s\tpw-review.sh\tpasses %s\n' "$s" "$s"
-    printf 'review-read-passes %s\tpw-review-read.sh\tpasses %s\n' "$s" "$s"
+    printf 'review-prepare %s\tpw-review.sh\tprepare --project %s --file task/PLAN.md --pass-id p-batt\n' "$s" "$s"
+    printf 'review-passes %s\tpw-review.sh\tpasses --project %s\n' "$s" "$s"
+    printf 'review-read-passes %s\tpw-review-read.sh\tpasses --project %s\n' "$s" "$s"
   done
-  printf 'review-import-refusal %s\tpw-review.sh\timport %s --report no-such-report.json\n' "$S1" "$S1"
+  printf 'review-import-refusal %s\tpw-review.sh\timport --project %s --report no-such-report.json\n' "$S1" "$S1"
   for s in "$S1" "$S2" "$S3"; do
-    printf 'review-trigger-get %s\tpw-config.sh\tproject get %s review-trigger\n' "$s" "$s"
-    printf 'review-repair-get %s\tpw-config.sh\tproject get %s review-repair\n' "$s" "$s"
-    printf 'review-rounds-get %s\tpw-config.sh\tproject get %s review-rounds\n' "$s" "$s"
+    printf 'review-trigger-get %s\tpw-config.sh\tget --project %s --key review-trigger\n' "$s" "$s"
+    printf 'review-repair-get %s\tpw-config.sh\tget --project %s --key review-repair\n' "$s" "$s"
+    printf 'review-rounds-get %s\tpw-config.sh\tget --project %s --key review-rounds\n' "$s" "$s"
   done
   # project-doctor battery rows: F1 (fresh scaffold → green) + F3 (hostile → red) only — the
   # all-green-on-planted-defects walk is config-sensitive (produced-by membership reads
   # PW_PROVIDERS) and owned by the T1 case with its deterministic f2 fixture config.
-  printf 'doctor-project F1\tpw-project-doctor.sh\t%s\n' "$S1"
-  printf 'doctor-project F3\tpw-project-doctor.sh\t%s\n' "$S3"
+  printf 'doctor-project F1\tpw-project-doctor.sh\t--project %s\n' "$S1"
+  printf 'doctor-project F3\tpw-project-doctor.sh\t--project %s\n' "$S3"
   # guidance preview is read-only on every fixture (plan 30): fresh templates → nothing to repair
-  printf 'doctor-guidance F1\tpw-project-doctor.sh\t%s --guidance\n' "$S1"
-  printf 'doctor-guidance F2\tpw-project-doctor.sh\t%s --guidance\n' "$S2"
-  printf 'doctor-guidance F3\tpw-project-doctor.sh\t%s --guidance\n' "$S3"
+  printf 'doctor-guidance F1\tpw-project-doctor.sh\t--project %s --guidance\n' "$S1"
+  printf 'doctor-guidance F2\tpw-project-doctor.sh\t--project %s --guidance\n' "$S2"
+  printf 'doctor-guidance F3\tpw-project-doctor.sh\t--project %s --guidance\n' "$S3"
   # config surface (read-only forms; per-fixture doctor covers the walk itself):
-  printf 'project show F2\tpw-config.sh\tproject show %s\n' "$S2"
+  printf 'project show F2\tpw-config.sh\tshow --project %s\n' "$S2"
   printf 'global show\tpw-config.sh\tglobal show\n'
   # plan-22 operators (shim catalog + session list make these deterministic in-suite):
-  printf 'model-check allow\tpw-config.sh\tmodel-check claude opus\n'
-  printf 'model-resolve ok\tpw-config.sh\tmodel-resolve kilo alibaba-token-plan/test-model\n'
-  printf 'model-resolve gone\tpw-config.sh\tmodel-resolve kilo alibaba-token-plan/nope-xyz\n'
-  printf 'model-resolve claude\tpw-config.sh\tmodel-resolve claude opus\n'
-  printf 'session-check live\tpw-session.sh\tsession-check kilo ses_livetest0000000001\n'
-  printf 'session-check dead\tpw-session.sh\tsession-check kilo ses_dead00000000000000000000\n'
-  printf 'session-check unknown\tpw-session.sh\tsession-check kilotest ses_any\n'
-  printf 'lint-task-crlf %s\tpw-doc.sh\tlint task %s\n' "$S3" "$S3"          # T06 (CRLF, sentinels)
-  printf 'batch-list F3\tpw-ship.sh\tmr-state-batch %s T02 T05\n' "$S3"
-  printf 'unknown-project\tpw-status.sh\tnope-not-here\n'
-  printf 'help unknown-project\tpw-help.sh\tproject nope-not-here\n'
-  printf 'unknown-arg\tpw-doc.sh\tlint bogus-mode %s\n' "$S2"
-  printf 'review-facet-scan F2\tpw-review-read.sh\tscan %s\n' "$S2"
-  printf 'review-facet-gate F2\tpw-review-read.sh\tgate %s task/review/PLAN.review.md\n' "$S2"
-  printf 'review-facet-count F2\tpw-review-read.sh\tcount %s task/review/PLAN.review.md\n' "$S2"
-  printf 'review-facet-open F2\tpw-review-read.sh\thas-open %s task/review/PLAN.review.md\n' "$S2"
-  printf 'review-facet-eligible F2\tpw-review-read.sh\teligible %s task/review/PLAN.review.md\n' "$S2"
-  printf 'history-pending F1\tpw-ship.sh\thistory %s pending\n' "$S1"
+  printf 'model-check allow\tpw-config.sh\tmodel-check --provider claude --model opus\n'
+  printf 'model-resolve ok\tpw-config.sh\tmodel-resolve --provider kilo --model alibaba-token-plan/test-model\n'
+  printf 'model-resolve gone\tpw-config.sh\tmodel-resolve --provider kilo --model alibaba-token-plan/nope-xyz\n'
+  printf 'model-resolve claude\tpw-config.sh\tmodel-resolve --provider claude --model opus\n'
+  printf 'session-check live\tpw-session.sh\tsession-check --provider kilo --session ses_livetest0000000001\n'
+  printf 'session-check dead\tpw-session.sh\tsession-check --provider kilo --session ses_dead00000000000000000000\n'
+  printf 'session-check unknown\tpw-session.sh\tsession-check --provider kilotest --session ses_any\n'
+  printf 'lint-task-crlf %s\tpw-doc.sh\tlint --kind task --project %s\n' "$S3" "$S3"          # T06 (CRLF, sentinels)
+  printf 'batch-list F3\tpw-ship.sh\tmr-state-batch --project %s --task T02 --task T05\n' "$S3"
+  printf 'unknown-project\tpw-status.sh\t--project nope-not-here\n'
+  printf 'help unknown-project\tpw-help.sh\tproject --project nope-not-here\n'
+  printf 'unknown-arg\tpw-doc.sh\tlint --kind bogus-mode --project %s\n' "$S2"
+  printf 'review-facet-scan F2\tpw-review-read.sh\tscan --project %s\n' "$S2"
+  printf 'review-facet-gate F2\tpw-review-read.sh\tgate --project %s --file task/review/PLAN.review.md\n' "$S2"
+  printf 'review-facet-count F2\tpw-review-read.sh\tcount --project %s --file task/review/PLAN.review.md\n' "$S2"
+  printf 'review-facet-open F2\tpw-review-read.sh\thas-open --project %s --file task/review/PLAN.review.md\n' "$S2"
+  printf 'review-facet-eligible F2\tpw-review-read.sh\teligible --project %s --file task/review/PLAN.review.md\n' "$S2"
+  printf 'history-pending F1\tpw-ship.sh\thistory --project %s --operation pending\n' "$S1"
   # request-review (read-only generator): F1 carries no PLAN.md -> the pinned, actionable
   # rc-2 stop path; forge-backed selection lives in the T1 case with strict fixtures.
-  printf 'request-review F1\tpw-ship.sh\trequest-review %s\n' "$S1"
+  printf 'request-review F1\tpw-ship.sh\trequest-review --project %s\n' "$S1"
 }
 
 gate_combos() {   # label only; the runner composes cmd from it: mode|phase|fixture
@@ -100,9 +100,9 @@ _gate_cmd() {     # "<mode> <fixture>" → echo preflight args (review-plan → 
   local label="$1" mode slug
   mode="${label#gate }"; slug="${mode##* }"; mode="${mode% *}"
   case "$mode" in
-    review-plan) printf 'review %s plan\n' "$slug" ;;
-    review-task) printf 'review %s task-exec\n' "$slug" ;;
-    *)           printf '%s %s\n'         "$mode" "$slug" ;;
+    review-plan) printf 'review --project %s --lane plan\n' "$slug" ;;
+    review-task) printf 'review --project %s --lane task-exec\n' "$slug" ;;
+    *)           printf '%s --project %s\n' "$mode" "$slug" ;;
   esac
 }
 
@@ -112,7 +112,7 @@ _gate_cmd() {     # "<mode> <fixture>" → echo preflight args (review-plan → 
 PWTEST_MODES="pw-doc|lint summary
 pw-doc|analysis task plan review dashboard all
 pw-preflight|analyze prepare execute breakdown ship review comments close
-pw-config|model-check model-resolve project global review-trigger review-repair review-rounds
+pw-config|get show global model-check model-resolve review-trigger review-repair review-rounds
 pw-session|session-check
 pw-review-read|gate has-open count eligible scan passes
 pw-status|provider-audit --all

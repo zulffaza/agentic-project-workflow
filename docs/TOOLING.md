@@ -33,8 +33,8 @@ See [the guidance recipe](RECIPES.md#refresh-old-project-guidance-after-a-workfl
 
 ## Change settings
 
-Use `/pw-config <slug> show` for project settings and `/pw-config global show` for machine settings.
-Change project values through `/pw-config <slug> set <key> <value>`.
+Use `/pw-config show --project <slug>` for project settings and `/pw-config global show` for machine settings.
+Change project values through `/pw-config set --project <slug> --key <key> --value <value>`.
 The [reference](REFERENCE.md#what-you-can-update-per-project-pw-config) lists supported keys and values.
 For setup, provider configuration, and uninstall instructions, read [onboarding](../ONBOARDING.md).
 

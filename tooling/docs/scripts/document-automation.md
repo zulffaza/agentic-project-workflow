@@ -9,12 +9,12 @@ Checks the format conventions the pipeline depends on — run before breakdown/e
 so convention violations surface as cheap errors, not as agent confusion later.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-doc.sh lint analysis  <slug> <topic|--all>  # analysis/<topic>.md
-$PW_HOME/tooling/scripts/entities/pw-doc.sh lint task     <slug> <task-id|--all> # task/T0n.md
-$PW_HOME/tooling/scripts/entities/pw-doc.sh lint plan     <slug>                 # task/PLAN.md
-$PW_HOME/tooling/scripts/entities/pw-doc.sh lint review   <slug> <path>          # a .review.md file
-$PW_HOME/tooling/scripts/entities/pw-doc.sh lint dashboard <slug>                # README.md tables
-$PW_HOME/tooling/scripts/entities/pw-doc.sh lint all      <slug>                 # everything the project has
+$PW_HOME/tooling/scripts/entities/pw-doc.sh lint --kind analysis  --project <slug> [--file <topic> | --all]   # analysis/<topic>.md
+$PW_HOME/tooling/scripts/entities/pw-doc.sh lint --kind task      --project <slug> [--file <task-id> | --all] # task/T0n.md
+$PW_HOME/tooling/scripts/entities/pw-doc.sh lint --kind plan      --project <slug>                            # task/PLAN.md
+$PW_HOME/tooling/scripts/entities/pw-doc.sh lint --kind review    --project <slug> --file <path>              # a .review.md file
+$PW_HOME/tooling/scripts/entities/pw-doc.sh lint --kind dashboard --project <slug>                            # README.md tables
+$PW_HOME/tooling/scripts/entities/pw-doc.sh lint --kind all       --project <slug>                            # everything the project has
 ```
 
 **What each mode checks (so you know what "lint failed" implies):**
@@ -53,10 +53,10 @@ doc while linting `--all` only happens if the dir was empty (reported as "`--all
 Cheap digests instead of full-file reads when an agent only needs the headlines.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-doc.sh summary analysis <slug> <topic>  # §1 problem + chosen approach + repos
-$PW_HOME/tooling/scripts/entities/pw-doc.sh summary task    <slug> <task-id> # Repo + Branch + goal one-liner
-$PW_HOME/tooling/scripts/entities/pw-doc.sh summary plan    <slug>           # task count, ΣSP, repos, produced-by
-$PW_HOME/tooling/scripts/entities/pw-doc.sh summary project <slug>           # one-liner, phase, task status counts
+$PW_HOME/tooling/scripts/entities/pw-doc.sh summary --kind analysis --project <slug> --file <topic>  # §1 problem + chosen approach + repos
+$PW_HOME/tooling/scripts/entities/pw-doc.sh summary --kind task     --project <slug> --file <task-id> # Repo + Branch + goal one-liner
+$PW_HOME/tooling/scripts/entities/pw-doc.sh summary --kind plan     --project <slug>           # task count, ΣSP, repos, produced-by
+$PW_HOME/tooling/scripts/entities/pw-doc.sh summary --kind project  --project <slug>           # one-liner, phase, task status counts
 ```
 
 **Output** — `Key: value` lines, e.g.:
@@ -78,11 +78,11 @@ command, not a script failure. Exit `2` only for usage errors / missing project 
 ## pw-doc.sh sync
 
 Re-derives every derived document from on-disk truth (task files + PLAN) — the repair tool when
-`pw-doc.sh lint dashboard` or `pw-doctor.sh` reports drift.
+`pw-doc.sh lint --kind dashboard` or `pw-doctor.sh` reports drift.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-doc.sh sync <slug>                 # dashboard + PLAN + task docs
-$PW_HOME/tooling/scripts/entities/pw-doc.sh sync <slug> --dashboard-only # or: --plan-only | --tasks-only
+$PW_HOME/tooling/scripts/entities/pw-doc.sh sync --project <slug>                 # dashboard + PLAN + task docs
+$PW_HOME/tooling/scripts/entities/pw-doc.sh sync --project <slug> --dashboard-only # or: --plan-only | --tasks-only
 ```
 
 **Output:** progress lines only:
@@ -106,4 +106,4 @@ Dashboard reconciliation follows each checkpoint. A failed sync stops scheduling
 
 **When to use:** after manual/agent edits that updated a task file but not the README or PLAN;
 before `/pw-close` if dashboard lint failed. **Writes files** — unlike the two linting/summarizing
-scripts above, run it deliberately, and re-lint after (`pw-doc.sh lint all <slug>`).
+scripts above, run it deliberately, and re-lint after (`pw-doc.sh lint --kind all --project <slug>`).

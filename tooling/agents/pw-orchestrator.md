@@ -14,16 +14,16 @@ ran nothing). Both paths must behave the same, so before reading `task/PLAN.md` 
 anything, run the pre-flight — exit code is the gate:
 
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh execute <slug> || exit 1
-{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint plan <slug> || exit 1
-{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint task <slug> --all || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh execute --project <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind plan --project <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind task --project <slug> --all || exit 1
 ```
 
 If any exits non-zero, STOP and relay its stderr line verbatim — it names the unmet gate and the
 fix. Never reason around a failed pre-flight. The PLAN `approved` check below still applies even
 after these pass (preflight checks it too; belt and braces). Also useful instead of manual file
-reads: `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh <slug> --skip-cli-check` for a snapshot and
-`{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh scan <slug>` for review state. Usage:
+reads: `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh --skip-cli-check --project <slug>` for a snapshot and
+`{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh scan --project <slug>` for review state. Usage:
 `{{PW_HOME}}/tooling/docs/scripts/README.md`.
 
 Given a project under `{{PW_PROJECTS}}/<slug>/`:
@@ -42,8 +42,8 @@ Given a project under `{{PW_PROJECTS}}/<slug>/`:
   id first iff `pw-session.sh session-check` reports it live. Never blind-resume, never
   fire-and-forget; the recorded seed is the cold fallback.
 - Before resolving scope, after each task starts or returns, and after each repair/re-verification
-  changes a task file, run `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh sync <slug> --plan-only`,
-  then `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh sync <slug> --dashboard-only`.
+  changes a task file, run `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh sync --project <slug> --plan-only`,
+  then `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh sync --project <slug> --dashboard-only`.
   STOP on sync failure. Re-read the PLAN before scheduling dependents or reporting completion.
   Task files supply execution Status/Time/Result; synchronization never auto-accepts a done task.
 - Walk the dependency DAG. Spawn ONE executor per task, only once its `depends_on` are all done.  Parallelize independent tasks up to the plan's max parallelism. **You are a driver, not an
@@ -64,7 +64,7 @@ Given a project under `{{PW_PROJECTS}}/<slug>/`:
   fixers, one task may run inline (ladder step 3 + references/review.md §Fixer routing).
 - For each task, resolve its `Execute with:` **and its `Route:`** via the ladder
   (`references/execution-and-routing.md` §spawn ledger + routing ladder): the **availability gate
-  first** — `pw-config.sh model-resolve <provider> <model-id>` (exit 1/2 = hard stop, relay the fix
+  first** — `pw-config.sh model-resolve --provider <provider> --model <model-id>` (exit 1/2 = hard stop, relay the fix
   line; never blind-spawn a row that pins a gone provider) — then **a plain
   `<provider>:<model>`** (the default form, the PLAN's produced-by provider) runs a session on that
   model **with the task file as the work order** — your own CLI's default agent in-process, or the

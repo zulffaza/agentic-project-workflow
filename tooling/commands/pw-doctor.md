@@ -1,6 +1,10 @@
 ---
 description: Check health — installed commands + skill vs the bundle (global side), or one project's docs/config/gates consistency (--project <slug>); --fix repairs what has a deterministic writer; --project <slug> --guidance previews or applies scoped workflow-guidance prose repairs
 args: "[--fix | --project <slug> [--fix | --guidance [--apply]]]"
+scope: mixed
+scope-forms: "default=global, --project=project"
+args-global: "[--fix]"
+args-project: "--project <project-slug> [--fix | --guidance [--apply]]"
 ---
 Arguments: {{ARGS}}.
 

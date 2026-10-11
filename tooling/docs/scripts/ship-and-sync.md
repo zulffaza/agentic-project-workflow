@@ -14,7 +14,7 @@ The `history` family manages project-owned review-attempt records and verified d
 Pre-computes the shippable set so `/pw-ship`'s agent reasons over a resolved list, not raw files.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-ship.sh resolve <slug>
+$PW_HOME/tooling/scripts/entities/pw-ship.sh resolve --project <slug>
 ```
 
 **Output** — one `|`-delimited line per task whose status is `done`:
@@ -35,7 +35,7 @@ The mechanical half of shipping **one task**, after the agent has confirmed the 
 written the MR description: `git push`, then create the MR (`glab`/`gh`, per the forge registry).
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-ship.sh exec <slug> <task-id> <description-file>
+$PW_HOME/tooling/scripts/entities/pw-ship.sh exec --project <slug> --task <task-id> --file <description-file>
 ```
 
 The description file's contents become the MR description — generating it stays an agent job;
@@ -60,8 +60,8 @@ origin host (github → `gh`, else `glab`).
 
 A marked creation body is read back before its ownership snapshot is stored. Failure leaves the
 MR URL recorded and reports initial snapshot pending; retain the creation body for a safe retry.
-The marked body is also retained in the project record before readback. `history ... init <url>`
-can retry from that payload without the temporary source file. No review attempt is created.
+The marked body is also retained in the project record before readback. `history --project <slug>
+--operation init --mr <url>` can retry from that payload without the temporary source file. No review attempt is created.
 
 **Prerequisite it validates for you:** `Repo:`/`Branch:` set in the task file and the repo present
 locally — exit 2 messages name which is missing.
@@ -71,8 +71,8 @@ locally — exit 2 messages name which is missing.
 One call instead of N `pw-ship.sh mr-state` queries.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-ship.sh mr-state-batch <slug>            # every PLAN task, inferred
-$PW_HOME/tooling/scripts/entities/pw-ship.sh mr-state-batch <slug> T03 T05    # just these
+$PW_HOME/tooling/scripts/entities/pw-ship.sh mr-state-batch --project <slug>            # every PLAN task, inferred
+$PW_HOME/tooling/scripts/entities/pw-ship.sh mr-state-batch --project <slug> --task T03 --task T05    # just these
 ```
 
 **Output** — one line per task: `T03|merged`, `T05|opened`, `T07|unknown`… `unknown` means the
@@ -84,7 +84,7 @@ query couldn't resolve state (no MR yet, forge CLI missing, task not in PLAN) �
 Polls a task's MR pipeline to a terminal state after push — replaces agent-polling loops.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-ship.sh monitor <slug> <task-id> [--timeout <minutes>] [--interval <seconds>]
+$PW_HOME/tooling/scripts/entities/pw-ship.sh monitor --project <slug> --task <task-id> [--timeout <minutes>] [--interval <seconds>]
 ```
 
 Machine-reads the MR URL **from the task file's `## Result` only** (the bold `- **MR:**` field, with a
@@ -129,7 +129,7 @@ worktree, no origin, unauthenticated CLI). The diagnostic goes to stderr prefixe
 `unknown` on stdout is deliberate — callers skip, they don't die.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-ship.sh mr-state <slug> T03
+$PW_HOME/tooling/scripts/entities/pw-ship.sh mr-state --project <slug> --task T03
 ```
 
 ## pw-ship.sh comment-seen
@@ -140,11 +140,11 @@ file's `## MR comment tracking` table (hidden keyed marker; rerun the same threa
 in place, never duplicated; the section is created before `## Sign-off`, never after it).
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-ship.sh comment-seen <slug> <task-id> <thread-id> resolvable|unresolvable yes|no [note...]
+$PW_HOME/tooling/scripts/entities/pw-ship.sh comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no> [--note <note…>]
 ```
 
 Kind/replied values are validated — anything else exits `2` without touching the table.
-Don't reformat a row by hand; add a `note` argument instead.
+Don't reformat a row by hand; add a `--note` value instead.
 
 ## pw-ship.sh dashboard-mr-state
 
@@ -153,21 +153,21 @@ never a fixed position; a missing table/column/row fails loudly and leaves the f
 untouched). Used by the accept/merge flow; `exec` marks `open` on creation.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-ship.sh dashboard-mr-state <slug> <task-id> merged
+$PW_HOME/tooling/scripts/entities/pw-ship.sh dashboard-mr-state --project <slug> --task <task-id> --state merged
 ```
 
 ## pw-ship.sh history
 
-`history <slug> invocation` prints a call candidate ID; the caller retains it in its ledger.
-`history <slug> pending` lists unfinished records without a forge query, including delivered history
+`history --project <slug> --operation invocation` prints a call candidate ID; the caller retains it in its ledger.
+`history --project <slug> --operation pending` lists unfinished records without a forge query, including delivered history
 whose main summary still needs repair. Discover these before merged/closed skips or worktree cleanup.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-ship.sh history <slug> init <MR-url> --file <creation-body>
-$PW_HOME/tooling/scripts/entities/pw-ship.sh history <slug> begin <MR-url> --invocation <call-id>
-$PW_HOME/tooling/scripts/entities/pw-ship.sh history <slug> checkpoint <MR-url> --attempt <key> --file <JSON>
-$PW_HOME/tooling/scripts/entities/pw-ship.sh history <slug> freeze <MR-url> --attempt <key>
-$PW_HOME/tooling/scripts/entities/pw-ship.sh history <slug> deliver <MR-url> --attempt <key> --limit <n> --unit <utf8|chars> --limit-source <reference>
+$PW_HOME/tooling/scripts/entities/pw-ship.sh history --project <slug> --operation init --mr <MR-url> --options --file <creation-body>
+$PW_HOME/tooling/scripts/entities/pw-ship.sh history --project <slug> --operation begin --mr <MR-url> --options --invocation <call-id>
+$PW_HOME/tooling/scripts/entities/pw-ship.sh history --project <slug> --operation checkpoint --mr <MR-url> --options --attempt <key> --file <JSON>
+$PW_HOME/tooling/scripts/entities/pw-ship.sh history --project <slug> --operation freeze --mr <MR-url> --options --attempt <key>
+$PW_HOME/tooling/scripts/entities/pw-ship.sh history --project <slug> --operation deliver --mr <MR-url> --options --attempt <key> --limit <n> --unit <utf8|chars> --limit-source <reference>
 ```
 
 One invocation/MR produces one attempt. All intermediate fixes, commits, pipeline observations,
@@ -200,7 +200,8 @@ authorized delivery. New event datetimes carry the dashed separator; readers sti
 legacy undashed form, and an already-frozen heading keeps its original bytes. Unknown ownership, malformed markers,
 external edits inside a summary, or changed frozen blocks stop conflicting writes. Outside text
 survives unchanged. A legacy unmarked summary permits history delivery only, explicitly summary pending.
-After explicit owner review of a repaired currently published body, `history init --file <body> --reviewed`
+After explicit owner review of a repaired currently published body, `history --project <slug>
+--operation init --options --file <body> --reviewed`
 can adopt its exact snapshot. This is human-triggered only, never an agent-initiative bypass. It rejects
 changed or removed retained history. Frozen attempt bytes remain immutable.
 
@@ -223,14 +224,14 @@ unique MR once, applies the selection rules, validates the frame and any optiona
 only the enabled generation prompts, and prints a selection recap plus one fenced message.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-ship.sh request-review <slug> [all | task-ids…] \
+$PW_HOME/tooling/scripts/entities/pw-ship.sh request-review --project <slug> [--all | --task <task-id>]… \
   [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]
 ```
 
 - **Selection** follows stable PLAN order: the task-file `## Result → MR:` line first, with the
   same dashboard fallback the other readers use; a task-file link that disagrees with the
-  dashboard is a recorded-links conflict that stops the run before any message. `all` reports
-  (and excludes) tasks without an MR and merged/closed MRs in the recap; an explicit task id in
+  dashboard is a recorded-links conflict that stops the run before any message. `--all` reports
+  (and excludes) tasks without an MR and merged/closed MRs in the recap; an explicit `--task` id in
   any of those states stops instead. One entry per unique MR; several tasks sharing one MR emit
   one entry and are reported together.
 - **Metadata** per unique MR comes from one bounded read-only forge call each: title, state,
@@ -290,22 +291,22 @@ resolver as `mr-state`; the rest are offline.
 
 ```bash
 S=$PW_HOME/tooling/scripts/entities/pw-ship.sh
-$S stack <slug>                 # read-only topology + health: task|parent|target|branch|base|landed|freshness|debt
-$S stack-validate <slug>        # fail-closed topology check (cycle, unknown/cross-repo parent, base drift, shared branch, missing depends_on); exit 1 on any finding
-$S stack-plan <slug> [ids…]     # root-first publication order: task|repo|branch|target|parent|ready|reason (a stacked child is ready only once its target exists on origin)
-$S stack-record <slug> <T0n> col=value…   # upsert binding columns (fork_sha, consumed_parent_sha, target, …); verification/landing columns are refused
-$S stack-verify <slug> <T0n> <evidence> [--head <sha>] [--ci-sha <sha|skipped|pending|failed|unknown>] [--ci-target <branch>]
+$S stack --project <slug>                 # read-only topology + health: task|parent|target|branch|base|landed|freshness|debt
+$S stack-validate --project <slug>        # fail-closed topology check (cycle, unknown/cross-repo parent, base drift, shared branch, missing depends_on); exit 1 on any finding
+$S stack-plan --project <slug> [--task <T0n>]…     # root-first publication order: task|repo|branch|target|parent|ready|reason (a stacked child is ready only once its target exists on origin)
+$S stack-record --project <slug> --task <T0n> --set <col=value> [--set <col=value>]…   # upsert binding columns (fork_sha, consumed_parent_sha, target, …); verification/landing columns are refused
+$S stack-verify --project <slug> --task <T0n> --evidence <path> [--head <sha>] [--ci-sha <sha|skipped|pending|failed|unknown>] [--ci-target <branch>]
                                             # bind the verification tuple (current head + parent + effective target + evidence + CI disposition) in one atomic write after ## Verify
-$S stack-fresh|stack-stale <slug> <T0n>    # force/clear the freshness flag (the tuple is always compared live, so the flag alone cannot certify)
-$S stack-land <slug> <T0n> <merge-sha|-> <landed-into> [merge|ff|squash|rebase|closed|unknown]
+$S stack-fresh|stack-stale --project <slug> --task <T0n>   # force/clear the freshness flag (the tuple is always compared live, so the flag alone cannot certify)
+$S stack-land --project <slug> --task <T0n> --merge-sha <sha|-> --landed-into <branch> [--kind <merge|ff|squash|rebase|closed|unknown>]
                                             # verify + record a landing: merge/ff proven against a FETCHED origin ref + observed forge target; retains refs/pw-stack-landed/<slug>/<task>
-$S stack-promote <slug> <T0n>   # promote|<target> | noop|<target> | block|<reason> (fetches first; the target must be published on origin)
-$S stack-retarget <slug> <T0n> [--apply]   # move the MR base to the promoted target via the forge (dry-run; --apply: pending row first, state/target/head readback, loud local mirrors, no-op retry)
-$S stack-op <slug> list|create|set|clear …   # pending-operation recovery rows (stages)
-$S stack-debt <slug> [ids…]     # exit 1 + the pending ops touching the set (gates ship/comment/sync/close)
-$S stack-adopt <slug> [--apply] [ids…]       # infer edges from real MR targets (dry-run; --apply writes)
-$S stack-inherited <slug> <T0n> <parent> <sha>   # record one inherited update (Result bullet + LOG; never a reviewer comment)
-$S stack-cascade <slug> <T0n> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>]
+$S stack-promote --project <slug> --task <T0n>   # promote|<target> | noop|<target> | block|<reason> (fetches first; the target must be published on origin)
+$S stack-retarget --project <slug> --task <T0n> [--apply]   # move the MR base to the promoted target via the forge (dry-run; --apply: pending row first, state/target/head readback, loud local mirrors, no-op retry)
+$S stack-op --project <slug> list|create|set|clear …   # pending-operation recovery rows (stages)
+$S stack-debt --project <slug> [--task <T0n>]…     # exit 1 + the pending ops touching the set (gates ship/comment/sync/close)
+$S stack-adopt --project <slug> [--apply] [--task <T0n>]…       # infer edges from real MR targets (dry-run; --apply writes)
+$S stack-inherited --project <slug> --task <T0n> --parent <T0n> --parent-sha <sha>   # record one inherited update (Result bullet + LOG; never a reviewer comment)
+$S stack-cascade --project <slug> --task <T0n> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>]
                                             # parent-first descendant propagation: integrate → verify-bind → record → push (shipped only, --push required); stages persist and resume
 ```
 

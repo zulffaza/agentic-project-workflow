@@ -1,6 +1,7 @@
 ---
 description: Push verified task branches and open MRs with rich descriptions
-args: <project-slug> [task-ids] [comments] [request-review …] [--skip-build-check]
+args: "[comments | request-review] --project <project-slug> [--task <T0n>]… [--skip-build-check]"
+scope: project
 ---
 Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task
 IDs to scope to a subset; the word `comments` = go into MR-comment mode, below; `request-review` =
@@ -25,7 +26,7 @@ project state, and it returns BEFORE the pre-flight block.** Do not treat its to
 IDs and do not run the ship/comment pre-flight or the monitor machinery for it.
 
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh request-review <slug> [all | task-ids…] \
+{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh request-review --project <slug> [--all | --task <T0n>]… \
   [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]
 ```
 
@@ -79,15 +80,15 @@ and relay its stdout; never re-order or re-word the generated MR fields yourself
      lint belongs ONLY to Ship mode step 1. -->
 ```bash
 # Ship (push) mode:
-{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh ship <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh ship --project <slug> || exit 1
 # Comments / sync mode (instead of the line above):
-{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh comments <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh comments --project <slug> || exit 1
 ```
 **Reading the pre-flight:** `pw-preflight.sh ship` checks at least one task is actually shippable
 (`done`, verified) in a legal phase; `pw-preflight.sh comments` just requires a legal phase plus at
 least one task with a linked MR (nothing to comment on before the first push). Non-zero +
 `pw-…:` stderr = STOP and relay it — never push against an unmet gate. After the gates pass, run
-`{{PW_HOME}}/tooling/scripts/entities/pw-status.sh provider-audit <slug>` as a **warning** pass:
+`{{PW_HOME}}/tooling/scripts/entities/pw-status.sh provider-audit --project <slug>` as a **warning** pass:
 relay any `stale-provider`/`unbound`/`mismatch` row verbatim (each names a row to re-pin; the
 per-spawn availability gate will hard-stop on it anyway — fix the rows first and the fan-out
 never spawns a dead model). Once confirmed, the
@@ -110,22 +111,22 @@ branch-inheritance edge (a scheduling dependency alone is not a stack).
 
 Two read-only/import operators on this command (no new user script):
 
-```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack <slug>          # topology + health preview
-{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-plan <slug> [task-ids…]   # root-first ship plan
-{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-adopt <slug> [task-ids…]  # dry-run
-{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-adopt <slug> --apply [task-ids…]
-```
-
-- `/pw-ship <slug> stack` is the **read-only topology and health preview** (parent, effective
-  target, branch, base, landed, freshness, pending operations). It writes nothing.
-- `/pw-ship <slug> stack adopt [task-ids]` imports an **existing** manually stacked set: preview
-  first (no writes), then a confirmation re-run with `--apply`. It reads each open MR's actual
+- **`/pw-ship stack --project <slug>`** → `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack --project <slug>` — the
+  **read-only topology and health preview** (parent, effective target, branch, base, landed,
+  freshness, pending operations). It writes nothing.
+- **`/pw-ship stack adopt --project <slug> [--task <T0n>]…`** → the import-side operator: preview
+  first (no writes), then a confirmation re-run with `--apply` (script: `pw-ship.sh stack-adopt --project <slug> [--task <T0n>]…`
+  / `… --apply`). It reads each open MR's actual
   target branch and records an edge only when the target provably matches another task's branch;
   when fork boundaries or inherited commits cannot be proven it retains ambiguity and blocks
   automatic restacking. If importing would change the approved dependency graph, re-run
   `/pw-breakdown` and get PLAN re-approved before dependent execution or publication. Fresh,
   approved stacks need **no** adopt call.
+
+```bash
+{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-plan --project <slug> [--task <T0n>]…   # root-first ship plan
+```
+
 - **Parent-first:** publish each MR against its **effective target** (nearest unmerged ancestor's
   branch, else the ultimate base). A parent's target branch must exist remotely at its verified
   head before a child's MR is created; `pw-ship.sh exec` refuses otherwise. An explicit child
@@ -134,13 +135,13 @@ Two read-only/import operators on this command (no new user script):
 
 ## Ship mode (default)
 1. **Task-format gate, then candidates.** First
-   `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint task <slug> --all || exit 1` — push mechanics read exactly
+   `{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind task --project <slug> --all || exit 1` — push mechanics read exactly
    the fields lint checks (`Repo`/`Branch`/`## Verify`/`## Result`), so a malformed task file must
    stop the push (relay stderr; the named task needs its fields completed — usually by re-running
    `/pw-breakdown` or a small edit + `/pw-review`). Then determine which tasks are shippable —
    **run the resolver, don't re-derive it by hand**:
    ```bash
-   {{PW_HOME}}/tooling/scripts/entities/pw-ship.sh resolve <slug>
+   {{PW_HOME}}/tooling/scripts/entities/pw-ship.sh resolve --project <slug>
    ```
    One line per `done`-status task: `task-id|repo|branch|base|ticket|title|has-commits|has-mr`
    (`—`/`none` where absent). Treat the flags exactly as the criteria you'd check: a `no`
@@ -180,9 +181,9 @@ Two read-only/import operators on this command (no new user script):
       mistake an interdependent MR for an independent one.
    - Record the MR in the task's `## Result → MR:` field **and** the dashboard **Merge requests**
      table (Task · Repo · MR url · Target branch · State=open · Build), then log it:
-     `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log <slug> ship "T0n pushed <branch>; MR <url>"`.
+     `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log --project <slug> --actor ship --message "T0n pushed <branch>; MR <url>"`.
     - **Unless `--skip-build-check` was passed:** once the MR is open, monitor its pipeline/checks to
-      a terminal state with `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh monitor <slug> <task-id>`
+      a terminal state with `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh monitor --project <slug> --task <task-id>`
       (exit 0 green — or neutral `SKIPPED`, no jobs ran, which is NOT a red build — / 1 red /
       2 still-running — it records the task file's `## Result → Build
       check:` line itself; you fill the dashboard row's `Build` column from that outcome) before
@@ -241,17 +242,17 @@ its **effective target**: the base (`git diff origin/<base>...<branch>`) for an 
 the parent's target (`git diff origin/<parent-branch>...<branch>`) for a **stacked** task, so the
 reviewer sees only this task's own changes. Group per file/module with real identifiers.
 
-## MR-comment mode  (`/pw-ship <slug> [task-ids] comments`)
+## MR-comment mode  (`/pw-ship comments --project <slug> [--task <T0n>]…`)
 ### Invocation and pending delivery
 Before MR-state skips, cleanup, or the no-open-comments shortcut, run
-`{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh history <slug> pending`.
+`{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh history --project <slug> --operation pending`.
 Recover frozen pending description writes without repeating completed pushes, tests, or replies.
 Closed/merged MRs keep their project-owned records and receive no description write.
 Do not remove pending records when accepting tasks or removing worktrees.
 
-Generate one call ID with `pw-ship.sh history <slug> invocation` and retain it in the run ledger.
+Generate one call ID with `pw-ship.sh history --project <slug> --operation invocation` and retain it in the run ledger.
 After discovering actual review work, group tasks by resolved forge/host/repository/MR identity.
-For each distinct MR, run `pw-ship.sh history <slug> begin <MR-url> --invocation <call-id>` once.
+For each distinct MR, run `pw-ship.sh history --project <slug> --operation begin --mr <MR-url> --options --invocation <call-id>` once.
 Retain its returned attempt key, start timestamp, before head, and body snapshot. Reuse them through
 all comments, commits, pushes, CI repairs, and any resumed interrupted invocation. An empty sweep
 creates no attempt; delivery-only recovery does not create a new one.
@@ -261,7 +262,7 @@ not-yet-run verification. Update the checkpoint after each fix/push/verification
 acknowledging replies with `comment-seen`. If persistence fails, stop further acknowledgement
 and description delivery. Author text from actual code/diff/results; the helper does not invent it.
 
-Use `pw-ship.sh history <slug> checkpoint <MR-url> --attempt <key> --file <JSON-file>`.
+Use `pw-ship.sh history --project <slug> --operation checkpoint --mr <MR-url> --options --attempt <key> --file <JSON-file>`.
 The JSON object contains `before`, `after`, `summary` string-bullet lists, a `commits` list
 of `{sha, subject, published}` objects, `verification` objects `{head, text}`, actual published
 `head`, and `summary_body` (only the complete marked current-state summary). Optional `tasks`
@@ -269,9 +270,9 @@ and namespaced `comments` retain local traceability and never appear as comment-
 Use full recorded SHAs in checkpoints, including intermediate CI failures and local-only commits.
 
 At the end of this invocation's MR work, freeze one consolidated block with
-`pw-ship.sh history <slug> freeze <MR-url> --attempt <key>`.
+`pw-ship.sh history --project <slug> --operation freeze --mr <MR-url> --options --attempt <key>`.
 Never split that call into one block per comment, task, fixer pass, or CI repair.
-Publish with `pw-ship.sh history <slug> deliver <MR-url> --attempt <key>
+Publish with `pw-ship.sh history --project <slug> --operation deliver --mr <MR-url> --options --attempt <key>
 --limit <documented-number> --unit <utf8|chars> --limit-source <reference>`.
 Resolve the forge/instance's documented capacity and measurement unit first; unknown capacity
 must be reported as pending, not guessed or inferred from a rejected write. Pass argv quote-safe.
@@ -290,7 +291,7 @@ Ownership conflicts, malformed markers, capacity failure, or failed readback rem
 Unmarked legacy summaries are preserved; report `summary refresh pending` and obtain a reviewed
 ownership repair rather than claiming the description is fully current.
 Only after explicit owner approval of a repaired, currently published marked body, use
-`pw-ship.sh history <slug> init <MR-url> --file <reviewed-current-body> --reviewed`.
+`pw-ship.sh history --project <slug> --operation init --mr <MR-url> --options --file <reviewed-current-body> --reviewed`.
 This ownership repair is **human-triggered only, never on agent initiative**. It verifies exact
 readback and retained history before adopting the summary snapshot; it is not permission to edit history.
 An initial snapshot failure retains its creation body locally; retry `history ... init <MR-url>`
@@ -299,7 +300,7 @@ from the retained payload before starting new review work.
 Handle review comments left on the **MR itself** — **all open threads on one task arrive as ONE fixer pass** for that task's worktree (a batched `seed-review-batch`, per-thread replies mirrored
 into `task/review/T0n.review.md`; the pass is routed by the §routing ladder —
 `references/execution-and-routing.md` — not by blind resume: same-provider single task → you fix
-it inline; `Route: headless` → resume iff `pw-session.sh session-check <slug> <task-id>` says the recorded id is
+it inline; `Route: headless` → resume iff `pw-session.sh session-check --project <slug> --task <task-id>` says the recorded id is
 live, else inline fallback; cross-provider → resume-first-then-supervised-cold-headless), not one
 run per comment. And when a fix *lands* on a task whose dependents
 already ran, apply the **§3.6 fan** exactly once: merge the fixed branch → re-run each already-run
@@ -307,28 +308,28 @@ dependent's own `## Verify` (clean → stays `done`; conflict/regression → tha
 driver-side) + ≤1 `dep-impact:T0n` review-style pass where their files/landing units actually
 overlap — filed as items for the dependent's batch, never a direct edit into it. **Scope:** with task IDs, only those, plus (for a selected **stacked** task) its transitive stack descendants, per the cascade section below; **with no
 task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, state open) — so
-`/pw-ship <slug> comments` clears review comments across all of the project's MRs in one run.
+`/pw-ship comments --project <slug>` clears review comments across all of the project's MRs in one run.
 
 0. **Resolve the set** of tasks to process (the given IDs, or all tasks with an MR). **Check MR
    state for the whole set in one call** before proceeding — `pw-ship.sh mr-state-batch` (no task-ids =
    every PLAN task; prints `task-id|state` per line, plain-text pipe-delimited; per-line semantics
    identical to the helper it wraps):
    ```bash
-   {{PW_HOME}}/tooling/scripts/entities/pw-ship.sh mr-state-batch <slug> [given task-ids…]
+   {{PW_HOME}}/tooling/scripts/entities/pw-ship.sh mr-state-batch --project <slug> [--task <T0n>]…
    ```
    Read each line's state per the bullets below (a single-task `state` recheck mid-flow can still
-   use `pw-ship.sh mr-state <slug> <task-id>`).
+   use `pw-ship.sh mr-state --project <slug> --task <task-id>`).
     - **If `merged`**: The MR was already merged downstream. Handle it:
       1. Accept the task — ONE call sets all three acceptance holders (task-file `Status:`, the
          PLAN task-table cell the close gate reads, and the dashboard task row; the dashboard is
-         best-effort): `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh task-accept <slug> <task-id>`
-      2. Update dashboard MR table: `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh dashboard-mr-state <slug> <task-id> merged`
+         best-effort): `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh task-accept --project <slug> --task <task-id>`
+      2. Update dashboard MR table: `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh dashboard-mr-state --project <slug> --task <task-id> --state merged`
       3. If the task is **stacked** or a stacked **parent**, settle the stack before removing
          anything: record its landing (`stack-land`) and each open child's promotion debt
          (`stack-promote`), per "Comment fixes on a stack (cascade)" below. The recovery refs and
          child debt must exist **before** the removal in the next step. An independent task skips
          this.
-      4. Remove worktree: `{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh remove <slug> <task-id>`
+      4. Remove worktree: `{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh remove --project <slug> --task <task-id>`
       5. **Skip this task** — do NOT attempt to fetch/process comments.
    - **If `closed`**: The MR was closed without merging. Note it in the recap and skip.
    - **If `open`**: Proceed with comment processing (steps 1–3).
@@ -402,7 +403,7 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
     per the cascade section below; **exactly one MR, same
    provider, `Route: auto|subagent` → you fix it inline** (bounded exception to the no-source-edit
    rule: listed items only, run its `## Verify`, commit, reply per item); `Route: headless` single
-   task → resume-try iff `pw-session.sh session-check <slug> <task-id>` exits 0, dead/failed →
+   task → resume-try iff `pw-session.sh session-check --project <slug> --task <task-id>` exits 0, dead/failed →
    inline fallback (`resume-failed→inline` + `model-degraded` in the ledger). Where a session is
    resumed, you are handing it a work order, not re-deriving context from a cold spawn.
    - **A landed fix on a dependency fans the §3.6 passthrough** onto tasks *already run* from it:
@@ -411,7 +412,7 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      file/landing-unit overlap is real, one `dep-impact` reviewer pass files items into the
      dependent's queue — no edit-backward into the fixed task, new DAG task if it needs one.
     - **Unless `--skip-build-check` was passed:** monitor the pipeline/checks to a terminal state
-      right after this push via `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh monitor <slug> <task-id>`
+      right after this push via `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh monitor --project <slug> --task <task-id>`
       (same contract as ship mode — see "Build check" below), before moving on to step 3 — so a failed
       build shows up in the recap and can be mentioned in the thread reply, not discovered later.
       A **red** build → the task is **not done**: enter the build-check fix loop below (fix in the
@@ -427,7 +428,7 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      or clearly references the original so the connection is legible to the reviewer.
    - **Record it via the helper — this is what makes resolvable-general and unresolvable comments
      idempotent across reruns:**
-     `…/{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh comment-seen <slug> <T0n> <thread-id> <resolvable|unresolvable> yes`
+     `…/{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh comment-seen --project <slug> --task <T0n> --thread <thread-id> --kind <resolvable|unresolvable> --replied yes`
      Do this for **every** thread you replied to — it upserts a row into
      `task/review/T0n.review.md`'s `## MR comment tracking` table keyed by thread ID, which step 1
      reads back on the next run. Without this call, an unresolvable comment (which the forge can
@@ -437,10 +438,10 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
       using the protocol above. Preserve older blocks and external edits. Readback and the
       helper's `summary refresh pending` result determine the delivery recap, not an API exit alone.
    - Also mirror as usual: task `## Result`, a `[RESOLVED]` item in `task/review/T0n.review.md`'s
-     `## Items` section (create the file first via `pw-review.sh init-docs <slug> task/T0n.md`
+     `## Items` section (create the file first via `pw-review.sh init-docs --project <slug> --file task/T0n.md`
      if it doesn't exist yet — init-all only ever covers the current dashboard phase), and a `LOG.md` line via the
      helper. Write the mirrored item + its resolution deterministically via
-     `pw-review.sh add-item … --actor pw-reviewer` then `pw-review.sh resolve …` — never
+     `pw-review.sh add-item --project <slug> --file task/review/T0n.review.md --section <§anchor> --text <finding> --actor pw-reviewer` then `pw-review.sh resolve --project <slug> --file task/review/T0n.review.md --item <Rn>` — never
      a hand-copied heading block. The project dir stays the source of truth even for MR-driven
      changes.
 4. **Recap** a table — one row per task in the set: Task · Repo · MR · state (open/merged/closed) ·
@@ -462,9 +463,9 @@ affected descendant** with fresh verification and an explicit publication result
 - Selecting `A` expands to A's transitive stack descendants (`pw-ship.sh stack`/`stack-plan` show
   the set and order). Descendant MRs with **no comments** are still updated — inherited code changed.
 - **Order is parent-first.** Fix and settle `A` first (batch its comments, run its `## Verify`, bind
-  it with `pw-ship.sh stack-verify <slug> A <captured-verify-output>`), then drive the mechanical
+  it with `pw-ship.sh stack-verify --project <slug> --task A --evidence <captured-verify-output>`), then drive the mechanical
   propagation with the deterministic operator (one per invocation):
-  `pw-ship.sh stack-cascade <slug> A --verify-cmd '<descendant Verify command>' [--evidence-dir <dir>] [--push]`.
+  `pw-ship.sh stack-cascade --project <slug> --task A --verify-cmd '<descendant Verify command>' [--evidence-dir <dir>] [--push]`.
   It walks descendants root-first and, per descendant, integrates the immediate parent's recorded
   verified head (normal merge; no merge when already contained), runs your Verify command, binds the
   tuple through `stack-verify --head`, records the inherited update, and — only with `--push` (the
@@ -549,9 +550,9 @@ done** — it is not shipped until the pipeline passes; see the fix loop below.
 
 After a run whose shipped tasks finished with a green build check (or a reported
 unresolved/environmental one), read the `ship` axis
-(`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh project get <slug> review-trigger` and
-`… ai-review`) and, ONLY when the trigger is `completion` and the outcome is callable (`advisory`
-default; a legacy `off` row reads as advisory), run `/pw-review <slug> ai T0n` for each shipped
+(`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh get --project <slug> --key review-trigger` and
+`get --project <slug> --key ai-review`) and, ONLY when the trigger is `completion` and the outcome is callable (`advisory`
+default; a legacy `off` row reads as advisory), run `/pw-review ai --project <slug> --task T0n` for each shipped
 task — a fresh reviewer only (it reads the task's committed diff + MR description; the item record
 stays in `task/review/T0n.review.md`). Bounded repairs only when `review-repair ship=bounded`
 within `review-rounds` passes; repairs go through the executor ladder, re-run the task's

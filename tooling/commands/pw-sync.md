@@ -1,9 +1,11 @@
 ---
 description: Update all of a project's open MR branches — merge the moved base branch into each, re-verify, push
-args: <project-slug> [task-ids]
+args: "--project <project-slug> [--task <T0n>]…"
+scope: project
 ---
-Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task
-IDs to sync a subset — default is every shipped task with an open MR).
+Follow the `project-workflow` skill. Arguments: {{ARGS}} — `--project <project-slug>` selects the
+project; each optional `--task <T0n>` (repeatable) restricts the sweep to that task (default: every
+shipped task with an open MR). Unknown flags and stray positional values fail closed.
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
@@ -17,7 +19,7 @@ history rewrite). Pushing is **outward-facing**, so confirm before anything goes
 **Stacked tasks use the same resolver, ordering, freshness checks, and pending-operation recovery
 as comment propagation.** A stacked task targets its **effective target** (nearest unmerged
 ancestor's branch, else its ultimate base), not the static base. Preview the set first
-(`pw-ship.sh stack <slug>` / `pw-ship.sh stack-plan <slug>`): sync roots against their ultimate
+(`pw-ship.sh stack --project <slug>` / `pw-ship.sh stack-plan --project <slug>`): sync roots against their ultimate
 destinations first, then propagate the updated heads through their descendants in root-first order
 — merge each descendant's **immediate parent's** recorded updated head, not the ultimate base.
 Explicit task selection includes a disclosed descendant impact set; inspect omitted ancestors and
@@ -28,7 +30,7 @@ consumed-parent bindings and pending debt, not merely an unchanged destination. 
 ## Steps
 1. **Resolve the set.** Find each task that is shipped: `Status: accepted`/`done`, a real branch,
    and an MR recorded in its `## Result → MR:` (and the dashboard **Merge requests** table).
-   Skip zero-change tasks and `verify-failed` tasks. If task IDs were given, restrict to those for
+   Skip zero-change tasks and `verify-failed` tasks. If `--task` was given (repeatable), restrict to those for
    independent tasks; a selected **stacked** task also pulls in its transitive stack descendants
    (their inherited code changed even where they have no comments). Never add an independent task
    just because it shares a repository.
@@ -36,23 +38,24 @@ consumed-parent bindings and pending debt, not merely an unchanged destination. 
 2. **Check MR state for every task in the set — one batch call, not a per-task loop.** Before
    syncing, verify each MR is still open:
    ```bash
-   {{PW_HOME}}/tooling/scripts/entities/pw-ship.sh mr-state-batch <slug> [task-ids…]   # no ids = every PLAN task
+   {{PW_HOME}}/tooling/scripts/entities/pw-ship.sh mr-state-batch --project <slug> [--task <T0n>]…   # no --task = every PLAN task
    ```
    This queries the forge (GitLab/GitHub) once per task and prints `task-id|state` lines, with
    `state` one of `open`, `merged`, `closed`, or `unknown` (per-task handling below is unchanged;
-   a mid-flow recheck of a single task may use `pw-ship.sh mr-state <slug> <task-id>` directly).
+   a mid-flow recheck of a single task may use `pw-ship.sh mr-state --project <slug> --task <T0n>` directly).
     - **If `merged`**: The MR was already merged downstream. Handle it:
       1. Accept the task — ONE call sets all three acceptance holders (task-file `Status:`, the
          PLAN task-table cell the close gate reads, and the dashboard task row; the dashboard is
-         best-effort): `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh task-accept <slug> <task-id>`
-      2. Update dashboard MR table: `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh dashboard-mr-state <slug> <task-id> merged`
+         best-effort): `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh task-accept --project <slug> --task <T0n>`
+      2. Update dashboard MR table: `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh dashboard-mr-state --project <slug> --task <T0n> --state merged`
       3. If the task is **stacked** or a stacked **parent**, settle the stack before removing
          anything: record its landing
-         (`pw-ship.sh stack-land <slug> <task-id> <merge-sha|-> <landed-into> [merge|ff|squash|rebase|closed|unknown]`)
-         and every open child's promotion debt (`pw-ship.sh stack-promote <slug> <child>`), per
+         (`pw-ship.sh stack-land --project <slug> --task <T0n> --merge-sha <sha|-> --landed-into
+         <branch> [--kind <merge|ff|squash|rebase|closed|unknown>]`) and every open child's promotion
+         debt (`pw-ship.sh stack-promote --project <slug> --task <T0n>`), per
          "Parent landing and promotion" below. The recovery refs and child debt must exist
          **before** the removal in the next step. An independent task skips this.
-      4. Remove worktree: `{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh remove <slug> <task-id>`
+      4. Remove worktree: `{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh remove --project <slug> --task <T0n>`
       5. Mark this task as `already-merged` in your tracking — **do NOT attempt to sync it**.
    - **If `closed`**: The MR was closed without merging. Note it in the recap but skip sync.
    - **If `open`**: Proceed with sync (step 3).
@@ -68,7 +71,7 @@ consumed-parent bindings and pending debt, not merely an unchanged destination. 
    - `git fetch origin` then merge the task's **effective target**: `origin/<base>` (its **Base
      branch**) for an independent task; for a **stacked** task, the recorded updated head of its
      immediate parent, or of its nearest unmerged ancestor, after that ancestor synced. Never the
-     ultimate base for a stacked task. `pw-ship.sh stack <slug>` prints each task's target.
+     ultimate base for a stacked task. `pw-ship.sh stack --project <slug>` prints each task's target.
    - **Conflict?** `git merge --abort`, mark the task `CONFLICT — needs manual resolution`, and
      **move on to the next task** — never leave a half-merged worktree. Don't try to auto-resolve.
      For a **stacked** task the conflict also blocks **that child's subtree** (a descendant cannot
@@ -79,10 +82,10 @@ consumed-parent bindings and pending debt, not merely an unchanged destination. 
        through review. Continue with the others.
      - Verify **passes** → `git push` (plain push; the merge commit is a fast-forward-safe update to
        the existing MR branch).
-   - On a successful push, log it: `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log <slug> sync "T0n merged
-     origin/<base>; verify green; pushed"`, and add a one-line note to the task's `## Result`
+   - On a successful push, log it: `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log --project <slug>
+     --actor sync --message "T0n merged origin/<base>; verify green; pushed"`, and add a one-line note to the task's `## Result`
      (`Synced with <base> @ <short-sha> on <DD MMMM YYYY - HH.mm WIB>`). The MR updates itself — no new MR is opened.
-   - Then settle the CI the push triggered: `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh monitor <slug> T0n`
+   - Then settle the CI the push triggered: `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh monitor --project <slug> --task <T0n>`
      (exit 0 green — or neutral `SKIPPED`, no jobs ran — / 1 red / 2 still running; it records the task's `## Result → Build check:` line).
      Red → report it prominently in the recap; don't undo the sync. Still running → say so, don't
      claim green.
@@ -102,10 +105,10 @@ When a stacked **parent MR merges**, observe the forge state and merge metadata 
 child, then refresh refs and resolve each open child's next target:
 
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-land <slug> <parent-task> <merge-sha|-> <landed-into-branch> [merge|ff|squash|rebase|closed|unknown]
-{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-promote <slug> <child-task>
-{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-verify <slug> <child-task> <captured-verify-output>
-{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-retarget <slug> <child-task> [--apply]
+{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-land --project <slug> --task <parent-task> --merge-sha <sha|-> --landed-into <branch> [--kind <merge|ff|squash|rebase|closed|unknown>]
+{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-promote --project <slug> --task <child-task>
+{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-verify --project <slug> --task <child-task> --evidence <path>
+{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh stack-retarget --project <slug> --task <child-task> [--apply]
 ```
 
 `stack-land` only records a landing it can prove: a merge/fast-forward is checked with real Git
@@ -117,9 +120,9 @@ source-branch deletion.
 
 - **Ancestry preserved** (merge / fast-forward): merge the refreshed target into the child if
   needed, re-verify it and bind the new tuple
-  (`stack-verify <slug> <child> <captured-verify-output> --ci-sha <sha|skipped|pending>` — the CI
+  (`stack-verify --project <slug> --task <child> --evidence <path> --ci-sha <sha|skipped|pending>` — the CI
   disposition is part of the tuple, and an old-target green never certifies the promoted MR), then
-  move the MR's base with the deterministic retarget operator: `stack-retarget <slug> <child>`
+  move the MR's base with the deterministic retarget operator: `stack-retarget --project <slug> --task <child>`
   previews and `--apply` publishes through the resolved forge, checks the destination against
   freshly fetched refs and the MR's state/target/head, reads the target back, and mirrors local
   state/dashboard loudly. A pending retarget row is resumed before any noop shortcut and a retry

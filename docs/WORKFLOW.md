@@ -8,33 +8,33 @@ You can stop after any command and resume from the files on disk.
 
 | Stage | Run | Inspect before continuing |
 |---|---|---|
-| Context | `/pw-new <slug>` and `/pw-context <slug> …` | Goals, source inputs, repository scope |
-| Analysis | `/pw-analyze <slug>` | Approach options, evidence, risks, questions |
-| Plan | `/pw-breakdown <slug>` | `task/PLAN.md`, task steps, dependencies, verification |
-| Execute | `/pw-execute <slug>` | Commits, diffs, actual verification output |
-| Ship | `/pw-ship <slug>` | MR links, targets, CI, reviewer feedback |
-| Close | `/pw-close <slug>` | Accepted task results and reported leftovers |
+| Context | `/pw-new --project <slug>` and `/pw-context … --project <slug>` | Goals, source inputs, repository scope |
+| Analysis | `/pw-analyze --project <slug>` | Approach options, evidence, risks, questions |
+| Plan | `/pw-breakdown --project <slug>` | `task/PLAN.md`, task steps, dependencies, verification |
+| Execute | `/pw-execute --project <slug>` | Commits, diffs, actual verification output |
+| Ship | `/pw-ship --project <slug>` | MR links, targets, CI, reviewer feedback |
+| Close | `/pw-close --project <slug>` | Accepted task results and reported leftovers |
 
 Use `/pw-review` to record and apply feedback. Use `signoff` to record your approval decision.
 For concrete commands at every checkpoint, follow the [walkthrough](WALKTHROUGH.md).
 
 ## Step 1 — Context
 
-Create a project with `/pw-new <slug>`. It appears at `$PW_PROJECTS/<slug>/`.
+Create a project with `/pw-new --project <slug>`. It appears at `$PW_PROJECTS/<slug>/`.
 Provide requirements, tickets, document excerpts, relevant code references, or logs in `context/`.
 The assisted path drafts that context for you: state the outcome and constraints, then
-`/pw-context <slug> prepare <brief>` writes a requirements draft, registers inputs, and proposes
+`/pw-context prepare --project <slug> --brief <brief>` writes a requirements draft, registers inputs, and proposes
 repository rows with evidence. Review and correct the files before analysis.
 The manual path stays available: write the brief yourself and register each source with
-`/pw-context <slug> add-input` and each repository with `add-repo`.
+`/pw-context add-input --project <slug>` and each repository with `add-repo`.
 Include the real base branch for each repository.
 
-Manual brief creation uses `/pw-context <slug> req-init`. Fill it before analysis.
+Manual brief creation uses `/pw-context req-init --project <slug>`. Fill it before analysis.
 Initialization creates a template copy; source registration records provenance; neither supplies your requirements.
 See [context recipes](RECIPES.md#add-context-or-continue-existing-work) for full argument examples.
 
 Check that `context/INDEX.md` contains useful inputs and repository scope before analysis.
-For uncertain evidence, `/pw-research <slug> --context [focus]` checks sources and repository state.
+For uncertain evidence, `/pw-research --project <slug> --context [--focus <focus>]` checks sources and repository state.
 
 <a id="adopting-existing-in-progress-work"></a>
 ### Two ways to start: fresh vs. continuation
@@ -47,27 +47,27 @@ See [adoption](ADOPTION.md) for multiple branches and mixed projects.
 
 ## Step 2–3 — Analysis
 
-Run `/pw-analyze <slug>`. Read the generated `analysis/<topic>.md` and matching review file.
+Run `/pw-analyze --project <slug>`. Read the generated `analysis/<topic>.md` and matching review file.
 The analysis explains the problem, affected repositories, evidence, approaches, and open questions.
 It establishes what changes and why. Task boundaries come during breakdown.
 
-Answer questions with `/pw-review <slug> answer <review-path> <Qid> <answer>`.
-Request changes with `item`, then run `/pw-review <slug> analysis` to incorporate them.
+Answer questions with `/pw-review answer --project <slug> --file <review-path> --question <Qid> --text <answer>`.
+Request changes with `item`, then run `/pw-review --project <slug> --phase analysis` to incorporate them.
 Choose the approach and resolve questions before recording approval through `signoff`.
 
 If you use an RFC, publishing its draft is an optional side loop.
-An unresolved RFC review item blocks breakdown. Use `/pw-rfc <slug> comments` to fetch feedback, then resolve it through local review.
+An unresolved RFC review item blocks breakdown. Use `/pw-rfc comments --project <slug>` to fetch feedback, then resolve it through local review.
 The [RFC guide](RFC.md) explains draft publication and later PLAN milestones.
 
 ## Step 4–5 — Task breakdown
 
-Run `/pw-breakdown <slug>` after analysis approval.
+Run `/pw-breakdown --project <slug>` after analysis approval.
 It produces `task/PLAN.md` and one task document per task ID.
 PLAN records repositories, dependencies, execution strategy, and model choices.
 Each task states its branch, detailed steps, verification commands, and expected results.
 
 Read PLAN and inspect important task files. Request changes through `task/review/PLAN.review.md` or individual task reviews.
-Apply feedback with `/pw-review <slug> plan` or selected task IDs.
+Apply feedback with `/pw-review --project <slug> --phase plan` or selected task IDs.
 Once satisfied, approve `task/review/PLAN.review.md` through `signoff`.
 
 Current PLAN approval is the hard gate for execution, including resumed runs.
@@ -76,7 +76,7 @@ New feedback can reopen an existing approval; inspect the current decision befor
 
 ## Step 6 — Execution
 
-Run `/pw-execute <slug>` to complete the remaining plan in dependency order.
+Run `/pw-execute --project <slug>` to complete the remaining plan in dependency order.
 Each task runs in its own Git worktree. Independent tasks can run concurrently within the configured limit.
 The agent commits changes, runs each task's verification checks, and records output in its `## Result`.
 
@@ -84,9 +84,9 @@ Choose the scope that fits your next checkpoint:
 
 | Scope | Command | Stops after |
 |---|---|---|
-| Remaining plan | `/pw-execute <slug>` | Remaining work completes or reports blockers |
-| Current ready group | `/pw-execute <slug> --wave` | The tasks ready when this invocation starts |
-| Selected tasks | `/pw-execute <slug> T01 T03` | The named scope |
+| Remaining plan | `/pw-execute --project <slug>` | Remaining work completes or reports blockers |
+| Current ready group | `/pw-execute --project <slug> --wave` | The tasks ready when this invocation starts |
+| Selected tasks | `/pw-execute --project <slug> --task T01 --task T03` | The named scope |
 
 A full resume leaves completed tasks complete and resumes unfinished or failed work.
 Explicit task IDs can re-run selected work. Failed prerequisites block their dependents; independent work can continue.
@@ -102,21 +102,21 @@ Clean automatic acceptance and `--then-ship` require explicit opt-in; see [clean
 <a id="ship-and-sync"></a>
 ## Step 7 — Ship (`/pw-ship`), and keeping MRs fresh (`/pw-sync`)
 
-Run `/pw-ship <slug> [task-ids]` when you authorize publication of verified work.
+Run `/pw-ship --project <slug> [--task <T0n>]…` when you authorize publication of verified work.
 It pushes branches, opens MRs/PRs, and records their links.
 MR descriptions explain the changes and verification. Titles include a ticket when the input provenance supplies one.
 The command monitors CI by default and reports or repairs failures within its limits.
 `--skip-build-check` skips CI monitoring; it still pushes and opens MRs.
 
-When reviewers leave comments, `/pw-ship <slug> [task-ids] comments` reads them, applies justified fixes, verifies, pushes, and replies.
+When reviewers leave comments, `/pw-ship comments --project <slug> [--task <T0n>]…` reads them, applies justified fixes, verifies, pushes, and replies.
 Each attempt keeps a local record and MR description history. See [MR review](REVIEW.md#2-the-mr-review-flow-post-ship).
 
-To invite review, `/pw-ship <slug> request-review` builds one copyable message for the open MRs —
+To invite review, `/pw-ship request-review --project <slug>` builds one copyable message for the open MRs —
 read-only, no push, no comment, no CI wait. Optional writing help (`--summary`, `--mr-summary`,
 `--note`, `--to`) keeps the sender in control of the wording. See
 [the review-request recipe](RECIPES.md#ask-teammates-to-review-the-open-mrs).
 
-When an MR's target changes, `/pw-sync <slug> [task-ids]` merges the updated target into the branch, verifies, and pushes.
+When an MR's target changes, `/pw-sync --project <slug> [--task <T0n>]…` merges the updated target into the branch, verifies, and pushes.
 Merged or closed MRs remain visible as leftovers rather than receiving ordinary comment fixes or sync updates.
 MR merging remains your decision.
 
@@ -128,7 +128,7 @@ PLAN and task files record `Stacked on: <parent-task>`.
 The child starts from the parent's verified commit and targets the parent's branch, so its MR shows the child's changes.
 A scheduling dependency or a cross-repository dependency alone does not create a stack.
 
-Preview topology and health with `/pw-ship <slug> stack`.
+Preview topology and health with `/pw-ship stack --project <slug>`.
 For existing manually stacked MRs, `stack adopt` previews the import and `stack adopt --apply` records it after confirmation.
 If an import changes the approved dependency graph, regenerate and reapprove PLAN before dependent execution or publication.
 
@@ -145,18 +145,18 @@ Use [stack troubleshooting](TROUBLESHOOTING.md) and project doctor to identify t
 ## Step 8 — Review results
 
 Read each task's diff and `## Result`. `done` records completion; `accepted` records your decision about that result.
-If you want a correction, add a task review item and run `/pw-review <slug> T01`.
-Task repair normally re-runs verification. Use `/pw-execute <slug> T01` when a selected result needs another run.
+If you want a correction, add a task review item and run `/pw-review --project <slug> --task T01`.
+Task repair normally re-runs verification. Use `/pw-execute --project <slug> --task T01` when a selected result needs another run.
 Upstream fixes can also require checks on dependent tasks.
 
 When satisfied, explicitly ask the agent to accept the named task results and update project records.
 For example: `I reviewed T01 and T02 in delivery-note. Accept both results.`
-Use `/pw-status <slug>` to confirm acceptance. There is no separate public acceptance slash command.
+Use `/pw-status --project <slug>` to confirm acceptance. There is no separate public acceptance slash command.
 In clean execution's optional auto mode, only eligible verified tasks without open review or dependency-impact items become accepted.
 
 ## Step 9 — Learn + close (`/pw-close`)
 
-Run `/pw-close <slug>` after all task results are accepted.
+Run `/pw-close --project <slug>` after all task results are accepted.
 It checks the records, captures workflow learnings, cleans eligible worktrees, and marks the project `done`.
 If memory is configured, it also records learnings there. Memory is optional.
 
@@ -177,7 +177,7 @@ See [the update recipe](RECIPES.md#refresh-old-project-guidance-after-a-workflow
 ## Who owns the dashboard `Status:` field?
 
 Workflow commands maintain the dashboard phase. Review updates feedback and gate decisions without changing that phase.
-Use `/pw-status <slug>` to inspect it and `rewind` for an intentional backward move.
+Use `/pw-status --project <slug>` to inspect it and `rewind` for an intentional backward move.
 Project config values belong to `/pw-config`. Task acceptance remains an explicit decision about task results.
 
 <a id="audit-log--logmd"></a>
@@ -190,7 +190,7 @@ Existing history and source timestamps retain their original values.
 
 ## Going back a phase (rewind)
 
-Run `/pw-status <slug> rewind <phase>` when an earlier approach or plan needs revision.
+Run `/pw-status rewind --project <slug> --phase <phase>` when an earlier approach or plan needs revision.
 Follow its prompts to record feedback, reopen the review gate, and move the dashboard back.
 Re-run the affected phase, apply feedback, and approve the revised artifact.
 Downstream files stay on disk; refresh them after upstream reapproval.

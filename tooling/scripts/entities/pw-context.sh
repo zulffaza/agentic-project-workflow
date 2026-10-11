@@ -2,25 +2,25 @@
 # ============================================================================
 # pw-context.sh — deterministic context-doc editing (the context-doc entity)
 #
-#   pw-context.sh req-init   <slug>
+#   pw-context.sh req-init --project <slug>
 #       Create context/REQUIREMENTS.md from context/_REQUIREMENTS.template.md
 #       if missing (idempotent — an existing brief is never touched). Prints
 #       the reminder to add its provenance row to context/INDEX.md.
 #
-#   pw-context.sh add-input  <slug> --file <f> --what <w> --source <s> [--trust <t>]
+#   pw-context.sh add-input --project <slug> --file <f> --what <w> --source <s> [--trust <t>]
 #       Append one row to context/INDEX.md's inputs table:
 #       | <f> | <w> | <s> | <today> | <t|—> |. Replaces the template's empty
 #       placeholder row when it is the insertion point; never touches `_e.g._`
-#       example rows. "|" in values is escaped. A2 flag-segment shape (each
-#       value runs until the next --flag — see tooling/docs/conventions.md).
+#       example rows. "|" in values is escaped. Each value runs until the next
+#       --flag token; use --flag=value for a literal value that starts with --.
 #
-#   pw-context.sh add-repo   <slug> <repo> <base> <why...>
+#   pw-context.sh add-repo --project <slug> --repo <r> --base <b> --why <text…>
 #       Append one row to context/INDEX.md's "Repos in scope" table:
-#       | <repo> | <base> | <why> |. A1 rest-of-line shape: everything after
-#       <base> is the why. NEVER touches /pw-adopt's `<!-- pw-adopt-scope:… -->`
+#       | <repo> | <base> | <why> |. --why runs until the next --flag (or
+#       end of line). NEVER touches /pw-adopt's `<!-- pw-adopt-scope:… -->`
 #       marker rows (append-only below them); same placeholder-row handling.
 #
-#   pw-context.sh ensure-input <slug> --file <f> --what <w> --source <s> [--trust <t>]
+#   pw-context.sh ensure-input --project <slug> --file <f> --what <w> --source <s> [--trust <t>]
 #       Keyed upsert for the inputs table (assisted preparation's repeat-run path):
 #       identity = the normalized "File / link" cell (trim + one backtick pair +
 #       \| unescape + space collapse; URL query parameters and case preserved).
@@ -29,28 +29,32 @@
 #       all. Duplicate rows for the key that do not all agree stop with a conflict
 #       report (never deleted, nothing written). Phase context only.
 #
-#   pw-context.sh ensure-repo <slug> <repo> <base> <why...>
+#   pw-context.sh ensure-repo --project <slug> --repo <r> --base <b> --why <text…>
 #       Keyed upsert for the "Repos in scope" table: identity = normalized
 #       (repo, base). No row → append; one row → update its why in place; identical
 #       → no write. Same repo on DIFFERENT bases stays two rows. NEVER touches
 #       /pw-adopt's marker rows. Duplicates stop with a conflict. Phase context only.
 #
-#   pw-context.sh fetch    <slug> [--ignore-errors]
+#   pw-context.sh fetch --project <slug> [--ignore-errors]
 #       Fetch the CLI-handleable URLs (jira/gh/glab) in INDEX.md's provenance table;
 #       Web/Lark rows print as agent-handled. (was pw-context-fetch.sh)
 #
-#   pw-context.sh adopt-snapshot <slug> <repo> <branch> [mr-url]
+#   pw-context.sh adopt-snapshot --project <slug> --repo <r> --branch <b> [--mr <url>]
 #       Snapshot git state for adoption; resolves the base from the MR target
 #       (host-based forge resolution) and emits structured key: value lines.
 #       (was pw-adopt-snapshot.sh)
 #
-#   pw-context.sh adopt    <slug> <repo> <branch> <base> [mr-url]
+#   pw-context.sh adopt --project <slug> --repo <r> --branch <b> --base <b> [--mr <url>]
 #       The CONTINUATION workflow's adoption record: append/upsert ONE unit into
 #       context/ADOPTED.md keyed by repo@branch (never clobbers earlier units),
 #       keep INDEX.md's provenance + "Repos in scope" rows in lockstep (hidden
 #       pw-adopt-scope markers), and set the dashboard Adopted: pointer.
 #       (was pw-lib.sh adopt — the context-doc entity owns these tables per S1a)
 #
+# Named-argument grammar: operation words first, every value named; --project
+# selects the project in every project form. Scalar values are ONE token (quote
+# spaces); prose values run until the next --flag token. A literal value that
+# starts with -- is passed as --flag=value.
 # Exit codes: 0 success · 2 usage/state error (stderr carries a → fix: hint).
 # Portable bash 3.2+. Project slug resolves under $PW_PROJECTS_DIR.
 # ============================================================================
@@ -68,8 +72,8 @@ REPOS_DIR="${PW_REPOS:-$(cd "$PROJECTS_DIR/.." && pwd)}"
 ST="$HERE/pw-status.sh"
 
 die() { echo "pw-context: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new $1)"; printf '%s' "$d"; }
-_log() { PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" log "$1" "$2" "$3" >/dev/null; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
+_log() { PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" log --project "$1" --actor "$2" --message "$3" >/dev/null; }
 
 # Pipe-escape a table cell value.
 _esc() { printf '%s' "$1" | sed 's/|/\\|/g'; }
@@ -101,8 +105,19 @@ _append_or_replace_row() {
 
 # ---------------------------------------------------------------- req-init
 cmd_req_init() {
-  [ $# -eq 1 ] || die "usage: req-init <slug>"
-  local slug="$1" d; d="$(proj_dir "$slug")"
+  local slug="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --project=*) v="${a#*=}"; a="--project" ;; esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "req-init --project <slug>" ;;
+      *) _pw_positional "$a" "req-init --project <slug>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "req-init: --project is required → fix: req-init --project <slug>"
+  local d; d="$(proj_dir "$slug")"
   local f="$d/context/REQUIREMENTS.md" tmpl="$d/context/_REQUIREMENTS.template.md"
   if [ -f "$f" ]; then
     echo "$slug: context/REQUIREMENTS.md already exists (left untouched)"
@@ -112,7 +127,7 @@ cmd_req_init() {
   cp "$tmpl" "$f"
   _log "$slug" you "created context/REQUIREMENTS.md from template"
   echo "$slug: created context/REQUIREMENTS.md — fill it in, then add its provenance row:"
-  echo "  /pw-context $slug add-input --file REQUIREMENTS.md --what 'project brief' --source 'written by you' --trust 'owner brief'"
+  echo "  /pw-context add-input --project $slug --file REQUIREMENTS.md --what 'project brief' --source 'written by you' --trust 'owner brief'"
 }
 
 # Preparation writes context only (pw-preflight.sh prepare mirrors this gate). The manual
@@ -120,9 +135,9 @@ cmd_req_init() {
 # preparation and keep their contract.
 _require_context_phase() {
   local slug="$1" raw tok
-  raw="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" phase "$slug" 2>/dev/null || true)"
+  raw="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" phase --project "$slug" 2>/dev/null || true)"
   tok="$(pw_phase_token "${raw:-missing}")"
-  [ "$tok" = "context" ] || die "preparation writes context only — the README says: ${raw:-none} → fix: if you really mean to redo this project's context, reopen its analysis and PLAN reviews first with /pw-review, then run: /pw-status $slug rewind context, then re-run preparation"
+  [ "$tok" = "context" ] || die "preparation writes context only — the README says: ${raw:-none} → fix: if you really mean to redo this project's context, reopen its analysis and PLAN reviews first with /pw-review, then run: /pw-status rewind --project $slug --phase context, then re-run preparation"
 }
 
 # Conservative identity normalization for table-cell keys: trim, drop one surrounding
@@ -156,20 +171,25 @@ _table_data_rows() {
     }' "$1"
 }
 
-# A2 flag-segment parsing shared by add-input/ensure-input: each value runs until the
-# next --flag token, so the script behaves identically whether the agent hands it
-# pre-quoted argv or a human types the slash-command shape verbatim in a shell.
-# _parse_input_flags <op> "$@" → sets FILEV/WHAT/SOURCE/TRUST.
+# Named-grammar parsing shared by add-input/ensure-input: each value runs until the
+# next --flag token, so the script behaves identically whether the agent hands it a
+# single pre-quoted argv or a human types the slash-command shape verbatim in a shell.
+# --flag=value carries one literal value (needed when the value itself starts with --).
+# _parse_input_flags <op> "$@" → sets PROJECT/FILEV/WHAT/SOURCE/TRUST.
 _parse_input_flags() {
   local _op="$1"; shift
   local flag val
-  FILEV=""; WHAT=""; SOURCE=""; TRUST=""
+  PROJECT=""; FILEV=""; WHAT=""; SOURCE=""; TRUST=""
   while [ $# -gt 0 ]; do
     flag="$1"; shift
     val=""
     case "$flag" in
+      --project)
+        [ $# -ge 1 ] || _pw_missing --project
+        PROJECT="$1"; shift ;;
+      --project=*) PROJECT="${flag#--project=}" ;;
       --file|--what|--source|--trust)
-        # A2: the value runs until the next --flag token (ANY token starting with --,
+        # the value runs until the next --flag token (ANY token starting with --,
         # known or not — an unknown one then dies below instead of being silently
         # swallowed into the previous value).
         while [ $# -gt 0 ]; do
@@ -177,20 +197,19 @@ _parse_input_flags() {
           val="${val:+$val }$1"; shift
         done
         [ -n "$val" ] || die "$_op: $flag requires a value → fix: --file <f> --what <w> --source <s> [--trust <t>], each value runs until the next --flag"
-        ;;
-      --file=*)   val="${flag#--file=}";   flag="--file" ;;
-      --what=*)   val="${flag#--what=}";   flag="--what" ;;
-      --source=*) val="${flag#--source=}"; flag="--source" ;;
-      --trust=*)  val="${flag#--trust=}";  flag="--trust" ;;
-      *) die "$_op: unknown option: $flag → fix: expected --file <f> --what <w> --source <s> [--trust <t>]" ;;
-    esac
-    case "$flag" in
-      --file)   FILEV="$val" ;;
-      --what)   WHAT="$val" ;;
-      --source) SOURCE="$val" ;;
-      --trust)  TRUST="$val" ;;
+        case "$flag" in
+          --file) FILEV="$val" ;; --what) WHAT="$val" ;; --source) SOURCE="$val" ;; --trust) TRUST="$val" ;;
+        esac ;;
+      --file=*)   FILEV="${flag#--file=}" ;;
+      --what=*)   WHAT="${flag#--what=}" ;;
+      --source=*) SOURCE="${flag#--source=}" ;;
+      --trust=*)  TRUST="${flag#--trust=}" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$flag" "$_op: --project <slug> --file <f> --what <w> --source <s> [--trust <t>]" ;;
+      *) _pw_positional "$flag" "operation words first, values named — e.g. /pw-context $_op --project <slug> --file <f> --what <w> --source <s>" ;;
     esac
   done
+  [ -n "$PROJECT" ] || die "$_op: --project is required → fix: add --project <slug>"
   [ -n "$FILEV" ]  || die "$_op: --file is required → fix: the artifact's filename in context/ (or a bare URL)"
   [ -n "$WHAT" ]    || die "$_op: --what is required → fix: one phrase saying what the input is"
   [ -n "$SOURCE" ]  || die "$_op: --source is required → fix: where it came from (ticket key / URL / person)"
@@ -199,8 +218,8 @@ _parse_input_flags() {
 
 # ---------------------------------------------------------------- add-input
 cmd_add_input() {
-  local slug="$1"; shift
   _parse_input_flags add-input "$@"
+  local slug="$PROJECT"
   local d; d="$(proj_dir "$slug")"
   local f="$d/context/INDEX.md"
   [ -f "$f" ] || die "no context/INDEX.md in $slug → fix: restore it from $PW_HOME/template/context/INDEX.md"
@@ -217,8 +236,8 @@ cmd_add_input() {
 # user corrections: match on the normalized File / link cell; update that row's
 # what/source/trust in place (original date preserved) only when the content changed.
 cmd_ensure_input() {
-  local slug="$1"; shift
   _parse_input_flags ensure-input "$@"
+  local slug="$PROJECT"
   local d; d="$(proj_dir "$slug")"
   _require_context_phase "$slug"
   local f="$d/context/INDEX.md"
@@ -266,12 +285,43 @@ cmd_ensure_input() {
   fi
 }
 
+# Named-grammar parsing shared by add-repo/ensure-repo: --why runs until the next --flag.
+# _parse_repo_flags <op> "$@" → sets PROJECT/REPO/BASE/WHY.
+_parse_repo_flags() {
+  local _op="$1"; shift
+  local a v
+  PROJECT=""; REPO=""; BASE=""; WHY=""
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --repo=*)    v="${a#*=}"; a="--repo" ;;
+      --base=*)    v="${a#*=}"; a="--base" ;;
+    esac
+    case "$a" in
+      --project|--repo|--base)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) PROJECT="$v" ;; --repo) REPO="$v" ;; --base) BASE="$v" ;; esac ;;
+      --why)
+        while [ $# -gt 0 ]; do case "$1" in --*) break ;; esac; v="${v:+$v }$1"; shift; done
+        [ -n "$v" ] || die "$_op: --why requires a value → fix: --why <text…> (runs until the next --flag)"
+        WHY="$v" ;;
+      --why=*) WHY="${a#*=}" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "$_op: --project <slug> --repo <r> --base <b> --why <text…>" ;;
+      *) _pw_positional "$a" "operation words first, values named — e.g. /pw-context $_op --project <slug> --repo <r> --base <b> --why <text…>" ;;
+    esac
+  done
+  [ -n "$PROJECT" ] || die "$_op: --project is required → fix: add --project <slug>"
+  [ -n "$REPO" ] || die "$_op: --repo is required → fix: pass the repo dir name"
+  [ -n "$BASE" ] || die "$_op: --base is required → fix: pass the base branch"
+  [ -n "$(printf '%s' "$WHY" | tr -d '[:space:]')" ] || die "$_op: --why is empty → fix: say why the repo is in scope"
+}
+
 # ---------------------------------------------------------------- add-repo
 cmd_add_repo() {
-  [ $# -ge 4 ] || die "usage: add-repo <slug> <repo> <base> <why...>   (why is rest-of-line, unquoted)"
-  local slug="$1" repo="$2" base="$3"; shift 3
-  local why="$*"
-  [ -n "$(printf '%s' "$why" | tr -d '[:space:]')" ] || die "add-repo: <why> is empty → fix: say why the repo is in scope (rest of the line after <base>)"
+  _parse_repo_flags add-repo "$@"
+  local slug="$PROJECT" repo="$REPO" base="$BASE" why="$WHY"
   local d; d="$(proj_dir "$slug")"
   local f="$d/context/INDEX.md"
   [ -f "$f" ] || die "no context/INDEX.md in $slug → fix: restore it from $PW_HOME/template/context/INDEX.md"
@@ -287,11 +337,8 @@ cmd_add_repo() {
 # a guess nor clobber user edits: a changed why updates that row in place; the same repo on
 # a DIFFERENT base stays a separate row. /pw-adopt's marker rows are never touched.
 cmd_ensure_repo() {
-  [ $# -ge 4 ] || die "usage: ensure-repo <slug> <repo> <base> <why...>   (why is rest-of-line, unquoted)"
-  local slug="$1" repo="$2" base="$3"; shift 3
-  local why="$*"
-  [ -n "$repo" ] && [ -n "$base" ] || die "ensure-repo: <repo> and <base> must not be empty → fix: pass the repo dir name and its likely base branch"
-  [ -n "$(printf '%s' "$why" | tr -d '[:space:]')" ] || die "ensure-repo: <why> is empty → fix: say why the repo is in scope (rest of the line after <base>)"
+  _parse_repo_flags ensure-repo "$@"
+  local slug="$PROJECT" repo="$REPO" base="$BASE" why="$WHY"
   local d; d="$(proj_dir "$slug")"
   _require_context_phase "$slug"
   local f="$d/context/INDEX.md"
@@ -340,17 +387,20 @@ cmd_ensure_repo() {
 cmd_fetch() {
   IGNORE_ERRORS=0
   SLUG=""
-
-  for arg in "$@"; do
-    case "$arg" in
+  local a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --project=*) v="${a#*=}"; a="--project" ;; esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; SLUG="$v" ;;
       --ignore-errors) IGNORE_ERRORS=1 ;;
       -h|--help) pw_usage ;;
-      -*) die "unknown option: $arg" ;;
-      *) SLUG="$arg" ;;
+      -*) _pw_unknown "$a" "fetch: --project <slug> [--ignore-errors]" ;;
+      *) _pw_positional "$a" "fetch --project <slug> [--ignore-errors]" ;;
     esac
   done
 
-  [ -n "$SLUG" ] || die "usage: fetch <slug> [--ignore-errors]"
+  [ -n "$SLUG" ] || die "fetch: --project is required → fix: fetch --project <slug> [--ignore-errors]"
 
   D="$(proj_dir "$SLUG")"
   INDEX="$D/context/INDEX.md"
@@ -463,12 +513,28 @@ cmd_fetch() {
 }
 
 cmd_adopt_snapshot() {
-  [ $# -ge 3 ] || die "usage: adopt-snapshot <slug> <repo> <branch> [mr-url]"
-
-  SLUG="$1"
-  REPO="$2"
-  BRANCH="$3"
-  MR_URL="${4:-}"
+  local a v
+  SLUG=""; REPO=""; BRANCH=""; MR_URL=""
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --repo=*)    v="${a#*=}"; a="--repo" ;;
+      --branch=*)  v="${a#*=}"; a="--branch" ;;
+      --mr=*)      v="${a#*=}"; a="--mr" ;;
+    esac
+    case "$a" in
+      --project|--repo|--branch|--mr)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) SLUG="$v" ;; --repo) REPO="$v" ;; --branch) BRANCH="$v" ;; --mr) MR_URL="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "adopt-snapshot --project <slug> --repo <r> --branch <b> [--mr <url>]" ;;
+      *) _pw_positional "$a" "adopt-snapshot --project <slug> --repo <r> --branch <b> [--mr <url>]" ;;
+    esac
+  done
+  [ -n "$SLUG" ] || die "adopt-snapshot: --project is required → fix: adopt-snapshot --project <slug> --repo <r> --branch <b> [--mr <url>]"
+  [ -n "$REPO" ] || die "adopt-snapshot: --repo is required → fix: pass the repo dir name"
+  [ -n "$BRANCH" ] || die "adopt-snapshot: --branch is required → fix: pass the existing branch"
 
   D="$(proj_dir "$SLUG")"
   REPO_DIR="$REPOS_DIR/$REPO"
@@ -544,10 +610,33 @@ cmd_adopt_snapshot() {
 # Append-only per unit (new units go at EOF; re-adopting the same repo@branch updates that unit's
 # Base/MR in place) — so adopting a 2nd branch can NEVER clobber the 1st (the bug free-form editing
 # caused). The agent fills each unit's prose after; the structure/IDs/count are owned here.
-#   adopt <slug> <repo> <branch> <base> [mr]
+#   adopt --project <slug> --repo <r> --branch <b> --base <b2> [--mr <url>]
 cmd_adopt() {
-  [ $# -ge 4 ] || die "usage: adopt <slug> <repo> <branch> <base> [mr-url]"
-  local slug="$1" repo="$2" branch="$3" base="$4" mr="${5:-none yet}"
+  local a v
+  local slug="" repo="" branch="" base="" mr=""
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --repo=*)    v="${a#*=}"; a="--repo" ;;
+      --branch=*)  v="${a#*=}"; a="--branch" ;;
+      --base=*)    v="${a#*=}"; a="--base" ;;
+      --mr=*)      v="${a#*=}"; a="--mr" ;;
+    esac
+    case "$a" in
+      --project|--repo|--branch|--base|--mr)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --repo) repo="$v" ;; --branch) branch="$v" ;; --base) base="$v" ;; --mr) mr="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "adopt --project <slug> --repo <r> --branch <b> --base <b2> [--mr <url>]" ;;
+      *) _pw_positional "$a" "adopt --project <slug> --repo <r> --branch <b> --base <b2> [--mr <url>]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "adopt: --project is required → fix: adopt --project <slug> --repo <r> --branch <b> --base <b2> [--mr <url>]"
+  [ -n "$repo" ] || die "adopt: --repo is required → fix: pass the repo dir name"
+  [ -n "$branch" ] || die "adopt: --branch is required → fix: pass the existing branch"
+  [ -n "$base" ] || die "adopt: --base is required → fix: pass the resolved base branch (use adopt-snapshot to resolve it)"
+  [ -n "$mr" ] || mr="none yet"
   local d; d="$(proj_dir "$slug")"; local cdir="$d/context"; local f="$cdir/ADOPTED.md"
   mkdir -p "$cdir"
   local key="$repo @ $branch"
@@ -587,7 +676,7 @@ cmd_adopt() {
   _index_provenance_ensure "$cdir/INDEX.md" || die "adopt: cannot stamp provenance → fix: check the date command and retry"
   _scope_upsert "$cdir/INDEX.md" "$repo" "$branch" "$base" "$mr"
   local count; count="$(grep -cE '^## A[0-9]+ · ' "$f" 2>/dev/null || true)"; : "${count:=0}"
-  "$ST" adopted "$slug" "$count unit(s) — continuation; see context/ADOPTED.md" >/dev/null
+  "$ST" adopted --project "$slug" --text "$count unit(s) — continuation; see context/ADOPTED.md" >/dev/null
   _log "$slug" adopt "unit $uid: $repo@$branch (base $base, MR $mr)"
   echo "$slug: adopted $uid ($key) — base $base, MR $mr  [$count unit(s)]"
 }

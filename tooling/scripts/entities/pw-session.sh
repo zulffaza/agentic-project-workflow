@@ -2,14 +2,17 @@
 # ============================================================================
 # pw-session.sh — deterministic headless-session liveness (the resume gate)
 #
-#   pw-session.sh session-check <provider> <session-id>
-#   pw-session.sh session-check <slug> <task-id>
+#   pw-session.sh session-check --provider <provider> --session <session-id>
+#   pw-session.sh session-check --project <slug> --task <task-id>
 #       Is the recorded session still resumable? exit 0 = live, 1 = dead/absent,
 #       2 = unverifiable (provider without a checked surface, or its store not
 #       reachable). The 2-reading on the ladder is conservative: NOT resumable →
 #       cold/inline path; never a false "live".
-#       The <slug> <task-id> form reads the provider + `- **Session:**` id from
+#       The --project/--task form reads the provider + `- **Session:**` id from
 #       the task file, so the driver never transcribes ids.
+#
+# Named-argument grammar: operation words first, every value named; --project
+# selects the project. Scalar values are ONE token (quote spaces).
 #
 # Per-provider surface (probe-verified 2026-09-23 on this machine):
 #   kilo     — `kilo session list --format json -a`, id present in the output
@@ -96,18 +99,50 @@ _sc_codex() {
 }
 
 cmd_session_check() {
-  [ $# -eq 2 ] || die "usage: session-check <provider> <session-id> | session-check <slug> <task-id>"
-  local prov="$1" id="$2" rc=0
-  # slug/task form: provider + id come from the task file (never transcribed by the caller)
-  if [ -d "$PROJECTS_DIR/$prov" ] && printf '%s' "$id" | grep -qE '^T[0-9]+$'; then
-    local slug="$prov" tf; tf="$PROJECTS_DIR/$slug/task/$id.md"
-    [ -f "$tf" ] || die "no task file: $slug/task/$id.md → fix: check the task id (or pass <provider> <session-id> directly)"
+  local prov="" sid="" slug="" task="" id="" rc=0 a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --provider=*) v="${a#*=}"; a="--provider" ;;
+      --session=*)  v="${a#*=}"; a="--session" ;;
+      --project=*)  v="${a#*=}"; a="--project" ;;
+      --task=*)     v="${a#*=}"; a="--task" ;;
+    esac
+    case "$a" in
+      --provider|--session|--project|--task)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --provider) prov="$v" ;;
+          --session)  sid="$v" ;;
+          --project)  slug="$v" ;;
+          --task)     task="$v" ;;
+        esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "session-check --provider <p> --session <id> | session-check --project <slug> --task <T0n>" ;;
+      *) _pw_positional "$a" "session-check --provider <p> --session <id> | session-check --project <slug> --task <T0n>" ;;
+    esac
+  done
+
+  # Two dispatch forms, same liveness answer. Task form: provider + id come from the task
+  # file (never transcribed by the caller). Provider form: both values are given directly.
+  # A mixed pair fails closed instead of guessing which form was meant.
+  if [ -n "$slug" ] || [ -n "$task" ]; then
+    [ -n "$slug" ] && [ -n "$task" ] || die "session-check: --project and --task go together → fix: session-check --project <slug> --task <T0n>"
+    if [ -n "$prov" ] || [ -n "$sid" ]; then
+      die "session-check: --provider/--session cannot combine with --project/--task → fix: pass one form"
+    fi
+    local tf; tf="$PROJECTS_DIR/$slug/task/$task.md"
+    [ -f "$tf" ] || die "no task file: $slug/task/$task.md → fix: check the task id (or pass --provider <p> --session <id> directly)"
     local sess exec_with
     sess="$(pw_field "$tf" Session || true)"
-    case "${sess:-}" in ""|"—"|"<*") echo "session-check: $slug/$id — dead (no recorded Session: id)" >&2; return 1 ;; esac
+    case "${sess:-}" in ""|"—"|"<*") echo "session-check: $slug/$task — dead (no recorded Session: id)" >&2; return 1 ;; esac
     exec_with="$(pw_field "$tf" "Execute with" || true)"
     prov="${exec_with%%:*}"
     id="$sess"
+  else
+    [ -n "$prov" ] || die "session-check: --provider is required → fix: session-check --provider <p> --session <id> | session-check --project <slug> --task <T0n>"
+    [ -n "$sid" ] || die "session-check: --session is required → fix: session-check --provider <p> --session <id>"
+    id="$sid"
   fi
   case "$prov" in
     kilo)     _sc_kilo "$id"   ;;

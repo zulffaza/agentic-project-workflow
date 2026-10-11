@@ -154,7 +154,7 @@ pwtest_repo() {   # <name> [branch:<br>]… — create-once seed, clone, idempot
 pwtest_build_f1() {
   local slug="$1"
   PW_PROJECTS="$PW_PROJECTS_DIR" PW_REPOS="$PW_REPOS" \
-    "$(pwtest_script scaffold.sh)" "$slug" >/dev/null 2>&1
+    "$(pwtest_script scaffold.sh)" --project "$slug" >/dev/null 2>&1
   printf '%s/%s' "$PW_PROJECTS_DIR" "$slug"
 }
 
@@ -199,7 +199,7 @@ pwtest_approve_review() {
 # --- F2: mid-lifecycle, current baseline ----------------------------------------
 pwtest_scaffold_into() {
   PW_PROJECTS="$PW_PROJECTS_DIR" PW_REPOS="$PW_REPOS" \
-    "$(pwtest_script scaffold.sh)" "$1" >/dev/null 2>&1
+    "$(pwtest_script scaffold.sh)" --project "$1" >/dev/null 2>&1
 }
 
 pwtest_build_f2() {
@@ -223,9 +223,9 @@ pwtest_build_f2() {
   cp "$p/_REVIEW.template.md" "$p/task/review/T04.review.md"
   pwtest_approve_review "$p" analysis/review/fixture.review.md
   pwtest_approve_review "$p" task/review/PLAN.review.md
-  "$(pwtest_script pw-status.sh)" status "$slug" executing >/dev/null 2>&1 \
+  "$(pwtest_script pw-status.sh)" status --project "$slug" --phase executing >/dev/null 2>&1 \
     || sed -i '' 's/^- \*\*Status:\*\* context/- **Status:** executing/' "$p/README.md"
-  "$(pwtest_script pw-status.sh)" log "$slug" test "fixture materialized" >/dev/null 2>&1 || true
+  "$(pwtest_script pw-status.sh)" log --project "$slug" --actor test --message "fixture materialized" >/dev/null 2>&1 || true
   # mount the worktrees each task declares (mr-state/pw-status resolve the repo via the task's
   # Worktree:/Branch: fields, so those must point at actually-mounted worktrees).
   local tt
@@ -263,7 +263,7 @@ PLANEOF
   sed -i '' "s@^- \*\*One-liner:\*\*.*@- **One-liner:** fixture project for the harness@" "$p/README.md" && rm -f "$p/README.md.bak"
     sed -i '' "s@\*\*Chosen approach:\*\* .*@**Chosen approach:** Option A — fixture choice@" "$p/analysis/fixture.md"
   # seed the dashboard from task truth — the SAME script does it, so "stale on arrival" can't bias tests:
-  "$(pwtest_script pw-doc.sh)" sync "$slug" --dashboard-only >/dev/null 2>&1 || true
+  "$(pwtest_script pw-doc.sh)" sync --project "$slug" --dashboard-only >/dev/null 2>&1 || true
   printf '%s' "$p"
 }
 

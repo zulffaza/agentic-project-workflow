@@ -161,7 +161,7 @@ cd {{PW_PROJECTS}}/<project-slug>/worktree/<repo>/<T0n>-<slug>
 > **If the human rejects this result:** flip `Status: verify-failed` above and either (a) add items
 > to `task/review/<T0n>.review.md`, or (b) just tell the agent what's wrong in chat — `/pw-review`
 > will create that review file from your feedback if it doesn't exist yet. Then the task is re-run
-> in its worktree (`/pw-execute <slug> <T0n>`) and re-verified. Task review is **optional**: a task
+> in its worktree (`/pw-execute --project <slug> --task <T0n>`) and re-verified. Task review is **optional**: a task
 > only needs a review file when you're sending it back.
 
 ## Result (filled by the executor at run time)

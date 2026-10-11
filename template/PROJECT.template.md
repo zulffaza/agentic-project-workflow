@@ -11,32 +11,32 @@
 - **One-liner:** <what this project is>
   <!-- 🤖 set by /pw-analyze. Leave the placeholder until analysis fills it. -->
 - **AI Models:** <AI_MODELS_DEFAULT>
-  <!-- 🤖 set via `/pw-config <slug> set ai-model <role>=<provider:model>` — one row per spawn
+  <!-- 🤖 set via `/pw-config set --project <slug> --key ai-model --set <role>=<provider:model>` — one row per spawn
        lane (researcher/analyst/writer-task/reviewer/verifier); `—` = no row = the provider's own
        default (kilo `small_model`/`subagent_model`; claude the session model; cursor the `auto`/
        `selectedModel` floor; codex its own configured default). The EXECUTOR is not
        a row — its pin is the task file's `Execute with:`/the PLAN's produced-by. Where a spawn
        can't bind the row (Kilo's Task-tool has no model arg), the driver runs the row as a headless
        session of that model over the same work order and the result says which actually ran.
-       See docs/EXECUTION.md §Spawning phase work; set rows with `/pw-config <slug> set ai-model <role>=<provider:model>`. -->
+       See docs/EXECUTION.md §Spawning phase work; set rows with `/pw-config set --project <slug> --key ai-model --set <role>=<provider:model>`. -->
 - **AI Review:** <AI_REVIEW_DEFAULT>
-  <!-- 🤖 set via `/pw-config <slug> set ai-review <surface>=<mode>` — one OUTCOME mode per review
+  <!-- 🤖 set via `/pw-config set --project <slug> --key ai-review --set <surface>=<mode>` — one OUTCOME mode per review
        surface (context/analysis/plan/task-plan/task-exec/ship/rfc/close). `advisory` = a fresh
        pw-reviewer files items, a human still signs off; `auto` = it may also sign off itself on a
        genuinely clean pass (guarded tool call only). The removed `off` migrated to `advisory`
-       (reads normalize; `/pw-config <slug> project ensure` persists it). Scheduling lives on the
+       (reads normalize; `/pw-config ensure --project <slug>` persists it). Scheduling lives on the
        Review Trigger line, not here. See docs/REVIEW.md §3. -->
 - **Review Trigger:** <REVIEW_TRIGGER_DEFAULT>
-  <!-- 🤖 set via `/pw-config <slug> set review-trigger <surface>=<value>` — `manual` = an AI pass
-       starts only when you invoke one (`/pw-review <slug> ai …`); `completion` = it also starts
+  <!-- 🤖 set via `/pw-config set --project <slug> --key review-trigger --set <surface>=<value>` — `manual` = an AI pass
+       starts only when you invoke one (`/pw-review ai --project <slug> …`); `completion` = it also starts
        after a succeeded producing command's verification. `completion` never disables explicit
        requests. -->
 - **Review Repair:** <REVIEW_REPAIR_DEFAULT>
-  <!-- 🤖 set via `/pw-config <slug> set review-repair <surface>=<value>` — `manual` = findings
+  <!-- 🤖 set via `/pw-config set --project <slug> --key review-repair --set <surface>=<value>` — `manual` = findings
        stop for you; `bounded` = a completion review may run the bounded cycle
        (review → repair → verify → fresh review) within the Review Budget. -->
 - **Review Budget:** <REVIEW_BUDGET_DEFAULT>
-  <!-- 🤖 set via `/pw-config <slug> set review-rounds <1..3>` — total reviewer passes in a
+  <!-- 🤖 set via `/pw-config set --project <slug> --key review-rounds --value <1..3>` — total reviewer passes in a
        bounded cycle; 3 allows at most two intervening verified repairs. -->
 
 

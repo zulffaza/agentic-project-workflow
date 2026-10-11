@@ -1,29 +1,29 @@
 # shellcheck shell=bash
 # cases/pw-status.t.sh
-pwtest_rc 0 "status F1 sections" "$(pwtest_script pw-status.sh)" "$S1" --skip-cli-check
+pwtest_rc 0 "status F1 sections" "$(pwtest_script pw-status.sh)" --project "$S1" --skip-cli-check
 pwtest_re '^## Phase' "phase header present"
 pwtest_re '^## Next action' "next-action guidance (P5)"
-pwtest_rc 0 "status F2 sections" "$(pwtest_script pw-status.sh)" "$S2" --skip-cli-check
+pwtest_rc 0 "status F2 sections" "$(pwtest_script pw-status.sh)" --project "$S2" --skip-cli-check
 pwtest_re '^## Tasks' "task table header"
 grep -q 'REVIEW.template\|_TEMPLATE' "$PWTEST_OUT" \
   && pwtest_bad "status ignores scaffold templates in counts" "template leaked into report" \
   || pwtest_ok "no scaffold template counted (status round)"
-pwtest_rc 0 "status F3 hostile parses clean" "$(pwtest_script pw-status.sh)" "$S3" --skip-cli-check
+pwtest_rc 0 "status F3 hostile parses clean" "$(pwtest_script pw-status.sh)" --project "$S3" --skip-cli-check
 pwtest_re 'prose around the token|repair with' "prose phase surfaced as repair, not silent"
-pwtest_rc 2 "no-such-project" "$(pwtest_script pw-status.sh)" nope-not-here
+pwtest_rc 2 "no-such-project" "$(pwtest_script pw-status.sh)" --project nope-not-here
 pwtest_fix "unknown carries the fix"
 
 # --- status/oneliner + phase/ship gate helpers (ported from pw-lib.t.sh, plan 20) ---
 # 1) status self-heal + backward guards (C19 companion): prose drift normalizes on a forward write:
 CP=libclonestat; rm -rf "$PW_PROJECTS_DIR/$CP"; cp -a "$F3" "$PW_PROJECTS_DIR/$CP"
 HEAL="$PW_PROJECTS_DIR/$CP/README.md"
-pwtest_rc 0 "status forward write onto drifted prose" "$(pwtest_script pw-status.sh)" status "$CP" executing
+pwtest_rc 0 "status forward write onto drifted prose" "$(pwtest_script pw-status.sh)" status --project "$CP" --phase executing
 if grep -qxF -- '- **Status:** executing' "$HEAL"; then pwtest_ok "forward write self-heals drifted prose line"
 else pwtest_bad "status heal" "$(grep '\*\*Status' "$HEAL" | head -2 | tr '\n' '|')"; fi
-pwtest_rc 2 "backward refusing still honest: analysis ← executing without --rewind" "$(pwtest_script pw-status.sh)" status "$CP" analysis
+pwtest_rc 2 "backward refusing still honest: analysis ← executing without --rewind" "$(pwtest_script pw-status.sh)" status --project "$CP" --phase analysis
 # 6) phase/ship gate helpers on the clone:
-pwtest_rc 0 "phase getter" "$(pwtest_script pw-status.sh)" phase "$CP"
-[ "$("$(pwtest_script pw-status.sh)" phase "$CP" 2>/dev/null)" ] ; pwtest_ok "phase prints non-empty" || true
+pwtest_rc 0 "phase getter" "$(pwtest_script pw-status.sh)" phase --project "$CP"
+[ "$("$(pwtest_script pw-status.sh)" phase --project "$CP" 2>/dev/null)" ] ; pwtest_ok "phase prints non-empty" || true
 
 # --- ported from pw-lib's inline selftest (plan 20 Phase 5) ---
 pl_status_selftest() {
@@ -31,34 +31,34 @@ pl_status_selftest() {
   printf -- '- **Status:** context\n- **One-liner:** <what this project is>\n  <!-- comment stays -->\n' > "$tmp/demo/README.md"
   : > "$tmp/demo/LOG.md"
   die() { pwtest_bad "pw-lib-port[status]: $*" "ported selftest assert failed"; }
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" status demo analysis >/dev/null
-  local got; got="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" phase demo)"
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" status --project demo --phase analysis >/dev/null
+  local got; got="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" phase --project demo)"
   [ "$got" = "analysis" ] || die "selftest FAIL: phase='$got' (expected analysis)"
   grep -q '<!-- comment stays -->' "$tmp/demo/README.md" || die "selftest FAIL: clobbered trailing comment"
   grep -qE '^- \*\*[0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\.[0-9]{2} WIB\*\* · `status` — Status -> analysis$' "$tmp/demo/LOG.md" || die "selftest FAIL: log line missing/wrong format"
   # One-liner setter
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" oneliner demo "toggle kafka usage safely" >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" oneliner --project demo --text "toggle kafka usage safely" >/dev/null
   grep -q '^- \*\*One-liner:\*\* toggle kafka usage safely$' "$tmp/demo/README.md" || die "selftest FAIL: one-liner not set"
   # Monotonic guard: a backward move without --rewind must fail…
-  if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" status demo context >/dev/null 2>&1; then
+  if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" status --project demo --phase context >/dev/null 2>&1; then
     die "selftest FAIL: backward status move was NOT blocked"
   fi
-  [ "$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" phase demo)" = "analysis" ] || die "selftest FAIL: blocked move still mutated Status"
+  [ "$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" phase --project demo)" = "analysis" ] || die "selftest FAIL: blocked move still mutated Status"
   # …but --rewind is allowed, and executing↔review (same rank) is never treated as backward.
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" status demo executing >/dev/null
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" status demo review >/dev/null
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" status demo executing >/dev/null   # re-run a task: not a rewind
-  [ "$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" phase demo)" = "executing" ] || die "selftest FAIL: executing↔review blocked"
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" status demo analysis --rewind >/dev/null
-  [ "$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" phase demo)" = "analysis" ] || die "selftest FAIL: --rewind did not apply"
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" log demo analyze "wrote analysis/x.md" >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" status --project demo --phase executing >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" status --project demo --phase review >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" status --project demo --phase executing >/dev/null   # re-run a task: not a rewind
+  [ "$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" phase --project demo)" = "executing" ] || die "selftest FAIL: executing↔review blocked"
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" status --project demo --phase analysis --rewind >/dev/null
+  [ "$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" phase --project demo)" = "analysis" ] || die "selftest FAIL: --rewind did not apply"
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" log --project demo --actor analyze --message "wrote analysis/x.md" >/dev/null
   grep -qE '^- \*\*[0-9]{1,2} [A-Za-z]+ [0-9]{4} - [0-9]{2}\.[0-9]{2} WIB\*\* · `analyze` — wrote analysis/x\.md$' "$tmp/demo/LOG.md" || die "selftest FAIL: custom log missing/wrong format"
   # Adopted pointer: inserted after One-liner when absent, then replaced in place (idempotent).
   grep -q '^- \*\*Adopted:\*\*' "$tmp/demo/README.md" && die "selftest FAIL: Adopted line present before adopt"
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" adopted demo "1 unit — see context/ADOPTED.md" >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" adopted --project demo --text "1 unit — see context/ADOPTED.md" >/dev/null
   grep -q '^- \*\*Adopted:\*\* 1 unit — see context/ADOPTED.md$' "$tmp/demo/README.md" || die "selftest FAIL: Adopted not inserted"
   grep -A1 '^- \*\*One-liner:\*\*' "$tmp/demo/README.md" | grep -q '^- \*\*Adopted:\*\*' || die "selftest FAIL: Adopted not anchored after One-liner"
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" adopted demo "2 units — see context/ADOPTED.md" >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" adopted --project demo --text "2 units — see context/ADOPTED.md" >/dev/null
   [ "$(grep -c '^- \*\*Adopted:\*\*' "$tmp/demo/README.md")" = "1" ] || die "selftest FAIL: Adopted duplicated instead of replaced"
   grep -q '^- \*\*Adopted:\*\* 2 units' "$tmp/demo/README.md" || die "selftest FAIL: Adopted not updated"
   # --- cmd_log duplicate-guard ---------------------------------------------------------
@@ -70,20 +70,20 @@ pl_status_selftest() {
   printf -- '- **Status:** context\n- **One-liner:** <x>\n' > "$tmp/logtest/README.md"
   : > "$tmp/logtest/LOG.md"
   local LT="$tmp/logtest/LOG.md"
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" log logtest review "3 items resolved in analysis/review/x.review.md" >/dev/null
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" log logtest review "3 items resolved in analysis/review/x.review.md" >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" log --project logtest --actor review --message "3 items resolved in analysis/review/x.review.md" >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" log --project logtest --actor review --message "3 items resolved in analysis/review/x.review.md" >/dev/null
   [ "$(grep -c '^- ' "$LT")" = "1" ] || die "selftest FAIL: duplicate log entry was not deduped"
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" log logtest review "1 items resolved in analysis/review/y.review.md" >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" log --project logtest --actor review --message "1 items resolved in analysis/review/y.review.md" >/dev/null
   [ "$(grep -c '^- ' "$LT")" = "2" ] || die "selftest FAIL: a distinct message was wrongly deduped"
   sed -i '' -e 's/^- \*\*[^*]*\*\*/- **2020-01-01 00:00**/' "$LT"
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" log logtest review "1 items resolved in analysis/review/y.review.md" >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" log --project logtest --actor review --message "1 items resolved in analysis/review/y.review.md" >/dev/null
   [ "$(grep -c '^- ' "$LT")" = "3" ] || die "selftest FAIL: an identical message outside the dedup window was wrongly skipped"
   # --- dashboard table edits (MR-state flow) --------------------------------
   # Task status table + MR table with realistic rows; the MR table's State is column 5, so a
   # fixed-position "column 4" write (the original implementation) would clobber the MR URL.
   printf '\n## Task status\n\n| ID | Title | Repo | Status | Notes |\n|----|-------|------|--------|-------|\n| T01 | fix x | repo-a | done | |\n\n## Merge requests\n\n| Task | Repo | MR | Target branch | State | Build |\n|------|------|----|--------------|-------|-------|\n| T01 | repo-a | http://forge/x/-/merge_requests/12 | main | open | green |\n' >> "$tmp/demo/README.md"
 
-  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" dashboard-task-status demo T01 "accepted (MR merged)" >/dev/null
+  PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" dashboard-task-status --project demo --task T01 --status "accepted (MR merged)" >/dev/null
   grep -q '^| T01 | fix x | repo-a | accepted (MR merged) | |$' "$tmp/demo/README.md" \
     || die "selftest FAIL: dashboard-task-status did not update the Status column"
   grep -q '^| T01 | repo-a | http://forge/x/-/merge_requests/12 | main | open | green |$' "$tmp/demo/README.md" \
@@ -93,7 +93,7 @@ pl_status_selftest() {
 
   # failure path: a task with no row must fail loudly and leave the file untouched.
   local readme_before; readme_before="$(cat "$tmp/demo/README.md")"
-  if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" dashboard-task-status demo T99 done >/dev/null 2>&1; then
+  if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-status.sh)" dashboard-task-status --project demo --task T99 --status done >/dev/null 2>&1; then
     die "selftest FAIL: dashboard-task-status accepted a task with no row"
   fi
   [ "$(cat "$tmp/demo/README.md")" = "$readme_before" ] \
@@ -126,7 +126,7 @@ cat > "$PA/LOG.md" <<'LOG'
 - **2026-09-23 10:20** · `exec` — spawned T05 (kilo:alibaba-token-plan/other-model) · via=subagent · model-degraded kilo:alibaba-token-plan/test-model→kilo:alibaba-token-plan/other-model · session=— · seed=x · out=y
 LOG
 PAE="$(pwtest_script pw-status.sh)"
-pwtest_rc 1 "provider-audit flags planted rows" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit paaudit
+pwtest_rc 1 "provider-audit flags planted rows" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit --project paaudit
 grep -qE '^T01\|expected=kilo:alibaba-token-plan/test-model\|used=kilo:alibaba-token-plan/test-model\|via=subagent\|route=headless\|verdict=ok$' "$PWTEST_OUT" \
   && pwtest_ok "ok row renders expected shape (route from task file)" \
   || pwtest_bad "ok row shape" "$(grep '^T01' "$PWTEST_OUT")"
@@ -140,12 +140,12 @@ cat >> "$PA/LOG.md" <<'LOG'
 - **2026-09-23 09:00** · `exec` — spawned T06 (kilotest:test-model) · session=— · seed=x · out=y
 - **2026-09-23 09:10** · `exec` — spawned T06 fixer for T04.review.md R1 (kilotest:test-model) · session=— · seed=x · out=y
 LOG
-pwtest_rc 0 "provider-audit filtered to clean rows exits 0" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit paaudit T01 T05
-pwtest_rc 1 "provider-audit names the filtered offender" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit paaudit T04
+pwtest_rc 0 "provider-audit filtered to clean rows exits 0" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit --project paaudit --task T01 --task T05
+pwtest_rc 1 "provider-audit names the filtered offender" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit --project paaudit --task T04
 # a ledger line with description text between the task id and the model group must still parse
 # (regression: the capture required '(' immediately after 'spawned T0n ' → used=unknown);
 # the fixer line is the newest (file order = append order), so it is the one audited
-pwtest_rc 1 "provider-audit parses described fixer lines" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit paaudit T06
+pwtest_rc 1 "provider-audit parses described fixer lines" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit --project paaudit --task T06
 grep -qE '^T06\|expected=kilotest:test-model\|used=kilotest:test-model\|' "$PWTEST_OUT" \
   && pwtest_ok "fixer-style line yields the real model" || pwtest_bad "fixer line parse" "$(grep '^T06' "$PWTEST_OUT")"
 # …and a colon-less model value (no provider prefix) still captures (a colon-required pattern
@@ -153,12 +153,12 @@ grep -qE '^T06\|expected=kilotest:test-model\|used=kilotest:test-model\|' "$PWTE
 cat >> "$PA/LOG.md" <<'LOG'
 - **2026-09-23 09:15** · `exec` — spawned T02 (kilotest/other-model) via=subagent route=in-process
 LOG
-pwtest_rc 1 "provider-audit keeps colon-less models parseable" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit paaudit T02
+pwtest_rc 1 "provider-audit keeps colon-less models parseable" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit --project paaudit --task T02
 grep -qE '^T02\|.*used=kilotest/other-model\|' "$PWTEST_OUT" \
   && pwtest_ok "colon-less model captured verbatim" || pwtest_bad "colon-less parse" "$(grep '^T02' "$PWTEST_OUT")"
 # report-only: audit must never mutate LOG.md
 before="$(cat "$PA/LOG.md")"
-env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit paaudit >/dev/null 2>&1
+env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit --project paaudit >/dev/null 2>&1
 [ "$before" = "$(cat "$PA/LOG.md")" ] && pwtest_ok "provider-audit mutates nothing (LOG.md byte-identical)" || pwtest_bad "audit mutating" "LOG.md changed"
 
 # --- plan 23 (KI-1/KI-2): placeholder fill + task-accept three-holder sync + close gate ---
@@ -183,41 +183,41 @@ p23_selftest() {
 | [T01](./T01.md) | fix x | api | — | G1 | kilotest/test-model | 1 | done | — | — |
 PLAN
   printf -- '- **Status:** done\n- **Execute with:** kilotest/test-model\n' > "$P/task/T01.md"
-  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" status "$SL" review >/dev/null
+  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" status --project "$SL" --phase review >/dev/null
 
   # KI-2: both dashboard tables are untouched template placeholders — writers fill the first blank row
-  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" dashboard-task-status "$SL" T01 done >/dev/null
+  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" dashboard-task-status --project "$SL" --task T01 --status done >/dev/null
   grep -q '^| T01 | | | done | |$' "$P/README.md" || die "placeholder task row not filled"
-  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$SH" dashboard-mr-state "$SL" T01 merged >/dev/null
+  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$SH" dashboard-mr-state --project "$SL" --task T01 --state merged >/dev/null
   grep -q '^| T01 | | | | merged | — / green / red / still-running |$' "$P/README.md" \
     || die "MR placeholder fill wrong / hint cell lost"
   # genuinely missing row (no blank left) → loud failure, file untouched
   local before; before="$(cat "$P/README.md")"
-  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" dashboard-task-status "$SL" T99 done >/dev/null 2>&1; then
+  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" dashboard-task-status --project "$SL" --task T99 --status done >/dev/null 2>&1; then
     die "T99 dashboard write succeeded with no row and no placeholder"
   fi
   [ "$(cat "$P/README.md")" = "$before" ] || die "failed dashboard write mutated the file"
 
   # KI-1: task-accept syncs task file + PLAN cell + dashboard row, ONE log line
-  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" task-accept "$SL" T01 >/dev/null
+  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" task-accept --project "$SL" --task T01 >/dev/null
   grep -q '| accepted | — | — |$' "$P/task/PLAN.md" || die "PLAN Status cell not synced"
   grep -q '^- \*\*Status:\*\* accepted$' "$P/task/T01.md" || die "task file Status not synced"
   grep -q '^| T01 | | | accepted | |$' "$P/README.md" || die "dashboard row not synced"
   [ "$(grep -c 'marked as accepted' "$P/LOG.md")" = "1" ] || die "expected exactly one accept LOG line"
   # the close gate — the whole point of KI-1 — is green now, with no manual cell edits
-  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$PF" close "$SL" || die "close gate still blocked after task-accept"
+  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$PF" close --project "$SL" || die "close gate still blocked after task-accept"
 
   # idempotent rerun: holders byte-identical, no second LOG line
   local lc; lc="$(grep -c '^- \*\*' "$P/LOG.md")"
   before="$(cat "$P/README.md")$(cat "$P/task/PLAN.md")$(cat "$P/task/T01.md")"
-  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" task-accept "$SL" T01 >/dev/null
+  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" task-accept --project "$SL" --task T01 >/dev/null
   [ "$before" = "$(cat "$P/README.md")$(cat "$P/task/PLAN.md")$(cat "$P/task/T01.md")" ] \
     || die "idempotent rerun mutated a holder"
   [ "$(grep -c '^- \*\*' "$P/LOG.md")" = "$lc" ] || die "idempotent rerun logged again"
 
   # a task file with NO PLAN row → die, never silence
   printf -- '- **Status:** done\n' > "$P/task/T02.md"
-  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" task-accept "$SL" T02 >/dev/null 2>&1; then
+  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" task-accept --project "$SL" --task T02 >/dev/null 2>&1; then
     die "accepted a task with no PLAN row"
   fi
   rm -f "$P/task/T02.md"
@@ -229,7 +229,7 @@ PLAN
   cp "$P/task/PLAN.md" "$PW_PROJECTS_DIR/$ND/task/PLAN.md"
   printf -- '- **Status:** done\n' > "$PW_PROJECTS_DIR/$ND/task/T01.md"
   sed -i '' 's/p23fresh/p23nodash/' "$PW_PROJECTS_DIR/$ND/task/PLAN.md"
-  if ! PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" task-accept "$ND" T01 >/dev/null 2>"$ROOT/p23err"; then
+  if ! PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" task-accept --project "$ND" --task T01 >/dev/null 2>"$ROOT/p23err"; then
     die "task-accept failed when the dashboard has no tables (must stay best-effort)"
   fi
   grep -q 'warning: dashboard row' "$ROOT/p23err" || die "best-effort warning not printed"
@@ -249,32 +249,32 @@ SB=st-plan31; rm -rf "$PW_PROJECTS_DIR/$SB"; cp -a "$F2" "$PW_PROJECTS_DIR/$SB"
 STB="$(pwtest_script pw-status.sh)"
 ARV="$PW_PROJECTS_DIR/$SB/analysis/review/fixture.review.md"; PRV="$PW_PROJECTS_DIR/$SB/task/review/PLAN.review.md"
 # baseline: F2 (executing, both gates approved, zero real open) → no Unapproved blocker:
-pwtest_rc 0 "status clone rc0" "$STB" "$SB" --skip-cli-check
+pwtest_rc 0 "status clone rc0" "$STB" --project "$SB" --skip-cli-check
 if grep -q 'Unapproved' "$PWTEST_OUT"; then pwtest_bad "clean approved baseline" "false Unapproved on approved fixtures"; else pwtest_ok "clean approved → no Unapproved blocker"; fi
 # reopened history: auto-reopen in-review row AFTER the approved row — the old whole-file
 # grep kept reporting the file approved; the latest-row reader must flag it, with the actor:
 _rv_add_s "$ARV" '| pwtest | approved |' '| 2026-10-05 12:30 | pw-review (auto-reopen) | in-review |'
-pwtest_rc 0 "status after reopen" "$STB" "$SB" --skip-cli-check
+pwtest_rc 0 "status after reopen" "$STB" --project "$SB" --skip-cli-check
 pwtest_re 'Unapproved analysis review: analysis/review/fixture\.review\.md \(in-review by pw-review \(auto-reopen\)\)' "stale approval flagged with latest decision AND actor"
 # hyphenated token + repair actor verbatim:
 _rv_set_s "$PRV" '| 2026-09-15 00:00 | pwtest | approved |' '| 2026-10-05 13:00 | pw-review (repair) | changes-requested |'
-pwtest_rc 0 "status after repair row" "$STB" "$SB" --skip-cli-check
+pwtest_rc 0 "status after repair row" "$STB" --project "$SB" --skip-cli-check
 pwtest_re 'Unapproved PLAN review \(changes-requested by pw-review \(repair\)\)' "full hyphenated token + actor shown"
 # legacy decoration stays readable and satisfies the latest-row check:
 _rv_set_s "$PRV" '| 2026-10-05 13:00 | pw-review (repair) | changes-requested |' '| 2026-10-05 14:00 | you | approved ✅ |'
-pwtest_rc 0 "status legacy approved" "$STB" "$SB" --skip-cli-check
+pwtest_rc 0 "status legacy approved" "$STB" --project "$SB" --skip-cli-check
 if grep -q 'Unapproved PLAN' "$PWTEST_OUT"; then pwtest_bad "legacy approved readable" "approved ✅ blocked"; else pwtest_ok "legacy approved ✅ satisfies the latest-row check"; fi
 # placeholder row: decision shown, blank actor renders no 'by' (never invented):
 _rv_set_s "$PRV" '| 2026-10-05 14:00 | you | approved ✅ |' '| | | in-review |'
-pwtest_rc 0 "status placeholder" "$STB" "$SB" --skip-cli-check
+pwtest_rc 0 "status placeholder" "$STB" --project "$SB" --skip-cli-check
 pwtest_re 'Unapproved PLAN review \(in-review\)' "placeholder row: decision shown, no invented actor"
 # RFC staging: template copy never appears as an unapproved analysis blocker…
 cp "$PWTEST_TEMPLATE_DIR/_REVIEW.template.md" "$PW_PROJECTS_DIR/$SB/analysis/review/RFC.review.md"
-pwtest_rc 0 "status with RFC staging" "$STB" "$SB" --skip-cli-check
+pwtest_rc 0 "status with RFC staging" "$STB" --project "$SB" --skip-cli-check
 if grep -q 'Unapproved analysis review: analysis/review/RFC\.review\.md' "$PWTEST_OUT"; then pwtest_bad "RFC excluded" "RFC staging gated as unapproved"; else pwtest_ok "RFC staging excluded from approval discovery"; fi
 # …but its real open items still surface in the unresolved list (independent gate):
 _open_item_s "$PW_PROJECTS_DIR/$SB/analysis/review/RFC.review.md"
-pwtest_rc 0 "status RFC open item" "$STB" "$SB" --skip-cli-check
+pwtest_rc 0 "status RFC open item" "$STB" --project "$SB" --skip-cli-check
 pwtest_re 'analysis/review/RFC\.review\.md \([0-9]+ open\)' "RFC unresolved comment stays visible"
 rm -rf "$PW_PROJECTS_DIR/$SB"
 
@@ -371,9 +371,9 @@ pwtest_rc 1 "overview --all partial scan rc=1 (malformed delta, unreadable zeta)
   env PW_PROJECTS_DIR="$OVW" "$OVST" --all
 pwtest_re '^8 discovered \| 8 shown \| 0 filtered \| 1 skipped symlinks \| 1 unreadable \| 2 malformed$' \
   "counts line accounts for every bucket"
-pwtest_re '^alpha +executing +verification-failed \(1\), acceptance-pending \(1\), review-open \(1\), review-pending, metadata \(1\) +1/4 +8 Oct +/pw-status alpha' \
+pwtest_re '^alpha +executing +verification-failed \(1\), acceptance-pending \(1\), review-open \(1\), review-pending, metadata \(1\) +1/4 +8 Oct +/pw-status --project alpha' \
   "alpha row: attention order, accepted count, last event, status drill-down"
-pwtest_re '^gamma +done +review-open \(1\) +n/a +— +/pw-status gamma' "gamma CLOSE findings visible on a done project"
+pwtest_re '^gamma +done +review-open \(1\) +n/a +— +/pw-status --project gamma' "gamma CLOSE findings visible on a done project"
 pwtest_re '^delta +unknown +phase-unknown' "drifted prose phase reads unknown, not silent"
 pwtest_re '^BAD_Name +context +invalid-name' "invalid legacy name flagged"
 pwtest_re '^zeta +executing +metadata \(1\)' "escaped review lane becomes metadata uncertainty"
@@ -421,8 +421,8 @@ a=p["alpha"]
 assert [r["code"] for r in a["attention"]]==["verification-failed","acceptance-pending","review-open","review-pending","metadata"], a["attention"]
 assert a["tasks"]=={"parsable":True,"accepted":1,"total":4,"done":1,"verify_failed":1,"in_progress":0,"todo":0,"other":1}, a["tasks"]
 assert a["last_event"]=={"raw":"2026-10-08 09:00","display":"8 Oct"}, a["last_event"]
-assert a["inspect"]=="/pw-status alpha" and a["description"]=="alpha scratch project", a
-assert p["beta"]["attention"]==[] and p["beta"]["inspect"]=="/pw-help project beta", p["beta"]
+assert a["inspect"]=="/pw-status --project alpha" and a["description"]=="alpha scratch project", a
+assert p["beta"]["attention"]==[] and p["beta"]["inspect"]=="/pw-help project --project beta", p["beta"]
 assert p["gamma"]["attention"]==[{"code":"review-open","count":1,"files":["review/CLOSE.review.md"]}], p["gamma"]
 assert p["delta"]["malformed"] is True and [r["code"] for r in p["delta"]["attention"]]==["phase-unknown"] and p["delta"]["diagnostics"], p["delta"]
 assert p["epsln"]["last_event"] is None and p["epsln"]["tasks"] is None and p["epsln"]["attention"]==[], p["epsln"]
@@ -457,15 +457,15 @@ _pw_ovw_hash() { ( cd "$OVW" && { find . -type f -exec shasum {} + ; find . -typ
 _ovw_pre="$(_pw_ovw_hash)"
 env PW_PROJECTS_DIR="$OVW" "$OVST" --all >/dev/null 2>&1 || true
 env PW_PROJECTS_DIR="$OVW" "$OVST" --all --json >/dev/null 2>&1 || true
-env PW_PROJECTS_DIR="$OVW" "$OVST" alpha --skip-cli-check >/dev/null 2>&1
-env PW_PROJECTS_DIR="$OVW" "$OVST" epsln --skip-cli-check >/dev/null 2>&1
+env PW_PROJECTS_DIR="$OVW" "$OVST" --project alpha --skip-cli-check >/dev/null 2>&1
+env PW_PROJECTS_DIR="$OVW" "$OVST" --project epsln --skip-cli-check >/dev/null 2>&1
 pwtest_eq "read-only: scratch tree hash unchanged after overview + status reads" "$_ovw_pre" "$(_pw_ovw_hash)"
 grep -qE '^\- \*\*(Review Trigger|Review Repair|Review Budget):\*\*' "$OVW/epsln/README.md" \
   && pwtest_bad "status write regression" "status inserted missing dashboard lines" \
   || pwtest_ok "status never inserts missing dashboard lines (read-only policy)"
 
 # single-project detail: shared five-lane coverage + pending decisions + advisory-normalized policy
-pwtest_rc 0 "status alpha detail" env PW_PROJECTS_DIR="$OVW" "$OVST" alpha --skip-cli-check
+pwtest_rc 0 "status alpha detail" env PW_PROJECTS_DIR="$OVW" "$OVST" --project alpha --skip-cli-check
 pwtest_re '^  - task/review/T02\.review\.md \(1 open\)$' "task-lane open item listed"
 [ "$(grep -c '(1 open)' "$PWTEST_OUT")" = 1 ] \
   && pwtest_ok "snapshot copy under review/ai is never double-counted" \
@@ -473,7 +473,7 @@ pwtest_re '^  - task/review/T02\.review\.md \(1 open\)$' "task-lane open item li
 pwtest_re '^  - Pending review decision: context/review/CONTEXT\.review\.md \(in-review by pwtest\)$' \
   "optional-lane attributed pending decision surfaced"
 pwtest_re '^outcome: analysis=advisory plan=advisory$' "legacy off reads as effective advisory"
-pwtest_re 'persist with: /pw-config alpha project ensure' "legacy advisory note points at the persist path"
+pwtest_re 'persist with: /pw-config ensure --project alpha' "legacy advisory note points at the persist path"
 pwtest_re '^trigger: — \(line absent; effective default: manual per surface\)$' "absent trigger shows its default"
 grep -q 'Unapproved' "$PWTEST_OUT" && pwtest_bad "alpha unapproved" "unexpected gate blocker" || pwtest_ok "no gate blocker on alpha (task/context lanes are optional)"
 

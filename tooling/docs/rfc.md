@@ -30,9 +30,9 @@ genuine cross-team negotiation. Wave 2 (`milestone`) is different: it summarizes
 milestone" to negotiate over.
 
 **The other direction of the same coin: `/pw-breakdown` hard-refuses while a pulled RFC comment sits
-unresolved**, even if analysis is `approved` on its own merits — `pw-review-read.sh has-open <slug>
-analysis/review/RFC.review.md` checks this independently of the Sign-off read, because a comment
-that's been pulled (`/pw-rfc <slug> comments`) but never folded into the analysis leaves no trace on
+unresolved**, even if analysis is `approved` on its own merits — `pw-review-read.sh has-open --project <slug>
+--file analysis/review/RFC.review.md` checks this independently of the Sign-off read, because a comment
+that's been pulled (`/pw-rfc comments --project <slug>`) but never folded into the analysis leaves no trace on
 the analysis's own Sign-off table at all; only an actual fold-in reopens that gate. Without this
 second check, analysis could get approved (or stay approved from before the RFC even published)
 while a live, known, external negotiation is still open — breakdown would otherwise race ahead of
@@ -78,12 +78,12 @@ mapping is data, not a hardcoded assumption that every platform's template reads
 | References → RFC review meeting notes | 🧑 you (never the agent) | — |
 
 ## The two publish waves
-- **Wave 1** (`/pw-rfc <slug> [--target <ref>]`) — refuses unless analysis §4's `Chosen approach:`
+- **Wave 1** (`/pw-rfc --project <slug> [--target <ref>]`) — refuses unless analysis §4's `Chosen approach:`
   is filled in, not pending. **Does NOT require the review file's Sign-off to read `approved`**
   — publishing a still-`in-review` draft for outside comment is the normal, expected case; see
   above for why. Fills Background through Dependencies (+ Rollout/Rollback if asked) from the
   chosen option only.
-- **Wave 2** (`/pw-rfc <slug> milestone`) — refuses unless `task/PLAN.md` is `approved`. Fills
+- **Wave 2** (`/pw-rfc milestone --project <slug>`) — refuses unless `task/PLAN.md` is `approved`. Fills
   Milestone + Conclusion from the approved PLAN.
 - Neither wave sets the dashboard `Status:` or otherwise advances the pipeline — RFC publishing is
   purely a side-effect of a gate-passing artifact (Wave 1: a chosen approach; Wave 2: an approved
@@ -120,7 +120,7 @@ in its `rfc-backends.md` row), `/pw-rfc` must warn loudly before publishing rath
 silently.
 
 ## Comment loop — read-only outward, always
-`/pw-rfc <slug> comments` only **pulls**. It calls the backend's `list_comments` for every thread,
+`/pw-rfc comments --project <slug>` only **pulls**. It calls the backend's `list_comments` for every thread,
 using **the platform's own resolved-state** (e.g. Lark's `is_solved`) as the primary signal for
 what still needs attention — the same way the MR-comment flow implicitly relies on GitLab/GitHub's
 own thread-resolved flag rather than inventing a parallel one. A resolved thread is only worth
@@ -141,7 +141,7 @@ The agent **never replies to or resolves anything on the external platform, and 
 item's existing text** — new replies are *appended* underneath, same convention as local
 `.review.md` files never being rewritten. You reply/resolve on the platform yourself, and decide
 whether the analysis needs a change via the existing `/pw-review` (its `↳ agent:` reply is the
-durable record of what changed — no new review machinery). Re-run `/pw-rfc <slug>` afterward to
+durable record of what changed — no new review machinery). Re-run `/pw-rfc --project <slug>` afterward to
 push the revision. This mirrors `docs/REVIEW.md`'s MR-comment flow's FETCH → MIRROR steps, but
 deliberately **drops** its FIX-in-worktree/REPLY-on-thread steps — those are code-review mechanics
 that don't apply to RFC prose, and you explicitly own the on-platform reply here. No-ops with a
@@ -161,7 +161,7 @@ diagram must never be a single point of failure for the whole RFC push.
 
 ## `rfc/` project-subdir contents
 - **`rfc/RFC.md`** — the generated canonical doc (see schema above). Created idempotently by
-  `pw-rfc.sh init <slug> <backend>` (mirrors `review-init`'s create-if-missing/else-no-op).
+  `pw-rfc.sh init --project <slug> [--backend <backend>]` (mirrors `review-init`'s create-if-missing/else-no-op).
 - **`rfc/META.md`** — 🤖-owned via `pw-rfc.sh init|target|state|comment-seen` (never hand-edit):
   backend, target ref, last revision pushed, wave1/wave2-published flags, and a **"Comment
   tracking" table** — one row per thread (ID → reply count seen → solved), not a single scalar,

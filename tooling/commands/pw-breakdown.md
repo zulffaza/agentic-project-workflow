@@ -1,18 +1,19 @@
 ---
 description: Break approved analysis into PLAN.md + task files
-args: <project-slug>
+args: "--project <project-slug>"
+scope: project
 ---
-Invoke the `project-workflow` skill. Arguments: {{ARGS}} (project slug).
+Invoke the `project-workflow` skill. Arguments: {{ARGS}} — `--project <project-slug>` selects the project.
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
 <!-- Pre-flight: deterministic checks before agent reasoning -->
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh breakdown <slug> || exit 1
-{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint analysis <slug> --all || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh breakdown --project <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind analysis --project <slug> || exit 1
 ```
 **Reading the pre-flight:** `pw-preflight.sh breakdown` checks every analysis review file is
-`approved` (and RFC open items are clear if the side-loop runs); `pw-doc.sh lint analysis --all`
+`approved` (and RFC open items are clear if the side-loop runs); `pw-doc.sh lint --kind analysis`
 checks each analysis doc's §1–5. Silent = pass; a non-zero exit + `pw-…:` stderr line is a hard
 STOP — relay it (it names which doc/gate needs `/pw-review` first), don't draft a PLAN on
 unapproved analysis. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
@@ -23,13 +24,13 @@ unapproved analysis. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
 independent ones batched in parallel (they write different files, so batching is capped by `- Max parallelism:`
 n at a time), each getting the task's decisions as a compact seed + the template. It cannot change
 what the step does; a spawn that goes beyond its decisions gets stopped (exit-check like every
-lane result). Read the lane models from `- **AI Models:**` (`pw-config.sh ai-model` — no row =
+lane result). Read the lane models from `- **AI Models:**` (`pw-config.sh get --project <slug> --key ai-model` — no row =
 provider default) and log each spawn with its `session=<id>` for later repair/§review-batch
 resumption.
 
 First check the analysis gate — **per analysis doc, its CURRENT Sign-off decision, not "was it
 ever approved":** for each real `<project>/analysis/<topic>.md`, run
-`{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh gate <slug> analysis/review/<topic>.review.md` (the file
+`{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh gate --project <slug> --file analysis/review/<topic>.review.md` (the file
 doesn't exist yet → treat as not approved). If it exits non-zero for **any** topic, STOP and ask me
 to (re-)approve that analysis first — quote the decision it printed (`in-review` or
 `changes-requested`). **Do not fall back to scanning the file for an `approved` string anywhere
@@ -43,7 +44,7 @@ it says nothing about a comment that's been pulled but never folded in. That gap
 below, a genuinely separate mechanism from this Sign-off read.
 
 **Third check — an open RFC negotiation blocks breakdown outright:** run
-`{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh has-open <slug> analysis/review/RFC.review.md`. If it prints
+`{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh has-open --project <slug> --file analysis/review/RFC.review.md`. If it prints
 `yes` (exit 0), STOP — do not produce `PLAN.md` or any task file, even if the analysis Sign-off
 above reads `approved`. Tell me which item(s) are still [OPEN]/[PENDING] in that file
 and that I need to either fold each one into the analysis via `/pw-review` (which reopens the
@@ -96,8 +97,9 @@ Then produce, from `{{PW_HOME}}/template/task/`:
    **`Effort:`**/**`Thinking:`**/**`Route:`** (route = `auto|subagent|headless` spawn-routing per
    the ladder — only write it when the task needs strict binding (`headless`) or forced
    in-process (`subagent`); omit for `auto`), and an empty `## Result` block.
-      - **Per-lane model default on top of "Produced by":** the dashboard's `- **AI Models:**` line is        what the *next* run's lane spawns will use (`pw-config.sh ai-model <slug> [role <provider:model>]`
-        reads/sets it — researcher/analyst/writer-task/reviewer/verifier; the **executor is never a
+      - **Per-lane model default on top of "Produced by":** the dashboard's `- **AI Models:**` line is        what the *next* run's lane spawns will use (`pw-config.sh get --project <slug> --key ai-model` reads it;
+        `pw-config.sh set --project <slug> --key ai-model --set <role>=<provider:model>` writes it —
+        researcher/analyst/writer-task/reviewer/verifier; the **executor is never a
         row**, a task's `Execute with:` is its only pin). Surface the current rows in your summary so I
         can change one before I sign off (e.g. "writer-task=— → say the word to pin it cheap").
       - **Default the provider to "Produced by"** (this agent) so I don't have to switch agents;
@@ -120,7 +122,7 @@ Then produce, from `{{PW_HOME}}/template/task/`:
                                     #   same slug, never id segments
       ```
      Pick the id from that actual output; confirm it resolves (and get its canonical bind id) with
-     `pw-config.sh model-resolve <provider> <model-id>` before writing the row. Claude has no live
+     `pw-config.sh model-resolve --provider <provider> --model <model-id>` before writing the row. Claude has no live
      catalog — its fixed alias set is
      already fully documented in `{{PW_HOME}}/tooling/docs/providers.md`.
    - **Before finalizing each task's `Execute with:`**, check the chosen model against the
@@ -129,8 +131,8 @@ Then produce, from `{{PW_HOME}}/template/task/`:
      prefix scope — a row pinning a model/provider that isn't available fails the execute gate
      later, so don't write it now):
      ```bash
-     {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-check   <provider> <model-id>
-     {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-resolve <provider> <model-id>
+     {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-check --provider <provider> --model <model-id>
+     {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-resolve --provider <provider> --model <model-id>
      ```
      If it refuses, pick a different allowed model for that task rather than writing one the
      allowlist excludes — don't silently override it.
@@ -204,26 +206,26 @@ existing branch (and its MR, if any), fresh tasks open new branches.
 
 Then, **create the PLAN review file (idempotent)** — never hand-write it:
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init <slug> task/review/PLAN.review.md task/PLAN.md
+{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init --project <slug> --file task/review/PLAN.review.md --doc task/PLAN.md
 ```
 No-ops if it already exists; otherwise creates it verbatim from the template so I don't have to
 copy it myself. (Task review files T0n.review.md are created the same way per task — or in one
-pass via `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init-docs <slug> task/PLAN.md <named-task-paths>`,
+pass via `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init-docs --project <slug> --file task/PLAN.md [--file <named-task-path>]…`,
 which creates only the chosen docs. `init-all` applies only after the dashboard actually enters
 breakdown; before that move it still selects analysis. My own items/answers/sign-off
-rows go through the `/pw-review <slug> item|answer|signoff` operators, never hand-copied blocks.)
+rows go through the `/pw-review item|answer|signoff --project <slug>` operators, never hand-copied blocks.)
 
 Then **MANDATORY final step — do NOT skip** — update status + log via the helper
 (never hand-edit the Status line), and confirm the dashboard now shows `Status: breakdown`:
 ```bash
-{{PW_HOME}}/tooling/scripts/entities/pw-status.sh status <slug> breakdown
-{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log <slug> breakdown "wrote PLAN.md + N task files (ΣSP=<n>)"
+{{PW_HOME}}/tooling/scripts/entities/pw-status.sh status --project <slug> --phase breakdown
+{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log --project <slug> --actor breakdown --message "wrote PLAN.md + N task files (ΣSP=<n>)"
 ```
 
 **Completion review — only when configured.** After PLAN + task files are written and linted, read
-the `plan` axis (`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh project get <slug>
-review-trigger` and `… ai-review`) and, ONLY when the trigger is `completion` and the outcome is
-callable (`advisory` default; legacy `off` reads as advisory), run the `/pw-review <slug> ai plan`
+the `plan` axis (`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh get --project <slug>
+--key review-trigger` and `… --key ai-review`) and, ONLY when the trigger is `completion` and the outcome is
+callable (`advisory` default; legacy `off` reads as advisory), run the `/pw-review ai --project <slug> --surface plan`
 flow BEFORE your summary — fresh reviewer only, bounded repairs only when `review-repair
 plan=bounded` within `review-rounds` passes. Outage or unverified route: one skip line, continue.
 It never signs off by itself (advisory), never fails breakdown, and never starts `/pw-execute`.

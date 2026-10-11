@@ -6,7 +6,7 @@ Asked to analyze `context/`:
    `tooling/docs/memory.md`) — fold in and cite what's relevant; skip silently if none configured.
 2. Read everything in `context/` — **including fetching any bare external URL** in
    `context/INDEX.md`. **Run the fetch script first for the CLI-handleable rows:**
-   `{{PW_HOME}}/tooling/scripts/entities/pw-context.sh fetch <slug>` (`[--ignore-errors]` mirrors the command's
+   `{{PW_HOME}}/tooling/scripts/entities/pw-context.sh fetch --project <slug>` (`[--ignore-errors]` mirrors the command's
    `--ignore-fetch-errors`) — it covers Jira (`jira issue view`) → GitHub (`gh issue/pr view`) →
    GitLab (`glab issue/mr view`) in exactly the precedence below, and its `Fetching:` blocks are
    already-fetched content: **cite what they actually said, never re-fetch them.** The script
@@ -42,7 +42,7 @@ Asked to analyze `context/`:
      those three slots.
    - **Several large, mostly-independent problem areas in one project** → don't cram them into one
      flat §4 — see the template's "MULTIPLE LARGE SOLUTION AREAS" comment for named §4 groupings
-     vs. a separate `analysis/<topic>.md` per area (a second `/pw-analyze <slug> <area>` run — no
+     vs. a separate `analysis/<topic>.md` per area (a second `/pw-analyze --project <slug> --focus <area>` run — no
      phase/workflow change, `references/breakdown.md` already merges every analysis doc present).
      **Concrete trigger, not a vibe:** once §4 would need a 5th option/area slot, or the doc
      crosses roughly 500–600 lines (`wc -l`), that's the signal to split.
@@ -53,7 +53,7 @@ Asked to analyze `context/`:
      genuinely durable, generalizable finding (not this project's own bookkeeping) gets seeded
      using its own §5.1 Decisions-log one-liner as the payload — never a separate authoring pass.
 4. **Last step, mandatory:** set the dashboard one-liner + Status via
-   `pw-status.sh oneliner <slug> "…"` then `pw-status.sh status <slug> analysis` (see
+   `pw-status.sh oneliner --project <slug> --text "…"` then `pw-status.sh status --project <slug> --phase analysis` (see
    `references/conventions-and-gotchas.md` for the full helper contract).
 5. Iterate with the human until approved — see `references/review.md` for how the review loop
    works (local `.review.md` file, QnA, the Sign-off gate).

@@ -1,45 +1,45 @@
 # shellcheck shell=bash
 # cases/pw-doc.t.sh — the docs entity (merged plan 20 Phase 4: lint/summary/sync).
-pwtest_rc 0 "lint all F2 baseline passes" "$(pwtest_script pw-doc.sh)" lint all "$S2"
-pwtest_rc 1 "lint all F3 flags hostile file" "$(pwtest_script pw-doc.sh)" lint all "$S3"
+pwtest_rc 0 "lint all F2 baseline passes" "$(pwtest_script pw-doc.sh)" lint --kind all --project "$S2"
+pwtest_rc 1 "lint all F3 flags hostile file" "$(pwtest_script pw-doc.sh)" lint --kind all --project "$S3"
 pwtest_err 'missing|Story|Repo' "names the broken fields"
 pwtest_fix "lint failure carries what-to-do"
-pwtest_rc 1 "task T06 (missing fields, CRLF)" "$(pwtest_script pw-doc.sh)" lint task "$S3" T06
+pwtest_rc 1 "task T06 (missing fields, CRLF)" "$(pwtest_script pw-doc.sh)" lint --kind task --project "$S3" --file T06
 cp "$F2/task/T01.md" "$F2/task/T99.md"
 sed -i '' -e '/\*\*Repo:\*\*/d' "$F2/task/T99.md"
-pwtest_rc 1 "task with no Repo errors on that field" "$(pwtest_script pw-doc.sh)" lint task "$S2" T99
+pwtest_rc 1 "task with no Repo errors on that field" "$(pwtest_script pw-doc.sh)" lint --kind task --project "$S2" --file T99
 pwtest_fix "missing-field actionable"
 rm -f "$F2/task/T99.md"
-pwtest_rc 0 "task T03 prose-polluted values tolerated (C17)" "$(pwtest_script pw-doc.sh)" lint task "$S3" T03
-pwtest_rc 2 "unknown project" "$(pwtest_script pw-doc.sh)" lint all nope-xyz
+pwtest_rc 0 "task T03 prose-polluted values tolerated (C17)" "$(pwtest_script pw-doc.sh)" lint --kind task --project "$S3" --file T03
+pwtest_rc 2 "unknown project" "$(pwtest_script pw-doc.sh)" lint --kind all --project nope-xyz
 pwtest_fix "unknown project actionable"
-pwtest_rc 2 "bogus mode" "$(pwtest_script pw-doc.sh)" lint bogus "$S2"
+pwtest_rc 2 "bogus mode" "$(pwtest_script pw-doc.sh)" lint --kind bogus --project "$S2"
 
 # C22 (2026-09-16): review marker lint reads the shared detector — unfilled stubs must not false-fail,
 # a filled real item with no status marker must.
 RVF="$PWTEST_F2/task/review/T04.review.md"
-pwtest_rc 0 "lint review on template-shape file (stubs exempt)" "$(pwtest_script pw-doc.sh)" lint review "$S2" "task/review/T04.review.md"
+pwtest_rc 0 "lint review on template-shape file (stubs exempt)" "$(pwtest_script pw-doc.sh)" lint --kind review --project "$S2" --file "task/review/T04.review.md"
 # The C22 mutation below writes into the SHARED F2 fixture — back it up and restore after,
 # or T2's `lint-all pwt-f2-mid` later sees the leftover marker-less item and (correctly) fails.
 cp "$RVF" "$RVF.c22bak"
 awk '/^## Open questions/{print "### R9 · §1 real ask — (you, 2026-09-16 12:00)"; print "no marker here"; print "---"; print ""} {print}' "$RVF" > "$RVF.a" && mv "$RVF.a" "$RVF"
-pwtest_rc 1 "lint review flags marker-less real item (C22)" "$(pwtest_script pw-doc.sh)" lint review "$S2" "task/review/T04.review.md"
+pwtest_rc 1 "lint review flags marker-less real item (C22)" "$(pwtest_script pw-doc.sh)" lint --kind review --project "$S2" --file "task/review/T04.review.md"
 if grep -q '1 item headings but only 0' "$PWTEST_BOTH"; then pwtest_ok "count in the error text (C22d)"; else pwtest_bad "count in the error text (C22d)" "$(head -c 160 "$PWTEST_BOTH" | tr '\n' ' ')"; fi
 mv "$RVF.c22bak" "$RVF"
 
-pwtest_rc 0 "summary plan F2" "$(pwtest_script pw-doc.sh)" summary plan "$S2"
+pwtest_rc 0 "summary plan F2" "$(pwtest_script pw-doc.sh)" summary --kind plan --project "$S2"
 pwtest_re '^Tasks: 4' "plan mode counts 4 tasks (linked IDs, C4)"
 pwtest_re 'SP=7|SP: 7' "SP summed (1+3+2+1)"
 pwtest_re 'Repos:' "repos listed (Repo manifest)"
 pwtest_re '^Produced by: [a-z-]*$' "Produced by = bare provider token, no template prose ('$' anchor)"
-pwtest_rc 0 "summary plan F3 hostile" "$(pwtest_script pw-doc.sh)" summary plan "$S3"
+pwtest_rc 0 "summary plan F3 hostile" "$(pwtest_script pw-doc.sh)" summary --kind plan --project "$S3"
 pwtest_re '^Tasks: 6' "hostile rows (plain+linked ids, quotes) parsed"
-pwtest_rc 0 "summary project F2" "$(pwtest_script pw-doc.sh)" summary project "$S2"
+pwtest_rc 0 "summary project F2" "$(pwtest_script pw-doc.sh)" summary --kind project --project "$S2"
 pwtest_re '^Phase: executing' "phase token extracted (not prose)"
-pwtest_rc 0 "summary project F3" "$(pwtest_script pw-doc.sh)" summary project "$S3"
-pwtest_rc 0 "summary task F2 T01" "$(pwtest_script pw-doc.sh)" summary task "$S2" T01
+pwtest_rc 0 "summary project F3" "$(pwtest_script pw-doc.sh)" summary --kind project --project "$S3"
+pwtest_rc 0 "summary task F2 T01" "$(pwtest_script pw-doc.sh)" summary --kind task --project "$S2" --file T01
 pwtest_re 'Repo: api' "task keys parsed"
-pwtest_rc 2 "unknown project" "$(pwtest_script pw-doc.sh)" summary project nope
+pwtest_rc 2 "unknown project" "$(pwtest_script pw-doc.sh)" summary --kind project --project nope
 pwtest_fix "summary unknown carries fix"
 
 S=sync-f2; rm -rf "$PW_PROJECTS_DIR/$S"; cp -a "$F2" "$PW_PROJECTS_DIR/$S"
@@ -58,16 +58,16 @@ for L in open(f):
     out.append(s+"\n")
 open(f,"w").write("".join(out))
 PY
-pwtest_rc 1 "drifted dashboard lints red" "$(pwtest_script pw-doc.sh)" lint dashboard "$S"
+pwtest_rc 1 "drifted dashboard lints red" "$(pwtest_script pw-doc.sh)" lint --kind dashboard --project "$S"
 pwtest_fix "drift points at pw-doc.sh sync"
-pwtest_rc 0 "sync --dashboard-only repairs" "$(pwtest_script pw-doc.sh)" sync "$S" --dashboard-only
-pwtest_rc 0 "post-repair lint green" "$(pwtest_script pw-doc.sh)" lint dashboard "$S"
+pwtest_rc 0 "sync --dashboard-only repairs" "$(pwtest_script pw-doc.sh)" sync --project "$S" --dashboard-only
+pwtest_rc 0 "post-repair lint green" "$(pwtest_script pw-doc.sh)" lint --kind dashboard --project "$S"
 grep -q 'handnote' "$D" && pwtest_ok "C7 hand-written Notes preserved through rebuild" || pwtest_bad "C7 Notes preservation" "Notes wiped by rebuild (must never happen)"
 grep -q '^| T02 | api' "$D" && pwtest_bad "C7 TXX stale row dropped" "renamed row survived rebuild" || pwtest_ok "C7 stale row dropped by rebuild"
 cp "$D" "$ROOT/sync.pass1"
-pwtest_rc 0 "sync second run" "$(pwtest_script pw-doc.sh)" sync "$S" --dashboard-only
+pwtest_rc 0 "sync second run" "$(pwtest_script pw-doc.sh)" sync --project "$S" --dashboard-only
 cmp -s "$ROOT/sync.pass1" "$D" && pwtest_ok "sync idempotent (second run no-op)" || pwtest_bad "sync idempotent" "README changed on a no-op run"
-pwtest_rc 2 "sync unknown project rc2+fix" "$(pwtest_script pw-doc.sh)" sync nope; pwtest_fix "sync unknown fix"
+pwtest_rc 2 "sync unknown project rc2+fix" "$(pwtest_script pw-doc.sh)" sync --project nope; pwtest_fix "sync unknown fix"
 rm -rf "$PW_PROJECTS_DIR/$S"
 
 # ---------- PLAN task-table reconciliation (sync --plan-only) ----------
@@ -129,7 +129,7 @@ tsync_setrow "$PF" T01 stale-1 keep-time keep-result
 tsync_setrow "$PF" T02 stale-2 keep-time keep-result
 tsync_setrow "$PF" T03 stale-3 keep-time keep-result
 tsync_setrow "$PF" T04 stale-4 keep-time keep-result
-pwtest_rc 0 "table-sync A: sync --plan-only" "$(pwtest_script pw-doc.sh)" sync "$S" --plan-only
+pwtest_rc 0 "table-sync A: sync --plan-only" "$(pwtest_script pw-doc.sh)" sync --project "$S" --plan-only
 pwtest_eq "A: T01 status copied (never promoted)" "done" "$(tsync_cell "$PF" T01 status)"
 pwtest_eq "A: T01 time from Result" "12m" "$(tsync_cell "$PF" T01 time)"
 pwtest_eq "A: T01 commits kept, no MR" "a1b2c3" "$(tsync_cell "$PF" T01 result)"
@@ -142,7 +142,7 @@ pwtest_eq "A: Title cell untouched" "Add rate limiter" "$(tsync_cell "$PF" T02 t
 pwtest_eq "A: depends_on untouched" "T01" "$(tsync_cell "$PF" T02 depends_on)"
 pwtest_eq "A: SP cell untouched" "3" "$(tsync_cell "$PF" T02 sp)"
 before="$(tsync_cksum "$PF")"
-pwtest_rc 0 "A: repeat sync" "$(pwtest_script pw-doc.sh)" sync "$S" --plan-only
+pwtest_rc 0 "A: repeat sync" "$(pwtest_script pw-doc.sh)" sync --project "$S" --plan-only
 [ "$before" = "$(tsync_cksum "$PF")" ] && pwtest_ok "A: repeat sync byte-identical (idempotence)" || pwtest_bad "A: idempotence" "PLAN changed on a no-op sync"
 
 # Case B — legacy table, reordered columns, no Time/Result columns: Status updates BY NAME,
@@ -160,7 +160,7 @@ new = ("| Task | Notes | Status | Title |\n"
 t, k = re.subn(r"\| ID \| Title \| Repo \| depends_on \| Group \| Execute with \| SP \| Status \| Time \| Result \|\n\|[-| ]+\n(?:\|[^\n]*\n)+", new, t, count = 1)
 assert k == 1, "legacy table replace did not fire"
 open(f, "w", encoding = "utf-8").write(t)' "$PF"
-pwtest_rc 0 "table-sync B: legacy reordered table syncs without Time/Result" "$(pwtest_script pw-doc.sh)" sync "$S" --plan-only
+pwtest_rc 0 "table-sync B: legacy reordered table syncs without Time/Result" "$(pwtest_script pw-doc.sh)" sync --project "$S" --plan-only
 pwtest_eq "B: T01 status by column name" "done" "$(tsync_cell "$PF" T01 status)"
 pwtest_eq "B: T02 status linked row" "done" "$(tsync_cell "$PF" T02 status)"
 pwtest_eq "B: T03 status bold-id row" "in-progress" "$(tsync_cell "$PF" T03 status)"
@@ -194,7 +194,7 @@ tsync_setrow "$PF" T01 stale-1 keep-time keep-result
 tsync_setrow "$PF" T02 stale-2 keep-time keep-result
 tsync_setrow "$PF" T03 stale-3 keep-time keep-result
 tsync_setrow "$PF" T04 stale-4 keep-time keep-result
-pwtest_rc 0 "table-sync C: sync copies the full status ladder" "$(pwtest_script pw-doc.sh)" sync "$S" --plan-only
+pwtest_rc 0 "table-sync C: sync copies the full status ladder" "$(pwtest_script pw-doc.sh)" sync --project "$S" --plan-only
 pwtest_eq "C: todo copies" "todo" "$(tsync_cell "$PF" T01 status)"
 pwtest_eq "C: done copies" "done" "$(tsync_cell "$PF" T02 status)"
 pwtest_eq "C: verify-failed copies" "verify-failed" "$(tsync_cell "$PF" T03 status)"
@@ -225,7 +225,7 @@ for i, x in enumerate(L):
         L.insert(i + 1, "| T05 | crlf task | api | T01 | G1 | kilotest/test-model | 1 | stale-5 | — | — |\n")
         break
 open(f, "w", encoding = "utf-8").write("".join(L))' "$PF"
-pwtest_rc 0 "table-sync D: result-variant sync" "$(pwtest_script pw-doc.sh)" sync "$S" --plan-only
+pwtest_rc 0 "table-sync D: result-variant sync" "$(pwtest_script pw-doc.sh)" sync --project "$S" --plan-only
 pwtest_eq "D: Time read Result-scoped (Verify decoy ignored)" "12m" "$(tsync_cell "$PF" T01 time)"
 pwtest_eq "D: Commit(s) read Result-scoped (Verify decoy ignored)" "a1b2c3" "$(tsync_cell "$PF" T01 result)"
 pwtest_eq "D: MR URL beats Commit(s)" "https://gitlab.example.com/pwtest/api/-/merge_requests/42" "$(tsync_cell "$PF" T02 result)"
@@ -240,7 +240,7 @@ if grep -q $'\r' "$PF"; then pwtest_bad "D: PLAN stays CR-free" "a CR leaked fro
 S=sync-plan-e1; rm -rf "$PW_PROJECTS_DIR/$S"; cp -a "$F2" "$PW_PROJECTS_DIR/$S"; TSERR="$PW_PROJECTS_DIR/$S"; PF="$TSERR/task/PLAN.md"
 tsync_sub "$PF" '| Execute with | SP | Status | Time | Result |' '| Execute with | SP | Time | Result |'
 before="$(tsync_cksum "$PF")"
-pwtest_rc 2 "E: missing Status column fails the sync" "$(pwtest_script pw-doc.sh)" sync "$S" --plan-only
+pwtest_rc 2 "E: missing Status column fails the sync" "$(pwtest_script pw-doc.sh)" sync --project "$S" --plan-only
 pwtest_err 'no Status column' "E: failure names the missing column"
 pwtest_fix "E: missing column carries a fix hint"
 [ "$before" = "$(tsync_cksum "$PF")" ] && pwtest_ok "E: missing column leaves PLAN untouched" || pwtest_bad "E: atomic (missing column)" "PLAN was modified"
@@ -254,13 +254,13 @@ L = open(f, encoding = "utf-8").read().splitlines(True)
 open(f, "w", encoding = "utf-8").write("".join(x for x in L if not x.startswith("| [T03")))
 ' "$PF"
 before="$(tsync_cksum "$PF")"
-pwtest_rc 2 "E: missing task row fails the sync" "$(pwtest_script pw-doc.sh)" sync "$S" --plan-only
+pwtest_rc 2 "E: missing task row fails the sync" "$(pwtest_script pw-doc.sh)" sync --project "$S" --plan-only
 pwtest_err 'no row for T03' "E: failure names the missing row"
 [ "$before" = "$(tsync_cksum "$PF")" ] && pwtest_ok "E: earlier staged rows rolled back too" || pwtest_bad "E: atomic (missing row)" "partial PLAN edits survived the failure"
 rm -rf "$PW_PROJECTS_DIR/$S"
 for f in "$TOOL/commands/pw-execute.md" "$TOOL/agents/pw-orchestrator.md" "$TOOL/skill/project-workflow/references/execution-and-routing.md"; do
   b="$(basename "$f")"
-  if grep -qF 'sync <slug> --plan-only' "$f" && grep -qF 'sync <slug> --dashboard-only' "$f" \
+  if grep -qF 'sync --project <slug> --plan-only' "$f" && grep -qF 'sync --project <slug> --dashboard-only' "$f" \
      && grep -qiF 'resolving scope' "$f" && grep -qiF 'starts or returns' "$f" \
      && grep -qiF 'repair/re-verification' "$f" && grep -qiF 'scheduling dependents' "$f"; then
     pwtest_ok "E: entry path reconciles the PLAN at every checkpoint: $b"

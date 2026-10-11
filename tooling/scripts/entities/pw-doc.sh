@@ -4,13 +4,16 @@
 # dashboard reconciliation for pipeline documents (one operator per verb-family,
 # S1a; the three former scripts' semantics and exit codes are unchanged).
 #
-#   pw-doc.sh lint     <analysis|task|plan|review|dashboard|all> <slug> [<path>]
+#   pw-doc.sh lint --kind <analysis|task|plan|review|dashboard|all> --project <slug> [--file <topic|T0n|path> | --all]
 #       Validate required sections/fields; exit 1 with findings, 0 clean,
 #       2 usage/missing project.
-#   pw-doc.sh summary  <analysis|task|plan|project> <slug> [<path>]
+#   pw-doc.sh summary --kind <analysis|task|plan|project> --project <slug> [--file <topic|T0n>]
 #       Extract the structured summary an agent would otherwise re-read for.
-#   pw-doc.sh sync     <slug> [--dashboard-only|--plan-only|--tasks-only]
+#   pw-doc.sh sync --project <slug> [--dashboard-only|--plan-only|--tasks-only]
 #       Reconcile dashboard/task docs from the authoritative files (idempotent).
+#
+# Named-argument grammar: operation words first, every value named; --project
+# selects the project. Scalar values are ONE token (quote spaces).
 #
 # Merged from pw-doc-lint.sh / pw-doc-summary.sh / pw-doc-sync.sh (plan 20).
 # ============================================================================
@@ -26,18 +29,33 @@ PW_HOME="$(cd "$HERE/../../.." && pwd)"
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 
 die() { echo "pw-doc: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new $1)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
 
 
 
 cmd_lint() {
-[ $# -ge 2 ] || die "usage: pw-doc.sh lint <type> <slug> [args...]"
+local kind="" slug="" file="" all=0 a v
+while [ $# -gt 0 ]; do
+  a="$1"; shift; v=""
+  case "$a" in
+    --kind=*)    v="${a#*=}"; a="--kind" ;;
+    --project=*) v="${a#*=}"; a="--project" ;;
+    --file=*)    v="${a#*=}"; a="--file" ;;
+  esac
+  case "$a" in
+    --kind|--project|--file)
+      [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+      case "$a" in --kind) kind="$v" ;; --project) slug="$v" ;; --file) file="$v" ;; esac ;;
+    --all) all=1 ;;
+    -h|--help) pw_usage ;;
+    -*) _pw_unknown "$a" "lint --kind <analysis|task|plan|review|dashboard|all> --project <slug> [--file <topic|T0n|path> | --all]" ;;
+    *) _pw_positional "$a" "lint --kind <analysis|task|plan|review|dashboard|all> --project <slug> [--file <topic|T0n|path> | --all]" ;;
+  esac
+done
+[ -n "$kind" ] || die "lint: --kind is required → fix: lint --kind <analysis|task|plan|review|dashboard|all> --project <slug> [--file <topic|T0n|path> | --all]"
+[ -n "$slug" ] || die "lint: --project is required → fix: lint --kind <analysis|task|plan|review|dashboard|all> --project <slug> [--file <topic|T0n|path> | --all]"
 
-TYPE="$1"
-SLUG="$2"
-shift 2
-
-D="$(proj_dir "$SLUG")"
+D="$(proj_dir "$slug")"
 ERRORS=()
 
 add_error() {
@@ -120,7 +138,7 @@ lint_task() {
     if grep -q '^## Result' "$f"; then
       RESULT="$(awk '/^## Result/{p=1; next} /^## /{p=0} p' "$f" | wc -l)"
       if [ "$RESULT" -lt 2 ]; then
-        add_error "$f: ## Result should be filled when Status is $STATUS" "the executor fills '## Result' when it completes — re-run: /pw-execute <slug> $task_id (or fill it by hand if the work is genuinely done)"
+        add_error "$f: ## Result should be filled when Status is $STATUS" "the executor fills '## Result' when it completes — re-run: /pw-execute --project <slug> --task $task_id (or fill it by hand if the work is genuinely done)"
       fi
     fi
   fi
@@ -167,7 +185,7 @@ lint_plan() {
 }
 
 lint_review() {
-  local rel_path="$1"
+  local rel_path="$1" slug="$2"
   local f="$D/$rel_path"
   [ -f "$f" ] || die "review file not found: $f"
   
@@ -180,7 +198,7 @@ lint_review() {
   # (comment-blanking, heading-level, unfilled-stub-exempt) every other consumer uses, instead
   # of a fourth grep that could drift (C22). Unfilled template stubs count as neither item nor
   # marker, so a fresh review can't false-fail; a real heading with NO status vocabulary can.
-  _st="$("$HERE/pw-review.sh" count "$SLUG" "$rel_path" 2>/dev/null || true)"
+  _st="$("$HERE/pw-review.sh" count --project "$slug" --file "$rel_path" 2>/dev/null || true)"
   ITEMS="$(printf '%s' "$_st" | sed -n 's/.*items=\([0-9]*\).*/\1/p')"; ITEMS="${ITEMS:-0}"
   if [ "$ITEMS" -gt 0 ]; then
     _mo="$(printf '%s' "$_st" | sed -n 's/.*open=\([0-9]*\).*/\1/p')"; _mo="${_mo:-0}"
@@ -205,11 +223,10 @@ lint_dashboard() {
   fi
 }
 
-case "$TYPE" in
+case "$kind" in
   readme|project) die "user-friendly alias — use 'dashboard' for the README task table or 'all' for the full sweep" ;;
   analysis)
-    [ $# -ge 1 ] || die "usage: pw-doc.sh lint analysis <slug> <topic|--all>"
-    if [ "$1" = "--all" ]; then
+    if [ "$all" -eq 1 ]; then
       found=0
       for topic_file in "$D/analysis"/*.md; do
         [ -f "$topic_file" ] || continue
@@ -218,13 +235,14 @@ case "$TYPE" in
         found=1
       done
       [ "$found" = 1 ] || add_error "$D/analysis: no analysis docs to lint (--all matched none)" "run /pw-analyze to produce them from the context/ notes"
+    elif [ -n "$file" ]; then
+      lint_analysis "$file"
     else
-      lint_analysis "$1"
+      die "usage: pw-doc.sh lint --kind analysis --project <slug> [--file <topic> | --all]"
     fi
     ;;
   task)
-    [ $# -ge 1 ] || die "usage: pw-doc.sh lint task <slug> <task-id|--all>"
-    if [ "$1" = "--all" ]; then
+    if [ "$all" -eq 1 ]; then
       found=0
       for task_file in "$D/task"/T*.md; do
         [ -f "$task_file" ] || continue
@@ -232,16 +250,18 @@ case "$TYPE" in
         found=1
       done
       [ "$found" = 1 ] || add_error "$D/task: no task files to lint (--all matched none)" "run /pw-breakdown to produce them from the approved analysis"
+    elif [ -n "$file" ]; then
+      lint_task "$file"
     else
-      lint_task "$1"
+      die "usage: pw-doc.sh lint --kind task --project <slug> [--file <task-id> | --all]"
     fi
     ;;
   plan)
     lint_plan
     ;;
   review)
-    [ $# -ge 1 ] || die "usage: pw-doc.sh lint review <slug> <path>"
-    lint_review "$1"
+    [ -n "$file" ] || die "usage: pw-doc.sh lint --kind review --project <slug> --file <path>"
+    lint_review "$file" "$slug"
     ;;
   dashboard)
     lint_dashboard
@@ -266,19 +286,19 @@ case "$TYPE" in
     if [ -d "$D/analysis/review" ]; then
       for review_file in "$D/analysis/review"/*.review.md; do
         [ -f "$review_file" ] || continue
-        lint_review "analysis/review/$(basename "$review_file")"
+        lint_review "analysis/review/$(basename "$review_file")" "$slug"
       done
     fi
     if [ -d "$D/task/review" ]; then
       for review_file in "$D/task/review"/*.review.md; do
         [ -f "$review_file" ] || continue
-        lint_review "task/review/$(basename "$review_file")"
+        lint_review "task/review/$(basename "$review_file")" "$slug"
       done
     fi
     lint_dashboard
     ;;
   *)
-    die "unknown type: $TYPE (expected: analysis|task|plan|review|dashboard|all)"
+    die "unknown type: $kind (expected: analysis|task|plan|review|dashboard|all)"
     ;;
 esac
 
@@ -297,18 +317,32 @@ exit 0
 }
 
 cmd_summary() {
-[ $# -ge 2 ] || die "usage: pw-doc.sh summary <type> <slug> [args...]"
+local kind="" slug="" file="" a v
+while [ $# -gt 0 ]; do
+  a="$1"; shift; v=""
+  case "$a" in
+    --kind=*)    v="${a#*=}"; a="--kind" ;;
+    --project=*) v="${a#*=}"; a="--project" ;;
+    --file=*)    v="${a#*=}"; a="--file" ;;
+  esac
+  case "$a" in
+    --kind|--project|--file)
+      [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+      case "$a" in --kind) kind="$v" ;; --project) slug="$v" ;; --file) file="$v" ;; esac ;;
+    -h|--help) pw_usage ;;
+    -*) _pw_unknown "$a" "summary --kind <analysis|task|plan|project> --project <slug> [--file <topic|T0n>]" ;;
+    *) _pw_positional "$a" "summary --kind <analysis|task|plan|project> --project <slug> [--file <topic|T0n>]" ;;
+  esac
+done
+[ -n "$kind" ] || die "summary: --kind is required → fix: summary --kind <analysis|task|plan|project> --project <slug> [--file <topic|T0n>]"
+[ -n "$slug" ] || die "summary: --project is required → fix: summary --kind <analysis|task|plan|project> --project <slug> [--file <topic|T0n>]"
 
-TYPE="$1"
-SLUG="$2"
-shift 2
+D="$(proj_dir "$slug")"
 
-D="$(proj_dir "$SLUG")"
-
-case "$TYPE" in
+case "$kind" in
   analysis)
-    [ $# -ge 1 ] || die "usage: pw-doc.sh summary analysis <slug> <topic>"
-    TOPIC="$1"
+    [ -n "$file" ] || die "usage: pw-doc.sh summary --kind analysis --project <slug> --file <topic>"
+    TOPIC="$file"
     f="$D/analysis/$TOPIC.md"
     [ -f "$f" ] || die "analysis doc not found: $f — /pw-analyze produces analysis docs (ls $D/analysis)"
     
@@ -329,8 +363,8 @@ case "$TYPE" in
     ;;
     
   task)
-    [ $# -ge 1 ] || die "usage: pw-doc.sh summary task <slug> <task-id>"
-    TASK_ID="$1"
+    [ -n "$file" ] || die "usage: pw-doc.sh summary --kind task --project <slug> --file <task-id>"
+    TASK_ID="$file"
     f="$D/task/$TASK_ID.md"
     [ -f "$f" ] || die "task file not found: $f — check the task id against $D/task/T*.md"
     
@@ -383,7 +417,7 @@ case "$TYPE" in
     echo "One-liner: $ONELINER"
     
     # Extract phase
-    PHASE="$("$HERE/pw-status.sh" phase "$SLUG")"
+    PHASE="$("$HERE/pw-status.sh" phase --project "$slug")"
     echo "Phase: $PHASE"
     
     # Count tasks by status
@@ -396,35 +430,32 @@ case "$TYPE" in
     ;;
     
   *)
-    die "unknown type: $TYPE (expected: analysis|task|plan|project)"
+    die "unknown type: $kind (expected: analysis|task|plan|project)"
     ;;
 esac
 
 }
 
 cmd_sync() {
+local slug="" a v
 SYNC_MODE="all"
-for arg in "$@"; do
-  case "$arg" in
+while [ $# -gt 0 ]; do
+  a="$1"; shift; v=""
+  case "$a" in --project=*) v="${a#*=}"; a="--project" ;; esac
+  case "$a" in
+    --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
     --dashboard-only) SYNC_MODE="dashboard" ;;
     --plan-only) SYNC_MODE="plan" ;;
     --tasks-only) SYNC_MODE="tasks" ;;
     -h|--help) pw_usage ;;
-    -*) die "unknown option: $arg" ;;
+    -*) _pw_unknown "$a" "sync --project <slug> [--dashboard-only | --plan-only | --tasks-only]" ;;
+    *) _pw_positional "$a" "sync --project <slug> [--dashboard-only | --plan-only | --tasks-only]" ;;
   esac
 done
 
-# Extract slug (first non-flag argument)
-SLUG=""
-for arg in "$@"; do
-  [[ "$arg" =~ ^-- ]] && continue
-  SLUG="$arg"
-  break
-done
+[ -n "$slug" ] || die "sync: --project is required → fix: sync --project <slug> [--dashboard-only | --plan-only | --tasks-only]"
 
-[ -n "$SLUG" ] || die "usage: pw-doc.sh sync <slug> [--dashboard-only | --plan-only | --tasks-only]"
-
-D="$(proj_dir "$SLUG")"
+D="$(proj_dir "$slug")"
 README="$D/README.md"
 PLAN="$D/task/PLAN.md"
 

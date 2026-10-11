@@ -49,7 +49,7 @@ QUICK REFERENCE (full mechanics + rationale: docs/REVIEW.md):
   to re-read the whole resolved history just to apply one new item.
 - **Agents:** the `> **Add an item:**` / `> **Answer a question:**` hints are permanent — never
   remove them, even once a section reads "No blocking …". Create this file with
-  `/pw-review <slug> init <doc-path>` (copies the template verbatim) — or `/pw-review <slug>
+  `/pw-review init --project <slug> --file <doc-path>` (copies the template verbatim) — or `/pw-review --project <slug>
   init-all` for the review files missing in the project's CURRENT phase — never by hand. -->
 
 ## Decision status — what moves, and who moves it
@@ -64,7 +64,7 @@ You never set an item/question's own status — just leave items `[OPEN]` and ru
 
 ## Items
 
-> **Add an item:** easiest is the deterministic operator — `/pw-review <slug> item <this-file>
+> **Add an item:** easiest is the deterministic operator — `/pw-review --project <slug> item <this-file>
 > §4 <your ask, spaces and all>` (it writes the heading, timestamp, marker, `---` rule, and
 > reindexes `## Contents` for you; a first new item after an `approved` row also records one
 > `pw-review (feedback)` `in-review` row, so the old approval stops being the live decision).
@@ -109,7 +109,7 @@ The agent seeds a `Qn` row here when it hits something it can't resolve (mirrors
 doc's §5). **You answer** with a `↳ you:` line; the agent then folds the answer into the doc and
 flips the row to `[ANSWERED]`. This is the QnA channel — don't answer inside the rewritten doc.
 
-> **Answer a question:** easiest is `/pw-review <slug> answer <this-file> Qn <your answer>`
+> **Answer a question:** easiest is `/pw-review answer --project <slug> --file <this-file> --question Qn --text <your answer>`
 > (it writes the styled `↳ you:` line under the question; a first answer after an `approved` row
 > records the same `pw-review (feedback)` `in-review` row as a new item).
 > By hand instead: under the `Qn` heading, add a quoted line `> ↳ **you** (<DD MMMM YYYY - HH.mm WIB>):
@@ -147,7 +147,7 @@ yours, and flips this exact heading to `[ANSWERED]` — never a second heading.
 This table is the **gate**. Add a row when you're satisfied this phase is complete — `approved`
 is what clears it for the next phase. Date-time **to the minute** (rounds often land same-day);
 new rows are stamped like `5 October 2026 11.30 WIB` and older formats stay readable.
-Easiest: `/pw-review <slug> signoff <this-file> approved` — it stamps the date-time and appends
+Easiest: `/pw-review signoff --project <slug> --file <this-file> --decision approved` — it stamps the date-time and appends
 the row; **human-triggered only**, an agent never runs it on its own initiative. By hand: fill
 the row below. An `in-review`/`changes-requested` row **you** record stands until you withdraw or
 replace it — automatic operational rows never override an explicit human decision.
@@ -169,7 +169,7 @@ readable exactly as history; repairing or reopening an EARLIER phase's gate asks
 
 - Not ready yet? Leave `in-review`, or add `changes-requested` and run /pw-review again.
 - Reopening BY HAND (your own decision, not the recorded operational rows above)? Add a new "in-review" row
-  (keep the old approval), `/pw-status <slug> rewind <phase>`, re-run the phase — see
+  (keep the old approval), `/pw-status rewind --project <slug> --phase <phase>`, re-run the phase — see
   README "Going back a phase".
 - A review file written before this bundle's keyboard-typable-symbols migration may still show the
   legacy `approved ✅` (with a checkmark) — that's read exactly the same as `approved` by every

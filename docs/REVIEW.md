@@ -12,7 +12,7 @@ Adding an item or answering a question does not apply the correction by itself.
 |---|---|
 | Copyable feedback and approval commands | [Review recipe](RECIPES.md#record-feedback-answers-and-approval) |
 | Review an analysis or PLAN | [Local review files](#1-local-review-files-pre-ship) |
-| Fix a reviewer's MR comment | `/pw-ship <slug> [task-ids] comments` and [MR review](#2-the-mr-review-flow-post-ship) |
+| Fix a reviewer's MR comment | `/pw-ship comments --project <slug> [--task <T0n>]…` and [MR review](#2-the-mr-review-flow-post-ship) |
 | An AI pass that keeps human approval | [Advisory recipe](RECIPES.md#use-ai-review-with-human-approval) |
 | Understand automatic approval safeguards | [AI-assisted review](#3-ai-assisted-review-optional-advisory--manual-by-default) |
 
@@ -23,7 +23,7 @@ There are **two places** review happens, and they run at different times:
 | When | Where you comment | What you're reviewing | Command |
 |------|-------------------|-----------------------|---------|
 | **Before ship** (steps 3, 5, 8) | a local `*.review.md` file | analysis, the plan, a task's result | `/pw-review` |
-| **After ship** (step 7+) | comments **on the MR itself** | the pushed diff, in your Git host's UI | `/pw-ship <slug> [task-ids] comments` |
+| **After ship** (step 7+) | comments **on the MR itself** | the pushed diff, in your Git host's UI | `/pw-ship comments --project <slug> [--task <T0n>]…` |
 
 Both feed the **same source of truth** — the project dir. MR comments never live only on the MR;
 they get mirrored back in. The two sections below cover each in turn.
@@ -54,8 +54,8 @@ They start empty and in review. To create missing files:
 
 | Command | Scope |
 |---|---|
-| `/pw-review <slug> init <artifact-path> [artifact-path…]` | Exactly the existing artifacts you name; one invalid entry rejects the whole list |
-| `/pw-review <slug> init-all` | Missing reviews for the current dashboard phase only |
+| `/pw-review init --project <slug> --file <artifact-path> [--file <artifact-path>]…` | Exactly the existing artifacts you name; one invalid entry rejects the whole list |
+| `/pw-review init-all --project <slug>` | Missing reviews for the current dashboard phase only |
 
 Rerunning either command preserves existing review content and history.
 `init-all` covers analysis docs during `analysis`, PLAN and current task plans during `breakdown`,
@@ -93,11 +93,11 @@ Recording the item does not apply the change yet.
 
 | Command | Reviews processed |
 |---|---|
-| `/pw-review <slug> analysis` | Files in `analysis/review/` |
-| `/pw-review <slug> plan` | Files in `task/review/`, including PLAN and individual task reviews; `task` is an alias |
-| `/pw-review <slug> task/review/PLAN.review.md` | Only PLAN's review file |
-| `/pw-review <slug> T01 T02` | The named tasks' review files |
-| `/pw-review <slug>` | Scope inferred from the current phase |
+| `/pw-review --project <slug> --phase analysis` | Files in `analysis/review/` |
+| `/pw-review --project <slug> --phase plan` | Files in `task/review/`, including PLAN and individual task reviews; `task` is an alias |
+| `/pw-review --project <slug> --file task/review/PLAN.review.md` | Only PLAN's review file |
+| `/pw-review --project <slug> --task T01 --task T02` | The named tasks' review files |
+| `/pw-review --project <slug>` | Scope inferred from the current phase |
 
 `plan` is a scope word. The actual plan artifact is `task/PLAN.md`.
 For inferred scope, `analysis` uses analysis reviews, `breakdown` uses task reviews,
@@ -107,9 +107,9 @@ and `executing`/`review` targets tasks currently marked `verify-failed`.
 
 | Action | Command |
 |---|---|
-| Answer an existing question | `/pw-review <slug> answer <review-path> Q2 <your answer>` |
-| Approve the reviewed artifact | `/pw-review <slug> signoff <review-path> approved` |
-| Request changes or leave the gate open | `/pw-review <slug> signoff <review-path> changes-requested` or `in-review` |
+| Answer an existing question | `/pw-review answer --project <slug> --file <review-path> --question Q2 --text <your answer>` |
+| Approve the reviewed artifact | `/pw-review signoff --project <slug> --file <review-path> --decision approved` |
+| Request changes or leave the gate open | `/pw-review signoff --project <slug> --file <review-path> --decision changes-requested` or `in-review` |
 
 `answer` records your response; the next apply pass incorporates it and resolves the question.
 Free text after `Q2` is your answer, including spaces.
@@ -168,8 +168,8 @@ New timestamps use forms such as `5 October 2026 23.11 WIB`. Older formats remai
   and their bookkeeping stay visibly distinct by the `By` attribution; see
   [docs/RFC.md](./RFC.md) for why the post-approval invalidation exists.
 - Task review is optional. Only PLAN approval gates execution. To reject a result, tell the agent what failed and ask it to record `verify-failed`.
-  Add feedback to the task review, or describe the correction in chat. `/pw-review <slug> T0n` creates a missing review for a `verify-failed` task and applies the repair.
-  Task repair normally re-runs `## Verify`. Use `/pw-execute <slug> T0n` if the repair remains unverified or checks still fail.
+  Add feedback to the task review, or describe the correction in chat. `/pw-review --project <slug> --task T0n` creates a missing review for a `verify-failed` task and applies the repair.
+  Task repair normally re-runs `## Verify`. Use `/pw-execute --project <slug> --task T0n` if the repair remains unverified or checks still fail.
 - **Who applies a fix.** Pre-execution artifacts (analysis doc, PLAN, task doc) are edited
   **inline by the driver** — the review file is the work order; no separate session is spawned and
   what you re-read is the edited doc. Post-execution *task* fixes follow the **same routing ladder
@@ -221,8 +221,8 @@ MR in your Git host (GitLab / GitHub). These come from *other* reviewers (or you
 diff). They are handled by a dedicated mode of `/pw-ship`, **not** `/pw-review` — because fixing
 them means going back into the task's worktree and pushing, which is ship-side work.
 
-**One MR or all of them.** `/pw-ship <slug> T03 comments` handles a single task's MR;
-**`/pw-ship <slug> comments`** (no task IDs) sweeps **every** open MR in the project in one run —
+**One MR or all of them.** `/pw-ship comments --project <slug> --task T03` handles a single task's MR;
+**`/pw-ship comments --project <slug>`** (no task IDs) sweeps **every** open MR in the project in one run —
 so you don't have to invoke it per task. It processes them serially (each is a real
 edit → verify → push) and recaps a per-task table at the end.
 
@@ -242,7 +242,7 @@ worktree, and skip it (never process comments on a merged MR); `closed` → note
 reviewer leaves a comment on MR !123 (thread on file X, line N — OR a general/no-diff comment)
         │
         ▼
-/pw-ship <slug> T03 comments
+/pw-ship comments --project <slug> --task T03
         │
         ├─ 0. RECOVER pending description delivery, then CHECK MR state — merged/closed/unknown ⇒
         │                      accept/update dashboard/remove worktree + skip; only open MRs proceed
@@ -372,7 +372,7 @@ configuring):
 
 | Axis | Values (default) | What it decides |
 |---|---|---|
-| `ai-review` | `advisory`\|`auto` (`advisory`) | **Outcome**: advisory files findings and leaves approval with you; auto may ALSO approve a genuinely clean managed pass through the guarded call below. The removed `off` value reads as effective `advisory`; persist the migration with `/pw-config <slug> project ensure`. |
+| `ai-review` | `advisory`\|`auto` (`advisory`) | **Outcome**: advisory files findings and leaves approval with you; auto may ALSO approve a genuinely clean managed pass through the guarded call below. The removed `off` value reads as effective `advisory`; persist the migration with `/pw-config ensure --project <slug>`. |
 | `review-trigger` | `manual`\|`completion` (`manual`) | **When a pass starts**: manual = only when you invoke one; completion = also after a succeeded producing command's verification (context prepare, analysis, breakdown, per-task execute, ship, RFC content, close). `completion` never disables explicit requests. |
 | `review-repair` | `manual`\|`bounded` (`manual`) | Whether a completion review may run the **bounded cycle**: review → repair → verify → fresh review. |
 | `review-rounds` | `1..3` (`3`) | Total reviewer passes in that cycle — with 3, at most two intervening verified repairs; the sequence stops at pass 3 even with findings left. |
@@ -393,12 +393,12 @@ baseline regardless of argument order, and a batch with any illegal pair writes 
 |---|---|
 | `ai-review=advisory` | `pw-reviewer` files items into the normal `.review.md`, tagged `(pw-reviewer, <timestamp>)` so they're never confused with a human's. **A human still writes the Sign-off row** — this is a pre-filter, not a replacement, even when every finding has been resolved. |
 | `ai-review=auto` | Same filing, but if the pass leaves **nothing** [OPEN] or [PENDING], `pw-reviewer` may sign off itself, via a guarded tool call that independently re-checks its conditions (mode, open counts, artifact/lane match, no standing human rejection). A clean **external** import never approves, even in `auto`. |
-| `review-trigger=manual` | No pass starts by itself — you invoke `/pw-review <slug> ai …` when you want one. |
+| `review-trigger=manual` | No pass starts by itself — you invoke `/pw-review ai --project <slug> …` when you want one. |
 | `review-trigger=completion` | After the producing command's own verification succeeds (never on failure), that command runs the same fresh-reviewer flow for its surface before summarizing. The reviewer's availability is never allowed to fail the phase: an outage or an unverified cross-provider route records a skip and continues. Completion review never starts the NEXT phase, never accepts a task, and never pushes. |
 | `review-repair=bounded` | A completion review that ends with repairable findings may batch-fix them by their normal routing (the producing driver for docs; the executor ladder for task code, each fix re-running the task's `## Verify`) and then request a fresh pass on the changed artifact. Human questions, scope changes, and consumed earlier-phase edits stop the cycle for your decision. |
 | `review-repair=manual` | Findings stop for you — nothing repairs automatically. |
 
-**Run it** with `/pw-review <slug> ai [surface|Tid(s)|path]` — same scope resolution as the normal
+**Run it** with `/pw-review ai --project <slug> [--surface <surface> | --task <T0n> | --file <path>]` — same scope resolution as the normal
 `/pw-review` (a list of task ids = one fresh reviewer pass per task). Under the hood this spawns the
 `pw-reviewer` agent fresh, in-process, same provider. A cross-provider reviewer (e.g. Kilo
 producing, Codex reviewing) is a separate review-only CLI session used only when its read-only
@@ -434,7 +434,7 @@ a structured import.
 artifact's own `.review.md`; the narrative (what ran, verdict, coverage gaps, attribution) goes to
 `REVIEWER-NOTES.md`; and approval — when it happens at all — is the review file's Sign-off table,
 written by you (advisory) or, for an eligible clean managed pass, by the guarded auto call.
-`/pw-review <slug> passes` lists every packet with its surface, state, artifact, round, and
+`/pw-review passes --project <slug>` lists every packet with its surface, state, artifact, round, and
 verdict. Raw code/document review outside a scaffolded project is a different tool — the
 `pw-independent-review` skill — whose default destination is chat, with no project records.
 

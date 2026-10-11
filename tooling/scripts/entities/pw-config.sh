@@ -3,69 +3,79 @@
 # pw-config.sh — the per-project config entity: which models and which review
 # modes a project runs with (dashboard config lines, get-or-set semantics).
 #
-#   pw-config.sh project      <op> <slug> …  — ALL per-project configuration, under ONE operation:
-#       project show   <slug> [--json]   every axis: kind | stored | source | effective floor
-#                                        (read-only — includes state/data rows, which have no set)
-#       project get    <slug> <key>      one config key's stored value (or "(unset — effective: …)")
-#       project set    <slug> <key> <value…>   validated write through the single owner location
-#                                        (keys: routing | execution-limit | max-parallel |
-#                                               produced-by | ai-review | ai-model | pin | rfc-target |
-#                                               review-trigger | review-repair | review-rounds)
-#                                        ai-review/ai-model/review-trigger/review-repair accept BATCH
-#                                        pairs (`plan=auto ship=advisory`) and an `all=<value>`
-#                                        baseline that expands over every supported surface, with
-#                                        explicitly named surfaces overriding it (in either
-#                                        argument order): every pair validated first
-#                                        (all-or-nothing), then ONE write + ONE LOG line.
-#                                        review-rounds takes one integer 1..3 (the bounded
-#                                        review→repair cycle's total reviewer passes).
-#                                        pin accepts BATCH task pins (`pin T01=kilo:prov/model
-#                                        T02=claude:sonnet`, `—` clears): same all-or-nothing
-#                                        validation (membership + model-check + model-resolve),
-#                                        written to BOTH holders — task file `Execute with:` +
-#                                        PLAN cell — by one propagator, ONE LOG line.
-#       project ensure <slug>            insert any missing explicit dashboard config lines
-#                                        (AI Models: / AI Review: / Review Trigger: /
-#                                        Review Repair: / Review Budget: — `—`/`manual`/`3` are
-#                                        legal explicit values; an absent line is a defect,
-#                                        never a style choice). Also the one migration door for
-#                                        legacy `off` outcome rows: they become effective
-#                                        `advisory` on every read WITHOUT a write; ensure
-#                                        persists that normalization.
-#   pw-config.sh global     show
+#   pw-config.sh show --project <slug> [--json]
+#       every axis: kind | stored | source | effective floor
+#       (read-only — includes state/data rows, which have no set)
+#   pw-config.sh get --project <slug> --key <key>
+#       one config key's stored value (or "(unset — effective: …)")
+#   pw-config.sh set --project <slug> --key <key> [--value <v> | --set <member=value>]…
+#       validated write through the single owner location
+#       (keys: routing | execution-limit | max-parallel |
+#              produced-by | ai-review | ai-model | pin | rfc-target |
+#              review-trigger | review-repair | review-rounds)
+#       Scalar keys (routing, execution-limit, max-parallel, produced-by, rfc-target,
+#       review-rounds) take --value <v> — vocabulary: routing auto|subagent|headless
+#       (headless = strict binding); ai-review surfaces context|analysis|plan|task-plan|
+#       task-exec|ship|rfc|close with modes advisory|auto; review-trigger values
+#       manual|completion; review-repair values manual|bounded; ai-model roles
+#       researcher|analyst|writer-task|reviewer|verifier.
+#       ai-review/ai-model/review-trigger/review-repair accept BATCH
+#       --set pairs (`--set plan=auto --set ship=advisory`) and an
+#       `--set all=<value>` baseline that expands over every supported surface,
+#       with explicitly named surfaces overriding it (in either
+#       argument order): every pair validated first
+#       (all-or-nothing), then ONE write + ONE LOG line.
+#       review-rounds --value <n> takes one integer 1..3 (the bounded
+#       review→repair cycle's total reviewer passes).
+#       pin accepts BATCH task pins (`--set T01=kilo:prov/model
+#       --set T02=claude:sonnet`, `—` clears): same all-or-nothing
+#       validation (membership + model-check + model-resolve),
+#       written to BOTH holders — task file `Execute with:` +
+#       PLAN cell — by one propagator, ONE LOG line.
+#   pw-config.sh ensure --project <slug>
+#       insert any missing explicit dashboard config lines
+#       (AI Models: / AI Review: / Review Trigger: /
+#       Review Repair: / Review Budget: — `—`/`manual`/`3` are
+#       legal explicit values; an absent line is a defect,
+#       never a style choice). Also the one migration door for
+#       legacy `off` outcome rows: they become effective
+#       `advisory` on every read WITHOUT a write; ensure
+#       persists that normalization.
+#   pw-config.sh global show
 #       The effective machine floors view: providers, API-provider scopes, model allowlists,
 #       route/ladder defaults, repair budgets, RFC backend. Read-only on purpose — pw.config.sh
 #       is the human-owned floor file; there is deliberately no `global set`.
 #   get/set on state/data keys (status, adopted, base-branches, landing-units) is REFUSED with the
 #   owning flow's command — those are derived facts, not configuration.
-#   Bare `ai-model` / `ai-review` are DEPRECATED shims onto `project ai-model` / `project
-#   ai-review` — same behavior plus a pointer; use the project form in new invocations.
-#   pw-config.sh ai-model     <slug> [<role> <provider:model|—> | <role>=<value>…]
-#       Get or set spawn-lane model rows (roles: researcher analyst
+#   The ai-model / ai-review / review-trigger / review-repair / review-rounds ops are
+#   DEPRECATED shims (named args only) — the same writers as `set --key …`, and they
+#   announce the pointer on stderr; use the `set --key …` form in new invocations.
+#   pw-config.sh ai-model --project <slug> [--set <role=value>]…
+#       Get (no --set) or set spawn-lane model rows (roles: researcher analyst
 #       writer-task reviewer verifier). — clears to provider/session default. Several
-#       role=<value> pairs in one call = batch (validated all-or-nothing, one write/log).
-#   pw-config.sh ai-review    <slug> [<surface> <mode> | <surface>=<mode>…]
-#       Get or set AI-review OUTCOME modes. Two values only: advisory|auto (auto is
+#       --set role=<value> pairs in one call = batch (validated all-or-nothing, one write/log).
+#   pw-config.sh ai-review --project <slug> [--set <surface=mode>]…
+#       Get (no --set) or set AI-review OUTCOME modes. Two values only: advisory|auto (auto is
 #       what lets pw-review.sh auto-signoff ever succeed). The removed `off` value
 #       reads as effective `advisory` (missing rows too), so an explicit AI pass is
-#       always callable; SCHEDULING lives on review-trigger, never here. `all=<mode>`
+#       always callable; SCHEDULING lives on review-trigger, never here. `--set all=<mode>`
 #       sets every surface, named surfaces override it. Surfaces:
 #       context analysis plan task-plan task-exec ship rfc close.
-#   pw-config.sh review-trigger <slug> [<surface> <value> | <surface>=<value>…]
-#       Get or set WHEN an AI pass starts: manual (only an explicit /pw-review … ai
+#   pw-config.sh review-trigger --project <slug> [--set <surface=value>]…
+#       Get (no --set) or set WHEN an AI pass starts: manual (only an explicit /pw-review … ai
 #       request) | completion (after a successful producing command's verification).
 #       completion never disables explicit requests; missing rows mean manual.
-#   pw-config.sh review-repair <slug> [<surface> <value> | <surface>=<value>…]
-#       Get or set whether a completion review may run the BOUNDED repair cycle:
+#   pw-config.sh review-repair --project <slug> [--set <surface=value>]…
+#       Get (no --set) or set whether a completion review may run the BOUNDED repair cycle:
 #       manual (findings stop for the owner) | bounded (review→repair→verify→fresh
 #       review within the budget). Missing rows mean manual.
-#   pw-config.sh review-rounds <slug> [<n>]
-#       Get or set the bounded cycle's total reviewer passes (1..3; default 3 —
+#   pw-config.sh review-rounds --project <slug> [--value <n>]
+#       Get (no --value) or set the bounded cycle's total reviewer passes (1..3; default 3 —
 #       three passes allow at most two intervening verified repairs).
-#   pw-config.sh model-check  <provider> <model-id>
+#   pw-config.sh model-check --provider <p> --model <m>
 #       Pass/refuse a model against PW_MODEL_ALLOWLIST_<PROVIDER> from
 #       pw.config.sh (empty/unset = all allowed — the default rule).
-#   pw-config.sh model-resolve <provider> <model-id>
+#   pw-config.sh model-resolve --provider <p> --model <m>
 #       AVAILABILITY check (the sibling of model-check's PERMISSION check): match the model
 #       against the provider's live catalog, verify it sits inside the
 #       PW_<PROVIDER>_API_PROVIDERS prefix scope, and print the CANONICAL catalog id that a
@@ -73,6 +83,9 @@
 #       2 matched but out of configured scope. Providers with no queryable catalog (claude)
 #       or no catalog reachable (CLI off PATH) exit 0 "unverified" — never a false dead.
 #
+# Named-argument grammar: operation words stay first and positional; every value is
+# named. Scalar values are ONE token (quote spaces); --flag=value carries one literal
+# value (needed when a value starts with --).
 # Merged from pw-lib's config block (plan 20 entity consolidation); semantics
 # unchanged. (was pw-lib.sh ai-model / ai-review / model-check)
 # ============================================================================
@@ -89,7 +102,7 @@ PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 ST="$HERE/pw-status.sh"
 
 die() { echo "pw-config: $*" >&2; exit 2; }
-proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new $1)"; printf '%s' "$d"; }
+proj_dir() { local d="$PROJECTS_DIR/$1"; [ -d "$d" ] || die "no such project: $1 ($d) → fix: check the slug under the projects dir (new project? create it with: /pw-new --project $1)"; printf '%s' "$d"; }
 
 # --- AI Models (per-lane model row for the spawned sub-agent lanes — plan 01 §5.1) -----------
 # The model sibling of the AI Review config block below: which model a *lane* should run on when a
@@ -118,9 +131,9 @@ _ai_models_line_ensure() {
     "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 }
 
-# Get (no extra args) or set (role + value; — clears to no-row).
-#   ai-model <slug>                                -> "researcher=— analyst=— writer-task=— reviewer=— verifier=—"
-#   ai-model <slug> <role> <provider:model|—>      -> sets just that lane, leaves the other four untouched
+# Get (no --set) or set (--set <role>=<value>; — clears to no-row).
+#   ai-model --project <slug>                        -> "researcher=— analyst=— writer-task=— reviewer=— verifier=—"
+#   ai-model --project <slug> --set <role>=<provider:model|—>   -> sets just that lane, leaves the other four untouched
 _line_pairs_set() {  # <file> <line-label> <k>=<v>… — batch-update a one-line k=v config line
   local f="$1" label="$2"; shift 2
   local cur pair k v new kv kk found
@@ -164,8 +177,8 @@ _model_pin_validate() {
         || die "invalid value '$value' ($context) — write <provider>:<model> (e.g. kilo:command_code/<m>, claude:sonnet) or — to clear"
       for _pp in "${PW_PROVIDERS[@]}"; do [ "$_pp" = "$_prov" ] && _pin=1; done
       [ "$_pin" = 1 ] || die "$context refused at write time — provider '$_prov' is not an enabled Agent Provider (pw.config.sh PW_PROVIDERS: ${PW_PROVIDERS[*]})"
-      cmd_model_check "$_prov" "$_mdl" >/dev/null
-      _mres="$(cmd_model_resolve "$_prov" "$_mdl" 2>&1)" || _mrc=$?
+      cmd_model_check --provider "$_prov" --model "$_mdl" >/dev/null
+      _mres="$(cmd_model_resolve --provider "$_prov" --model "$_mdl" 2>&1)" || _mrc=$?
       if [ "$_mrc" = 1 ] || [ "$_mrc" = 2 ]; then
         die "$context refused at write time — $_mres"
       fi ;;
@@ -174,33 +187,41 @@ _model_pin_validate() {
 }
 
 cmd_ai_model() {
-  [ $# -ge 1 ] || die "usage: ai-model <slug> [<role> <provider:model|—> | <role>=<value>…]   (role: $AI_MODEL_ROLES)"
-  local slug="$1"; shift
+  local slug="" a v s
+  local -a sets; sets=()
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --set=*)     v="${a#*=}"; a="--set" ;;
+    esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      --set) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --set; v="$1"; shift; }; sets+=("$v") ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "ai-model --project <slug> [--set <role=value>]…   (roles: $AI_MODEL_ROLES)" ;;
+      *) _pw_positional "$a" "ai-model --project <slug> [--set <role=value>]…   (roles: $AI_MODEL_ROLES)" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "ai-model: --project is required → fix: ai-model --project <slug> [--set <role=value>]…   (roles: $AI_MODEL_ROLES)"
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
   _ai_models_line_ensure "$f"
-  if [ $# -eq 0 ]; then
+  if [ ${#sets[@]} -eq 0 ]; then
     grep '^- \*\*AI Models:\*\*' "$f" | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//'
     return 0
   fi
-  [ $# -ge 2 ] || die "usage: ai-model <slug> <role> <provider:model|—>   (or batch: '<role>=<value>' pairs; roles: $AI_MODEL_ROLES)"
-  if [ "${1#*=}" = "$1" ]; then
-    # legacy positional <role> <value> → normalize to the one pair form
-    [ $# -eq 2 ] || die "usage: ai-model <slug> <role> <provider:model|—>   (or batch role=<value> pairs)"
-    set -- "$1=$2"
-  fi
-  local pair
-  for pair in "$@"; do
-    case "$pair" in *=*) ;; *) die "ai-model: expected <role>=<provider:model|—>, got '$pair' (legacy form: '<role> <value>')" ;; esac
-    _ai_model_validate "${pair%%=*}" "${pair#*=}"
+  for s in "${sets[@]}"; do
+    case "$s" in *=*) ;; *) die "ai-model: --set expects <role>=<provider:model|—>, got '$s' (roles: $AI_MODEL_ROLES)" ;; esac
+    _ai_model_validate "${s%%=*}" "${s#*=}"
   done
-  _line_pairs_set "$f" "AI Models" "$@"
-  if [ $# -eq 1 ]; then
-    "$ST" log "$slug" ai-model "${1%%=*} -> ${1#*=}"
-    echo "$slug: AI Model ${1%%=*} -> ${1#*=}"
+  _line_pairs_set "$f" "AI Models" "${sets[@]}"
+  if [ ${#sets[@]} -eq 1 ]; then
+    "$ST" log --project "$slug" --actor "ai-model" --message "${sets[0]%%=*} -> ${sets[0]#*=}"
+    echo "$slug: AI Model ${sets[0]%%=*} -> ${sets[0]#*=}"
   else
-    "$ST" log "$slug" ai-model "set: $*"
-    echo "$slug: AI Models set: $*"
+    "$ST" log --project "$slug" --actor "ai-model" --message "set: ${sets[*]}"
+    echo "$slug: AI Models set: ${sets[*]}"
   fi
 }
 
@@ -212,7 +233,7 @@ cmd_ai_model() {
 #                  human; auto lets ONE guarded tool call (pw-review.sh auto-signoff) approve a
 #                  genuinely clean pass. The removed legacy `off` value reads as effective
 #                  `advisory` (missing rows too) — an explicit /pw-review … ai request is never
-#                  silently dead; /pw-config … project ensure persists the normalization.
+#                  silently dead; /pw-config ensure --project <slug> persists the normalization.
 #   review-trigger <surface>=manual|completion — SCHEDULING only. completion runs a pass after
 #                  a successful producing command's verification; explicit requests stay
 #                  available under BOTH values. Missing rows mean manual.
@@ -327,7 +348,7 @@ _ai_review_validate() { # <surface> <mode> — die on anything illegal (validate
   case " $AI_REVIEW_PHASES " in *" $1 "*) ;; *) die "invalid surface '$1' (allowed: $AI_REVIEW_PHASES)" ;; esac
   case "$2" in
     advisory|auto) ;;
-    off)  die "'off' was removed from ai-review — outcome is advisory|auto; keep review manual with review-trigger=manual instead (explicit AI review stays available). → fix: /pw-config <slug> set ai-review all=advisory" ;;
+    off)  die "'off' was removed from ai-review — outcome is advisory|auto; keep review manual with review-trigger=manual instead (explicit AI review stays available). → fix: /pw-config set --project <slug> --key ai-review --set all=advisory" ;;
     *)    die "invalid mode '$2' (allowed: advisory auto) → fix: use advisory (human still approves) or auto (guarded self-approval on a clean pass)" ;;
   esac
 }
@@ -335,7 +356,7 @@ _review_trigger_validate() {
   case " $AI_REVIEW_PHASES " in *" $1 "*) ;; *) die "invalid surface '$1' (allowed: $AI_REVIEW_PHASES)" ;; esac
   case "$2" in
     manual|completion) ;;
-    both) die "'both' was removed — 'completion' already keeps explicit review available → fix: /pw-config <slug> set review-trigger all=completion (or manual)" ;;
+    both) die "'both' was removed — 'completion' already keeps explicit review available → fix: /pw-config set --project <slug> --key review-trigger --set all=completion (or manual)" ;;
     *)    die "invalid value '$2' (allowed: manual completion) → fix: manual = review only when explicitly requested; completion = also after a successful producing command" ;;
   esac
 }
@@ -356,7 +377,7 @@ _expand_axis_pairs() { # <axis> <pair…>
   local -a explicit
   explicit=()
   for pair in "$@"; do
-    case "$pair" in *=*) ;; *) die "$axis: expected <surface>=<value> or all=<value>, got '$pair'" ;; esac
+    case "$pair" in *=*) ;; *) die "$axis: --set expects <surface>=<value> or all=<value>, got '$pair'" ;; esac
     s="${pair%%=*}"
     if [ "$s" = "all" ]; then
       [ -z "$allv" ] || die "$axis: duplicate all= — give exactly one baseline"
@@ -379,9 +400,27 @@ _expand_axis_pairs() { # <axis> <pair…>
 }
 
 # One get/set implementation for the three per-surface review axes (ai-review / review-trigger /
-# review-repair): ensure line → get (normalized for ai-review) or expand+validate+write+log.
-_review_axis_cmd() { # <axis> <line-label> <validator-fn> <values-help> <slug> [args…]
-  local axis="$1" label="$2" vfn="$3" vhelp="$4" slug="$5"; shift 5
+# review-repair): parse --project/--set, ensure line → get (normalized for ai-review) or
+# expand+validate+write+log. No --set = read.
+_review_axis_cmd() { # <axis> <line-label> <validator-fn> <values-help> <"--project/--set" flags…>
+  local axis="$1" label="$2" vfn="$3" vhelp="$4"; shift 4
+  local slug="" a v s
+  local -a sets; sets=()
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --set=*)     v="${a#*=}"; a="--set" ;;
+    esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      --set) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --set; v="$1"; shift; }; sets+=("$v") ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "$axis --project <slug> [--set <surface>=<value>]…   ($vhelp)" ;;
+      *) _pw_positional "$a" "$axis --project <slug> [--set <surface>=<value>]…   ($vhelp)" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "$axis: --project is required → fix: $axis --project <slug> [--set <surface>=<value>]…   ($vhelp)"
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
   case "$axis" in
@@ -389,7 +428,7 @@ _review_axis_cmd() { # <axis> <line-label> <validator-fn> <values-help> <slug> [
     review-trigger) _review_trigger_line_ensure "$f" ;;
     review-repair)  _review_repair_line_ensure "$f" ;;
   esac
-  if [ $# -eq 0 ]; then
+  if [ ${#sets[@]} -eq 0 ]; then
     local line out kv norm=0
     line="$(grep -m1 "^- \*\*${label}:\*\*" "$f" | sed "s|^- \*\*${label}:\*\*[[:space:]]*||" || true)"
     if [ "$axis" = "ai-review" ]; then
@@ -400,68 +439,70 @@ _review_axis_cmd() { # <axis> <line-label> <validator-fn> <values-help> <slug> [
           *)   out="$out $kv" ;;
         esac
       done
-      [ "$norm" = 1 ] && printf 'pw-config: note: stored legacy off row(s) read as effective advisory — persist with: /pw-config %s project ensure\n' "$slug" >&2
+      [ "$norm" = 1 ] && printf 'pw-config: note: stored legacy off row(s) read as effective advisory — persist with: /pw-config ensure --project %s\n' "$slug" >&2
       printf '%s\n' "${out# }"
       return 0
     fi
     printf '%s\n' "$line"
     return 0
   fi
-  [ $# -ge 1 ] || die "usage: $axis <slug> <surface> <value>   (or batch: '<surface>=<value>' pairs / all=<value>; $vhelp)"
-  if [ "${1#*=}" = "$1" ]; then
-    [ $# -eq 2 ] || die "usage: $axis <slug> <surface> <value>   (or batch pairs; $vhelp)"
-    set -- "$1=$2"
-  fi
-  local argc=$# expanded pair
-  expanded="$(_expand_axis_pairs "$axis" "$@")" || exit 2
+  local argc=${#sets[@]} expanded pair
+  expanded="$(_expand_axis_pairs "$axis" "${sets[@]}")" || exit 2
   for pair in $expanded; do "$vfn" "${pair%%=*}" "${pair#*=}"; done
   _line_pairs_set "$f" "$label" $expanded
   if [ "$argc" = 1 ] && [ "$(printf '%s' "$expanded" | wc -w | tr -d ' ')" = 1 ]; then
-    "$ST" log "$slug" "$axis" "${expanded%%=*} -> ${expanded#*=}"
+    "$ST" log --project "$slug" --actor "$axis" --message "${expanded%%=*} -> ${expanded#*=}"
     echo "$slug: ${label} ${expanded%%=*} -> ${expanded#*=}"
   else
-    "$ST" log "$slug" "$axis" "set: $expanded"
+    "$ST" log --project "$slug" --actor "$axis" --message "set: $expanded"
     echo "$slug: ${label} set: $expanded"
   fi
 }
 
-# Get (no extra args) or set (surface + mode) this project's per-surface AI-review OUTCOME mode.
-#   ai-review <slug>                       -> effective rows, legacy off normalized to advisory
-#   ai-review <slug> <surface> <mode>      -> sets just that surface
-#   ai-review <slug> all=<mode> [s=<mode>] -> baseline + named overrides
+# Get (no --set) or set (--set <surface>=<mode>) this project's per-surface AI-review OUTCOME mode.
+#   ai-review --project <slug>                        -> effective rows, legacy off normalized to advisory
+#   ai-review --project <slug> --set <surface>=<mode> -> sets just that surface
+#   ai-review --project <slug> --set all=<mode> [--set <s>=<mode>] -> baseline + named overrides
 cmd_ai_review() {
-  [ $# -ge 1 ] || die "usage: ai-review <slug> [<surface> <mode> | <surface>=<mode>… | all=<mode>]   (surfaces: $AI_REVIEW_PHASES; modes: advisory|auto)"
-  local slug="$1"; shift
-  _review_axis_cmd ai-review "AI Review" _ai_review_validate "modes: advisory|auto" "$slug" "$@"
+  _review_axis_cmd ai-review "AI Review" _ai_review_validate "modes: advisory|auto" "$@"
 }
 cmd_review_trigger() {
-  [ $# -ge 1 ] || die "usage: review-trigger <slug> [<surface> <value> | <surface>=<value>… | all=<value>]   (surfaces: $AI_REVIEW_PHASES; values: manual|completion)"
-  local slug="$1"; shift
-  _review_axis_cmd review-trigger "Review Trigger" _review_trigger_validate "values: manual|completion" "$slug" "$@"
+  _review_axis_cmd review-trigger "Review Trigger" _review_trigger_validate "values: manual|completion" "$@"
 }
 cmd_review_repair() {
-  [ $# -ge 1 ] || die "usage: review-repair <slug> [<surface> <value> | <surface>=<value>… | all=<value>]   (surfaces: $AI_REVIEW_PHASES; values: manual|bounded)"
-  local slug="$1"; shift
-  _review_axis_cmd review-repair "Review Repair" _review_repair_validate "values: manual|bounded" "$slug" "$@"
+  _review_axis_cmd review-repair "Review Repair" _review_repair_validate "values: manual|bounded" "$@"
 }
 # Get/set the bounded cycle's total reviewer passes (1..3, default 3).
-#   review-rounds <slug>       -> "rounds=3"
-#   review-rounds <slug> <n>   -> sets n
+#   review-rounds --project <slug>            -> "rounds=3"
+#   review-rounds --project <slug> --value <n> -> sets n
 cmd_review_rounds() {
-  [ $# -ge 1 ] || die "usage: review-rounds <slug> [<n>]   (n: 1..3 — total reviewer passes in a bounded review→repair cycle; default 3)"
-  local slug="$1"; shift
+  local slug="" val="" hasval=0 a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --value=*)   v="${a#*=}"; a="--value" ;;
+    esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      --value) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --value; v="$1"; shift; }; val="$v"; hasval=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "review-rounds --project <slug> [--value <n>]   (n: 1..3 — total reviewer passes in a bounded review→repair cycle; default 3)" ;;
+      *) _pw_positional "$a" "review-rounds --project <slug> [--value <n>]   (n: 1..3 — total reviewer passes in a bounded review→repair cycle; default 3)" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "review-rounds: --project is required → fix: review-rounds --project <slug> [--value <n>]   (n: 1..3 — total reviewer passes in a bounded review→repair cycle; default 3)"
   local f; f="$(proj_dir "$slug")/README.md"
   [ -f "$f" ] || die "no README.md in project $slug"
   _review_budget_line_ensure "$f"
-  if [ $# -eq 0 ]; then
+  if [ "$hasval" = 0 ]; then
     grep -m1 '^- \*\*Review Budget:\*\*' "$f" | sed 's/^- \*\*Review Budget:\*\*[[:space:]]*//'
     return 0
   fi
-  [ $# -eq 1 ] || die "usage: review-rounds <slug> <1..3>"
-  _require_int review-rounds "$1" 1 3
-  _line_pairs_set "$f" "Review Budget" "rounds=$1"
-  "$ST" log "$slug" review-rounds "rounds -> $1"
-  echo "$slug: Review Budget rounds -> $1"
+  _require_int review-rounds "$val" 1 3
+  _line_pairs_set "$f" "Review Budget" "rounds=$val"
+  "$ST" log --project "$slug" --actor review-rounds --message "rounds -> $val"
+  echo "$slug: Review Budget rounds -> $val"
 }
 
 
@@ -475,10 +516,27 @@ cmd_review_rounds() {
 # gate rather than trusting the reviewer. Called by /pw-breakdown (while filling a task's `Execute
 # with:`) and /pw-execute (again, right before invoking — catches a hand-edited PLAN.md too); not
 # meant to be run directly by a human — see docs/EXECUTION.md's "Model allowlist" section.
-#   model-check <provider> <model-id>
+#   model-check --provider <p> --model <m>
 cmd_model_check() {
-  [ $# -eq 2 ] || die "usage: model-check <provider> <model-id>   (empty PW_MODEL_ALLOWLIST_<PROVIDER> = all models allowed)"
-  local prov="$1" model="$2" upper var allow pats pat matched=0
+  local prov="" model="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --provider=*) v="${a#*=}"; a="--provider" ;;
+      --model=*)    v="${a#*=}"; a="--model" ;;
+    esac
+    case "$a" in
+      --provider|--model)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --provider) prov="$v" ;; --model) model="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "model-check --provider <p> --model <m>" ;;
+      *) _pw_positional "$a" "model-check --provider <p> --model <m>" ;;
+    esac
+  done
+  [ -n "$prov" ] || die "model-check: --provider is required → fix: model-check --provider <p> --model <m>   (empty PW_MODEL_ALLOWLIST_<PROVIDER> = all models allowed)"
+  [ -n "$model" ] || die "model-check: --model is required → fix: model-check --provider <p> --model <m>   (empty PW_MODEL_ALLOWLIST_<PROVIDER> = all models allowed)"
+  local upper var allow pats pat matched=0
   upper="$(printf '%s' "$prov" | tr '[:lower:]' '[:upper:]')"
   var="PW_MODEL_ALLOWLIST_${upper}"
   allow="${!var:-}"
@@ -514,10 +572,27 @@ cmd_model_check() {
 # Fail-open on "can't check" (claude has no catalog; a CLI off
 # PATH, an empty catalog, or an unknown provider = unverified, exit 0) — a non-zero here is a
 # POSITIVE determination, which is what makes it safe as a pre-spawn hard stop.
-#   model-resolve <provider> <model-id>
+#   model-resolve --provider <p> --model <m>
 cmd_model_resolve() {
-  [ $# -eq 2 ] || die "usage: model-resolve <provider> <model-id>   (prints the canonical catalog id on exit 0)"
-  local prov="$1" model="$2" catalog line cands upper via=0
+  local prov="" model="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --provider=*) v="${a#*=}"; a="--provider" ;;
+      --model=*)    v="${a#*=}"; a="--model" ;;
+    esac
+    case "$a" in
+      --provider|--model)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --provider) prov="$v" ;; --model) model="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "model-resolve --provider <p> --model <m>" ;;
+      *) _pw_positional "$a" "model-resolve --provider <p> --model <m>" ;;
+    esac
+  done
+  [ -n "$prov" ] || die "model-resolve: --provider is required → fix: model-resolve --provider <p> --model <m>   (prints the canonical catalog id on exit 0)"
+  [ -n "$model" ] || die "model-resolve: --model is required → fix: model-resolve --provider <p> --model <m>   (prints the canonical catalog id on exit 0)"
+  local catalog line cands upper via=0
   case "$prov" in
     claude)
       echo "model-resolve: $prov:$model — unverified (Claude Code has a fixed alias set, no queryable catalog; model-check governs)"
@@ -559,7 +634,7 @@ cmd_model_resolve() {
   printf '%s\n' "$line"
 }
 
-# --- project scope (per-project config, ONE operation) + global floors -------------------------
+# --- per-project config (top-level show/get/set/ensure) + global floors ------------------------
 # Storage stays markdown (dashboard/PLAN/META — the single source of truth; no parallel .pwrc).
 # kind split (owner decision): config = a get/set knob; state/data = derived facts the owning flow
 # writes — show lists them, get/set refuses them.
@@ -612,8 +687,20 @@ _require_int() { # <key> <value> <min> <max>
   [ "$2" -ge "$3" ] && [ "$2" -le "$4" ] || die "$1: expected $3..$4, got $2"
 }
 
-cmd_project_show() {
-  local slug="$1" json="${2:-}"
+cmd_show() {
+  local slug="" json=0 a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --project=*) v="${a#*=}"; a="--project" ;; esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      --json) json=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "show --project <slug> [--json]" ;;
+      *) _pw_positional "$a" "show --project <slug> [--json]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "show: --project is required → fix: show --project <slug> [--json]"
   local d; d="$(proj_dir "$slug")"
   local readme="$d/README.md" plan="$d/task/PLAN.md" meta="$d/rfc/META.md"
   [ -f "$readme" ] || die "no README.md in project $slug"
@@ -677,7 +764,7 @@ cmd_project_show() {
   fi
   line="$(grep -m1 '^- \*\*Adopted:\*\*' "$readme" | sed 's/^- \*\*Adopted:\*\*[[:space:]]*//' || true)"
   [ -n "$line" ] && _row adopted state "$line" "README.md:Adopted" "—"
-  if [ "$json" = "--json" ]; then
+  if [ "$json" = 1 ]; then
     printf '{"slug":"%s","rows":[' "$slug"
     local first=1
     while IFS='	' read -r k p v s e; do
@@ -691,7 +778,7 @@ cmd_project_show() {
     printf ']}\n'
     return 0
   fi
-  printf 'pw-config project show — %s   (config = get/set knob · state/data = derived fact, show-only)\n' "$slug"
+  printf 'pw-config show — %s   (config = get/set knob · state/data = derived fact, show-only)\n' "$slug"
   printf '  %-24s %-6s %-28s %-26s %s\n' KEY KIND STORED SOURCE EFFECTIVE
   while IFS='	' read -r k p v s e; do
     [ -n "$k" ] || continue
@@ -700,30 +787,47 @@ cmd_project_show() {
   printf '  settable keys: routing[auto|subagent|headless] execution-limit[int 0..99] max-parallel[int 1..99] produced-by[from PW_PROVIDERS] ai-review[surface=advisory|auto|all=…] ai-model[role=provider:model|—] pin[T0n=provider:model|—] rfc-target[ref] review-trigger[surface=manual|completion|all=…] review-repair[surface=manual|bounded|all=…] review-rounds[int 1..3]\n'
   printf '  show-only (flows derive them; set refuses): status · adopted · base-branches · landing-units\n'
   if [ "$legacy_off" = 1 ]; then
-    printf '  note: legacy AI Review off row(s) read as effective advisory — persist with: /pw-config %s project ensure\n' "$slug"
+    printf '  note: legacy AI Review off row(s) read as effective advisory — persist with: /pw-config ensure --project %s\n' "$slug"
   fi
   return 0
 }
 
-cmd_project_get() {
-  local slug="$1" key="$2" d v
-  d="$(proj_dir "$slug")"
+cmd_get() {
+  local slug="" key="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --key=*)     v="${a#*=}"; a="--key" ;;
+    esac
+    case "$a" in
+      --project|--key)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --key) key="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "get --project <slug> --key <key>   (keys: $CONFIG_KEYS; show-only: $STATE_KEYS)" ;;
+      *) _pw_positional "$a" "get --project <slug> --key <key>   (keys: $CONFIG_KEYS; show-only: $STATE_KEYS)" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "get: --project is required → fix: get --project <slug> --key <key>   (keys: $CONFIG_KEYS; show-only: $STATE_KEYS)"
+  [ -n "$key" ] || die "get: --key is required → fix: get --project <slug> --key <key>   (keys: $CONFIG_KEYS; show-only: $STATE_KEYS)"
+  local d; d="$(proj_dir "$slug")"
   case "$key" in
-    ai-review)   cmd_ai_review "$slug" ;;
-    ai-model)    cmd_ai_model "$slug" ;;
-    review-trigger) cmd_review_trigger "$slug" ;;
-    review-repair)  cmd_review_repair "$slug" ;;
-    review-rounds)  cmd_review_rounds "$slug" ;;
+    ai-review)   cmd_ai_review --project "$slug" ;;
+    ai-model)    cmd_ai_model --project "$slug" ;;
+    review-trigger) cmd_review_trigger --project "$slug" ;;
+    review-repair)  cmd_review_repair --project "$slug" ;;
+    review-rounds)  cmd_review_rounds --project "$slug" ;;
     pin)         local _t _v _f _any=0
                  for _f in "$d"/task/T*.md; do
                    [ -e "$_f" ] || continue
                    _t="$(basename "$_f" .md)"; _v="$(pw_field "$_f" "Execute with")"
                    printf '%s=%s\n' "$_t" "${_v:-—}"; _any=1
                  done
-                 [ "$_any" = 1 ] || die "project get pin: no task files in $slug — nothing pinned yet (/pw-breakdown creates tasks)" ;;
+                 [ "$_any" = 1 ] || die "get: pin — no task files in $slug — nothing pinned yet (/pw-breakdown --project $slug creates tasks)" ;;
     pin.T*)      local _t="${key#pin.}"
                  local _f="$d/task/$_t.md"
-                 [ -f "$_f" ] || die "project get: no task file task/$_t.md"
+                 [ -f "$_f" ] || die "get: no task file task/$_t.md"
                  v="$(pw_field "$_f" "Execute with")"; printf '%s\n' "${v:-(unset — spawn uses the route ladder)}" ;;
     routing)     v="$(_plan_value "$d/task/PLAN.md" Routing)";   printf '%s\n' "${v:-(unset — effective: $PW_ROUTE_DEFAULT)}" ;;
     execution-limit) v="$(_plan_value "$d/task/PLAN.md" "AI execution limit")"; printf '%s\n' "${v:-(unset — effective: $PW_MAX_SELF_REPAIR)}" ;;
@@ -731,8 +835,8 @@ cmd_project_get() {
     produced-by) v="$(_plan_value "$d/task/PLAN.md" "Produced by")"; printf '%s\n' "${v:-(unset — providers: ${PW_PROVIDERS[*]})}" ;;
     rfc-target)  v="$(pw_field "$d/rfc/META.md" Target 2>/dev/null || true)"; printf '%s\n' "${v:-(unset — backend: ${PW_RFC_BACKEND:-markdown})}" ;;
     status|adopted|base-branches|landing-units)
-      die "project get: '$key' is project state/data, not configuration — written by its owning flow (/pw-status phase moves, /pw-adopt, /pw-breakdown; read it in 'project show')" ;;
-    *) die "project get: unknown key '$key' (config keys: $CONFIG_KEYS; show-only state/data: $STATE_KEYS — see --help)" ;;
+      die "get: '$key' is project state/data, not configuration — written by its owning flow (/pw-status phase moves, /pw-adopt, /pw-breakdown; read it in 'show')" ;;
+    *) die "get: unknown key '$key' (config keys: $CONFIG_KEYS; show-only state/data: $STATE_KEYS — see --help)" ;;
   esac
 }
 
@@ -752,35 +856,59 @@ _pin_propagate() {
     || die "pin: PLAN 'Execute with' cell write failed for $tid (see above) — the PLAN task-table row must exist; repair the PLAN doc, then re-run"
 }
 
-cmd_project_set() {
-  local slug="$1" key="$2"; shift 2
+cmd_set() {
+  local slug="" key="" val="" hasval=0 a v s
+  local -a sets; sets=()
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --key=*)     v="${a#*=}"; a="--key" ;;
+      --value=*)   v="${a#*=}"; a="--value" ;;
+      --set=*)     v="${a#*=}"; a="--set" ;;
+    esac
+    case "$a" in
+      --project|--key|--value)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project) slug="$v" ;;
+          --key)     key="$v" ;;
+          --value)   val="$v"; hasval=1 ;;
+        esac ;;
+      --set) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --set; v="$1"; shift; }; sets+=("$v") ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "set --project <slug> --key <key> [--value <v> | --set <member=value>]…   (keys: $CONFIG_KEYS)" ;;
+      *) _pw_positional "$a" "set --project <slug> --key <key> [--value <v> | --set <member=value>]…   (keys: $CONFIG_KEYS)" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "set: --project is required → fix: set --project <slug> --key <key> [--value <v> | --set <member=value>]…   (keys: $CONFIG_KEYS)"
+  [ -n "$key" ] || die "set: --key is required → fix: set --project <slug> --key <key> [--value <v> | --set <member=value>]…   (keys: $CONFIG_KEYS)"
   local d; d="$(proj_dir "$slug")"
   local plan="$d/task/PLAN.md"
   case "$key" in
-    ai-review|ai-model|rfc-target|review-trigger|review-repair|review-rounds) ;;
-    *) [ $# -ge 1 ] || die "project set: '$key' needs a value (keys: $CONFIG_KEYS — see --help)" ;;
+    ai-review|ai-model|pin|review-trigger|review-repair)
+      [ ${#sets[@]} -ge 1 ] || die "set: '$key' needs --set <member=value> pairs → fix: set --project <slug> --key $key --set <member=value> […]"
+      [ "$hasval" = 0 ] || die "set: '$key' takes --set <member=value> pairs, not --value → fix: set --project <slug> --key $key --set <member=value> […]" ;;
+    routing|execution-limit|max-parallel|produced-by|rfc-target|review-rounds)
+      [ "$hasval" = 1 ] || die "set: '$key' needs --value <v> → fix: set --project <slug> --key $key --value <v>"
+      [ ${#sets[@]} -eq 0 ] || die "set: '$key' takes --value <v>, not --set → fix: set --project <slug> --key $key --value <v>" ;;
+    status|adopted|base-branches|landing-units)
+      die "set: '$key' is project state/data, not configuration — the owning flow writes it (/pw-status, /pw-adopt, /pw-breakdown)" ;;
+    *) die "set: unknown key '$key' (config keys: $CONFIG_KEYS — see --help)" ;;
   esac
+  local -a setflags; setflags=()
+  for s in ${sets[@]+"${sets[@]}"}; do setflags+=("--set" "$s"); done
   case "$key" in
-    ai-review) [ $# -ge 1 ] || die "usage: project set <slug> ai-review <surface>=<mode> […] | all=<mode> | <surface> <mode>   (surfaces: $AI_REVIEW_PHASES; modes: advisory|auto)"
-               cmd_ai_review "$slug" "$@" ;;
-    ai-model)  [ $# -ge 1 ] || die "usage: project set <slug> ai-model <role>=<value> […] | <role> <value>   (roles: $AI_MODEL_ROLES)"
-               cmd_ai_model "$slug" "$@" ;;
-    review-trigger) [ $# -ge 1 ] || die "usage: project set <slug> review-trigger <surface>=<value> […] | all=<value> | <surface> <value>   (values: manual|completion)"
-               cmd_review_trigger "$slug" "$@" ;;
-    review-repair)  [ $# -ge 1 ] || die "usage: project set <slug> review-repair <surface>=<value> […] | all=<value> | <surface> <value>   (values: manual|bounded)"
-               cmd_review_repair "$slug" "$@" ;;
-    review-rounds)  [ $# -ge 1 ] || die "usage: project set <slug> review-rounds <1..3>"
-               cmd_review_rounds "$slug" "$@" ;;
-    pin)       [ $# -ge 1 ] || die "usage: project set <slug> pin <T0n>=<provider:model|—> […] | <T0n> <value>   (batch: several pairs, all-or-nothing; writes task file + PLAN cell)"
-               if [ "${1#*=}" = "$1" ]; then
-                 [ $# -eq 2 ] || die "usage: project set <slug> pin <T0n>=<provider:model|—> […]   (or single: pin <T0n> <value>)"
-                 set -- "$1=$2"
-               fi
-               [ -f "$plan" ] || die "no task/PLAN.md in $slug → fix: run /pw-breakdown $slug first"
+    ai-review)      cmd_ai_review    --project "$slug" ${setflags[@]+"${setflags[@]}"} ;;
+    ai-model)       cmd_ai_model     --project "$slug" ${setflags[@]+"${setflags[@]}"} ;;
+    review-trigger) cmd_review_trigger --project "$slug" ${setflags[@]+"${setflags[@]}"} ;;
+    review-repair)  cmd_review_repair  --project "$slug" ${setflags[@]+"${setflags[@]}"} ;;
+    review-rounds)  cmd_review_rounds  --project "$slug" --value "$val" ;;
+    pin)       [ -f "$plan" ] || die "no task/PLAN.md in $slug → fix: run /pw-breakdown --project $slug first"
                local _pair _tid _val
                # validate-all-first (plan 04 batch discipline): nothing is written unless EVERY pair binds
-               for _pair in "$@"; do
-                 case "$_pair" in *=*) ;; *) die "pin: expected <T0n>=<provider:model|—>, got '$_pair' (single form: pin <T0n> <value>)" ;; esac
+               for _pair in "${sets[@]}"; do
+                 case "$_pair" in *=*) ;; *) die "pin: --set expects <T0n>=<provider:model|—>, got '$_pair'" ;; esac
                  _tid="${_pair%%=*}"; _val="${_pair#*=}"
                  case "$_tid" in T[0-9]*) ;; *) die "pin: '$_tid' is not a task id (expected T01, T02, …)" ;; esac
                  [ -f "$d/task/$_tid.md" ] || die "pin: no task file task/$_tid.md — /pw-breakdown owns task creation"
@@ -790,79 +918,71 @@ cmd_project_set() {
                    || die "pin: no PLAN task-table row for $_tid — repair the PLAN doc first (rows are /pw-breakdown's)"
                  _model_pin_validate "pin '$_tid=$_val'" "$_val"
                done
-               for _pair in "$@"; do
+               for _pair in "${sets[@]}"; do
                  _pin_propagate "$d" "$plan" "${_pair%%=*}" "${_pair#*=}"
                done
-               if [ $# -eq 1 ]; then
-                 "$ST" log "$slug" config "pin ${1%%=*} -> ${1#*=} (task file + PLAN cell)"
-                 echo "$slug: pin ${1%%=*} -> ${1#*=}"
+               if [ ${#sets[@]} -eq 1 ]; then
+                 "$ST" log --project "$slug" --actor "config" --message "pin ${sets[0]%%=*} -> ${sets[0]#*=} (task file + PLAN cell)"
+                 echo "$slug: pin ${sets[0]%%=*} -> ${sets[0]#*=}"
                else
-                 "$ST" log "$slug" config "pin set: $* (task files + PLAN cells)"
-                 echo "$slug: pins set: $*"
+                 "$ST" log --project "$slug" --actor "config" --message "pin set: ${sets[*]} (task files + PLAN cells)"
+                 echo "$slug: pins set: ${sets[*]}"
                fi ;;
-    rfc-target) [ $# -eq 1 ] || die "usage: project set <slug> rfc-target <ref>"
-               "$HERE/pw-rfc.sh" target "$slug" "$1" ;;
-    routing)   [ $# -eq 1 ] || die "usage: project set <slug> routing <auto|subagent|headless>   (headless = strict model binding)"
-               case "$1" in auto|subagent|headless) ;; *) die "routing: expected auto|subagent|headless, got '$1' (headless = strict binding; see --help)" ;; esac
-               [ -f "$plan" ] || die "no task/PLAN.md in $slug → fix: run /pw-breakdown $slug first"
-               _plan_set_bullet "$plan" "Routing" "$1" '^## Breakdown rules' \
-                 || die "project set routing: no '- **Routing:**' bullet and no '## Breakdown rules' section to insert one into — fix the PLAN structure (pw-doc.sh lint plan $slug)" ;;
-    execution-limit) [ $# -eq 1 ] || die "usage: project set <slug> execution-limit <n>   (self-repair rounds; floor $PW_MAX_SELF_REPAIR)"
-               _require_int execution-limit "$1" 0 99
-               [ -f "$plan" ] || die "no task/PLAN.md in $slug → fix: run /pw-breakdown $slug first"
-               _plan_set_bullet "$plan" "AI execution limit" "$1" '^## Execution strategy' \
-                 || die "project set execution-limit: no anchor bullet/section in task/PLAN.md — fix the PLAN structure (pw-doc.sh lint plan $slug)" ;;
-    max-parallel) [ $# -eq 1 ] || die "usage: project set <slug> max-parallel <n>"
-               _require_int max-parallel "$1" 1 99
-               [ -f "$plan" ] || die "no task/PLAN.md in $slug → fix: run /pw-breakdown $slug first"
-               _plan_set_maxparallel "$plan" "$1" \
-                 || die "project set max-parallel: no '- Max parallelism:' line in task/PLAN.md — fix the PLAN structure (pw-doc.sh lint plan $slug)" ;;
-    produced-by) [ $# -eq 1 ] || die "usage: project set <slug> produced-by <provider>   (enabled: ${PW_PROVIDERS[*]})"
-               local _p found=0
-               for _p in "${PW_PROVIDERS[@]}"; do [ "$_p" = "$1" ] && found=1; done
-               [ "$found" = 1 ] || die "produced-by: '$1' is not an enabled Agent Provider (pw.config.sh PW_PROVIDERS: ${PW_PROVIDERS[*]})"
-               [ -f "$plan" ] || die "no task/PLAN.md in $slug → fix: run /pw-breakdown $slug first"
-               _plan_set_bullet "$plan" "Produced by" "$1" '^- \*\*Status:\*\*' \
-                 || die "project set produced-by: no '- **Produced by:**' bullet and no 'Status:' anchor in task/PLAN.md — fix the PLAN structure (pw-doc.sh lint plan $slug)" ;;
-    status|adopted|base-branches|landing-units)
-      die "project set: '$key' is project state/data, not configuration — the owning flow writes it (/pw-status, /pw-adopt, /pw-breakdown)" ;;
-    *) die "project set: unknown key '$key' (config keys: $CONFIG_KEYS — see --help)" ;;
+    rfc-target) "$HERE/pw-rfc.sh" target --project "$slug" --ref "$val" ;;
+    routing)   case "$val" in auto|subagent|headless) ;; *) die "routing: expected auto|subagent|headless, got '$val' (headless = strict binding; see --help)" ;; esac
+               [ -f "$plan" ] || die "no task/PLAN.md in $slug → fix: run /pw-breakdown --project $slug first"
+               _plan_set_bullet "$plan" "Routing" "$val" '^## Breakdown rules' \
+                 || die "set routing: no '- **Routing:**' bullet and no '## Breakdown rules' section to insert one into — fix the PLAN structure (pw-doc.sh lint --kind plan --project $slug)" ;;
+    execution-limit) _require_int execution-limit "$val" 0 99
+               [ -f "$plan" ] || die "no task/PLAN.md in $slug → fix: run /pw-breakdown --project $slug first"
+               _plan_set_bullet "$plan" "AI execution limit" "$val" '^## Execution strategy' \
+                 || die "set execution-limit: no anchor bullet/section in task/PLAN.md — fix the PLAN structure (pw-doc.sh lint --kind plan --project $slug)" ;;
+    max-parallel) _require_int max-parallel "$val" 1 99
+               [ -f "$plan" ] || die "no task/PLAN.md in $slug → fix: run /pw-breakdown --project $slug first"
+               _plan_set_maxparallel "$plan" "$val" \
+                 || die "set max-parallel: no '- Max parallelism:' line in task/PLAN.md — fix the PLAN structure (pw-doc.sh lint --kind plan --project $slug)" ;;
+    produced-by) local _p found=0
+               for _p in "${PW_PROVIDERS[@]}"; do [ "$_p" = "$val" ] && found=1; done
+               [ "$found" = 1 ] || die "produced-by: '$val' is not an enabled Agent Provider (pw.config.sh PW_PROVIDERS: ${PW_PROVIDERS[*]})"
+               [ -f "$plan" ] || die "no task/PLAN.md in $slug → fix: run /pw-breakdown --project $slug first"
+               _plan_set_bullet "$plan" "Produced by" "$val" '^- \*\*Status:\*\*' \
+                 || die "set produced-by: no '- **Produced by:**' bullet and no 'Status:' anchor in task/PLAN.md — fix the PLAN structure (pw-doc.sh lint --kind plan --project $slug)" ;;
   esac
   # dual-holder propagation (e.g. an executor pin's PLAN cell) is the half-sync fix's job —
   # the writer logs exactly what it changed, never claims more.
   case "$key" in
     ai-review|ai-model|pin|rfc-target|review-trigger|review-repair|review-rounds) : ;;   # those writers log their own change line
-    *) "$ST" log "$slug" config "$key -> $1" ;;
+    *) "$ST" log --project "$slug" --actor "config" --message "$key -> $val" ;;
   esac
 }
 
-cmd_project() {
-  [ $# -ge 2 ] || die "usage: project <show|get|set|ensure> <slug> [<key> [<value>…]]   (keys: $CONFIG_KEYS — see --help)"
-  local op="$1" slug="$2"; shift 2
-  case "$op" in
-    show) [ $# -le 1 ] || die "usage: project show <slug> [--json]"
-          cmd_project_show "$slug" "${1:-}" ;;
-    get)  [ $# -eq 1 ] || die "usage: project get <slug> <key>   (keys: $CONFIG_KEYS; show-only: $STATE_KEYS)"
-          cmd_project_get "$slug" "$1" ;;
-    set)  [ $# -ge 2 ] || die "usage: project set <slug> <key> <value…>   (keys: $CONFIG_KEYS)"
-          cmd_project_set "$slug" "$@" ;;
-    ensure) [ $# -eq 0 ] || die "usage: project ensure <slug>"
-          local f; f="$(proj_dir "$slug")/README.md"
-          [ -f "$f" ] || die "no README.md in project $slug"
-          _ai_models_line_ensure "$f"; _ai_review_line_ensure "$f"
-          local migrated=0
-          _ai_review_line_migrate "$f" && migrated=1
-          _review_trigger_line_ensure "$f"; _review_repair_line_ensure "$f"; _review_budget_line_ensure "$f"
-          _axis_line_fill "$f" "AI Review" "$(_review_default_mode)" || true
-          _axis_line_fill "$f" "Review Trigger" "manual" || true
-          _axis_line_fill "$f" "Review Repair" "manual" || true
-          if [ "$migrated" = 1 ]; then
-            echo "$slug: dashboard config lines ensured (missing lines inserted with explicit defaults); legacy 'off' migrated to advisory"
-          else
-            echo "$slug: dashboard config lines ensured (missing lines inserted with explicit defaults)"
-          fi ;;
-    *) die "project: unknown op '$op' (expected: show|get|set|ensure)" ;;
-  esac
+cmd_ensure() {
+  local slug="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --project=*) v="${a#*=}"; a="--project" ;; esac
+    case "$a" in
+      --project) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --project; v="$1"; shift; }; slug="$v" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "ensure --project <slug>" ;;
+      *) _pw_positional "$a" "ensure --project <slug>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "ensure: --project is required → fix: ensure --project <slug>"
+  local f; f="$(proj_dir "$slug")/README.md"
+  [ -f "$f" ] || die "no README.md in project $slug"
+  _ai_models_line_ensure "$f"; _ai_review_line_ensure "$f"
+  local migrated=0
+  _ai_review_line_migrate "$f" && migrated=1
+  _review_trigger_line_ensure "$f"; _review_repair_line_ensure "$f"; _review_budget_line_ensure "$f"
+  _axis_line_fill "$f" "AI Review" "$(_review_default_mode)" || true
+  _axis_line_fill "$f" "Review Trigger" "manual" || true
+  _axis_line_fill "$f" "Review Repair" "manual" || true
+  if [ "$migrated" = 1 ]; then
+    echo "$slug: dashboard config lines ensured (missing lines inserted with explicit defaults); legacy 'off' migrated to advisory"
+  else
+    echo "$slug: dashboard config lines ensured (missing lines inserted with explicit defaults)"
+  fi
 }
 
 cmd_global() {
@@ -893,12 +1013,19 @@ cmd_global() {
 }
 
 case "${1:-}" in
-  ai-model)      shift; _dep_note ai-model "project ai-model"; cmd_ai_model "$@" ;;
-  ai-review)     shift; _dep_note ai-review "project ai-review"; cmd_ai_review "$@" ;;
-  project)       shift; cmd_project "$@" ;;
+  show)          shift; cmd_show "$@" ;;
+  get)           shift; cmd_get "$@" ;;
+  set)           shift; cmd_set "$@" ;;
+  ensure)        shift; cmd_ensure "$@" ;;
   global)        shift; cmd_global "$@" ;;
   model-check)   shift; cmd_model_check "$@" ;;
   model-resolve) shift; cmd_model_resolve "$@" ;;
+  ai-model)      shift; _dep_note ai-model "set --project <slug> --key ai-model --set <role=value>…"; cmd_ai_model "$@" ;;
+  ai-review)     shift; _dep_note ai-review "set --project <slug> --key ai-review --set <surface>=<mode>…"; cmd_ai_review "$@" ;;
+  review-trigger) shift; _dep_note review-trigger "set --project <slug> --key review-trigger --set <surface>=<value>…"; cmd_review_trigger "$@" ;;
+  review-repair)  shift; _dep_note review-repair "set --project <slug> --key review-repair --set <surface>=<value>…"; cmd_review_repair "$@" ;;
+  review-rounds)  shift; _dep_note review-rounds "set --project <slug> --key review-rounds --value <n>"; cmd_review_rounds "$@" ;;
+  project) die "the 'project' operator was flattened → fix: use show|get|set|ensure --project <slug> (see --help)" ;;
   -h|--help) pw_usage ;;
-  *) die "usage: pw-config.sh <project|global|model-check|model-resolve|ai-model*|ai-review*> … (see --help)" ;;
+  *) die "usage: pw-config.sh <show|get|set|ensure|global|model-check|model-resolve|ai-model|ai-review|review-trigger|review-repair|review-rounds> … (see --help)" ;;
 esac

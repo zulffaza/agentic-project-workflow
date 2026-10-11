@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Scaffold a new agentic-workflow project from template/.
-# Usage: tooling/scripts/toolchain/scaffold.sh <project-slug>
+# Usage: tooling/scripts/toolchain/scaffold.sh --project <project-slug>
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # tooling/
@@ -48,9 +48,18 @@ done
 ai_model_default_line="${ai_model_default_line# }"
 
 
-slug="${1:-}"
+slug=""
+while [ $# -gt 0 ]; do
+  a="$1"; shift; v=""
+  case "$a" in --project=*) v="${a#*=}"; a="--project" ;; esac
+  case "$a" in
+    --project) [ -n "$v" ] || { [ $# -ge 1 ] || { echo "Usage: $(basename "$0") --project <project-slug>   (e.g. spring-boot-3-upgrade)" >&2; exit 1; }; v="$1"; shift; }; slug="$v" ;;
+    -*) echo "Error: unknown option: $a  (name the project: --project <slug>)" >&2; exit 1 ;;
+    *) echo "Error: unexpected argument: $a  (name the project: --project <slug>)" >&2; exit 1 ;;
+  esac
+done
 if [[ -z "$slug" ]]; then
-  echo "Usage: $(basename "$0") <project-slug>   (e.g. spring-boot-3-upgrade)" >&2
+  echo "Usage: $(basename "$0") --project <project-slug>   (e.g. spring-boot-3-upgrade)" >&2
   exit 1
 fi
 if [[ ! "$slug" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
@@ -95,7 +104,8 @@ cat > "$dest/LOG.md" <<LOGEOF
 
 Append-only audit trail. One line per meaningful action: phase transitions, sub-agent spawns,
 commits, pushes, MRs, review passes, close-out. Newest at the bottom. The /pw-* commands append
-here automatically (via pw-status.sh log — never hand-edit); add manual notes the same way, or as
+here automatically (via pw-status.sh log --project <slug> --actor <a> --message <text…> — never
+hand-edit); add manual notes the same way, or as
 another Markdown bullet, so it reads consistently in preview.
 
 Format: a bullet per entry — "- **DD MMMM YYYY - HH.mm WIB** · \`<phase/actor>\` — <what happened>"
@@ -123,19 +133,19 @@ Next steps (each phase is gated by your review):
      brief: cp $dest/context/_REQUIREMENTS.template.md $dest/context/REQUIREMENTS.md and fill it.
   2. Fill context/INDEX.md — a row per input (what it is + where it came from), and your
      first-guess "repos in scope" table.
-  3. /pw-analyze $slug        → writes analysis/ + auto-creates analysis/review/<topic>.review.md,
-     sets Status=analysis. Add items to that review file, /pw-review $slug, sign off when satisfied.
-  4. /pw-breakdown $slug      → writes task/PLAN.md + T0n.md + auto-creates task/review/PLAN.review.md
+  3. /pw-analyze --project $slug        → writes analysis/ + auto-creates analysis/review/<topic>.review.md,
+     sets Status=analysis. Add items to that review file, /pw-review --project $slug, sign off when satisfied.
+  4. /pw-breakdown --project $slug      → writes task/PLAN.md + T0n.md + auto-creates task/review/PLAN.review.md
      (needs analysis approved). Sign off PLAN.review.md — that's the ONLY hard gate. Per-task
      reviews (task/review/T0n.review.md) are optional and created on demand, only to send a task back.
-  5. /pw-execute $slug        → orchestrates worktree executors; stops at committed + verified.
-  6. /pw-ship $slug           → pushes branches + opens MRs (the explicit publish step).
-  7. /pw-close $slug          → tears down worktrees (safely), seeds learnings, Status=done.
-  Check progress any time with /pw-status $slug.
+  5. /pw-execute --project $slug        → orchestrates worktree executors; stops at committed + verified.
+  6. /pw-ship --project $slug           → pushes branches + opens MRs (the explicit publish step).
+  7. /pw-close --project $slug          → tears down worktrees (safely), seeds learnings, Status=done.
+  Check progress any time with /pw-status --project $slug.
 
   Optional side-loops, run whenever — never gate the numbered steps above:
-    /pw-sync $slug   keep an open MR's branch fresh against a moved base.
-    /pw-rfc $slug    publish approved analysis/plan content to an RFC doc (any platform, or none).
+    /pw-sync --project $slug   keep an open MR's branch fresh against a moved base.
+    /pw-rfc --project $slug    publish approved analysis/plan content to an RFC doc (any platform, or none).
 
 Full guide: $PW_HOME/README.md
 EOF

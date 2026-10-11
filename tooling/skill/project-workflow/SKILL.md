@@ -9,7 +9,7 @@ Canonical guide + templates live in the `agentic-project-workflow/` bundle root 
 cloned it — `$PW_HOME` if sourced). **Read
 `agentic-project-workflow/README.md` first** — it is the source of truth; this skill is the
 on-demand cheat sheet, split into `references/*.md` loaded per-phase so a single invocation doesn't
-pull in detail from every other phase. New project: `/pw-new <project-slug>` (in your agent CLI).
+pull in detail from every other phase. New project: `/pw-new --project <project-slug>` (in your agent CLI).
 Onboarding a fresh machine or a teammate: `agentic-project-workflow/bootstrap.sh` (detects
 installed CLIs, installs this skill + the `/pw-*` commands per provider) — see
 `agentic-project-workflow/ONBOARDING.md`.
@@ -31,14 +31,14 @@ phases, `--json` prints a machine-readable object. No slug; never writes.
 
 | You're asked to... | Load |
 |---|---|
-| prepare `context/` from the user's intent (`/pw-context <slug> prepare`) | [`references/context.md`](references/context.md) |
+| prepare `context/` from the user's intent (`/pw-context prepare --project <slug>`) | [`references/context.md`](references/context.md) |
 | analyze `context/` | [`references/analysis.md`](references/analysis.md) |
 | break approved analysis into tasks | [`references/breakdown.md`](references/breakdown.md) |
 | execute `task/PLAN.md`, or pick a model/provider for a task | [`references/execution-and-routing.md`](references/execution-and-routing.md) |
 | apply review comments (local `.review.md` or MR/PR feedback) | [`references/review.md`](references/review.md) |
 | close out a finished project | [`references/close.md`](references/close.md) |
 | call an automation script (gates, lint, status, ship, fetch — the 14 `pw-*.sh` helpers) | [`tooling/docs/scripts/README.md`](../../docs/scripts/README.md) |
-| need the live command/operator map or an exact invocation line | `pw-help.sh` — `overview` · `command <name> [<slug>]` · `operators <name> [<op>]` · `project <slug> [<name>]` · `workflow` · `find <term>` (`--json` for bounded agent use) |
+| need the live command/operator map or an exact invocation line | `pw-help.sh` — `overview` · `command --name <name> [--project <slug>]` · `operators --name <name> [--operator <op>]` · `project --project <slug> [--name <command>]` · `workflow` · `find --term <term…>` (`--json` for bounded agent use) |
 | anything else — the `pw-*.sh` entity-script operators, the slash-command list, branch/worktree naming, the rewind flow | [`references/conventions-and-gotchas.md`](references/conventions-and-gotchas.md) |
 
 ## Golden rules (every phase — no reference file needed for these)
@@ -50,9 +50,9 @@ phases, `--json` prints a machine-readable object. No slug; never writes.
   `Status:` line, `LOG.md`, or a review file's structure. Exact subcommands + what each does:
   [`references/conventions-and-gotchas.md`](references/conventions-and-gotchas.md).
 - **Script the mechanical — call the automation scripts, don't re-implement them.** Pre-phase:
-  `pw-preflight.sh <cmd> <slug>` + `pw-doc.sh lint …` (nonzero → STOP, relay stderr). Cheap reads
+  `pw-preflight.sh <op> --project <slug>` + `pw-doc.sh lint …` (nonzero → STOP, relay stderr). Cheap reads
   instead of manual file-walking: `pw-status.sh`, `pw-review-read.sh scan`, `pw-doc.sh summary`, and
-  `pw-help.sh overview` / `pw-help.sh command <name>` / `pw-help.sh find <term>` — the live
+  `pw-help.sh overview` / `pw-help.sh command --name <name>` / `pw-help.sh find --term <term…>` — the live
   how-to map (`--json` machine modes; strictly read-only).
   Mechanics: `pw-ship.sh resolve`/`pw-ship.sh exec`, `pw-ship.sh mr-state-batch`,
   `pw-ship.sh monitor`, `pw-ship.sh request-review` (read-only review-request message),
@@ -84,7 +84,7 @@ phases, `--json` prints a machine-readable object. No slug; never writes.
   Session:`) with a seed patch rather than cold re-spawning, and every review item on one artifact is
   drained as **one batched fixer pass** (per-item replies unchanged) with a dependency's late fix
   fanning one capped re-verify/de-impact pass onto what already ran against the old state. Lanes
-  bind their model from the dashboard's `- **AI Models:**` line (`pw-config.sh ai-model`); the executor
+  bind their model from the dashboard's `- **AI Models:**` line (`pw-config.sh get|set --project <slug> --key ai-model`); the executor
   is bound by the task's `Execute with:`. Full rules: docs/EXECUTION.md +
   `references/execution-and-routing.md`.
 - **Report faithfully.** "Done" only after the task's `## Verify` block actually ran and you pasted

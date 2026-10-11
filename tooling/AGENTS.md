@@ -20,7 +20,8 @@ Start here, in order: the doctrine below, then the change protocol
 Read [`docs/conventions.md`](./docs/conventions.md) first — it answers "where does this go?"
 (S-rules: one script per entity — with S1a artifact-family granularity and S1b facets for
 the second-level split; L-rules: everything under `scripts/{entities,lib,toolchain}/` decided by
-the toolchain test; C-rules: one command per entity + operators; A-rules: free-text args).
+the toolchain test; C-rules: one command per entity + operators; A-rules: the named-argument
+grammar — operation words first, every value named; prose values run until the next `--flag`).
 
 ## Doctrine: sources only (canary-tested)
 

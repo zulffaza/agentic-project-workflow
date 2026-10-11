@@ -163,7 +163,7 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
   different-provider task is shelled out to that CLI headlessly. Either way the executor **tees its
   output to `worktree/<T0n>.log`** so you can `tail -f` any run in a window of your choosing.
 - **How work exits:** `/pw-execute` stops at *committed + verified*. Pushing branches and opening
-  MRs is a separate, explicit step — **`/pw-ship <slug> [task-ids]`** — so nothing goes outward
+  MRs is a separate, explicit step — **`/pw-ship --project <slug> [--task <T0n>]…`** — so nothing goes outward
   until you ask. Zero-change tasks never get a branch/MR.
 - **Gate:** only the **PLAN** sign-off (`task/review/PLAN.review.md → approved`) is required to
   execute. Per-task review is **optional** — add a `task/review/T0n.review.md` only when you want to

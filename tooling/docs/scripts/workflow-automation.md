@@ -8,12 +8,12 @@ state operators `init`/`target`/`state`/`comment-seen`/`dashboard` are documente
 
 ## pw-rfc.sh comments
 
-Powers `/pw-rfc <slug> comments`: pulls reader comments from the configured RFC backend, tracks
+Powers `/pw-rfc comments --project <slug>`: pulls reader comments from the configured RFC backend, tracks
 them against `rfc/META.md`, and appends new items to `analysis/review/RFC.review.md`. Purely
 mechanical — the agent's job starts at *triaging* what landed there.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-rfc.sh comments <slug> [--backend <backend>]   # default: PW_RFC_BACKEND
+$PW_HOME/tooling/scripts/entities/pw-rfc.sh comments --project <slug> [--backend <backend>]   # default: PW_RFC_BACKEND
 ```
 
 **Output:** one summary line —
@@ -37,7 +37,7 @@ Creates the execution worktree with the naming convention baked in — branch
 `git worktree add` and drifts from the layout `/pw-status`/`pw-teardown` expect.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-worktree.sh create <slug> <task-id> <repo> <base-branch>
+$PW_HOME/tooling/scripts/entities/pw-worktree.sh create --project <slug> --task <task-id> --repo <repo> --base <base-branch>
 ```
 
 **Output:** status line(s), then **the worktree path on the final line** — capture that:
@@ -57,8 +57,8 @@ branch — fetch first, or the branch name is wrong).
 
 ## pw-worktree.sh remove / teardown
 
-`remove <slug> <task-id>` — one task's worktree, used when its MR is already merged (refuses
+`remove --project <slug> --task <task-id>` — one task's worktree, used when its MR is already merged (refuses
 a dirty tree or the worktree you're standing in — the guards live in `teardown`, the single
-owner). `teardown <project-dir> [all|<task-id>] [worktree-path]` — the `/pw-close` sweep;
+owner). `teardown --dir <project-dir> [--task <task-id> | --all] [--worktree <path>]` — the `/pw-close` sweep;
 exit 1 = skipped with a printed reason, never a silent removal. Both were separate scripts
 before the entity merge; operator semantics unchanged.
