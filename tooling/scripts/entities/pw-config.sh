@@ -37,10 +37,13 @@
 #       (AI Models: / AI Review: / Review Trigger: /
 #       Review Repair: / Review Budget: — `—`/`manual`/`3` are
 #       legal explicit values; an absent line is a defect,
-#       never a style choice). Also the one migration door for
-#       legacy `off` outcome rows: they become effective
-#       `advisory` on every read WITHOUT a write; ensure
-#       persists that normalization.
+#       never a style choice). Getters stay READ-ONLY: a read
+#       of an absent line returns the effective defaults and
+#       says so on stderr without writing; `ensure` (or any
+#       `--set`) is the only door that persists the line. Also
+#       the one migration door for legacy `off` outcome rows:
+#       they become effective `advisory` on every read WITHOUT
+#       a write; ensure persists that normalization.
 #   pw-config.sh global show
 #       The effective machine floors view: providers, API-provider scopes, model allowlists,
 #       route/ladder defaults, repair budgets, RFC backend. Read-only on purpose — pw.config.sh

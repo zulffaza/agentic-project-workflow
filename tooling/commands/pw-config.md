@@ -68,7 +68,8 @@ The operators (operator words first; every value named — `--project <slug>` se
 - **`/pw-config ensure --project <slug>`** → `…/pw-config.sh ensure --project <slug>` — inserts any missing
   dashboard config lines (`AI Models:`, `AI Review:`, `Review Trigger:`, `Review Repair:`,
   `Review Budget:`) with explicit defaults, and persists the legacy-`off` → `advisory` migration
-  in the AI Review line; idempotent.
+  in the AI Review line; idempotent. Reads never write: a `get` of an absent line shows the
+  effective defaults with a note — `ensure` (or any `--set`) is the door that persists it.
 - **`/pw-config global show`** → `…/pw-config.sh global show` — the effective machine floors
   (providers, API-provider scopes, model allowlists, route default, repair budgets, RFC backend,
   and the **request-review frame + generation prompts** — each effective path plus
