@@ -16,7 +16,11 @@ cat >> "$PW/pw.config.sh" <<CFG
 # all dirs under \$FH ---
 PW_PROVIDERS=(kilo codex)
 # plan-22: a nested-BYOK-scoped allowlist exercises the catalog fetch (prefix-filter entries +
-# short-form pattern matching against the tests/bin/kilo shim's provider-prefixed lines)
+# short-form pattern matching against the tests/bin/kilo shim's provider-prefixed lines).
+# The API-provider scope is PINNED here (hermetic): the machine's real config may narrow
+# PW_KILO_API_PROVIDERS to a different BYOK (e.g. `(cliproxyapi)`), which would filter the
+# shim's `kilo/alibaba-token-plan/...` lines out and make the assertion below unsatisfiable.
+PW_KILO_API_PROVIDERS=(kilo alibaba-token-plan)
 PW_MODEL_ALLOWLIST_KILO="alibaba-token-plan/*"
 kilo_commanddir() { echo "$FH/.config/kilo/command"; }
 kilo_skilldir()   { echo "$FH/.kilocode/skills"; }

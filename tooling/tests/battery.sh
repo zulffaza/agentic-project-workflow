@@ -147,7 +147,11 @@ battery_t2() {
     fi
   done
 
-  # read-only invocations
+  # read-only invocations — resolved against the harness's DETERMINISTIC config so a maintainer's
+  # real provider scope (e.g. PW_KILO_API_PROVIDERS=(cliproxyapi)) cannot change these pinned
+  # expectations (the model-resolve rows exercise the nested-BYOK scope).
+  local _prev_cfg="${PW_CONFIG_FILE:-}"
+  export PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh"
   while IFS='	' read -r label script args; do
     [ -z "$label" ] && continue
     battery_run "$script" $args
@@ -174,6 +178,7 @@ battery_t2() {
   done <<EOF
 $(battery_rows)
 EOF
+  if [ -n "$_prev_cfg" ]; then export PW_CONFIG_FILE="$_prev_cfg"; else unset PW_CONFIG_FILE; fi
 
   # gate matrix
   while IFS='	' read -r label; do
