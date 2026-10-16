@@ -702,7 +702,8 @@ cmd_monitor() {
   # Resolve forge per tooling/docs/forges.md: MR-URL host → PW_FORGE_HOSTS override, else
   # auto-detect (github.com → github, else gitlab). Mirrors mr-state. A URL-substring
   # grep cannot identify self-hosted GitLab (e.g. source.golabs.io contains no "gitlab").
-  if [ -f "$PW_HOME/pw.config.sh" ]; then . "$PW_HOME/pw.config.sh"; fi
+  # pw-common already loaded the config at startup (PW_CONFIG_FILE, else $PW_HOME/pw.config.sh),
+  # so PW_FORGE_HOSTS is already resolved here — re-sourcing would clobber a fixture override.
   MR_HOST="$(echo "$MR_URL" | sed -E 's#^https?://([^/:?#]+).*#\1#')"
   # Host pin (S12): when the task's repo resolves, the MR URL host must match that repo's OWN
   # origin host — a decoy URL must not steer token-bearing forge calls (or the exported
@@ -719,21 +720,8 @@ cmd_monitor() {
       fi
     fi
   fi
-  FORGE="gitlab"
-  case "$MR_HOST" in github.com) FORGE="github" ;; esac
-  if declare -p PW_FORGE_HOSTS >/dev/null 2>&1; then
-    # Bash 3.2 rejects "${arr[@]}" on an EMPTY array under `set -u` — use the guarded form.
-    for entry in ${PW_FORGE_HOSTS[@]+"${PW_FORGE_HOSTS[@]}"}; do
-      h="${entry%%=*}"; f="${entry#*=}"
-      [ "$h" = "$MR_HOST" ] && { FORGE="$f"; break; }
-    done
-  fi
-  FORGE_CLI=""
-  case "$FORGE" in
-    github) FORGE_CLI="gh" ;;
-    gitlab) FORGE_CLI="glab" ;;
-    *) die "unknown forge '$FORGE' mapped for host $MR_HOST (check PW_FORGE_HOSTS)" ;;
-  esac
+  FORGE="$(_pw_forge_for_host "$MR_HOST")"
+  FORGE_CLI="$(_pw_forge_cli "$FORGE")"
 
   command -v "$FORGE_CLI" >/dev/null 2>&1 || die "$FORGE_CLI not found (needed to monitor $MR_URL)"
 
@@ -751,8 +739,10 @@ cmd_monitor() {
     GH_REPO="$(echo "$MR_URL" | sed -nE 's#.*github\.com/([^/]+/[^/]+)/pull.*#\1#p')"
   fi
 
-  # Self-managed GitLab must be pinned to the URL's host — glab defaults to gitlab.com otherwise.
-  export GITLAB_HOST="${GITLAB_HOST:-$MR_HOST}"
+  # Pin the resolved host for EVERY glab call in this invocation. An ambient `GITLAB_HOST` must
+  # not steer a token-bearing query to an unrelated host: the MR host is already validated
+  # against the repo's origin host above when the repo resolves.
+  GITLAB_HOST="$MR_HOST"; export GITLAB_HOST
 
   [ -n "$MR_IID" ] || die "cannot extract MR IID from URL: $MR_URL"
 
@@ -778,23 +768,29 @@ cmd_monitor() {
       # at 0m. Select by the MR's current head sha, prefer a non-skipped status among that sha's
       # pipelines, and only conclude "all skipped" after two consecutive polls (creation grace).
       # "[]" / no match yet (cold-start race) → keep waiting.
-      HEAD_SHA="$(glab api "projects/:id/merge_requests/$MR_IID" ${GL_REPO:+-R "$GL_REPO"} 2>/dev/null | grep -o '"sha":"[0-9a-f]*"' | head -1 | sed 's/.*:"//;s/"$//' || true)"
+      if command -v jq >/dev/null 2>&1; then
+        HEAD_SHA="$(glab api "projects/:id/merge_requests/$MR_IID" ${GL_REPO:+-R "$GL_REPO"} 2>/dev/null | jq -r '.sha // empty' 2>/dev/null || true)"
+      else
+        # Whitespace-tolerant read so pretty-printed JSON still yields the head (the old
+        # compact-only grep silently produced an empty identity on formatted output).
+        HEAD_SHA="$(glab api "projects/:id/merge_requests/$MR_IID" ${GL_REPO:+-R "$GL_REPO"} 2>/dev/null | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([0-9a-fA-F]\{7,\}\)".*/\1/p' | head -1 || true)"
+      fi
       RAW="$(glab api "projects/:id/merge_requests/$MR_IID/pipelines" ${GL_REPO:+-R "$GL_REPO"} 2>/dev/null || true)"
       if [ -n "$RAW" ]; then
         STATUS=""
-        JQ_OK=""
         if command -v jq >/dev/null 2>&1; then
           # jq legitimately answers "" (no pipelines for the head sha yet) — that must stay
-          # "keep waiting", NOT fall through to the sha-blind grep fallback.
+          # "keep waiting", NOT fall through to a sha-blind reading.
           if JQ_OUT="$(echo "$RAW" | jq -r --arg s "${HEAD_SHA:-}" '
             (if ($s | length) > 0 and (any(.[]?; has("sha"))) then (map(select(.sha == $s))) else . end) as $sel
             | ($sel | map(.status // "")) as $st
             | if ($st | length) == 0 then ""
               else (($st | map(select(. != "skipped" and . != "")) | .[0]) // "skipped")
-              end' 2>/dev/null)"; then JQ_OK=1; STATUS="$JQ_OUT"; fi
+              end' 2>/dev/null)"; then STATUS="$JQ_OUT"; fi
         fi
-        # no jq (or unparsable list) → old head-1 fallback, sha filtering unavailable
-        [ -n "$JQ_OK" ] || STATUS="$(echo "$RAW" | grep -o '"status":"[^"]*"' | head -1 | sed 's/"status":"//;s/"//' || true)"
+        # No jq, or an unparsable list: head-filtered selection is unavailable, so an old
+        # pipeline must NOT be accepted here — STATUS stays empty and the poll continues
+        # (it settles as an honest unresolved timeout rather than a false green).
         [ -n "$STATUS" ] || STATUS="pending"
         # all pipelines for this head are skipped → neutral SKIPPED, but only after the
         # grace of a second consecutive poll (the MR pipeline may still be registering).
@@ -861,6 +857,7 @@ cmd_monitor() {
         # waiting for a terminal state that may never arrive is worse than stopping.
         UNKNOWN_STREAK=$((UNKNOWN_STREAK+1))
         if [ "$UNKNOWN_STREAK" -ge 3 ]; then
+          _record_build_check "$TASK_FILE" "UNRESOLVED (state unreadable after ${UNKNOWN_STREAK} polls)"
           die "pipeline state unreadable after ${UNKNOWN_STREAK} polls — check $FORGE_CLI auth and the MR id ($MR_URL)"
         fi
         ;;
@@ -872,6 +869,9 @@ cmd_monitor() {
     # Check timeout
     if [ "$ELAPSED" -ge "$TIMEOUT_SEC" ]; then
       echo "$TASK_ID: pipeline still running after ${TIMEOUT_MIN}m — not yet resolved"
+      # Persist the unresolved observation so a PREVIOUS `SUCCESS` cannot keep describing the
+      # latest run. The task file's current record must agree with the last observation.
+      _record_build_check "$TASK_FILE" "UNRESOLVED (timeout after ${TIMEOUT_MIN}m — status: $STATUS)"
       exit 2
     fi
 
@@ -889,17 +889,56 @@ cmd_monitor() {
 # "already contains 'Build check:'" guard once made this a silent no-op on template-derived
 # files (the UNFILLED placeholder bullet matches too — the record never landed). Plan 16 harness,
 # found by the monitor case.
+#
+# The match is scoped to the CURRENT `## Result` record: the old first-match-anywhere form let a
+# decoy `Build check:` line OUTSIDE Result win, so the real Result field stayed `—` while the
+# decoy was rewritten (a wrong-record write, not just an untidy one).
 _record_build_check() {
   local tf="$1" rec="$2"
-  if grep -qE '^[*+-] (\*\*)?Build check' "$tf"; then
-_pwstage="$(pw_tmpfile "$(dirname "$tf")")" || return 1;     awk -v r="$rec" '
-      !d && /^[*+-] \*\*Build check:\*\*/ { print "- **Build check:** " r; d=1; next }
-      !d && /^[*+-] Build check:/           { print "- Build check: " r;      d=1; next }
+  local _has=0
+  awk '/^## Result/{p=1;next} /^## /{p=0} p && /^[*+-] (\*\*)?Build check/{f=1} END{exit(f?0:1)}' "$tf" && _has=1
+  if [ "$_has" = 1 ]; then
+    _pwstage="$(pw_tmpfile "$(dirname "$tf")")" || return 1
+    awk -v r="$rec" '
+      /^## Result/{p=1}
+      /^## / && !/^## Result/{p=0}
+      p && !d && /^[*+-] \*\*Build check:\*\*/ { print "- **Build check:** " r; d=1; next }
+      p && !d && /^[*+-] Build check:/           { print "- Build check: " r;      d=1; next }
       {print}' "$tf" > "$_pwstage" && mv "$_pwstage" "$tf"
   elif grep -q '^## Result' "$tf"; then
 _pwstage="$(pw_tmpfile "$(dirname "$tf")")" || return 1;     awk -v r="$rec" '/^## Result/{p=1; print; print "- Build check: " r; next} p && /^## /{p=0} {print}' \
       "$tf" > "$_pwstage" && mv "$_pwstage" "$tf"
   fi
+}
+
+# _pw_origin_host <repo-dir> — the host of the repo's origin remote, or empty when unresolvable.
+# Handles both scp-style (git@host:path) and URL forms.
+_pw_origin_host() {
+  git -C "$1" config --get remote.origin.url 2>/dev/null | sed -E 's|^[^@/]*@||; s|^https?://||; s|[:/].*||'
+}
+
+# _pw_forge_for_host <host> — the configured forge name for a host: an exact `PW_FORGE_HOSTS`
+# entry wins, else github.com → github, else gitlab. The registry is read here, so callers must
+# have a chance to source pw.config.sh first (exec/monitor both do).
+_pw_forge_for_host() {
+  local host="$1" entry h f
+  if declare -p PW_FORGE_HOSTS >/dev/null 2>&1; then
+    for entry in ${PW_FORGE_HOSTS[@]+"${PW_FORGE_HOSTS[@]}"}; do
+      h="${entry%%=*}"; f="${entry#*=}"
+      [ "$h" = "$host" ] && { printf '%s' "$f"; return 0; }
+    done
+  fi
+  case "$host" in github.com) printf 'github' ;; *) printf 'gitlab' ;; esac
+}
+
+# _pw_forge_cli <forge> — the CLI binary for a forge, or die (a caller runs this BEFORE any push,
+# so a missing required CLI refuses the shipment rather than silently switching forges).
+_pw_forge_cli() {
+  case "$1" in
+    github) printf 'gh' ;;
+    gitlab) printf 'glab' ;;
+    *) die "unknown forge '$1' (check PW_FORGE_HOSTS)" ;;
+  esac
 }
 
 cmd_exec() {
@@ -1015,6 +1054,20 @@ EOF
     fi
   fi
 
+  # Forge CLI — resolved from the CONFIGURED forge for the repo's origin host (an exact
+  # `PW_FORGE_HOSTS` entry wins), never a URL-substring guess or an availability fallback that
+  # could route an enterprise host to the wrong CLI. Resolved BEFORE the push so a missing
+  # required CLI refuses the shipment instead of leaving a pushed branch with no MR path.
+  # `_pw_forge_for_host`/`_pw_forge_cli` are shared with `monitor` so both read one registry.
+  # pw-common already loaded the config at startup (PW_CONFIG_FILE, else $PW_HOME/pw.config.sh),
+  # so PW_FORGE_HOSTS is already resolved here — re-sourcing would clobber a fixture override.
+  _origin_host="$(_pw_origin_host "$REPO_DIR")"
+  [ -n "$_origin_host" ] || die "cannot determine the origin host for $REPO → fix: check the repo's remote.origin.url"
+  FORGE="$(_pw_forge_for_host "$_origin_host")"
+  FORGE_CLI="$(_pw_forge_cli "$FORGE")"
+  command -v "$FORGE_CLI" >/dev/null 2>&1 \
+    || die "$FORGE_CLI not found (needed to open an MR for $REPO on $_origin_host) → fix: install $FORGE_CLI"
+
   # Push branch
   echo "Pushing $BRANCH to origin..."
   git -C "$REPO_DIR" push origin "$BRANCH" || die "push failed"
@@ -1022,23 +1075,6 @@ EOF
   # Check for existing MR — Result-scoped resolution (`**MR:**` field first; a whole-file grep lets
   # decoy URLs in ## Steps win, which once made this call mis-see "existing MR"). See pw_task_mr_url.
   MR_URL="$(pw_task_mr_url "$TASK_FILE")"
-
-  # Determine forge CLI — by the repo's actual origin host (docs/forges.md resolution, simplified:
-  # github.com → gh, anything else → glab; self-hosted GitLab needs gitlab in its URL or falls to
-  # the availability order below). Prefer correct-over-merely-installed, then fall back.
-  ORIGIN_URL="$(git -C "$REPO_DIR" config --get remote.origin.url 2>/dev/null || echo "")"
-  FORGE_CLI=""
-  if echo "$ORIGIN_URL" | grep -q github; then
-    command -v gh >/dev/null 2>&1 && FORGE_CLI="gh"
-  elif echo "$ORIGIN_URL" | grep -q gitlab; then
-    command -v glab >/dev/null 2>&1 && FORGE_CLI="glab"
-  fi
-  if [ -z "$FORGE_CLI" ]; then
-    if command -v glab >/dev/null 2>&1; then FORGE_CLI="glab"
-    elif command -v gh >/dev/null 2>&1; then FORGE_CLI="gh"
-    else die "no forge CLI found (need glab or gh)"
-    fi
-  fi
 
   # Create or update MR — only a REAL URL means an MR already exists. The old bare -n test
   # counted placeholder sentinels ("-", "—") as existing MRs and silently skipped creation

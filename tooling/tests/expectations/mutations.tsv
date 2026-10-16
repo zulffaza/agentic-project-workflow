@@ -328,3 +328,9 @@ C260-resolve-remote-ref-only	scripts/entities/pw-ship.sh	      COMMIT_COUNT="$(g
 C261-resolve-ignores-stack-parent	scripts/entities/pw-ship.sh	  sp="$(pw_stack_parent "$tf" 2>/dev/null || true)"	  sp=""	T1	pw-ship.t.sh
 C262-worktree-reuse-skips-branch	scripts/entities/pw-worktree.sh	    || die "existing worktree is on branch '${_wt_branch:-?}', expected '$BRANCH_NAME' → fix: move it aside (mv ...), or select the task that owns that checkout"	    || true	T1	pw-worktree.t.sh
 C263-preflight-ship-excludes-accepted	scripts/entities/pw-preflight.sh	      if [ "$status" = "done" ] || [ "$status" = "accepted" ]; then	      if [ "$status" = "done" ]; then	T1	pw-preflight.t.sh
+# C264–C267 continue the harness-state-correctness plan: CI head identity from structured data,
+# the unresolved timeout record, Result-scoped Build check writes, and the configured-forge override.
+C264-ci-head-compact-only	scripts/entities/pw-ship.sh	        HEAD_SHA="$(glab api "projects/:id/merge_requests/$MR_IID" ${GL_REPO:+-R "$GL_REPO"} 2>/dev/null | jq -r '.sha // empty' 2>/dev/null || true)"	        HEAD_SHA="$(glab api "projects/:id/merge_requests/$MR_IID" ${GL_REPO:+-R "$GL_REPO"} 2>/dev/null | grep -o '"sha":"[0-9a-f]*"' | head -1 | sed 's/.*:"//;s/"$//' || true)"	T1	pw-ship.t.sh
+C265-timeout-leaves-stale-success	scripts/entities/pw-ship.sh	      _record_build_check "$TASK_FILE" "UNRESOLVED (timeout after ${TIMEOUT_MIN}m — status: $STATUS)"	      :	T1	pw-ship.t.sh
+C266-result-scope-lost	scripts/entities/pw-ship.sh	      p && !d && /^[*+-] Build check:/           { print "- Build check: " r;      d=1; next }	      !d && /^[*+-] Build check:/           { print "- Build check: " r;      d=1; next }	T1	pw-ship.t.sh
+C267-forge-override-ignored	scripts/entities/pw-ship.sh	  if declare -p PW_FORGE_HOSTS >/dev/null 2>&1; then	  if false; then	T1	pw-ship.t.sh

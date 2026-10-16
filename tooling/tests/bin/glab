@@ -25,7 +25,13 @@ _state_json() {
   if [ -n "${PWTEST_MR_HEAD_FILE:-}" ] && [ -f "$PWTEST_MR_HEAD_FILE" ]; then
     h="$(awk -v k="$iid" '$1==k{print $2; exit}' "$PWTEST_MR_HEAD_FILE")"; [ -n "$h" ] && hd="$h"
   fi
-  printf '{"iid":"%s","state":"%s","sha":"%s","target_branch":"%s","web_url":"https://gitlab.example.com/pwtest/api/-/merge_requests/%s"}\n' "$iid" "$st" "$hd" "$tgt" "$iid"
+  # A real forge may pretty-print its JSON; PWTEST_MR_PRETTY=1 pins that shape so a
+  # whitespace-sensitive reader cannot pass by accident. Falls back to compact without jq.
+  if [ -n "${PWTEST_MR_PRETTY:-}" ] && command -v jq >/dev/null 2>&1; then
+    printf '{"iid":"%s","state":"%s","sha":"%s","target_branch":"%s","web_url":"https://gitlab.example.com/pwtest/api/-/merge_requests/%s"}\n' "$iid" "$st" "$hd" "$tgt" "$iid" | jq .
+  else
+    printf '{"iid":"%s","state":"%s","sha":"%s","target_branch":"%s","web_url":"https://gitlab.example.com/pwtest/api/-/merge_requests/%s"}\n' "$iid" "$st" "$hd" "$tgt" "$iid"
+  fi
 }
 case "${1:-}" in
   mr)

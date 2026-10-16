@@ -62,8 +62,10 @@ existing MR. A successful creation upserts the URL into that same bold field. A
 push failure dies with `pw-ship: push failed` (exit 2). If the push succeeded but the forge
 CLI returned no MR URL, stderr carries the CLI's first error line + `MR creation failed (push
 itself succeeded — safe to re-run after fixing auth/context)` — report that state honestly
-(branch is public, no MR yet), fix auth/context, re-run. The forge CLI is picked from the repo's
-origin host (github → `gh`, else `glab`).
+(branch is public, no MR yet), fix auth/context, re-run. The forge CLI is chosen from the
+**configured** forge for the repo's origin host (an exact `PW_FORGE_HOSTS` entry wins, else
+`github.com` → `gh`, else `glab`) and resolved **before** the push: a missing required CLI
+refuses the shipment instead of pushing a branch with no MR path or silently switching forges.
 
 A marked creation body is read back before its ownership snapshot is stored. Failure leaves the
 MR URL recorded and reports initial snapshot pending; retain the creation body for a safe retry.
@@ -110,7 +112,7 @@ green ≠ merged; that column belongs to true merged-ness from `pw-ship.sh mr-st
 | `0` | `T03: pipeline SUCCESS (4m 12s)` | CI green; the task's `- **Build check:**` field is upserted to `SUCCESS` (a template placeholder never blocks the record) |
 | `0` | `T03: pipeline SKIPPED (1m 2s) — no CI jobs ran for this push (repo pipeline rules)` | Terminal-**neutral**: every pipeline registered for the MR head sha was `skipped`. Not a failure — records `Build check: SKIPPED (no jobs …)`. Do NOT enter the build-fix loop on this |
 | `1` | `T03: pipeline FAILED (2m 03s) — status: failed` | CI red/Cancelled; task file records `Build check: FAILED (…)` |
-| `2` | `T03: pipeline still running after 30m — not yet resolved` | **timeout, not failure** — re-run or raise `--timeout` |
+| `2` | `T03: pipeline still running after 30m — not yet resolved` | **timeout, not failure** — re-run or raise `--timeout`. Records `Build check: UNRESOLVED (timeout …)` so a previous `SUCCESS` cannot describe the latest run |
 
 **Which pipeline it trusts (GitLab):** the MR's *head sha*, not "the first entry". Right after a
 push the pipelines list can contain a **branch** pipeline that the repo's rules skip (the MR
@@ -118,8 +120,10 @@ pipeline registers a beat later) and a **stale** pipeline from the previous push
 first produced, respectively, false `FAILED (skipped)` and false instant `SUCCESS` in live runs
 (2026-09-23). The monitor filters the list to pipelines whose `sha` equals the MR head sha,
 prefers a non-`skipped` status among those, and only concludes SKIPPED after two consecutive
-skipped-only polls (registration grace). Requires `jq` for sha filtering; without it, falls back
-to the older first-entry read.
+skipped-only polls (registration grace). The head sha is read structurally (`jq`, or a
+whitespace-tolerant read without it), so a pretty-printed MR body still yields the identity.
+Head filtering needs `jq`; without it the monitor does **not** fall back to a sha-blind first
+entry — it keeps polling and settles as an honest unresolved timeout rather than a false green.
 
 Intermediate `T03: pipeline running (…elapsed) — status: …` lines stream while polling. Exit `2`
 is overloaded with usage errors — distinguish by message ("still running" = timeout). A query

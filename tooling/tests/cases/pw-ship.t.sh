@@ -199,3 +199,65 @@ R47B="$("$(pwtest_script $SH)" resolve --project "$R47" 2>"$PWTEST_ROOT/r47b.err
 grep -q "fix:" "$PWTEST_ROOT/r47b.err" && pwtest_ok "F03 names a → fix remedy" \
   || pwtest_bad "F03 remedy" "$(cat "$PWTEST_ROOT/r47b.err")"
 rm -rf "$PW_PROJECTS_DIR/$R47"
+
+# --- forge routing + CI identity + current Result record (plan 47 F05,F07,F09,F10) --------------
+# F05/F09: a PRETTY-PRINTED MR body must still yield the head sha, so an old-head green pipeline
+# cannot certify a build whose head has no pipeline yet; the unresolved timeout must then REPLACE
+# a previous SUCCESS in the current record.
+M47=mon47; rm -rf "$PW_PROJECTS_DIR/$M47"; cp -a "$F2" "$PW_PROJECTS_DIR/$M47"
+python3 - "$PW_PROJECTS_DIR/$M47/task/T02.md" <<'PYEOF'
+import sys
+f=sys.argv[1]; t=open(f).read()
+t=t.replace("- **Build check:** —","- **Build check:** SUCCESS",1)
+open(f,"w").write(t)
+PYEOF
+pwtest_rc 2 "F05 pretty JSON head still selects by sha (stale green not claimed)" \
+  env PWTEST_MR_PRETTY=1 PWTEST_PIPELINE='[
+    { "sha": "aaaa1111", "status": "success" }
+  ]' "$(pwtest_script $SH)" monitor --project "$M47" --task T02 --interval 1 --timeout 1
+grep -qE 'Build check:.*UNRESOLVED' "$PW_PROJECTS_DIR/$M47/task/T02.md" \
+  && pwtest_ok "F09 timeout records the unresolved observation" \
+  || pwtest_bad "F09 timeout record" "$(grep -i 'build check' "$PW_PROJECTS_DIR/$M47/task/T02.md")"
+grep -qiE 'build check:.*SUCCESS' "$PW_PROJECTS_DIR/$M47/task/T02.md" \
+  && pwtest_bad "F09 stale SUCCESS must not stay current" "$(grep -i 'build check' "$PW_PROJECTS_DIR/$M47/task/T02.md")" \
+  || pwtest_ok "F09 stale SUCCESS replaced by the latest observation"
+rm -rf "$PW_PROJECTS_DIR/$M47"
+
+# F10: a decoy `Build check:` line OUTSIDE ## Result must never be the one rewritten.
+BC=bcdecoy; rm -rf "$PW_PROJECTS_DIR/$BC"; cp -a "$F2" "$PW_PROJECTS_DIR/$BC"
+python3 - "$PW_PROJECTS_DIR/$BC/task/T02.md" <<'PYEOF'
+import sys
+f=sys.argv[1]; t=open(f).read()
+# Insert before the REAL Result section heading (line-anchored: an earlier "## Result"
+# mention lives inside prose, and inserting there would not create a parseable decoy line).
+t=t.replace("\n## Result", "\n- Build check: DECOY-OUTSIDE\n\n## Result", 1)
+open(f,"w").write(t)
+PYEOF
+pwtest_rc 0 "monitor success on the decoy project" \
+  env PWTEST_PIPELINE='[{"sha":"dead000f","status":"success"}]' "$(pwtest_script $SH)" monitor --project "$BC" --task T02 --interval 1 --timeout 1
+grep -q 'Build check: DECOY-OUTSIDE' "$PW_PROJECTS_DIR/$BC/task/T02.md" \
+  && pwtest_ok "F10 decoy outside Result left untouched" \
+  || pwtest_bad "F10 decoy rewritten" "$(grep -i 'build check' "$PW_PROJECTS_DIR/$BC/task/T02.md")"
+grep -qE 'Build check:.*SUCCESS' "$PW_PROJECTS_DIR/$BC/task/T02.md" \
+  && pwtest_ok "F10 current Result record updated" \
+  || pwtest_bad "F10 Result record" "$(grep -i 'build check' "$PW_PROJECTS_DIR/$BC/task/T02.md")"
+rm -rf "$PW_PROJECTS_DIR/$BC"
+
+# F07: an exact PW_FORGE_HOSTS entry routes exec to the configured forge (not a substring guess).
+E2=exec-f2gh; rm -rf "$PW_PROJECTS_DIR/$E2"; cp -a "$F2" "$PW_PROJECTS_DIR/$E2"
+pwtest_repo api "branch:agent/$E2/T01-thing"
+( cd "$PW_REPOS/api" && git worktree add "$PW_PROJECTS_DIR/$E2/worktree/api/T01-thing" "agent/$E2/T01-thing" >/dev/null 2>&1 ) || true
+sed -i '' "s|agent/$S2/T01-thing|agent/$E2/T01-thing|" "$PW_PROJECTS_DIR/$E2/task/T01.md"
+: > "$ROOT/forge47.log"
+pwtest_rc 0 "F07 exec honors an exact PW_FORGE_HOSTS mapping" \
+  env PWTEST_FORGE_LOG="$ROOT/forge47.log" PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.forge.sh" \
+  "$(pwtest_script $SH)" exec --project "$E2" --task T01 --file "$ROOT/desc.md"
+grep -q '^gh pr create' "$ROOT/forge47.log" \
+  && pwtest_ok "F07 configured forge (github) drove MR creation" \
+  || pwtest_bad "F07 forge choice" "$(tr '\n' ';' < "$ROOT/forge47.log" 2>/dev/null)"
+grep -q '^glab ' "$ROOT/forge47.log" \
+  && pwtest_bad "F07 must not fall back to glab" "$(cat "$ROOT/forge47.log")" \
+  || pwtest_ok "F07 no glab fallback under the configured forge"
+git -C "$PW_REPOS/api" worktree remove --force "$PW_PROJECTS_DIR/$E2/worktree/api/T01-thing" >/dev/null 2>&1 || true
+git -C "$PW_REPOS/api" branch -D "agent/$E2/T01-thing" >/dev/null 2>&1 || true
+rm -rf "$PW_PROJECTS_DIR/$E2"
