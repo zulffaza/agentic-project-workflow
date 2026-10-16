@@ -10,10 +10,10 @@ This page also gives contributors the bundle location, so existing links to this
 | You need… | Run in your agent session |
 |---|---|
 | A list of available commands | `/pw-help` |
-| Arguments and examples for review | `/pw-help command pw-review` |
-| Next steps for your project | `/pw-help project <slug>` |
+| Arguments and examples for review | `/pw-help command --name pw-review` |
+| Next steps for your project | `/pw-help project --project <slug>` |
 | The phase sequence and gates | `/pw-help workflow` |
-| Documentation for a concept | `/pw-help find <term>` |
+| Documentation for a concept | `/pw-help find --term <term…>` |
 
 Help reads current command sources. Use it when an example does not match your installed version.
 For copyable examples with expected outcomes, read [recipes](RECIPES.md).

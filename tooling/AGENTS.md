@@ -38,7 +38,7 @@ State mutations inside any project go through the entity scripts — `pw-status.
 (`log|status|oneliner|adopted|phase|dashboard-task-status|task-accept`), `pw-review.sh`
 (`init|init-docs|init-all|start|gate|reopen|auto-signoff|has-open|count|reindex|archive|…`),
 `pw-context.sh`
-(`adopt|add-input|add-repo|fetch|…`), `pw-config.sh` (`ai-review|ai-model|model-check`) —
+(`adopt|add-input|add-repo|fetch|…`), `pw-config.sh` (`show|get|set|ensure|global|model-check|model-resolve`, plus the named-only `ai-review`/`ai-model`/`review-trigger`/`review-repair`/`review-rounds` shims) —
 never hand-edits of load-bearing lines, and `pw_field`/`pw_plan_pairs`/`_pw_url_from_line`/
 `pw_trim` in `pw-common.sh` are the reader plumbing commands rely on. New shared logic: add to
 the libraries, don't re-implement in a caller (P2). The old frozen legacy core (`pw-lib.sh`) is

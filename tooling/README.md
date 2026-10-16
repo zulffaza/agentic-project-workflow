@@ -25,8 +25,8 @@ tooling/
 │   │   ├── pw-rfc.sh           rfc-doc: init · target · state · comment-seen · dashboard · comments
 │   │   ├── pw-worktree.sh      worktree: create · remove · teardown
 │   │   ├── pw-doc.sh           docs: lint · summary · sync
-│   │   ├── pw-config.sh        config: project show|get|set|ensure · global show ·
-│   │   │                       model-check · model-resolve (+ deprecated ai-model/ai-review shims)
+│   │   ├── pw-config.sh        config: show|get|set|ensure --project · global show ·
+│   │   │                       model-check · model-resolve (+ named-only ai-model/ai-review shims)
 │   │   └── pw-help.sh          discovery: overview · command · operators · project ·
 │   │                           workflow · find (read-only how-to map + search; --json)
 │   ├── lib/                  source-only libraries — invisible to callers (L2)
@@ -159,7 +159,8 @@ That's the whole cost of onboarding a provider — the phase prompts themselves 
 ```markdown
 ---
 description: <one line, becomes the command description>
-args: <argument hint, e.g. "<project-slug> [focus]">
+args: <named-argument hint, e.g. "--project <project-slug> [--focus <prose…>]">
+scope: <global | project | mixed — required; "mixed" also needs per-form scope-forms>
 agent: <optional — a provider agent to run the command under, e.g. pw-orchestrator>
 ---
 <prompt body, using {{ARGS}} where the invocation's arguments go>
@@ -168,8 +169,8 @@ agent: <optional — a provider agent to run the command under, e.g. pw-orchestr
 > Sub-agents **are** generated — from [`agents/`](./agents/README.md), seeded into each provider's
 > agent dir by `gen-agents.sh` (kilo `~/.config/kilo/agent/`, Claude Code `~/.claude/agents/`,
 > Cursor `~/.cursor/agents/`; codex gets none — it has no agent-def surface and drives Flow B). The
-> six shipped roles: `pw-orchestrator`, `pw-executor`, `pw-reviewer` (optional — off by default
-> per phase) and the spawn-lanes `pw-researcher` / `pw-analyst` / `pw-writer-task`; execution can
+> six shipped roles: `pw-orchestrator`, `pw-executor`, `pw-reviewer` (optional — every review
+> point defaults to human-only `advisory`; a pass only starts when scheduled for that phase) and the spawn-lanes `pw-researcher` / `pw-analyst` / `pw-writer-task`; execution can
 > still reuse a registered agent (e.g. `pw-executor`) by naming it in a task's `Execute with:` —
 > or, the portable Option-A form, route a `provider:model` and let the task file be the work order
 > (Option A: one executor concept, no second implementer def). Lane spawns take their model from the
@@ -183,5 +184,5 @@ agent: <optional — a provider agent to run the command under, e.g. pw-orchestr
 Anything under `tooling/` or `template/` changes the contract the **entity scripts**
 keep. The full agent-change protocol — tiers, which tier for which change type, the corpus
 gate — is [`docs/testing.md`](./docs/testing.md). One command summary:
-**`tooling/tests/pw-test.sh all` before every commit; `--mutation <new-fix>` after any fix**
+**`tooling/tests/pw_test.sh` (all tiers) before every commit; `--mutation <new-fix>` after any fix**
 (its `expectations/mutations.tsv` reverts each documented fix and proves a test sees it).

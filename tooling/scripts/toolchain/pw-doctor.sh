@@ -508,7 +508,7 @@ for p in "${PW_PROVIDERS[@]}"; do
 done
 
 # --- request-review frame + generation prompts (independent of provider sync) ------------------
-# /pw-ship <slug> request-review reads the effective frame and (for the enabled AI flags) the
+# /pw-ship request-review --project <slug> reads the effective frame and (for the enabled AI flags) the
 # effective generation prompts on every invocation. Check them even when every provider is
 # synchronized — a healthy install must not hide a missing user file. --fix seeds ONLY absent
 # DEFAULT files (the legacy template migrates byte-for-byte first; prompts come from the tracked

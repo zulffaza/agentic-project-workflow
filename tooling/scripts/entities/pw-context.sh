@@ -405,7 +405,7 @@ cmd_fetch() {
   D="$(proj_dir "$SLUG")"
   INDEX="$D/context/INDEX.md"
 
-  [ -f "$INDEX" ] || die "context/INDEX.md not found — run /pw-context <slug> to build the context pack"
+  [ -f "$INDEX" ] || die "context/INDEX.md not found — the context pack was never built → fix: on the context phase run /pw-context prepare --project <slug> (or req-init + add-input by hand); a project past context needs /pw-status rewind --project <slug> --phase context first"
 
   ERRORS=()
   SEP_RE='^[-: ]+$'   # markdown table separator cells ("---", ":---:", …)

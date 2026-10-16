@@ -35,14 +35,14 @@ Run commands one at a time. Inspect the result and resolve any blocker before co
 Create the project:
 
 ```text
-/pw-new delivery-note
+/pw-new --project delivery-note
 ```
 
 The project appears at `$PW_PROJECTS/delivery-note/`.
 Then let the agent draft the context from one paragraph of intent:
 
 ```text
-/pw-context delivery-note prepare Customers can save and view an optional delivery note on an order. Existing orders must remain valid. storefront and order-service are likely related. Changing order status and payment behavior is out of scope.
+/pw-context prepare --project delivery-note --brief Customers can save and view an optional delivery note on an order. Existing orders must remain valid. storefront and order-service are likely related. Changing order status and payment behavior is out of scope.
 ```
 
 The agent reads the project, drafts `context/REQUIREMENTS.md`, registers an input row, and records
@@ -53,7 +53,7 @@ Running `prepare` again updates its own rows in place instead of duplicating the
 The manual path works the same way. Create and fill the brief yourself, then register it:
 
 ```text
-/pw-context delivery-note req-init
+/pw-context req-init --project delivery-note
 ```
 
 `req-init` creates `context/REQUIREMENTS.md`; it does not fill your requirements.
@@ -70,9 +70,9 @@ Save any supporting ticket or specification in `context/`, then register each ac
 The file name below is relative to `context/`. Registering a row does not create the input file.
 
 ```text
-/pw-context delivery-note add-input --file REQUIREMENTS.md --what Delivery note requirements --source Product brief from me --trust Approved scope
-/pw-context delivery-note add-repo storefront main Collect and display the note
-/pw-context delivery-note add-repo order-service main Store and return the optional note
+/pw-context add-input --project delivery-note --file REQUIREMENTS.md --what Delivery note requirements --source Product brief from me --trust Approved scope
+/pw-context add-repo --project delivery-note --repo storefront --base main --why Collect and display the note
+/pw-context add-repo --project delivery-note --repo order-service --base main --why Store and return the optional note
 ```
 
 Registration only adds a table row; preparation creates or edits the brief and any saved excerpts.
@@ -83,7 +83,7 @@ Use actual source details when you add a ticket, document link, or log.
 ## Analyze
 
 ```text
-/pw-analyze delivery-note
+/pw-analyze --project delivery-note
 ```
 
 The agent examines the inputs and repository code, then writes analysis and a matching review file.
@@ -96,32 +96,31 @@ Use the generated paths if your project uses different names.
 Suppose the review file asks `Q0` about the approach. Answer the existing question:
 
 ```text
-/pw-review delivery-note answer analysis/review/delivery-note.review.md Q0 Add the optional service field first, then update the storefront
+/pw-review answer --project delivery-note --file analysis/review/delivery-note.review.md --question Q0 --text Add the optional service field first, then update the storefront
 ```
 
 Use the question IDs in your actual review file. To request another change, add an item:
 
 ```text
-/pw-review delivery-note item analysis/review/delivery-note.review.md --section Compatibility risks --text Check orders that have no delivery note
-/pw-review delivery-note analysis
+/pw-review item --project delivery-note --file analysis/review/delivery-note.review.md --section 'Compatibility risks' --text Check orders that have no delivery note
+/pw-review --project delivery-note --phase analysis
 ```
 
 The first command records feedback. The second applies analysis feedback and incorporates your answers.
 
 | Part of the feedback command | Meaning |
 |---|---|
-| `delivery-note` | The project slug |
+| `--project delivery-note` | The project slug |
 | `item` | Record a new review item |
-| `analysis/review/delivery-note.review.md` | Review file receiving the item, relative to the project |
-| `--section Compatibility risks` | Heading or anchor in the analysis you want changed; use your actual heading |
+| `--file analysis/review/delivery-note.review.md` | Review file receiving the item, relative to the project |
+| `--section Compatibility risks` | Heading or anchor in the analysis you want changed; use your actual heading; quote multi-word anchors |
 | `--text Check orders that have no delivery note` | Your requested change |
 
-`--section` and `--text` belong to the `item` action. Each value continues until the next flag or the end of the command, so multi-word values need no quotes.
-See [review feedback parameters](REVIEW.md#add-feedback-with-section-and-text) for the shorter form.
+`item` is the operator word; every value is named. `--section` takes one token (quote a multi-word anchor); `--text` continues until the next flag or the end of the command, so multi-word prose values need no quotes.
 Read the revised analysis and the agent replies. Once questions and review items are resolved, approve it:
 
 ```text
-/pw-review delivery-note signoff analysis/review/delivery-note.review.md approved
+/pw-review signoff --project delivery-note --file analysis/review/delivery-note.review.md --decision approved
 ```
 
 `signoff` records your decision. Resolving feedback alone does not record human approval.
@@ -130,7 +129,7 @@ For an optional AI pass, use the [advisory review recipe](RECIPES.md#use-ai-revi
 ## Break down
 
 ```text
-/pw-breakdown delivery-note
+/pw-breakdown --project delivery-note
 ```
 
 The agent writes `task/PLAN.md` and individual task files. An illustrative plan contains:
@@ -148,18 +147,18 @@ Check the repository, base branch, model choice, dependencies, and expected test
 If the plan misses compatibility tests, record that request and apply it:
 
 ```text
-/pw-review delivery-note item task/review/PLAN.review.md --section Verification --text Require tests for orders with no note
-/pw-review delivery-note task/review/PLAN.review.md
+/pw-review item --project delivery-note --file task/review/PLAN.review.md --section Verification --text Require tests for orders with no note
+/pw-review --project delivery-note --file task/review/PLAN.review.md
 ```
 
 The second command applies feedback from that exact review file to `task/PLAN.md`.
 
-You may also see `/pw-review delivery-note plan`:
+You may also see `/pw-review --project delivery-note --phase plan`:
 
-- `delivery-note` is the project slug.
-- `plan` is a **scope selector**, not a file name or an approval decision.
-- It selects reviews under `task/review/`, including PLAN and any individual task reviews there. `task` is an alias for this scope.
-- Use `task/review/PLAN.review.md` when you want to apply only PLAN feedback.
+- `--project delivery-note` selects the project.
+- `--phase plan` is a **scope selector**, not a file name or an approval decision.
+- It selects reviews under `task/review/`, including PLAN and any individual task reviews there. `--phase task` is an alias for this scope.
+- Use `--file task/review/PLAN.review.md` when you want to apply only PLAN feedback.
 
 Before approving, check:
 
@@ -171,7 +170,7 @@ Before approving, check:
 Read the revised plan, then approve it:
 
 ```text
-/pw-review delivery-note signoff task/review/PLAN.review.md approved
+/pw-review signoff --project delivery-note --file task/review/PLAN.review.md --decision approved
 ```
 
 Every execution invocation checks the current PLAN approval. New feedback can reopen that gate.
@@ -181,9 +180,9 @@ Every execution invocation checks the current PLAN approval. New feedback can re
 To inspect T02 separately before execution, create its review and add your request:
 
 ```text
-/pw-review delivery-note init task/T02.md
-/pw-review delivery-note item task/review/T02.review.md --section Steps --text Keep the note field optional in the form
-/pw-review delivery-note T02
+/pw-review init --project delivery-note --file task/T02.md
+/pw-review item --project delivery-note --file task/review/T02.review.md --section Steps --text Keep the note field optional in the form
+/pw-review --project delivery-note --task T02
 ```
 
 This changes the selected task plan. PLAN approval still governs execution.
@@ -191,11 +190,11 @@ This changes the selected task plan. PLAN approval still governs execution.
 ## Execute
 
 ```text
-/pw-execute delivery-note --wave
+/pw-execute --project delivery-note --wave
 ```
 
 The first wave runs T01 because T02 depends on it. The recap identifies completed, failed, and newly ready tasks.
-Run `/pw-status delivery-note` to find the task links.
+Run `/pw-status --project delivery-note` to find the task links.
 Open T01 and read `## Result` for its commit and actual verification output.
 For a local diff, ask the agent:
 
@@ -207,10 +206,10 @@ Check that the service field remains optional and orders without a note pass the
 Run another wave to execute T02 after T01 succeeds:
 
 ```text
-/pw-execute delivery-note --wave
+/pw-execute --project delivery-note --wave
 ```
 
-A bare `/pw-execute delivery-note` instead runs the remaining dependency sequence in one invocation.
+A bare `/pw-execute --project delivery-note` instead runs the remaining dependency sequence in one invocation.
 Completed tasks remain complete. Execution stops at local commits and verification by default.
 
 ## Review an execution result (optional)
@@ -219,15 +218,15 @@ Read each task's diff and `## Result`.
 If T02 uses a required field, create its review if needed, then give a scoped correction:
 
 ```text
-/pw-review delivery-note init task/T02.md
-/pw-review delivery-note item task/review/T02.review.md --section Result --text The note field must remain optional
-/pw-review delivery-note T02
+/pw-review init --project delivery-note --file task/T02.md
+/pw-review item --project delivery-note --file task/review/T02.review.md --section Result --text The note field must remain optional
+/pw-review --project delivery-note --task T02
 ```
 
 Task repair normally re-runs verification. If checks remain failed or pending, run:
 
 ```text
-/pw-execute delivery-note T02
+/pw-execute --project delivery-note --task T02
 ```
 
 Inspect the new result before accepting it. Related dependent tasks can also need fresh checks after an upstream fix.
@@ -237,7 +236,7 @@ Inspect the new result before accepting it. Related dependent tasks can also nee
 Once verification passes and you want to publish the branches:
 
 ```text
-/pw-ship delivery-note
+/pw-ship --project delivery-note
 ```
 
 This pushes eligible branches and opens MRs/PRs. It monitors CI by default.
@@ -247,7 +246,7 @@ The recap includes links, branch targets, and check results.
 To ask teammates for review, build the ready-to-send message (read-only):
 
 ```text
-/pw-ship delivery-note request-review
+/pw-ship request-review --project delivery-note
 ```
 
 It lists every open MR with its link, target, current CI status, and assigned reviewers. Add
@@ -259,13 +258,13 @@ It lists every open MR with its link, target, current CI status, and assigned re
 After a reviewer comments on T01's MR, run:
 
 ```text
-/pw-ship delivery-note T01 comments
+/pw-ship comments --project delivery-note --task T01
 ```
 
 The agent reads comments, applies justified fixes, verifies them, pushes updates, and replies on the MR.
 The project records the exchange and review-attempt history.
 Without a task ID, `comments` handles all eligible open MRs.
-If the target branch changes, `/pw-sync delivery-note` refreshes open MR branches and verifies them again.
+If the target branch changes, `/pw-sync --project delivery-note` refreshes open MR branches and verifies them again.
 
 ## Accept results
 
@@ -276,17 +275,17 @@ I reviewed T01 and T02 in delivery-note. Accept both task results and update the
 ```
 
 This is an acceptance request in chat, not a slash command.
-Run `/pw-status delivery-note` to confirm that both tasks are `accepted`.
+Run `/pw-status --project delivery-note` to confirm that both tasks are `accepted`.
 Approval of the PLAN, task acceptance, and merging an MR are separate decisions.
 
 ## Close
 
 ```text
-/pw-close delivery-note
+/pw-close --project delivery-note
 ```
 
 Close checks task acceptance, records learnings, removes eligible worktrees, and marks the project `done`.
 It preserves the project directory and branches. Dirty worktrees remain for recovery.
 An open MR can remain after close; acceptance does not merge it.
 
-For your next project, keep the [recipes](RECIPES.md) handy and use `/pw-help project <slug>` at each checkpoint.
+For your next project, keep the [recipes](RECIPES.md) handy and use `/pw-help project --project <slug>` at each checkpoint.

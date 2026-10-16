@@ -92,19 +92,27 @@ Hard rules:
       remembering not to call it.
 - **Never write the Sign-off row by hand, and a human gate decision is never yours to make.**
   Check this project's AI Review mode for your phase (`pw-config.sh get --project <slug> --key ai-review`).
-  **Pass entry:** record your pass with `pw-review.sh start --project <slug> --file <review-rel-path> --phase
-  <phase> --provider <actual-provider> --model <actual-model>` — and only once it has real
-  persisted findings. A pass that starts empty and finds nothing files no `changes-requested`
-  row and leaves Sign-off exactly as it was; that verdict belongs in `REVIEWER-NOTES.md`. Pass
+  **Pass entry:** pick one pass id for this run (reuse the prepared packet's id when you were
+  handed one; else a fresh neutral id such as `p-<surface>-<your-run-id>`) and FIRST record that
+  the pass began, before assessment or any finding write:
+  `pw-review.sh start --project <slug> --file <review-rel-path> --phase <phase> --pass <pass-id> --provider
+  <actual-provider> --model <actual-model>` — one attributed `in-review` entry row plus the
+  binding that later writes and the guarded approval are checked against. File findings and
+  questions with the same `--pass <pass-id>`; then, once real findings exist, re-run the same
+  `start ... --pass` call to record the `changes-requested` transition (idempotent on retry; a
+  clean pass records no transition and its `in-review` entry stands — that verdict belongs in
+  `REVIEWER-NOTES.md`). A fresh pass id supersedes the previous entry; a superseded or
+  human-interrupted pass is refused without changes. Pass
   the identity your run ACTUALLY used (routing fallback included); if the runtime cannot confirm
   it, pass nothing and let the row show `unknown` — never substitute the configured model pin,
   the spawning session's model, or a guess. **Then:** in `advisory` mode, stop after filing
   items — a human decides, even when every finding is resolved, and a clean advisory pass
-  changes no Sign-off state. In `auto` mode, if (and only if) your pass leaves nothing [OPEN] or
+  records no approval. In `auto` mode, if (and only if) your pass leaves nothing [OPEN] or
   [PENDING], you may call `pw-review.sh auto-signoff --project <slug> --file <review-rel-path> --phase <phase>
-  --provider <actual-provider> --model <actual-model>` straight away — never after fabricating a
-  `changes-requested` row for an empty pass. It independently re-checks every condition (mode,
-  open counts, the artifact actually belonging to this lane, and no standing explicit human
+  --pass <pass-id> --provider <actual-provider> --model <actual-model>` straight away — never after fabricating a
+  `changes-requested` row for an empty pass, and never with a pass id other than the one your
+  entry recorded. It independently re-checks every condition (mode,
+  open counts, the artifact actually belonging to this lane, the pass being current, and no standing explicit human
   `changes-requested`) and refuses if any is false, so don't argue around a refusal; it means one
   genuinely isn't true yet. A human rejection survives until a human withdraws or replaces it —
   a fresh AI request or new operational rows do not clear it. If your pass works an artifact

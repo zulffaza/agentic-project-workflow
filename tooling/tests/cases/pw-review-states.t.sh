@@ -319,6 +319,8 @@ u_by "pw-review (feedback)" feedback
 u_by "pw-review (auto-reopen)" reopen
 u_by "pw-reviewer (auto)" reviewer
 u_by "pw-reviewer (advisory; provider=kilo; model=m)" reviewer
+u_by "pw-reviewer (advisory; provider=kilo; model=m; pass=p-1)" reviewer
+u_by "pw-reviewer (auto; provider=kilo; model=m; pass=p-1)" reviewer
 u_by "" blank
 u_by "something-ambiguous" human
 RU="$N/analysis/review/rej-order.md"
@@ -347,7 +349,94 @@ if _review_approval_valid "$EA"; then pwtest_ok "approved + stub-only is a valid
 printf '\n### R1 · §1 — [OPEN] (you, 2026-09-16 09:00) <!-- pw-item-status: open -->\nhand-added blocker\n\n---\n' >> "$EA"
 if _review_approval_valid "$EA"; then pwtest_bad "stale approval" "hand edit not seen"; else pwtest_ok "hand-added open item invalidates consumption"; fi
 
+# ============================================================ J) pass-correlated entry (plan 46)
+# The managed lifecycle: one attributed in-review entry when the pass actually begins (before
+# findings), pass-guarded item writes, one changes-requested transition after real findings,
+# idempotent retries, supersession by a fresh pass id, interruption by a human decision, and
+# the uncorrelated-caller refusals. Binding marker + rows + derived header publish together.
+PC=st-passcorr; rm -rf "$PW_PROJECTS_DIR/$PC"; cp -a "$F2" "$PW_PROJECTS_DIR/$PC"
+P="$PW_PROJECTS_DIR/$PC"; set_phase "$PC" analysis
+PRV=analysis/review/fixture.review.md; PF="$P/$PRV"
+PASSA=p-t46-a1; PASSB=p-t46-b2
+pwtest_rc 0 "J: configure advisory" "$CFG" set --project "$PC" --key ai-review --set analysis=advisory
+pwtest_rc 2 "J: --pass without --phase refused" "$E" start --project "$PC" --file "$PRV" --pass "$PASSA"
+pwtest_fix "J: pass-without-phase refusal offers the fix"
+pwtest_rc 2 "J: malformed --pass id refused" "$E" start --project "$PC" --file "$PRV" --phase analysis --pass 'bad id'
+pwtest_rc 0 "J: fresh entry records the entry" "$E" start --project "$PC" --file "$PRV" --phase analysis --pass "$PASSA" --provider kilo --model m1
+pwtest_re '__entry__' "J: entry report reads entry"
+rowfix "| pw-reviewer (advisory; provider=kilo; model=m1; pass=$PASSA) | in-review |" "J: attributed entry row written" "$PF"
+pwtest_grep_file "^<!-- pw-review-pass: id=$PASSA; artifact=$PRV; phase=analysis; provider=kilo; model=m1; -->$" "J: binding marker records pass+artifact+phase+identity" "$PF"
+pwtest_grep_file "^Gate: in-review \\(pw-reviewer \\(advisory; provider=kilo; model=m1; pass=$PASSA\\)\\)$" "J: derived gate reads the entry" "$PF"
+pwtest_rc 0 "J: entry retry idempotent" "$E" start --project "$PC" --file "$PRV" --phase analysis --pass "$PASSA" --provider kilo --model m1
+pwtest_re '__resume__' "J: entry retry reports a resume"
+[ "$(rowcount "| pw-reviewer (advisory; provider=kilo; model=m1; pass=$PASSA) | in-review |" "$PF")" = 1 ] && pwtest_ok "J: entry retry added no row" || pwtest_bad "J: entry retry" "extra pass row"
+pwtest_rc 0 "J: pass-guarded item write" "$E" add-item --project "$PC" --file "$PRV" --section '§1 Goal' --actor pw-reviewer --pass "$PASSA" --text pass-scoped finding
+pwtest_re 'R1 added' "J: pass-guarded item landed"
+pwtest_rc 0 "J: transition after findings" "$E" start --project "$PC" --file "$PRV" --phase analysis --pass "$PASSA" --provider kilo --model m1
+pwtest_re '__entered__' "J: transition report reads entered"
+rowfix "| pw-reviewer (advisory; provider=kilo; model=m1; pass=$PASSA) | changes-requested |" "J: transition row attributed to the pass" "$PF"
+pwtest_rc 0 "J: transition retry idempotent" "$E" start --project "$PC" --file "$PRV" --phase analysis --pass "$PASSA" --provider kilo --model m1
+pwtest_re '__resume__' "J: transition retry reports a resume"
+[ "$(rowcount "| changes-requested |" "$PF")" = 1 ] && pwtest_ok "J: transition retry added no row" || pwtest_bad "J: transition retry" "duplicate CR row"
+PW1A="$PASSA-w1"
+pwtest_rc 0 "J: fresh pass supersedes" "$E" start --project "$PC" --file "$PRV" --phase analysis --pass "$PW1A" --provider kilo --model m2
+[ "$(grep -c '^<!-- pw-review-pass:' "$PF")" = 1 ] && pwtest_grep_file "^<!-- pw-review-pass: id=$PW1A; " "J: binding replaced, not duplicated" "$PF" \
+  || pwtest_bad "J: supersession binding" "marker count != 1"
+BEFORE="$(cksum < "$PF")"
+pwtest_rc 2 "J: superseded pass cannot transition" "$E" start --project "$PC" --file "$PRV" --phase analysis --pass "$PASSA" --provider kilo --model m1
+pwtest_err 'superseded' "J: supersession refusal names the cause"
+pwtest_rc 2 "J: superseded pass cannot write items" "$E" add-item --project "$PC" --file "$PRV" --section '§9' --text stale write --pass "$PASSA"
+[ "$(cksum < "$PF")" = "$BEFORE" ] && pwtest_ok "J: refused writes left the file byte-identical" || pwtest_bad "J: refusal purity" "file changed"
+pwtest_rc 2 "J: uncorrelated phase transition refused while bound" "$E" start --project "$PC" --file "$PRV" --phase analysis --provider kilo --model m3
+pwtest_err 'uncorrelated' "J: bypass refusal names the binding"
+pwtest_rc 0 "J: human decision recorded mid-pass" "$E" signoff --project "$PC" --file "$PRV" --decision in-review --by faza
+BEFORE2="$(cksum < "$PF")"
+pwtest_rc 2 "J: human decision interrupts the pass" "$E" start --project "$PC" --file "$PRV" --phase analysis --pass "$PW1A" --provider kilo --model m2
+pwtest_err 'interrupted' "J: interruption refusal names the cause"
+pwtest_rc 2 "J: interrupted pass cannot write items" "$E" add-item --project "$PC" --file "$PRV" --section '§9' --text stale write --pass "$PW1A"
+[ "$(cksum < "$PF")" = "$BEFORE2" ] && pwtest_ok "J: refusals after human decision left the file byte-identical" || pwtest_bad "J: interruption purity" "file changed"
+# machine rows (repair/feedback) never break a current pass — the fix cycle writes its own rows
+PMX=st-passmix; rm -rf "$PW_PROJECTS_DIR/$PMX"; cp -a "$F2" "$PW_PROJECTS_DIR/$PMX"
+PX="$PW_PROJECTS_DIR/$PMX"; set_phase "$PMX" analysis
+MXRV=analysis/review/fixture.review.md; MXF="$PX/$MXRV"
+PASSC=p-t46-c3
+pwtest_rc 0 "J: mix upstream advisory" "$CFG" set --project "$PMX" --key ai-review --set analysis=advisory
+pwtest_rc 0 "J: mix entry" "$E" start --project "$PMX" --file "$MXRV" --phase analysis --pass "$PASSC" --provider kilo --model m1
+pwtest_rc 0 "J: mix finding" "$E" add-item --project "$PMX" --file "$MXRV" --section '§2' --actor pw-reviewer --pass "$PASSC" --text finding for the mix
+pwtest_rc 0 "J: mix repair pass rides between" "$E" start --project "$PMX" --file "$MXRV"
+rowfix '| pw-review (repair) | changes-requested |' "J: repair row landed between entry and transition" "$MXF"
+pwtest_rc 0 "J: transition still allowed after machine rows" "$E" start --project "$PMX" --file "$MXRV" --phase analysis --pass "$PASSC" --provider kilo --model m1
+pwtest_re '__entered__' "J: pass transition after machine rows"
+rowfix "| pw-reviewer (advisory; provider=kilo; model=m1; pass=$PASSC) | changes-requested |" "J: pass transition row present" "$MXF"
+
+# ============================================================ K) pass-bound auto approval
+PA=st-passauto; rm -rf "$PW_PROJECTS_DIR/$PA"; cp -a "$F2" "$PW_PROJECTS_DIR/$PA"
+PA2D="$PW_PROJECTS_DIR/$PA"; set_phase "$PA" analysis
+PARV=analysis/review/fixture.review.md; PAF="$PA2D/$PARV"
+PASSD=p-t46-d4; PASSE=p-t46-e5
+pwtest_rc 0 "K: configure auto" "$CFG" set --project "$PA" --key ai-review --set analysis=auto
+pwtest_rc 0 "K: clean entry" "$E" start --project "$PA" --file "$PARV" --phase analysis --pass "$PASSD" --provider kilo --model ma
+pwtest_rc 2 "K: approval without the pass id refused while bound" "$E" auto-signoff --project "$PA" --file "$PARV" --phase analysis
+pwtest_err 'uncorrelated' "K: uncorrelated approval refusal names the binding"
+pwtest_rc 2 "K: approval for a pass with no entry refused" "$E" auto-signoff --project "$PA" --file "$PARV" --phase analysis --pass p-t46-ghost
+pwtest_err 'no recorded entry' "K: missing-entry refusal names the cause"
+pwtest_rc 0 "K: approval binds to the pass" "$E" auto-signoff --project "$PA" --file "$PARV" --phase analysis --pass "$PASSD" --provider kilo --model ma
+rowfix "| pw-reviewer (auto; provider=kilo; model=ma; pass=$PASSD) | approved |" "K: approval row carries the pass" "$PAF"
+NAPPR="$(rowcount "pass=$PASSD) | approved |" "$PAF")"
+pwtest_rc 0 "K: approval retry is idempotent" "$E" auto-signoff --project "$PA" --file "$PARV" --phase analysis --pass "$PASSD" --provider kilo --model ma
+pwtest_re 'already auto-approved' "K: retry recap says already approved"
+[ "$(rowcount "pass=$PASSD) | approved |" "$PAF")" = "$NAPPR" ] && pwtest_ok "K: retry added no approval row" || pwtest_bad "K: approval retry" "duplicate approval"
+pwtest_rc 0 "K: second pass supersedes the approved one" "$E" start --project "$PA" --file "$PARV" --phase analysis --pass "$PASSE" --provider kilo --model mb
+pwtest_rc 2 "K: superseded pass cannot approve" "$E" auto-signoff --project "$PA" --file "$PARV" --phase analysis --pass "$PASSD" --provider kilo --model ma
+pwtest_err 'superseded' "K: stale approval refusal names the cause"
+pwtest_rc 0 "K: current pass may approve" "$E" auto-signoff --project "$PA" --file "$PARV" --phase analysis --pass "$PASSE" --provider kilo --model mb
+rowfix "| pw-reviewer (auto; provider=kilo; model=mb; pass=$PASSE) | approved |" "K: replacement pass approves under its own id" "$PAF"
+pwtest_rc 0 "K: human interrupts after approval" "$E" signoff --project "$PA" --file "$PARV" --decision in-review --by faza
+pwtest_rc 2 "K: interrupted pass cannot re-approve" "$E" auto-signoff --project "$PA" --file "$PARV" --phase analysis --pass "$PASSE" --provider kilo --model mb
+pwtest_err 'interrupted' "K: re-approval refusal names the human decision"
+
 rm -rf "$PW_PROJECTS_DIR/$AD" "$PW_PROJECTS_DIR/$IA" "$PW_PROJECTS_DIR/$SM" "$PW_PROJECTS_DIR/$RMQ" \
        "$PW_PROJECTS_DIR/$MFM" "$PW_PROJECTS_DIR/$UK" "$PW_PROJECTS_DIR/$EC" "$PW_PROJECTS_DIR/$FB" \
        "$PW_PROJECTS_DIR/$EBA" "$PW_PROJECTS_DIR/$MF" "$PW_PROJECTS_DIR/$AS" "$PW_PROJECTS_DIR/$HR" \
-       "$PW_PROJECTS_DIR/$EAR" "$PW_PROJECTS_DIR/$IN"
+       "$PW_PROJECTS_DIR/$EAR" "$PW_PROJECTS_DIR/$IN" "$PW_PROJECTS_DIR/$PC" "$PW_PROJECTS_DIR/$PMX" \
+       "$PW_PROJECTS_DIR/$PA"

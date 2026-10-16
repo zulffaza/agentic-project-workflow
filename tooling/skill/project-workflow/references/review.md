@@ -176,16 +176,20 @@ ADVISORY ONLY (no approval row, no repair, even in `auto`) and replay-safe:
   <timestamp>)` instead of `(you, …)`. A human still writes the Sign-off row; process its items via
   the normal apply-comments flow above, no different from a human's.
 - `auto` — same filing, but if the pass leaves nothing `[OPEN]`/`[PENDING]`, `pw-reviewer` may call
-  `pw-review.sh auto-signoff --project <slug> --file <review-rel-path> --phase <surface> --provider <actual> --model <actual>`
+  `pw-review.sh auto-signoff --project <slug> --file <review-rel-path> --phase <surface> --pass <pass-id> --provider <actual> --model <actual>`
   itself — the ONE tool-enforced exception to "only a human clears a gate", re-checked by the tool
-  (mode, zero open items in that file, artifact/lane match, and no standing human rejection), not
+  (mode, zero open items in that file, artifact/lane match, the pass being the current correlated
+  entry, and no standing human rejection), not
   taken on trust.
-  Pass entry for an independent AI pass is `pw-review.sh start --project <slug> --file <review-rel-path> --phase
-  <surface> --provider <actual-provider> --model <actual-model>`: it records `changes-requested`
-  (attributed `pw-reviewer (<mode>; provider=…; model=…)`) only after the pass has persisted real
-  findings — a pass that starts empty and finds nothing files notes only and leaves Sign-off
-  unchanged, a clean advisory pass never approves, and a clean auto pass approves directly through
-  the guards above without first fabricating a `changes-requested` row.
+  A managed pass is correlated by ONE pass id: `pw-review.sh start --project <slug> --file <review-rel-path> --phase
+  <surface> --pass <pass-id> --provider <actual-provider> --model <actual-model>` FIRST records the
+  attributed `in-review` entry (before assessment or finding writes), findings/questions carry the
+  same `--pass <pass-id>`, and the same call records the `changes-requested` transition
+  (attributed `pw-reviewer (<mode>; provider=…; model=…; pass=<id>)`) only after the pass has
+  persisted real findings. A clean pass records no transition and its `in-review` entry stands —
+  notes only; a clean advisory pass never approves, and a clean auto pass approves directly through
+  the guards above without first fabricating a `changes-requested` row. A fresh pass id supersedes
+  the previous entry; a superseded or human-interrupted pass refuses further writes.
 `pw-reviewer` is spawned **fresh** (no shared context with whoever produced the artifact — and
 never the producer's session resumed/forked, its chat history, a defense it wrote, or anything
 recoverable via session recall/shared boards) and gets

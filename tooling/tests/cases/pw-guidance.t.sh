@@ -161,6 +161,27 @@ open(p + "/analysis/review/topic.review.md", "w", encoding="utf-8").write(
 open(p + "/task/review/T01.archive.md", "w", encoding="utf-8").write(
     "# Archived review items — T01\n\nItems/questions moved out of `task/review/T01.review.md` once fully [RESOLVED]/[ANSWERED], by `pw-review.sh\n"
     "archive` — text preserved verbatim, never edited. See that file's \"## Archived items\"\ntable for one pointer row per entry moved here.\n")
+# Shipped-generation positional guidance (the 42-era template bytes): the item hint and the
+# wrapped init-all comment must repair to fully named forms; an already-named sibling line
+# must stay byte-identical (mixed named/positional copy).
+open(p + "/analysis/review/topic2.review.md", "w", encoding="utf-8").write(
+    "# Review: topic2.md\n\n"
+    "<!-- QUICK REFERENCE\n"
+    "- **Agents:** the `> **Add an item:**` / `> **Answer a question:**` hints are permanent — never\n"
+    "  remove them, even once a section reads \"No blocking …\". Create this file with\n"
+    "  `/pw-review init --project <slug> --file <doc-path>` (copies the template verbatim) — or `/pw-review --project <slug>\n"
+    "  init-all` for the review files missing in the project's CURRENT phase — never by hand. -->\n\n"
+    "> **Add an item:** easiest is the deterministic operator — `/pw-review --project <slug> item <this-file>\n"
+    "> §4 <your ask, spaces and all>` (it writes the heading, timestamp, marker, `---` rule, and\n"
+    "> reindexes `## Contents` for you; a first new item after an `approved` row also records one\n"
+    "> `pw-review (feedback)` `in-review` row, so the old approval stops being the live decision).\n\n"
+    "> **Answer a question:** easiest is `/pw-review answer --project <slug> --file <this-file> --question Qn --text <your answer>`\n"
+    "> (it writes the styled `↳ you:` line under the question).\n\n"
+    "## Sign-off\n\n| By | Decision | When |\n|----|----------|------|\n| you | approved | 1 October 2026 10.00 WIB |\n")
+# analysis/README.md: shipped positional answer row → named row
+repl("analysis/README.md",
+     "| Answer the agent's questions | `/pw-review answer --project <slug> --file analysis/review/<topic>.review.md --question Q<n> --text <your answer>` |",
+     "| Answer the agent's questions | `/pw-review --project <slug> answer analysis/review/<topic>.review.md Q<n> <your answer>` |")
 open(p + "/rfc/META.md", "w", encoding="utf-8").write(
     "# RFC metadata — guidance-legacy   [🤖-owned — never hand-edit; see `pw-rfc.sh target|state`]\n\n"
     "- **Backend:** markdown\n\n## Comment tracking   [🤖-owned — never hand-edit; see `pw-rfc.sh comment-seen`]\n\n"
@@ -191,6 +212,8 @@ pwtest_re 'would repair context/README.md' "preview lists context/README.md"
 pwtest_re 'would repair context/INDEX.md' "preview lists context/INDEX.md"
 pwtest_re 'would repair task/review/T01.review.md' "preview lists the review file"
 pwtest_re 'would repair analysis/review/topic.review.md' "preview lists the analysis review"
+pwtest_re 'would repair analysis/review/topic2.review.md' "preview lists the shipped-generation copy"
+pwtest_re 'would repair analysis/README.md' "preview lists the analysis README row"
 pwtest_re 'would repair task/review/T01.archive.md' "preview lists the archive banner"
 pwtest_re 'would repair task/PLAN.md' "preview lists PLAN"
 pwtest_re 'guidance preview: .* repairable' "preview prints a summary"
@@ -221,6 +244,15 @@ else pwtest_ok "analysis review leak gone"; fi
 if grep -qF 'pw-review.sh' "$P3/analysis/review/topic.review.md"; then pwtest_bad "analysis review prose script-free" "pw-review.sh remains"
 else pwtest_ok "analysis review prose script-free"; fi
 pwtest_grep_file '`/pw-status rewind --project <slug> --phase <phase>`' "analysis rewind hint repaired" "$P3/analysis/review/topic.review.md"
+# shipped-generation rules: positional item hint + wrapped init-all comment → named forms;
+# an already-named sibling line in the same file stays byte-identical (mixed copy).
+pwtest_grep_file '`/pw-review item --project <slug>' "shipped item hint repaired to the named form" "$P3/analysis/review/topic2.review.md"
+if grep -qF '/pw-review --project <slug> item <this-file>' "$P3/analysis/review/topic2.review.md"; then pwtest_bad "shipped item hint leak gone" "positional bytes remain"; else pwtest_ok "shipped item hint leak gone"; fi
+pwtest_grep_file '`/pw-review init-all --project <slug>` for the review files missing in the project' "wrapped init-all comment repaired" "$P3/analysis/review/topic2.review.md"
+if grep -qF '  init-all` for the review files missing' "$P3/analysis/review/topic2.review.md"; then pwtest_bad "wrapped init-all leak gone" "positional bytes remain"; else pwtest_ok "wrapped init-all leak gone"; fi
+pwtest_grep_file '`/pw-review answer --project <slug> --file <this-file> --question Qn --text <your answer>`' "already-named sibling untouched" "$P3/analysis/review/topic2.review.md"
+pwtest_grep_file '`/pw-review answer --project <slug> --file analysis/review/<topic>.review.md --question Q<n> --text <your answer>`' "analysis README answer row repaired" "$P3/analysis/README.md"
+if grep -qF 'answer analysis/review/<topic>.review.md Q<n>' "$P3/analysis/README.md"; then pwtest_bad "analysis README positional row gone" "old bytes remain"; else pwtest_ok "analysis README positional row gone"; fi
 if grep -qF ', by `pw-review.sh' "$P3/task/review/T01.archive.md"; then pwtest_bad "archive leak gone" "old bytes remain"
 else pwtest_ok "archive leak gone"; fi
 pwtest_grep_file 'text preserved verbatim' "archive keeps preservation sentence" "$P3/task/review/T01.archive.md"

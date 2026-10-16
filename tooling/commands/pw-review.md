@@ -132,16 +132,20 @@ repair cycle described at step 6):
 4. `pw-reviewer` files items (tagged `(pw-reviewer, <timestamp>)`) and a `REVIEWER-NOTES.md` entry
     on its own — you don't do this part. It checks for an existing item on the same section anchor
     before filing anything (loop prevention — a 3rd item on the same anchor becomes a [OPEN]
-    escalation instead of a normal finding, never resolved by it). Its pass entry is
-    `pw-review.sh start --project <slug> --file <review-rel-path> --phase <phase> --provider <actual-provider>
-    --model <actual-model>`, which records `changes-requested` ONLY once the pass has persisted
-    real findings — a reviewer that starts empty and finds nothing files no such row and leaves
-    Sign-off untouched (its verdict lives in `REVIEWER-NOTES.md`). A reviewer that starts empty and
-    discovers real findings persists them first (the item write invalidates a stale approval via
-     the `pw-review (feedback)` row), then records the pass row. In `auto` mode with a genuinely
-     clean pass it may call `pw-review.sh auto-signoff --project <slug> --file <review-rel-path> --phase <phase>`
-     with its actual `--provider`/`--model`
-     directly — never after first fabricating a `changes-requested` row; you never write either row.
+    escalation instead of a normal finding, never resolved by it). Its pass is correlated by ONE
+    pass id (reuse a prepared packet's id when one exists; otherwise the reviewer mints a fresh
+    neutral id and keeps it across retries): it FIRST records the entry with
+    `pw-review.sh start --project <slug> --file <review-rel-path> --phase <phase> --pass <pass-id>
+    --provider <actual-provider> --model <actual-model>` — an attributed `in-review` entry row plus
+    the binding, before assessment or finding writes — then files findings/questions carrying the
+    same `--pass <pass-id>`, and once real findings exist re-runs the same start call to record the
+    `changes-requested` transition (idempotent retry; a clean pass keeps its `in-review` entry and
+    its verdict lives in `REVIEWER-NOTES.md`). A fresh pass id supersedes the previous entry; a
+    superseded or human-interrupted pass refuses further writes without changing the file. In
+    `auto` mode with a genuinely clean pass it may call
+    `pw-review.sh auto-signoff --project <slug> --file <review-rel-path> --phase <phase> --pass <pass-id>`
+    with its actual `--provider`/`--model`
+    directly — never after first fabricating a `changes-requested` row; you never write either row.
     If the run's identity is unconfirmed it records `unknown`, never a guessed or configured value.
 5. Recap what it did (items filed, whether it signed off, any escalation) exactly like the
    apply-comments recap below, naming the actual reviewer identity shown in the rows. `advisory`

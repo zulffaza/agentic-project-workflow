@@ -16,7 +16,7 @@ Adding an item or answering a question does not apply the correction by itself.
 | An AI pass that keeps human approval | [Advisory recipe](RECIPES.md#use-ai-review-with-human-approval) |
 | Understand automatic approval safeguards | [AI-assisted review](#3-ai-assisted-review-optional-advisory--manual-by-default) |
 
-Use `/pw-help project <slug> pw-review` for paths and commands matched to your actual project.
+Use `/pw-help project --project <slug>` for paths and commands matched to your actual project, or `/pw-help find --term pw-review` for every review surface.
 
 There are **two places** review happens, and they run at different times:
 
@@ -67,22 +67,23 @@ and current task results during `executing`/`review`. It creates none implicitly
 Use this form when recording a change request, especially for a heading with spaces:
 
 ```text
-/pw-review delivery-note item task/review/PLAN.review.md --section Execution strategy --text Run compatibility tests before storefront changes
+/pw-review item --project delivery-note --file task/review/PLAN.review.md --section Execution strategy --text Run compatibility tests before storefront changes
 ```
 
 | Argument | What to put there |
 |---|---|
-| `<slug>` | Project name, here `delivery-note` |
-| `item` | The action that records a new feedback item |
-| `<review-path>` | Project-relative review file; here `task/review/PLAN.review.md` |
-| `--section` | Heading or anchor in the reviewed artifact; here `Execution strategy` in `task/PLAN.md` |
-| `--text` | The requested change; here `Run compatibility tests before storefront changes` |
+| `--project delivery-note` | Project name |
+| `item` | The operator word that records a new feedback item |
+| `--file task/review/PLAN.review.md` | Project-relative review file receiving the item |
+| `--section Execution strategy` | Heading or anchor in the reviewed artifact, here in `task/PLAN.md`; quote a multi-word anchor as one token |
+| `--text Run compatibility tests before storefront changes` | The requested change |
 
-Both flags belong to `item`. Each value continues until the next `--flag` or the command ends.
-Multi-word values need no quotes. For a single section token, the shorter form also works:
+`item` is the operator word; every value is named. `--section` takes one token;
+`--text` continues until the next `--flag` or the command ends, so multi-word prose values need no quotes.
+The same flags cover short section tokens:
 
 ```text
-/pw-review delivery-note item task/review/PLAN.review.md §4 Add compatibility tests
+/pw-review item --project delivery-note --file task/review/PLAN.review.md --section '§4' --text Add compatibility tests
 ```
 
 The operator creates the next `Rn` item with its section, timestamp, and `[OPEN]` status.
@@ -133,8 +134,9 @@ author in the `By` column:
 | `you` (or a named human) | An explicit sign-off you asked to record | `in-review` · `changes-requested` · `approved` |
 | `pw-review (feedback)` | Your first new item or answer queues a review cycle; a previous `approved` stops being the live decision | `in-review` |
 | `pw-review (repair)` | A `/pw-review` pass starts on real actionable work in that file | `changes-requested` |
-| `pw-reviewer (advisory; provider=…, model=…)` | An independent AI pass filed real findings | `changes-requested` |
-| `pw-reviewer (auto; provider=…, model=…)` | Same, plus the guarded `auto`-mode approval | `changes-requested` · `approved` |
+| `pw-reviewer (advisory; provider=…, model=…)` | A legacy or uncorrelated AI pass filed real findings | `changes-requested` |
+| `pw-reviewer (advisory; provider=…, model=…; pass=…)` | A managed pass recorded its assessment entry, then its findings transition | `in-review` · `changes-requested` |
+| `pw-reviewer (auto; provider=…, model=…; pass=…)` | Same, plus the guarded `auto`-mode approval bound to that pass | `in-review` · `changes-requested` · `approved` |
 
 Read the row's author alongside its decision:
 
@@ -182,7 +184,7 @@ New timestamps use forms such as `5 October 2026 23.11 WIB`. Older formats remai
 Find the current review files and their open-item counts:
 
 ```text
-/pw-help project <slug> pw-review
+/pw-help project --project <slug>
 ```
 
 Open the named review file and use its contents table to jump to an item.
@@ -306,7 +308,7 @@ Failed delivery remains recoverable locally. See [pending description recovery](
 **Build check runs by default, in both modes:** polls the MR's pipeline/checks to a terminal state
 (green/red/still-running) and shows the result in the recap and the task's `## Result` — meaning a
 plain run now waits on CI before it finishes. Pass `--skip-build-check` to opt out and get the
-immediate-return behavior back — `/pw-help command pw-ship` spells out the exact per-forge
+immediate-return behavior back — `/pw-help command --name pw-ship` spells out the exact per-forge
 mechanics, the build-check section, and timeout handling. **A red build means that task is NOT done:** the
 agent diagnoses the failure, fixes the change in the worktree, re-runs the task's `## Verify`,
 pushes, and re-monitors until the pipeline passes — up to 3 fix rounds, then it stops and surfaces
@@ -341,13 +343,13 @@ asked and what changed?" entirely from the project dir, without opening the MR.
 
 ### The typical post-ship loop
 ```
-/pw-ship  myproj                 # open the MRs
+/pw-ship --project myproj                       # open the MRs
 … reviewer comments on MR for T03 …
-/pw-ship  myproj T03 comments    # fix + reply + mirror
+/pw-ship comments --project myproj --task T03   # fix + reply + mirror
 … base branch moves …
-/pw-sync  myproj                 # merge base into all open MR branches + re-verify
+/pw-sync --project myproj                       # merge base into all open MR branches + re-verify
 … all approved & merged by a human …
-/pw-close myproj                 # tear down + learn
+/pw-close --project myproj        # tear down + learn
 ```
 
 ---
@@ -378,12 +380,12 @@ configuring):
 | `review-rounds` | `1..3` (`3`) | Total reviewer passes in that cycle — with 3, at most two intervening verified repairs; the sequence stops at pass 3 even with findings left. |
 
 ```
-/pw-config myproj show                                # every axis, in plain language
-/pw-config myproj set ai-review plan=auto             # let the plan-review gate self-approve clean passes
-/pw-config myproj set review-trigger all=completion   # start after each producing command too…
-/pw-config myproj set review-trigger context=manual   # …except where you want manual control
-/pw-config myproj set review-repair task-exec=bounded # completion review may repair+re-review task results
-/pw-config myproj set review-rounds 2                 # tighten the bounded cycle
+/pw-config show --project myproj                                    # every axis, in plain language
+/pw-config set --project myproj --key ai-review --set plan=auto     # let the plan-review gate self-approve clean passes
+/pw-config set --project myproj --key review-trigger --set all=completion   # start after each producing command too…
+/pw-config set --project myproj --key review-trigger --set context=manual   # …except where you want manual control
+/pw-config set --project myproj --key review-repair --set task-exec=bounded # completion review may repair+re-review task results
+/pw-config set --project myproj --key review-rounds --value 2       # tighten the bounded cycle
 ```
 
 `all=<value>` sets every surface in one validated write; explicitly named surfaces override the
@@ -412,10 +414,10 @@ unavailable and stops at the `review-rounds` budget: pass 1 → repair 1 → ver
 non-native session (another chat, another provider, a colleague's agent), freeze a packet first:
 
 ```
-/pw-review myproj prepare analysis                 # or: prepare T01 / prepare rfc / a path / close
+/pw-review prepare --project myproj --surface analysis   # or: --task T01 / --surface rfc / --surface close / --file <path>
 # → review/ai/p-analysis-…/ (manifest.json · snapshot/ · request.md); NO model is launched
 # hand request.md + the snapshot to a fresh session anywhere; it returns report JSON
-/pw-review myproj import --report ~/reviews/analysis.json
+/pw-review import --project myproj --report ~/reviews/analysis.json
 # → validated once against the manifest (schema, project/pass binding, freshness fingerprint);
 #   findings land in the normal .review.md tagged (pw-reviewer (external), …); replay-safe
 ```
@@ -438,12 +440,26 @@ written by you (advisory) or, for an eligible clean managed pass, by the guarded
 verdict. Raw code/document review outside a scaffolded project is a different tool — the
 `pw-independent-review` skill — whose default destination is chat, with no project records.
 
+**Pass correlation — one id per managed pass.** A managed reviewer correlates its lifecycle
+under ONE pass id (a prepared packet's id when one exists; otherwise a fresh neutral id it keeps
+across retries). `start … --pass <id>` records the attributed `in-review` entry row and a machine
+binding marker under `## Sign-off` when the reviewer actually begins, before assessment; finding
+and question writes carry the same `--pass <id>`, and the same call records the
+`changes-requested` transition once real findings exist. Retries are idempotent; a fresh pass id
+supersedes the previous entry; a superseded pass, or one interrupted by a human Sign-off
+decision, refuses further writes without changing the file. Fix-cycle rows (`pw-review (repair)`,
+feedback, reopen) never break a current pass — the correlated entry, not the newest row alone,
+decides who may still write. While a correlation is current, a phase-bearing reviewer transition
+or an approval WITHOUT `--pass` is refused — an uncorrelated late reviewer cannot bypass the
+recorded pass. The binding marker itself is machine-managed: do not hand-edit or duplicate it.
+
 **On `auto`'s self-approval** — this is the one place this feature changes an existing invariant
 ("only a human clears a gate"), so it's deliberately the most auditable part: the Sign-off row
-reads `pw-reviewer (auto; provider=<actual>; model=<actual>)` in the "By" column, never blended
+reads `pw-reviewer (auto; provider=<actual>; model=<actual>; pass=<id>)` in the "By" column, never blended
 with a human "you" row, and the underlying tool (the auto-signoff step) refuses outright unless
 the project's mode for that phase is genuinely `auto`, **and** the file has no real open
-item/question left, **and** the artifact actually belongs to the lane being approved, **and** no
+item/question left, **and** the artifact actually belongs to the lane being approved, **and** the
+pass is the current correlated entry, **and** no
 explicit human `changes-requested` is still standing — it doesn't take the reviewer's word for
 any of them. ("Real" means a *filled* heading: the template's never-used
 R1/Q1 stubs — recognized by their live timestamp/section placeholders, including legacy `<YYYY-MM-DD>` — are copies to
@@ -459,13 +475,15 @@ guessed — and missing identity grants no approval authority. A retry with a di
 a distinct attempt with its own attribution; plain `pw-reviewer (auto)` rows written before this
 attribution shipped stay readable history, without invented provider/model values.
 
-**A clean pass changes nothing unless `auto` approves.** An AI pass may start with no items at all —
-reading an artifact does not invalidate an approval or record a row. If it finds real findings it
-persists them first (a first real item invalidates a stale approval exactly like feedback does), and
-only then records its `changes-requested` pass row; its later internal writes never toggle that
-state back. A clean `advisory` pass adds no row and leaves any existing approval alone — you still
-sign it off. A clean `auto` pass may approve straight through the guards above; it never first
-fabricates a `changes-requested` row. A normal repair pass (`/pw-review` without `ai`) records
+**A clean pass keeps its entry; only `auto` approves.** A managed pass records its attributed
+`in-review` entry when it actually begins — reading an artifact records nothing, but a started
+pass leaves its entry even when it ends clean. If it finds real findings it persists them first,
+then records the `changes-requested` transition; its later internal writes never toggle that
+state back. A clean `advisory` pass keeps its entry and stops — you still sign it off. A clean
+`auto` pass may approve straight through the guards above; it never first fabricates a
+`changes-requested` row. An uncorrelated pass (no `--pass`) keeps the legacy behavior: it records
+`changes-requested` only when it persisted findings and adds no row otherwise. A normal repair
+pass (`/pw-review` without `ai`) records
 `pw-review (repair)` `changes-requested` only when the selected file genuinely has eligible work to
 process: a no-op call over stubs, resolved items, or a question merely waiting for your answer adds
 no row and is reported as skipped.

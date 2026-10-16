@@ -30,7 +30,7 @@ declare -p PW_FORGE_HOSTS >/dev/null 2>&1 || PW_FORGE_HOSTS=()
 : "${PW_RFC_BACKEND:=markdown}"
 
 # Request-review frame file (see tooling/docs/scripts/ship-and-sync.md): the human-owned
-# outer message frame for /pw-ship <slug> request-review. Unset resolves the default under
+# outer message frame for /pw-ship request-review --project <slug>. Unset resolves the default under
 # $PW_HOME/user/templates/ (the pre-2026-10 legacy location user-templates/ migrates through
 # the doctor); a relative configured path resolves against $PW_HOME so the effective file
 # never depends on the current working directory. Never source the file.

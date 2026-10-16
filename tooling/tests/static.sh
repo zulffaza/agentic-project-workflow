@@ -8,6 +8,36 @@ export PWTEST_AUTOMATION
 
 _pwtest_code_lines() { awk '!/^[[:space:]]*#/' "$@" 2>/dev/null | cat -n; }
 
+# _pwtest_namedarg_scan — plan 46 named-argument contract scanner. stdin: candidate lines in
+# `<file>:<line>:<text>` form; stdout: offending lines. Bounded regexes ONLY (each encodes a
+# pre-migration shape that actually shipped in docs/templates); the live-context class requires
+# the command to sit at line start or right after ` $ > : (the -nH prefix) so prose mentions
+# stay clean. Every class is fixture-tested by the T4 canary before it guards the live tree.
+_pwtest_namedarg_scan() {
+  local all R1 R1A R2 R3 R4 R5 R6 R7 R8 R8A
+  all="$(cat)"
+  R1='(^|[`$>:])/pw-(new|analyze|breakdown|close|sync|execute|status|ship|config|context|adopt|rfc|doctor|review) +[a-z0-9][a-z0-9-]*'
+  R1A='pw-review (init|init-all|item|answer|signoff|prepare|import|ai|config|reopen|archive|passes|read|gate|count|has-open|resolve|reindex)\b|pw-(status|ship) (rewind|comments|request-review|stack|stack-adopt)\b|pw-config (global|model-check|model-resolve|show|get|set|ensure|ai-model|ai-review|review-trigger|review-repair|review-rounds|agent-model)\b|pw-context (adopt|add-input|add-repo|fetch|prepare|req-init|scan)\b|pw-rfc (init|target|state|comment-seen|dashboard|comments|milestone|deploy)\b|pw-adopt\b|/pw-[a-z-]+ (to|for|and|or|the|an|will|can|is|runs|works|already|side-loop|command|commands|before|after|twice|again|now|still|only|users?|sessions?|without|with)\b'
+  R2='--project +[^ ]+ +(item|answer|signoff|prepare|import|ai|comments|request-review|rewind|set|ensure|global|adopt|milestone)\b'
+  R3='pw-config(\.sh)? +(project|ai-review|ai-model|review-trigger|review-repair|review-rounds) +[a-z0-9<-]'
+  R4='/(pw-review) +(item|answer) +([^ -][^ ]*/|<[a-z-]+>)'
+  R5='/(pw-help) +(project|command|operators|find) +[a-z<]'
+  R6='task IDs use spaces|[Mm]ultiple task IDs use spaces|task[- ]ids? separated by spaces'
+  R7='<task-id>…'
+  R8='pw-[a-z-]+\.sh [a-z][a-z0-9-]* +[a-z0-9<]'
+  R8A='pw-ship\.sh stack adopt\b|pw-config\.sh global +show\b|\.sh [a-z][a-z0-9-]* (and|or|the|a|an|is|are|was|will|to|for|with|in|on|at|by)\b'
+  {
+    printf '%s\n' "$all" | grep -E -- "$R1" | grep -vE -- "$R1A" || true
+    printf '%s\n' "$all" | grep -E -- "$R2" || true
+    printf '%s\n' "$all" | grep -E -- "$R3" || true
+    printf '%s\n' "$all" | grep -E -- "$R4" || true
+    printf '%s\n' "$all" | grep -E -- "$R5" || true
+    printf '%s\n' "$all" | grep -E -- "$R6" || true
+    printf '%s\n' "$all" | grep -E -- "$R7" || true
+    printf '%s\n' "$all" | grep -E -- "$R8" | grep -vE -- "$R8A" || true
+  } | awk '!seen[$0]++'
+}
+
 static_t0() {
   echo "== T0 static ==" >&2
   local f code hits re label excl
@@ -256,6 +286,18 @@ static_t4() {
     && grep -qF 'Compare `observed heads`' "$TOOL/commands/pw-ship.md" \
     && pwtest_ok "T4 canary: pw-ship generation-prompt wiring text" \
     || pwtest_bad "T4 canary: pw-ship generation-prompt wiring" "the editable prompt files or the observed-head comparison died from the command file"
+  # named dispatch + entry-before-assessment doctrine (plan 46): the ship command selects modes by
+  # operation word (never an ordinal argument slot), and every reviewer instruction surface keeps
+  # the correlated pass entry strictly before assessment.
+  grep -qF 'The first word selects the mode:' "$TOOL/commands/pw-ship.md" \
+    && ! grep -qF '2nd argument' "$TOOL/commands/pw-ship.md" \
+    && pwtest_ok "T4 canary: ship dispatch prose selects operation words" \
+    || pwtest_bad "T4 canary: ship dispatch prose" "pw-ship.md lost the first-word dispatch contract (or an ordinal-slot phrase returned)"
+  grep -qF 'FIRST records the entry with' "$TOOL/commands/pw-review.md" \
+    && grep -qF 'and FIRST record that' "$TOOL/agents/pw-reviewer.md" \
+    && grep -qF 'comes before assessment' "$TOOL/skill/pw-review/SKILL.md" \
+    && pwtest_ok "T4 canary: reviewer entry precedes assessment in every instruction surface" \
+    || pwtest_bad "T4 canary: entry-before-assessment routing" "a reviewer instruction surface lost the entry-first contract"
   # /user/ ignore coverage: representative frame, prompt, and scratch files must be ignored, the
   # legacy location stays ignored during migration, and no user-owned customization may be tracked.
   _giterr=""
@@ -423,4 +465,49 @@ PY
     && grep -qF 'KNOWN_PROVIDERS=(claude kilo opencode cursor codex)' "$TOOL/../offboard.sh" \
     && pwtest_ok "T4 canary: codex skill-layout + D13 skips + config.toml hands-off + offboard list" \
     || pwtest_bad "T4 canary: codex provider doctrine" "a plan-28 anchor died: command_style hook (gen-commands.sh), codex hooks/skips/config.toml comment (pw-common.sh), or codex in offboard.sh KNOWN_PROVIDERS"
+
+  # (i) named-argument contract canary (plan 46): the migrated user + agent surfaces must not
+  # carry pre-migration invocation shapes. Bounded regexes over real invocation contexts only;
+  # a controlled fixture proves the scanner still catches every banned class (no vacuous guard).
+  local na_files na_cand na_hits na_fx na_fx_hits na_fx_ids
+  na_files="$(cd "$TOOL/.." && printf '%s\n' \
+    README.md AGENTS.md CLAUDE.md ONBOARDING.md \
+    docs/*.md template/*.md template/*/*.md \
+    tooling/README.md tooling/AGENTS.md tooling/CLAUDE.md \
+    tooling/commands/*.md tooling/agents/*.md \
+    tooling/docs/*.md tooling/docs/scripts/*.md \
+    tooling/skill/*/*.md tooling/skill/*/*/*.md \
+    tooling/skill-internal/*/*.md tooling/skill-internal/*/*/*.md 2>/dev/null | sort -u \
+    | while read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done)"
+  na_cand="$(cd "$TOOL/.." && grep -nH '/pw-' $na_files 2>/dev/null | grep -vE '^[^:]*:[0-9]+:#' || true)"
+  na_hits="$(printf '%s\n' "$na_cand" | _pwtest_namedarg_scan)"
+  [ -z "$na_hits" ] && pwtest_ok "T4 canary: named-argument contract holds on live surfaces (plan 46)" \
+    || pwtest_bad "T4 canary: named-argument contract" "$(printf '%s' "$na_hits" | head -3 | tr '\n' ' ')"
+  na_fx="$ROOT/namedarg-fixture.txt"
+  printf '%s\n' \
+    'fx:1:/pw-new delivery-note' \
+    'fx:2:/pw-review delivery-note signoff analysis/review/x.review.md approved' \
+    'fx:3:/pw-review --project proj item task/review/PLAN.review.md' \
+    'fx:4:pw-config.sh project show myproj' \
+    'fx:5:/pw-review item task/review/PLAN.review.md' \
+    'fx:6:/pw-help project <slug>' \
+    'fx:7:Multiple task IDs use spaces.' \
+    'fx:8:Task IDs are `T01`; task IDs use spaces.' \
+    'fx:9:<task-id>…' \
+    'fx:10:/pw-new --project delivery-note' \
+    'fx:11:/pw-review item --project proj --file task/review/PLAN.review.md --section Verification --text Fix' \
+    'fx:12:/pw-config set --project proj --key max-parallel --value 2' \
+    'fx:13:run /pw-new to scaffold a project' \
+    'fx:14:/pw-ship comments --project proj' \
+    'fx:15:/pw-help find --term review' \
+    'fx:16:/pw-review --project <slug> [--phase plan | --task T01]' \
+    'fx:17:$PW_HOME/tooling/scripts/entities/pw-status.sh log   <slug> <actor> <msg...>' \
+    'fx:18:$PW_HOME/tooling/scripts/entities/pw-context.sh scan --repo repo-x --area src' \
+    'fx:19:pw-ship.sh stack adopt --project <slug>' \
+    'fx:20:pw-config.sh global show' > "$na_fx"
+  na_fx_hits="$(cat "$na_fx" | _pwtest_namedarg_scan)"
+  na_fx_ids="$(printf '%s\n' "$na_fx_hits" | grep -oE '^fx:[0-9]+' | tr '\n' ' ')"
+  [ "$na_fx_ids" = "fx:1 fx:2 fx:3 fx:4 fx:5 fx:6 fx:7 fx:8 fx:9 fx:17 " ] \
+    && pwtest_ok "T4 canary: named-argument scanner catches every banned class on the fixture" \
+    || pwtest_bad "T4 canary: named-argument scanner fixture" "expected fx:1..fx:9 + fx:17 only; got: '${na_fx_ids:-none}' (a scanner class went vacuous or a valid form false-positives)"
 }

@@ -93,7 +93,7 @@ PW_KILO_API_PROVIDERS=(kilo)
 # PLAN-only (an env there would be a third surface for one decision).
 
 # Per-project AI Review + spawn-lane model defaults (written into a new project's dashboard by
-# scaffold.sh — a project can always flip them later via /pw-config <slug> set …).
+# scaffold.sh — a project can always flip them later via /pw-config set --project <slug> --key <key> …).
 #   PW_AI_REVIEW_DEFAULT=advisory                # advisory|auto — the per-surface starting OUTCOME
 #                                                # (legacy "off" here normalizes to "advisory")
 #   PW_AI_MODEL_DEFAULT_RESEARCHER=—             # e.g. kilo:command_code/MiniMaxAI/MiniMax-M3,
@@ -149,14 +149,14 @@ PW_MODEL_ALLOWLIST_CODEX=""
 # surface; the legacy `off` value normalizes to `advisory` on read and is no longer writable),
 # Review Trigger (manual|completion), Review Repair (manual|bounded), and Review Budget
 # (rounds 1..3). All are overridable per project at any time via
-# `/pw-config <slug> set ai-review …` — see docs/REVIEW.md. This only changes what NEW projects
+# `/pw-config set --project <slug> --key ai-review --set <surface>=<mode>` — see docs/REVIEW.md. This only changes what NEW projects
 # are scaffolded with; it never touches an already-scaffolded project's dashboard.
 #   PW_AI_REVIEW_DEFAULT="advisory"   # "advisory" (default) | "auto" — starting OUTCOME mode;
 #                                     # a legacy "off" here normalizes to "advisory"
 PW_AI_REVIEW_DEFAULT="advisory"
 
 # --- Review-request frame and generation prompts (OPTIONAL — defaults are seeded at install) --
-# /pw-ship <slug> request-review renders its copyable message through one editable Markdown
+# /pw-ship request-review --project <slug> renders its copyable message through one editable Markdown
 # frame — $PW_HOME/user/templates/review-request.md by default (seeded by bootstrap.sh / repaired
 # by /pw-doctor --fix; the pre-2026-10 legacy user-templates/review-request.md migrates to the
 # new default when the new one is absent). The optional AI prose (--summary/--mr-summary/--note)
