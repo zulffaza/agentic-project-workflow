@@ -23,7 +23,7 @@ Separate upstream changes from the documentation changes. Resolve overlapping pr
 
 Check these details whenever an example depends on them:
 
-- Required operators, positional arguments, flag values, and multi-word parsing.
+- Required operation words first, named values (`--project`, `--file`, `--section`, `--text`), flag values, and multi-word parsing.
 - Project-relative versus context-relative versus filesystem paths.
 - Scope selectors versus filenames, task IDs, or approval decisions.
 - Recording feedback versus applying it, PLAN approval versus task acceptance, and acceptance versus MR merging.
@@ -63,8 +63,8 @@ For each important action, include enough to answer:
 4. What do I review or approve before continuing?
 
 Explain unfamiliar syntax at its first useful example. Prefer the discoverable flag form when it clarifies separate free-text fields.
-For example, `item <review-path> --section <heading> --text <request>` needs an explanation of the reviewed heading, requested change, and recording/applying distinction.
-For a scope word such as `plan`, verify what files it selects and show an exact review-path alternative when the example targets one file.
+For example, `item --project <slug> --file <review-path> --section <heading> --text <request>` needs an explanation of the reviewed heading, requested change, and recording/applying distinction.
+For a scope selector such as `--phase plan`, verify what files it selects and show an exact `--file` alternative when the example targets one file.
 
 Do not tell readers to inspect a diff or verification result without explaining how to find it.
 Use the supported status/help surface for discovery, or a concrete chat request for local evidence.
@@ -87,7 +87,7 @@ Read the changed path as a newcomer: setup, inputs, review, execution, publicati
 Check linked pages for conflicting instructions and examples after a source update.
 
 - Check local links and heading anchors, including renamed headings and new navigation.
-- Check examples against command definitions, including parameter parsing and action scope.
+- Check example bodies, tables, and multiline examples against command definitions, including operation words, named values, parameter parsing, and action scope. A wrapped example must stay valid when rejoined; a table row must keep its fields separate and accurate.
 - Run `git diff --check` and the repository's required checks for the change type; see [testing.md](../../docs/testing.md).
 - For substantial layout changes, render the affected Markdown at desktop and narrow widths. Inspect tables, lists, and command-block scrolling.
 - Report what was checked, what remains unverified, and whether edits are local, committed, or published.

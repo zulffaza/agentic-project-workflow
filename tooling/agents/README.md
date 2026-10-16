@@ -60,8 +60,9 @@ reporting) comes from the `project-workflow` skill + the task file, not from a b
 `pw-executor` is the *single* dedicated executor concept (ad-hoc non-pw implementation runs on the
 main agent or a default-agent session named by provider+model — not a second implementer
 definition). `pw-reviewer` is optional —
-every review point defaults to human-only (AI Review mode `off`); it only ever runs when a
-project's dashboard turns it on for a specific phase.
+every review point defaults to human-only (effective outcome `advisory`; a legacy stored
+`off` reads that way); a pass only starts when the project's settings schedule one for that
+phase, or when you ask explicitly, and `advisory` never approves.
 
 ## Adding a custom agent
 Only for a **genuinely new role** no existing agent covers, that recurs across tasks (e.g. a

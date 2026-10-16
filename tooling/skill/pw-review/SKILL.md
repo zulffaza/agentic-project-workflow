@@ -132,23 +132,37 @@ repeating.
 
 ## The gate — advisory vs. auto
 
-**Pass entry — `start` — comes after real findings, never before.** Record your pass with:
+**Pass entry — `start --pass` — comes before assessment**; the `changes-requested` transition
+comes once real findings exist. Pick ONE pass id for this run (reuse the prepared packet's
+pass id when you were handed one; otherwise mint a fresh neutral id, e.g.
+`p-<surface>-<your-run-or-session-id>`, and keep it identical across retries):
 
 ```sh
+# 1. entry: record that this pass actually began (one attributed in-review row + binding marker)
 tooling/scripts/entities/pw-review.sh start --project <slug> --file <review-rel-path> --phase <phase> \
-  --provider <actual-provider> --model <actual-model>   # identity as the RUNTIME reports it
+  --pass <pass-id> --provider <actual-provider> --model <actual-model>   # identity as the RUNTIME reports it
+
+# 2. file findings/questions, carrying the same id (refused if this pass is not current):
+tooling/scripts/entities/pw-review.sh add-item --project <slug> --file <review-rel-path> \
+  --section '<§anchor>' --actor pw-reviewer --pass <pass-id> --stdin
+
+# 3. transition: once real eligible findings exist (no-op for a clean pass; idempotent on retry)
+tooling/scripts/entities/pw-review.sh start --project <slug> --file <review-rel-path> --phase <phase> \
+  --pass <pass-id> --provider <actual-provider> --model <actual-model>
 ```
 
-It appends `changes-requested` (attributed `pw-reviewer (<mode>; provider=…; model=…)`) only once
-the pass has actually persisted eligible findings. A pass that starts with no items and finds
-nothing files **no** row and leaves Sign-off untouched — its verdict lives in `REVIEWER-NOTES.md`
-alone. A pass that finds real issues persists the items first (that write is what invalidates a
-stale approval), then records the row. The provider/model you pass must be the identity your run
-ACTUALLY executed with — routing fallback included — never the configured spawn-lane pin, the
-spawning session's model, or the artifact author's; if the runtime cannot confirm it, omit the
-flags and the row records `unknown`. An unconfirmed identity grants no approval authority. If the
-artifact belongs to a phase EARLIER than the project's current one, its repair/reopen requires
-the human's explicit confirmation (`--confirm-earlier`); otherwise leave the gate alone.
+The entry row (attributed `pw-reviewer (<mode>; provider=…; model=…; pass=<id>)`, decision
+`in-review`) is recorded even when the pass turns out clean — that row is the audit trail that a
+reviewer actually ran; completion itself stays in `REVIEWER-NOTES.md`. Step 3 appends the
+`changes-requested` transition only when real eligible findings exist; a clean pass keeps its
+`in-review` entry. Retries of either call are idempotent; a fresh pass id supersedes the previous
+entry, and a superseded or human-interrupted pass is refused without changes. The provider/model
+you pass must be the identity your run ACTUALLY executed with — routing fallback included — never
+the configured spawn-lane pin, the spawning session's model, or the artifact author's; if the
+runtime cannot confirm it, omit the flags and the row records `unknown`. An unconfirmed identity
+grants no approval authority. If the artifact belongs to a phase EARLIER than the project's
+current one, its repair/reopen requires the human's explicit confirmation (`--confirm-earlier`);
+otherwise leave the gate alone.
 
 This project's AI Review OUTCOME for your surface controls what you're allowed to do (scheduling —
 whether a pass starts at all — lives on the separate `review-trigger` axis, and repair permission
@@ -162,19 +176,22 @@ tooling/scripts/entities/pw-config.sh set --project <slug> --key ai-review --set
 - **`advisory`** (the default, and what a legacy stored `off` row reads as): file your
   items/questions, then **stop**. A human reads them and writes the
   Sign-off row themselves, exactly as if a human had raised those items — approval stays with the
-  human even when every finding is resolved, and a clean advisory pass adds no row and changes no
-  existing approval. This is the default expectation whenever you're unsure.
-- **`auto`**: same filing step, but if — and only if — your pass leaves **zero** [OPEN] items and
-  **zero** [PENDING] questions, you may call:
+  human even when every finding is resolved, and a clean advisory pass adds no transition row
+  (its attributed `in-review` entry stands, awaiting the human's decision). This is the default
+  expectation whenever you're unsure.
+- **`auto`**: same entry/filing sequence, but if — and only if — your pass leaves **zero** [OPEN]
+  items and **zero** [PENDING] questions, you may call:
   ```sh
   tooling/scripts/entities/pw-review.sh auto-signoff --project <slug> --file <review-rel-path> --phase <surface> \
-    --provider <actual-provider> --model <actual-model>
+    --pass <pass-id> --provider <actual-provider> --model <actual-model>
   ```
   A clean auto pass may approve **directly** through this call — never after first fabricating a
-  `changes-requested` row. This is the ONLY way a gate advances without a human touching it, and
+  `changes-requested` row — and the approval binds to your recorded entry via `--pass`. This is
+  the ONLY way a gate advances without a human touching it, and
   the tool independently re-checks every condition (genuinely `auto` mode + genuinely nothing open
   in THAT file + the artifact actually belonging to this review lane + no standing explicit human
-  `changes-requested` — a human rejection survives until a human withdraws or replaces it; new
+  `changes-requested` + the pass being the current correlated entry — a human rejection survives
+  until a human withdraws or replaces it; new
   operational rows never erase it) — it isn't taking your word for any of them. A refusal means
   one of those isn't actually true; don't retry the same call expecting a different answer, fix
   the actual condition or leave it for a human. An EXTERNAL import (the packet flow above) can

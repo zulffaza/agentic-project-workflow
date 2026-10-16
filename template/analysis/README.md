@@ -24,7 +24,7 @@ text. Only you approve (guarded AI `auto` mode aside). See `../README.md` → "R
 |---|---|
 | Start a review for this doc | `/pw-review init --project <slug> --file analysis/<topic>.md` |
 | Add feedback | `/pw-review item --project <slug> --file analysis/review/<topic>.review.md --section §<section> --text <your comment>` |
-| Answer the agent's questions | `/pw-review --project <slug> answer analysis/review/<topic>.review.md Q<n> <your answer>` |
+| Answer the agent's questions | `/pw-review answer --project <slug> --file analysis/review/<topic>.review.md --question Q<n> --text <your answer>` |
 | Have the agent apply approved fixes | `/pw-review --project <slug> --file analysis/review/<topic>.review.md` |
 | Ask for an independent AI pass | `/pw-review ai --project <slug> --surface analysis` |
 | Approve (human-only) | `/pw-review signoff --project <slug> --file analysis/review/<topic>.review.md --decision approved` |

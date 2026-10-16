@@ -11,7 +11,7 @@ action, plus the one-line cause where knowing it helps.
 
 | What you see | First action |
 |---|---|
-| Unsure what to run next | `/pw-help project <slug>` |
+| Unsure what to run next | `/pw-help project --project <slug>` |
 | Command missing or stale | `/pw-doctor`; if unavailable, follow [setup recovery](../ONBOARDING.md#troubleshooting--pw-doctor) |
 | Execution stopped or session ended | `/pw-status --project <slug>`, then resume the appropriate task scope |
 | Approval blocks the next step | Read the named review file, apply feedback, and explicitly sign off after review |

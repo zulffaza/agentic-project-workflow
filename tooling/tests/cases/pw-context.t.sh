@@ -195,3 +195,13 @@ pl_adopt_selftest() {
   rm -rf "$tmp"
 }
 pl_adopt_selftest
+
+# Missing context pack: the recovery is command-only and state-appropriate (plan 46).
+CM=ctx-missing46; rm -rf "$PW_PROJECTS_DIR/$CM"; cp -a "$F2" "$PW_PROJECTS_DIR/$CM"
+rm -f "$PW_PROJECTS_DIR/$CM/context/INDEX.md"
+pwtest_rc any "fetch without context/INDEX.md dies" "$C" fetch --project "$CM"
+[ "$PWTEST_RC" != 0 ] && pwtest_ok "missing index refused" || pwtest_bad "missing index refused" "rc=0"
+pwtest_err 'prepare --project <slug>' "missing-index hint names the prepare operator"
+pwtest_err 'req-init' "missing-index hint offers the manual path"
+if grep -qF 'pw-context <slug>' "$PWTEST_ERR"; then pwtest_bad "missing-index hint free of the legacy slot" "legacy form present"; else pwtest_ok "missing-index hint free of the legacy slot"; fi
+rm -rf "$PW_PROJECTS_DIR/$CM"

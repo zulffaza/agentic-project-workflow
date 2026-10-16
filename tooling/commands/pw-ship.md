@@ -1,12 +1,14 @@
 ---
 description: Push verified task branches and open MRs with rich descriptions
-args: "[comments | request-review] --project <project-slug> [--task <T0n>]… [--skip-build-check]"
+args: "[comments | request-review | stack] --project <project-slug> [--task <T0n>]… [--skip-build-check]"
 scope: project
 ---
-Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task
-IDs to scope to a subset; the word `comments` = go into MR-comment mode, below; `request-review` =
-read-only request-message mode, below; `--skip-build-check`
-may appear anywhere after the slug, in either ship/comment mode). Task IDs are **optional in both
+Follow the `project-workflow` skill. Arguments: {{ARGS}}. The first word selects the mode:
+`comments` = MR-comment mode (below); `request-review` = read-only request-message mode (below);
+anything else = ship mode (default). Every value is named: `--project <slug>` is required, and
+optional task IDs scope to a subset by REPEATING `--task <T0n>` (e.g. `--task T01 --task T03`);
+`--skip-build-check`
+may appear in either ship/comment mode. Task IDs are **optional in both
 ship modes** — with none, the command applies to **every** eligible task (all shippable tasks in
 ship mode; all tasks with an open MR in comment mode).
 
@@ -20,9 +22,9 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 
 ## Request-review mode (`request-review`)
 
-**Read-only and complete on its own: when the 2nd argument is literally `request-review`, run the
+**Read-only and complete on its own: when the first word is literally `request-review`, run the
 mapping below, relay its output, and STOP — this mode never pushes, comments, polls CI, or writes
-project state, and it returns BEFORE the pre-flight block.** Do not treat its tokens as ship task
+project state, and it returns BEFORE the pre-flight block.** Do not treat its `--task` values as ship task
 IDs and do not run the ship/comment pre-flight or the monitor machinery for it.
 
 ```bash
@@ -102,6 +104,8 @@ Publishing is **outward-facing** — this is the explicit "make it public" step,
 task; here we push branches and open MRs.
 
 ## Stacked MRs
+
+**If the first word is literally `stack`, this is the stacked-MR surface (below) where `stack` previews the topology and health read-only while `stack adopt` is the import-side form that records edges only after an explicit apply confirmation**
 
 Some tasks **inherit code** from another task in the same repository: the task file carries
 `Stacked on: <parent-task>` (with PLAN's `Stacked on` column as a mirror). Its branch forked the

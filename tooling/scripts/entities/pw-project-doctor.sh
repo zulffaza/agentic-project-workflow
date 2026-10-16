@@ -310,6 +310,30 @@ stamps the date-time and appends the row;
 >>>NEW
 ## Contents   [agent-owned; refreshed automatically; do not edit]
 <<<RULE
+>>>FILE */review/*.review.md
+>>>OLD
+— or `/pw-review --project <slug>
+  init-all` for the review files missing in the project's CURRENT phase — never by hand.
+>>>NEW
+— or
+  `/pw-review init-all --project <slug>` for the review files missing in the project's
+  CURRENT phase — never by hand.
+<<<RULE
+>>>FILE */review/*.review.md
+>>>OLD
+— `/pw-review --project <slug> item <this-file>
+> §4 <your ask, spaces and all>` (it writes the heading, timestamp, marker, `---` rule, and
+>>>NEW
+— `/pw-review item --project <slug>
+> --file <this-file> --section §4 --text <your ask, spaces and all>` (it writes the heading,
+> timestamp, marker, `---` rule, and
+<<<RULE
+>>>FILE analysis/README.md
+>>>OLD
+| Answer the agent's questions | `/pw-review --project <slug> answer analysis/review/<topic>.review.md Q<n> <your answer>` |
+>>>NEW
+| Answer the agent's questions | `/pw-review answer --project <slug> --file analysis/review/<topic>.review.md --question Q<n> --text <your answer>` |
+<<<RULE
 GUIDANCE_RULES
 }
 

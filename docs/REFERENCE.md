@@ -9,7 +9,7 @@ Commands belong in your agent session. Setup commands belong in a terminal.
 `<slug>` is the project identifier: lowercase letters, digits, and hyphens, starting with a letter or digit (for example, `delivery-note`).
 `<value>` is required; `[value]` is optional. Do not type the brackets.
 Review paths are project-relative. Input file names are relative to `context/`.
-Task IDs are `T01`, `T02`, etc. Multiple task IDs use spaces.
+Task IDs are `T01`, `T02`, etc. Repeat the selector for multiple tasks: `--task T01 --task T03`.
 
 <a id="slash-commands--the-generator-one-source-of-truth"></a>
 ## Command syntax
@@ -33,14 +33,14 @@ Task IDs are `T01`, `T02`, etc. Multiple task IDs use spaces.
 
 | Command | Purpose |
 |---|---|
-| `/pw-review --project <slug> [--phase <phase> \| --task <task-id>… \| --file <review-path>]` | Apply recorded feedback; default scope follows the current phase |
+| `/pw-review --project <slug> [--phase <phase> \| --task <task-id> \| --file <review-path>]` | Apply recorded feedback; default scope follows the current phase |
 | `/pw-review init --project <slug> --file <artifact-path> [--file <artifact-path>…]` | Create reviews for exactly the named existing artifacts |
 | `/pw-review init-all --project <slug>` | Create missing reviews for the current phase only |
 | `/pw-review item --project <slug> --file <review-path> --section <section words> --text <ask>` | Record feedback with a heading or anchor and your requested change |
 | `/pw-review item --project <slug> --file <review-path> --section §4 --text <ask>` | Same flags; a single section token such as `§4` |
 | `/pw-review answer --project <slug> --file <review-path> --question <Qid> --text <answer>` | Record an answer to an existing question |
 | `/pw-review signoff --project <slug> --file <review-path> --decision <approved\|changes-requested\|in-review>` | Record your approval decision |
-| `/pw-review ai --project <slug> [--surface <surface> \| --task <task-id>… \| --file <review-path>]` | Request a fresh AI pass for an enabled review mode |
+| `/pw-review ai --project <slug> [--surface <surface> \| --task <task-id> \| --file <review-path>]` | Request a fresh AI pass for an enabled review mode |
 
 `init` takes the artifact path, such as `task/PLAN.md`. `item`, `answer`, and `signoff` take its review path.
 For `item`:
@@ -59,17 +59,17 @@ See [review](REVIEW.md) for scope, gate transitions, and AI approval safeguards.
 
 | Command | Purpose |
 |---|---|
-| `/pw-execute --project <slug> [--task <task-id>…]` | Execute selected tasks, or resume the remaining plan |
+| `/pw-execute --project <slug> [--task <task-id>]…` | Execute selected tasks, or resume the remaining plan |
 | `/pw-execute --project <slug> --wave` | Run only the tasks ready at this checkpoint |
 | `/pw-execute --project <slug> --task T02 --model <provider:model\|agent>` | Override execution choice for the selected task |
 | `/pw-execute --project <slug> --acceptance <manual\|auto>` | Override result acceptance for one run |
 | `/pw-execute --project <slug> --then-ship` | Request shipping after execution, with push confirmation |
-| `/pw-ship --project <slug> [--task <task-id>…] [--skip-build-check]` | Push verified branches, open MRs, and monitor CI |
-| `/pw-ship comments --project <slug> [--task <task-id>…] [--skip-build-check]` | Handle MR feedback, including fixes, pushes, and replies |
-| `/pw-ship request-review --project <slug> [--all \| --task <task-id>…] [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]` | Read-only: one copyable teammate review request for the open MRs |
+| `/pw-ship --project <slug> [--task <task-id>]… [--skip-build-check]` | Push verified branches, open MRs, and monitor CI |
+| `/pw-ship comments --project <slug> [--task <task-id>]… [--skip-build-check]` | Handle MR feedback, including fixes, pushes, and replies |
+| `/pw-ship request-review --project <slug> [--all \| --task <task-id>]… [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]` | Read-only: one copyable teammate review request for the open MRs |
 | `/pw-ship stack --project <slug>` | Preview stack topology and health without writes |
-| `/pw-ship stack-adopt --project <slug> [--task <task-id>…] [--apply]` | Preview an existing stack import; `--apply` records it |
-| `/pw-sync --project <slug> [--task <task-id>…]` | Refresh open MR branches against changed targets, verify, and push |
+| `/pw-ship stack adopt --project <slug> [--task <task-id>]… [--apply]` | Preview an existing stack import; `--apply` records it |
+| `/pw-sync --project <slug> [--task <task-id>]…` | Refresh open MR branches against changed targets, verify, and push |
 | `/pw-verify --repo-ref <repo-ref> | --worktree <worktree-path> | --task <task-path> [--commit <sha>] [--note <note>]` | Independently verify a result without fixing it |
 | `/pw-close --project <slug>` | Check acceptance, record learnings, and clean eligible worktrees |
 
@@ -83,10 +83,10 @@ It is separate from PLAN approval and MR merging.
 | Command | Purpose |
 |---|---|
 | `/pw-help [overview]` | List commands |
-| `/pw-help command <name> [slug]` | Explain one command with examples |
-| `/pw-help project <slug> [name]` | Show commands that apply to the project now |
+| `/pw-help command --name <name> [--project <slug>]` | Explain one command with examples |
+| `/pw-help project --project <slug>` | Show commands that apply to the project now |
 | `/pw-help workflow` | Show the phase sequence and gates |
-| `/pw-help find <term>` | Search command and user documentation |
+| `/pw-help find --term <term…>` | Search command and user documentation |
 | `/pw-status --project <slug>` | Show project progress and blockers |
 | `/pw-status rewind --project <slug> --phase <phase>` | Reopen an earlier phase with a review trail |
 | `/pw-status --all` | Overview of every project: phase, attention, accepted tasks, last activity; optional `--attention`, `--phase <phase>`, `--json` |
@@ -99,7 +99,7 @@ It is separate from PLAN approval and MR merging.
 | `/pw-config set --project <slug> --key <key> --value <value…>` | Validate and change a project setting |
 | `/pw-config ensure --project <slug>` | Add missing config fields with defaults |
 | `/pw-config global show` | Read machine settings; no project slug |
-| `/pw-config model-check <provider> <model-id>` | Check model permission against the allowlist; no project slug |
+| `/pw-config model-check --provider <provider> --model <model-id>` | Check model permission against the allowlist; no project slug |
 
 Guidance preview writes nothing. Applying it repairs recognized prose, preserving project state and custom content outside the matches.
 Health repair (`--fix`) and guidance repair are separate modes. See the [preview/apply recipe](RECIPES.md#refresh-old-project-guidance-after-a-workflow-update).
@@ -136,8 +136,8 @@ For `ai-review`/`review-trigger`/`review-repair`, `ai-model`, and `pin`, a batch
 pair before writing any value:
 
 ```text
-/pw-config delivery-note set ai-review all=auto context=advisory
-/pw-config delivery-note set review-trigger all=completion ship=manual
+/pw-config set --project delivery-note --key ai-review --set all=auto --set context=advisory
+/pw-config set --project delivery-note --key review-trigger --set all=completion --set ship=manual
 ```
 
 `show` also lists facts owned by other commands. `set` cannot change project status, adopted work, base branches, or landing units.

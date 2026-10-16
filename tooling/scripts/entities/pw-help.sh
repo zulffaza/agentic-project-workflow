@@ -341,11 +341,11 @@ scripts_of() {
 # --- operator surface ---------------------------------------------------------------
 # The op lines are the command's own exposed surface, from two deterministic sources:
 #  R1 — an entity/toolchain operator (name = usage-header sig) whose command-form
-#       invocation `/pw-<cmd> <slug> <op>` appears in the command file;
+#       invocation `/pw-<cmd> <op> --project <slug>` appears in the command file;
 #  R2 — a frontmatter selector token (C1 operator group `<a | b | c>` / `[a | b]`)
 #       that appears in an invocation shape or a "literally `<tok>`" line and is not
 #       already listed — command-level sugar (ai/config/item) whose script partner
-#       carries a different op name (config ↔ pw-config.sh project get ai-review; item ↔ add-item).
+#       carries a different op name (config ↔ pw-config.sh get --project <slug> --key ai-review; item ↔ add-item).
 # cmd_use_clause <cmd> <op> — the prose the command file carries for an operator's bullet
 # (everything after the "—" of the mapping line), collapsed to the blurb shown in user views.
 cmd_use_clause() {

@@ -419,6 +419,173 @@ _pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1; if ! awk -v row="$row" '
   return 1
 }
 
+# --- pass-correlated review entry ------------------------------------------------------
+#
+# A managed AI reviewer records an attributed `in-review` row when it actually begins its
+# pass (before assessment or finding writes), and that pass identity then rides every later
+# transition (findings, guarded approval). The single "who is current" pointer is ONE machine
+# marker line under the `## Sign-off` heading:
+#   <!-- pw-review-pass: id=<pass>; artifact=<review-rel>; phase=<surface>; provider=<p>; model=<m>; -->
+# The Sign-off ROWS stay the append-only history (their By cell carries `; pass=<id>`); the
+# marker line is invisible to every table reader (all scan comment-blanked copies) and is
+# replaced — never duplicated — when a fresh pass supersedes the previous one. A file with
+# more than one marker line is ambiguous and every pass-aware reader fails closed on it.
+
+# _pass_token_ok <value> — bounded, table-safe pass id: 1..64 chars of [A-Za-z0-9._-].
+_pass_token_ok() {
+  local v="$1"
+  [ -n "$v" ] || return 1
+  [ "${#v}" -le 64 ] || return 1
+  case "$v" in *[!A-Za-z0-9._-]*) return 1 ;; esac
+  return 0
+}
+
+# _pass_binding_value_ok <value> — one binding field: bounded, no spaces/semicolons/angles
+# (the marker assembles `; key=value` pairs, so those characters would corrupt the parse).
+_pass_binding_value_ok() {
+  local v="$1"
+  [ -n "$v" ] || return 1
+  [ "${#v}" -le 200 ] || return 1
+  case "$v" in *[!A-Za-z0-9._@/+:-]*) return 1 ;; esac
+  return 0
+}
+
+# _pass_binding_count <file> — number of pw-review-pass marker lines (raw file: the marker IS
+# a comment, so comment-blanked scans never see it; this reader greps the raw bytes).
+_pass_binding_count() { grep -c '^<!-- pw-review-pass:' "$1" 2>/dev/null || true; }
+
+# _pass_binding_line <file> — line number of the single binding marker (empty when none).
+_pass_binding_line() { grep -n '^<!-- pw-review-pass:' "$1" 2>/dev/null | head -1 | cut -d: -f1; }
+
+# _pass_binding_field <file> <key> — value of one field (id|artifact|phase|provider|model);
+# rc 1 when the marker or the field is absent.
+_pass_binding_field() {
+  local line; line="$(_pass_binding_line "$1")"
+  [ -n "$line" ] || return 1
+  sed -n "${line}p" "$1" | sed -n "s/.*[ ;]$2=\([^;]*\);.*/\1/p" | head -1
+}
+
+# _pass_binding_put <file> <id> <artifact> <phase> <provider> <model> — replace the existing
+# marker line in place, or insert one right after the `## Sign-off` heading. rc 1 (file left
+# as it was) when the file is ambiguous (2+ markers) or the splice/publish fails — callers
+# run this inside pw_review_staged, so a failure aborts the whole staged write.
+_pass_binding_put() {
+  local f="$1" id="$2" artifact="$3" phase="$4" prov="$5" mdl="$6"
+  local marker="<!-- pw-review-pass: id=$id; artifact=$artifact; phase=$phase; provider=$prov; model=$mdl; -->"
+  local n; n="$(_pass_binding_count "$f")"; n="${n:-0}"
+  if [ "$n" -gt 1 ]; then
+    echo "_pass_binding_put: $f carries $n pw-review-pass markers — refusing to guess which one is current" >&2
+    return 1
+  fi
+  if [ "$n" -eq 1 ]; then
+    local ln tmp; ln="$(_pass_binding_line "$f")"
+    tmp="$(pw_tmpfile "$(dirname "$f")")" || return 1
+    if ! awk -v row="$marker" -v ln="$ln" 'NR == ln { print row; next } { print }' "$f" > "$tmp"; then
+      rm -f "$tmp"
+      echo "_pass_binding_put: failed to rewrite the binding marker in $f (file left as it was)" >&2
+      return 1
+    fi
+    if ! mv "$tmp" "$f"; then
+      rm -f "$tmp"
+      echo "_pass_binding_put: failed to publish the binding rewrite in $f (file left as it was)" >&2
+      return 1
+    fi
+    return 0
+  fi
+  local hl; hl="$(grep -n '^## Sign-off' "$f" | head -1 | cut -d: -f1)"
+  [ -n "$hl" ] || { echo "_pass_binding_put: no '## Sign-off' heading in $f — cannot bind a pass" >&2; return 1; }
+  local ins; ins="$(mktemp)" || return 1
+  if ! printf '%s\n' "$marker" > "$ins"; then rm -f "$ins"; return 1; fi
+  if md_insert_lines_after "$f" "$hl" "$ins"; then rm -f "$ins"; return 0; fi
+  rm -f "$ins"
+  echo "_pass_binding_put: failed to splice the binding marker into $f (file left as it was)" >&2
+  return 1
+}
+
+# _pass_row_exists <file> <pass> — 0 iff a real Sign-off row's By cell carries `pass=<pass>`
+# (the token bound by `;` or the closing `)`; never a substring of a longer id).
+_pass_row_exists() {
+  local f="$1" p="$2"
+  _comment_blanked "$f" | awk -v p="$p" '
+    /^## Sign-off/ { s = 1; next }
+    s && /^\|/ {
+      n = split($0, c, "|"); if (n < 5) next
+      b = c[3]
+      if (index(b, "pass=" p ";") > 0 || index(b, "pass=" p ")") > 0) { found = 1; exit }
+    }
+    END { exit(found ? 0 : 1) }'
+}
+
+# _pass_row_last_line <file> <pass> — line number of the pass's newest real Sign-off row (0 = none).
+_pass_row_last_line() {
+  local f="$1" p="$2"
+  _comment_blanked "$f" | awk -v p="$p" '
+    /^## Sign-off/ { s = 1; next }
+    s && /^\|/ {
+      n = split($0, c, "|"); if (n < 5) next
+      b = c[3]
+      if (index(b, "pass=" p ";") > 0 || index(b, "pass=" p ")") > 0) last = NR
+    }
+    END { print last + 0 }'
+}
+
+# _pass_row_decision <file> <pass> — the Decision cell of the pass's NEWEST real row (empty
+# when the pass has no row). rc 1 when there is no row at all.
+_pass_row_decision() {
+  local f="$1" p="$2" ln
+  ln="$(_pass_row_last_line "$f" "$p")"
+  [ "${ln:-0}" -gt 0 ] || return 1
+  sed -n "${ln}p" "$f" | awk -F'|' '{ gsub(/^[ \t]+|[ \t]+$/, "", $4); print $4 }'
+}
+
+# _pass_human_row_after <file> <line> — 0 iff any HUMAN-class Sign-off row is newer than
+# <line> (same conservative classifier as _signoff_human_rejection_active: blank/header and
+# machine-actor rows are skipped; anything unrecognized counts human).
+_pass_human_row_after() {
+  local f="$1" after="$2"
+  _comment_blanked "$f" | awk -v after="$after" '
+    /^## Sign-off/ { s = 1; next }
+    s && /^\|/ && NR > after {
+      n = split($0, c, "|"); if (n < 5) next
+      b = c[3]; gsub(/^[ \t]+|[ \t]+$/, "", b)
+      if (b == "" || b == "By") next
+      if (b == "pw-review (repair)" || b == "pw-review (feedback)" \
+          || b == "pw-review (auto-reopen)") next
+      if (b ~ /^pw-reviewer/) next
+      found = 1; exit
+    }
+    END { exit(found ? 0 : 1) }'
+}
+
+# _pass_state <file> <pass> — the pass-correlation verdict for one artifact:
+#   no-entry    no binding names this pass and no row carries it: a genuinely fresh pass
+#   current     the binding names this pass, its row is the newest pass row, and no human
+#               Sign-off row landed after it (machine bookkeeping rows never break currency)
+#   superseded  this pass entered before, but a newer entry now owns the artifact
+#   interrupted a HUMAN Sign-off decision landed after this pass's latest row
+#   unbound     binding/rows disagree (row without binding, or binding without row): refuse
+#   ambiguous   two or more binding marker lines: refuse
+# Machine rows (repair/feedback/auto-reopen/other reviewer rows) do NOT end currency: the
+# fix cycle legitimately writes its own rows between a pass's entry and its approval.
+_pass_state() {
+  local f="$1" p="$2" cnt id passlast
+  cnt="$(_pass_binding_count "$f")"; cnt="${cnt:-0}"
+  [ "$cnt" -le 1 ] || { echo ambiguous; return 0; }
+  if [ "$cnt" -eq 0 ]; then
+    if _pass_row_exists "$f" "$p"; then echo unbound; else echo no-entry; fi
+    return 0
+  fi
+  id="$(_pass_binding_field "$f" id)" || id=""
+  if [ "$id" != "$p" ]; then
+    if _pass_row_exists "$f" "$p"; then echo superseded; else echo no-entry; fi
+    return 0
+  fi
+  _pass_row_exists "$f" "$p" || { echo unbound; return 0; }
+  passlast="$(_pass_row_last_line "$f" "$p")"
+  if _pass_human_row_after "$f" "$passlast"; then echo interrupted; return 0; fi
+  echo current
+}
+
 # --- derived header state -------------------------------------------------------------
 
 # pw_review_gate_refresh <file> — rewrite the generated header's "Gate:" line from the

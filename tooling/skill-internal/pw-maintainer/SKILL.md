@@ -60,7 +60,7 @@ that matches your task.
 | write, review, or refresh user guides and user-facing guidance | [User documentation skill](../pw-maintainer-user-documentation/SKILL.md), then the boundary reference below |
 | check what may leak to users, or write / update docs & plan files | [`references/boundary-and-docs.md`](references/boundary-and-docs.md) |
 | need a script's exact operators, exit codes, and fix hints | [`tooling/docs/scripts/README.md`](../../docs/scripts/README.md) — the usage reference |
-| need the live command / operator map (read-only) | `pw-help.sh overview` · `command <name>` · `operators <name>` · `find <term>` |
+| need the live command / operator map (read-only) | `pw-help.sh overview` · `command --name <name>` · `operators --name <name>` · `find --term <term…>` |
 
 `pw-maintainer` is a **reserved name** — never reuse it for a `/pw-*` user command or a
 `tooling/skill/` user skill. The durable reservation lives in

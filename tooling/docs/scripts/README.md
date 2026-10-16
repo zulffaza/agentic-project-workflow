@@ -38,7 +38,7 @@ $PW_HOME/tooling/scripts/entities/<script>.sh <op…> [--flag <value>]… [--swi
   a missing project is always an error, never an empty success. Scripts that touch repos resolve
   them under `PW_REPOS` the same way.
 - Every automation script accepts `--selftest` (delegates to the harness). After **any** tooling
-  change run the full protocol: `tooling/tests/pw-test.sh all` — tiers, corpus mode and the
+  change run the full protocol: `tooling/tests/pw_test.sh` (all tiers) — tiers, corpus mode and the
   change-type matrix are in [`../testing.md`](../testing.md).
 
 ## Exit codes — read this before "handling" a failure

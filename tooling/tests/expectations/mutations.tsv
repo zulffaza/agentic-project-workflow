@@ -98,7 +98,7 @@ C44-worker-copy-skipped	tests/mutate.sh	  if ! rsync -a --exclude .git --exclude
 C45-harness-internals-doc-dies	docs/testing.md	## Inside the harness (read this before editing tests/ or writing mutation rows)	## Internals (read this before editing tests/ or writing mutation rows)	T4	-
 C36-deadpath-canary-fails-open	commands/pw-status.md	project is always `--project <slug>`. Project dir: `{{PW_PROJECTS}}/<slug>`.	project is always `--project <slug>`. Project dir: `{{PW_PROJECTS}}/<slug>` `tooling/pw-doc-lint.sh`.	T4	-
 C37-lib-invisible-canary	commands/pw-sync.md	Follow the `project-workflow` skill. Arguments: {{ARGS}} — `--project <project-slug>` selects the	Follow the `project-workflow` skill. Arguments: {{ARGS}} `tooling/scripts/lib/pw-mdlib.sh` — `--project <project-slug>` selects the	T4	-
-C38-toolchain-allowlist-canary	commands/pw-ship.md	Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task	Follow the `project-workflow` skill. Arguments: {{ARGS}} (first token = project slug; optional task `tooling/scripts/toolchain/gen-commands.sh`	T4	-
+C38-toolchain-allowlist-canary	commands/pw-ship.md	Follow the `project-workflow` skill. Arguments: {{ARGS}}. The first word selects the mode:	Follow the `project-workflow` skill. Arguments: {{ARGS}}. The first word selects the mode: `tooling/scripts/toolchain/gen-commands.sh`	T4	-
 C39-usage-string-dead-script	pw-doc.sh	die "usage: pw-doc.sh lint --kind analysis --project <slug> [--file <topic> | --all]"	die "usage: pw-doc-lint.sh lint --kind analysis --project <slug> [--file <topic> | --all]"	T4	-
 C40-doctor-orphan-check-disabled	pw-doctor.sh	corph="$corph $(basename "$inst")"	corph=""	T1	pw-doctor
 C46-operator-cross-attribution	skill/project-workflow/references/conventions-and-gotchas.md	`pw-status.sh adopted --project <slug> --text "<pointer>"`	`pw-context.sh adopted --project <slug> --text "<pointer>"`	T4	-
@@ -106,7 +106,7 @@ C31-frontmatter-derivation-canned	pw-help.sh	      desc="$(fmof "$file" descript
 C31a-overview-scoped-desc-canned	pw-help.sh	desc="$(fmof "$file" description)"; args="$(scope_args "$cmd" "$sec")"	desc="Canned overview description"; args="canned-args"	T1	pw-help
 C31b-command-view-desc-canned	pw-help.sh	desc="$(fmof "$file" description)"; args="$(fmof "$file" args)"; agn="$(fmof "$file" agent)"	desc="Scaffold a new agentic-workflow project"; args="canned-args"; agn="$(fmof "$file" agent)"	T1	pw-help
 C35-phase-map-drops-a-command	pw-help.sh	executing|pw-execute pw-verify pw-sync	executing|pw-execute pw-sync	T4	-
-C33-path-substitution-dead	pw-help.sh	sub() { sed -e "s|{{PW_HOME}}|$PW_HOME|g" -e "s|{{PW_PROJECTS}}|$PW_PROJECTS|g"; }	sub() { cat; }	T1	pw-help
+C33-path-substitution-dead	pw-help.sh	    _l="${_l//\{\{PW_HOME\}\}/$PW_HOME}"	    _l="${_l}"	T1	pw-help
 C34-C4-echo-dropped-from-renderer	pw-help.sh	awk '/DOCTRINE|HUMAN-TRIGGERED ONLY/{print	awk '/DOCTRINE/{print	T1	pw-help
 C32-project-render-writes	pw-help.sh	raw="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" phase --project "$slug" 2>/dev/null)" || raw="?"	raw="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" phase --project "$slug" 2>/dev/null)" || raw="?" ; mkdir -p "$d/.c32-bleed" 2>/dev/null || true	T1	pw-help
 C49-model-resolve-nested-byok	pw-config.sh	grep -F -x "$prov/$model" | head -1	grep -F -x "$model" | head -1	T1	pw-config
@@ -124,7 +124,7 @@ C60-model-resolve-exact-preferred	pw-config.sh	grep -F -x "$model" | head -1	gre
 C61-monitor-skipped-red	pw-ship.sh	      failed|FAILURE|failed|canceled|CANCELLED|failing)	      failed|FAILURE|failed|canceled|skipped|CANCELLED|SKIPPED|failing)	T1	pw-ship
 C62-monitor-no-sha-select	pw-ship.sh	(if ($s | length) > 0 and (any(.[]?; has("sha"))) then (map(select(.sha == $s))) else . end) as $sel	(.) as $sel	T1	pw-ship
 C63-template-ai-review-line-gone	../template/PROJECT.template.md	- **AI Review:** <AI_REVIEW_DEFAULT>	- **AI Review:** analysis=off	T4	-
-C64-scaffold-ai-review-render-dropped	scaffold.sh	s|<AI_REVIEW_DEFAULT>|	(no-op-token|	T4	-
+C64-scaffold-ai-review-render-dropped	scaffold.sh	_rl="${_rl//<AI_REVIEW_DEFAULT>/$ai_review_default_line}"	_rl="${_rl}"	T4	-
 C65-config-recipe-resumes	commands/pw-config.md	reviewing is not configuring;	reviewing is not configuring; legacy: /pw-review <slug> config plan auto	T4	-
 C66-task-accept-plan-sync-reverted	pw-status.sh	  if [ "$plan_status" != "accepted" ]; then	  if false; then	T1	pw-status
 C67-dashboard-fill-reverted	pw-mdlib.sh	    if grep -q '^ERR: no row with' "$errfile" 2>/dev/null \	    if false && grep -q '^ERR: no row with' "$errfile" 2>/dev/null \	T1	pw-status
@@ -162,7 +162,7 @@ C101-empty-pass-requests-changes	scripts/entities/pw-review.sh	  if [ "${e:-0}" 
 C102-pass-entry-duplicates-state	scripts/entities/pw-review.sh	  if [ "$d" = "changes-requested" ] && [ "$a" = "$ST_BY" ]; then	  if false; then	T1	pw-review-states
 C103-operational-pass-self-approves	scripts/entities/pw-review.sh	  pw_signoff_row_put "$f" "$ts" "$ST_BY" changes-requested	  pw_signoff_row_put "$f" "$ts" "$ST_BY" approved	T1	pw-review-states
 C104-human-signoff-spoofs-machine	scripts/entities/pw-review.sh	  [ "$by_kind" = human ] || die "--by	  true || die "--by	T1	pw-review-hardening
-C105-header-splice-failure-swallowed	scripts/lib/pw-reviewlib.sh	  if ! md_replace_line "$f" "$hl" "$f.gate"; then rm -f "$f.gate"; return 1; fi	  md_replace_line "$f" "$hl" "$f.gate"	T1	pw-review-hardening
+C105-header-splice-failure-swallowed	scripts/lib/pw-reviewlib.sh	  if ! md_replace_line "$f" "$hl" "$_gate"; then rm -f "$_gate"; return 1; fi	  md_replace_line "$f" "$hl" "$_gate"	T1	pw-review-hardening
 C106-task-plan-policy-approves-plan	scripts/lib/pw-reviewlib.sh	    task-plan)  [ "$lane" = "task" ] ;;	    task-plan)  return 0 ;;	T1	pw-review-binding
 C107-lock-holder-removed	scripts/lib/pw-reviewlib.sh	    tries=$((tries + 1))	    rm -rf "$lock"; tries=$((tries + 1))	T1	pw-review-hardening
 C108-plan-table-sync-disabled	pw-doc.sh	  mv "$work/PLAN.md" "$PLAN"	  rm -f "$work/PLAN.md"	T1	pw-doc
@@ -178,7 +178,7 @@ C117-log-future-suppressed	pw-status.sh	[ "$now_epoch" -ge "$last_epoch" ]	true	
 C118-wib-stub-filter-missing	pw-mdlib.sh	!/<DD MMMM YYYY/ && !/<§section/'	!/<§section/'	T1	^pw-datetime\.t\.sh$
 C119-empty-formatter-published	pw-mdlib.sh	  [ -n "$t" ] || return 1	  :	T1	^pw-datetime\.t\.sh$
 C120-context-writer-date-only	pw-context.sh	| $ts | $(_esc "$TRUST")	| $(date '+%F') | $(_esc "$TRUST")	T1	^pw-datetime\.t\.sh$
-C121-scaffold-created-local	scaffold.sh	s|<CREATED>|$created|	s|<CREATED>|$(date '+%F %H:%M')|	T1	^pw-datetime\.t\.sh$
+C121-scaffold-created-local	scaffold.sh	created="$(pw_now_wib)" || { echo "scaffold: cannot format event timestamp → fix: check the date command and retry" >&2; exit 1; }	created="$(date '+%F %H:%M')"	T1	^pw-datetime\.t\.sh$
 C122-frozen-attempt-overwrite	pw-shiplib.sh	need(not selected['frozen'] or data == selected['checkpoint'],	need(True,	T1	^pw-ship-history\.t\.sh$
 C123-duplicate-invocation	pw-shiplib.sh	            if existing:	            if False and existing:	T1	^pw-ship-history\.t\.sh$
 C124-history-oldest-first	pw-shiplib.sh	reverse=True)	reverse=False)	T1	^pw-ship-history\.t\.sh$
@@ -310,3 +310,14 @@ C249-doctor-hook-assert	pw-doctor.sh	pw_hook_dir_ok "$skilldir" || { echo "pw-do
 C250-review-archive-stage-off	pw-review.sh	local htmp; htmp="$(pw_tmpfile "$(dirname "$af")")"	local htmp; htmp="$af.tmp"	T0	
 C251-review-manifest-stage-off	pw-review.sh	tmp; tmp="$(pw_tmpfile "$(dirname "$1")")"	tmp="$tf.tmp"	T0	
 C252-doc-pipe-escape-amp	pw-doc.sh	sed 's/|/\&#124;/g'	sed 's/|/&#124;/g'	T1	^pw-doc\.t\.sh$
+# C253–C255 minted by the named-argument documentation-consistency plan (2026-10-16): the
+# pass-correlated reviewer lifecycle — entry row, entry timing, and transition decision.
+C253-pass-entry-omits-row	scripts/entities/pw-review.sh	      pw_signoff_row_put "$f" "$ts" "$ST_BY" in-review \	      : \	T1	pw-review-states
+C254-pass-entry-gated-on-findings	scripts/entities/pw-review.sh	  if [ -n "$st_pass" ]; then	  if [ -n "$st_pass" ] && [ "${e:-0}" -gt 0 ]; then	T1	pw-review-states
+C255-pass-transition-approves	scripts/entities/pw-review.sh	      pw_signoff_row_put "$f" "$ts2" "$ST_BY" changes-requested \	      pw_signoff_row_put "$f" "$ts2" "$ST_BY" approved \	T1	pw-review-states
+# C256–C259 minted by plan 46: representative doc-class regressions (slug-first user guidance,
+# wrapped operator-after-flag template, positional dispatch prose, maintainer helper signature).
+C256-walkthrough-slug-first-regresses	../docs/WALKTHROUGH.md	/pw-new --project delivery-note	/pw-new delivery-note	T4	-
+C257-template-operator-wraps-after-flag	../template/_REVIEW.template.md	— `/pw-review item --project <slug>	— `/pw-review --project <slug> item	T4	-
+C258-ship-dispatch-prose-positional	commands/pw-ship.md	skill. Arguments: {{ARGS}}. The first word selects the mode:	skill. Arguments: {{ARGS}} (first token = project slug; the word `comments` = MR-comment mode:	T4	-
+C259-maintainer-signature-slug-first	docs/scripts/status-and-preflight.md	pw-status.sh log --project <slug> --actor <a> --message <text…>	pw-status.sh log <slug> --actor <a> --message <text…>	T4	-

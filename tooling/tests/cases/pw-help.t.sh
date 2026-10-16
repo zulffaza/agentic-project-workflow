@@ -152,6 +152,22 @@ assert all(o["scope"]=="project" for o in d["ops"])
 assert "pw-context.sh" in d["scripts"]
 PYJ
 
+# 5f) pw-ship stack exposure (plan 46): the user view and the JSON contract both name the public
+# stack forms with named values (the script operator stays `stack-adopt`; never a second alias).
+pwtest_rc 0 "user view of pw-ship" "$C" command --name pw-ship
+pwtest_re '\$ /pw-ship stack --project <project-slug>' "user view lists the stack operator with named values"
+pwtest_re '`stack adopt` is the import-side form' "user view names the public stack adopt form"
+pwtest_rc 0 "json view of pw-ship" "$C" command --name pw-ship --json
+python3 - "$PWTEST_OUT" <<'PYJS' && pwtest_ok "ship json: stack exposed with named values" || pwtest_bad "ship json stack op" "missing or malformed"
+import json,sys
+d=json.load(open(sys.argv[1]))
+assert d["cmd"]=="pw-ship", d["cmd"]
+ops={o["name"]:o for o in d["ops"]}
+assert "stack" in ops, sorted(ops)
+assert "--project" in ops["stack"]["args"], ops["stack"]["args"]
+assert "stack adopt" in ops["stack"]["use"], ops["stack"]["use"]
+PYJS
+
 # 5d) command view desc renders from the file's own frontmatter (C31b anchor)
 pwtest_rc 0 "command view pw-close" "$C" command --name pw-close
 pwtest_re 'Close out a finished project — verify, tear down, learn' "command view desc renders from frontmatter"

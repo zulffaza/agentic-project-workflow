@@ -240,7 +240,7 @@ already exists the script attaches instead of dying; re-running is idempotent.
      this pass. Not-yet-run dependents need nothing (they already fork the fixed state).
 7. **Stop at committed + verified — but only once the WHOLE resolved scope is there, or genuinely
    blocked.** `/pw-execute` does NOT push or open MRs — that's the separate, explicit `/pw-ship
-   <slug> [task-ids]` step, so nothing goes outward until I ask. Set each task's `## Result → MR: —`
+   --project <slug> [--task <T0n>]…` step, so nothing goes outward until I ask. Set each task's `## Result → MR: —`
    (not shipped yet). Keep the dashboard task-status table current and log each action via the
    helper:
    `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log --project <slug> --actor execute --message "spawned T0n (provider:model); committed <sha>"`.

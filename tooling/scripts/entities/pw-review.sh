@@ -79,7 +79,7 @@
 #       file; blocks are fenced with pw-archived-block markers so a failed-publish
 #       retry re-appends nothing and duplicates nothing.
 #   pw-review.sh start        --project <slug> --file <review-rel-path> [--phase <analysis|plan|task-plan|task-exec|ship>]
-#                                 [--provider <actual-id>] [--model <actual-id>] [--confirm-earlier]
+#                                 [--pass <id>] [--provider <actual-id>] [--model <actual-id>] [--confirm-earlier]
 #       Pass entry. Without --phase this is the normal repair pass, attributed
 #       "pw-review (repair)". With --phase it is an independent AI pass; the
 #       configured mode must be advisory/auto and the row names the ACTUAL
@@ -88,6 +88,15 @@
 #       file has real actionable work (eligible>0); an empty/stub/resolved-only/
 #       malformed-only/waiting-human-only set adds no row. Same attempt on the
 #       same actor stays idempotent; a distinct actor may log a new attempt.
+#       With --pass the phase form becomes the pass-correlated assessment entry
+#       (a managed reviewer records ONE attributed in-review row + a binding
+#       marker when it actually begins, before findings):
+#         first call (fresh id)  → binds the pass + appends its in-review row
+#         call once findings exist → appends the pass's changes-requested row
+#         retries               → no-op (never downgrades a later decision)
+#       A fresh pass id supersedes the previous entry; a superseded or
+#       human-interrupted pass (and any pass-less phase transition while a
+#       binding is current) is refused without changes. --pass requires --phase.
 #       Repairing an artifact whose phase was already consumed (dashboard phase
 #       ahead of the artifact lane) requires --confirm-earlier; unknown/missing
 #       dashboard phase and malformed Sign-off tables fail closed before writes.
@@ -97,23 +106,27 @@
 #       earlier, already-consumed phase requires --confirm-earlier.
 #   pw-review.sh note-init    --project <slug>
 #       Create REVIEWER-NOTES.md with its header if missing (idempotent).
-#   pw-review.sh auto-signoff --project <slug> --file <review-rel-path> --phase <phase> [--provider <actual-id>]
+#   pw-review.sh auto-signoff --project <slug> --file <review-rel-path> --phase <phase> [--pass <id>] [--provider <actual-id>]
 #                                 [--model <actual-id>] [--confirm-earlier]
 #       The ONE tool-enforced exception to "only a human clears a gate": refuses
 #       unless this project's AI Review mode for <phase> is 'auto' (re-checked
 #       here, never taken on the caller's word) AND the review file belongs to
 #       that phase's lane (RFC staging never) AND zero real open items AND no
 #       explicit human changes-requested is still active. The row names the
-#       actual reviewer (identity defaults to unknown).
+#       actual reviewer (identity defaults to unknown). With --pass the approval
+#       is bound to the pass-correlated entry (the pass must be the current
+#       binding); when a binding is current, an approval WITHOUT --pass is
+#       refused — an uncorrelated late reviewer must not approve a replacement
+#       pass.
 #   pw-review.sh signoff      --project <slug> --file <review-rel-path> --decision <approved|changes-requested|in-review> [--by <name>]
 #       DOCTRINE (C4): human-triggered only — an agent runs this ONLY verbatim
 #       on the user's explicit instruction, never on its own initiative. --by
 #       must name a HUMAN: reserved machine actors (pw-reviewer (…), pw-review
 #       (repair/feedback/auto-reopen)) are written only by their guarded code
 #       paths and rejected here; legacy rows with those labels stay readable.
-#   pw-review.sh add-item     --project <slug> --file <review-rel-path> --section <§anchor> (--text <ask…> | --stdin) [--actor <name>]
+#   pw-review.sh add-item     --project <slug> --file <review-rel-path> --section <§anchor> (--text <ask…> | --stdin) [--actor <name>] [--pass <id>]
 #   pw-review.sh answer       --project <slug> --file <review-rel-path> --question <Qid> (--text <answer…> | --stdin)
-#   pw-review.sh add-question --project <slug> --file <review-rel-path> --section <§anchor> (--text <q…> | --stdin) [--actor <name>]
+#   pw-review.sh add-question --project <slug> --file <review-rel-path> --section <§anchor> (--text <q…> | --stdin) [--actor <name>] [--pass <id>]
 #   pw-review.sh resolve      --project <slug> --file <review-rel-path> --item <Rid|Qid> (--reply <text…> | --stdin)
 #       Deterministic block editing: next Rn/Qn id, timestamps, pw-item-status
 #       markers, --- rules, auto-reindex. Free text per the A-rules (one
@@ -517,11 +530,11 @@ _next_id() {
 # runs until the next --flag token (one pre-quoted argv still works verbatim);
 # --flag=value carries one literal value.
 # _parse_edit_flags <op> <text-flag> <extra-scalars-csv> <shape> <actor-default> <heading-guard 0|1> "$@"
-#   → MP_PROJECT MP_FILE MP_SECTION MP_ACTOR MP_QUESTION MP_ITEM MP_TEXT MP_TEXTSET
-MP_PROJECT="" MP_FILE="" MP_SECTION="" MP_ACTOR="" MP_QUESTION="" MP_ITEM="" MP_TEXT="" MP_TEXTSET=0
+#   → MP_PROJECT MP_FILE MP_SECTION MP_ACTOR MP_QUESTION MP_ITEM MP_TEXT MP_TEXTSET MP_PASS
+MP_PROJECT="" MP_FILE="" MP_SECTION="" MP_ACTOR="" MP_QUESTION="" MP_ITEM="" MP_TEXT="" MP_TEXTSET=0 MP_PASS=""
 _parse_edit_flags() {
   local _op="$1" _tf="$2" _extra="$3" _shape="$4" _adef="$5" _hd="$6"; shift 6
-  MP_PROJECT=""; MP_FILE=""; MP_SECTION=""; MP_ACTOR="$_adef"; MP_QUESTION=""; MP_ITEM=""; MP_TEXT=""; MP_TEXTSET=0
+  MP_PROJECT=""; MP_FILE=""; MP_SECTION=""; MP_ACTOR="$_adef"; MP_QUESTION=""; MP_ITEM=""; MP_TEXT=""; MP_TEXTSET=0; MP_PASS=""
   local a v
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
@@ -532,12 +545,13 @@ _parse_edit_flags() {
       --actor=*)    v="${a#*=}"; a="--actor" ;;
       --question=*) v="${a#*=}"; a="--question" ;;
       --item=*)     v="${a#*=}"; a="--item" ;;
+      --pass=*)     v="${a#*=}"; a="--pass" ;;
     esac
     case "$a" in
       --project|--file)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
         case "$a" in --project) MP_PROJECT="$v" ;; --file) MP_FILE="$v" ;; esac ;;
-      --section|--actor|--question|--item)
+      --section|--actor|--question|--item|--pass)
         case ",$_extra," in *",$a,"*) ;; *) _pw_unknown "$a" "$_shape" ;; esac
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
         case "$a" in
@@ -545,6 +559,7 @@ _parse_edit_flags() {
           --actor)    MP_ACTOR="$v" ;;
           --question) MP_QUESTION="$v" ;;
           --item)     MP_ITEM="$v" ;;
+          --pass)     MP_PASS="$v" ;;
         esac ;;
       "$_tf"=*)
         [ "$MP_TEXTSET" = 0 ] || die "$_op: pass exactly one of $_tf or --stdin → fix: $_tf <text…> (runs until the next --flag) or --stdin (heredoc)"
@@ -573,6 +588,9 @@ _parse_edit_flags() {
     # `### ` items are work). The old guard covered only levels 2-3 and let level 4+ through.
     printf '%s\n' "$MP_TEXT" | grep -qE '^#{2,} ' \
       && die "text must not contain lines starting with a markdown heading (## or deeper would corrupt the heading scan) → fix: indent or quote the line"
+  fi
+  if [ -n "$MP_PASS" ]; then
+    _pass_token_ok "$MP_PASS" || die "$_op: invalid --pass id '$MP_PASS' → fix: 1-64 characters of A-Z a-z 0-9 . _ - (the id recorded by the pass's entry)"
   fi
   return 0
 }
@@ -655,9 +673,10 @@ _feedback_transition() {
 }
 
 # ---------------------------------------------------------------- add-item
-AI_SECTION=""; AI_ACTOR=""; AI_TEXT=""; AI_REL=""; _AI_IDFILE=""
+AI_SECTION=""; AI_ACTOR=""; AI_TEXT=""; AI_REL=""; _AI_IDFILE=""; AI_PASS=""
 _add_item_body() {
   local f="$1"
+  [ -z "$AI_PASS" ] || _pass_guard_write "$f" "$AI_PASS" "add-item" || return 1
   # aliases keep the historical heading-line bytes (mutation register anchor C26)
   local SECTION="$AI_SECTION" ACTOR="$AI_ACTOR"
   local blanked; blanked="$(mktemp)"; _comment_blanked "$f" > "$blanked"
@@ -689,7 +708,7 @@ _add_item_body() {
 }
 
 cmd_add_item() {
-  _parse_edit_flags add-item --text "--section,--actor" "add-item --project <slug> --file <review-rel-path> --section <§anchor> (--text <ask…> | --stdin) [--actor <name>]" you 1 "$@"
+  _parse_edit_flags add-item --text "--section,--actor,--pass" "add-item --project <slug> --file <review-rel-path> --section <§anchor> (--text <ask…> | --stdin) [--actor <name>] [--pass <id>]" you 1 "$@"
   local slug="$MP_PROJECT" rel="$MP_FILE"
   local SECTION="$MP_SECTION" ACTOR="$MP_ACTOR" TEXT="$MP_TEXT"
   [ -n "$SECTION" ] || die "add-item: --section <§anchor> is required → fix: anchor the item to a doc section, e.g. --section '§3 Affected repos'"
@@ -698,7 +717,7 @@ cmd_add_item() {
   pw_heading_meta_check "--section" "$SECTION" || die "add-item: --section carries reserved review syntax → fix: keep status tags, HTML comments, machine markers, reply arrows, and <stub> tokens out of the anchor — the tool writes them into the heading itself"
   pw_heading_meta_check "--actor" "$ACTOR"     || die "add-item: --actor carries reserved review syntax → fix: pass a plain name (the heading tag and marker are written by the tool, never injected)"
   local f; f="$(review_file "$slug" "$rel")" || return 2
-  AI_SECTION="$SECTION" AI_ACTOR="$ACTOR" AI_TEXT="$TEXT" AI_REL="$rel"
+  AI_SECTION="$SECTION" AI_ACTOR="$ACTOR" AI_TEXT="$TEXT" AI_REL="$rel" AI_PASS="$MP_PASS"
   _FT_REL="$rel"
   if [ "$(_decision_actor_kind "$ACTOR")" = human ]; then _FT_HUMAN=1; else _FT_HUMAN=0; fi
   _set_lane_flags "$slug" "$rel"
@@ -788,9 +807,10 @@ cmd_answer() {
 }
 
 # ---------------------------------------------------------------- add-question
-AQ_SECTION=""; AQ_ACTOR=""; AQ_TEXT=""
+AQ_SECTION=""; AQ_ACTOR=""; AQ_TEXT=""; AQ_PASS=""
 _add_question_body() {
   local f="$1"
+  [ -z "$AQ_PASS" ] || _pass_guard_write "$f" "$AQ_PASS" "add-question" || return 1
   local blanked; blanked="$(mktemp)"; _comment_blanked "$f" > "$blanked"
   local oq; oq="$(_section_line "$blanked" '^## Open questions')"
   [ "$oq" -gt 0 ] || { rm -f "$blanked"; echo "pw-review: no '## Open questions' heading — not a valid review file → fix: recreate from template/_REVIEW.template.md" >&2; return 1; }
@@ -820,7 +840,7 @@ _add_question_body() {
 }
 
 cmd_add_question() {
-  _parse_edit_flags add-question --text "--section,--actor" "add-question --project <slug> --file <review-rel-path> --section <§anchor> (--text <q…> | --stdin) [--actor <name>]" agent 1 "$@"
+  _parse_edit_flags add-question --text "--section,--actor,--pass" "add-question --project <slug> --file <review-rel-path> --section <§anchor> (--text <q…> | --stdin) [--actor <name>] [--pass <id>]" agent 1 "$@"
   local slug="$MP_PROJECT" rel="$MP_FILE"
   local SECTION="$MP_SECTION" ACTOR="$MP_ACTOR" TEXT="$MP_TEXT"
   [ -n "$SECTION" ] || die "add-question: --section <§anchor> is required"
@@ -829,7 +849,7 @@ cmd_add_question() {
   pw_heading_meta_check "--section" "$SECTION" || die "add-question: --section carries reserved review syntax → fix: keep status tags, HTML comments, machine markers, reply arrows, and <stub> tokens out of the anchor"
   pw_heading_meta_check "--actor" "$ACTOR"     || die "add-question: --actor carries reserved review syntax → fix: pass a plain name (the heading tag and marker are written by the tool, never injected)"
   local f; f="$(review_file "$slug" "$rel")" || return 2
-  AQ_SECTION="$SECTION" AQ_ACTOR="$ACTOR" AQ_TEXT="$TEXT"
+  AQ_SECTION="$SECTION" AQ_ACTOR="$ACTOR" AQ_TEXT="$TEXT" AQ_PASS="$MP_PASS"
   _AQ_IDFILE="$(mktemp)"
   staged_or_die "$f" _add_question_body
   local n; n="$(cat "$_AQ_IDFILE")"; rm -f "$_AQ_IDFILE"
@@ -978,9 +998,31 @@ cmd_reopen() {
 # provider=<p>; model=<m>), "unknown" for anything the runtime cannot confirm — identity labels
 # never grant authority the guards above don't.
 #   auto-signoff <slug> <review-rel-path> <phase> [--provider <id>] [--model <id>] [--confirm-earlier]
-AS_BY=""; AS_REL=""
+AS_BY=""; AS_REL=""; AS_PASS=""; AS_NOOP=0
 _auto_signoff_body() {
   local f="$1"
+  if [ -n "$AS_PASS" ]; then
+    local pst; pst="$(_pass_state "$f" "$AS_PASS")"
+    case "$pst" in
+      current)
+        if [ "$(_pass_row_decision "$f" "$AS_PASS")" = "approved" ]; then
+          AS_NOOP=1
+          return 0
+        fi ;;
+      no-entry)
+        echo "pw-review: refusing auto-signoff: no recorded entry for pass '$AS_PASS' in $AS_REL — approval must bind to a pass that actually entered → fix: record the entry first (start --project <slug> --file $AS_REL --phase <surface> --pass $AS_PASS)" >&2; return 1 ;;
+      superseded)
+        echo "pw-review: refusing auto-signoff: pass '$AS_PASS' is no longer current in $AS_REL (a later assessment superseded it) — an old pass must not approve a replacement → fix: approve with the current pass's id" >&2; return 1 ;;
+      interrupted)
+        echo "pw-review: refusing auto-signoff: pass '$AS_PASS' was interrupted by a human Sign-off decision in $AS_REL — the human's decision stands → fix: only the human withdraws or replaces it" >&2; return 1 ;;
+      *)
+        echo "pw-review: refusing auto-signoff: the pass binding in $AS_REL is missing or ambiguous → fix: repair the single pw-review-pass marker under '## Sign-off'" >&2; return 1 ;;
+    esac
+  elif [ "$(_pass_binding_count "$f")" != 0 ]; then
+    local abp; abp="$(_pass_binding_field "$f" id)" || abp="?"
+    echo "pw-review: refusing auto-signoff: $AS_REL carries a pass-correlated reviewer entry (pass $abp) — an uncorrelated approval must not bypass it → fix: rerun with --pass $abp" >&2
+    return 1
+  fi
   _review_has_open_marker "$f" && { echo "pw-review: refusing auto-signoff: $AS_REL still has an unresolved [OPEN] item or [PENDING] question" >&2; return 1; }
   _signoff_human_rejection_active "$f" && { echo "pw-review: refusing auto-signoff: an explicit human changes-requested is still active in $AS_REL → fix: only the human withdraws it (/pw-review signoff --project <slug> --file <review-path> --decision in-review --by <name>, on explicit instruction)" >&2; return 1; }
   local ts; ts="$(pw_now_wib)" || return 1
@@ -991,35 +1033,40 @@ _auto_signoff_body() {
 }
 
 cmd_auto_signoff() {
-  local slug="" rel="" phase="" provider="" model="" confirm=0 a v
+  local slug="" rel="" phase="" provider="" model="" pass="" confirm=0 a v
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
     case "$a" in
       --project=*)  v="${a#*=}"; a="--project" ;;
       --file=*)     v="${a#*=}"; a="--file" ;;
       --phase=*)    v="${a#*=}"; a="--phase" ;;
+      --pass=*)     v="${a#*=}"; a="--pass" ;;
       --provider=*) v="${a#*=}"; a="--provider" ;;
       --model=*)    v="${a#*=}"; a="--model" ;;
     esac
     case "$a" in
-      --project|--file|--phase|--provider|--model)
+      --project|--file|--phase|--pass|--provider|--model)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
         case "$a" in
           --project)  slug="$v" ;;
           --file)     rel="$v" ;;
           --phase)    phase="$v" ;;
+          --pass)     pass="$v" ;;
           --provider) provider="$v" ;;
           --model)    model="$v" ;;
         esac ;;
       --confirm-earlier) confirm=1 ;;
       -h|--help) pw_usage ;;
-      -*) _pw_unknown "$a" "auto-signoff --project <slug> --file <review-rel-path> --phase <phase> [--provider <id>] [--model <id>] [--confirm-earlier]   (phase: $AI_REVIEW_PHASES)" ;;
-      *) _pw_positional "$a" "auto-signoff --project <slug> --file <review-rel-path> --phase <phase> [--provider <id>] [--model <id>] [--confirm-earlier]   (phase: $AI_REVIEW_PHASES)" ;;
+      -*) _pw_unknown "$a" "auto-signoff --project <slug> --file <review-rel-path> --phase <phase> [--pass <id>] [--provider <id>] [--model <id>] [--confirm-earlier]   (phase: $AI_REVIEW_PHASES)" ;;
+      *) _pw_positional "$a" "auto-signoff --project <slug> --file <review-rel-path> --phase <phase> [--pass <id>] [--provider <id>] [--model <id>] [--confirm-earlier]   (phase: $AI_REVIEW_PHASES)" ;;
     esac
   done
   [ -n "$slug" ] || die "auto-signoff: --project is required → fix: auto-signoff --project <slug> --file <review-rel-path> --phase <phase>   (phase: $AI_REVIEW_PHASES)"
   [ -n "$rel" ] || die "auto-signoff: --file is required → fix: the review file's project-relative path"
   [ -n "$phase" ] || die "auto-signoff: --phase is required → fix: auto-signoff --project <slug> --file <review-rel-path> --phase <phase>   (phase: $AI_REVIEW_PHASES)"
+  if [ -n "$pass" ]; then
+    _pass_token_ok "$pass" || die "invalid --pass id '$pass' → fix: 1-64 characters of A-Z a-z 0-9 . _ - (the id recorded by the pass's entry)"
+  fi
   case " $AI_REVIEW_PHASES " in *" $phase "*) ;; *) die "invalid phase '$phase' (allowed: $AI_REVIEW_PHASES)" ;; esac
   local d; d="$(proj_dir "$slug")" || return 2
   pw_review_contain "$d" "$rel" >/dev/null || die "invalid review path: $rel → fix: keep it project-relative"
@@ -1037,9 +1084,19 @@ cmd_auto_signoff() {
   [ "$st" = earlier ] && [ "$confirm" != 1 ] && die "$rel's phase was already consumed by a later dashboard phase — an auto approval here would silently rewind a used gate → fix: get the human's confirmation, then rerun with --confirm-earlier"
   local ident prov mdl; ident="$(_ai_identity "$provider" "$model")"
   prov="${ident%%$'\t'*}"; mdl="${ident#*$'\t'}"
-  AS_BY="pw-reviewer (auto; provider=$prov; model=$mdl)" AS_REL="$rel"
+  if [ -n "$pass" ]; then
+    AS_BY="pw-reviewer (auto; provider=$prov; model=$mdl; pass=$pass)"
+  else
+    AS_BY="pw-reviewer (auto; provider=$prov; model=$mdl)"
+  fi
+  AS_REL="$rel" AS_PASS="$pass"
   staged_or_die "$f" _auto_signoff_body
-  _log "$slug" pw-reviewer "AUTO-APPROVED $rel (phase=$phase, AI Review mode=auto, provider=$prov, model=$mdl, zero open items, no active human rejection) — no human sign-off"
+  if [ "$AS_NOOP" = 1 ]; then
+    _log "$slug" pw-reviewer "auto-signoff on $rel: pass $pass already approved — idempotent retry, no second row"
+    echo "$slug: $rel already auto-approved by pass $pass (idempotent retry — nothing changed)"
+    return 0
+  fi
+  _log "$slug" pw-reviewer "AUTO-APPROVED $rel (phase=$phase, AI Review mode=auto, pass=${pass:-none}, provider=$prov, model=$mdl, zero open items, no active human rejection) — no human sign-off"
   echo "$slug: $rel auto-signed-off by $AS_BY (phase=$phase)"
 }
 
@@ -1263,14 +1320,91 @@ _pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     if ! {
 }
 
 # ---------------------------------------------------------------- start (pass entry)
-ST_BY=""; ST_REL=""
+ST_BY=""; ST_REL=""; ST_PASS=""; ST_PHASE=""; ST_PROV=""; ST_MDL=""
 # Worker decision (under the per-file lock, so the work set is RE-checked before publishing —
 # recheck the work set before publication): append changes-requested only for real eligible work;
 # never approved; never toggle inside the same active attempt. The latest-decision ENUM is
 # validated FIRST: a file whose current decision is unrecognized/malformed must fail closed
 # even when the work set happens to be empty — reporting such a file "clean" would tell the
 # caller the gate state is trustworthy when it is not (the empty-set short-circuit previously
-# ran before the enum check).
+# ran before the enum check). A pass-correlated call (ST_PASS set) routes through
+# _start_pass_entry, where the binding marker is the currency authority.
+
+# _start_pass_entry <file> <counts> <eligible> — the pass-correlated branch of _start_body
+# (runs under the same staged lock, so binding + row + derived header publish together or
+# not at all). States: a fresh id binds + appends the attributed in-review entry row; a
+# current pass appends its changes-requested transition once real findings exist and stays
+# a no-op otherwise; a superseded or human-interrupted pass refuses without changes.
+_start_pass_entry() {
+  local f="$1" counts="$2" e="$3" st
+  st="$(_pass_state "$f" "$ST_PASS")"
+  case "$st" in
+    ambiguous)
+      echo "pw-review: $ST_REL carries more than one pw-review-pass binding marker — refuses to pick one → fix: keep exactly one marker line under '## Sign-off' (delete the stale one)" >&2
+      return 1 ;;
+    unbound)
+      echo "pw-review: $ST_REL records pass '$ST_PASS' inconsistently (pass rows and binding marker disagree) — no state mutation → fix: repair the Sign-off section from template/_REVIEW.template.md, or start a fresh pass with a new id" >&2
+      return 1 ;;
+    superseded)
+      echo "pw-review: pass '$ST_PASS' is no longer current on $ST_REL (a later assessment superseded it) — no state mutation → fix: a continued review needs a fresh pass id" >&2
+      return 1 ;;
+    interrupted)
+      echo "pw-review: pass '$ST_PASS' was interrupted by a human Sign-off decision on $ST_REL — no state mutation → fix: do not restart this pass; a new pass needs a fresh id and the phase's normal authorization" >&2
+      return 1 ;;
+    no-entry)
+      local ts
+      ts="$(pw_now_wib)" || return 1
+      _pass_binding_put "$f" "$ST_PASS" "$ST_REL" "$ST_PHASE" "$ST_PROV" "$ST_MDL" \
+        || { echo "pw-review: FAILED to bind pass '$ST_PASS' in $ST_REL — whole staged write aborted, nothing published → fix: check the file is writable and retry" >&2; return 1; }
+      pw_signoff_row_put "$f" "$ts" "$ST_BY" in-review \
+        || { echo "pw-review: FAILED to append the pass-entry row in $ST_REL — whole staged write aborted (binding not published) → fix: restore the Sign-off table from template/_REVIEW.template.md and retry" >&2; return 1; }
+      pw_review_gate_refresh "$f" \
+        || { echo "pw-review: FAILED to refresh the Gate header in $ST_REL — whole staged write aborted → fix: check the file is writable and retry" >&2; return 1; }
+      printf '__entry__ %s\n' "$counts" > "$_START_REPORT"
+      return 0 ;;
+    current)
+      case "$(_pass_row_decision "$f" "$ST_PASS")" in
+        changes-requested|approved)
+          printf '__resume__ %s\n' "$counts" > "$_START_REPORT"
+          return 0 ;;
+      esac
+      if [ "${e:-0}" -eq 0 ]; then
+        printf '__resume__ %s\n' "$counts" > "$_START_REPORT"
+        return 0
+      fi
+      local ts2
+      ts2="$(pw_now_wib)" || return 1
+      pw_signoff_row_put "$f" "$ts2" "$ST_BY" changes-requested \
+        || { echo "pw-review: FAILED to place the pass transition row in $ST_REL — whole staged write aborted, nothing published → fix: restore the Sign-off table from template/_REVIEW.template.md and retry" >&2; return 1; }
+      pw_review_gate_refresh "$f" \
+        || { echo "pw-review: FAILED to refresh the Gate header in $ST_REL — whole staged write aborted → fix: check the file is writable and retry" >&2; return 1; }
+      printf '__entered__ %s\n' "$counts" > "$_START_REPORT"
+      return 0 ;;
+  esac
+  echo "pw-review: pass entry internal state error ('$st') — nothing published" >&2
+  return 1
+}
+
+# _pass_guard_write <file> <pass> <label> — the shared guard for pass-carrying managed item
+# writes: rc 0 only while that pass is the current entry on this artifact (fail closed with a
+# reason on stderr otherwise, so the staged write aborts before any content is published).
+_pass_guard_write() {
+  local st
+  st="$(_pass_state "$1" "$2")"
+  case "$st" in
+    current) return 0 ;;
+    no-entry)
+      echo "pw-review: $3: no recorded entry for pass '$2' on this artifact — a managed reviewer must record its entry first → fix: record it (start --project <slug> --file <review-rel-path> --phase <surface> --pass $2), then retry the write" >&2 ;;
+    superseded)
+      echo "pw-review: $3: pass '$2' is no longer current (a later assessment superseded it) — write refused, nothing changed → fix: a continued review needs a fresh pass id" >&2 ;;
+    interrupted)
+      echo "pw-review: $3: pass '$2' was interrupted by a human Sign-off decision — write refused, nothing changed → fix: do not restart this pass; a fresh pass needs a fresh id" >&2 ;;
+    *)
+      echo "pw-review: $3: pass binding on this artifact is missing or ambiguous — write refused, nothing changed → fix: repair the single pw-review-pass marker under '## Sign-off'" >&2 ;;
+  esac
+  return 1
+}
+
 _start_body() {
   local f="$1"
   local d a
@@ -1285,6 +1419,18 @@ _start_body() {
   esac
   local counts; counts="$(_review_eligible_counts "$f")"
   local e="${counts#eligible=}"; e="${e%% *}"
+  local st_pass="${ST_PASS:-}"
+  if [ -n "$st_pass" ]; then
+    _start_pass_entry "$f" "$counts" "$e"
+    return $?
+  fi
+  # An uncorrelated phase-bearing reviewer transition must never bypass a current
+  # pass-correlated entry: the binding names who owns this artifact's review lifecycle.
+  if [ -n "${ST_PHASE:-}" ] && [ "$(_pass_binding_count "$f")" != 0 ]; then
+    local bp; bp="$(_pass_binding_field "$f" id)" || bp="?"
+    echo "pw-review: $ST_REL carries a current pass-correlated reviewer entry (pass $bp) — an uncorrelated reviewer transition must not bypass it → fix: rerun with --pass $bp (or finish that pass first)" >&2
+    return 1
+  fi
   if [ "${e:-0}" -eq 0 ]; then
     printf '__clean__ %s\n' "$counts" > "$_START_REPORT"
     return 0
@@ -1302,34 +1448,40 @@ _start_body() {
 }
 
 cmd_start() {
-  local slug="" rel="" phase="" provider="" model="" confirm=0 a v
+  local slug="" rel="" phase="" provider="" model="" pass="" confirm=0 a v
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
     case "$a" in
       --project=*)  v="${a#*=}"; a="--project" ;;
       --file=*)     v="${a#*=}"; a="--file" ;;
       --phase=*)    v="${a#*=}"; a="--phase" ;;
+      --pass=*)     v="${a#*=}"; a="--pass" ;;
       --provider=*) v="${a#*=}"; a="--provider" ;;
       --model=*)    v="${a#*=}"; a="--model" ;;
     esac
     case "$a" in
-      --project|--file|--phase|--provider|--model)
+      --project|--file|--phase|--pass|--provider|--model)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
         case "$a" in
           --project)  slug="$v" ;;
           --file)     rel="$v" ;;
           --phase)    phase="$v" ;;
+          --pass)     pass="$v" ;;
           --provider) provider="$v" ;;
           --model)    model="$v" ;;
         esac ;;
       --confirm-earlier) confirm=1 ;;
       -h|--help) pw_usage ;;
-      -*) _pw_unknown "$a" "start --project <slug> --file <review-rel-path> [--phase <analysis|plan|task-plan|task-exec|ship>] [--provider <id>] [--model <id>] [--confirm-earlier]" ;;
-      *) _pw_positional "$a" "start --project <slug> --file <review-rel-path> [--phase <analysis|plan|task-plan|task-exec|ship>] [--provider <id>] [--model <id>] [--confirm-earlier]" ;;
+      -*) _pw_unknown "$a" "start --project <slug> --file <review-rel-path> [--phase <analysis|plan|task-plan|task-exec|ship>] [--pass <id>] [--provider <id>] [--model <id>] [--confirm-earlier]" ;;
+      *) _pw_positional "$a" "start --project <slug> --file <review-rel-path> [--phase <analysis|plan|task-plan|task-exec|ship>] [--pass <id>] [--provider <id>] [--model <id>] [--confirm-earlier]" ;;
     esac
   done
-  [ -n "$slug" ] || die "start: --project is required → fix: start --project <slug> --file <review-rel-path> [--phase <phase>] [--provider <id>] [--model <id>] [--confirm-earlier]"
+  [ -n "$slug" ] || die "start: --project is required → fix: start --project <slug> --file <review-rel-path> [--phase <phase>] [--pass <id>] [--provider <id>] [--model <id>] [--confirm-earlier]"
   [ -n "$rel" ] || die "start: --file is required → fix: the review file's project-relative path"
+  if [ -n "$pass" ]; then
+    _pass_token_ok "$pass" || die "invalid --pass id '$pass' → fix: 1-64 characters of A-Z a-z 0-9 . _ - (reuse the prepared packet's pass id when one exists)"
+    [ -n "$phase" ] || die "start: --pass requires --phase — a pass-correlated entry is an independent AI review pass → fix: add --phase <surface>, or drop --pass for the normal repair pass"
+  fi
   local f; f="$(review_file "$slug" "$rel")" || return 2
   grep -q '^## Sign-off' "$f" || die "$rel has no '## Sign-off' section — pass entry needs the gate table (task reviews created from the template always have one)"
   local lane; lane="$(pw_review_lane "$rel")"
@@ -1345,7 +1497,11 @@ cmd_start() {
       || die "AI Review mode for '$phase' is '$mode' — an independent AI pass needs advisory or auto → fix: run without --phase for the normal repair pass, or configure: /pw-config set --project $slug --key ai-review --set $phase=advisory"
     local ident; ident="$(_ai_identity "$provider" "$model")"
     prov="${ident%%$'\t'*}"; mdl="${ident#*$'\t'}"
-    ST_BY="pw-reviewer ($mode; provider=$prov; model=$mdl)"
+    if [ -n "$pass" ]; then
+      ST_BY="pw-reviewer ($mode; provider=$prov; model=$mdl; pass=$pass)"
+    else
+      ST_BY="pw-reviewer ($mode; provider=$prov; model=$mdl)"
+    fi
   else
     ST_BY="pw-review (repair)"
   fi
@@ -1353,6 +1509,7 @@ cmd_start() {
   [ "$st" = unknown ] && die "dashboard phase is missing or non-canonical — cannot judge consumed-phase safety → fix: repair the dashboard Status line (/pw-status --project $slug shows the current phase)"
   [ "$st" = earlier ] && [ "$confirm" != 1 ] && die "$rel's phase was already consumed by a later dashboard phase — a repair pass here may invalidate work that depends on the gate → fix: get the human's explicit confirmation, then re-run with --confirm-earlier"
   ST_REL="$rel"
+  ST_PASS="$pass" ST_PHASE="$phase" ST_PROV="${prov:-n/a}" ST_MDL="${mdl:-n/a}"
   _START_REPORT="$(mktemp)" || die "cannot create pass report → fix: check the temporary directory"
   local start_rc=0
   pw_review_staged "$f" _start_body || start_rc=$?
@@ -1362,8 +1519,8 @@ cmd_start() {
     exit 2
   fi
   local report kind; report="$(cat "$_START_REPORT")"; rm -f "$_START_REPORT"; kind="${report%% *}"; local counts="${report#* }"
-  _log "$slug" pw-review "pass entry on $rel: mode=$mode phase=${phase:-repair} provider=$prov model=$mdl decision=$kind ($counts)"
-  echo "$slug: $rel → pass entry ($kind by $ST_BY, mode=$mode${phase:+, phase=$phase}) — $counts"
+  _log "$slug" pw-review "pass entry on $rel: mode=$mode phase=${phase:-repair} pass=${pass:-none} provider=$prov model=$mdl decision=$kind ($counts)"
+  echo "$slug: $rel → pass entry ($kind by $ST_BY, mode=$mode${phase:+, phase=$phase}${pass:+, pass=$pass}) — $counts"
   return 0
 }
 

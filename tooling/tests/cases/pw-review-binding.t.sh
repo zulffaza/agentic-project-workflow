@@ -36,3 +36,17 @@ pwtest_eq "start callback propagates header failure" "$B_RC" 1
 pwtest_eq "failed start callback publishes no transition" "$(cksum < "$B_CALLBACK")" "$B_BEFORE"
 unset -f _start_body pw_review_gate_refresh
 . "$TOOL/scripts/lib/pw-reviewlib.sh"
+
+# Plan 46: an explicit human rejection survives a fresh pass-correlated operational entry —
+# the entry may record that a pass began, but a clean pass can still not override the human.
+B2=bind-reject46; rm -rf "$PW_PROJECTS_DIR/$B2"; cp -a "$F2" "$PW_PROJECTS_DIR/$B2"
+B2RV=analysis/review/fixture.review.md; B2F="$PW_PROJECTS_DIR/$B2/$B2RV"
+pwtest_rc 0 "rejection: rewind the dashboard to analysis" "$(pwtest_script pw-status.sh)" status --project "$B2" --phase analysis --rewind
+pwtest_rc 0 "rejection: auto mode configured" "$B_CFG" set --project "$B2" --key ai-review --set analysis=auto
+pwtest_rc 0 "rejection: human records changes-requested" "$B_REVIEW" signoff --project "$B2" --file "$B2RV" --decision changes-requested --by reviewer-owner
+pwtest_rc 0 "rejection: a fresh operational entry is still allowed" "$B_REVIEW" start --project "$B2" --file "$B2RV" --phase analysis --pass p-bind-rej1 --provider kilo --model m
+pwtest_grep_file '\| pw-reviewer \(auto; provider=kilo; model=m; pass=p-bind-rej1\) \| in-review \|' "rejection: entry row recorded" "$B2F"
+pwtest_grep_file '\| reviewer-owner \| changes-requested \|' "rejection: human row preserved" "$B2F"
+pwtest_rc 2 "rejection: clean pass cannot auto-approve over it" "$B_REVIEW" auto-signoff --project "$B2" --file "$B2RV" --phase analysis --pass p-bind-rej1 --provider kilo --model m
+pwtest_err 'human changes-requested is still active' "rejection: refusal names the human rejection"
+rm -rf "$PW_PROJECTS_DIR/$B2"

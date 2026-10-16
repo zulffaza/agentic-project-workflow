@@ -823,7 +823,7 @@ cmd_all() {
   done
   case "$phase_filter" in
     ""|context|analysis|breakdown|executing|review|done) ;;
-    *) die "invalid --phase '$phase_filter' ($PW_VALID_PHASES) → fix: the overview filters dashboard phases; review surfaces belong to /pw-help project <slug>" ;;
+    *) die "invalid --phase '$phase_filter' ($PW_VALID_PHASES) → fix: the overview filters dashboard phases; review surfaces belong to /pw-help project --project <slug>" ;;
   esac
   [ -d "$PROJECTS_DIR" ] || die "projects root not accessible: $PROJECTS_DIR → fix: check PW_PROJECTS_DIR (normally the directory holding your projects)"
 

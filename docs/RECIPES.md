@@ -263,8 +263,8 @@ Preview the topology and health:
 For existing manually stacked MRs, preview the import before applying it:
 
 ```text
-/pw-ship stack-adopt --project delivery-note
-/pw-ship stack-adopt --project delivery-note --apply
+/pw-ship stack adopt --project delivery-note
+/pw-ship stack adopt --project delivery-note --apply
 ```
 
 The preview is read-only. `--apply` records the import after confirmation.

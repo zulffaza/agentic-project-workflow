@@ -46,7 +46,8 @@ is normative.
 - **S6 — house style** (all entry-point scripts): `set -euo pipefail`; `case "${1:-}"` dispatch;
   usage header comment block (one paragraph per operator, grouped under its facet label — this is
   the operator's primary doc); `-h`/`--help` exits 0; `die`-style errors to stderr prefixed with
-  the script name, always carrying a `→ fix:` style remediation hint; `<slug>` first arg;
+  the script name, always carrying a `→ fix:` style remediation hint; operation words first and
+  every value named (`--project <slug>` in project forms — the named-argument grammar);
   project-relative paths; bash 3.2 compatible; `--selftest` delegating to the harness.
 - **S7 — migration policy.** Moving/renaming/dissolving a script updates **every** reference in
   the same commit: commands, agents, skills, tests (registry, case files, canaries, fixture

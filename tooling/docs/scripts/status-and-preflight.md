@@ -100,14 +100,14 @@ The same script is the ONLY writer of dashboard/LOG state (commands call these; 
 hand-edit the Status line or LOG.md):
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-status.sh log   <slug> <actor> <msg...>   # LOG.md bullet, dedup-guarded
-$PW_HOME/tooling/scripts/entities/pw-status.sh status <slug> <phase> [--rewind]  # refuses backward moves
-$PW_HOME/tooling/scripts/entities/pw-status.sh oneliner <slug> <text...>
-$PW_HOME/tooling/scripts/entities/pw-status.sh adopted <slug> <text...>          # insert-or-replace, idempotent
-$PW_HOME/tooling/scripts/entities/pw-status.sh phase  <slug>                     # read the Status token only
-$PW_HOME/tooling/scripts/entities/pw-status.sh dashboard-task-status <slug> <T0n> <status>
-$PW_HOME/tooling/scripts/entities/pw-status.sh task-accept <slug> <T0n>          # merged-MR acceptance: task file + PLAN cell + dashboard row in ONE call (single propagator, since 2026-09-25; dashboard best-effort, one LOG line, idempotent)
-$PW_HOME/tooling/scripts/entities/pw-status.sh provider-audit <slug> [task-ids…] # report-only (below)
+$PW_HOME/tooling/scripts/entities/pw-status.sh log --project <slug> --actor <a> --message <text…>   # LOG.md bullet, dedup-guarded
+$PW_HOME/tooling/scripts/entities/pw-status.sh status --project <slug> --phase <phase> [--rewind]   # refuses backward moves
+$PW_HOME/tooling/scripts/entities/pw-status.sh oneliner --project <slug> --text <text…>
+$PW_HOME/tooling/scripts/entities/pw-status.sh adopted --project <slug> --text <text…>             # insert-or-replace, idempotent
+$PW_HOME/tooling/scripts/entities/pw-status.sh phase --project <slug>                               # read the Status token only
+$PW_HOME/tooling/scripts/entities/pw-status.sh dashboard-task-status --project <slug> --task <T0n> --status <status>
+$PW_HOME/tooling/scripts/entities/pw-status.sh task-accept --project <slug> --task <T0n>           # merged-MR acceptance: task file + PLAN cell + dashboard row in ONE call (single propagator, since 2026-09-25; dashboard best-effort, one LOG line, idempotent)
+$PW_HOME/tooling/scripts/entities/pw-status.sh provider-audit --project <slug> [--task <T0n>]…      # report-only (below)
 ```
 
 **Verified gotcha — dated record (D2 routing):** *`task-accept` synced the task file but not the
@@ -144,13 +144,13 @@ rfc-META — no parallel config file); this script is the only validated writer,
 logged to `LOG.md`. Two scopes, deliberately split:
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-config.sh project show   <slug> [--json]   # kind | stored | source | effective — READ-ONLY
-$PW_HOME/tooling/scripts/entities/pw-config.sh project get    <slug> <key>
-$PW_HOME/tooling/scripts/entities/pw-config.sh project set    <slug> <key> <value…>
-$PW_HOME/tooling/scripts/entities/pw-config.sh project ensure <slug>            # insert missing explicit dashboard config lines
-$PW_HOME/tooling/scripts/entities/pw-config.sh global   show                    # effective machine floors — read-only (no 'global set' on purpose)
-$PW_HOME/tooling/scripts/entities/pw-config.sh model-check  <provider> <model-id>     # PERMISSION axis (allowlist guard) — global verb, slug-less
-$PW_HOME/tooling/scripts/entities/pw-config.sh model-resolve <provider> <model-id>    # AVAILABILITY axis (below) — global verb, slug-less
+$PW_HOME/tooling/scripts/entities/pw-config.sh show   --project <slug> [--json]   # kind | stored | source | effective — READ-ONLY
+$PW_HOME/tooling/scripts/entities/pw-config.sh get    --project <slug> --key <key>
+$PW_HOME/tooling/scripts/entities/pw-config.sh set    --project <slug> --key <key> [--value <v> | --set <member=value>]…
+$PW_HOME/tooling/scripts/entities/pw-config.sh ensure --project <slug>            # insert missing explicit dashboard config lines
+$PW_HOME/tooling/scripts/entities/pw-config.sh global   show                      # effective machine floors — read-only (no 'global set' on purpose)
+$PW_HOME/tooling/scripts/entities/pw-config.sh model-check  --provider <p> --model <m>     # PERMISSION axis (allowlist guard) — global verb, slug-less
+$PW_HOME/tooling/scripts/entities/pw-config.sh model-resolve --provider <p> --model <m>    # AVAILABILITY axis (below) — global verb, slug-less
 ```
 
 Config keys: `routing | execution-limit | max-parallel | produced-by | ai-review | ai-model |
@@ -175,9 +175,9 @@ T02=…`, `—` clears) writes the per-task executor pin through the single prop
 and the PLAN task-table `Execute with` cell (the gate/audit/resume-guard read) — so
 provider-audit's `mismatch` verdict can't arise from the config surface itself; `get pin` lists
 `T0n=value` pairs, `get pin.T0n` reads one. Bare `ai-model`/`ai-review` remain **deprecated
-shims** onto `project …` (same engine + stderr pointer) for pre-existing callers; the two new
+shims** onto `set --key …` (same engine + stderr pointer) for pre-existing callers; the two new
 axes have no bare shims.
-`project ensure` also persists the legacy-`off` → `advisory` migration and creates the
+`ensure` also persists the legacy-`off` → `advisory` migration and creates the
 `Review Trigger:`/`Review Repair:`/`Review Budget:` lines; reads normalize `off` without writing.
 `/pw-config … --project <slug>` is the human-facing surface — prefer it over calling the script, and note
 configuration is no longer a `/pw-review` sub-verb.
@@ -238,7 +238,7 @@ loosening matching.
 
 Output is grouped in 8 human-labelled sections (internal IDs stay stable in the script header):
 
-`[1/8] Documentation & template lint` — C10 (`pw-doc.sh lint all`, reused never re-implemented — its
+`[1/8] Documentation & template lint` — C10 (`pw-doc.sh lint --kind all`, reused never re-implemented — its
 `add_error` remediation texts print verbatim in owner output, so they follow the same command-only
 hint ban, pinned by the T4 canary) +
 C11 required dashboard/PLAN lines incl. the explicit `AI Review:`, unexpanded scaffold tokens ·
@@ -258,7 +258,7 @@ pin is **unusable** (unbound/stale-provider) with a finite `/pw-*`-command decis
 ruling 09-28; users may freely re-pin, the ledger stays the record) · `[6/8] Execution health` —
 C5 stale in-progress runs (`PW_DOCTOR_STALE_DAYS`, default 7) + C2 status-aware worktrees/branches
 (accepted tasks' teardown is the expected post-close shape → `·`, agreed with C7) ·
-`[7/8] Review gates` — C4 PLAN gate passing right now (`pw-preflight.sh review <slug> plan`) ·
+`[7/8] Review gates` — C4 PLAN gate passing right now (`pw-preflight.sh review --project <slug> --lane plan`) ·
 `[8/8] Merge requests ↔ task status` — C7 reads the **dashboard MR table** (project-local, kept
 fresh by `/pw-ship`) against each task's Status: merged-but-unaccepted / accepted-before-merge.
 No live forge call — post-teardown `mr-state` reads `unknown` and only adds noise (owner ruling
@@ -273,8 +273,8 @@ Deterministic headless-session liveness — the resume gate. "Is this recorded `
 resumable?" is a script answer, never an attempted-resume-and-read-the-error:
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-session.sh session-check <provider> <session-id>
-$PW_HOME/tooling/scripts/entities/pw-session.sh session-check <slug> <task-id>   # reads provider+id from the task file
+$PW_HOME/tooling/scripts/entities/pw-session.sh session-check --provider <provider> --session <session-id>
+$PW_HOME/tooling/scripts/entities/pw-session.sh session-check --project <slug> --task <task-id>   # reads provider+id from the task file
 ```
 
 Exit `0` live / `1` dead-or-absent / `2` unverifiable (the conservative reading on the ladder is
@@ -306,27 +306,27 @@ describes, and the T4 canary fails CI if a new command skips its phase-map entry
 
 ```bash
 $PW_HOME/tooling/scripts/entities/pw-help.sh overview [--json]
-$PW_HOME/tooling/scripts/entities/pw-help.sh operators <name> [<operator>]
-$PW_HOME/tooling/scripts/entities/pw-help.sh project <slug> [<name>] [--json]
+$PW_HOME/tooling/scripts/entities/pw-help.sh operators --name <name> [--operator <op>]
+$PW_HOME/tooling/scripts/entities/pw-help.sh project --project <slug> [--name <command>] [--json]
 $PW_HOME/tooling/scripts/entities/pw-help.sh workflow [--json]
-$PW_HOME/tooling/scripts/entities/pw-help.sh command <name> [<slug>] [--full|--json]
+$PW_HOME/tooling/scripts/entities/pw-help.sh command --name <name> [--project <slug>] [--full|--json|--maintainer]
 ```
 
 - `overview` — one line per command and per exposed operator (the command's own
   invocation shapes are the surface proof; a "literally `<op>`" definition line counts
   for sugar operators like `/pw-review config`), grouped by phase bucket. `--json`
   returns the stable machine shape (`cmd,args,summary,agent,scripts,facets,phase,ops[]`).
-- `operators <name> [<operator>]` — the verbatim usage-header dump for the named
+- `operators --name <name> [--operator <op>]` — the verbatim usage-header dump for the named
   command's entity/toolchain scripts (facet lines included), or one operator's deep-dive.
   Library scripts are not listable — they are source-only (L2); names echo in full
   canonical form (`pw-review`, never `review`).
 - `workflow` — the phase spine with gate paths, from `PW_VALID_PHASES` + the phase map.
-- `project <slug> [<name>]` — the project how-to: phase, most-likely-next lines with real
+- `project --project <slug> [--name <command>]` — the project how-to: phase, most-likely-next lines with real
   targets, on-disk review/plan/task rows with gate + open-item states, and per-operator
-  concretization with `<name>`. Its only subprocesses are reads: `pw-status.sh phase <slug>`,
-  `pw-review-read.sh gate`/`count`, and `pw-config.sh ai-review <slug>` (get form, never with a
-  mode argument) — pinned by the T1 case's call-site whitelists.
-- `command <name> [<slug>]` — the how-to manual per command (Use when / Does / Shape /
+  concretization with `--name`. Its only subprocesses are reads: `pw-status.sh phase --project <slug>`,
+  `pw-review-read.sh gate`/`count`, and `pw-config.sh get --project <slug> --key ai-review`
+  — pinned by the T1 case's call-site whitelists.
+- `command --name <name> [--project <slug>]` — the how-to manual per command (Use when / Does / Shape /
   doctrine / runnable example per operator; `--full` = substituted source file).
 
 Strictly read-only: opens files for read only, and calls only the read operators above;

@@ -30,8 +30,10 @@ QUICK REFERENCE (full mechanics + rationale: docs/REVIEW.md):
 - Only YOU write an `approved` row (the one exception: AI `auto` mode's guarded pass). The workflow
   also records **operational rows** here — agent-attributed, never your decision:
   `pw-review (feedback)` when your first new item/answer queues a fresh cycle, `pw-review (repair)`
-  when a pass starts on real open work, `pw-reviewer (advisory; provider=…, model=…)` /
-  `pw-reviewer (auto; provider=…, model=…)` for independent AI passes. See docs/REVIEW.md.
+  when a pass starts on real open work, and for correlated AI passes the `pw-reviewer
+  (advisory|auto; provider=…; model=…; pass=…)` lifecycle — an `in-review` entry when the pass
+  actually begins, then `changes-requested` after real findings (or `approved` in guarded `auto`).
+  Older `pw-reviewer (…)` rows without a pass id are legacy passes. See docs/REVIEW.md.
 - List everything open in a project: `grep -rln "\[OPEN\]" .` (or, more robustly, the actual
   machine marker: `grep -rln "pw-item-status: open" .`).
 - Every heading carries a trailing `<!-- pw-item-status: open|resolved -->` marker alongside the
@@ -49,8 +51,9 @@ QUICK REFERENCE (full mechanics + rationale: docs/REVIEW.md):
   to re-read the whole resolved history just to apply one new item.
 - **Agents:** the `> **Add an item:**` / `> **Answer a question:**` hints are permanent — never
   remove them, even once a section reads "No blocking …". Create this file with
-  `/pw-review init --project <slug> --file <doc-path>` (copies the template verbatim) — or `/pw-review --project <slug>
-  init-all` for the review files missing in the project's CURRENT phase — never by hand. -->
+  `/pw-review init --project <slug> --file <doc-path>` (copies the template verbatim) — or
+  `/pw-review init-all --project <slug>` for the review files missing in the project's
+  CURRENT phase — never by hand. -->
 
 ## Decision status — what moves, and who moves it
 
@@ -64,8 +67,9 @@ You never set an item/question's own status — just leave items `[OPEN]` and ru
 
 ## Items
 
-> **Add an item:** easiest is the deterministic operator — `/pw-review --project <slug> item <this-file>
-> §4 <your ask, spaces and all>` (it writes the heading, timestamp, marker, `---` rule, and
+> **Add an item:** easiest is the deterministic operator — `/pw-review item --project <slug>
+> --file <this-file> --section §4 --text <your ask, spaces and all>` (it writes the heading,
+> timestamp, marker, `---` rule, and
 > reindexes `## Contents` for you; a first new item after an `approved` row also records one
 > `pw-review (feedback)` `in-review` row, so the old approval stops being the live decision).
 > By hand instead: start a
@@ -161,9 +165,16 @@ Agent-recorded OPERATIONAL rows also appear here — always attributed, never di
 (full rationale: docs/REVIEW.md, docs/RFC.md):
 | 5 October 2026 11.45 WIB | pw-review (feedback) | in-review |          ← your first new item/answer after an approval
 | 5 October 2026 11.50 WIB | pw-review (repair) | changes-requested |    ← a pass started on real open work
-| 5 October 2026 14.10 WIB | pw-reviewer (auto; provider=kilo; model=glm-5.2) | approved |
+| 5 October 2026 14.10 WIB | pw-reviewer (advisory; provider=kilo; model=glm-5.2; pass=p-analysis-…) | in-review |
+    ← a managed AI pass recorded that it began (entry); a clean pass keeps this row
+| 5 October 2026 14.40 WIB | pw-reviewer (advisory; provider=kilo; model=glm-5.2; pass=p-analysis-…) | changes-requested |
+    ← the same pass recorded real findings
+| 5 October 2026 15.30 WIB | pw-reviewer (auto; provider=kilo; model=glm-5.2; pass=p-analysis-…) | approved |
     ← guarded AI `auto` mode on a clean pass — the ONLY agent-written `approved` row; `advisory`
       never approves, a human always signs advisory phases off
+A managed pass also keeps ONE tool-owned binding line under this heading recording its id,
+artifact, phase, and run identity (`pw-review-pass`). It is machine-managed: never hand-edit,
+duplicate, or invent one — a fresh pass replaces it, and a superseded pass refuses further writes.
 (Legacy rows — plain `pw-reviewer (auto)`, `pw-review (auto-reopen)`, older date formats — stay
 readable exactly as history; repairing or reopening an EARLIER phase's gate asks you first.)
 

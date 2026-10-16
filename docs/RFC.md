@@ -81,7 +81,7 @@ Continuing the [first-project walkthrough](WALKTHROUGH.md), suppose another team
    final, not after.
 2. **Wave 1 publish:**
    ```
-   /pw-rfc delivery-note --target <lark-doc-or-folder-ref>
+   /pw-rfc --project delivery-note --target <lark-doc-or-folder-ref>
    ```
    Generates/updates `rfc/RFC.md` locally, shows you the diff, and — since `--target` was given —
    pushes Background/Requirements/Solution/Dependencies into the configured backend (or stays
@@ -90,13 +90,13 @@ Continuing the [first-project walkthrough](WALKTHROUGH.md), suppose another team
    compatibility with consumers that receive orders without a delivery note?"*
 4. **Pull it in:**
    ```
-   /pw-rfc delivery-note comments
+   /pw-rfc comments --project delivery-note
    ```
    Fetches that thread (read-only) and adds one [OPEN] item to its own dedicated review file,
    `analysis/review/RFC.review.md` (separate from `delivery-note.review.md` — created on
    demand if it doesn't exist yet), quoting the comment with a link back to the thread.
 5. **You decide it's worth addressing** — either answer it inline in the review file yourself, or
-   just tell the agent; run `/pw-review delivery-note` to fold the answer into the analysis
+   just tell the agent; run `/pw-review --project delivery-note` to fold the answer into the analysis
    (its `↳ agent:` reply is the durable record of what changed). **You** reply to and resolve the
    actual thread on the platform — the agent never touches it. **This step also, automatically,
    reopens `analysis/review/delivery-note.review.md`'s own Sign-off** — even though the fix
@@ -105,7 +105,7 @@ Continuing the [first-project walkthrough](WALKTHROUGH.md), suppose another team
    once the doc's changed out from under it. The invalidating row is recorded with the workflow's
    own `By` attribution (`pw-review (feedback)` / `pw-review (repair)`; files may also hold the older
    `pw-review (auto-reopen)` tag) so you can tell at a glance it wasn't your own decision.
-6. **Push the revision:** re-run `/pw-rfc delivery-note` — it updates only the affected
+6. **Push the revision:** re-run `/pw-rfc --project delivery-note` — it updates only the affected
    section(s) in the external doc, never a whole-doc overwrite, so nothing else on that page (their
    comment thread included) gets disturbed. The RFC doc **only ever moves when you explicitly ask
    for this step** — nothing in the comment-pull or the analysis fix triggers a push on its own.
@@ -128,7 +128,7 @@ Continuing the [first-project walkthrough](WALKTHROUGH.md), suppose another team
    re-approval after a later round. `/pw-breakdown` unblocks.
 9. **Later, once the PLAN is approved:**
    ```
-   /pw-rfc delivery-note milestone
+   /pw-rfc milestone --project delivery-note
    ```
    fills in Milestone + Conclusion from the approved `task/PLAN.md`.
 

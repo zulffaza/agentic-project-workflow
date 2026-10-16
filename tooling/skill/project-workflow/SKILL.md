@@ -59,8 +59,9 @@ phases, `--json` prints a machine-readable object. No slug; never writes.
   `pw-worktree.sh create`, `pw-context.sh fetch`, `pw-rfc.sh comments`,
   `pw-context.sh adopt-snapshot`, `pw-doc.sh sync`. Deterministic document writes (never hand-copy
   template blocks): `pw-review.sh` (`init|init-docs|init-all|start|add-item|answer|add-question|resolve`;
-  `init-all` is current-phase-only, `signoff` is human-triggered only — C4 — and `start` can only
-  ever write `changes-requested`, never approval) and `pw-context.sh` (`req-init|add-input|add-repo`
+  `init-all` is current-phase-only, `signoff` is human-triggered only — C4 — and `start` writes only
+  operational rows: `changes-requested`, or the attributed `in-review` pass entry for a correlated
+  `--pass` — never approval) and `pw-context.sh` (`req-init|add-input|add-repo`
   plus preparation's keyed `ensure-input|ensure-repo`).
   The `/pw-*` commands already invoke their share; when
   you reach a phase **without** the command (direct spawn, skill-only session), run the same calls
