@@ -26,3 +26,25 @@ mkdir -p "$WTBASE" 2>/dev/null || true
 git -C "$PW_REPOS/api" worktree list | grep -q "T02-thing" \
   || git -C "$PW_REPOS/api" worktree add "$WTBASE/T02-thing" "agent/$S2/T02-thing" >/dev/null 2>&1 || true
 rm -f "$WTBASE/T02-thing/DIRTY-UNCOMMITTED.txt" 2>/dev/null || true
+
+# --- plan 47 F04: reuse requires a real registered checkout on the expected branch -------------
+W47="wt47"; rm -rf "$PW_PROJECTS_DIR/$W47"; cp -a "$F2" "$PW_PROJECTS_DIR/$W47"
+wp47="$PW_PROJECTS_DIR/$W47/worktree/api/T01-$W47"
+mkdir -p "$wp47"; printf 'stray\n' > "$wp47/STRAY.txt"
+pwtest_rc 2 "worktree create refuses a plain directory (not a registered checkout)" \
+  "$(pwtest_script pw-worktree.sh)" create --project "$W47" --task T01 --repo api --base master
+pwtest_fix "plain-directory refusal names the remedy"
+rm -rf "$wp47"
+pwtest_rc 0 "worktree create succeeds on a clean path" \
+  "$(pwtest_script pw-worktree.sh)" create --project "$W47" --task T01 --repo api --base master
+pwtest_rc 0 "worktree create REUSES a valid checkout (idempotent)" \
+  "$(pwtest_script pw-worktree.sh)" create --project "$W47" --task T01 --repo api --base master
+# a registered checkout on the WRONG branch must still be refused (not silently reused)
+git -C "$PW_REPOS/api" worktree remove --force "$wp47" >/dev/null 2>&1 || true
+git -C "$PW_REPOS/api" worktree add "$wp47" -b "agent/$W47/other-branch" origin/master >/dev/null 2>&1 || true
+pwtest_rc 2 "worktree create refuses a checkout on the wrong branch" \
+  "$(pwtest_script pw-worktree.sh)" create --project "$W47" --task T01 --repo api --base master
+git -C "$PW_REPOS/api" worktree remove --force "$wp47" >/dev/null 2>&1 || true
+git -C "$PW_REPOS/api" branch -D "agent/$W47/other-branch" >/dev/null 2>&1 || true
+git -C "$PW_REPOS/api" branch -D "agent/$W47/T01-$W47" >/dev/null 2>&1 || true
+rm -rf "$PW_PROJECTS_DIR/$W47"

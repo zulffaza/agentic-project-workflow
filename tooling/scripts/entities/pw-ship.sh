@@ -307,6 +307,40 @@ cmd_request_review() {
     "$sum_prompt" "$note_prompt" "$sum_src" "$note_src"
 }
 
+# _resolve_compare_target <proj-dir> <task-file> <repo-dir> <base> <task-id> — print the ref a
+# task's own commits are counted above, or rc 1 with a `→ fix:` diagnostic on stderr.
+# Independent task: its configured Base branch (local ref, else origin/<base>).
+# Stacked child: its effective parent target — the parent's current LOCAL branch when present,
+# else the parent's recorded verified commit — so a child identical to its parent has NO own
+# shipment even when the parent differs from the ultimate base.
+_resolve_compare_target() {
+  local d="$1" tf="$2" repo_dir="$3" base="$4" tid="$5"
+  local sp pbr vh
+  sp="$(pw_stack_parent "$tf" 2>/dev/null || true)"
+  if [ -n "$sp" ]; then
+    pbr="$(_stack_branch_of "$d" "$sp")"
+    if [ -n "$pbr" ] && git -C "$repo_dir" rev-parse --verify --quiet "refs/heads/$pbr" >/dev/null 2>&1; then
+      printf '%s' "refs/heads/$pbr"; return 0
+    fi
+    vh="$(pw_stack_state_get "$d" "$sp" verified_head 2>/dev/null || true)"
+    if [ -n "$vh" ] && git -C "$repo_dir" rev-parse --verify --quiet "$vh^{commit}" >/dev/null 2>&1; then
+      printf '%s' "$vh"; return 0
+    fi
+    printf 'pw-ship: resolve %s: stacked comparison target for parent %s is unavailable in %s → fix: execute/verify the parent first (/pw-execute --project %s --task %s)\n' \
+      "$tid" "$sp" "$repo_dir" "$SLUG" "$sp" >&2
+    return 1
+  fi
+  if git -C "$repo_dir" rev-parse --verify --quiet "refs/heads/$base" >/dev/null 2>&1; then
+    printf '%s' "refs/heads/$base"; return 0
+  fi
+  if git -C "$repo_dir" rev-parse --verify --quiet "refs/remotes/origin/$base" >/dev/null 2>&1; then
+    printf '%s' "refs/remotes/origin/$base"; return 0
+  fi
+  printf 'pw-ship: resolve %s: base branch "%s" is not available in %s → fix: git -C %s fetch origin (or correct the Base branch field in the task file)\n' \
+    "$tid" "$base" "$repo_dir" "$repo_dir" >&2
+  return 1
+}
+
 cmd_resolve() {
   local slug="" a v
   while [ $# -gt 0 ]; do
@@ -333,11 +367,17 @@ cmd_resolve() {
   # Process each task in PLAN — column-NAME driven rows (works with both PLAN
   # generations); repo/branch/base/ticket/title read from the task file itself
   # in bold-bullet or legacy line-start shape via pw_field().
+  # Buffer rows and emit only after the whole selection validates, so a mid-scan failure can
+  # never leave a partial shipment proposal on stdout.
+  local _rows _rc=0
+  _rows="$(mktemp)" || die "resolve: cannot create a temp file → fix: check that \$TMPDIR is writable"
   while IFS='|' read -r task_id status; do
     task_id="$(echo "$task_id" | pw_trim)"
     status="$(echo "$status" | pw_trim)"
     [[ "$task_id" =~ ^T[0-9]+ ]] || continue
-    [ "$status" = "done" ] || continue
+    # Shippable + continuation: 'done' is ready to publish; 'accepted' may still need an explicit
+    # shipment when it has no MR yet (opt-in auto-acceptance runs before any push).
+    case "$status" in done|accepted) ;; *) continue ;; esac
 
     TASK_FILE="$D/task/$task_id.md"
     repo=""; branch=""
@@ -348,24 +388,34 @@ cmd_resolve() {
       branch="$(pw_field "$TASK_FILE" Branch)"; branch="${branch//\`/}"; branch="${branch%% *}"
     fi
 
-    # Check for real commits
-    HAS_COMMIT="no"
-    REPO_DIR="$REPOS_DIR/$repo"
-    if [ -n "$repo" ] && [ -d "$REPO_DIR" ] && pw_dir_within "$REPOS_DIR" "$REPO_DIR" && [ -n "$branch" ]; then
-      if git -C "$REPO_DIR" rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
-        COMMIT_COUNT="$(git -C "$REPO_DIR" log --oneline "origin/$BASE..origin/$branch" 2>/dev/null | wc -l | pw_trim)"
-        if [ "${COMMIT_COUNT:-0}" -gt 0 ] 2>/dev/null; then
-          HAS_COMMIT="yes"
-        fi
-      fi
-    fi
-
-    # Check for existing MR — Result-scoped `**MR:**` field first, then a bare URL in the block
-    # (pw_task_mr_url). Only a genuine http(s) URL counts as shipped; `(none)`/odd text does not.
+    # Check for existing MR first — a recorded MR is the continuation fact (Result-scoped
+    # `**MR:**` field, then a bare URL in the block). Only a genuine http(s) URL counts.
     HAS_MR="no"
     if [ -f "$TASK_FILE" ]; then
       MR_URL="$(pw_task_mr_url "$TASK_FILE")"
       case "$MR_URL" in http*) HAS_MR="yes" ;; esac
+    fi
+
+    # Real local work: count the task's OWN commits on the LOCAL branch above its effective
+    # comparison target. The local branch is the push source (a stale/absent remote task ref must
+    # not decide this), and a stacked child compares against its effective parent target so
+    # inherited commits never count as its own. A failed comparison is a named error, never a
+    # silent exit-128; `has-commits=no` is reserved for a successful comparison finding none.
+    HAS_COMMIT="no"
+    REPO_DIR="$REPOS_DIR/$repo"
+    if [ -n "$repo" ] && [ -d "$REPO_DIR" ] && pw_dir_within "$REPOS_DIR" "$REPO_DIR" && [ -n "$branch" ] \
+       && git -C "$REPO_DIR" rev-parse --verify --quiet "refs/heads/$branch" >/dev/null 2>&1; then
+      _cmp=""
+      if ! _cmp="$(_resolve_compare_target "$D" "$TASK_FILE" "$REPO_DIR" "$BASE" "$task_id")"; then
+        _rc=1; continue
+      fi
+      COMMIT_COUNT="$(git -C "$REPO_DIR" rev-list --count "$_cmp..refs/heads/$branch" 2>/dev/null || true)"
+      if [ -z "${COMMIT_COUNT:-}" ]; then
+        printf 'pw-ship: resolve %s: cannot compare %s against %s in %s → fix: git -C %s fetch origin (or correct the task Branch/Base fields)\n' \
+          "$task_id" "$branch" "$_cmp" "$REPO_DIR" "$REPO_DIR" >&2
+        _rc=1; continue
+      fi
+      [ "${COMMIT_COUNT:-0}" -gt 0 ] 2>/dev/null && HAS_COMMIT="yes"
     fi
 
     # Resolve ticket
@@ -375,9 +425,18 @@ cmd_resolve() {
     TITLE="$(grep '^# ' "$TASK_FILE" 2>/dev/null | head -1 | sed 's/^# //; s/^T[0-9]*[: ]*//' | pw_trim)"
     [ -n "$TITLE" ] || TITLE="$task_id"
 
-    echo "$task_id|$repo|$branch|$BASE|$TICKET|$TITLE|$HAS_COMMIT|$HAS_MR"
+    printf '%s|%s|%s|%s|%s|%s|%s|%s\n' \
+      "$task_id" "$repo" "$branch" "$BASE" "$TICKET" "$TITLE" "$HAS_COMMIT" "$HAS_MR" >> "$_rows"
 
   done < <(pw_plan_pairs "$PLAN")
+
+  if [ "$_rc" != 0 ]; then
+    rm -f "$_rows"
+    printf 'pw-ship: resolve could not classify every candidate task (see the reasons above) → fix: resolve each named item, then re-run /pw-ship --project %s\n' "$SLUG" >&2
+    return 2
+  fi
+  cat "$_rows"
+  rm -f "$_rows"
 }
 
 # --- MR state detection (for /pw-sync and /pw-ship comments) -----------------

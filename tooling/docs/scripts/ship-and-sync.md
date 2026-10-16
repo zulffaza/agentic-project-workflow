@@ -17,7 +17,7 @@ Pre-computes the shippable set so `/pw-ship`'s agent reasons over a resolved lis
 $PW_HOME/tooling/scripts/entities/pw-ship.sh resolve --project <slug>
 ```
 
-**Output** — one `|`-delimited line per task whose status is `done`:
+**Output** — one `|`-delimited line per shippable task (PLAN Status `done` or `accepted`):
 
 ```
 T03|api-service|agent/myproj/T03-retry|main|PROJ-123|Wire retry into dispatcher|yes|no
@@ -25,9 +25,16 @@ T03|api-service|agent/myproj/T03-retry|main|PROJ-123|Wire retry into dispatcher|
 
 Field order: `task-id | repo | branch | base-branch | ticket | title | has-real-commits | has-mr`.
 
-**Reading it:** a line with `has-real-commits=no` means the "done" status is wrong — surface that,
-don't ship it. Already has an MR → the task can go through sync/close-out instead. `0` lines =
-nothing shippable (that's exit `0`, not an error). Exit `2` = usage / missing project / no PLAN.md.
+**Reading it:** `has-real-commits` is the count of the task's OWN commits on its LOCAL branch above
+its effective comparison target (a `Stacked on:` child is compared against its parent's branch or
+verified commit, so inherited commits never count as the child's own; an independent task is
+compared against its `Base branch`). A line with `has-real-commits=no` means the "done" status is
+wrong — surface that, don't ship it. Already has an MR → the task can go through sync/close-out
+instead. `accepted` tasks appear too: opt-in auto-acceptance runs before any push, so an accepted
+task with no MR is still eligible for an explicit shipment. When a candidate cannot be classified
+(missing base ref, unavailable stacked parent), resolve prints a `→ fix:` line and exits `2`
+**without emitting a partial list** — resolve the named item, then re-run. `0` lines = nothing
+shippable (that's exit `0`, not an error). Exit `2` = usage / missing project / no PLAN.md.
 
 ## pw-ship.sh exec
 

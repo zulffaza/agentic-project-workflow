@@ -147,11 +147,15 @@ Two read-only/import operators on this command (no new user script):
    ```bash
    {{PW_HOME}}/tooling/scripts/entities/pw-ship.sh resolve --project <slug>
    ```
-   One line per `done`-status task: `task-id|repo|branch|base|ticket|title|has-commits|has-mr`
-   (`—`/`none` where absent). Treat the flags exactly as the criteria you'd check: a `no`
-   has-commits means the status lies → surface it, don't ship; `has-mr` set means already-shipped →
-   it belongs to comment/sync handling, not here. **Skip zero-change tasks** (note "zero-change —
-   no branch/MR" in their Result) and any already-shipped task (Result → MR already set).
+   One line per shippable task (`done` or `accepted`): `task-id|repo|branch|base|ticket|title|has-commits|has-mr`
+   (`—`/`none` where absent). `has-commits` counts the task's OWN commits on its LOCAL branch
+   above its effective comparison target (a stacked child is compared against its parent, so
+   inherited commits do not count). A `no` has-commits means the status lies → surface it, don't
+   ship; `has-mr` set means the task is already published → it belongs to comment/sync handling,
+   not here. **Skip zero-change tasks** (note "zero-change — no branch/MR" in their Result) and any
+   already-shipped task (Result → MR already set). A resolve that cannot classify a candidate
+   prints a `→ fix:` reason and exits non-zero with NO partial list — relay it rather than guessing
+   the task's status.
    - **Adopted (continuation) project** (dashboard `Adopted:` note / `context/ADOPTED.md`): ship
      **per adopted branch**, not per task — each adopted branch is one shipment. For each, push the
      branch and, if an MR already exists (from `ADOPTED.md → MR:` or a `glab/gh` lookup on the

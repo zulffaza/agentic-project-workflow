@@ -321,3 +321,10 @@ C256-walkthrough-slug-first-regresses	../docs/WALKTHROUGH.md	/pw-new --project d
 C257-template-operator-wraps-after-flag	../template/_REVIEW.template.md	— `/pw-review item --project <slug>	— `/pw-review --project <slug> item	T4	-
 C258-ship-dispatch-prose-positional	commands/pw-ship.md	skill. Arguments: {{ARGS}}. The first word selects the mode:	skill. Arguments: {{ARGS}} (first token = project slug; the word `comments` = MR-comment mode:	T4	-
 C259-maintainer-signature-slug-first	docs/scripts/status-and-preflight.md	pw-status.sh log --project <slug> --actor <a> --message <text…>	pw-status.sh log <slug> --actor <a> --message <text…>	T4	-
+# C260–C263 minted by the harness-state-correctness plan: resolver reads the LOCAL branch (not a
+# remote task ref), stacked children compare against their parent, worktree reuse verifies branch
+# identity, and ship eligibility includes 'accepted' tasks.
+C260-resolve-remote-ref-only	scripts/entities/pw-ship.sh	      COMMIT_COUNT="$(git -C "$REPO_DIR" rev-list --count "$_cmp..refs/heads/$branch" 2>/dev/null || true)"	      COMMIT_COUNT="$(git -C "$REPO_DIR" rev-list --count "$_cmp..refs/remotes/origin/$branch" 2>/dev/null || true)"	T1	pw-ship.t.sh
+C261-resolve-ignores-stack-parent	scripts/entities/pw-ship.sh	  sp="$(pw_stack_parent "$tf" 2>/dev/null || true)"	  sp=""	T1	pw-ship.t.sh
+C262-worktree-reuse-skips-branch	scripts/entities/pw-worktree.sh	    || die "existing worktree is on branch '${_wt_branch:-?}', expected '$BRANCH_NAME' → fix: move it aside (mv ...), or select the task that owns that checkout"	    || true	T1	pw-worktree.t.sh
+C263-preflight-ship-excludes-accepted	scripts/entities/pw-preflight.sh	      if [ "$status" = "done" ] || [ "$status" = "accepted" ]; then	      if [ "$status" = "done" ]; then	T1	pw-preflight.t.sh

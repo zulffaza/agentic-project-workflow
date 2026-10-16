@@ -129,3 +129,73 @@ grep -q '^| T01 | repo-a | http://forge/x/-/merge_requests/12 | main | merged | 
 
 # cleanup — leave shared fixtures as found (fixture-pollution etiquette)
 rm -rf "$PW_PROJECTS_DIR/$E" "$PW_PROJECTS_DIR/$RI" "$PW_PROJECTS_DIR/$DM"
+
+# --- resolve: own-work / inherited-only / missing base / accepted (plan 47 F01-F03,F11) --------
+# Dedicated fixture with LOCAL-ONLY branches (never pushed) and an accepted-no-MR task: the shared
+# F2 repo already pushes its branches, so it cannot tell a local-ref read from a remote-ref read.
+R47="resolve47"; rm -rf "$PW_PROJECTS_DIR/$R47"; cp -a "$F2" "$PW_PROJECTS_DIR/$R47"
+RP="$PW_PROJECTS_DIR/$R47"
+pwtest_repo r47
+( cd "$PW_REPOS/r47"
+  git checkout -q -b "agent/$R47/T01-thing" master
+  echo own1 > own1.txt; git add -A; git -c user.email=t@t -c user.name=t commit -qm "own work T01"
+  git checkout -q -b "agent/$R47/T02-thing" "agent/$R47/T01-thing"   # identical to the parent head
+  git checkout -q -b "agent/$R47/T05-thing" master
+  echo own5 > own5.txt; git add -A; git -c user.email=t@t -c user.name=t commit -qm "own work T05"
+  git checkout -q master ) >/dev/null 2>&1
+rm -f "$RP/task/T01.md" "$RP/task/T02.md" "$RP/task/T05.md"
+pwtest_fill_task "$RP" T01 done     "-" "Own work"             r47 master
+pwtest_fill_task "$RP" T02 done     "-" "Inherited only"       r47 master
+pwtest_fill_task "$RP" T05 accepted "-" "Accepted unpublished" r47 master
+sed -i '' 's@^- \*\*Stacked on:\*\* .*@- **Stacked on:** T01@' "$RP/task/T02.md"
+python3 - "$RP/task/PLAN.md" <<'PLANEOF'
+import re,sys
+f=sys.argv[1]
+t=open(f).read()
+rows=("| ID | Title | Repo | depends_on | Group | Execute with | SP | Status | Time | Result |\n"
+      "|----|-------|------|------------|-------|--------------|----|--------|------|--------|\n"
+      "| [T01](./T01.md) | Own work | r47 | — | G1 | kilotest/test-model | 1 | done | — | — |\n"
+      "| [T02](./T02.md) | Inherited only | r47 | T01 | G1 | kilotest/test-model | 1 | done | — | — |\n"
+      "| [T05](./T05.md) | Accepted unpublished | r47 | — | G1 | kilotest/test-model | 1 | accepted | — | — |\n")
+hdr=re.search(r'^\| ID \| Title \|.*\n\|[-| ]+\n', t, re.M)
+if hdr:
+    tail=re.match(r'(?:\|[^\n]*\n?)+', t[hdr.end():])
+    t=t[:hdr.start()]+rows+t[(hdr.end()+tail.end()) if tail else hdr.end():]
+open(f,"w").write(t)
+PLANEOF
+R47OUT="$("$(pwtest_script $SH)" resolve --project "$R47" 2>"$PWTEST_ROOT/r47.err")"; R47RC=$?
+[ "$R47RC" = 0 ] && pwtest_ok "resolve rc 0 on the own-work fixture" \
+  || pwtest_bad "resolve fixture rc" "rc=$R47RC: $(cat "$PWTEST_ROOT/r47.err")"
+printf '%s\n' "$R47OUT" | grep -q "^T01|r47|agent/$R47/T01-thing|master|.*|yes|no$" \
+  && pwtest_ok "F01 local-only work resolves has-commits=yes" \
+  || pwtest_bad "F01 local-only" "rows: $(printf '%s' "$R47OUT" | tr '\n' ';')"
+printf '%s\n' "$R47OUT" | grep -q "^T02|r47|.*|no|no$" \
+  && pwtest_ok "F02 inherited-only child excluded (has-commits=no)" \
+  || pwtest_bad "F02 inherited-only" "rows: $(printf '%s' "$R47OUT" | tr '\n' ';')"
+printf '%s\n' "$R47OUT" | grep -q "^T05|r47|.*|yes|no$" \
+  && pwtest_ok "F11 accepted-no-MR task is eligible" \
+  || pwtest_bad "F11 accepted" "rows: $(printf '%s' "$R47OUT" | tr '\n' ';')"
+
+# F03: a candidate whose comparison BASE cannot resolve must fail loudly with → fix and NO rows.
+rm -f "$RP/task/T06.md"
+pwtest_fill_task "$RP" T06 done "-" "Missing base" r47 "no-such-base-47"
+( cd "$PW_REPOS/r47"; git checkout -q -b "agent/$R47/T06-thing" master; git checkout -q master ) >/dev/null 2>&1
+python3 - "$RP/task/PLAN.md" <<'PLANEOF'
+import re,sys
+f=sys.argv[1]
+t=open(f).read()
+row="| [T06](./T06.md) | Missing base | r47 | — | G1 | kilotest/test-model | 1 | done | — | — |\n"
+out=[]
+for ln in t.splitlines(True):
+    out.append(ln)
+    if re.match(r'\| \[T05\]', ln):
+        out.append(row)
+open(f,"w").write("".join(out))
+PLANEOF
+R47B="$("$(pwtest_script $SH)" resolve --project "$R47" 2>"$PWTEST_ROOT/r47b.err")"; R47BRC=$?
+[ "$R47BRC" = 2 ] && pwtest_ok "F03 unresolved base → exit 2" || pwtest_bad "F03 rc" "rc=$R47BRC"
+[ -z "$R47B" ] && pwtest_ok "F03 emits no partial shipment list" \
+  || pwtest_bad "F03 partial list" "$(printf '%s' "$R47B" | head -2)"
+grep -q "fix:" "$PWTEST_ROOT/r47b.err" && pwtest_ok "F03 names a → fix remedy" \
+  || pwtest_bad "F03 remedy" "$(cat "$PWTEST_ROOT/r47b.err")"
+rm -rf "$PW_PROJECTS_DIR/$R47"
