@@ -224,15 +224,15 @@ case "$COMMAND" in
   ship)
     phase_gate "executing review"
 
-    # Shippable = at least one task with PLAN Status 'done' (verify-failed is
-    # 'verify-failed', accepted has moved on). Column/ID-driven: works on both
-    # PLAN generations including markdown-linked ids — never positional.
+    # Shippable = a task with PLAN Status 'done' OR 'accepted'. 'accepted' work may still be
+    # unpublished (opt-in auto-acceptance runs before any push), so it stays eligible for an
+    # explicit shipment; verify-failed is neither (the guard below blocks it).
     [ -f "$D/task/PLAN.md" ] || die_fix "PLAN.md missing" "run /pw-breakdown --project $SLUG"
     SHIPPABLE=""
     NOTDONE=""
     while IFS='|' read -r task_id status; do
       [ -n "$task_id" ] || continue
-      if [ "$status" = "done" ]; then
+      if [ "$status" = "done" ] || [ "$status" = "accepted" ]; then
         SHIPPABLE="$SHIPPABLE $task_id"
         TASK_FILE="$D/task/$task_id.md"
         # Status FIELD only — never a whole-file grep: the template legend mentions
@@ -245,7 +245,7 @@ case "$COMMAND" in
       fi
     done < <(pw_plan_pairs "$D/task/PLAN.md")
     if [ -z "$SHIPPABLE" ]; then
-      die_fix "no shippable tasks (PLAN task table shows no Status 'done')$([ -n "$NOTDONE" ] && printf ' — not yet done:%s' "$NOTDONE")" "complete the tasks (/pw-execute --project $SLUG) — 'done' means executed+verified; a pushed-comment sweep uses /pw-ship comments --project $SLUG instead"
+      die_fix "no shippable tasks (PLAN task table shows no Status 'done' or 'accepted')$([ -n "$NOTDONE" ] && printf ' — not yet done:%s' "$NOTDONE")" "complete the tasks (/pw-execute --project $SLUG) — 'done' means executed+verified; a pushed-comment sweep uses /pw-ship comments --project $SLUG instead"
     fi
 
     # Stacked tasks (plan 35): the topology must be valid, every stacked shippable task must be

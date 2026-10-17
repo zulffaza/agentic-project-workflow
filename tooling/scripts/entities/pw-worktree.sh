@@ -102,8 +102,45 @@ if [ -n "$STACK_PARENT" ]; then
   PARENT_SHA="$VPARENT"
 fi
 
-# Check if worktree already exists
-if [ -d "$WORKTREE_PATH" ]; then
+# Reuse an existing path ONLY when it is a real registered checkout of THIS repository already on
+# the expected task branch. An arbitrary directory here was once accepted as ready (exit 0 with a
+# misleading path). A stacked branch must additionally carry its recorded parent binding, exactly
+# like the attach path below. Nothing is removed, reset, or switched here.
+if [ -e "$WORKTREE_PATH" ]; then
+  [ -d "$WORKTREE_PATH" ] \
+    || die "existing path is not a directory: $WORKTREE_PATH → fix: move it aside (mv \"$WORKTREE_PATH\" \"$WORKTREE_PATH.bak\"), then re-run"
+  [ -f "$WORKTREE_PATH/.git" ] \
+    || die "existing path is not a linked worktree of '$REPO' (no .git marker): $WORKTREE_PATH → fix: move it aside (mv ...); a plain directory is never a reusable checkout"
+  _wt_gitdir="$(sed -n 's/^gitdir: //p' "$WORKTREE_PATH/.git" 2>/dev/null | head -1)"
+  case "$_wt_gitdir" in
+    /*) ;;
+    "") die "existing worktree has an empty gitdir marker: $WORKTREE_PATH → fix: move it aside (mv ...), then re-run" ;;
+    *) _wt_gitdir="$WORKTREE_PATH/$_wt_gitdir" ;;
+  esac
+  # Physical forms: macOS /var resolves to /private/var, so a raw prefix match against the
+  # logical $REPO_DIR would wrongly reject a genuine worktree.
+  _wt_gitdir="$(cd "$(dirname "$_wt_gitdir")" 2>/dev/null && printf '%s/%s' "$(pwd -P)" "$(basename "$_wt_gitdir")")"
+  _rd_phys="$(cd "$REPO_DIR" 2>/dev/null && pwd -P)"
+  case "$_wt_gitdir" in
+    "$_rd_phys"/.git/*) ;;
+    *) die "existing checkout $WORKTREE_PATH is not registered to $REPO_DIR → fix: move it aside (mv ...), then re-run" ;;
+  esac
+  _wt_branch="$(git -C "$WORKTREE_PATH" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  [ "$_wt_branch" = "$BRANCH_NAME" ] \
+    || die "existing worktree is on branch '${_wt_branch:-?}', expected '$BRANCH_NAME' → fix: move it aside (mv ...), or select the task that owns that checkout"
+  if [ -n "$STACK_PARENT" ]; then
+    RECORDED="$(pw_stack_state_get "$D" "$TASK_ID" consumed_parent_sha 2>/dev/null || true)"
+    [ -n "$RECORDED" ] || RECORDED="$(pw_stack_state_get "$D" "$TASK_ID" fork_sha 2>/dev/null || true)"
+    [ -n "$RECORDED" ] \
+      || die "stacked worktree $WORKTREE_PATH has no recorded parent binding → fix: re-create it (/pw-execute --project $SLUG --task $TASK_ID after verifying $STACK_PARENT)"
+    git -C "$REPO_DIR" merge-base --is-ancestor "$RECORDED" "$BRANCH_NAME" 2>/dev/null \
+      || die "stacked worktree $WORKTREE_PATH is stale — it does not contain its recorded parent commit ${RECORDED:0:8} → fix: /pw-sync --project $SLUG --task $TASK_ID (merge the updated parent, re-verify, push)"
+    git -C "$REPO_DIR" merge-base --is-ancestor "$VPARENT" "$BRANCH_NAME" 2>/dev/null \
+      || die "stacked worktree $WORKTREE_PATH predates $STACK_PARENT's current verified head ${VPARENT:0:8} → fix: /pw-sync --project $SLUG --task $TASK_ID (merge the updated parent, re-verify, push)"
+  fi
+  if [ -n "$(git -C "$WORKTREE_PATH" status --porcelain 2>/dev/null || true)" ]; then
+    echo "Worktree exists with uncommitted changes (left intact): $WORKTREE_PATH" >&2
+  fi
   echo "Worktree already exists: $WORKTREE_PATH"
   echo "$WORKTREE_PATH"
   exit 0

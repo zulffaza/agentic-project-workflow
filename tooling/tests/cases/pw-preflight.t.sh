@@ -143,3 +143,9 @@ pwtest_rc 1 "review executing-word (phase, not lane) fails closed" "$PF3" review
 pwtest_rc 1 "ship lane with no task reviews refuses (F1)" "$PF3" review --project "$S1" --lane ship
 pwtest_err "no task review files" "ship lane reports the real condition"
 pwtest_rc 1 "task-plan lane with no task reviews refuses (F1)" "$PF3" review --project "$S1" --lane task-plan
+
+# --- plan 47 F11: the ship gate accepts 'accepted' tasks (accepted-but-unpublished) ------------
+AC=pre-acc; rm -rf "$PW_PROJECTS_DIR/$AC"; cp -a "$F2" "$PW_PROJECTS_DIR/$AC"
+sed -i '' 's@| done |@| accepted |@g' "$PW_PROJECTS_DIR/$AC/task/PLAN.md"
+pwtest_rc 0 "ship gate passes with only accepted tasks (F11)" "$(pwtest_script pw-preflight.sh)" ship --project "$AC"
+rm -rf "$PW_PROJECTS_DIR/$AC"

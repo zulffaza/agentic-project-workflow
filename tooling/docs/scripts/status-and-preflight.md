@@ -73,7 +73,7 @@ $PW_HOME/tooling/scripts/entities/pw-preflight.sh analyze      --project <slug> 
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh prepare      --project <slug>   # phase context only — assisted preparation accepts an EMPTY scaffolded context (no input rows required; analyze keeps its gate)
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh execute      --project <slug>   # PLAN approved, phase valid, scope/model resolvable (allowlist + availability gate)
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh breakdown    --project <slug>   # analysis reviews approved (approval discovery excludes RFC staging — only its Sign-off-bearing files), RFC open items resolved
-$PW_HOME/tooling/scripts/entities/pw-preflight.sh ship         --project <slug>   # shippable tasks exist, verify passed
+$PW_HOME/tooling/scripts/entities/pw-preflight.sh ship         --project <slug>   # shippable tasks exist (done or accepted), verify passed
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh comments     --project <slug>   # ≥1 task has a linked MR (for /pw-ship comments --project <slug> — no 'done' requirement)
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh close        --project <slug>   # all tasks accepted
 $PW_HOME/tooling/scripts/entities/pw-preflight.sh review --project <slug> [--lane <lane>] # review files exist for phase: analysis|plan|task-plan|task-exec

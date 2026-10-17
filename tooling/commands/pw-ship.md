@@ -147,11 +147,15 @@ Two read-only/import operators on this command (no new user script):
    ```bash
    {{PW_HOME}}/tooling/scripts/entities/pw-ship.sh resolve --project <slug>
    ```
-   One line per `done`-status task: `task-id|repo|branch|base|ticket|title|has-commits|has-mr`
-   (`—`/`none` where absent). Treat the flags exactly as the criteria you'd check: a `no`
-   has-commits means the status lies → surface it, don't ship; `has-mr` set means already-shipped →
-   it belongs to comment/sync handling, not here. **Skip zero-change tasks** (note "zero-change —
-   no branch/MR" in their Result) and any already-shipped task (Result → MR already set).
+   One line per shippable task (`done` or `accepted`): `task-id|repo|branch|base|ticket|title|has-commits|has-mr`
+   (`—`/`none` where absent). `has-commits` counts the task's OWN commits on its LOCAL branch
+   above its effective comparison target (a stacked child is compared against its parent, so
+   inherited commits do not count). A `no` has-commits means the status lies → surface it, don't
+   ship; `has-mr` set means the task is already published → it belongs to comment/sync handling,
+   not here. **Skip zero-change tasks** (note "zero-change — no branch/MR" in their Result) and any
+   already-shipped task (Result → MR already set). A resolve that cannot classify a candidate
+   prints a `→ fix:` reason and exits non-zero with NO partial list — relay it rather than guessing
+   the task's status.
    - **Adopted (continuation) project** (dashboard `Adopted:` note / `context/ADOPTED.md`): ship
      **per adopted branch**, not per task — each adopted branch is one shipment. For each, push the
      branch and, if an MR already exists (from `ADOPTED.md → MR:` or a `glab/gh` lookup on the
@@ -176,8 +180,11 @@ Two read-only/import operators on this command (no new user script):
       stacked task (that branch must already exist on origin; `pw-ship.sh exec` refuses otherwise),
       with a rich description (template below), title
       per the ticket convention above. **Resolve the forge + CLI per `tooling/docs/forges.md`** (host
-      from this repo's own `origin` remote → `PW_FORGE_HOSTS` override, else auto-detect) — GitLab:
-      `glab` run from inside the worktree with `GITLAB_HOST=<resolved-host>`; GitHub: `gh pr create`.
+      from this repo's own `origin` remote → `PW_FORGE_HOSTS` override, else auto-detect; an exact
+      `PW_FORGE_HOSTS` entry wins) — GitLab: `glab` run from inside the worktree with
+      `GITLAB_HOST=<resolved-host>`; GitHub: `gh pr create`. The script resolves the forge and
+      requires the CLI **before** it pushes: a missing CLI refuses the shipment rather than pushing a
+      branch with no MR path, and the forge is never switched by mere CLI availability.
       Never hardcode a host.
     - **If the task has a `Landing unit:` field** (a must-land-together set from PLAN's `## Landing
       units`): fill the description template's "**Landing unit:**" bullet with the unit name + the
@@ -533,7 +540,8 @@ done** — it is not shipped until the pipeline passes; see the fix loop below.
   a skipped branch pipeline or a stale previous-push pipeline can't masquerade as the result.
 - **Timeout, not an infinite wait:** poll on a short interval (~30s) up to a ~15 minute budget. Still
   not terminal at the budget → report it as **"still running — not yet resolved"** in the recap and
-  the `## Result → Build check:` field, rather than blocking the rest of the run on it.
+  the `## Result → Build check:` field (`UNRESOLVED (timeout …)`), rather than blocking the rest of
+  the run on it — a previous `SUCCESS` must not keep describing the latest run.
 - **Build-check fix loop (a red build → the task is NOT done → keep fixing until green):**
   1. **Diagnose** — read the failing job's output (GitLab: `glab api projects/:id/pipelines/<id>/jobs`
      → the failed job's trace; GitHub: the failing check's details via `gh api`). Bounded: you need

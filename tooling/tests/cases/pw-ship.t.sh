@@ -129,3 +129,135 @@ grep -q '^| T01 | repo-a | http://forge/x/-/merge_requests/12 | main | merged | 
 
 # cleanup — leave shared fixtures as found (fixture-pollution etiquette)
 rm -rf "$PW_PROJECTS_DIR/$E" "$PW_PROJECTS_DIR/$RI" "$PW_PROJECTS_DIR/$DM"
+
+# --- resolve: own-work / inherited-only / missing base / accepted (plan 47 F01-F03,F11) --------
+# Dedicated fixture with LOCAL-ONLY branches (never pushed) and an accepted-no-MR task: the shared
+# F2 repo already pushes its branches, so it cannot tell a local-ref read from a remote-ref read.
+R47="resolve47"; rm -rf "$PW_PROJECTS_DIR/$R47"; cp -a "$F2" "$PW_PROJECTS_DIR/$R47"
+RP="$PW_PROJECTS_DIR/$R47"
+pwtest_repo r47
+( cd "$PW_REPOS/r47"
+  git checkout -q -b "agent/$R47/T01-thing" master
+  echo own1 > own1.txt; git add -A; git -c user.email=t@t -c user.name=t commit -qm "own work T01"
+  git checkout -q -b "agent/$R47/T02-thing" "agent/$R47/T01-thing"   # identical to the parent head
+  git checkout -q -b "agent/$R47/T05-thing" master
+  echo own5 > own5.txt; git add -A; git -c user.email=t@t -c user.name=t commit -qm "own work T05"
+  git checkout -q master ) >/dev/null 2>&1
+rm -f "$RP/task/T01.md" "$RP/task/T02.md" "$RP/task/T05.md"
+pwtest_fill_task "$RP" T01 done     "-" "Own work"             r47 master
+pwtest_fill_task "$RP" T02 done     "-" "Inherited only"       r47 master
+pwtest_fill_task "$RP" T05 accepted "-" "Accepted unpublished" r47 master
+sed -i '' 's@^- \*\*Stacked on:\*\* .*@- **Stacked on:** T01@' "$RP/task/T02.md"
+python3 - "$RP/task/PLAN.md" <<'PLANEOF'
+import re,sys
+f=sys.argv[1]
+t=open(f).read()
+rows=("| ID | Title | Repo | depends_on | Group | Execute with | SP | Status | Time | Result |\n"
+      "|----|-------|------|------------|-------|--------------|----|--------|------|--------|\n"
+      "| [T01](./T01.md) | Own work | r47 | — | G1 | kilotest/test-model | 1 | done | — | — |\n"
+      "| [T02](./T02.md) | Inherited only | r47 | T01 | G1 | kilotest/test-model | 1 | done | — | — |\n"
+      "| [T05](./T05.md) | Accepted unpublished | r47 | — | G1 | kilotest/test-model | 1 | accepted | — | — |\n")
+hdr=re.search(r'^\| ID \| Title \|.*\n\|[-| ]+\n', t, re.M)
+if hdr:
+    tail=re.match(r'(?:\|[^\n]*\n?)+', t[hdr.end():])
+    t=t[:hdr.start()]+rows+t[(hdr.end()+tail.end()) if tail else hdr.end():]
+open(f,"w").write(t)
+PLANEOF
+R47OUT="$("$(pwtest_script $SH)" resolve --project "$R47" 2>"$PWTEST_ROOT/r47.err")"; R47RC=$?
+[ "$R47RC" = 0 ] && pwtest_ok "resolve rc 0 on the own-work fixture" \
+  || pwtest_bad "resolve fixture rc" "rc=$R47RC: $(cat "$PWTEST_ROOT/r47.err")"
+printf '%s\n' "$R47OUT" | grep -q "^T01|r47|agent/$R47/T01-thing|master|.*|yes|no$" \
+  && pwtest_ok "F01 local-only work resolves has-commits=yes" \
+  || pwtest_bad "F01 local-only" "rows: $(printf '%s' "$R47OUT" | tr '\n' ';')"
+printf '%s\n' "$R47OUT" | grep -q "^T02|r47|.*|no|no$" \
+  && pwtest_ok "F02 inherited-only child excluded (has-commits=no)" \
+  || pwtest_bad "F02 inherited-only" "rows: $(printf '%s' "$R47OUT" | tr '\n' ';')"
+printf '%s\n' "$R47OUT" | grep -q "^T05|r47|.*|yes|no$" \
+  && pwtest_ok "F11 accepted-no-MR task is eligible" \
+  || pwtest_bad "F11 accepted" "rows: $(printf '%s' "$R47OUT" | tr '\n' ';')"
+
+# F03: a candidate whose comparison BASE cannot resolve must fail loudly with → fix and NO rows.
+rm -f "$RP/task/T06.md"
+pwtest_fill_task "$RP" T06 done "-" "Missing base" r47 "no-such-base-47"
+( cd "$PW_REPOS/r47"; git checkout -q -b "agent/$R47/T06-thing" master; git checkout -q master ) >/dev/null 2>&1
+python3 - "$RP/task/PLAN.md" <<'PLANEOF'
+import re,sys
+f=sys.argv[1]
+t=open(f).read()
+row="| [T06](./T06.md) | Missing base | r47 | — | G1 | kilotest/test-model | 1 | done | — | — |\n"
+out=[]
+for ln in t.splitlines(True):
+    out.append(ln)
+    if re.match(r'\| \[T05\]', ln):
+        out.append(row)
+open(f,"w").write("".join(out))
+PLANEOF
+R47B="$("$(pwtest_script $SH)" resolve --project "$R47" 2>"$PWTEST_ROOT/r47b.err")"; R47BRC=$?
+[ "$R47BRC" = 2 ] && pwtest_ok "F03 unresolved base → exit 2" || pwtest_bad "F03 rc" "rc=$R47BRC"
+[ -z "$R47B" ] && pwtest_ok "F03 emits no partial shipment list" \
+  || pwtest_bad "F03 partial list" "$(printf '%s' "$R47B" | head -2)"
+grep -q "fix:" "$PWTEST_ROOT/r47b.err" && pwtest_ok "F03 names a → fix remedy" \
+  || pwtest_bad "F03 remedy" "$(cat "$PWTEST_ROOT/r47b.err")"
+rm -rf "$PW_PROJECTS_DIR/$R47"
+
+# --- forge routing + CI identity + current Result record (plan 47 F05,F07,F09,F10) --------------
+# F05/F09: a PRETTY-PRINTED MR body must still yield the head sha, so an old-head green pipeline
+# cannot certify a build whose head has no pipeline yet; the unresolved timeout must then REPLACE
+# a previous SUCCESS in the current record.
+M47=mon47; rm -rf "$PW_PROJECTS_DIR/$M47"; cp -a "$F2" "$PW_PROJECTS_DIR/$M47"
+python3 - "$PW_PROJECTS_DIR/$M47/task/T02.md" <<'PYEOF'
+import sys
+f=sys.argv[1]; t=open(f).read()
+t=t.replace("- **Build check:** —","- **Build check:** SUCCESS",1)
+open(f,"w").write(t)
+PYEOF
+pwtest_rc 2 "F05 pretty JSON head still selects by sha (stale green not claimed)" \
+  env PWTEST_MR_PRETTY=1 PWTEST_PIPELINE='[
+    { "sha": "aaaa1111", "status": "success" }
+  ]' "$(pwtest_script $SH)" monitor --project "$M47" --task T02 --interval 1 --timeout 1
+grep -qE 'Build check:.*UNRESOLVED' "$PW_PROJECTS_DIR/$M47/task/T02.md" \
+  && pwtest_ok "F09 timeout records the unresolved observation" \
+  || pwtest_bad "F09 timeout record" "$(grep -i 'build check' "$PW_PROJECTS_DIR/$M47/task/T02.md")"
+grep -qiE 'build check:.*SUCCESS' "$PW_PROJECTS_DIR/$M47/task/T02.md" \
+  && pwtest_bad "F09 stale SUCCESS must not stay current" "$(grep -i 'build check' "$PW_PROJECTS_DIR/$M47/task/T02.md")" \
+  || pwtest_ok "F09 stale SUCCESS replaced by the latest observation"
+rm -rf "$PW_PROJECTS_DIR/$M47"
+
+# F10: a decoy `Build check:` line OUTSIDE ## Result must never be the one rewritten.
+BC=bcdecoy; rm -rf "$PW_PROJECTS_DIR/$BC"; cp -a "$F2" "$PW_PROJECTS_DIR/$BC"
+python3 - "$PW_PROJECTS_DIR/$BC/task/T02.md" <<'PYEOF'
+import sys
+f=sys.argv[1]; t=open(f).read()
+# Insert before the REAL Result section heading (line-anchored: an earlier "## Result"
+# mention lives inside prose, and inserting there would not create a parseable decoy line).
+t=t.replace("\n## Result", "\n- Build check: DECOY-OUTSIDE\n\n## Result", 1)
+open(f,"w").write(t)
+PYEOF
+pwtest_rc 0 "monitor success on the decoy project" \
+  env PWTEST_PIPELINE='[{"sha":"dead000f","status":"success"}]' "$(pwtest_script $SH)" monitor --project "$BC" --task T02 --interval 1 --timeout 1
+grep -q 'Build check: DECOY-OUTSIDE' "$PW_PROJECTS_DIR/$BC/task/T02.md" \
+  && pwtest_ok "F10 decoy outside Result left untouched" \
+  || pwtest_bad "F10 decoy rewritten" "$(grep -i 'build check' "$PW_PROJECTS_DIR/$BC/task/T02.md")"
+grep -qE 'Build check:.*SUCCESS' "$PW_PROJECTS_DIR/$BC/task/T02.md" \
+  && pwtest_ok "F10 current Result record updated" \
+  || pwtest_bad "F10 Result record" "$(grep -i 'build check' "$PW_PROJECTS_DIR/$BC/task/T02.md")"
+rm -rf "$PW_PROJECTS_DIR/$BC"
+
+# F07: an exact PW_FORGE_HOSTS entry routes exec to the configured forge (not a substring guess).
+E2=exec-f2gh; rm -rf "$PW_PROJECTS_DIR/$E2"; cp -a "$F2" "$PW_PROJECTS_DIR/$E2"
+pwtest_repo api "branch:agent/$E2/T01-thing"
+( cd "$PW_REPOS/api" && git worktree add "$PW_PROJECTS_DIR/$E2/worktree/api/T01-thing" "agent/$E2/T01-thing" >/dev/null 2>&1 ) || true
+sed -i '' "s|agent/$S2/T01-thing|agent/$E2/T01-thing|" "$PW_PROJECTS_DIR/$E2/task/T01.md"
+: > "$ROOT/forge47.log"
+pwtest_rc 0 "F07 exec honors an exact PW_FORGE_HOSTS mapping" \
+  env PWTEST_FORGE_LOG="$ROOT/forge47.log" PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.forge.sh" \
+  "$(pwtest_script $SH)" exec --project "$E2" --task T01 --file "$ROOT/desc.md"
+grep -q '^gh pr create' "$ROOT/forge47.log" \
+  && pwtest_ok "F07 configured forge (github) drove MR creation" \
+  || pwtest_bad "F07 forge choice" "$(tr '\n' ';' < "$ROOT/forge47.log" 2>/dev/null)"
+grep -q '^glab ' "$ROOT/forge47.log" \
+  && pwtest_bad "F07 must not fall back to glab" "$(cat "$ROOT/forge47.log")" \
+  || pwtest_ok "F07 no glab fallback under the configured forge"
+git -C "$PW_REPOS/api" worktree remove --force "$PW_PROJECTS_DIR/$E2/worktree/api/T01-thing" >/dev/null 2>&1 || true
+git -C "$PW_REPOS/api" branch -D "agent/$E2/T01-thing" >/dev/null 2>&1 || true
+rm -rf "$PW_PROJECTS_DIR/$E2"
