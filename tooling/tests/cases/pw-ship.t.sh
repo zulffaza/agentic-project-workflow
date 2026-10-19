@@ -118,6 +118,22 @@ pwtest_rc any "invalid replied refused" "$(pwtest_script $SH)" comment-seen --pr
 [ "$(grep -c 'pw-mr-comment:' "$TREV")" = "2" ] && pwtest_ok "refused calls did not mutate" || pwtest_bad "refusal purity" "table mutated by rejected calls"
 grep -q 'aaaaaaaa1111' "$PW_PROJECTS_DIR/$RI/LOG.md" && pwtest_ok "comment-seen logged" || pwtest_bad "comment-seen LOG" "nothing recorded"
 
+# --- comment-seen evidence marker (opt-in resolution support) — optional --feedback/--reply/--head
+# record the handled revision + reply id + verified head so a rerun can skip an unchanged handled
+# thread and a later `--resolve` can close it without re-fixing.
+pwtest_rc 0 "comment-seen evidence flags" "$(pwtest_script $SH)" comment-seen --project "$RI" --task T99 --thread dddddddd4444 --kind resolvable --replied yes --feedback note-778 --reply 991 --head abc1234
+grep 'pw-mr-comment:dddddddd4444' "$TREV" | grep -q 'pw-mr-ev:dddddddd4444;f=note-778;r=991;h=abc1234' \
+  && pwtest_ok "evidence marker recorded" || pwtest_bad "evidence marker" "$(grep dddddddd4444 "$TREV")"
+pwtest_rc 0 "comment-seen evidence rerun" "$(pwtest_script $SH)" comment-seen --project "$RI" --task T99 --thread dddddddd4444 --kind resolvable --replied yes --feedback note-779 --reply 992 --head def5678
+[ "$(grep -c 'pw-mr-comment:dddddddd4444' "$TREV")" = "1" ] && pwtest_ok "evidence rerun no duplicate" || pwtest_bad "evidence rerun" "row duplicated"
+grep 'pw-mr-comment:dddddddd4444' "$TREV" | grep -q 'pw-mr-ev:dddddddd4444;f=note-779;r=992;h=def5678' \
+  && pwtest_ok "evidence marker updated in place" || pwtest_bad "evidence update" "$(grep dddddddd4444 "$TREV")"
+grep 'pw-mr-comment:aaaaaaaa1111' "$TREV" | grep -q 'pw-mr-ev:' \
+  && pwtest_bad "legacy row shape" "a plain call grew an evidence marker" || pwtest_ok "plain call keeps the legacy row shape"
+pwtest_rc any "evidence token injection refused" "$(pwtest_script $SH)" comment-seen --project "$RI" --task T99 --thread eeeeeeee5555 --kind resolvable --replied yes --head 'abc|xyz'
+[ "$PWTEST_RC" != 0 ] && pwtest_ok "hostile evidence non-zero" || pwtest_bad "evidence guard" "accepted a pipe in --head"
+grep -q 'eeeeeeee5555' "$TREV" && pwtest_bad "refusal purity" "a refused evidence call wrote a row" || pwtest_ok "refused evidence call wrote nothing"
+
 # --- dashboard-mr-state (WRITE facet) — column-NAME driven MR table edit.
 DM=dashmr; rm -rf "$PW_PROJECTS_DIR/$DM"; mkdir -p "$PW_PROJECTS_DIR/$DM"
 printf -- '- **Status:** executing\n- **One-liner:** dashmr\n\n## Task status\n\n| ID | Title | Repo | Status | Notes |\n|----|-------|------|--------|-------|\n| T01 | fix x | repo-a | done | |\n\n## Merge requests\n\n| Task | Repo | MR | Target branch | State | Build |\n|------|------|----|--------------|-------|-------|\n| T01 | repo-a | http://forge/x/-/merge_requests/12 | main | open | green |\n' > "$PW_PROJECTS_DIR/$DM/README.md"

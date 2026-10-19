@@ -76,19 +76,21 @@ installed CLI's exact target-update syntax and API behavior before relying on it
 |-------|---------|------------|
 | `notes[].system` | `true` = GitLab's own activity log (approvals, "added 1 commit", the security-scan bot, description changes, "resolved all threads") — **never real reviewer feedback**. | Skip entirely. This is the real noise filter — not `individual_note`. |
 | `notes[].resolvable` | Can this discussion *ever* report `resolved: true`? True for diff-anchored threads **and** general "Start thread" discussions alike. False = a genuine one-off standalone comment (posted as a plain "Comment", not a thread) — the forge can **never** mark it resolved, full stop. | `true` → trust `resolved` (below). `false` (and `system` isn't true) → this is the case the LOCAL tracking table exists for. |
-| `notes[].resolved` | Only meaningful when `resolvable: true`. **GitLab auto-resolves a diff-anchored discussion when the underlying line changes on a later push** — that's why an already-fixed diff thread shows `resolved: true` with no explicit API call from anyone. **This auto-resolve does NOT happen for a resolvable discussion with no diff position** — pushing a fix to a *general* thread leaves it `resolved: false` forever unless something explicitly resolves it (`glab api -X PUT projects/:id/merge_requests/<iid>/discussions/<id> -f resolved=true`, or the GitHub equivalent). | After replying to a resolvable **general** thread, explicitly resolve it — don't assume a push will do it. |
+| `notes[].resolved` | Only meaningful when `resolvable: true`. **GitLab auto-resolves a diff-anchored discussion when the underlying line changes on a later push** — that's why an already-fixed diff thread shows `resolved: true` with no explicit API call from anyone. **This auto-resolve does NOT happen for a resolvable discussion with no diff position** — pushing a fix to a *general* thread leaves it `resolved: false` forever unless something explicitly resolves it (`glab api -X PUT projects/:id/merge_requests/<iid>/discussions/<id> -f resolved=true`, or the GitHub equivalent). | Only with `--resolve`: after replying to a resolvable thread you fixed **and verified**, explicitly resolve it — don't assume a push will do it. By default leave it open for human review; report the observed closure if a push auto-resolved a diff thread. |
 
 **GitHub equivalent:** "issue comments" (`gh pr view --comments`) are always the standalone/general
 kind, no resolved concept at all; "review comments" (`gh api repos/:owner/:repo/pulls/<n>/comments`)
 are diff-anchored and support a resolve/thread API. Fetch **both** — `gh pr view --comments` alone
 misses every inline review comment.
 
-**Consequence for anything that loops "fetch → fix → reply → treat as done":** a thread with
-`resolvable: false` can never show resolved on the forge, so you cannot use the forge's own
-resolved/open state to decide whether it still needs handling — it will look "open" forever.
-`/pw-ship comments --project <slug>` handles this by tracking every thread it has already replied to — resolvable
-or not — in a **local** table (`task/review/T0n.review.md`'s `## MR comment tracking`, via
-`pw-ship.sh comment-seen`) instead of relying solely on the forge's resolved bit — see
+**Consequence for anything that loops "fetch → fix → reply → treat as done":** neither the forge's
+resolved bit nor "we pushed a fix" can decide whether a thread still needs handling — a
+`resolvable: false` thread can never show resolved, and by default a `resolvable: true` thread we
+fixed is left open too. `/pw-ship comments --project <slug>` tracks every thread it replied to —
+resolvable or not — in a **local** table (`task/review/T0n.review.md`'s `## MR comment tracking`,
+via `pw-ship.sh comment-seen`), recording the handled feedback revision, the reply id, and the
+verified head in a hidden evidence marker, so a rerun skips an unchanged handled thread and a later
+`--resolve` closes it without re-fixing — see
 [`docs/REVIEW.md`](../../docs/REVIEW.md#2-the-mr-review-flow-post-ship).
 
 **Optional sanity check (if `jq` is available)** — run this after fetching `/notes`, to mechanically

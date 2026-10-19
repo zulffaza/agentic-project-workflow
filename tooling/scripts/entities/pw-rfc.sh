@@ -15,6 +15,7 @@
 #   pw-rfc.sh dashboard --project <slug> --text <text…>    set the dashboard RFC: line.
 #   pw-rfc.sh comments --project <slug> [--backend <b>]
 #       list open threads + per-thread reply counts (was pw-rfc-comments.sh).
+#       Read-only outward: --resolve is refused; RFC threads are never written back.
 #
 # Named-argument grammar: operation words first, every value named; --project
 # selects the project. Scalar values are ONE token (quote spaces); the prose
@@ -287,6 +288,8 @@ while [ $# -gt 0 ]; do
     --backend)
       [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --backend; v="$1"; shift; }
       BACKEND="$v"; BACKEND_FROM_META=0 ;;
+    --resolve|--no-resolve)
+      die "comments: $a is not supported → fix: RFC comments are externally read-only; reply to and resolve the external thread yourself (only MR review via '/pw-ship comments … --resolve' closes threads)" ;;
     -h|--help) pw_usage ;;
     -*) _pw_unknown "$a" "comments --project <slug> [--backend <b>]" ;;
     *) _pw_positional "$a" "comments --project <slug> [--backend <b>]" ;;

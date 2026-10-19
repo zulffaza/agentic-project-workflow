@@ -334,3 +334,7 @@ C264-ci-head-compact-only	scripts/entities/pw-ship.sh	        HEAD_SHA="$(glab a
 C265-timeout-leaves-stale-success	scripts/entities/pw-ship.sh	      _record_build_check "$TASK_FILE" "UNRESOLVED (timeout after ${TIMEOUT_MIN}m — status: $STATUS)"	      :	T1	pw-ship.t.sh
 C266-result-scope-lost	scripts/entities/pw-ship.sh	      p && !d && /^[*+-] Build check:/           { print "- Build check: " r;      d=1; next }	      !d && /^[*+-] Build check:/           { print "- Build check: " r;      d=1; next }	T1	pw-ship.t.sh
 C267-forge-override-ignored	scripts/entities/pw-ship.sh	  if declare -p PW_FORGE_HOSTS >/dev/null 2>&1; then	  if false; then	T1	pw-ship.t.sh
+C268-comment-seen-evidence-marker	scripts/entities/pw-ship.sh	[ -n "$feedback$reply_id$head" ] && evmarker="<!-- pw-mr-ev:$thread;f=$feedback;r=$reply_id;h=$head -->"	[ -n "$feedback$reply_id$head" ] && evmarker=""	T1	pw-ship.t.sh
+C269-comment-seen-evidence-guard-vacuous	scripts/entities/pw-ship.sh	case "$_tok" in *[!A-Za-z0-9._:-]*)	case "" in *[!A-Za-z0-9._:-]*)	T1	pw-ship.t.sh
+C270-ship-resolve-optin-doctrine	commands/pw-ship.md	`--resolve` is a comment-mode-only switch	`--resolve` is a switch	T4	-
+C271-rfc-comments-refuses-resolve	scripts/entities/pw-rfc.sh	die "comments: $a is not supported → fix: RFC comments are externally read-only; reply to and resolve the external thread yourself (only MR review via '/pw-ship comments … --resolve' closes threads)"	:	T1	pw-rfc.t.sh

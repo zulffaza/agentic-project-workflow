@@ -65,7 +65,7 @@ See [review](REVIEW.md) for scope, gate transitions, and AI approval safeguards.
 | `/pw-execute --project <slug> --acceptance <manual\|auto>` | Override result acceptance for one run |
 | `/pw-execute --project <slug> --then-ship` | Request shipping after execution, with push confirmation |
 | `/pw-ship --project <slug> [--task <task-id>]… [--skip-build-check]` | Push verified branches, open MRs, and monitor CI |
-| `/pw-ship comments --project <slug> [--task <task-id>]… [--skip-build-check]` | Handle MR feedback, including fixes, pushes, and replies |
+| `/pw-ship comments --project <slug> [--task <task-id>]… [--skip-build-check] [--resolve]` | Handle MR feedback: fixes, pushes, and replies; `--resolve` also closes the fixed threads |
 | `/pw-ship request-review --project <slug> [--all \| --task <task-id>]… [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]` | Read-only: one copyable teammate review request for the open MRs |
 | `/pw-ship stack --project <slug>` | Preview stack topology and health without writes |
 | `/pw-ship stack adopt --project <slug> [--task <task-id>]… [--apply]` | Preview an existing stack import; `--apply` records it |
@@ -77,6 +77,10 @@ See [review](REVIEW.md) for scope, gate transitions, and AI approval safeguards.
 On local task review, the same flag skips the repair verification loop; the recap must identify the unchecked result.
 Task acceptance is an explicit human request in chat, unless clean automatic acceptance is enabled.
 It is separate from PLAN approval and MR merging.
+
+By default, `comments` mode leaves each thread it handled **open for your review**; add `--resolve`
+to close the threads it fixed and verified. `--resolve` is comment-mode only — the other modes
+refuse it.
 
 ### Inspect, configure, and recover
 

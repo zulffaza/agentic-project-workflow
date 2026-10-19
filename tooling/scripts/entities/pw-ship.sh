@@ -7,7 +7,7 @@
 #   pw-ship.sh monitor            --project <slug> --task <task-id> [--timeout <minutes>] [--interval <seconds>]
 #   pw-ship.sh mr-state           --project <slug> --task <task-id>
 #   pw-ship.sh mr-state-batch     --project <slug> [--task <task-id>]…
-#   pw-ship.sh comment-seen       --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no> [--note <text…>]
+#   pw-ship.sh comment-seen       --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no> [--note <text…>] [--feedback <token>] [--reply <token>] [--head <sha>]
 #   pw-ship.sh dashboard-mr-state --project <slug> --task <task-id> --state <state>
 #   pw-ship.sh history            --project <slug> --operation <invocation|pending|init|begin|checkpoint|freeze|deliver> [--mr <MR-url>] [--options <text…>]
 #   pw-ship.sh request-review     --project <slug> [--all | --task <task-id>]… [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]
@@ -1207,37 +1207,50 @@ _pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     { head -n "$((signli
 # skipped forever (looks perpetually "not resolved" on the forge, so a naive resolved-filter treats
 # it as not-actionable) or gets re-processed/re-replied-to every single run (no forge-side flag
 # ever flips to stop it recurring).
-#   comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no> [--note <text…>]
+#
+# Handled-vs-closed: `/pw-ship … comments` leaves handled threads OPEN by default, so the forge's
+# `resolved` flag is no longer a usable "already handled" signal for resolvable threads either.
+# The optional evidence marker records WHY the current feedback is considered handled — the
+# reviewer-feedback revision seen (--feedback), the agent's own reply identity (--reply), and the
+# verified published head (--head) — so a later run can skip an unchanged handled thread and a
+# later `comments --resolve` can close it without repeating the fix. Absent the marker, a legacy
+# row is not proof of handling: re-check the live thread.
+#   comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no> [--note <text…>] [--feedback <token>] [--reply <token>] [--head <sha>]
+_CS_USAGE="comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no> [--note <text…>] [--feedback <token>] [--reply <token>] [--head <sha>]"
 cmd_comment_seen() {
-  local slug="" task="" thread="" kind="" replied="" note="" a v
+  local slug="" task="" thread="" kind="" replied="" note="" feedback="" reply_id="" head="" a v
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
     case "$a" in
-      --project=*) v="${a#*=}"; a="--project" ;;
-      --task=*)    v="${a#*=}"; a="--task" ;;
-      --thread=*)  v="${a#*=}"; a="--thread" ;;
-      --kind=*)    v="${a#*=}"; a="--kind" ;;
-      --replied=*) v="${a#*=}"; a="--replied" ;;
-      --note=*)    v="${a#*=}"; a="--note" ;;
+      --project=*)  v="${a#*=}"; a="--project" ;;
+      --task=*)     v="${a#*=}"; a="--task" ;;
+      --thread=*)   v="${a#*=}"; a="--thread" ;;
+      --kind=*)     v="${a#*=}"; a="--kind" ;;
+      --replied=*)  v="${a#*=}"; a="--replied" ;;
+      --note=*)     v="${a#*=}"; a="--note" ;;
+      --feedback=*) v="${a#*=}"; a="--feedback" ;;
+      --reply=*)    v="${a#*=}"; a="--reply" ;;
+      --head=*)     v="${a#*=}"; a="--head" ;;
     esac
     case "$a" in
-      --project|--task|--thread|--kind|--replied)
+      --project|--task|--thread|--kind|--replied|--feedback|--reply|--head)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
         case "$a" in
           --project) slug="$v" ;; --task) task="$v" ;; --thread) thread="$v" ;;
           --kind) kind="$v" ;; --replied) replied="$v" ;;
+          --feedback) feedback="$v" ;; --reply) reply_id="$v" ;; --head) head="$v" ;;
         esac ;;
       --note)
         while [ $# -gt 0 ]; do case "$1" in --*) break ;; esac; v="${v:+$v }$1"; shift; done
         [ -n "$v" ] || die "comment-seen: --note requires a value → fix: --note <text…> (runs until the next --flag)"
         note="$v" ;;
       -h|--help) pw_usage ;;
-      -*) _pw_unknown "$a" "comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no> [--note <text…>]" ;;
-      *) _pw_positional "$a" "comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no> [--note <text…>]" ;;
+      -*) _pw_unknown "$a" "$_CS_USAGE" ;;
+      *) _pw_positional "$a" "$_CS_USAGE" ;;
     esac
   done
-  [ -n "$slug" ] || die "comment-seen: --project is required → fix: comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no>"
-  [ -n "$task" ] || die "comment-seen: --task is required → fix: comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no>"
+  [ -n "$slug" ] || die "comment-seen: --project is required → fix: $_CS_USAGE"
+  [ -n "$task" ] || die "comment-seen: --task is required → fix: $_CS_USAGE"
   pw_task_id_ok "$task" || die "comment-seen: invalid task id '$task' → fix: task ids look like T01"
   [ -n "$thread" ] || die "comment-seen: --thread is required → fix: pass the MR discussion/thread id"
   [ -n "$kind" ] || die "comment-seen: --kind is required → fix: --kind <resolvable|unresolvable>"
@@ -1249,13 +1262,23 @@ cmd_comment_seen() {
   case "$thread" in ''|*[!A-Za-z0-9._-]*) die "comment-seen: invalid --thread id '$thread' → fix: pass the forge discussion/thread id (letters, digits, dot, dash, underscore)" ;; esac
   case "$note" in *"|"*|*"$IFS_NL"*|*$'\t'*|*'\'*|*"<!--"*)
     die "comment-seen: --note must be plain text (no |, TAB, newline, backslash, or an HTML comment opener) → fix: strip the markup from the note" ;; esac
+  # Evidence tokens land in the hidden evidence marker beside $thread: same forgery risk, so a `|`,
+  # whitespace, angle bracket, or comment-opener is refused. Empty is allowed (partial evidence).
+  local _tok
+  for _tok in "$feedback" "$reply_id" "$head"; do
+    case "$_tok" in *[!A-Za-z0-9._:-]*) die "comment-seen: evidence value '$_tok' has invalid characters → fix: pass ids/shas only (letters, digits, dot, dash, colon, underscore)" ;; esac
+  done
   local d; d="$(proj_dir "$slug")"
   local f="$d/task/review/$task.review.md"
   [ -f "$f" ] || die "no review file: task/review/$task.review.md (run '/pw-review init --project $slug --file task/review/$task.review.md --doc task/$task.md' first)"
   _ship_comment_section_ensure "$f"
   local marker="<!-- pw-mr-comment:$thread -->"
   local shortid="${thread:0:8}"
-  local row="| \`$shortid\` | $kind | $replied | $note $marker |"
+  # Evidence marker only when at least one value was supplied — a plain call keeps the exact legacy
+  # row shape (and its byte-for-byte compatibility with older readers).
+  local evmarker=""
+  [ -n "$feedback$reply_id$head" ] && evmarker="<!-- pw-mr-ev:$thread;f=$feedback;r=$reply_id;h=$head -->"
+  local row="| \`$shortid\` | $kind | $replied | $note $marker${evmarker:+ $evmarker} |"
   if grep -Fq "$marker" "$f"; then
 _pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v marker="$marker" -v row="$row" 'index($0,marker){print row; next} {print}' \
       "$f" > "$_pwstage" && mv "$_pwstage" "$f"
@@ -1271,7 +1294,7 @@ _pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v row="$row" '
     ' "$f" > "$_pwstage" && mv "$_pwstage" "$f"
     grep -Fq "$marker" "$f" || printf '%s\n' "$row" >> "$f"
   fi
-  "$ST" log --project "$slug" --actor ship --message "comment-seen $task/$thread ($kind): replied=$replied"
+  "$ST" log --project "$slug" --actor ship --message "comment-seen $task/$thread ($kind): replied=$replied${head:+ head=$head}"
   echo "$slug: ship comment-seen $task/$thread ($kind) -> replied=$replied"
 }
 

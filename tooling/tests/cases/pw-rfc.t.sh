@@ -21,6 +21,16 @@ pwtest_rc 0 "rfc comment-seen (thread t99 solved=yes)" "$(pwtest_script pw-rfc.s
 grep -qiE 't99' "$PW_PROJECTS_DIR/$RI/rfc/META.md" \
   && pwtest_ok "thread persisted in META" || pwtest_bad "rfc comment-seen" "$(tail -3 "$PW_PROJECTS_DIR/$RI/rfc/META.md" 2>/dev/null)"; 
 
+# rfc comments refuses a resolve flag — RFC threads are externally read-only, so the flag must be
+# rejected at parse time, before any fetch or local write, with an actionable fix line.
+RFCREV="$PW_PROJECTS_DIR/$RI/analysis/review/RFC.review.md"
+_rfc_before=0; [ -f "$RFCREV" ] && _rfc_before=1
+pwtest_rc 2 "rfc comments refuses --resolve" "$(pwtest_script pw-rfc.sh)" comments --project "$RI" --resolve
+pwtest_fix "read-only RFC comment contract"
+_rfc_after=0; [ -f "$RFCREV" ] && _rfc_after=1
+[ "$_rfc_before" = "$_rfc_after" ] && pwtest_ok "rfc --resolve wrote nothing" || pwtest_bad "rfc --resolve purity" "the review file was created"
+pwtest_rc 2 "rfc comments refuses --no-resolve" "$(pwtest_script pw-rfc.sh)" comments --project "$RI" --no-resolve
+
 # --- ported from pw-lib's inline selftest (plan 20 Phase 5) ---
 pl_rfc_selftest() {
   local tmp="$ROOT/pl-rfc"; rm -rf "$tmp"; mkdir -p "$tmp/demo" "$tmp/demo2"
