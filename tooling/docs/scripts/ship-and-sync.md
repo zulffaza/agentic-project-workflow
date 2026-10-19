@@ -145,16 +145,24 @@ $PW_HOME/tooling/scripts/entities/pw-ship.sh mr-state --project <slug> --task T0
 
 ## pw-ship.sh comment-seen
 
-The local authority for MR-comment threads the forge can never report resolved (plain
-one-off comments — `resolvable: false`). Upserts ONE row per thread into the task review
-file's `## MR comment tracking` table (hidden keyed marker; rerun the same thread → updated
-in place, never duplicated; the section is created before `## Sign-off`, never after it).
+The local authority for MR-comment threads the forge cannot decide by its own resolved bit —
+plain one-off comments (`resolvable: false`) can never report resolved, and since `/pw-ship …
+comments` leaves handled threads open by default, a `resolvable: true` thread it fixed is still open
+too. Upserts ONE row per thread into the task review file's `## MR comment tracking` table (hidden
+keyed marker; rerun the same thread → updated in place, never duplicated; the section is created
+before `## Sign-off`, never after it).
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-ship.sh comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no> [--note <note…>]
+$PW_HOME/tooling/scripts/entities/pw-ship.sh comment-seen --project <slug> --task <task-id> --thread <thread-id> --kind <resolvable|unresolvable> --replied <yes|no> [--note <note…>] [--feedback <token>] [--reply <token>] [--head <sha>]
 ```
 
 Kind/replied values are validated — anything else exits `2` without touching the table.
+The optional evidence flags record *why* the current feedback is handled: `--feedback` = the
+reviewer-feedback revision seen (latest actionable note id, or a short fingerprint), `--reply` =
+the agent's own reply id, `--head` = the verified published head. When any is given, a hidden
+`<!-- pw-mr-ev:… -->` marker is appended to the row (a plain call keeps the exact legacy row
+shape); the next `/pw-ship … comments` run uses it to skip an unchanged handled thread and to let
+`--resolve` close it without re-fixing. A row with no evidence marker is not proof of handling.
 Don't reformat a row by hand; add a `--note` value instead.
 
 ## pw-ship.sh dashboard-mr-state

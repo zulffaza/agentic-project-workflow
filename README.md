@@ -63,6 +63,7 @@ Optional controls have separate purposes:
 
 - [AI review](docs/RECIPES.md#use-ai-review-with-human-approval) can add an independent review pass.
 - [Automatic acceptance and chained shipping](docs/EXECUTION.md#opt-in-clean-execution-pre-reviewed-plans) can shorten a pre-reviewed execution run.
+- [MR review-thread fixes](docs/REVIEW.md#2-the-mr-review-flow-post-ship) run after ship and leave each fixed thread open for your review; add `--resolve` to close the ones it fixed and verified.
 
 ## Find the command you need
 

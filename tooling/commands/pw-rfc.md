@@ -179,6 +179,8 @@ loop. The default flow (no operator word) is Wave 1.**
      local `.review.md` files never being rewritten, only appended to.
    - **Unresolved, tracked, reply count unchanged** — nothing to do, already surfaced.
 4. **Never reply to, resolve, or otherwise write into the external thread — that's mine to do.**
+   There is no `--resolve` here: `pw-rfc.sh comments --resolve` (and `--no-resolve`) is refused, so
+   passing it stops the run before any fetch or local write rather than pretending a thread closed.
    After handling each thread, record its current state:
    `pw-rfc.sh comment-seen --project <slug> --thread <thread-id> --replies <reply-count> --solved <yes|no>`.
 5. **Recap:** how many genuinely new items were pulled, how many existing items got new replies
@@ -192,7 +194,8 @@ loop. The default flow (no operator word) is Wave 1.**
 - Never guesses a target location for a first publish — asks instead of picking one.
 - Never deletes or edits an external template's pre-populated section that has no corresponding
   generated content — leaves it untouched unless explicitly asked.
-- Never replies to, resolves, or otherwise writes into an external comment thread.
+- Never replies to, resolves, or otherwise writes into an external comment thread — and refuses a
+  `--resolve`/`--no-resolve` flag instead of acting on it.
 - Never performs a whole-doc overwrite on any backend — every external write is section-scoped.
 - Never blocks a phase because a backend is unset or unreachable — RFC publishing is best-effort
   enrichment on an already-complete artifact; report and continue.

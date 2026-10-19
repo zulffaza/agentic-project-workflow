@@ -262,6 +262,8 @@ After a reviewer comments on T01's MR, run:
 ```
 
 The agent reads comments, applies justified fixes, verifies them, pushes updates, and replies on the MR.
+By default it leaves each handled thread **open for your review**; add `--resolve` to close the
+threads it fixed and verified.
 The project records the exchange and review-attempt history.
 Without a task ID, `comments` handles all eligible open MRs.
 If the target branch changes, `/pw-sync --project delivery-note` refreshes open MR branches and verifies them again.

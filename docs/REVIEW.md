@@ -12,7 +12,7 @@ Adding an item or answering a question does not apply the correction by itself.
 |---|---|
 | Copyable feedback and approval commands | [Review recipe](RECIPES.md#record-feedback-answers-and-approval) |
 | Review an analysis or PLAN | [Local review files](#1-local-review-files-pre-ship) |
-| Fix a reviewer's MR comment | `/pw-ship comments --project <slug> [--task <T0n>]…` and [MR review](#2-the-mr-review-flow-post-ship) |
+| Fix a reviewer's MR comment | `/pw-ship comments --project <slug> [--task <T0n>]… [--resolve]` and [MR review](#2-the-mr-review-flow-post-ship) |
 | An AI pass that keeps human approval | [Advisory recipe](RECIPES.md#use-ai-review-with-human-approval) |
 | Understand automatic approval safeguards | [AI-assisted review](#3-ai-assisted-review-optional-advisory--manual-by-default) |
 
@@ -223,6 +223,12 @@ MR in your Git host (GitLab / GitHub). These come from *other* reviewers (or you
 diff). They are handled by a dedicated mode of `/pw-ship`, **not** `/pw-review` — because fixing
 them means going back into the task's worktree and pushing, which is ship-side work.
 
+**Handled threads stay open by default.** After fixing and verifying a thread, `/pw-ship comments`
+replies but **leaves the thread open**, so you can compare the fix against the live thread before it
+is closed. Add `--resolve` to close the threads it fixed and verified — `--resolve` is comment-mode
+only. With it, a thread closes only when its fix landed, its verification passed, and CI is green
+(or was skipped with `--skip-build-check`).
+
 **One MR or all of them.** `/pw-ship comments --project <slug> --task T03` handles a single task's MR;
 **`/pw-ship comments --project <slug>`** (no task IDs) sweeps **every** open MR in the project in one run —
 so you don't have to invoke it per task. It processes them serially (each is a real
@@ -259,8 +265,10 @@ reviewer leaves a comment on MR !123 (thread on file X, line N — OR a general/
         ├─ 2. FIX in the worktree  worktree/<repo>/T03-<slug>/ … edit, re-run ## Verify, push
         │                          (build-check monitors the pipeline here too, unless
         │                          --skip-build-check was passed)
-        ├─ 3. REPLY on each thread  summarising the fix (never a bare "done") — general comments too;
-        │                          explicitly resolve a resolvable-but-general thread (no auto-resolve)
+        ├─ 3. REPLY on each thread  summarising the fix (never a bare "done") — general comments too.
+        │                          Threads stay OPEN by default; with --resolve, close the ones you
+        │                          fixed + verified (resolvable: true only; a general thread needs
+        │                          the explicit call — a push never auto-resolves it)
         ├─ 4. REFRESH the current MR summary and DELIVER one frozen attempt for this invocation
         │                          — preserve prior attempts, reviewer text, and actual verification
         └─ 5. MIRROR into the project dir  ← the important bit
@@ -322,7 +330,9 @@ filters by diff-position. And some comment types can never be marked "resolved" 
 matter what — for those, `/pw-ship … comments` checks the **local** `## MR comment tracking` table
 in `task/review/T0n.review.md` (written by the comments flow) instead of waiting on a
 forge-side flag that will never flip (the same pattern `/pw-rfc comments` uses for RFC-platform
-comments). If a comment is missing from the recap, follow [MR comment troubleshooting](TROUBLESHOOTING.md).
+comments). By default a handled thread is left open whatever its type, so that local table — not the
+forge's open/resolved state — is what tells a rerun a thread is already handled. If a comment is
+missing from the recap, follow [MR comment troubleshooting](TROUBLESHOOTING.md).
 
 ### Why the mirror matters (the reconciliation rule)
 An MR comment lives in your Git host, which the project dir doesn't automatically know about. If a
@@ -335,6 +345,8 @@ asked and what changed?" entirely from the project dir, without opening the MR.
 
 ### What each command does *not* do
 - `/pw-ship … comments` **never merges** the MR — merging is a human decision downstream.
+- `/pw-ship … comments` **never closes a thread by default.** Handled threads stay open for your
+  review; only `--resolve` closes the ones it fixed and verified.
 - `/pw-review` is for the **local** `.review.md` files only; it doesn't touch MRs.
 - Bringing a stale MR up to date with its moved base is a *different* concern from review comments —
   that's [`/pw-sync`](./WORKFLOW.md#ship-and-sync), which merges
@@ -345,7 +357,8 @@ asked and what changed?" entirely from the project dir, without opening the MR.
 ```
 /pw-ship --project myproj                       # open the MRs
 … reviewer comments on MR for T03 …
-/pw-ship comments --project myproj --task T03   # fix + reply + mirror
+/pw-ship comments --project myproj --task T03   # fix + reply + mirror (threads left open)
+/pw-ship comments --project myproj --task T03 --resolve   # optional: also close the fixed threads
 … base branch moves …
 /pw-sync --project myproj                       # merge base into all open MR branches + re-verify
 … all approved & merged by a human …

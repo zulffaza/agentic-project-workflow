@@ -1,6 +1,6 @@
 ---
 description: Push verified task branches and open MRs with rich descriptions
-args: "[comments | request-review | stack] --project <project-slug> [--task <T0n>]… [--skip-build-check]"
+args: "[comments | request-review | stack] --project <project-slug> [--task <T0n>]… [--skip-build-check] [--resolve]"
 scope: project
 ---
 Follow the `project-workflow` skill. Arguments: {{ARGS}}. The first word selects the mode:
@@ -11,6 +11,14 @@ optional task IDs scope to a subset by REPEATING `--task <T0n>` (e.g. `--task T0
 may appear in either ship/comment mode. Task IDs are **optional in both
 ship modes** — with none, the command applies to **every** eligible task (all shippable tasks in
 ship mode; all tasks with an open MR in comment mode).
+
+**`--resolve` is a comment-mode-only switch, and it is OFF by default.** In comment mode it lets the
+run close the MR threads whose fixes it just verified (see "Handling and resolution are separate").
+Without it, a comments run still fixes, verifies, pushes, replies, and records the work — it just
+**leaves every thread open for your review**, so a human can check the fix against the live thread
+before anything is closed. In any other mode (`ship`, `request-review`, `stack`) `--resolve` is a
+usage error: refuse with that reason and do nothing — never push, comment, or write state. This flag
+is unrelated to `pw-ship.sh resolve`, the internal operator that lists shippable candidates.
 
 **Build-check monitoring runs by default** — after the MR is opened/updated (ship mode) or after
 each fix is pushed (comment mode), this command also polls that MR's pipeline/checks to a terminal
@@ -25,7 +33,8 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 **Read-only and complete on its own: when the first word is literally `request-review`, run the
 mapping below, relay its output, and STOP — this mode never pushes, comments, polls CI, or writes
 project state, and it returns BEFORE the pre-flight block.** Do not treat its `--task` values as ship task
-IDs and do not run the ship/comment pre-flight or the monitor machinery for it.
+IDs and do not run the ship/comment pre-flight or the monitor machinery for it. `--resolve` is also
+rejected here (it belongs to comment mode only): refuse and stop, writing nothing.
 
 ```bash
 {{PW_HOME}}/tooling/scripts/entities/pw-ship.sh request-review --project <slug> [--all | --task <T0n>]… \
@@ -366,8 +375,11 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      ```
      For each note:
      1. `system == true` → GitLab's own activity log — skip it.
-     2. Otherwise, check the local tracking table (below) for this note ID. If already recorded
-        with `replied=yes`, skip it.
+     2. Otherwise, check the local tracking table (below) for this note ID. If the row is
+        recorded with `replied=yes` and its evidence marker names this same feedback revision,
+        skip it — it is already addressed (open or closed, depending on the run that handled it).
+        A row with no evidence marker, or a newer reviewer reply / edited note than the recorded
+        revision, is **not** already handled: process it.
      3. Otherwise, this is an actionable note. Read its `body`, `position.new_path`,
         `position.new_line`, `resolvable`, and `resolved` fields.
 
@@ -395,7 +407,15 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      I already reply to this." Also remember: GitLab auto-resolves a diff-anchored thread when its
      underlying line changes (a later push can silently flip `resolved` with no explicit API call)
      — but that auto-resolve does **not** happen for a resolvable *general* (no diff position)
-     thread, so don't assume pushing a fix closed it out; you must explicitly resolve it (below).
+     thread.
+   - **An open thread this run handled is still "handled" — open ≠ actionable.** Because the
+     default no longer resolves threads, a resolvable-but-still-open thread is not automatically
+     "not actionable." Treat it as handled when the local row records the same feedback revision
+     (its evidence marker, step 3): skip the fix, and with `--resolve` close it without re-fixing.
+     A newer reviewer reply or an edited note changes the revision and returns the thread to triage.
+     A row with no evidence marker (legacy) is not proof — re-check the live thread before skipping
+     or resolving it. Likewise, when the *same thread* surfaces through a fresh note ID you have not
+     recorded, process that feedback even if an earlier note in the thread was answered.
     - A task whose MR has no open/unrecorded threads is skipped only after pending-description
       recovery and any newly observed matching-head verification evidence (note it in the recap),
       **unless** it is a stacked descendant pulled in by the cascade: its inherited code changed, so
@@ -428,22 +448,41 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
       build shows up in the recap and can be mentioned in the thread reply, not discovered later.
       A **red** build → the task is **not done**: enter the build-check fix loop below (fix in the
       worktree, re-verify, push, re-monitor) until it passes or the cap is hit.
-3. **Reply to every thread you acted on — general/no-diff comments included — AND mirror it into
-   the internal record:**
-   - **Reply on the thread itself.** GitLab: `POST` a new note into that same discussion (works
-     whether or not it's resolvable). If it's `resolvable: true` **and has no diff position**
-     (won't auto-resolve from your push), also explicitly resolve it:
-     `glab api -X PUT projects/:id/merge_requests/<iid>/discussions/<discussion-id> -f resolved=true`.
-     GitHub diff comments: reply in that review-comment thread; GitHub standalone/conversation
-     comments have no native reply-thread API — post a new PR comment (`gh pr comment`) that quotes
-     or clearly references the original so the connection is legible to the reviewer.
-   - **Record it via the helper — this is what makes resolvable-general and unresolvable comments
-     idempotent across reruns:**
-     `…/{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh comment-seen --project <slug> --task <T0n> --thread <thread-id> --kind <resolvable|unresolvable> --replied yes`
+3. **Reply to every thread you acted on — general/no-diff comments included — then, only with
+   `--resolve`, close the ones you fixed; and mirror the result into the internal record:**
+   - **Reply on the thread itself — always, either mode.** GitLab: `POST` a new note into that same
+     discussion (works whether or not it's resolvable). GitHub diff comments: reply in that
+     review-comment thread; GitHub standalone/conversation comments have no native reply-thread API
+     — post a new PR comment (`gh pr comment`) that quotes or clearly references the original so the
+     connection is legible to the reviewer.
+   - **Default (no `--resolve`): leave every thread OPEN.** Do **not** call any resolve or unresolve
+     endpoint. A handled thread stays open for you to inspect. Never describe a thread as closed
+     because the fix landed — say "addressed — left open for review".
+   - **Only with `--resolve`, close a thread when all of these hold:** it is `resolvable: true`; its
+     fix landed on the branch you pushed this run; the batch `## Verify` passed on that published
+     head; and, when the build check ran, the pipeline/checks reached a green terminal state. With
+     `--skip-build-check` the required local `## Verify` passing is sufficient — and both the thread
+     reply and the recap must say CI was skipped. GitLab: `glab api -X PUT
+     projects/:id/merge_requests/<iid>/discussions/<discussion-id> -f resolved=true` (covers diff
+     threads and resolvable general threads). GitHub: use the review thread's own resolve operation;
+     a standalone/conversation comment has no native resolved state — never invent one. **Read the
+     thread back after resolving** and record the observed state. If the fix failed, verification
+     failed, the head is unknown, or CI is red/pending/unreadable, leave it open and say why in the
+     recap. A resolve request that fails: keep the fix and reply evidence, report the thread as still
+     open, and retry only the pending resolve — never claim closure from an unconfirmed request. If
+     the forge already auto-resolved a diff thread on push, record that observation without a second
+     write and without reopening it.
+   - **Record it via the helper — this is what makes resolvable and unresolvable comments idempotent
+     across reruns, whether a thread was left open or closed:**
+     `…/{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh comment-seen --project <slug> --task <T0n> --thread <thread-id> --kind <resolvable|unresolvable> --replied yes --feedback <seen-revision> --reply <reply-id> --head <published-head>`
      Do this for **every** thread you replied to — it upserts a row into
      `task/review/T0n.review.md`'s `## MR comment tracking` table keyed by thread ID, which step 1
-     reads back on the next run. Without this call, an unresolvable comment (which the forge can
-     never mark resolved) either gets silently skipped forever or re-processed every single run.
+     reads back on the next run. `--feedback` is the reviewer-feedback revision you handled (the
+     latest actionable note id, or a short fingerprint of its text+timestamp), `--reply` is your own
+     reply's note id, and `--head` is the verified published head. All three are optional, but a row
+     without `--feedback` cannot prove the current feedback was handled, so the next run re-checks
+     it. Without this call, an unresolvable comment (which the forge can never mark resolved) either
+     gets silently skipped forever or re-processed every single run.
     - **Checkpoint and deliver the description through `history`, never ad-hoc forge body edits.**
       Retain the invocation/MR key, aggregate all comment and CI work, freeze once, and deliver
       using the protocol above. Preserve older blocks and external edits. Readback and the
@@ -456,11 +495,15 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      a hand-copied heading block. The project dir stays the source of truth even for MR-driven
      changes.
 4. **Recap** a table — one row per task in the set: Task · Repo · MR · state (open/merged/closed) ·
-   threads addressed (note how many were general/no-diff-position) · verify (green/failed) ·
-    pushed? · build result (or "skipped" if `--skip-build-check` was passed) · description delivery
-    (verified / pending / history delivered but summary pending). Flag any task whose
+   threads addressed (note how many were general/no-diff-position) · **thread resolution** (how many
+   left open for your review — the default — versus closed under `--resolve`) · verify
+   (green/failed) ·
+   pushed? · build result (or "skipped" if `--skip-build-check` was passed) · description delivery
+   (verified / pending / history delivered but summary pending). Flag any task whose
    verify failed after the fix (leave it for review) and any thread you couldn't resolve without a
-   decision. For `merged` tasks, note that the worktree was removed and docs updated.
+   decision. Under the default, link the threads you left open so they are easy to review; under
+   `--resolve`, flag any resolve request that failed or was skipped. For `merged` tasks, note that
+   the worktree was removed and docs updated.
 
 Process the set **serially by default** (each is a real edit-verify-push in a worktree); parallelize
 only independent repos if you're confident. Never merge an MR as part of this command — merging is a
@@ -498,7 +541,9 @@ affected descendant** with fresh verification and an explicit publication result
   description through the `history` protocol as an inherited-update round (never a fake reviewer
   request), and keep its `describe` stage pending until that delivery lands.
 - **Before outward writes**, show the selected comment tasks, affected descendants, publication
-  actions, and blocked ancestors. If expanded publication lacks approval, run without `--push`: the
+  actions, and blocked ancestors. Thread resolution follows the same `--resolve` policy for each
+  handled thread; a descendant that received only an inherited update never has its own threads
+  resolved. If expanded publication lacks approval, run without `--push`: the
   pending push/describe stages keep the stack blocked and the run reports it incomplete.
 
 **Failure and freshness:** if A fails verification, do not publish or advance descendants. If a

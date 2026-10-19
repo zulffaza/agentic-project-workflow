@@ -94,7 +94,9 @@ Rules you MUST follow:
   Report unanswered `Qn` as blocking.
 - **MR feedback:** review comments left on the *MR itself* are handled by `/pw-ship comments --project <slug> [--task <T0n>]…`
   (fetch via `glab`/`gh`, fix in the worktree, reply on the thread). **Task IDs are
-  optional — with none it sweeps EVERY open MR** in the project in one run (serially). Always
+  optional — with none it sweeps EVERY open MR** in the project in one run (serially). By default
+  the run leaves each handled thread **open for your review**; add `--resolve` to close the ones it
+  fixed and verified. Always
   **mirror the change into the internal record** (task `## Result` + `task/review/` + `LOG.md`); the
   project dir stays the source of truth even for MR-driven fixes.
   - **Refresh the MR description every round**, not just at open — it goes stale fast once several
@@ -119,16 +121,23 @@ Rules you MUST follow:
     `resolvable: true` just like a diff comment — filtering on diff-position is a verified real bug
     that silently dropped an open reviewer thread entirely. Full field breakdown + a `jq` recipe:
     `tooling/docs/forges.md`.
+  - **Resolution is opt-in (`--resolve`); by default handled threads stay open for your review.**
+    Without `--resolve`, `/pw-ship comments` fixes, verifies, pushes, and replies but never calls a
+    resolve endpoint — say "addressed — left open". With `--resolve`, it closes only a `resolvable:
+    true` thread whose fix landed, whose batch `## Verify` passed on the published head, and whose
+    CI is green (or skipped via `--skip-build-check`). GitLab: `glab api -X PUT
+    …/discussions/<id> -f resolved=true`; read the thread back before claiming closure.
   - **GitLab auto-resolves a diff thread when its line changes on a later push — it does NOT
-    auto-resolve a resolvable *general* thread the same way.** Reply to a resolvable general thread
-    AND explicitly resolve it (`glab api -X PUT …/discussions/<id> -f resolved=true`), or it'll look
-    open forever even after being fixed.
-  - **Idempotency for `resolvable: false` comments is local, not the forge's** — those can never
-    report `resolved: true` no matter what. After replying to *any* thread, call
-    `pw-ship.sh comment-seen --project <slug> --task <T0n> --thread <thread-id> --kind <resolvable|unresolvable> --replied yes` — this
-    upserts a row in `task/review/T0n.review.md`'s `## MR comment tracking` table, which the next
-    `/pw-ship comments --project <slug>` run checks before treating a thread as new. Same pattern as
-    `pw-rfc.sh comment-seen` for RFC-platform comments.
+    auto-resolve a resolvable *general* thread the same way.** Report that observed closure rather
+    than double-writing, and do not reopen it.
+  - **Idempotency is local for every comment kind now that handled threads stay open** —
+    `resolvable: false` comments can never report `resolved: true` no matter what, and a `resolvable:
+    true` one we leave open is still open. After replying to *any* thread, call
+    `pw-ship.sh comment-seen --project <slug> --task <T0n> --thread <thread-id> --kind <resolvable|unresolvable> --replied yes --feedback <seen-revision> --reply <reply-id> --head <published-head>` —
+    this upserts a row in `task/review/T0n.review.md`'s `## MR comment tracking` table (the hidden
+    evidence marker records the handled feedback revision, your reply id, and the verified head),
+    which the next `/pw-ship comments --project <slug>` run checks before treating a thread as new.
+    Same pattern as `pw-rfc.sh comment-seen` for RFC-platform comments.
   - **⚠️ Use `/notes` as the primary source for GitLab, NOT `/discussions`.**
     The `/discussions` endpoint has persistent indexing lag — notes can be visible in the GitLab
     web UI and `/notes` API **20+ minutes** before appearing in `/discussions`. Verified 2026-08-26:

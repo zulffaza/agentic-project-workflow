@@ -185,6 +185,11 @@ and resolve the actual thread on the platform yourself**, using that local recor
 reference. Re-run `/pw-rfc --project <slug>` (or `milestone`) afterward to push the revised sections. Under
 the `markdown` backend, `comments` is a clear no-op — there's nothing external to read.
 
+This is a deliberate contrast with the [MR review flow](./REVIEW.md#2-the-mr-review-flow-post-ship):
+there, the agent fixes a diff it can verify and may close a thread with `--resolve`. RFC threads
+close against prose you own, so **there is no resolve option for RFC comments** — `comments` only
+ever pulls. Attempting to add one is refused, not silently ignored.
+
 ## Doc hygiene — a filled RFC must never look half-finished
 Caught from a real published doc: a blank metadata table, instructional placeholder text left
 sitting beside real content, rejected alternatives crammed into the wrong subsection, and a

@@ -510,4 +510,15 @@ PY
   [ "$na_fx_ids" = "fx:1 fx:2 fx:3 fx:4 fx:5 fx:6 fx:7 fx:8 fx:9 fx:17 " ] \
     && pwtest_ok "T4 canary: named-argument scanner catches every banned class on the fixture" \
     || pwtest_bad "T4 canary: named-argument scanner fixture" "expected fx:1..fx:9 + fx:17 only; got: '${na_fx_ids:-none}' (a scanner class went vacuous or a valid form false-positives)"
+
+  # (n) opt-in review-thread resolution (plan 49): `/pw-ship … comments` leaves handled threads OPEN
+  # by default and closes them only under `--resolve`; the RFC comment flow stays externally
+  # read-only and refuses a resolve flag. Losing either half re-opens silent auto-resolution.
+  grep -qF '`--resolve` is a comment-mode-only switch' "$TOOL/commands/pw-ship.md" \
+    && grep -qF 'leaves every thread open for your review' "$TOOL/commands/pw-ship.md" \
+    && ! grep -qF 'also explicitly resolve it:' "$TOOL/commands/pw-ship.md" \
+    && ! grep -qE '^args:.*--resolve' "$TOOL/commands/pw-rfc.md" \
+    && grep -qF 'RFC comments are externally read-only' "$TOOL/scripts/entities/pw-rfc.sh" \
+    && pwtest_ok "T4 canary: opt-in thread resolution + read-only RFC comments" \
+    || pwtest_bad "T4 canary: opt-in thread resolution" "pw-ship.md lost the --resolve-opt-in contract (or an unconditional resolve instruction returned), or the RFC comment flow started advertising/accepting resolution"
 }

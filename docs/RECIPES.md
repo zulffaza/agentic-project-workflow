@@ -208,10 +208,13 @@ See [AI-assisted review](REVIEW.md#3-ai-assisted-review-optional-advisory--manua
 ```text
 /pw-ship --project delivery-note --task T01
 /pw-ship comments --project delivery-note --task T01
+/pw-ship comments --project delivery-note --task T01 --resolve
 /pw-sync --project delivery-note
 ```
 
 Ship publishes selected verified work. Comments mode can fix code, push, and reply on the MR.
+By default it leaves each handled thread open for your review; add `--resolve` to also close the
+threads it fixed and verified. `--resolve` is comment-mode only.
 Sync merges updated target branches into open MR branches, verifies the changes, and pushes them.
 These commands change remote state. CI monitoring runs by default.
 `--skip-build-check` skips monitoring during ship or comments mode; it is not a dry run.
