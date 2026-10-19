@@ -120,6 +120,19 @@ is normative.
   names: check it before proposing a new command/skill name, and append any new reservation **here**
   (not only in the proposing plan — a plan is single-use, this doc is not).
 
+- **C5 — commands dispatch; an operation's procedure lives in a skill reference loaded on demand.**
+  A command file keeps its frontmatter, its dispatch sentence (operation words select the mode), its
+  non-negotiable contract (authorization, refusal, ordering, and the safety literals the canaries
+  pin), and the operator→script invocation lines the operator map derives. The long *procedure* for
+  one operation (step lists, per-forge mechanics, probe and recovery detail) lives in
+  `tooling/skill/project-workflow/references/*.md`, and the command points at the exact file with a
+  `**Load \`references/<name>.md\`**` line. Rationale: a single invocation must not pull every other
+  operation's detail. Never move a pinned safety literal out of the command to shorten it; when a
+  canary's text legitimately moves with its procedure, re-point the canary at the reference in the
+  same commit (keep the assertion biting). Current operation references: `mr-comments.md` (MR-comment
+  fixes, `/pw-ship comments` and the comment cascade), `review-request.md` (the read-only
+  request-message flow, `/pw-ship request-review`).
+
 ## A-rules — the named-argument grammar (every external operator)
 
 **Uniform grammar (breaking change):** every external operator — slash command or

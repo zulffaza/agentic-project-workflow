@@ -280,12 +280,14 @@ static_t4() {
     && pwtest_ok "T4 canary: pw-ship request-review routing text" \
     || pwtest_bad "T4 canary: pw-ship request-review routing" "the read-only request-review mode (selector mapping, pre-flight ordering, --prose flow) died from the command file"
   # generation-prompt wiring: the two-call prose flow must name the editable prompt files and the
-  # observed-head comparison — losing either re-opens ungrounded prose generation.
-  grep -qF 'user/prompts/review-request-summary.md' "$TOOL/commands/pw-ship.md" \
-    && grep -qF 'PW_REVIEW_REQUEST_NOTE_PROMPT_FILE' "$TOOL/commands/pw-ship.md" \
-    && grep -qF 'Compare `observed heads`' "$TOOL/commands/pw-ship.md" \
+  # observed-head comparison — losing either re-opens ungrounded prose generation. The procedure
+  # lives in the request-review reference; the command must still point at it.
+  grep -qF 'references/review-request.md' "$TOOL/commands/pw-ship.md" \
+    && grep -qF 'user/prompts/review-request-summary.md' "$TOOL/skill/project-workflow/references/review-request.md" \
+    && grep -qF 'PW_REVIEW_REQUEST_NOTE_PROMPT_FILE' "$TOOL/skill/project-workflow/references/review-request.md" \
+    && grep -qF 'Compare `observed heads`' "$TOOL/skill/project-workflow/references/review-request.md" \
     && pwtest_ok "T4 canary: pw-ship generation-prompt wiring text" \
-    || pwtest_bad "T4 canary: pw-ship generation-prompt wiring" "the editable prompt files or the observed-head comparison died from the command file"
+    || pwtest_bad "T4 canary: pw-ship generation-prompt wiring" "the command lost its request-review reference, or the editable prompt files / observed-head comparison died from the request-review reference"
   # named dispatch + entry-before-assessment doctrine (plan 46): the ship command selects modes by
   # operation word (never an ordinal argument slot), and every reviewer instruction surface keeps
   # the correlated pass entry strictly before assessment.
@@ -354,15 +356,15 @@ static_t4() {
   # carry the stacked branch where the old wording was independent-only (selection, target, diff,
   # merged-parent settle-before-remove, no-comment cascade, fixer ordering) — a regression there
   # would re-describe policy the scripts no longer follow.
-  grep -qF 'transitive stack descendants' "$TOOL/commands/pw-ship.md" \
+  grep -qF 'transitive stack descendants' "$TOOL/skill/project-workflow/references/mr-comments.md" \
     && grep -qF 'effective target' "$TOOL/commands/pw-ship.md" \
-    && grep -qF 'never** fixed concurrently' "$TOOL/commands/pw-ship.md" \
+    && grep -qF 'never** fixed concurrently' "$TOOL/skill/project-workflow/references/mr-comments.md" \
     && grep -qF 'transitive stack descendants' "$TOOL/commands/pw-sync.md" \
     && grep -qF 'settle the stack before removing' "$TOOL/commands/pw-sync.md" \
     && grep -qF 'effective target' "$TOOL/commands/pw-sync.md" \
     && grep -qF 'never concurrently' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
     && pwtest_ok "T4 canary: ship/sync commands carry the stacked-policy branches" \
-    || pwtest_bad "T4 canary: ship/sync stacked-policy branches" "a stacked branch died from pw-ship.md/pw-sync.md or the routing ladder — the command prose fell back to independent-only instructions the scripts no longer match"
+    || pwtest_bad "T4 canary: ship/sync stacked-policy branches" "a stacked branch died from pw-ship.md/pw-sync.md/mr-comments.md or the routing ladder — the command prose fell back to independent-only instructions the scripts no longer match"
 
   # (l) the commands bind verification/landing through the deterministic operators: stack-verify is
   # the only verification writer the execution path names, promotion uses stack-retarget, and no
@@ -376,12 +378,13 @@ static_t4() {
   # (m) the cascade/history interop stays wired in prose: the command protocol names the
   # deterministic cascade + inherited-update writers (descendants update without fabricated
   # reviewer requests, as a distinct inherited round) and the maintainer doc lists the cascade.
-  grep -qF 'stack-cascade' "$TOOL/commands/pw-ship.md" \
-    && grep -qF 'stack-inherited' "$TOOL/commands/pw-ship.md" \
-    && grep -qF 'inherited-update round' "$TOOL/commands/pw-ship.md" \
+  grep -qF 'references/mr-comments.md' "$TOOL/commands/pw-ship.md" \
+    && grep -qF 'stack-cascade' "$TOOL/skill/project-workflow/references/mr-comments.md" \
+    && grep -qF 'stack-inherited' "$TOOL/skill/project-workflow/references/mr-comments.md" \
+    && grep -qF 'inherited-update round' "$TOOL/skill/project-workflow/references/mr-comments.md" \
     && grep -qF 'stack-cascade' "$TOOL/docs/scripts/ship-and-sync.md" \
     && pwtest_ok "T4 canary: stack cascade + inherited-update writers named in command and maintainer docs" \
-    || pwtest_bad "T4 canary: stack cascade wiring" "pw-ship.md must name stack-cascade/stack-inherited (distinct inherited-update round) and ship-and-sync.md must list stack-cascade"
+    || pwtest_bad "T4 canary: stack cascade wiring" "pw-ship.md must point at references/mr-comments.md, which must name stack-cascade/stack-inherited (distinct inherited-update round), and ship-and-sync.md must list stack-cascade"
 
   # 5) shared plumbing used, not reinvented
   for f in $PWTEST_AUTOMATION; do

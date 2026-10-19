@@ -338,3 +338,7 @@ C268-comment-seen-evidence-marker	scripts/entities/pw-ship.sh	[ -n "$feedback$re
 C269-comment-seen-evidence-guard-vacuous	scripts/entities/pw-ship.sh	case "$_tok" in *[!A-Za-z0-9._:-]*)	case "" in *[!A-Za-z0-9._:-]*)	T1	pw-ship.t.sh
 C270-ship-resolve-optin-doctrine	commands/pw-ship.md	`--resolve` is a comment-mode-only switch	`--resolve` is a switch	T4	-
 C271-rfc-comments-refuses-resolve	scripts/entities/pw-rfc.sh	die "comments: $a is not supported → fix: RFC comments are externally read-only; reply to and resolve the external thread yourself (only MR review via '/pw-ship comments … --resolve' closes threads)"	:	T1	pw-rfc.t.sh
+C272-ship-comments-ref-pointer-lost	commands/pw-ship.md	**Load `references/mr-comments.md`**	**Load the comments procedure**	T4	-
+C273-ship-request-review-ref-pointer-lost	commands/pw-ship.md	**Load `references/review-request.md`**	**Load the request-review procedure**	T4	-
+C274-request-review-observed-heads-guard-lost	skill/project-workflow/references/review-request.md	Compare `observed heads`	Skip the observed-heads step	T4	-
+C275-mr-comments-inherited-round-lost	skill/project-workflow/references/mr-comments.md	inherited-update round	inherited-update pass	T4	-
