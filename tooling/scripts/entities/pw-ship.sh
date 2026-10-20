@@ -1030,6 +1030,67 @@ _pw_record_mr_url() {
   awk -v u="$mr" '/^## Result/{p=1} /^## / && !/^## Result/{p=0} p && index($0,u){f=1} END{exit(f?0:1)}' "$tf"
 }
 
+# repair-round --project <slug> --task <T0n> --work <identity> [--limit <n>] [--consume]
+# One persistent code-repair budget shared by every entry path (local repair, CI repair, resume).
+# The work identity is stable across resume/handoff; a NEW explicitly requested run uses a new
+# identity. Environment retries and CI polling must not call this.
+cmd_repair_round() {
+  local slug="" task="" work="" limit="" consume=0 a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+      --work=*)    v="${a#*=}"; a="--work" ;;
+      --limit=*)   v="${a#*=}"; a="--limit" ;;
+    esac
+    case "$a" in
+      --project|--task|--work|--limit)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project) slug="$v" ;; --task) task="$v" ;; --work) work="$v" ;; --limit) limit="$v" ;;
+        esac ;;
+      --consume) consume=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "repair-round --project <slug> --task <task-id> --work <identity> [--limit <n>] [--consume]" ;;
+      *) _pw_positional "$a" "repair-round --project <slug> --task <task-id> --work <identity> [--limit <n>] [--consume]" ;;
+    esac
+  done
+  [ -n "$slug" ] && [ -n "$task" ] && [ -n "$work" ]     || die "repair-round: --project, --task and --work are required → fix: repair-round --project <slug> --task <task-id> --work <identity> [--limit <n>] [--consume]"
+  case "$work" in *[!A-Za-z0-9._:/@-]*) die "repair-round: work identity '$work' has unsupported characters → fix: use a stable key such as <task>@<branch>" ;; esac
+  local D; D="$(proj_dir "$slug")"
+  local budget="$D/task/repair-budget.tsv"
+  if [ -z "$limit" ]; then
+    limit="$(pw_field "$D/task/$task.md" 'Self-repair limit' 2>/dev/null || true)"
+    limit="${limit//\`/}"; limit="${limit%% *}"
+  fi
+  [ -n "$limit" ] || limit="${PW_MAX_SELF_REPAIR:-3}"
+  case "$limit" in ''|*[!0-9]*) die "repair-round: invalid limit '$limit' → fix: pass --limit <rounds>" ;; esac
+  mkdir -p "$D/task" || die "repair-round: cannot create $D/task"
+  local consumed=0
+  if [ -f "$budget" ]; then
+    consumed="$(awk -F'\t' -v w="$work" '$1==w{print $2; exit}' "$budget")"
+    consumed="${consumed:-0}"
+  fi
+  case "$consumed" in ''|*[!0-9]*) consumed=0 ;; esac
+  if [ "$consume" = 1 ] && [ "$consumed" -ge "$limit" ]; then
+    die "repair budget exhausted for $work ($consumed/$limit) → fix: report the unresolved failure and its evidence instead of retrying; a new explicitly requested run uses a new work identity"
+  fi
+  if [ "$consume" = 1 ]; then
+    consumed=$((consumed + 1))
+    local tmp; tmp="$(pw_tmpfile "$D/task")" || die "repair-round: cannot write the budget file"
+    { [ -f "$budget" ] || printf 'work\tconsumed\tlimit\n' > "$budget"
+      awk -F'\t' -v w="$work" 'NR==1 && $1=="work" {print; next} $1!=w' "$budget" > "$tmp"
+      printf '%s\t%s\t%s\n' "$work" "$consumed" "$limit" >> "$tmp"
+      mv "$tmp" "$budget"
+    } || die "repair-round: could not persist the budget"
+  fi
+  local remain=$((limit - consumed))
+  echo "work=$work consumed=$consumed limit=$limit remaining=$remain"
+  # The pre-check above is authoritative: consuming the LAST allowed round is successful, and the
+  # following call is the one that refuses.
+}
+
 cmd_exec() {
   local slug="" task="" file="" a v
   while [ $# -gt 0 ]; do
@@ -3452,6 +3513,7 @@ case "${1:-}" in
   stack-land)         shift; cmd_stack_land "$@" ;;
   stack-promote)      shift; cmd_stack_promote "$@" ;;
   stack-verify)       shift; cmd_stack_verify "$@" ;;
+  repair-round)       shift; cmd_repair_round "$@" ;;
   stack-retarget)     shift; cmd_stack_retarget "$@" ;;
   stack-op)           shift; cmd_stack_op "$@" ;;
   stack-debt)         shift; cmd_stack_debt "$@" ;;

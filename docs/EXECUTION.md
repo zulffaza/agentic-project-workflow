@@ -179,6 +179,34 @@ tighten that in `PLAN.md → ## Execution strategy`:
 
 All three default OFF so any existing project behaves exactly as before.
 
+## Failure attribution and one repair budget
+
+Every entry path (local repair, CI repair, resume, review) classifies an observation the same way
+before deciding to retry. Retrying is a code-repair round only when the evidence points at the
+change itself.
+
+| Observation | Class | Evidence expected | Next actor |
+|---|---|---|---|
+| `## Verify` command fails | code repair | the command and its output at the tested head | executor fixes, then re-verifies |
+| Auth, network, missing CLI, forge 5xx | environment retry | the failing command and its reason; no head change | operator fixes the environment |
+| CI pipeline failed/cancelled on the current head | code repair | pipeline state for that head | executor fixes, then re-verifies |
+| CI pending, queued, or skipped-only | settlement | head-filtered status | wait; never green before a terminal state |
+| Review changes-requested | code repair | the open review items | executor fixes; a fresh review pass is a separate identity |
+| Verification tuple stale (head moved after verify) | re-verify | recorded head vs current head | re-run Verify; this spends no repair round |
+| Verification command edited tracked files | refuse | the dirty/head change | executor reverts and re-verifies |
+
+The budget is one persistent counter per work identity, shared by every path that repairs code:
+
+```
+pw-ship.sh repair-round --project <slug> --task <T0n> --work <task>@<branch> [--limit <n>] [--consume]
+```
+
+It prints `consumed/limit/remaining` and persists `task/repair-budget.tsv`, so an interrupted run, a
+resumed helper, or a local-to-CI handoff continues the same allowance. Consuming the last allowed
+round succeeds; the next call refuses with the evidence in hand. A new **explicitly requested** run
+uses a new work identity and therefore a new budget; an automatic retry, a fresh reviewer pass, or a
+resumed helper does not. Environment retries and CI polling never call it.
+
 ## A dependency that lands a late fix re-checks what already ran
 
 The DAG protects **not-yet-started** dependents (they fork the fixed branch). A **post-first-pass
