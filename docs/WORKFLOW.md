@@ -117,6 +117,8 @@ read-only, no push, no comment, no CI wait. Optional writing help (`--summary`, 
 [the review-request recipe](RECIPES.md#ask-teammates-to-review-the-open-mrs).
 
 When an MR's target changes, `/pw-sync --project <slug> [--task <T0n>]…` merges the updated target into the branch, verifies, and pushes.
+A conflict aborts that task by default for manual resolution. Add `--auto-resolve` to let the agent reconcile it;
+the result still needs the task's complete verification before publication, and ambiguous intent stops for a decision.
 Merged or closed MRs remain visible as leftovers rather than receiving ordinary comment fixes or sync updates.
 MR merging remains your decision.
 

@@ -221,12 +221,16 @@ See [AI-assisted review](REVIEW.md#3-ai-assisted-review-optional-advisory--manua
 /pw-ship comments --project delivery-note --task T01
 /pw-ship comments --project delivery-note --task T01 --resolve
 /pw-sync --project delivery-note
+/pw-sync --project delivery-note --auto-resolve
 ```
 
 Ship publishes selected verified work. Comments mode can fix code, push, and reply on the MR.
 By default it leaves each handled thread open for your review; add `--resolve` to also close the
 threads it fixed and verified. `--resolve` is comment-mode only.
 Sync merges updated target branches into open MR branches, verifies the changes, and pushes them.
+A conflict normally aborts that task for manual resolution. `--auto-resolve` lets the agent try to
+reconcile it, but it still verifies the final result and stops when intent is ambiguous, inputs
+moved, or the repair limit is reached. It does not merge the MR or force-push.
 These commands change remote state. CI monitoring runs by default.
 `--skip-build-check` skips monitoring during ship or comments mode; it is not a dry run.
 If a push succeeds but the description remains pending, follow [description recovery](TROUBLESHOOTING.md#changes-were-pushed-but-the-mr-description-update-is-pending).

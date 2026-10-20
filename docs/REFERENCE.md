@@ -69,7 +69,7 @@ See [review](REVIEW.md) for scope, gate transitions, and AI approval safeguards.
 | `/pw-ship request-review --project <slug> [--all \| --task <task-id>]… [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]` | Read-only: one copyable teammate review request for the open MRs |
 | `/pw-ship stack --project <slug>` | Preview stack topology and health without writes |
 | `/pw-ship stack adopt --project <slug> [--task <task-id>]… [--apply]` | Preview an existing stack import; `--apply` records it |
-| `/pw-sync --project <slug> [--task <task-id>]…` | Refresh open MR branches against changed targets, verify, and push |
+| `/pw-sync --project <slug> [--task <task-id>]… [--auto-resolve]` | Refresh open MR branches against changed targets, verify, and push; `--auto-resolve` lets the agent reconcile conflicts and verify before publishing |
 | `/pw-verify --repo-ref <repo-ref> | --worktree <worktree-path> | --task <task-path> [--commit <sha>] [--note <note>]` | Independently verify a result without fixing it |
 | `/pw-close --project <slug>` | Check acceptance, record learnings, and clean eligible worktrees |
 

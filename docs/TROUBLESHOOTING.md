@@ -267,3 +267,19 @@ This mode repairs known workflow-authored guidance, while preserving review hist
 It does not run project health checks or publish changes.
 Use health doctor separately for consistency findings. Do not combine `--guidance` with `--fix`.
 See the [guidance recipe](RECIPES.md#refresh-old-project-guidance-after-a-workflow-update) for scope and expected output.
+
+## "A sync conflict stopped the task"
+
+The default `/pw-sync` path aborts a conflicted merge and leaves the task for manual resolution; that
+is intentional, not a partial push. Re-run with `--auto-resolve` when you want the agent to attempt
+the reconciliation. It publishes only after the final HEAD passes the task's `## Verify` block, and
+it stops when intent is ambiguous, inputs moved, or the single repair pass is exhausted.
+
+| Reported outcome | What to do |
+|---|---|
+| `conflict` or `CONFLICT — needs manual resolution` | Resolve the task worktree yourself, or re-run with `--auto-resolve` |
+| `stale-inputs` | Fetch again and re-capture the attempt; the target or task branch moved |
+| `verify-failed` after a resolution | Inspect the kept merge, repair the regression once, then re-verify |
+| `push rejected` | Re-preview and retry a plain push; never force-push to recover a sync |
+
+A published attempt cannot be aborted. Reconcile the remote branch and MR state instead.
