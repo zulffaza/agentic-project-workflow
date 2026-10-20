@@ -392,7 +392,14 @@ def validate_state(state, mr):
         keys.add(attempt['key']); sequences.add(attempt['sequence'])
         need(isinstance(attempt.get('invocation'), str) and re.fullmatch(r'[A-Za-z0-9_-]{1,96}', attempt['invocation']), 'malformed invocation identity')
         filename = digest(json.dumps(mr, sort_keys=True))
-        need(attempt['key'] == digest(attempt['invocation'] + '|' + filename)[:32], 'attempt key does not match invocation/MR identity')
+        expected = {digest(attempt['invocation'] + '|' + filename)[:32]}
+        # A migrated attempt keeps its ORIGINAL key (computed against the source MR identity), so
+        # the key is valid when it matches either this record or its recorded source provenance.
+        if isinstance(attempt.get('source_mr'), dict):
+            expected.add(digest(attempt['invocation'] + '|'
+                                + digest(json.dumps(attempt['source_mr'], sort_keys=True)))[:32])
+        need(attempt['key'] in expected,
+             'attempt key does not match invocation/MR identity (or its recorded source provenance)')
         need(isinstance(attempt.get('timestamp'), str) and re.fullmatch(r'[0-9]{1,2} [A-Za-z]+ [0-9]{4}(?: -)? [0-9]{2}\.[0-9]{2} WIB', attempt['timestamp']),
              'malformed attempt timestamp')
         need(isinstance(attempt.get('before_head'), str) and re.fullmatch(r'[0-9a-f]{7,64}', attempt['before_head']) and isinstance(attempt.get('before_body'), str),
@@ -417,7 +424,7 @@ def validate_state(state, mr):
 def run():
     project, timestamp, mappings, registered, *arguments = sys.argv[1:]
     parser = HistoryParser(prog='pw-ship history')
-    parser.add_argument('operation', choices=['invocation', 'init', 'begin', 'checkpoint', 'freeze', 'deliver', 'pending', 'validate', 'verify', 'repair-preview', 'capacity'])
+    parser.add_argument('operation', choices=['invocation', 'init', 'begin', 'checkpoint', 'freeze', 'deliver', 'pending', 'validate', 'verify', 'repair-preview', 'capacity', 'migrate'])
     parser.add_argument('url', nargs='?')
     parser.add_argument('--invocation')
     parser.add_argument('--attempt')
@@ -426,6 +433,9 @@ def run():
     parser.add_argument('--limit', type=int)
     parser.add_argument('--unit', choices=['utf8', 'chars'])
     parser.add_argument('--limit-source')
+    parser.add_argument('--source')
+    parser.add_argument('--attempts')
+    parser.add_argument('--apply', action='store_true')
     args = parser.parse_args(arguments)
     need(not args.reviewed or args.operation == 'init', '--reviewed applies only to an explicitly owner-requested ownership repair')
     if args.operation == 'invocation':
@@ -497,6 +507,84 @@ def run():
                     if attempt['key'] not in state['pruned'] and (not attempt['delivered'] or attempt.get('summary_pending')):
                         print(json.dumps({'mr': mr, 'attempt': attempt['key'], 'frozen': attempt['frozen'],
                                           'description_delivered': attempt['delivered'], 'summary_pending': attempt.get('summary_pending', False)}, sort_keys=True))
+        return
+    if args.operation == 'migrate':
+        # Replacement/adoption: copy VERIFIED frozen attempts from a known source MR record into the
+        # destination record. Preview by default; `--apply` persists atomically under the destination
+        # lock. The source record is never modified, and outstanding source delivery debt is not
+        # copied — the destination starts with its own (undelivered) entries.
+        need(args.source, 'migrate requires --source <source MR url>')
+        need(args.attempts, 'migrate requires --attempts <key[,key…]>')
+        source = identity(args.source, mappings)
+        dest = identity(args.url or '', mappings)
+        need((source['host'], source['repo']) == (dest['host'], dest['repo']),
+             'source and destination must be the same repository on the same host')
+        src_path = directory / (digest(json.dumps(source, sort_keys=True)) + '.json')
+        need(src_path.exists(), 'source history record not found for ' + args.source
+             + ' → fix: confirm the source MR identity; search the project archives before restoring a backup')
+        src_state = validate_state(read_json(src_path), source)
+        wanted = [key.strip() for key in args.attempts.split(',') if key.strip()]
+        chosen = []
+        for key in wanted:
+            attempt = next((a for a in src_state['attempts'] if a['key'] == key), None)
+            need(attempt, 'unknown source attempt ' + key)
+            need(attempt['frozen'], 'only frozen attempts can migrate (' + key + ')')
+            chosen.append(attempt)
+        dest_path = directory / (digest(json.dumps(dest, sort_keys=True)) + '.json')
+        dest_state = (validate_state(read_json(dest_path), dest) if dest_path.exists() else
+                      {'version': 1, 'mr': dest, 'attempts': [], 'last_summary': None,
+                       'last_summary_head': None, 'pruned': [], 'planned': None})
+        remote = api(dest)
+        existing = {a['key']: a for a in dest_state['attempts']}
+        for attempt in chosen:
+            need(attempt['block'] in remote['body'],
+                 'destination body does not contain the exact frozen block for ' + attempt['key']
+                 + ' → fix: confirm the replacement MR really carries this history')
+            if attempt['key'] in existing:
+                need(existing[attempt['key']]['block'] == attempt['block'],
+                     'conflicting destination key ' + attempt['key'] + ' (edited or unrelated block)')
+        if not args.apply:
+            print('migrate-preview: ' + str(len(chosen)) + ' attempt(s) from ' + args.source
+                  + ' → ' + args.url + ' (source record read-only; destination unchanged)')
+            for attempt in chosen:
+                print('migrate-preview: ' + attempt['key'] + ' ' + attempt['timestamp']
+                      + ' frozen=' + str(attempt['frozen']))
+            print('migrate-preview: re-run with --apply to persist (idempotent; original archive unchanged)')
+            return
+        locks = safe_path(root.parent / '.ship-history-locks', directory=True)
+        locks.mkdir(mode=0o700, exist_ok=True)
+        lock = locks / (digest(json.dumps(dest, sort_keys=True)) + '.lock')
+        try:
+            lock.mkdir(mode=0o700)
+        except FileExistsError:
+            raise HistoryError('history locked: retry after the writer exits')
+        try:
+            migrated = 0
+            next_seq = max([a['sequence'] for a in dest_state['attempts']] + [0])
+            for attempt in chosen:
+                if attempt['key'] in existing:
+                    continue
+                next_seq += 1
+                entry = dict(attempt)
+                entry['sequence'] = next_seq
+                entry['delivered'] = False
+                entry['summary_pending'] = True
+                entry['source_mr'] = source
+                entry['source_delivered'] = attempt['delivered']
+                dest_state['attempts'].append(entry)
+                migrated += 1
+            atomic_json(dest_path, dest_state)
+        finally:
+            try:
+                (lock / 'owner.json').unlink()
+            except OSError:
+                pass
+            try:
+                lock.rmdir()
+            except OSError:
+                pass
+        print('migrate: ' + str(migrated) + ' attempt(s) migrated from ' + args.source
+              + '; original record unchanged')
         return
     mr = identity(args.url or '', mappings)
     directory.mkdir(mode=0o700, exist_ok=True)

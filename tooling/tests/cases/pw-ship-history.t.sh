@@ -377,6 +377,48 @@ for forge, host, url, endpoint in [
     crlf_key = begin('crlf-call'); put(crlf_key, evidence('b222222')); call('freeze', url, '--attempt', crlf_key)
     head('b222222'); deliver(crlf_key)
     check(forge + ' CRLF/Unicode outside content is byte-preserved', crlf_outside in state()['response'][field])
+    # Replacement-MR migration: preview, apply, idempotent retry, exact-block requirement.
+    frozen_src = None
+    for candidate in sorted((project / '.ship-history').glob('*.json')):
+        data = json.loads(candidate.read_text())
+        found = next((a for a in data['attempts'] if a['frozen'] and a.get('block')), None)
+        if found:
+            frozen_src = (data['mr'], found)
+            break
+    check(forge + ' migration source record available', frozen_src is not None)
+    src_mr, frozen = frozen_src
+    sep = '/pull/' if forge == 'gh' else '/-/merge_requests/'
+    src_url = 'https://' + src_mr['host'] + '/' + src_mr['repo'] + sep + str(src_mr['number'])
+    def dst_fixture_for(number, body_text):
+        endpoint = ('repos/a/b/pulls/' if forge == 'gh' else 'projects/a%2Fb/merge_requests/') + str(number)
+        path = scratch / (hashlib.sha256((forge + '|' + host + '|' + endpoint).encode()).hexdigest() + '.json')
+        native_dst = {'state': 'opened', 'sha': 'a111111'} if forge == 'glab' else {'state': 'open', 'head': {'sha': 'a111111'}}
+        native_dst[field] = body_text
+        path.write_text(json.dumps({'response': native_dst, 'reads': 0, 'writes': 0}, ensure_ascii=False))
+        return path
+    dst_num = 46 if forge == 'glab' else 48
+    edited_num = dst_num + 1
+    dst_url = 'https://' + host + '/a/b' + sep + str(dst_num)
+    dst_fixture_for(dst_num, summary('a111111') + '\n\n' + frozen['block'])
+    (project / 'task' / 'T06.md').write_text('# T06\n## Result\n- **MR:** ' + dst_url + '\n')
+    preview = call('migrate', dst_url, '--source', src_url, '--attempts', frozen['key'])
+    check(forge + ' migrate preview names the plan', 'migrate-preview' in preview.stdout)
+    check(forge + ' migrate preview writes no destination record',
+          not any(json.loads(item.read_text())['mr']['number'] == dst_num
+                  for item in (project / '.ship-history').glob('*.json')))
+    call('migrate', dst_url, '--source', src_url, '--attempts', frozen['key'], '--apply')
+    dst_record = next(item for item in (project / '.ship-history').glob('*.json')
+                      if json.loads(item.read_text())['mr']['number'] == dst_num)
+    copied = next((a for a in json.loads(dst_record.read_text())['attempts'] if a['key'] == frozen['key']), None)
+    check(forge + ' migrate copied the frozen attempt', copied is not None and copied.get('source_mr'))
+    check(forge + ' migrated attempt starts undelivered', copied['delivered'] is False and copied['block'] == frozen['block'])
+    again = call('migrate', dst_url, '--source', src_url, '--attempts', frozen['key'], '--apply')
+    check(forge + ' migrate retry is idempotent', 'migrate: 0 attempt(s)' in again.stdout)
+    edited = frozen['block'].replace('#### Changes', '#### Changes (edited)')
+    dst2_url = 'https://' + host + '/a/b' + sep + str(edited_num)
+    dst_fixture_for(edited_num, summary('a111111') + '\n\n' + edited)
+    (project / 'task' / 'T07.md').write_text('# T07\n## Result\n- **MR:** ' + dst2_url + '\n')
+    call('migrate', dst2_url, '--source', src_url, '--attempts', frozen['key'], rc=2)
     print('PASS\t' + forge + ' all runtime scenarios reached')
 print('ASSERTIONS\t' + str(checks))
 PY

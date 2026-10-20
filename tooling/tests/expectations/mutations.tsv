@@ -401,3 +401,7 @@ C312-capacity-policy-reprobes	scripts/lib/pw-shiplib.sh	        policy = read_js
 # C313-C314: slice 5 — outward prose must not expose local task IDs or plans paths.
 C313-prose-local-id-allowed	scripts/lib/pw-shiplib.sh	        if ident and re.search(r'(?<![A-Za-z0-9])' + re.escape(ident) + r'(?![0-9])', text):	        if False and re.search(r'(?<![A-Za-z0-9])' + re.escape(ident) + r'(?![0-9])', text):	T1	pw-ship-review-request.t.sh
 C314-prose-plans-path-allowed	scripts/lib/pw-shiplib.sh	    need('plans/' not in text, label + ' references a local plans path → fix: remove it')	    pass	T1	pw-ship-review-request.t.sh
+# C315-C317: replacement-MR migration — exact block match, undelivered destination, dry preview.
+C315-migrate-ignores-block-match	scripts/lib/pw-shiplib.sh	            need(attempt['block'] in remote['body'],	            need(True,	T1	pw-ship-history.t.sh
+C316-migrate-copies-delivered	scripts/lib/pw-shiplib.sh	                entry['delivered'] = False	                entry['delivered'] = True	T1	pw-ship-history.t.sh
+C317-migrate-preview-applies	scripts/lib/pw-shiplib.sh	        if not args.apply:	        if False:	T1	pw-ship-history.t.sh
