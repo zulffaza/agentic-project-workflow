@@ -398,3 +398,6 @@ C310-repair-preview-writes	scripts/lib/pw-shiplib.sh	        print('repair-previ
 # C311-C312: D03 — the 403 fallback must be labeled; a persisted policy must be reused.
 C311-403-fallback-unlabeled	scripts/lib/pw-shiplib.sh	    reason = ('settings-403; official-docs-fallback' if '403' in (out + err)	    reason = ('settings-unavailable; official-docs-fallback' if '403' in (out + err)	T1	pw-ship-history.t.sh
 C312-capacity-policy-reprobes	scripts/lib/pw-shiplib.sh	        policy = read_json(path)	        policy = discover_capacity(mr)	T1	pw-ship-history.t.sh
+# C313-C314: slice 5 — outward prose must not expose local task IDs or plans paths.
+C313-prose-local-id-allowed	scripts/lib/pw-shiplib.sh	        if ident and re.search(r'(?<![A-Za-z0-9])' + re.escape(ident) + r'(?![0-9])', text):	        if False and re.search(r'(?<![A-Za-z0-9])' + re.escape(ident) + r'(?![0-9])', text):	T1	pw-ship-review-request.t.sh
+C314-prose-plans-path-allowed	scripts/lib/pw-shiplib.sh	    need('plans/' not in text, label + ' references a local plans path → fix: remove it')	    pass	T1	pw-ship-review-request.t.sh

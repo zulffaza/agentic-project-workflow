@@ -18,3 +18,8 @@ obligations. Write to help the reviewer understand, without exaggeration or bait
 Use plain language and at most three bullets totaling 60 words. Return only the
 requested note field through the supplied output contract. If no useful hint is
 supported, use the supplied omission mechanism instead of generic filler.
+
+Recipient context: hints also leave the local project. No task IDs, plan numbers, attempt keys, or
+local paths. Name the component or the linked MR instead, use repository-scoped MR links, and state
+a review order only when the evidence supports it. A review dependency is not a deployment or
+rollout instruction.

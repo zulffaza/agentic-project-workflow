@@ -20,3 +20,9 @@ unless the supplied evidence supports it for the published change.
 Use plain language. Follow the supplied mode's length limit. Return only the
 requested summary fields through the supplied output contract. If the evidence
 cannot support a meaningful explanation, use the supplied omission mechanism.
+
+Recipient context: the message leaves the local project. Never use local orchestration labels
+(task IDs such as T12, plan numbers, invocation or attempt keys, lane/group names) or local file
+paths. Identify a change by its component, repository, or a linked MR URL, and express a real
+dependency as review order between accessible MR links. Keep meaningful product and API names.
+Explain a domain term only when the evidence supports the expansion; never guess one.

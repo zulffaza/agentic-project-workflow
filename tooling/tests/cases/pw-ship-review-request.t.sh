@@ -312,6 +312,21 @@ cat > "$RR_ROOT/prose-long.json" <<'JSON'
 JSON
 rr 2 'over-limit prose is refused before rendering' rr-review --task T01 --summary --prose "$RR_ROOT/prose-long.json"
 pwtest_err 'exceeds its limit' 'over-limit error names the limit'
+cat > "$RR_ROOT/prose-local-id.json" <<'JSON'
+{"summary": "Stacked T01 composes V2 settings with optional notification data."}
+JSON
+rr 2 'local task ID in prose is refused' rr-review --task T01 --summary --prose "$RR_ROOT/prose-local-id.json"
+pwtest_err 'exposes local workflow label' 'local-label refusal names the violation'
+cat > "$RR_ROOT/prose-component.json" <<'JSON'
+{"summary": "TPS composes V2 settings with optional notification data."}
+JSON
+rr 0 'component wording passes the recipient-context gate' rr-review --task T01 --summary --prose "$RR_ROOT/prose-component.json"
+pwtest_re '^\*\*Summary:\*\* TPS composes' 'component summary inserted'
+cat > "$RR_ROOT/prose-path.json" <<'JSON'
+{"note": ["Review the change recorded under plans/47-harness/notes.md."]}
+JSON
+rr 2 'local plans path in a hint is refused' rr-review --task T01 --note --prose "$RR_ROOT/prose-path.json"
+pwtest_err 'local plans path' 'path refusal names the violation'
 cat > "$RR_ROOT/prose-membership.json" <<'JSON'
 {"mr_summaries": {"https://gitlab.example.com/pwtest/api/-/merge_requests/999": "Not a selected MR."}}
 JSON

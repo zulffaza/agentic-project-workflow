@@ -825,7 +825,25 @@ def single_line(text, label):
     need('\n' not in text and '\r' not in text, label + ' must be a single line')
     return text.strip()
 
-def validate_prose(path, selected_urls, want):
+def check_recipient_context(text, label, local_ids=(), project_root=''):
+    """Recipient-context gate for outward prose.
+
+    Rejects LOCAL workflow labels that a recipient cannot resolve (known task IDs from the
+    selection, the project path) while leaving product/API names and repository identities alone.
+    A blanket identifier blacklist would reject legitimate names, so only known local identifiers
+    are checked.
+    """
+    leaked = []
+    for ident in sorted(set(local_ids)):
+        if ident and re.search(r'(?<![A-Za-z0-9])' + re.escape(ident) + r'(?![0-9])', text):
+            leaked.append(ident)
+    need(not leaked, label + ' exposes local workflow label(s): ' + ', '.join(leaked)
+         + ' → fix: name the component or a linked MR instead')
+    if project_root and project_root in text:
+        need(False, label + ' exposes the local project path → fix: remove it')
+    need('plans/' not in text, label + ' references a local plans path → fix: remove it')
+
+def validate_prose(path, selected_urls, want, local_ids=(), project_root=''):
     resolved = os.path.abspath(path)
     need(not os.path.islink(resolved) and os.path.isfile(resolved),
          'prose file must be a plain existing file: ' + resolved)
@@ -849,6 +867,7 @@ def validate_prose(path, selected_urls, want):
             text = single_line(text, 'summary')
             need(len(sentences(text)) <= 2 and word_count(text) <= 50,
                  'summary exceeds its limit (2 sentences and 50 words max)')
+            check_recipient_context(text, 'summary', local_ids, project_root)
             result['summary'] = text
     if want['mr_summary']:
         if 'mr_summary' in omit:
@@ -865,6 +884,7 @@ def validate_prose(path, selected_urls, want):
                 text = single_line(text, 'summary for ' + url)
                 need(len(sentences(text)) <= 2 and word_count(text) <= 35,
                      'summary for ' + url + ' exceeds its limit (2 sentences and 35 words max)')
+                check_recipient_context(text, 'summary for ' + url, local_ids, project_root)
                 result['mr_summaries'][url] = text
     if want['note']:
         if 'note' in omit:
@@ -881,6 +901,8 @@ def validate_prose(path, selected_urls, want):
                 total += word_count(bullet)
                 cleaned.append(bullet)
             need(total <= 60, 'note exceeds its limit (60 words max)')
+            for bullet in cleaned:
+                check_recipient_context(bullet, 'note bullet', local_ids, project_root)
             result['note'] = cleaned
     return result
 
@@ -1294,7 +1316,9 @@ def run():
         e['url'] + ' ' + (e['head'] or 'unavailable') for e in entries)
     if ai_requested:
         if prose_path and prose_path != '-':
-            prose = validate_prose(prose_path, [entry['url'] for entry in entries], want)
+            prose = validate_prose(prose_path, [entry['url'] for entry in entries], want,
+                                   local_ids={task for entry in entries for task in entry['tasks']},
+                                   project_root=str(project))
             included_sections = [s for s in ('summary', 'mr_summary', 'note') if want[s] and s not in prose['omitted']]
             if included_sections:
                 prose_note = 'prose included: ' + ', '.join(included_sections)
