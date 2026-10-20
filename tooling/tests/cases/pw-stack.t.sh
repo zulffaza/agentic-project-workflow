@@ -995,3 +995,25 @@ pwtest_rc any "F18 cascade retries the blocked push" "$(pwtest_script $SH)" stac
 C18_STAGES="$("$(pwtest_script $SH)" stack-op --project casc18 list | awk -F'\t' -v k="$C18_KEY" '$1==k{print $7}')"
 case "$C18_STAGES" in *T02:push=done*) pwtest_ok "F18 blocked push retried to done" ;; *) pwtest_bad "F18 push retry" "$C18_STAGES" ;; esac
 rm -rf "$PW_PROJECTS_DIR/casc18"
+
+# F27: a landed descendant is terminal and must not be republished by a later cascade.
+mk_cascade_pair casc27; C27_DIR="$PW_PROJECTS_DIR/casc27"
+printf '\n## Result\n- **MR:** https://gitlab.example.com/pwtest/casc27repo/-/merge_requests/71\n' >> "$C27_DIR/task/T02.md"
+printf 'v\n' > "$ROOT/ev-c27-t01"
+pwtest_rc 0 "F27 parent verified" "$(pwtest_script $SH)" stack-verify --project casc27 --task T01 --evidence "$ROOT/ev-c27-t01"
+# The child must carry its own verified binding before a landing can be proven.
+pwtest_rc any "F27 child verified through the cascade" "$(pwtest_script $SH)" stack-cascade --project casc27 --task T01 --verify-cmd 'echo ok'
+git -C "$PW_REPOS/casc27repo" checkout -q master
+git -C "$PW_REPOS/casc27repo" -c user.email=t@t -c user.name=t merge -q --no-ff "agent/casc27/T02-casc27" -m "land T02"
+git -C "$PW_REPOS/casc27repo" push -q origin master
+C27_MSHA="$(git -C "$PW_REPOS/casc27repo" rev-parse master)"
+git -C "$PW_REPOS/casc27repo" checkout -q master
+printf '71 merged\n' > "$ROOT/f27-state"
+pwtest_rc 0 "F27 T02 landing recorded" \
+  env PWTEST_FORGE_STATE_FILE="$ROOT/f27-state" PWTEST_MR_TARGET=master "$(pwtest_script $SH)" stack-land --project casc27 --task T02 --merge-sha "$C27_MSHA" --landed-into master --kind merge
+pwtest_rc any "F27 cascade after the landing" "$(pwtest_script $SH)" stack-cascade --project casc27 --task T01 --verify-cmd 'echo ok'
+pwtest_err 'already landed' "F27 skips the landed descendant"
+C27_KEY="cascade:T01:$(git -C "$PW_REPOS/casc27repo" rev-parse "agent/casc27/T01-casc27" | cut -c1-7)"
+C27_STAGES="$("$(pwtest_script $SH)" stack-op --project casc27 list | awk -F'\t' -v k="$C27_KEY" '$1==k{print $7}')"
+case "$C27_STAGES" in *T02:push=skipped*) pwtest_ok "F27 landed stages marked skipped" ;; *) pwtest_bad "F27 landed stages" "$C27_STAGES" ;; esac
+rm -rf "$PW_PROJECTS_DIR/casc27"

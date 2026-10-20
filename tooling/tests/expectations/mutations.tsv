@@ -390,3 +390,5 @@ C305-verify-edit-binds-anyway	scripts/entities/pw-ship.sh	          if [ "$dh2" 
 # C306-C307: slice 4 cascade — a blocked push retries; a moved head re-opens verify.
 C306-blocked-push-never-retried	scripts/entities/pw-ship.sh	    case "$ps" in pending|blocked) ;; *) ps="" ;; esac	    case "$ps" in pending) ;; *) ps="" ;; esac	T1	pw-stack.t.sh
 C307-verify-certifies-newer-head	scripts/entities/pw-ship.sh	      if [ -n "$_bound" ] && [ -n "$_now" ] && [ "$_bound" != "$_now" ]; then	      if false; then	T1	pw-stack.t.sh
+# C308: slice 4 F27 — a landed descendant must be skipped, never republished.
+C308-landed-descendant-republished	scripts/entities/pw-ship.sh	    if [ "$(pw_stack_state_get "$d" "$D" landed 2>/dev/null || true)" = "yes" ]; then	    if false; then	T1	pw-stack.t.sh
