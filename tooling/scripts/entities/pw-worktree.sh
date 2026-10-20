@@ -219,7 +219,7 @@ here="$(pwd -P)"
 
 [ -d "$wtroot" ] || { echo "no worktree/ dir under $projdir — nothing to tear down."; exit 0; }
 
-removed=0 skipped_cwd=0 skipped_dirty=0
+removed=0 skipped_cwd=0 skipped_dirty=0 failed=0
 
 # A worktree is a leaf dir under worktree/ that git recognises (has a .git file/dir).
 # Single-target mode (--task resolves the task's worktree dir, --worktree takes a path):
@@ -273,6 +273,7 @@ while IFS= read -r gitmarker; do
     removed=$((removed+1))
   else
     echo "  ✗ could not remove: $wt (remove manually: git -C <real-repo> worktree remove '$wt')"
+    failed=$((failed+1))
   fi
 done <<< "$marker_list"
 
@@ -280,6 +281,12 @@ echo
 echo "Teardown: $removed removed, $skipped_cwd skipped (current dir), $skipped_dirty skipped (dirty)."
 [ "$skipped_cwd" -gt 0 ] && echo "Re-run from the project/bundle root (not inside a worktree) to finish."
 
+# An incomplete teardown must say so in BOTH modes: close/continuation callers act on this result,
+# and "0 removed, still 3 checkouts" is not success. Only a run that had nothing to select (no
+# worktrees found at all) exits 0 without removing anything.
+if [ "$failed" -gt 0 ] || [ "$skipped_cwd" -gt 0 ] || [ "$skipped_dirty" -gt 0 ]; then
+  exit 1
+fi
 # Single-target mode: the caller needs to know whether the worktree actually went away.
 if [ -n "$target" ] && [ "$removed" -eq 0 ]; then
   exit 1

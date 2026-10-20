@@ -371,3 +371,6 @@ C293-continuation-reopens-mr	scripts/entities/pw-ship.sh	    _obs_state="$(cmd_m
 C294-existing-mr-lookup-lost	scripts/entities/pw-ship.sh	    _found_mr="$(_pw_find_existing_mr "$REPO_DIR" "$BRANCH" "$TARGET_BRANCH" "$FORGE_CLI")"	    _found_mr=""	T1	pw-ship.t.sh
 # C295: slice 3 D01 — a malformed managed-marker boundary must stop before the push.
 C295-description-boundary-gate-lost	scripts/entities/pw-ship.sh	  if grep -q '<!-- pw-\(mr-summary\|review-changes\):' "$DESC_FILE" 2>/dev/null; then	  if false; then	T1	pw-ship.t.sh
+# C296-C297: slice 4 terminal outcomes — incomplete bulk teardown, unobserved merge claim.
+C296-bulk-teardown-false-success	scripts/entities/pw-worktree.sh	if [ "$failed" -gt 0 ] || [ "$skipped_cwd" -gt 0 ] || [ "$skipped_dirty" -gt 0 ]; then	if false; then	T1	pw-worktree.t.sh
+C297-acceptance-claims-merge	scripts/entities/pw-status.sh	    if [ "$observed" -eq 1 ]; then	    if true; then	T1	pw-status.t.sh

@@ -48,3 +48,12 @@ git -C "$PW_REPOS/api" worktree remove --force "$wp47" >/dev/null 2>&1 || true
 git -C "$PW_REPOS/api" branch -D "agent/$W47/other-branch" >/dev/null 2>&1 || true
 git -C "$PW_REPOS/api" branch -D "agent/$W47/T01-$W47" >/dev/null 2>&1 || true
 rm -rf "$PW_PROJECTS_DIR/$W47"
+
+# --- bulk teardown result (plan 47 F21) --------------------------------------------------------
+# "0 removed, checkouts remain" is not success: a caller (close/continuation) acts on this result.
+T47=wtfail; rm -rf "$PW_PROJECTS_DIR/$T47"; mkdir -p "$PW_PROJECTS_DIR/$T47/worktree/x/fake"
+printf 'gitdir: /nonexistent\n' > "$PW_PROJECTS_DIR/$T47/worktree/x/fake/.git"
+pwtest_rc 1 "F21 bulk teardown reports an incomplete removal" \
+  "$(pwtest_script pw-worktree.sh)" teardown --dir "$PW_PROJECTS_DIR/$T47"
+pwtest_re 'could not remove' "F21 names the per-worktree failure"
+rm -rf "$PW_PROJECTS_DIR/$T47"

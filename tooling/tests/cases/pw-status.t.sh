@@ -478,3 +478,16 @@ pwtest_re '^trigger: — \(line absent; effective default: manual per surface\)$
 grep -q 'Unapproved' "$PWTEST_OUT" && pwtest_bad "alpha unapproved" "unexpected gate blocker" || pwtest_ok "no gate blocker on alpha (task/context lanes are optional)"
 
 rm -rf "$OVW" "$ROOT/ovw.json" "$ROOT/ovw.err"
+
+# --- acceptance wording (plan 47 F22) ----------------------------------------------------------
+# A manual/execution acceptance must not claim a merge; only an observed merge may say so.
+A47=acc47; rm -rf "$PW_PROJECTS_DIR/$A47"; cp -a "$F2" "$PW_PROJECTS_DIR/$A47"
+pwtest_rc 0 "F22 manual acceptance succeeds" "$(pwtest_script pw-status.sh)" task-accept --project "$A47" --task T01
+grep -qi "merged" "$PW_PROJECTS_DIR/$A47/LOG.md" \
+  && pwtest_bad "F22 claims a merge it did not observe" "$(grep -i merged "$PW_PROJECTS_DIR/$A47/LOG.md")" \
+  || pwtest_ok "F22 manual acceptance logs no merge claim"
+pwtest_rc 0 "F22 observed acceptance succeeds" "$(pwtest_script pw-status.sh)" task-accept --project "$A47" --task T02 --observed-merged
+grep -q "MR merged (observed)" "$PW_PROJECTS_DIR/$A47/LOG.md" \
+  && pwtest_ok "F22 observed merge is logged as observed" \
+  || pwtest_bad "F22 observed log" "$(tail -2 "$PW_PROJECTS_DIR/$A47/LOG.md")"
+rm -rf "$PW_PROJECTS_DIR/$A47"

@@ -90,9 +90,11 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   URL/worktree/origin, or the forge query failed or returned null — with exit 1). Used by `/pw-sync`
   and `/pw-ship comments` to detect MRs that were already merged downstream before attempting to
   sync or process comments.
-- `pw-status.sh task-accept --project <slug> --task <task-id>` — the merged-MR acceptance flow: ONE call sets all
+- `pw-status.sh task-accept --project <slug> --task <task-id> [--observed-merged]` — the acceptance flow: ONE call sets all
   three acceptance holders (task-file `Status:` field, the PLAN task-table Status cell the close
   gate reads, and the dashboard task row — best-effort), with a single LOG line; idempotent.
+  Pass `--observed-merged` only when the call follows an observed merged state; without it the
+  LOG says the task was accepted, not that an MR merged.
 - `pw-status.sh dashboard-task-status --project <slug> --task <task-id> --status <status>` — update a task's status in the
   dashboard README.md task status table.
 - `pw-ship.sh dashboard-mr-state --project <slug> --task <task-id> --state <state>` — update an MR's state in the dashboard
