@@ -374,3 +374,7 @@ C295-description-boundary-gate-lost	scripts/entities/pw-ship.sh	  if grep -q '<!
 # C296-C297: slice 4 terminal outcomes — incomplete bulk teardown, unobserved merge claim.
 C296-bulk-teardown-false-success	scripts/entities/pw-worktree.sh	if [ "$failed" -gt 0 ] || [ "$skipped_cwd" -gt 0 ] || [ "$skipped_dirty" -gt 0 ]; then	if false; then	T1	pw-worktree.t.sh
 C297-acceptance-claims-merge	scripts/entities/pw-status.sh	    if [ "$observed" -eq 1 ]; then	    if true; then	T1	pw-status.t.sh
+# C298-C300: slice 4 identity — URL-derived MR identity, enterprise repo identity, exact ref lookup.
+C298-mr-identity-from-url-lost	scripts/entities/pw-ship.sh	  set -- $(_pw_mr_parts "$mr_url")	  set --	T1	pw-ship.t.sh
+C299-enterprise-repo-identity-lost	scripts/entities/pw-ship.sh	        state="$(cd "$ctx" && GH_HOST="$host" gh pr view "$iid" -R "$repo" --json state -q .state 2>/dev/null || true)"	        state="$(cd "$ctx" && GH_HOST="$host" gh pr view "$iid" --json state -q .state 2>/dev/null || true)"	T1	pw-ship.t.sh
+C300-ref-lookup-accepts-token	scripts/entities/pw-ship.sh	  local cur_head; cur_head="$(git -C "$rd" rev-parse --verify "$branch^{commit}" 2>/dev/null || true)"	  local cur_head; cur_head="$(git -C "$rd" rev-parse "$branch" 2>/dev/null || true)"	T1	pw-ship.t.sh

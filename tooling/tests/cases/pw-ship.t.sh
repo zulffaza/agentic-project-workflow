@@ -409,3 +409,44 @@ grep -q 'nothing was pushed' "$PWTEST_BOTH" \
 git -C "$PW_REPOS/api" worktree remove --force "$PW_PROJECTS_DIR/$E7/worktree/api/T01-thing" >/dev/null 2>&1 || true
 git -C "$PW_REPOS/api" branch -D "agent/$E7/T01-thing" >/dev/null 2>&1 || true
 rm -rf "$PW_PROJECTS_DIR/$E7"
+
+# --- MR identity for state reads (plan 47 F24,F25) ----------------------------------------------
+# Identity comes from the recorded MR URL, so a state read does not need the task's worktree; an
+# enterprise GitHub host resolves to gh with explicit repository identity.
+M47=mrstate47; rm -rf "$PW_PROJECTS_DIR/$M47"; cp -a "$F2" "$PW_PROJECTS_DIR/$M47"
+pwtest_rc 0 "F24 mr-state reads with no worktree for the task" \
+  "$(pwtest_script $SH)" mr-state --project "$M47" --task T02
+# An observed state (whatever the fixture seeds) proves the read did not depend on the worktree.
+pwtest_re '^(open|merged|closed)$' "F24 returns an observed state"
+rm -rf "$PW_PROJECTS_DIR/$M47"
+
+G47=ghstate47; rm -rf "$PW_PROJECTS_DIR/$G47"; cp -a "$F2" "$PW_PROJECTS_DIR/$G47"
+python3 - "$PW_PROJECTS_DIR/$G47/task/T02.md" <<'PYEOF'
+import sys
+f=sys.argv[1]; t=open(f).read()
+t=t.replace("https://gitlab.example.com/pwtest/api/-/merge_requests/42",
+            "https://github.example.com/owner/api/pull/42")
+open(f,"w").write(t)
+PYEOF
+: > "$ROOT/ghstate47.log"
+pwtest_rc 0 "F25 enterprise GitHub state read succeeds" \
+  env PWTEST_FORGE_LOG="$ROOT/ghstate47.log" PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.forge.sh" \
+  "$(pwtest_script $SH)" mr-state --project "$G47" --task T02
+grep -q -- '-R owner/api' "$ROOT/ghstate47.log" \
+  && pwtest_ok "F25 uses the URL's repository identity" \
+  || pwtest_bad "F25 repo identity" "$(tr '\n' ';' < "$ROOT/ghstate47.log" 2>/dev/null)"
+rm -rf "$PW_PROJECTS_DIR/$G47"
+
+# F28: an unresolvable branch must fail, never be recorded as the verified head.
+S47=sv47; rm -rf "$PW_PROJECTS_DIR/$S47"; cp -a "$F2" "$PW_PROJECTS_DIR/$S47"
+sed -i '' "s|agent/$S2/T01-thing|agent/$S47/does-not-exist|" "$PW_PROJECTS_DIR/$S47/task/T01.md"
+printf 'manual evidence\n' > "$ROOT/ev47.txt"
+pwtest_rc 2 "F28 stack-verify refuses an unresolvable branch" \
+  "$(pwtest_script $SH)" stack-verify --project "$S47" --task T01 --evidence "$ROOT/ev47.txt"
+grep -q "cannot resolve branch" "$PWTEST_BOTH" \
+  && pwtest_ok "F28 names the unresolvable branch" \
+  || pwtest_bad "F28 message" "$(head -2 "$PWTEST_BOTH")"
+grep -q "does-not-exist" "$PW_PROJECTS_DIR/$S47/task/stack.tsv" 2>/dev/null \
+  && pwtest_bad "F28 recorded the branch token as a head" "$(grep 'does-not-exist' "$PW_PROJECTS_DIR/$S47/task/stack.tsv")" \
+  || pwtest_ok "F28 no fabricated head recorded"
+rm -rf "$PW_PROJECTS_DIR/$S47"
