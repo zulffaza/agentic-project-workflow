@@ -195,17 +195,13 @@ change itself.
 | Verification tuple stale (head moved after verify) | re-verify | recorded head vs current head | re-run Verify; this spends no repair round |
 | Verification command edited tracked files | refuse | the dirty/head change | executor reverts and re-verifies |
 
-The budget is one persistent counter per work identity, shared by every path that repairs code:
-
-```
-pw-ship.sh repair-round --project <slug> --task <T0n> --work <task>@<branch> [--limit <n>] [--consume]
-```
-
-It prints `consumed/limit/remaining` and persists `task/repair-budget.tsv`, so an interrupted run, a
-resumed helper, or a local-to-CI handoff continues the same allowance. Consuming the last allowed
-round succeeds; the next call refuses with the evidence in hand. A new **explicitly requested** run
-uses a new work identity and therefore a new budget; an automatic retry, a fresh reviewer pass, or a
-resumed helper does not. Environment retries and CI polling never call it.
+The budget is one persistent counter per work identity, shared by every path that repairs code. It
+records consumed rounds and the effective limit for that identity, so an interrupted run, a resumed
+helper, or a local-to-CI handoff continues the same allowance. Consuming the last allowed round
+succeeds; the next attempt refuses with the evidence in hand. A new **explicitly requested** run uses
+a new work identity and therefore a new budget; an automatic retry, a fresh reviewer pass, or a
+resumed helper does not. Environment retries and CI polling never spend a round. The operator command
+and its storage live in the maintainer reference.
 
 ## A dependency that lands a late fix re-checks what already ran
 
