@@ -369,3 +369,5 @@ C292-mr-write-scope-lost	scripts/entities/pw-ship.sh	          p && !d && /^- \*
 C293-continuation-reopens-mr	scripts/entities/pw-ship.sh	    _obs_state="$(cmd_mr_state --project "$SLUG" --task "$TASK_ID" 2>/dev/null || true)"	    _obs_state="open"	T1	pw-ship.t.sh
 # C294: slice 3 — an existing MR for the source branch must be adopted, not duplicated.
 C294-existing-mr-lookup-lost	scripts/entities/pw-ship.sh	    _found_mr="$(_pw_find_existing_mr "$REPO_DIR" "$BRANCH" "$TARGET_BRANCH" "$FORGE_CLI")"	    _found_mr=""	T1	pw-ship.t.sh
+# C295: slice 3 D01 — a malformed managed-marker boundary must stop before the push.
+C295-description-boundary-gate-lost	scripts/entities/pw-ship.sh	  if grep -q '<!-- pw-\(mr-summary\|review-changes\):' "$DESC_FILE" 2>/dev/null; then	  if false; then	T1	pw-ship.t.sh

@@ -357,3 +357,55 @@ grep -q 'merge_requests/77' "$PW_PROJECTS_DIR/$E6/task/T01.md" \
 git -C "$PW_REPOS/api" worktree remove --force "$PW_PROJECTS_DIR/$E6/worktree/api/T01-thing" >/dev/null 2>&1 || true
 git -C "$PW_REPOS/api" branch -D "agent/$E6/T01-thing" >/dev/null 2>&1 || true
 rm -rf "$PW_PROJECTS_DIR/$E6"
+
+# --- description marker boundary (plan 47 D01) -------------------------------------------------
+# The managed-marker parser requires the end marker to end a real line. Workflow-owned creation
+# must run that SAME parser over the whole body before anything is published.
+python3 - "$ROOT/desc-valid.md" "$ROOT/desc-bad.md" <<'PYEOF'
+import sys
+valid = """<!-- pw-mr-summary:start -->
+## What & why
+Fixture body.
+## High-level changes
+One thing.
+## Low-level changes
+One detail.
+## Verification
+Ran the check.
+## Notes for the reviewer
+Nothing special.
+<!-- pw-mr-summary:end -->
+"""
+open(sys.argv[1], "w").write(valid)
+# The live incident shape: literal backslash-n separators appended on the SAME line as the end
+# marker (a literal on the next line would be legal trailing text and prove nothing).
+bs = chr(92)
+bad = valid.replace("<!-- pw-mr-summary:end -->",
+                    "<!-- pw-mr-summary:end -->" + bs + "n" + bs + "n", 1)
+open(sys.argv[2], "w").write(bad)
+PYEOF
+pwtest_rc 0 "D01 valid managed description passes the parser" \
+  "$(pwtest_script $SH)" history --project "$S2" --operation validate --options --file "$ROOT/desc-valid.md"
+pwtest_rc 2 "D01 malformed marker suffix is rejected" \
+  "$(pwtest_script $SH)" history --project "$S2" --operation validate --options --file "$ROOT/desc-bad.md"
+pwtest_fix "marker rejection names the remedy"
+
+E7=exec-f2badmarker; rm -rf "$PW_PROJECTS_DIR/$E7"; cp -a "$F2" "$PW_PROJECTS_DIR/$E7"
+pwtest_repo api "branch:agent/$E7/T01-thing"
+( cd "$PW_REPOS/api" && git worktree add "$PW_PROJECTS_DIR/$E7/worktree/api/T01-thing" "agent/$E7/T01-thing" >/dev/null 2>&1 ) || true
+sed -i '' "s|agent/$S2/T01-thing|agent/$E7/T01-thing|" "$PW_PROJECTS_DIR/$E7/task/T01.md"
+: > "$ROOT/forge47marker.log"
+pwtest_rc 2 "D01 exec refuses a malformed boundary before pushing" \
+  env PWTEST_FORGE_LOG="$ROOT/forge47marker.log" \
+  "$(pwtest_script $SH)" exec --project "$E7" --task T01 --file "$ROOT/desc-bad.md"
+# The fixture branch is already pushed by pwtest_repo, so an origin ref proves nothing; the push
+# line is the real signal that publication started before validation.
+grep -q '^Pushing ' "$PWTEST_BOTH" \
+  && pwtest_bad "D01 exec pushed despite a malformed boundary" "push line present: $(cat "$PWTEST_BOTH" | head -3)" \
+  || pwtest_ok "D01 nothing was pushed"
+grep -q 'nothing was pushed' "$PWTEST_BOTH" \
+  && pwtest_ok "D01 refusal states that nothing was pushed" \
+  || pwtest_bad "D01 refusal wording" "$(cat "$PWTEST_BOTH" | head -3)"
+git -C "$PW_REPOS/api" worktree remove --force "$PW_PROJECTS_DIR/$E7/worktree/api/T01-thing" >/dev/null 2>&1 || true
+git -C "$PW_REPOS/api" branch -D "agent/$E7/T01-thing" >/dev/null 2>&1 || true
+rm -rf "$PW_PROJECTS_DIR/$E7"

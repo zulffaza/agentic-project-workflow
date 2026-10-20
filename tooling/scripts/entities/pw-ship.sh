@@ -1123,6 +1123,14 @@ EOF
     _GLAB_CREATE_JSON=1
   fi
 
+  # A workflow-owned description carrying the managed markers must pass the SAME parser the
+  # history delivery uses BEFORE anything is published: a malformed boundary (for example literal
+  # `\n` separators once appended after the summary end marker) stops here, before the push.
+  if grep -q '<!-- pw-\(mr-summary\|review-changes\):' "$DESC_FILE" 2>/dev/null; then
+    cmd_history --project "$SLUG" --operation validate --options --file "$DESC_FILE" >/dev/null \
+      || die "creation description fails the managed marker parser (see the reason above) → fix: repair the description file; nothing was pushed"
+  fi
+
   # Push branch
   echo "Pushing $BRANCH to origin..."
   git -C "$REPO_DIR" push origin "$BRANCH" || die "push failed"

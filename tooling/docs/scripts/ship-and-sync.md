@@ -198,7 +198,14 @@ $PW_HOME/tooling/scripts/entities/pw-ship.sh history --project <slug> --operatio
 $PW_HOME/tooling/scripts/entities/pw-ship.sh history --project <slug> --operation checkpoint --mr <MR-url> --options --attempt <key> --file <JSON>
 $PW_HOME/tooling/scripts/entities/pw-ship.sh history --project <slug> --operation freeze --mr <MR-url> --options --attempt <key>
 $PW_HOME/tooling/scripts/entities/pw-ship.sh history --project <slug> --operation deliver --mr <MR-url> --options --attempt <key> --limit <n> --unit <utf8|chars> --limit-source <reference>
+$PW_HOME/tooling/scripts/entities/pw-ship.sh history --project <slug> --operation validate --options --file <description>
 ```
+
+`validate` runs the SAME managed-marker parser delivery uses over the whole description and is a
+read-only gate: it prints `validate: ok (<n> chars)` or exits `2` naming the boundary failure. `exec`
+calls it automatically on a description that carries the managed markers, **before the push**, so a
+malformed boundary (for example literal `\n` separators appended after the end marker) cannot be
+published by a workflow-owned create.
 
 One invocation/MR produces one attempt. All intermediate fixes, commits, pipeline observations,
 and replies checkpoint under that identity. Freeze seals the Before/After/Summary bullet groups,
