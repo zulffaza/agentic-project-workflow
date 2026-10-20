@@ -771,7 +771,9 @@ cmd_monitor() {
     GL_REPO="$(echo "$MR_URL" | sed -E "s#^https?://[^/]+/##; s#/-/merge_requests(/[0-9]+).*##")"
   elif [ "$FORGE_CLI" = "gh" ]; then
     MR_IID="$(echo "$MR_URL" | grep -o 'pull/[0-9]*' | sed 's/pull\///')"
-    GH_REPO="$(echo "$MR_URL" | sed -nE 's#.*github\.com/([^/]+/[^/]+)/pull.*#\1#p')"
+    # Repository identity comes from the URL, so an enterprise GitHub host keeps its repo path
+    # (the old github.com-only pattern produced an empty -R and lost the query context).
+    GH_REPO="$(echo "$MR_URL" | sed -E 's#^https?://[^/]+/##; s#/pull(/[0-9]+).*##')"
   fi
 
   # Pin the resolved host for EVERY glab call in this invocation. An ambient `GITLAB_HOST` must
@@ -837,11 +839,22 @@ cmd_monitor() {
       fi
     elif [ "$FORGE_CLI" = "gh" ]; then
       # GitHub: check PR checks status ("no checks reported" cold-start keeps waiting).
-      RAW="$(gh pr checks "$MR_IID" ${GH_REPO:+-R "$GH_REPO"} 2>/dev/null || true)"
-      if [ -n "$RAW" ]; then
-        STATUS="$(echo "$RAW" | awk 'NR>1{print $2}' | sort -u | head -1 || true)"
-        [ -n "$STATUS" ] || STATUS="pending"
+      # Structured read: EVERY selected check contributes. The old table read dropped the first
+      # row and sorted one status into a verdict, so a failing check could be reported green.
+      RAW="$(gh pr checks "$MR_IID" ${GH_REPO:+-R "$GH_REPO"} --json state 2>/dev/null || true)"
+      if [ -n "$RAW" ] && command -v jq >/dev/null 2>&1; then
+        STATUS="$(printf '%s\n' "$RAW" | jq -r '
+            [.[] | .state] as $s
+            | if ($s | length) == 0 then "none"
+              elif any($s[]; . == "FAILURE" or . == "CANCELLED" or . == "TIMED_OUT" or . == "ACTION_REQUIRED" or . == "STARTUP_FAILURE") then "failed"
+              elif any($s[]; . == "PENDING" or . == "QUEUED" or . == "IN_PROGRESS" or . == "WAITING" or . == "REQUESTED" or . == "EXPECTED") then "pending"
+              elif all($s[]; . == "SUCCESS" or . == "SKIPPED" or . == "NEUTRAL") then (if all($s[]; . == "SKIPPED") then "skipped" else "success" end)
+              else "pending" end' 2>/dev/null || true)"
+      elif [ -n "$RAW" ]; then
+        # Without jq the structured list cannot be aggregated; a table reading is not a verdict.
+        STATUS="unknown"
       fi
+      [ "$STATUS" = "none" ] && STATUS="pending"
     fi
     STATUS="${STATUS:-unknown}"
 
@@ -1077,6 +1090,14 @@ cmd_exec() {
   # preflight does, so a bypassed preflight cannot let stale or mid-cascade work ship.
   STACK_PARENT="$(pw_stack_parent "$TASK_FILE" 2>/dev/null || true)"
   TARGET_BRANCH="$BASE"
+  # Publication proof applies to ANY task with a recorded verification tuple, not only stacked
+  # children: a ROOT whose branch moved after verification (or whose recorded evidence no longer
+  # matches reality) must not publish stale work. Tasks with no recorded tuple keep the legacy path.
+  if [ -n "$(pw_stack_state_get "$D" "$TASK_ID" verified_head 2>/dev/null || true)" ] \
+     && _stack_stale "$D" "$TASK_ID"; then
+    die "task $TASK_ID's verification tuple is stale (head/parent/target/CI changed) → fix: re-verify (/pw-execute --project $SLUG --task $TASK_ID) before shipping"
+  fi
+
   if [ -n "$STACK_PARENT" ]; then
     pw_stack_state_validate "$D" || die "stack state invalid (see the reason above) → fix: repair task/stack.tsv before shipping $TASK_ID"
     # Fresh remote view before validating the published parent (a stale origin ref must not pass).
@@ -1086,8 +1107,6 @@ cmd_exec() {
       || die "cannot resolve the stack target for $TASK_ID (unprovable landing destination or missing ancestor Branch) → fix: /pw-doctor --project $SLUG (stack topology)"
     [ -n "$TARGET_BRANCH" ] || die "cannot resolve the stack target for $TASK_ID → fix: /pw-doctor --project $SLUG (stack topology)"
     case "$TARGET_BRANCH" in ''|*[!A-Za-z0-9._/-]*|-*) die "refusing unsafe stack target branch '$TARGET_BRANCH' for $TASK_ID";; esac
-    _stack_stale "$D" "$TASK_ID" \
-      && die "task $TASK_ID's verification tuple is stale (head/parent/target changed) → fix: re-verify (/pw-execute --project $SLUG --task $TASK_ID) before shipping"
     if [ -f "$D/task/stack-ops.tsv" ]; then
       local _opkey _okind _opanc _oev _oexp _ocreated _ostages _ostate _clos
       _clos=" $(_stack_closure_ids "$D" "$TASK_ID" | tr '\n' ' ') "

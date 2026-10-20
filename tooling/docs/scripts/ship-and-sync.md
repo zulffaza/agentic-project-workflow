@@ -146,6 +146,14 @@ whitespace-tolerant read without it), so a pretty-printed MR body still yields t
 Head filtering needs `jq`; without it the monitor does **not** fall back to a sha-blind first
 entry — it keeps polling and settles as an honest unresolved timeout rather than a false green.
 
+**GitHub checks:** the monitor reads `gh pr checks --json state` and aggregates every selected
+check, so one failing check cannot hide behind another. Failed-ish (`FAILURE`, `CANCELLED`,
+`TIMED_OUT`, `ACTION_REQUIRED`, `STARTUP_FAILURE`) is a failed run; any pending-ish state
+(`PENDING`, `QUEUED`, `IN_PROGRESS`, `WAITING`, `REQUESTED`, `EXPECTED`) blocks a green verdict;
+all `SUCCESS`/`SKIPPED`/`NEUTRAL` is green, and an all-`SKIPPED` set keeps the existing skipped
+semantics. An empty list reads as "no checks yet" and keeps polling. The previous table read
+dropped the first row and reduced the rest to one sorted status.
+
 Intermediate `T03: pipeline running (…elapsed) — status: …` lines stream while polling. Exit `2`
 is overloaded with usage errors — distinguish by message ("still running" = timeout). A query
 that can't resolve state at all (no forge auth, bad MR id) fails fast after 3 consecutive
@@ -355,6 +363,13 @@ $S stack-adopt --project <slug> [--apply] [--task <T0n>]…       # infer edges 
 $S stack-inherited --project <slug> --task <T0n> --parent <T0n> --parent-sha <sha>   # record one inherited update (Result bullet + LOG; never a reviewer comment)
 $S stack-cascade --project <slug> --task <T0n> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>] [--on-conflict <abort|keep>]
                                             # parent-first descendant propagation: integrate → verify-bind → record → push (shipped only, --push required); stages persist and resume
+
+**Freshness proof applies to every task, not only stacked children.** `exec` refuses to publish when
+the task has a recorded verification tuple and `_stack_stale` no longer matches live Git/state — the
+branch head moved after verification, the consumed parent advanced, the effective target changed, or
+the CI binding no longer covers the current head. A ROOT task used to bypass these gates entirely,
+so a post-verification commit could be published under stale evidence. Tasks with no recorded tuple
+keep the legacy path.
 ```
 
 `stack-verify` writes the tuple (head, parent, target, evidence, CI disposition) in one atomic

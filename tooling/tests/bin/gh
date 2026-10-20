@@ -75,7 +75,13 @@ case "${1:-}" in
                   "$PWTEST_MR_HEAD_FILE" > "$PWTEST_MR_HEAD_FILE.tmp" 2>/dev/null && mv "$PWTEST_MR_HEAD_FILE.tmp" "$PWTEST_MR_HEAD_FILE"
               fi
               printf '{"url":"https://github.com/pwtest/api/pull/%s"}\n' "$_num" ;;
-      checks) printf 'ci\tpass\t0s\n' ;;
+      checks)
+        # Structured mode (the workflow requests it): every selected check is emitted so the
+        # caller can aggregate instead of reading a table. Defaults to one passing check.
+        case " $* " in
+          *--json*state*) printf '%s\n' "${PWTEST_CHECKS_JSON:-[{\"state\":\"SUCCESS\"}]}" ;;
+          *) printf 'ci\tpass\t0s\n' ;;
+        esac ;;
       *) printf 'gh-shim: unexpected pr sub: %s\n' "$2" >&2; exit 42 ;;
     esac ;;
   issue) printf '{"title":"fake","body":"fake issue content"}\n' ;;
