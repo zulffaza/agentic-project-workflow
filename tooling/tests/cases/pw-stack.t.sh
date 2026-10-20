@@ -961,3 +961,37 @@ C19_KEY="cascade:T01:$(git -C "$PW_REPOS/casc19repo" rev-parse "agent/casc19/T01
 C19_STAGES="$("$(pwtest_script $SH)" stack-op --project casc19 list | awk -F'\t' -v k="$C19_KEY" '$1==k{print $7}')"
 case "$C19_STAGES" in *T02:verify=blocked*) pwtest_ok "F19 verify stage blocked" ;; *) pwtest_bad "F19 verify stage" "$C19_STAGES" ;; esac
 rm -rf "$PW_PROJECTS_DIR/casc19"
+
+# F26: a completed verify stage must not certify a newer head.
+mk_cascade_pair casc26; C26_DIR="$PW_PROJECTS_DIR/casc26"
+printf 'v\n' > "$ROOT/ev-c26-t01"
+pwtest_rc 0 "F26 parent verified" "$(pwtest_script $SH)" stack-verify --project casc26 --task T01 --evidence "$ROOT/ev-c26-t01"
+pwtest_rc any "F26 cascade verifies the child" "$(pwtest_script $SH)" stack-cascade --project casc26 --task T01 --verify-cmd 'echo ok'
+C26_WT="$C26_DIR/worktree/casc26repo/T02-casc26"
+C26_KEY="cascade:T01:$(git -C "$PW_REPOS/casc26repo" rev-parse "agent/casc26/T01-casc26" | cut -c1-7)"
+C26_STAGES="$("$(pwtest_script $SH)" stack-op --project casc26 list | awk -F'\t' -v k="$C26_KEY" '$1==k{print $7}')"
+case "$C26_STAGES" in *T02:verify=done*) pwtest_ok "F26 verify bound" ;; *) pwtest_bad "F26 verify bound" "$C26_STAGES" ;; esac
+( cd "$C26_WT" && echo post >> post-verify.txt && git add -A \
+  && git -c user.email=t@t -c user.name=t commit -qm "post-verify change" ) >/dev/null 2>&1
+pwtest_rc any "F26 cascade re-runs after the head moved" "$(pwtest_script $SH)" stack-cascade --project casc26 --task T01
+pwtest_err 'verify re-opened' "F26 names the re-opened verification"
+C26_STAGES="$("$(pwtest_script $SH)" stack-op --project casc26 list | awk -F'\t' -v k="$C26_KEY" '$1==k{print $7}')"
+case "$C26_STAGES" in *T02:verify=pending*) pwtest_ok "F26 verify re-opened for the new head" ;; *) pwtest_bad "F26 verify re-opened" "$C26_STAGES" ;; esac
+rm -rf "$PW_PROJECTS_DIR/casc26"
+
+# F18: a blocked push is retried on a resumed invocation.
+mk_cascade_pair casc18; C18_DIR="$PW_PROJECTS_DIR/casc18"
+printf '\n## Result\n- **MR:** https://gitlab.example.com/pwtest/casc18repo/-/merge_requests/61\n' >> "$C18_DIR/task/T02.md"
+printf 'v\n' > "$ROOT/ev-c18-t01"
+pwtest_rc 0 "F18 parent verified" "$(pwtest_script $SH)" stack-verify --project casc18 --task T01 --evidence "$ROOT/ev-c18-t01"
+C18_SEED="$(git -C "$PW_REPOS/casc18repo" config --get remote.origin.url)"
+git -C "$PW_REPOS/casc18repo" remote set-url --push origin /nonexistent/pw18.git
+pwtest_rc any "F18 cascade records a failed push" "$(pwtest_script $SH)" stack-cascade --project casc18 --task T01 --verify-cmd 'echo ok' --push
+C18_KEY="cascade:T01:$(git -C "$PW_REPOS/casc18repo" rev-parse "agent/casc18/T01-casc18" | cut -c1-7)"
+C18_STAGES="$("$(pwtest_script $SH)" stack-op --project casc18 list | awk -F'\t' -v k="$C18_KEY" '$1==k{print $7}')"
+case "$C18_STAGES" in *T02:push=blocked*) pwtest_ok "F18 push stage blocked" ;; *) pwtest_bad "F18 push blocked" "$C18_STAGES" ;; esac
+git -C "$PW_REPOS/casc18repo" remote set-url --push origin "$C18_SEED"
+pwtest_rc any "F18 cascade retries the blocked push" "$(pwtest_script $SH)" stack-cascade --project casc18 --task T01 --verify-cmd 'echo ok' --push
+C18_STAGES="$("$(pwtest_script $SH)" stack-op --project casc18 list | awk -F'\t' -v k="$C18_KEY" '$1==k{print $7}')"
+case "$C18_STAGES" in *T02:push=done*) pwtest_ok "F18 blocked push retried to done" ;; *) pwtest_bad "F18 push retry" "$C18_STAGES" ;; esac
+rm -rf "$PW_PROJECTS_DIR/casc18"

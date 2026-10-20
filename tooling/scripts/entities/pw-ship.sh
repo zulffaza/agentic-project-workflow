@@ -2861,6 +2861,17 @@ cmd_stack_cascade() {
       cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:integrate=done" >/dev/null || die "stack-cascade: stage write failed"
       stages="$(_op_stages_of "$slug" "$opkey")"
     fi
+    # F26: a completed verify stage must not certify a NEWER head (integrate can move it, and a
+    # later run must not inherit the old binding). Re-open verify and downstream stages.
+    if _stage_done "$stages" "$D:verify"; then
+      _bound="$(pw_stack_state_get "$d" "$D" verified_head 2>/dev/null || true)"
+      _now="$(git -C "$workdir" rev-parse HEAD 2>/dev/null || true)"
+      if [ -n "$_bound" ] && [ -n "$_now" ] && [ "$_bound" != "$_now" ]; then
+        cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:verify=pending;$D:record=pending;$D:push=pending" >/dev/null || die "stack-cascade: stage write failed"
+        stages="$(_op_stages_of "$slug" "$opkey")"
+        echo "stack-cascade: $D head moved to ${_now:0:7} after verification at ${_bound:0:7} — verify re-opened; re-run with a verify command or bind the new head" >&2
+      fi
+    fi
     # --- verify: the caller's Verify command must pass; binding goes through stack-verify ---
     if ! _stage_done "$stages" "$D:verify"; then
       local dh; dh="$(git -C "$workdir" rev-parse HEAD)"
@@ -2919,7 +2930,10 @@ cmd_stack_cascade() {
     fi
     # --- push: already-shipped descendants only, and only under explicit --push authorization ---
     ps="$(_stage_state "$stages" "$D:push")"
-    if [ "$ps" = "pending" ]; then
+    # F18: a BLOCKED push is retried on a resumed invocation (the caller fixed the cause); only
+    # done/skipped are terminal. Previously the resume walked past it to the descendants.
+    case "$ps" in pending|blocked) ;; *) ps="" ;; esac
+    if [ -n "$ps" ]; then
       if [ "$push" != 1 ]; then
         pending_any=1
         echo "stack-cascade: $D integrated+verified; publication not authorized (add --push) — push/describe stages retained pending" >&2
