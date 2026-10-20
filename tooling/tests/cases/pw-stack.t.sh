@@ -895,3 +895,29 @@ pwtest_rc 0 "cascade resumes after resolution" "$(pwtest_script $SH)" stack-casc
 pwtest_grep_file 'Inherited:' "inherited update recorded after resume" "$SC_DIR/task/T02.md"
 pwtest_eq "T02 bound after cascade resume" "$(git -C "$SC_WT" rev-parse HEAD)" "$(_st_get "$SC_DIR" T02 verified_head)"
 rm -rf "$PW_PROJECTS_DIR/$SC"
+
+# --- stack-plan readiness vs the parent's VERIFIED head (plan 47 F16) --------------------------
+# Presence on origin is not proof: the published parent ref must sit at the parent's own verified
+# head, exactly as exec requires, or the plan would order a child against a different parent state.
+F16=f16stack; F16_DIR="$(stack_mkproj "$F16")"
+pwtest_repo f16repo "branch:agent/$F16/T01-$F16"
+stack_task "$F16_DIR" T01 f16repo master "agent/$F16/T01-$F16" none none done
+( cd "$PW_REPOS/f16repo" && git checkout -q -b "agent/$F16/T02-$F16" "agent/$F16/T01-$F16" \
+  && git checkout -q master ) >/dev/null 2>&1
+stack_task "$F16_DIR" T02 f16repo master "agent/$F16/T02-$F16" T01 T01 done
+printf 'f16 T01 verify\n' > "$ROOT/ev-f16-T01"
+pwtest_rc 0 "F16 parent verified" "$(pwtest_script $SH)" stack-verify --project "$F16" --task T01 --evidence "$ROOT/ev-f16-T01"
+printf 'f16 T02 verify\n' > "$ROOT/ev-f16-T02"
+pwtest_rc 0 "F16 child verified" "$(pwtest_script $SH)" stack-verify --project "$F16" --task T02 --evidence "$ROOT/ev-f16-T02"
+pwtest_rc 0 "F16 plan runs while origin matches" "$(pwtest_script $SH)" stack-plan --project "$F16" --task T02
+pwtest_re '^T02.*\|yes\|' "F16 ready while origin matches the verified parent"
+# An out-of-band remote change: a NEW commit on the parent branch, recorded only in the
+# remote-tracking ref (what a fetch would leave) so the LOCAL branch and its verified tuple stay
+# put. This isolates the plan's origin-vs-verified-head comparison from the stale-tuple gate.
+F16_NEW="$(git -C "$PW_REPOS/f16repo" -c user.email=t@t -c user.name=t \
+  commit-tree "agent/$F16/T01-$F16^{tree}" -p "agent/$F16/T01-$F16" -m "interposed remote change")"
+git -C "$PW_REPOS/f16repo" update-ref "refs/remotes/origin/agent/$F16/T01-$F16" "$F16_NEW"
+pwtest_rc 0 "F16 plan runs after the interposed push" "$(pwtest_script $SH)" stack-plan --project "$F16" --task T02
+pwtest_re 'not at the parent.s verified head' "F16 names the origin/verified-head mismatch"
+pwtest_re '^T02.*\|no\|' "F16 not ready when origin moved past the verified parent"
+rm -rf "$PW_PROJECTS_DIR/$F16"
