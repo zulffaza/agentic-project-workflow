@@ -5,7 +5,9 @@ The `/pw-ship` path lives in one entity script — `tooling/scripts/entities/pw-
 track MR/CI state (`mr-state`, `mr-state-batch`, `monitor`), record comment/bookkeeping
 state (`comment-seen`, `dashboard-mr-state`), and the ship-owned **stack** lifecycle
 (`stack`, `stack-validate`, `stack-plan`, `stack-record`, `stack-verify`, `stack-fresh`, `stack-stale`,
-`stack-land`, `stack-promote`, `stack-retarget`, `stack-op`, `stack-debt`, `stack-adopt`).
+`stack-land`, `stack-promote`, `stack-retarget`, `stack-op`, `stack-debt`, `stack-adopt`), and the
+opt-in sync attempt/conflict surface (`sync-attempt`, `sync-merge`, `sync-finish`, `sync-bind`,
+`sync-abort`).
 The `history` family manages project-owned review-attempt records and verified description delivery;
 `request-review` is the read-only review-request message generator.
 
@@ -325,7 +327,7 @@ $S stack-op --project <slug> list|create|set|clear …   # pending-operation rec
 $S stack-debt --project <slug> [--task <T0n>]…     # exit 1 + the pending ops touching the set (gates ship/comment/sync/close)
 $S stack-adopt --project <slug> [--apply] [--task <T0n>]…       # infer edges from real MR targets (dry-run; --apply writes)
 $S stack-inherited --project <slug> --task <T0n> --parent <T0n> --parent-sha <sha>   # record one inherited update (Result bullet + LOG; never a reviewer comment)
-$S stack-cascade --project <slug> --task <T0n> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>]
+$S stack-cascade --project <slug> --task <T0n> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>] [--on-conflict <abort|keep>]
                                             # parent-first descendant propagation: integrate → verify-bind → record → push (shipped only, --push required); stages persist and resume
 ```
 
@@ -357,3 +359,46 @@ uses the resolved effective target and
 refuses a child whose target branch is not yet published on origin; once every ancestor has landed,
 the effective target is the ultimate base and `exec` requires the base to be published instead of
 matching an ancestor branch.
+
+## Opt-in sync conflict resolution
+
+`/pw-sync` keeps its default behavior: a conflicting merge aborts and the task goes back for manual
+resolution. With `--auto-resolve`, the command records one attempt, leaves the conflict in place for
+the agent, and publishes only after verification binds to the final HEAD. The deterministic surface
+is these operators; the reasoning procedure lives in
+`tooling/skill/project-workflow/references/sync-conflict-resolution.md` and loads only for an
+opt-in run or a resume.
+
+```bash
+S=$PW_HOME/tooling/scripts/entities/pw-ship.sh
+$S sync-attempt begin --project <slug> --task <T0n> --kind <independent|stack> --mode auto --target-branch <branch>
+                                                 # pin start HEAD, origin/<task-branch>, target branch + SHA
+$S sync-attempt show --project <slug> [--task <T0n>]     # recorded attempts (machine TSV rows)
+$S sync-attempt check --project <slug> --task <T0n>      # fresh (0) | stale: reason (1) against fetched refs
+$S sync-merge --project <slug> --task <T0n> --target <sha> --keep-conflict
+                                                 # 0 clean/contained; 3 conflict kept for resolution; 2 aborted/failed
+$S sync-finish --project <slug> --task <T0n>     # complete the attempt-owned merge (needs staged paths, no unmerged/markers)
+$S sync-bind --project <slug> --task <T0n> --evidence <path>
+                                                 # require clean tree + recorded result HEAD, then bind verified evidence
+$S sync-attempt set --project <slug> --task <T0n> --stage <failed|pushed> [--repair 0|1]
+$S sync-abort --project <slug> --task <T0n>      # abort only the attempt-owned merge; report untracked files
+```
+
+The attempt record is `task/sync-attempts.tsv`: one row per task with the pinned tuple
+(`start_head`, `remote_head`, `target_branch`, `target_sha`), stage
+(`prepared → conflict → resolved → verified → pushed`, or `failed`), the repair count, the result
+head, evidence path, and timestamps. It is machine-owned, written under a lock by the operators,
+and rejected on a drifted header or row shape. `check` compares the live fetched refs and the
+worktree HEAD with that tuple; a stale result blocks publication. Stage transitions for the merge
+lifecycle are operator-owned, so a caller cannot skip verification by setting a stage directly.
+
+`stack-cascade --on-conflict keep` is the guarded handoff for a descendant integration. Instead of
+aborting internally, it leaves the conflicted merge in the descendant worktree, marks
+`integrate=blocked`, and blocks the subtree. After the agent resolves and commits, the caller marks
+the stage done (`stack-op set --key <opkey> --state <T0n>:integrate=done`) and re-runs the cascade;
+the remaining verify/record/push stages resume. This path does not push.
+
+Verification remains authoritative: `sync-bind` only records evidence for a clean worktree at the
+committed result HEAD, and a stack member must also rebind `stack-verify` (final head, verified
+parent, effective target, CI disposition) before descendants advance. Never report local resolution
+alone as a successful sync, and never substitute a pre-push `pending` CI marker for CI success.

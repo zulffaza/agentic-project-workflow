@@ -279,6 +279,16 @@ static_t4() {
     && grep -qF -- '--prose <file>' "$TOOL/commands/pw-ship.md" \
     && pwtest_ok "T4 canary: pw-ship request-review routing text" \
     || pwtest_bad "T4 canary: pw-ship request-review routing" "the read-only request-review mode (selector mapping, pre-flight ordering, --prose flow) died from the command file"
+  # sync opt-in conflict resolution (plan 48): the boolean flag, the default-abort contract, and
+  # the conditionally loaded procedure must all stay wired; the procedure must keep the
+  # deterministic finish/bind path rather than re-describing a raw edit-and-push loop.
+  grep -qF -- '[--auto-resolve]' "$TOOL/commands/pw-sync.md" \
+    && grep -qF 'Conflict without the flag?' "$TOOL/commands/pw-sync.md" \
+    && grep -qF 'references/sync-conflict-resolution.md' "$TOOL/commands/pw-sync.md" \
+    && grep -qF 'sync-finish' "$TOOL/skill/project-workflow/references/sync-conflict-resolution.md" \
+    && grep -qF 'sync-bind' "$TOOL/skill/project-workflow/references/sync-conflict-resolution.md" \
+    && pwtest_ok "T4 canary: sync opt-in conflict resolution wiring" \
+    || pwtest_bad "T4 canary: sync opt-in conflict resolution wiring" "the --auto-resolve flag, default-abort text, reference pointer, or finish/bind procedure died"
   # generation-prompt wiring: the two-call prose flow must name the editable prompt files and the
   # observed-head comparison — losing either re-opens ungrounded prose generation. The procedure
   # lives in the request-review reference; the command must still point at it.

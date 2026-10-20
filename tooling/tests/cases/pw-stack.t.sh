@@ -853,3 +853,45 @@ printf 'T99\tshort\trow\n' >> "$SV_DIR/task/stack.tsv"
 pwtest_rc 2 "P2 schema: a malformed row is rejected before operations" "$(pwtest_script $SH)" stack-record --project "$SV" --task T01 --set "branch=agent/$SV/T01-$SV"
 pwtest_err 'malformed row' "P2 schema: malformed-row refusal names the reason"
 rm -rf "$PW_PROJECTS_DIR/$SV"
+# --- guarded conflict handoff (plan 48): keep the merge, resolve, resume ------
+# The default cascade aborts internally. --on-conflict keep leaves an attempt-owned
+# conflicted merge in the descendant worktree so an authorized resolver can act.
+SC=stackconf; SC_DIR="$(stack_mkproj "$SC")"
+pwtest_repo gitrepo
+git -C "$PW_REPOS/gitrepo" checkout -q master
+git -C "$PW_REPOS/gitrepo" checkout -q -B "agent/$SC/T01-base" master
+printf 'parent-base\n' > "$PW_REPOS/gitrepo/conflict.txt"
+git -C "$PW_REPOS/gitrepo" add -A
+git -C "$PW_REPOS/gitrepo" -c user.email=t@t -c user.name=t commit -qm "SC parent base"
+git -C "$PW_REPOS/gitrepo" push -q -u origin "agent/$SC/T01-base" >/dev/null 2>&1
+git -C "$PW_REPOS/gitrepo" checkout -q -B "agent/$SC/T02-base" "agent/$SC/T01-base"
+printf 'child\n' > "$PW_REPOS/gitrepo/conflict.txt"
+git -C "$PW_REPOS/gitrepo" add -A
+git -C "$PW_REPOS/gitrepo" -c user.email=t@t -c user.name=t commit -qm "SC child"
+git -C "$PW_REPOS/gitrepo" push -q -u origin "agent/$SC/T02-base" >/dev/null 2>&1
+git -C "$PW_REPOS/gitrepo" checkout -q "agent/$SC/T01-base"
+printf 'parent\n' > "$PW_REPOS/gitrepo/conflict.txt"
+git -C "$PW_REPOS/gitrepo" add -A
+git -C "$PW_REPOS/gitrepo" -c user.email=t@t -c user.name=t commit -qm "SC parent advance"
+git -C "$PW_REPOS/gitrepo" push -q origin "agent/$SC/T01-base" >/dev/null 2>&1
+git -C "$PW_REPOS/gitrepo" checkout -q master
+stack_task "$SC_DIR" T01 gitrepo master "agent/$SC/T01-base" none none done
+stack_task "$SC_DIR" T02 gitrepo master "agent/$SC/T02-base" T01 T01 todo
+printf 'SC T01 verify\n' > "$ROOT/sc-ev-T01"
+pwtest_rc 0 "SC root binds verification before cascade" "$(pwtest_script $SH)" stack-verify --project "$SC" --task T01 --evidence "$ROOT/sc-ev-T01"
+SC_OPKEY="cascade:T01:$(git -C "$PW_REPOS/gitrepo" rev-parse "agent/$SC/T01-base" | cut -c1-7)"
+pwtest_rc 2 "cascade --on-conflict keep stops blocked" "$(pwtest_script $SH)" stack-cascade --project "$SC" --task T01 --on-conflict keep
+pwtest_err 'kept the T02 merge' "handoff names the kept merge"
+SC_WT="$SC_DIR/worktree/gitrepo/T02-stackconf"
+[ -n "$(git -C "$SC_WT" rev-parse --verify --quiet MERGE_HEAD || true)" ] \
+  && pwtest_ok "conflicted merge kept in the descendant worktree" || pwtest_bad "keep handoff" "merge was aborted"
+SC_STAGES="$("$(pwtest_script $SH)" stack-op --project "$SC" list | awk -F'\t' -v k="$SC_OPKEY" '$1==k{print $7}')"
+case "$SC_STAGES" in *T02:integrate=blocked*) pwtest_ok "integrate stage blocked" ;; *) pwtest_bad "integrate stage" "$SC_STAGES" ;; esac
+printf 'resolved\n' > "$SC_WT/conflict.txt"
+git -C "$SC_WT" add conflict.txt
+git -C "$SC_WT" -c user.email=t@t -c user.name=t commit -qm "resolve SC conflict"
+pwtest_rc 0 "mark the resolved integration done" "$(pwtest_script $SH)" stack-op --project "$SC" set --key "$SC_OPKEY" --state "T02:integrate=done"
+pwtest_rc 0 "cascade resumes after resolution" "$(pwtest_script $SH)" stack-cascade --project "$SC" --task T01 --verify-cmd 'echo ok' --on-conflict keep
+pwtest_grep_file 'Inherited:' "inherited update recorded after resume" "$SC_DIR/task/T02.md"
+pwtest_eq "T02 bound after cascade resume" "$(git -C "$SC_WT" rev-parse HEAD)" "$(_st_get "$SC_DIR" T02 verified_head)"
+rm -rf "$PW_PROJECTS_DIR/$SC"

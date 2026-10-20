@@ -37,6 +37,7 @@ phases, `--json` prints a machine-readable object. No slug; never writes.
 | execute `task/PLAN.md`, or pick a model/provider for a task | [`references/execution-and-routing.md`](references/execution-and-routing.md) |
 | apply review comments (local `.review.md` or MR/PR feedback) | [`references/review.md`](references/review.md) |
 | handle MR review comments post-ship (`/pw-ship comments`, cascade) | [`references/mr-comments.md`](references/mr-comments.md) |
+| reconcile a sync conflict, or resume a recorded attempt (`/pw-sync --auto-resolve`) | [`references/sync-conflict-resolution.md`](references/sync-conflict-resolution.md) |
 | compose a read-only review-request message (`/pw-ship request-review`) | [`references/review-request.md`](references/review-request.md) |
 | close out a finished project | [`references/close.md`](references/close.md) |
 | call an automation script (gates, lint, status, ship, fetch — the 14 `pw-*.sh` helpers) | [`tooling/docs/scripts/README.md`](../../docs/scripts/README.md) |

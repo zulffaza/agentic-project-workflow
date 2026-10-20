@@ -352,3 +352,13 @@ C279-context-completion-handoff-dropped	skill/project-workflow/references/contex
 C280-ai-surface-selector-dropped	commands/pw-review.md	--surface <context|analysis|plan|task-plan|task-exec|ship|rfc|close>	--surface <context>	T4	-
 C281-context-initall-message-regressed	scripts/entities/pw-review.sh	context readiness review is optional	no review files to initialize yet	T1	pw-review-states.t.sh
 C282-context-guidance-hint-dropped	scripts/entities/pw-project-doctor.sh	Assisted preparation also creates an optional feedback record at `review/CONTEXT.review.md`.	Assisted preparation creates no review record.	T4	-
+# C283–C288 minted by the sync auto conflict-resolution plan: keep-conflict handoff, finish marker guard,
+# bind cleanliness, and pinned task/target freshness must all stay wired.
+C283-sync-keep-conflict-aborted	scripts/entities/pw-ship.sh	if [ "$keep" = 1 ]; then	if false; then	T1	pw-sync.t.sh
+C284-sync-marker-guard-dropped	scripts/entities/pw-ship.sh	[ -z "$markers" ] || die "introduced conflict markers remain	[ -z "$markers" ] || true #	T1	pw-sync.t.sh
+C285-sync-bind-clean-guard-dropped	scripts/entities/pw-ship.sh	|| die "worktree $wt is dirty after verification	|| true #	T1	pw-sync.t.sh
+C286-sync-target-staleness-dropped	scripts/entities/pw-ship.sh	[ "$cur_target" = "$rec_target" ] ||	[ "$cur_target" = "$cur_target" ] ||	T1	pw-sync.t.sh
+C287-cascade-keep-handoff-dropped	scripts/entities/pw-ship.sh	if [ "$on_conflict" = keep ] && [ -n "$cpaths" ]; then	if false; then	T1	pw-stack.t.sh
+C288-sync-remote-head-staleness-dropped	scripts/entities/pw-ship.sh	[ "$cur_remote" = "$rec_remote" ] ||	[ "$cur_remote" = "$cur_remote" ] ||	T1	pw-sync.t.sh
+C289-sync-conflict-reference-pointer-lost	commands/pw-sync.md	references/sync-conflict-resolution.md	the conflict procedure	T4	-
+C290-sync-second-repair-allowed	scripts/entities/pw-ship.sh	[ "${repair:-0}" = "0" ] || die "repair budget exhausted	[ "${repair:-0}" = "0" ] || true #	T1	pw-sync.t.sh

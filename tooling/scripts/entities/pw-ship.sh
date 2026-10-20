@@ -11,6 +11,11 @@
 #   pw-ship.sh dashboard-mr-state --project <slug> --task <task-id> --state <state>
 #   pw-ship.sh history            --project <slug> --operation <invocation|pending|init|begin|checkpoint|freeze|deliver> [--mr <MR-url>] [--options <text…>]
 #   pw-ship.sh request-review     --project <slug> [--all | --task <task-id>]… [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]
+#   pw-ship.sh sync-attempt       --project <slug> begin|set|show|check|clear …
+#   pw-ship.sh sync-merge         --project <slug> --task <task-id> --target <sha> [--keep-conflict]
+#   pw-ship.sh sync-finish        --project <slug> --task <task-id>
+#   pw-ship.sh sync-bind          --project <slug> --task <task-id> --evidence <path>
+#   pw-ship.sh sync-abort         --project <slug> --task <task-id>
 #
 # Named-argument grammar: operation words first, every value named; --project
 # selects the project in every project form. Scalar values are ONE token (quote
@@ -2542,7 +2547,7 @@ _stage_done() {
   case "$(_stage_state "$1" "$2")" in done|skipped) return 0 ;; *) return 1 ;; esac
 }
 
-# stack-cascade --project <slug> --task <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>]
+# stack-cascade --project <slug> --task <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>] [--on-conflict <abort|keep>]
 # Deterministic descendant propagation after an upstream fix: for each transitive stack descendant,
 # parent-first, it drives the mechanical stages — integrate (merge the immediate parent's recorded
 # verified head), verify (bind through stack-verify after the caller-supplied verification command
@@ -2556,7 +2561,7 @@ _stage_done() {
 # the shared clone. The describe stage exists only for shipped descendants and is completed by the
 # command layer after the history delivery, so a description update cannot vanish.
 cmd_stack_cascade() {
-  local slug="" root="" push=0 vcmd="" evdir="" a v
+  local slug="" root="" push=0 vcmd="" evdir="" on_conflict="abort" a v
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
     case "$a" in
@@ -2564,6 +2569,7 @@ cmd_stack_cascade() {
       --task=*)         v="${a#*=}"; a="--task" ;;
       --verify-cmd=*)   v="${a#*=}"; a="--verify-cmd" ;;
       --evidence-dir=*) v="${a#*=}"; a="--evidence-dir" ;;
+      --on-conflict=*)  v="${a#*=}"; a="--on-conflict" ;;
     esac
     case "$a" in
       --project)
@@ -2574,14 +2580,17 @@ cmd_stack_cascade() {
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --verify-cmd; v="$1"; shift; }; vcmd="$v" ;;
       --evidence-dir)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --evidence-dir; v="$1"; shift; }; evdir="$v" ;;
+      --on-conflict)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --on-conflict; v="$1"; shift; }
+        case "$v" in abort|keep) on_conflict="$v" ;; *) die "stack-cascade: --on-conflict must be abort or keep (got '$v')" ;; esac ;;
       --push) push=1 ;;
       -h|--help) pw_usage ;;
-      -*) _pw_unknown "$a" "stack-cascade --project <slug> --task <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>]" ;;
-      *) _pw_positional "$a" "stack-cascade --project <slug> --task <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>]" ;;
+      -*) _pw_unknown "$a" "stack-cascade --project <slug> --task <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>] [--on-conflict <abort|keep>]" ;;
+      *) _pw_positional "$a" "stack-cascade --project <slug> --task <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>] [--on-conflict <abort|keep>]" ;;
     esac
   done
-  [ -n "$slug" ] || die "stack-cascade: --project is required → fix: stack-cascade --project <slug> --task <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>]"
-  [ -n "$root" ] || die "stack-cascade: --task is required → fix: stack-cascade --project <slug> --task <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>]"
+  [ -n "$slug" ] || die "stack-cascade: --project is required → fix: stack-cascade --project <slug> --task <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>] [--on-conflict <abort|keep>]"
+  [ -n "$root" ] || die "stack-cascade: --task is required → fix: stack-cascade --project <slug> --task <task-id> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>] [--on-conflict <abort|keep>]"
   pw_task_id_ok "$root" || die "invalid task id: $root"
   local d; d="$(proj_dir "$slug")"
   pw_stack_state_validate "$d" || die "stack state invalid (see the reason above) → fix: repair task/stack.tsv before a cascade"
@@ -2688,8 +2697,24 @@ cmd_stack_cascade() {
     fi
     # --- integrate: merge the parent's recorded verified head (no merge when already contained) ---
     if ! _stage_done "$stages" "$D:integrate"; then
+      if [ -n "$(git -C "$workdir" rev-parse --verify --quiet MERGE_HEAD 2>/dev/null || true)" ]; then
+        cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:integrate=blocked" >/dev/null || die "stack-cascade: stage write failed"
+        blocked="$blocked$D "; failed=1
+        echo "stack-cascade: $D still has an unresolved merge in $workdir → finish and commit it, then mark it done (stack-op --project $slug set --key $opkey --state $D:integrate=done) and re-run" >&2
+        continue
+      fi
       if ! git -C "$workdir" merge-base --is-ancestor "$psha" HEAD 2>/dev/null; then
         if ! git -C "$workdir" -c user.email=stack@pw -c user.name=stack merge -q --no-edit -m "stack cascade: merge $pd @ $(printf '%s' "$psha" | cut -c1-12) into $D" "$psha"; then
+          local cpaths; cpaths="$(git -C "$workdir" diff --name-only --diff-filter=U 2>/dev/null || true)"
+          if [ "$on_conflict" = keep ] && [ -n "$cpaths" ]; then
+            # Guarded handoff: leave the conflicted index for an authorized resolver. The caller
+            # finishes it in place, marks integrate=done, and re-runs; nothing is published here.
+            cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:integrate=blocked" >/dev/null || die "stack-cascade: stage write failed"
+            blocked="$blocked$D "; failed=1
+            echo "stack-cascade: conflict: $(printf '%s' "$cpaths" | tr '\n' ' ')"
+            echo "stack-cascade: kept the $D merge in $workdir for agent resolution (stage blocked, subtree blocked); after resolving and committing: stack-op --project $slug set --key $opkey --state $D:integrate=done, then re-run" >&2
+            continue
+          fi
           git -C "$workdir" merge --abort >/dev/null 2>&1 || true
           cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:integrate=blocked" >/dev/null || die "stack-cascade: stage write failed"
           blocked="$blocked$D "; failed=1
@@ -2766,6 +2791,455 @@ cmd_stack_cascade() {
   return 0
 }
 
+# --- sync attempts (opt-in conflict reconciliation) ---------------------------
+# task/sync-attempts.tsv is a project-owned, machine-written record of one /pw-sync
+# attempt per task. It exists so an interrupted run can tell a prepared attempt from
+# an active merge, a completed local merge, and an observed publication — and so a
+# resolution cannot be certified against inputs that moved underneath it.
+#
+# Columns (TAB-separated, fixed order):
+#   task repo branch kind mode start_head remote_head target_branch target_sha
+#   stage repair result_head evidence created updated
+_SYNC_ATTEMPT_HDR="task${_pw_stack_tab}repo${_pw_stack_tab}branch${_pw_stack_tab}kind${_pw_stack_tab}mode${_pw_stack_tab}start_head${_pw_stack_tab}remote_head${_pw_stack_tab}target_branch${_pw_stack_tab}target_sha${_pw_stack_tab}stage${_pw_stack_tab}repair${_pw_stack_tab}result_head${_pw_stack_tab}evidence${_pw_stack_tab}created${_pw_stack_tab}updated"
+_SYNC_ATTEMPT_NCOL=15
+
+_sync_attempt_file() { printf '%s/task/sync-attempts.tsv' "$1"; }
+
+_sync_attempt_validate() {
+  local f="$1"
+  [ -e "$f" ] || return 0
+  [ -L "$f" ] && { echo "sync-attempt: refusing to read through a symlink $f" >&2; return 1; }
+  [ -f "$f" ] || { echo "sync-attempt: not a regular file: $f → fix: repair task/sync-attempts.tsv (machine-owned)" >&2; return 1; }
+  [ "$(sed -n '1p' "$f" 2>/dev/null || true)" = "$_SYNC_ATTEMPT_HDR" ] \
+    || { echo "sync-attempt: unsupported header in $f → fix: restore task/sync-attempts.tsv (never hand-edit the columns)" >&2; return 1; }
+  awk -F'\t' -v n="$_SYNC_ATTEMPT_NCOL" 'NR>1 && NF>0 && NF!=n{bad=1} END{exit bad}' "$f" \
+    || { echo "sync-attempt: malformed row(s) in $f (field count) → fix: repair the record before resuming" >&2; return 1; }
+  return 0
+}
+
+_sync_col_idx() {
+  case "$1" in
+    task) echo 1 ;; repo) echo 2 ;; branch) echo 3 ;; kind) echo 4 ;; mode) echo 5 ;;
+    start_head) echo 6 ;; remote_head) echo 7 ;; target_branch) echo 8 ;; target_sha) echo 9 ;;
+    stage) echo 10 ;; repair) echo 11 ;; result_head) echo 12 ;; evidence) echo 13 ;;
+    created) echo 14 ;; updated) echo 15 ;;
+    *) return 1 ;;
+  esac
+}
+
+_sync_attempt_get() {  # <projdir> <task> <col>
+  local f; f="$(_sync_attempt_file "$1")"; local i; i="$(_sync_col_idx "$3")" || return 2
+  awk -F'\t' -v t="$2" -v i="$i" '$1==t{print $i; exit}' "$f" 2>/dev/null || true
+}
+
+_sync_attempt_upsert() {  # <projdir> <task> <col=value>…
+  [ $# -ge 3 ] || { echo "sync-attempt: usage: <projdir> <task> <col=value>…" >&2; return 2; }
+  local proj="$1" task="$2"; shift 2
+  pw_task_id_ok "$task" || { echo "sync-attempt: invalid task id '$task'" >&2; return 2; }
+  local dir="$proj/task" f; f="$(_sync_attempt_file "$proj")"; mkdir -p "$dir"
+  pw_path_within "$proj" "$f" || { echo "sync-attempt: refusing to write outside $proj ($f)" >&2; return 2; }
+  _sync_attempt_validate "$f" || return 2
+  local assign="" kv col v ci
+  for kv in "$@"; do
+    col="${kv%%=*}"; v="${kv#*=}"
+    ci="$(_sync_col_idx "$col")" || { echo "sync-attempt: unknown column '$col'" >&2; return 2; }
+    _stack_val_bad "$v" && { echo "sync-attempt: value for '$col' contains a reserved character (pipe/TAB/newline)" >&2; return 2; }
+    assign="$assign${assign:+|}${ci}:${v}"
+  done
+  local tmp ld="$dir/.sync-attempts.tsv.lock"
+  pw_lock "$ld" || { echo "sync-attempt: could not acquire $ld (another writer active)" >&2; return 2; }
+  if [ ! -f "$f" ]; then
+    printf '%s\n' "$_SYNC_ATTEMPT_HDR" > "$f" || { pw_unlock "$ld"; return 2; }
+  fi
+  tmp="$(pw_tmpfile "$dir")"
+  awk -F'\t' -v task="$task" -v ncol="$_SYNC_ATTEMPT_NCOL" -v assigns="$assign" '
+    BEGIN { n = split(assigns, A, "|"); for (i = 1; i <= n; i++) { if (A[i] == "") continue; p = index(A[i], ":"); C[substr(A[i], 1, p - 1)] = substr(A[i], p + 1) } found = 0 }
+    /^#/ { print; next }
+    !hdr { hdr = 1; print; next }
+    {
+      if ($1 == task) { found = 1; for (i = 1; i <= ncol; i++) row[i] = $i }
+      else print
+    }
+    END {
+      row[1] = task
+      for (i in C) row[i + 0] = C[i]
+      line = ""
+      for (i = 1; i <= ncol; i++) line = line (i > 1 ? "\t" : "") (row[i] == "" ? "-" : row[i])
+      print line
+    }' "$f" > "$tmp" 2>/dev/null || { rm -f "$tmp"; pw_unlock "$ld"; echo "sync-attempt: rewrite failed" >&2; return 2; }
+  if ! awk -F'\t' -v n="$_SYNC_ATTEMPT_NCOL" 'NF!=n{bad=1} END{exit bad}' "$tmp"; then
+    rm -f "$tmp"; pw_unlock "$ld"; echo "sync-attempt: refusing to install a malformed row" >&2; return 2
+  fi
+  mv "$tmp" "$f" || { rm -f "$tmp"; pw_unlock "$ld"; return 2; }
+  pw_unlock "$ld"
+}
+
+# _sync_repo_dir <repo> — the single-name repository dir, or empty when unsafe/missing.
+_sync_repo_dir() {
+  local repo="$1" rd
+  case "$repo" in ''|.|..|*/*) return 0 ;; esac
+  rd="$REPOS_DIR/$repo"
+  [ -d "$rd" ] && pw_dir_within "$REPOS_DIR" "$rd" && printf '%s' "$rd"
+}
+
+# _sync_worktree <d> <task> — mounted task worktree or empty.
+_sync_worktree() { _stack_task_repo_dir "$1" "$2" 2>/dev/null || true; }
+
+# _sync_git_op <dir> — the active operation name, or empty.
+_sync_git_op() {
+  local d="$1" p
+  p="$(git -C "$d" rev-parse --git-path MERGE_HEAD 2>/dev/null || true)"
+  [ -n "$p" ] && [ -f "$p" ] && { echo merge; return 0; }
+  p="$(git -C "$d" rev-parse --git-path rebase-merge 2>/dev/null || true)"
+  [ -n "$p" ] && [ -d "$p" ] && { echo rebase; return 0; }
+  p="$(git -C "$d" rev-parse --git-path rebase-apply 2>/dev/null || true)"
+  [ -n "$p" ] && [ -d "$p" ] && { echo rebase; return 0; }
+  p="$(git -C "$d" rev-parse --git-path CHERRY_PICK_HEAD 2>/dev/null || true)"
+  [ -n "$p" ] && [ -f "$p" ] && { echo cherry-pick; return 0; }
+  p="$(git -C "$d" rev-parse --git-path REVERT_HEAD 2>/dev/null || true)"
+  [ -n "$p" ] && [ -f "$p" ] && { echo revert; return 0; }
+  return 0
+}
+
+cmd_sync_attempt() {
+  local slug="" sub="" task="" kind="" mode="" tbranch="" stage="" repair="" rhead="" ev="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*) v="${a#*=}"; a="--task" ;;
+      --kind=*) v="${a#*=}"; a="--kind" ;;
+      --mode=*) v="${a#*=}"; a="--mode" ;;
+      --target-branch=*) v="${a#*=}"; a="--target-branch" ;;
+      --stage=*) v="${a#*=}"; a="--stage" ;;
+      --repair=*) v="${a#*=}"; a="--repair" ;;
+      --result-head=*) v="${a#*=}"; a="--result-head" ;;
+      --evidence=*) v="${a#*=}"; a="--evidence" ;;
+    esac
+    case "$a" in
+      --project|--task|--kind|--mode|--target-branch|--stage|--repair|--result-head|--evidence)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project) slug="$v" ;; --task) task="$v" ;; --kind) kind="$v" ;;
+          --mode) mode="$v" ;; --target-branch) tbranch="$v" ;; --stage) stage="$v" ;;
+          --repair) repair="$v" ;; --result-head) rhead="$v" ;; --evidence) ev="$v" ;;
+        esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "sync-attempt --project <slug> begin|set|show|check|clear …" ;;
+      *) if [ -z "$sub" ]; then sub="$a"; else _pw_positional "$a" "sync-attempt --project <slug> begin|set|show|check|clear …"; fi ;;
+    esac
+  done
+  [ -n "$slug" ] || die "sync-attempt: --project is required → fix: sync-attempt --project <slug> begin|set|show|check|clear …"
+  case "$sub" in
+    begin|set|show|check|clear) : ;;
+    "") die "sync-attempt: an operation word is required → fix: begin|set|show|check|clear" ;;
+    *) die "unknown sync-attempt subcommand '$sub' → fix: begin|set|show|check|clear" ;;
+  esac
+  local d; d="$(proj_dir "$slug")"; local f; f="$(_sync_attempt_file "$d")"
+  _sync_attempt_validate "$f" || die "sync attempt record invalid (see the reason above) → fix: repair task/sync-attempts.tsv"
+  case "$sub" in
+    show)
+      [ -f "$f" ] || { echo "no sync attempts recorded"; return 0; }
+      if [ -n "$task" ]; then awk -F'\t' -v t="$task" 'NR>1 && $1==t' "$f"; else awk 'NR>1' "$f"; fi ;;
+    begin)
+      [ -n "$task" ] && [ -n "$kind" ] && [ -n "$mode" ] && [ -n "$tbranch" ] \
+        || die "usage: sync-attempt --project <slug> begin --task <T0n> --kind <independent|stack> --mode <auto|clean> --target-branch <branch>"
+      pw_task_id_ok "$task" || die "invalid task id: $task"
+      pw_branch_ok "$tbranch" || die "invalid target branch '$tbranch' → fix: pass a ref-safe branch name"
+      case "$kind" in independent|stack) : ;; *) die "unknown sync kind '$kind' → fix: independent|stack" ;; esac
+      case "$mode" in auto|clean) : ;; *) die "unknown sync mode '$mode' → fix: auto|clean" ;; esac
+      [ -n "$(_sync_attempt_get "$d" "$task" stage)" ] \
+        && die "sync attempt for $task already exists (stage $(_sync_attempt_get "$d" "$task" stage)) → fix: resume it or run sync-abort/clear first"
+      local repo branch start rh ts_sha now rd
+      repo="$(_stack_repo_of "$d" "$task")"; branch="$(_stack_branch_of "$d" "$task")"
+      [ -n "$repo" ] && [ -n "$branch" ] || die "task $task needs Repo/Branch fields to start a sync attempt"
+      rd="$(_sync_repo_dir "$repo")"
+      [ -n "$rd" ] || die "repo not found or unsafe: $REPOS_DIR/$repo → fix: a single repository directory name"
+      pw_branch_ok "$branch" || die "refusing unsafe Branch '$branch' for $task → fix: correct the task file"
+      start="$(git -C "$rd" rev-parse "refs/heads/$branch" 2>/dev/null || true)"
+      [ -n "$start" ] || die "cannot resolve local task branch '$branch' → fix: ensure the task worktree exists"
+      rh="$(git -C "$rd" rev-parse "refs/remotes/origin/$branch" 2>/dev/null || true)"
+      [ -n "$rh" ] || die "cannot resolve origin/$branch → fix: fetch origin before an auto-resolve attempt"
+      ts_sha="$(git -C "$rd" rev-parse "refs/remotes/origin/$tbranch" 2>/dev/null || true)"
+      [ -n "$ts_sha" ] || die "cannot resolve origin/$tbranch → fix: fetch the target branch before an auto-resolve attempt"
+      now="$(pw_now_wib)" || die "cannot format the WIB timestamp"
+      _sync_attempt_upsert "$d" "$task" \
+        repo="$repo" branch="$branch" kind="$kind" mode="$mode" \
+        start_head="$start" remote_head="$rh" target_branch="$tbranch" target_sha="$ts_sha" \
+        stage=prepared repair=0 result_head=- evidence=- created="$now" updated="$now" \
+        || die "sync-attempt: could not record the attempt"
+      echo "$slug: $task sync attempt prepared (start ${start:0:12}, remote ${rh:0:12}, target $tbranch @ ${ts_sha:0:12})" ;;
+    set)
+      [ -n "$task" ] || die "sync-attempt set: --task is required"
+      [ -n "$(_sync_attempt_get "$d" "$task" stage)" ] || die "no sync attempt for $task → fix: begin one first"
+      [ -n "$stage" ] || [ -n "$repair" ] || [ -n "$rhead" ] || [ -n "$ev" ] \
+        || die "sync-attempt set: pass at least one of --stage, --repair, --result-head, --evidence"
+      local cur; cur="$(_sync_attempt_get "$d" "$task" stage)"
+      local -a sargs=(); sargs[0]="updated=$(pw_now_wib)"
+      if [ -n "$stage" ]; then
+        case "$stage" in
+          failed) [ "$cur" != "pushed" ] || die "cannot mark a published attempt failed → fix: reconcile publication first" ;;
+          pushed) [ "$cur" = "verified" ] || die "pushed requires verified evidence (current: $cur) → fix: run sync-bind after Verify" ;;
+          *) die "stage '$stage' is set by the deterministic operators → fix: use sync-merge/sync-finish/sync-bind, or failed" ;;
+        esac
+        sargs[${#sargs[@]}]="stage=$stage"
+      fi
+      if [ -n "$repair" ]; then
+        case "$repair" in 0|1) : ;; *) die "--repair must be 0 or 1" ;; esac
+        sargs[${#sargs[@]}]="repair=$repair"
+      fi
+      if [ -n "$rhead" ]; then
+        printf '%s' "$rhead" | grep -Eq '^[0-9a-fA-F]{7,64}$' || die "invalid --result-head '$rhead'"
+        sargs[${#sargs[@]}]="result_head=$rhead"
+      fi
+      if [ -n "$ev" ]; then
+        [ -f "$ev" ] && [ -s "$ev" ] || die "evidence path missing or empty: $ev → fix: capture the real Verify output"
+        sargs[${#sargs[@]}]="evidence=$ev"
+      fi
+      _sync_attempt_upsert "$d" "$task" ${sargs[@]+"${sargs[@]}"} || die "sync-attempt: could not update the attempt"
+      echo "$slug: $task sync attempt updated (stage $(_sync_attempt_get "$d" "$task" stage), repair $(_sync_attempt_get "$d" "$task" repair))" ;;
+    check)
+      [ -n "$task" ] || die "sync-attempt check: --task is required"
+      local st; st="$(_sync_attempt_get "$d" "$task" stage)"
+      [ -n "$st" ] || die "no sync attempt for $task → fix: begin one first"
+      [ "$st" = "pushed" ] && { echo "published"; return 0; }
+      local repo branch rec_remote rec_target tbranch rd cur_remote cur_target
+      repo="$(_sync_attempt_get "$d" "$task" repo)"; branch="$(_sync_attempt_get "$d" "$task" branch)"
+      rec_remote="$(_sync_attempt_get "$d" "$task" remote_head)"
+      tbranch="$(_sync_attempt_get "$d" "$task" target_branch)"
+      rec_target="$(_sync_attempt_get "$d" "$task" target_sha)"
+      rd="$(_sync_repo_dir "$repo")"
+      [ -n "$rd" ] || die "recorded repo is missing or unsafe: $repo → fix: repair task/sync-attempts.tsv"
+      cur_remote="$(git -C "$rd" rev-parse "refs/remotes/origin/$branch" 2>/dev/null || true)"
+      cur_target="$(git -C "$rd" rev-parse "refs/remotes/origin/$tbranch" 2>/dev/null || true)"
+      [ -n "$cur_remote" ] || { echo "stale: origin/$branch is unreadable"; return 1; }
+      [ -n "$cur_target" ] || { echo "stale: origin/$tbranch is unreadable"; return 1; }
+      [ "$cur_remote" = "$rec_remote" ] || { echo "stale: origin/$branch moved ${rec_remote:0:12} -> ${cur_remote:0:12}"; return 1; }
+      [ "$cur_target" = "$rec_target" ] || { echo "stale: origin/$tbranch moved ${rec_target:0:12} -> ${cur_target:0:12}"; return 1; }
+      local rec_head expect cur_head wt
+      rec_head="$(_sync_attempt_get "$d" "$task" result_head)"
+      wt="$(_sync_worktree "$d" "$task")"
+      if [ -n "$wt" ]; then
+        cur_head="$(git -C "$wt" rev-parse HEAD)"
+        case "$st" in
+          prepared|conflict) expect="$(_sync_attempt_get "$d" "$task" start_head)" ;;
+          *) expect="$rec_head" ;;
+        esac
+        [ "$expect" = "-" ] || [ -z "$expect" ] || [ "$cur_head" = "$expect" ] \
+          || { echo "stale: worktree HEAD ${cur_head:0:12} != recorded ${expect:0:12}"; return 1; }
+      fi
+      echo "fresh"; return 0 ;;
+    clear)
+      [ -n "$task" ] || die "sync-attempt clear: --task is required"
+      [ -f "$f" ] || { echo "no sync attempts recorded"; return 0; }
+      [ -L "$f" ] && die "refusing to write through symlink $f"
+      local ld="$f.lock" tmp; ld="$d/task/.sync-attempts.tsv.lock"
+      pw_lock "$ld" || die "sync-attempt: could not acquire $ld (another writer active)"
+      tmp="$(pw_tmpfile "$d/task")"
+      awk -F'\t' -v t="$task" 'NR==1{print; next} $1!=t{print}' "$f" > "$tmp" 2>/dev/null \
+        || { rm -f "$tmp"; pw_unlock "$ld"; die "sync-attempt clear: rewrite failed"; }
+      mv "$tmp" "$f" || { rm -f "$tmp"; pw_unlock "$ld"; die "sync-attempt clear: install failed"; }
+      pw_unlock "$ld"
+      echo "$slug: sync attempt for $task cleared" ;;
+  esac
+}
+
+cmd_sync_merge() {
+  local slug="" task="" target="" keep=0 a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*) v="${a#*=}"; a="--task" ;;
+      --target=*) v="${a#*=}"; a="--target" ;;
+    esac
+    case "$a" in
+      --project|--task|--target)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --task) task="$v" ;; --target) target="$v" ;; esac ;;
+      --keep-conflict) keep=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "sync-merge --project <slug> --task <task-id> --target <sha> [--keep-conflict]" ;;
+      *) _pw_positional "$a" "sync-merge --project <slug> --task <task-id> --target <sha> [--keep-conflict]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "sync-merge: --project is required"
+  [ -n "$task" ] || die "sync-merge: --task is required"
+  [ -n "$target" ] || die "sync-merge: --target is required (the pinned target SHA)"
+  printf '%s' "$target" | grep -Eq '^[0-9a-fA-F]{7,64}$' || die "invalid --target '$target' → fix: pass the pinned commit SHA"
+  pw_task_id_ok "$task" || die "invalid task id: $task"
+  local d; d="$(proj_dir "$slug")"
+  _sync_attempt_validate "$(_sync_attempt_file "$d")" || die "sync attempt record invalid → fix: repair task/sync-attempts.tsv"
+  local st rec_target rec_start wt
+  st="$(_sync_attempt_get "$d" "$task" stage)"
+  [ -n "$st" ] || die "no sync attempt for $task → fix: sync-attempt begin first"
+  case "$st" in
+    prepared) : ;;
+    conflict) die "sync attempt is already resolving a conflict → fix: finish it (sync-finish) or abort it (sync-abort)" ;;
+    *) die "sync attempt is at stage '$st' → fix: an attempt merges only from prepared" ;;
+  esac
+  rec_target="$(_sync_attempt_get "$d" "$task" target_sha)"
+  [ "$target" = "$rec_target" ] || die "--target ${target:0:12} != pinned target ${rec_target:0:12} → fix: re-capture the attempt (inputs moved)"
+  rec_start="$(_sync_attempt_get "$d" "$task" start_head)"
+  wt="$(_sync_worktree "$d" "$task")"
+  [ -n "$wt" ] || die "no mounted worktree for $task → fix: create/attach the task worktree"
+  local branch; branch="$(_sync_attempt_get "$d" "$task" branch)"
+  [ "$(git -C "$wt" branch --show-current 2>/dev/null || true)" = "$branch" ] \
+    || die "worktree $wt is not on $branch → fix: re-attach the task worktree"
+  [ -z "$(git -C "$wt" status --porcelain 2>/dev/null || true)" ] \
+    || die "worktree $wt has uncommitted changes → fix: settle them before syncing"
+  local op; op="$(_sync_git_op "$wt")"
+  [ -z "$op" ] || die "worktree $wt has an active $op operation → fix: finish or abort it before syncing"
+  local cur; cur="$(git -C "$wt" rev-parse HEAD)"
+  [ "$cur" = "$rec_start" ] || die "worktree HEAD ${cur:0:12} != captured start ${rec_start:0:12} → fix: re-capture the attempt"
+  git -C "$wt" rev-parse --verify --quiet "$target^{commit}" >/dev/null \
+    || die "target $target is not a local commit → fix: fetch before an auto-resolve attempt"
+  local now; now="$(pw_now_wib)"
+  if git -C "$wt" merge --no-edit -q "$target" >/dev/null 2>&1; then
+    local head; head="$(git -C "$wt" rev-parse HEAD)"
+    _sync_attempt_upsert "$d" "$task" stage=resolved result_head="$head" updated="$now" \
+      || die "sync-merge: could not record the resolved merge"
+    echo "merged ${head:0:12}"
+    return 0
+  fi
+  local unmerged; unmerged="$(git -C "$wt" diff --name-only --diff-filter=U 2>/dev/null || true)"
+  if [ -z "$unmerged" ]; then
+    _sync_attempt_upsert "$d" "$task" stage=failed updated="$now" >/dev/null 2>&1 || true
+    echo "sync-merge: merge failed without unmerged paths — no conflict resolution attempted" >&2
+    return 2
+  fi
+  if [ "$keep" = 1 ]; then
+    _sync_attempt_upsert "$d" "$task" stage=conflict updated="$now" \
+      || die "sync-merge: could not record the conflict state"
+    echo "conflict: $(printf '%s' "$unmerged" | tr '\n' ' ')"
+    echo "sync-merge: conflict left in $wt for agent resolution (attempt $task)" >&2
+    return 3
+  fi
+  if git -C "$wt" merge --abort >/dev/null 2>&1; then
+    _sync_attempt_upsert "$d" "$task" stage=failed updated="$now" >/dev/null 2>&1 || true
+    echo "conflict: $(printf '%s' "$unmerged" | tr '\n' ' ')"
+    echo "sync-merge: conflict aborted, worktree restored (manual resolution required)" >&2
+    return 2
+  fi
+  _sync_attempt_upsert "$d" "$task" stage=failed updated="$now" >/dev/null 2>&1 || true
+  echo "sync-merge: merge --abort failed — worktree $wt needs manual recovery" >&2
+  return 2
+}
+
+cmd_sync_finish() {
+  local slug="" task="" a
+  while [ $# -gt 0 ]; do
+    a="$1"; shift
+    case "$a" in
+      --project=*) slug="${a#*=}" ;;
+      --project) [ $# -ge 1 ] || _pw_missing --project; slug="$1"; shift ;;
+      --task=*) task="${a#*=}" ;;
+      --task) [ $# -ge 1 ] || _pw_missing --task; task="$1"; shift ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "sync-finish --project <slug> --task <task-id>" ;;
+      *) _pw_positional "$a" "sync-finish --project <slug> --task <task-id>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "sync-finish: --project is required"
+  [ -n "$task" ] || die "sync-finish: --task is required"
+  local d; d="$(proj_dir "$slug")"
+  local st; st="$(_sync_attempt_get "$d" "$task" stage)"
+  [ "$st" = "conflict" ] || die "sync attempt is at stage '${st:-none}' → fix: sync-finish only continues an active conflicted merge"
+  local wt; wt="$(_sync_worktree "$d" "$task")"
+  [ -n "$wt" ] || die "no mounted worktree for $task"
+  [ -n "$(git -C "$wt" rev-parse --verify --quiet MERGE_HEAD 2>/dev/null || true)" ] \
+    || die "worktree $wt has no active merge → fix: resolve conflicts only inside the attempted merge"
+  local unmerged; unmerged="$(git -C "$wt" diff --name-only --diff-filter=U 2>/dev/null || true)"
+  [ -z "$unmerged" ] || die "unresolved paths remain: $(printf '%s' "$unmerged" | tr '\n' ' ') → fix: reconcile every path and stage it"
+  [ -n "$(git -C "$wt" diff --cached --name-only 2>/dev/null || true)" ] \
+    || die "no staged resolution paths → fix: stage each reviewed path"
+  local markers; markers="$(git -C "$wt" diff --cached -U0 2>/dev/null | grep -E '^\+(<<<<<<<|=======|>>>>>>>)' || true)"
+  [ -z "$markers" ] || die "introduced conflict markers remain in the staged diff → fix: remove them before completing the merge"
+  git -C "$wt" commit --no-edit -q >/dev/null 2>&1 \
+    || die "could not complete the merge commit in $wt → fix: inspect the merge and commit manually"
+  local head; head="$(git -C "$wt" rev-parse HEAD)"
+  _sync_attempt_upsert "$d" "$task" stage=resolved result_head="$head" updated="$(pw_now_wib)" \
+    || die "sync-finish: could not record the result head"
+  echo "resolved ${head:0:12}"
+}
+
+cmd_sync_bind() {
+  local slug="" task="" ev="" a
+  while [ $# -gt 0 ]; do
+    a="$1"; shift
+    case "$a" in
+      --project=*) slug="${a#*=}" ;;
+      --project) [ $# -ge 1 ] || _pw_missing --project; slug="$1"; shift ;;
+      --task=*) task="${a#*=}" ;;
+      --task) [ $# -ge 1 ] || _pw_missing --task; task="$1"; shift ;;
+      --evidence=*) ev="${a#*=}" ;;
+      --evidence) [ $# -ge 1 ] || _pw_missing --evidence; ev="$1"; shift ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "sync-bind --project <slug> --task <task-id> --evidence <path>" ;;
+      *) _pw_positional "$a" "sync-bind --project <slug> --task <task-id> --evidence <path>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "sync-bind: --project is required"
+  [ -n "$task" ] || die "sync-bind: --task is required"
+  [ -n "$ev" ] || die "sync-bind: --evidence is required"
+  [ -f "$ev" ] && [ -s "$ev" ] || die "evidence path missing or empty: $ev → fix: capture the real Verify output"
+  [ -n "$(tr -d '[:space:]' < "$ev" 2>/dev/null || true)" ] || die "evidence file has no content beyond whitespace: $ev"
+  local d; d="$(proj_dir "$slug")"
+  local st repair; st="$(_sync_attempt_get "$d" "$task" stage)"; repair="$(_sync_attempt_get "$d" "$task" repair)"
+  case "$st" in
+    resolved|verified) : ;;
+    *) die "sync attempt is at stage '${st:-none}' → fix: finish the merge before binding verification" ;;
+  esac
+  local wt; wt="$(_sync_worktree "$d" "$task")"
+  [ -n "$wt" ] || die "no mounted worktree for $task"
+  [ -z "$(git -C "$wt" status --porcelain 2>/dev/null || true)" ] \
+    || die "worktree $wt is dirty after verification → fix: commit allowed changes and verify the final HEAD again"
+  local head rec next_repair; head="$(git -C "$wt" rev-parse HEAD)"; rec="$(_sync_attempt_get "$d" "$task" result_head)"
+  next_repair="${repair:-0}"
+  if [ "$head" != "$rec" ]; then
+    [ "$st" = "verified" ] || die "HEAD ${head:0:12} != recorded result ${rec:0:12} → fix: commit the repair and verify that HEAD"
+    [ "${repair:-0}" = "0" ] || die "repair budget exhausted (one follow-up pass) → fix: restore a verified state or stop for manual resolution"
+    next_repair=1
+  fi
+  _sync_attempt_upsert "$d" "$task" stage=verified repair="$next_repair" result_head="$head" evidence="$ev" updated="$(pw_now_wib)" \
+    || die "sync-bind: could not record the verification binding"
+  echo "$slug: $task sync resolution verified at ${head:0:12} (evidence $ev)"
+}
+
+cmd_sync_abort() {
+  local slug="" task="" a
+  while [ $# -gt 0 ]; do
+    a="$1"; shift
+    case "$a" in
+      --project=*) slug="${a#*=}" ;;
+      --project) [ $# -ge 1 ] || _pw_missing --project; slug="$1"; shift ;;
+      --task=*) task="${a#*=}" ;;
+      --task) [ $# -ge 1 ] || _pw_missing --task; task="$1"; shift ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "sync-abort --project <slug> --task <task-id>" ;;
+      *) _pw_positional "$a" "sync-abort --project <slug> --task <task-id>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "sync-abort: --project is required"
+  [ -n "$task" ] || die "sync-abort: --task is required"
+  local d; d="$(proj_dir "$slug")"
+  local st; st="$(_sync_attempt_get "$d" "$task" stage)"
+  [ -n "$st" ] || die "no sync attempt for $task"
+  [ "$st" != "pushed" ] || die "attempt is already published → fix: reconcile the publication; abort cannot undo a push"
+  local wt; wt="$(_sync_worktree "$d" "$task")"
+  if [ -n "$wt" ] && [ -n "$(git -C "$wt" rev-parse --verify --quiet MERGE_HEAD 2>/dev/null || true)" ]; then
+    git -C "$wt" merge --abort >/dev/null 2>&1 \
+      || die "merge --abort failed in $wt → fix: manual recovery; do not hard-reset unrelated work"
+  fi
+  _sync_attempt_upsert "$d" "$task" stage=failed updated="$(pw_now_wib)" \
+    || die "sync-abort: could not record the failure"
+  echo "$slug: $task sync attempt aborted (stage failed)"
+  if [ -n "$wt" ]; then
+    local untracked; untracked="$(git -C "$wt" ls-files --others --exclude-standard 2>/dev/null || true)"
+    [ -z "$untracked" ] || echo "untracked files remain (inspect ownership before removing): $(printf '%s' "$untracked" | tr '\n' ' ')" >&2
+  fi
+}
+
 case "${1:-}" in
   history)            shift; cmd_history "$@" ;;
   request-review)     shift; cmd_request_review "$@" ;;
@@ -2791,5 +3265,10 @@ case "${1:-}" in
   stack-adopt)        shift; cmd_stack_adopt "$@" ;;
   stack-inherited)    shift; cmd_stack_inherited "$@" ;;
   stack-cascade)      shift; cmd_stack_cascade "$@" ;;
-  *) die "usage: pw-ship.sh <resolve|exec|monitor|mr-state|mr-state-batch|comment-seen|dashboard-mr-state|history|request-review|stack|stack-validate|stack-plan|stack-record|stack-verify|stack-fresh|stack-stale|stack-land|stack-promote|stack-retarget|stack-op|stack-debt|stack-adopt|stack-inherited|stack-cascade> … (see --help)" ;;
+  sync-attempt)       shift; cmd_sync_attempt "$@" ;;
+  sync-merge)         shift; cmd_sync_merge "$@" ;;
+  sync-finish)        shift; cmd_sync_finish "$@" ;;
+  sync-bind)          shift; cmd_sync_bind "$@" ;;
+  sync-abort)         shift; cmd_sync_abort "$@" ;;
+  *) die "usage: pw-ship.sh <resolve|exec|monitor|mr-state|mr-state-batch|comment-seen|dashboard-mr-state|history|request-review|stack|stack-validate|stack-plan|stack-record|stack-verify|stack-fresh|stack-stale|stack-land|stack-promote|stack-retarget|stack-op|stack-debt|stack-adopt|stack-inherited|stack-cascade|sync-attempt|sync-merge|sync-finish|sync-bind|sync-abort> … (see --help)" ;;
 esac

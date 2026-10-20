@@ -1,11 +1,17 @@
 ---
 description: Update all of a project's open MR branches — merge the moved base branch into each, re-verify, push
-args: "--project <project-slug> [--task <T0n>]…"
+args: "--project <project-slug> [--task <T0n>]… [--auto-resolve]"
 scope: project
 ---
 Follow the `project-workflow` skill. Arguments: {{ARGS}} — `--project <project-slug>` selects the
 project; each optional `--task <T0n>` (repeatable) restricts the sweep to that task (default: every
 shipped task with an open MR). Unknown flags and stray positional values fail closed.
+
+`--auto-resolve` is a boolean, off by default. Without it a conflict still aborts and returns the
+task for manual resolution. With it, reconcile that conflict during this invocation, verify the
+merged result, then push through the normal path. The flag never authorizes force-push, history
+rewriting, MR merging, or MR thread resolution, and it cannot promise that every conflict is
+resolvable. A supplied value (`--auto-resolve=true`) fails closed; no persistent setting is added.
 
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
@@ -62,26 +68,47 @@ consumed-parent bindings and pending debt, not merely an unchanged destination. 
    - **If it prints `unknown`** (no MR URL/worktree/origin, or the forge query failed or returned
      null — the helper exits 1): Note it as `mr-state-unknown` and skip.
 
+   When this invocation uses `--auto-resolve`, or resumes a recorded sync attempt, read
+   `{{PW_HOME}}/tooling/skill/project-workflow/references/sync-conflict-resolution.md` before
+   step 3 and follow it for conflict work. Do not load it for an ordinary sync.
+
 3. **Confirm the list.** For each task with an `open` MR, show: repo, branch
-   (`agent/<slug>/<T0n>-<slug>`), base branch, MR url. Also list any `already-merged` / `closed` /
-   `mr-state-unknown` tasks separately. Ask me to confirm. Only after I say go:
+   (`agent/<slug>/<T0n>-<slug>`), base branch, MR url, and — when opt-in is present — the
+   resolution mode (`auto` for this invocation, `clean` for a merge that stays conflict-free).
+   Also list any `already-merged` / `closed` / `mr-state-unknown` tasks separately. Ask me to
+   confirm. Only after I say go:
 
 4. **For each task with an open MR, from its worktree**
    (`{{PW_PROJECTS}}/<slug>/worktree/<repo>/<T0n>-<slug>`):
-   - `git fetch origin` then merge the task's **effective target**: `origin/<base>` (its **Base
+   - `git fetch origin`. Resolve the task's **effective target**: `origin/<base>` (its **Base
      branch**) for an independent task; for a **stacked** task, the recorded updated head of its
      immediate parent, or of its nearest unmerged ancestor, after that ancestor synced. Never the
      ultimate base for a stacked task. `pw-ship.sh stack --project <slug>` prints each task's target.
-   - **Conflict?** `git merge --abort`, mark the task `CONFLICT — needs manual resolution`, and
-     **move on to the next task** — never leave a half-merged worktree. Don't try to auto-resolve.
-     For a **stacked** task the conflict also blocks **that child's subtree** (a descendant cannot
-     merge a parent that did not update); independent stacks and tasks continue.
+   - With `--auto-resolve`, record the pinned attempt **before** merging, then use the deterministic
+     merge operator (`S={{PW_HOME}}/tooling/scripts/entities/pw-ship.sh`):
+     `$S sync-attempt begin --project <slug> --task <T0n> --kind <independent|stack> --mode auto --target-branch <effective-target-branch>`
+     then `$S sync-merge --project <slug> --task <T0n> --target <pinned-target-sha> --keep-conflict`.
+     `sync-merge` exits 3 only when it left the conflict in place for resolution; follow the loaded
+     reference, then continue at its verification/publication steps. Exit 2 means it aborted or the
+     merge failed operationally — mark the task failed and continue. A clean merge returns 0.
+   - Without `--auto-resolve`, merge the effective target directly.
+   - **Conflict without the flag?** `git merge --abort`, mark the task `CONFLICT — needs manual
+     resolution`, and **move on to the next task** — never leave a half-merged worktree. Do not
+     auto-resolve without the explicit flag. For a **stacked** task the conflict also blocks **that
+     child's subtree** (a descendant cannot merge a parent that did not update); independent stacks
+     and tasks continue.
    - **Clean merge?** Re-run the task's `## Verify` block and capture the **real output**.
-     - Verify **fails** → do NOT push; mark `verify-failed after sync`, leave the merge commit in
-       the worktree for inspection, and flip the task `Status: verify-failed` so it goes back
-       through review. Continue with the others.
-     - Verify **passes** → `git push` (plain push; the merge commit is a fast-forward-safe update to
-       the existing MR branch).
+     - Verify **fails** → do NOT push. With `--auto-resolve`, if the failure is a regression caused
+       by this resolution and no repair has been used, make **one** bounded repair, commit it, re-run
+       Verify once, and rebind (`sync-bind`). If it still fails, leave the merge commit for
+       inspection, mark `verify-failed after sync`, flip the task `Status: verify-failed`, and record
+       the failed attempt (`$S sync-attempt set --project <slug> --task <T0n> --stage failed`).
+       Continue with the others.
+     - Verify **passes** → with `--auto-resolve`, bind the evidence to the final committed HEAD
+       (`$S sync-bind --project <slug> --task <T0n> --evidence <captured-file>`) and, for a stacked
+       task, re-bind the stack tuple before any descendant advances (reference). Then `git push`
+       (plain push; the merge commit is a fast-forward-safe update to the existing MR branch), and
+       record the publication (`$S sync-attempt set --project <slug> --task <T0n> --stage pushed`).
    - On a successful push, log it: `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log --project <slug>
      --actor sync --message "T0n merged origin/<base>; verify green; pushed"`, and add a one-line note to the task's `## Result`
      (`Synced with <base> @ <short-sha> on <DD MMMM YYYY - HH.mm WIB>`). The MR updates itself — no new MR is opened.
@@ -91,9 +118,11 @@ consumed-parent bindings and pending debt, not merely an unchanged destination. 
      claim green.
 
 5. **Recap** a table — one row per task: Task · Repo · Base · Result
-   (`synced ✓` / `already-merged ✓` / `closed` / `conflict ✗` / `verify-failed ✗` /
-   `mr-state-unknown` / `skipped`). List any `conflict` / `verify-failed` tasks as the ones
-   needing you next, with the exact worktree path for each.
+   (`synced ✓` / `auto-resolved ✓` / `already-merged ✓` / `closed` / `conflict ✗` /
+   `verify-failed ✗` / `stale-inputs ✗` / `mr-state-unknown` / `skipped`). List any `conflict` /
+   `verify-failed` / `stale-inputs` tasks as the ones needing you next, with the exact worktree
+   path and recorded attempt stage for each. `auto-resolved` means both sides were preserved and
+   the final HEAD verified; local resolution alone is never reported as a successful sync.
 
 Never merge or close the **MR** itself — that's a human decision downstream. This command only
 brings each MR's branch up to date with its base, and cleans up work for MRs that were already
