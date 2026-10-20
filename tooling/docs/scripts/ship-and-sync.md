@@ -86,16 +86,6 @@ The marked body is also retained in the project record before readback. `history
 **Prerequisite it validates for you:** `Repo:`/`Branch:` set in the task file and the repo present
 locally — exit 2 messages name which is missing.
 
-## pw-ship.sh mr-state
-
-Reads the recorded MR URL from `## Result` (else the dashboard row) and derives forge, host,
-repository, and IID **from that URL**, so a state read still works after the task's worktree — or the
-whole project checkout — is gone. A validated checkout is used as the CLI context when present; the
-repository field names a shared clone otherwise, and a fully absent checkout falls back to the
-forge API with the URL's explicit repository identity (needed for enterprise GitHub, where the
-origin-pattern guess used to yield an empty repo). Configured `PW_FORGE_HOSTS` still wins over the
-URL-derived forge. `unknown` means the state could not be read (auth/URL), never a guessed value.
-
 ## pw-ship.sh mr-state-batch
 
 One call instead of N `pw-ship.sh mr-state` queries.
@@ -163,14 +153,37 @@ that simply isn't registered yet is *not* unreadable: it waits normally.
 
 ## pw-ship.sh mr-state
 
-One task's MR state, straight from the forge: `open` | `merged` | `closed` — or `unknown`
-(exit `1`) for any lookup failure (no MR URL in `## Result` or the dashboard table, no
-worktree, no origin, unauthenticated CLI). The diagnostic goes to stderr prefixed `mr-state:`;
-`unknown` on stdout is deliberate — callers skip, they don't die.
+One task's MR state, straight from the forge: `open` | `merged` | `closed` — or `unknown` (exit `1`)
+when the state cannot be read (no MR URL, unauthenticated CLI, unparsable URL). The diagnostic goes
+to stderr prefixed `mr-state:`; `unknown` on stdout is deliberate — callers skip, they don't die.
+
+Identity (forge, host, repository, IID) comes **from the recorded MR URL**, so a state read still
+works after the task's worktree — or the whole project checkout — is gone. A validated checkout is
+used as the CLI context when present; the task's repository names a shared clone otherwise; a fully
+absent checkout falls back to the forge API with the URL's explicit repository identity (needed for
+enterprise GitHub, where the origin-pattern guess used to yield an empty repo). A configured
+`PW_FORGE_HOSTS` entry still wins over the URL-derived forge.
 
 ```bash
 $PW_HOME/tooling/scripts/entities/pw-ship.sh mr-state --project <slug> --task T03
 ```
+
+## pw-ship.sh repair-round
+
+One persistent code-repair counter per work identity, shared by the in-run self-repair loop, the
+ship loop, and review follow-ups.
+
+```
+$S repair-round --project <slug> --task <T0n> --work <task>@<branch> [--limit <n>] [--consume]
+```
+
+Prints `work=… consumed=… limit=… remaining=…`. The effective limit is `--limit`, else the task's
+`Self-repair limit` field, else `PW_MAX_SELF_REPAIR` (default 3). With `--consume` it increments and
+persists `task/repair-budget.tsv` (atomic rewrite); consuming the last allowed round succeeds and the
+next call exits `2` naming the exhausted budget. The identity must stay stable across resume and a
+local-to-CI handoff; a new explicitly requested run uses a new identity. Environment retries and CI
+polling must not call it. The failure classes that decide this are in `docs/EXECUTION.md`
+("Failure attribution and one repair budget").
 
 ## pw-ship.sh comment-seen
 

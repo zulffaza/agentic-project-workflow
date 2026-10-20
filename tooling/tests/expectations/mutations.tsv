@@ -407,3 +407,6 @@ C316-migrate-copies-delivered	scripts/lib/pw-shiplib.sh	                entry['d
 C317-migrate-preview-applies	scripts/lib/pw-shiplib.sh	        if not args.apply:	        if False:	T1	pw-ship-history.t.sh
 # C318: history migration must search archived projects before calling a record lost.
 C318-archive-search-skipped	scripts/lib/pw-shiplib.sh	    for sibling in sorted(root.parent.iterdir()):	    for sibling in []:	T1	pw-ship-history.t.sh
+# C319-C320: cross-workflow policy — the repair budget must enforce its limit and persist consumption.
+C319-repair-budget-ignores-limit	scripts/entities/pw-ship.sh	  if [ "$consume" = 1 ] && [ "$consumed" -ge "$limit" ]; then	  if false; then	T1	pw-ship.t.sh
+C320-repair-budget-not-persisted	scripts/entities/pw-ship.sh	    consumed=$((consumed + 1))	    consumed=$((consumed))	T1	pw-ship.t.sh

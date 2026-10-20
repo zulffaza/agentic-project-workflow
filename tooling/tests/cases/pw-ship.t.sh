@@ -506,3 +506,19 @@ grep -q 'stale' "$PWTEST_BOTH" \
 git -C "$PW_REPOS/api" worktree remove --force "$PW_PROJECTS_DIR/$R47/worktree/api/T01-thing" >/dev/null 2>&1 || true
 git -C "$PW_REPOS/api" branch -D "agent/$R47/T01-thing" >/dev/null 2>&1 || true
 rm -rf "$PW_PROJECTS_DIR/$R47"
+
+# --- persistent repair budget (plan 47 cross-workflow policy) -----------------------------------
+BR47=rb47; rm -rf "$PW_PROJECTS_DIR/$BR47"; cp -a "$F2" "$PW_PROJECTS_DIR/$BR47"
+pwtest_rc 0 "repair-round reports the effective limit" \
+  "$(pwtest_script $SH)" repair-round --project "$BR47" --task T01 --work "T01@branch" --limit 2
+pwtest_re 'remaining=2' "repair-round starts unreserved"
+pwtest_rc 0 "repair-round consumes a round" "$(pwtest_script $SH)" repair-round --project "$BR47" --task T01 --work "T01@branch" --limit 2 --consume
+pwtest_re 'remaining=1' "repair-round counts the consumed round"
+pwtest_rc 0 "repair-round consumes the last round" "$(pwtest_script $SH)" repair-round --project "$BR47" --task T01 --work "T01@branch" --limit 2 --consume
+pwtest_rc 2 "repair-round refuses past the budget" "$(pwtest_script $SH)" repair-round --project "$BR47" --task T01 --work "T01@branch" --limit 2 --consume
+pwtest_err 'repair budget exhausted' "exhaustion names the budget"
+grep -q 'T01@branch' "$PW_PROJECTS_DIR/$BR47/task/repair-budget.tsv" \
+  && pwtest_ok "repair budget persisted in the project" || pwtest_bad "repair budget file" "missing"
+pwtest_rc 0 "a new work identity gets its own budget" \
+  "$(pwtest_script $SH)" repair-round --project "$BR47" --task T01 --work "T01@new-run" --limit 2 --consume
+rm -rf "$PW_PROJECTS_DIR/$BR47"
