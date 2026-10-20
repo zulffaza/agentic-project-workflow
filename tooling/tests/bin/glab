@@ -33,6 +33,20 @@ _state_json() {
     printf '{"iid":"%s","state":"%s","sha":"%s","target_branch":"%s","web_url":"https://gitlab.example.com/pwtest/api/-/merge_requests/%s"}\n' "$iid" "$st" "$hd" "$tgt" "$iid"
   fi
 }
+_list_json() {
+  # Seeded existing-MR lookup: PWTEST_MR_LIST_FILE lines "<source-branch> <url>".
+  local f="${PWTEST_MR_LIST_FILE:-}" b u first=1
+  printf '['
+  if [ -n "$f" ] && [ -f "$f" ]; then
+    while read -r b u; do
+      [ -n "$b" ] || continue
+      [ "$first" = 1 ] || printf ','
+      first=0
+      printf '{"web_url":"%s","source_branch":"%s"}' "$u" "$b"
+    done < "$f"
+  fi
+  printf ']\n'
+}
 case "${1:-}" in
   mr)
     if [ "${2:-}" = create ] && { [ "${3:-}" = --help ] || [ "${3:-}" = -h ]; }; then
@@ -83,6 +97,7 @@ case "${1:-}" in
     esac ;;
   api)
     case "${2:-}" in
+      *'merge_requests?'*) _list_json ;;
       *pipelines*) printf '%s\n' "${PWTEST_PIPELINE:-}"; exit 0 ;;
       *merge_requests*) _state_json "${2##*/}" ;;
       *) printf '{}\n' ;;

@@ -159,7 +159,9 @@ Two read-only/import operators on this command (no new user script):
       requires the CLI **before** it pushes: a missing CLI refuses the shipment rather than pushing a
       branch with no MR path, and the forge is never switched by mere CLI availability. It also
       probes `glab mr create --help` for the `--output json` contract before the push and uses the
-      plain invocation (which prints the MR URL) when the installed release lacks it. The recorded
+      plain invocation (which prints the MR URL) when the installed release lacks it. With no
+      recorded MR, it first looks up an MR for the same source branch and adopts it rather than
+      opening a duplicate. The recorded
       URL is verified inside `## Result` before the run reports completion.
       Never hardcode a host.
     - **If the task has a `Landing unit:` field** (a must-land-together set from PLAN's `## Landing

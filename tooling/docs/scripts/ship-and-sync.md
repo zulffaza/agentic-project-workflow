@@ -60,7 +60,9 @@ Ship execution complete for T03
 
 If the task's `- **MR:**` field holds a **real http(s) URL** it prints `MR already exists: <url>` and
 stops (idempotent re-run); placeholder values (`-`, `—`, `(none)`, or no field) never count as an
-existing MR. A successful creation upserts the URL into that same bold field. The dashboard MR
+existing MR. With no recorded URL, the script still looks up an MR for the same source branch before
+creating one: a previous attempt whose response was lost is adopted and recorded instead of being
+duplicated. A successful creation upserts the URL into that same bold field. The dashboard MR
 `State` mirrors what exists: a new MR writes `open`, while a continuation on a merged or closed MR
 keeps that terminal state instead of reopening it. A
 push failure dies with `pw-ship: push failed` (exit 2). If the push succeeded but the forge

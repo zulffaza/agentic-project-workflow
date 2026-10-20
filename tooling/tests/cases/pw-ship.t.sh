@@ -337,3 +337,23 @@ grep -qE '^\| T02 .*\| closed \|' "$PW_PROJECTS_DIR/$E5/README.md" \
 git -C "$PW_REPOS/api" worktree remove --force "$PW_PROJECTS_DIR/$E5/worktree/api/T02-thing" >/dev/null 2>&1 || true
 git -C "$PW_REPOS/api" branch -D "agent/$E5/T02-thing" >/dev/null 2>&1 || true
 rm -rf "$PW_PROJECTS_DIR/$E5"
+
+# F13: an MR already existing for the source branch is adopted, never duplicated.
+E6=exec-f2found; rm -rf "$PW_PROJECTS_DIR/$E6"; cp -a "$F2" "$PW_PROJECTS_DIR/$E6"
+pwtest_repo api "branch:agent/$E6/T01-thing"
+( cd "$PW_REPOS/api" && git worktree add "$PW_PROJECTS_DIR/$E6/worktree/api/T01-thing" "agent/$E6/T01-thing" >/dev/null 2>&1 ) || true
+sed -i '' "s|agent/$S2/T01-thing|agent/$E6/T01-thing|" "$PW_PROJECTS_DIR/$E6/task/T01.md"
+printf '%s %s\n' "agent/$E6/T01-thing" "https://gitlab.example.com/pwtest/api/-/merge_requests/77" > "$ROOT/mrlist47.txt"
+: > "$ROOT/forge47found.log"
+pwtest_rc 0 "F13 existing MR reconciled without a duplicate create" \
+  env PWTEST_MR_LIST_FILE="$ROOT/mrlist47.txt" PWTEST_FORGE_LOG="$ROOT/forge47found.log" \
+  "$(pwtest_script $SH)" exec --project "$E6" --task T01 --file "$ROOT/desc.md"
+grep -q '^glab mr create --source-branch' "$ROOT/forge47found.log" \
+  && pwtest_bad "F13 duplicate create issued" "$(cat "$ROOT/forge47found.log")" \
+  || pwtest_ok "F13 no duplicate creation request"
+grep -q 'merge_requests/77' "$PW_PROJECTS_DIR/$E6/task/T01.md" \
+  && pwtest_ok "F13 adopted URL recorded in Result" \
+  || pwtest_bad "F13 adopted record" "$(grep -i 'MR:' "$PW_PROJECTS_DIR/$E6/task/T01.md")"
+git -C "$PW_REPOS/api" worktree remove --force "$PW_PROJECTS_DIR/$E6/worktree/api/T01-thing" >/dev/null 2>&1 || true
+git -C "$PW_REPOS/api" branch -D "agent/$E6/T01-thing" >/dev/null 2>&1 || true
+rm -rf "$PW_PROJECTS_DIR/$E6"
