@@ -379,6 +379,11 @@ the advice forever. When a `--verify-cmd` runs, the checkout must be unchanged a
 that commits or leaves tracked edits has certified a different snapshot than the one to be bound, so
 the stage blocks and nothing is pushed.
 
+**Resume semantics.** A `blocked` push stage is retried on the next authorized run (only `done` /
+`skipped` are terminal), so a transient rejection no longer strands the subtree. A completed verify
+stage is re-opened when the child head is no longer the bound commit (a later integrate can move it),
+so a stale binding can never certify newer work.
+
 
 `stack-verify` writes the tuple (head, parent, target, evidence, CI disposition) in one atomic
 record write, so a half-written binding can never certify anything; `skipped`/`pending` stay
