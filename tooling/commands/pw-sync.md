@@ -108,7 +108,8 @@ consumed-parent bindings and pending debt, not merely an unchanged destination. 
    - **Clean merge?** Re-run the task's `## Verify` block and capture the **real output**.
      - Verify **fails** → do NOT push. With `--auto-resolve`, if the failure is a regression caused
        by this resolution and no repair has been used, make **one** bounded repair, commit it, re-run
-       Verify once, and rebind (`sync-bind`). If it still fails, leave the merge commit for
+       Verify once, and rebind (`sync-bind`). That repair spends the shared `<task>@<branch>` budget;
+       an exhausted shared budget refuses it. If it still fails, leave the merge commit for
        inspection, mark `verify-failed after sync`, flip the task `Status: verify-failed`, and record
        the failed attempt (`$S sync-attempt set --project <slug> --task <T0n> --stage failed`).
        Continue with the others.

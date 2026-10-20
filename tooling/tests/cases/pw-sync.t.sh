@@ -132,11 +132,12 @@ git -C "$SY_DIR/worktree/syncgit/T01-thing" -c user.email=t@t -c user.name=t com
 printf 'verify: repaired green\n' > "$ROOT/ev-sync-repair"
 pwtest_rc 0 "one bounded repair can rebind" sht sync-bind --project "$SY" --task T01 --evidence "$ROOT/ev-sync-repair"
 pwtest_eq "repair count recorded" "1" "$(awk -F'\t' '$1=="T01"{print $11}' "$SY_DIR/task/sync-attempts.tsv")"
+pwtest_grep_file 'T01@agent/' "shared repair budget consumed" "$SY_DIR/task/repair-budget.tsv"
 printf 'second-repair\n' >> "$SY_DIR/worktree/syncgit/T01-thing/shared.txt"
 git -C "$SY_DIR/worktree/syncgit/T01-thing" add -A
 git -C "$SY_DIR/worktree/syncgit/T01-thing" -c user.email=t@t -c user.name=t commit -qm "second repair"
 pwtest_rc 2 "a second repair cannot bind" sht sync-bind --project "$SY" --task T01 --evidence "$ROOT/ev-sync-repair"
-pwtest_err 'repair budget exhausted' "exhausted budget is explicit"
+pwtest_err 'already used its one follow-up repair' "exhausted sync repair is explicit"
 pwtest_rc 2 "sync-merge refuses to re-merge a verified attempt" sht sync-merge --project "$SY" --task T01 --target "$TARGET" --keep-conflict
 pwtest_rc 0 "sync-attempt sets pushed only after verification" sht sync-attempt --project "$SY" set --task T01 --stage pushed
 pwtest_re 'stage pushed' "published stage recorded"
@@ -237,3 +238,11 @@ pwtest_rc 2 "one-sided path must be conflicted" sht sync-finish --project "$SY" 
 pwtest_err 'not in the conflict manifest' "unknown allow path is refused"
 pwtest_rc 0 "an explicitly justified one-sided resolution completes" sht sync-finish --project "$SY" --task T04 --allow-one-sided columns.yaml --reason "auth header column was superseded by the task's server_key migration" --owner-approved
 pwtest_grep_file 'auth header column was superseded' "one-sided reason is recorded" "$SY_DIR/task/.sync-evidence/T04-resolution.md"
+printf 'verify: T04 green\n' > "$ROOT/ev-t04"
+pwtest_rc 0 "T04 binds its resolution" sht sync-bind --project "$SY" --task T04 --evidence "$ROOT/ev-t04"
+printf 'repair\n' >> "$SY_DIR/worktree/syncgit/T04-thing/columns.yaml"
+git -C "$SY_DIR/worktree/syncgit/T04-thing" add -A
+git -C "$SY_DIR/worktree/syncgit/T04-thing" -c user.email=t@t -c user.name=t commit -qm "T04 repair"
+for _ in 1 2 3; do sht repair-round --project "$SY" --task T04 --work "T04@agent/$SY/T04-cols" --consume >/dev/null; done
+pwtest_rc 2 "an exhausted shared budget refuses a sync repair" sht sync-bind --project "$SY" --task T04 --evidence "$ROOT/ev-t04"
+pwtest_err 'repair budget exhausted' "shared exhaustion is explicit"

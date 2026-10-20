@@ -134,8 +134,11 @@ bind it again; `sync-bind` records the repair once. A second differing HEAD is r
 survives a resumed session or a new worker.
 
 At most **one** follow-up repair pass is allowed for a regression caused by this resolution,
-followed by complete re-verification. Keep that budget across resumes, executor handoffs, and CI
-repair. An environment blocker is not a code regression and never counts as a passing check.
+followed by complete re-verification. It consumes the shared persistent code-repair budget for
+`<task>@<branch>` (`repair-round`); if that budget is exhausted, the sync repair is refused. The
+attempt's own counter prevents a second sync repair even when the shared budget has room. An
+environment blocker is not a code regression and never consumes a round or counts as a passing
+check.
 
 For a stacked task, rebind the stack tuple before any descendant advances:
 

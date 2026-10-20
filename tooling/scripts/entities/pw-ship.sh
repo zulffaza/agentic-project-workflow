@@ -3564,11 +3564,16 @@ cmd_sync_bind() {
   [ -n "$wt" ] || die "no mounted worktree for $task"
   [ -z "$(git -C "$wt" status --porcelain 2>/dev/null || true)" ] \
     || die "worktree $wt is dirty after verification → fix: commit allowed changes and verify the final HEAD again"
-  local head rec next_repair; head="$(git -C "$wt" rev-parse HEAD)"; rec="$(_sync_attempt_get "$d" "$task" result_head)"
+  local head rec next_repair branch; head="$(git -C "$wt" rev-parse HEAD)"; rec="$(_sync_attempt_get "$d" "$task" result_head)"
   next_repair="${repair:-0}"
   if [ "$head" != "$rec" ]; then
     [ "$st" = "verified" ] || die "HEAD ${head:0:12} != recorded result ${rec:0:12} → fix: commit the repair and verify that HEAD"
-    [ "${repair:-0}" = "0" ] || die "repair budget exhausted (one follow-up pass) → fix: restore a verified state or stop for manual resolution"
+    [ "${repair:-0}" = "0" ] || die "sync attempt already used its one follow-up repair → fix: restore a verified state or stop for manual resolution"
+    # One shared code-repair budget per task/branch (plan 47). The sync attempt allows at most one
+    # repair, but it must spend the same round an execution or CI repair would.
+    branch="$(_sync_attempt_get "$d" "$task" branch)"
+    cmd_repair_round --project "$slug" --task "$task" --work "${task}@${branch}" --consume >/dev/null \
+      || die "shared repair budget unavailable → fix: report the unresolved failure instead of retrying"
     next_repair=1
   fi
   _sync_attempt_upsert "$d" "$task" stage=verified repair="$next_repair" result_head="$head" evidence="$ev" updated="$(pw_now_wib)" \
