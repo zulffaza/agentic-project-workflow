@@ -233,6 +233,15 @@ once after two seconds), then the documented fallback of `1048576 chars` with re
 uses the persisted policy when the flags are omitted, so other MRs on the same host reuse it without
 repeating the probe.
 
+`migrate --mr <destination> --source <source-mr> --attempts <key[,key]> [--apply]` carries verified
+frozen attempts from a replaced/adopted MR into the destination record. It is a preview by default;
+`--apply` persists atomically under the destination lock. Each source record must exist, the two
+MRs must share host and repository, every selected attempt must be frozen, and the destination body
+must contain that attempt's exact frozen block; a conflicting destination key or an edited block is
+refused. Migrated entries keep the original key, timestamp, block, and checkpoint, gain
+`source_mr`/`source_delivered` provenance, start undelivered (source delivery debt is never copied),
+and a retry is idempotent. The source record is never modified.
+
 `verify --mr <url>` is the post-navigation readback: it fetches the published body and runs that same
 parser, printing `verify: ok (head …)` or exiting `2` with the reason. Use it after an agent edits a
 parent MR's navigation. `repair-preview --mr <url>` is a dry run for the known suffix: it reports the
