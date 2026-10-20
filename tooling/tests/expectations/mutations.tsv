@@ -365,7 +365,7 @@ C290-sync-second-repair-allowed	scripts/entities/pw-ship.sh	[ "${repair:-0}" = "
 # C268-C270 continue slice 3: the pre-push creation capability probe, the Result-scoped
 # MR write, and mirroring a terminal MR state on a continuation write.
 C291-create-capability-probe-lost	scripts/entities/pw-ship.sh	  if [ "$FORGE_CLI" = "glab" ] && glab mr create --help 2>/dev/null | grep -q -- '--output'; then	  if [ "$FORGE_CLI" = "glab" ]; then	T1	pw-ship.t.sh
-C292-mr-write-scope-lost	scripts/entities/pw-ship.sh	          p && !d && /^- \*\*MR:\*\*/ { print "- **MR:** " mr; d=1; next }	          !d && /^- \*\*MR:\*\*/ { print "- **MR:** " mr; d=1; next }	T1	pw-ship.t.sh
+C292-mr-write-scope-lost	scripts/entities/pw-ship.sh	      p && !d && /^- \*\*MR:\*\*/ { print "- **MR:** " mr; d=1; next }	      !d && /^- \*\*MR:\*\*/ { print "- **MR:** " mr; d=1; next }	T1	pw-ship.t.sh
 C293-continuation-reopens-mr	scripts/entities/pw-ship.sh	    _obs_state="$(cmd_mr_state --project "$SLUG" --task "$TASK_ID" 2>/dev/null || true)"	    _obs_state="open"	T1	pw-ship.t.sh
 # C294: slice 3 — an existing MR for the source branch must be adopted, not duplicated.
 C294-existing-mr-lookup-lost	scripts/entities/pw-ship.sh	    _found_mr="$(_pw_find_existing_mr "$REPO_DIR" "$BRANCH" "$TARGET_BRANCH" "$FORGE_CLI")"	    _found_mr=""	T1	pw-ship.t.sh
