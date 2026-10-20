@@ -405,3 +405,5 @@ C314-prose-plans-path-allowed	scripts/lib/pw-shiplib.sh	    need('plans/' not in
 C315-migrate-ignores-block-match	scripts/lib/pw-shiplib.sh	            need(attempt['block'] in remote['body'],	            need(True,	T1	pw-ship-history.t.sh
 C316-migrate-copies-delivered	scripts/lib/pw-shiplib.sh	                entry['delivered'] = False	                entry['delivered'] = True	T1	pw-ship-history.t.sh
 C317-migrate-preview-applies	scripts/lib/pw-shiplib.sh	        if not args.apply:	        if False:	T1	pw-ship-history.t.sh
+# C318: history migration must search archived projects before calling a record lost.
+C318-archive-search-skipped	scripts/lib/pw-shiplib.sh	    for sibling in sorted(root.parent.iterdir()):	    for sibling in []:	T1	pw-ship-history.t.sh
