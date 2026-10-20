@@ -12,8 +12,9 @@ Gate: see Sign-off
 <!-- pw-contents:end -->
 
 <!-- WHERE THIS LIVES: review files sit in a `review/` subdir next to the doc they review
-  (analysis/<topic>.md → analysis/review/<topic>.review.md · task/PLAN.md → task/review/
-  PLAN.review.md · task/T0n.md → task/review/T0n.review.md) — "Reviewing:" above points ../ to it.
+  (context/REQUIREMENTS.md → context/review/CONTEXT.review.md · analysis/<topic>.md →
+  analysis/review/<topic>.review.md · task/PLAN.md → task/review/PLAN.review.md · task/T0n.md →
+  task/review/T0n.review.md) — "Reviewing:" above points ../ to it.
 
 QUICK REFERENCE (full mechanics + rationale: docs/REVIEW.md):
 - You write items/answers below; the agent never edits or deletes your text, only replies.
@@ -61,7 +62,7 @@ QUICK REFERENCE (full mechanics + rationale: docs/REVIEW.md):
 |------|--------|-------------|
 | Item (`Rn`) | `[OPEN]` → `[RESOLVED]` | 🤖 agent, after addressing it |
 | Question (`Qn`) | `[PENDING]` → `[ANSWERED]` | 🤖 agent, after folding in your `↳ you:` |
-| **Gate** (Sign-off) | in-review · changes-requested · **approved** | 🧑 **you approve** — only `approved` opens the next phase; 🤖 records `in-review`/`changes-requested` operational rows (and `approved` only in guarded AI `auto` mode) |
+| **Gate** (Sign-off) | in-review · changes-requested · **approved** | 🧑 **you approve** — `approved` opens the next phase where one exists (the context readiness record gates nothing); 🤖 records `in-review`/`changes-requested` operational rows (and `approved` only in guarded AI `auto` mode) |
 
 You never set an item/question's own status — just leave items `[OPEN]` and run `/pw-review`.
 

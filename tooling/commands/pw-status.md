@@ -41,8 +41,8 @@ everything below and follow this instead** (`--phase` carries the phase to rewin
    needs to change, plus a new `in-review` Sign-off row (never delete the old `approved` row —
    it's history). If neither exists yet, tell me to add them first rather than rewinding into a
    phase with no record of *why*.
-   - **Target `context` has no context review file of its own — never create one.** Record the
-     reason on the existing downstream reviews instead: add one item to the analysis review
+   - **Target `context` has an optional readiness record, but it gates nothing and must not replace
+     this reopening record.** Record the reason on the existing downstream reviews instead: add one item to the analysis review
      (`/pw-review item --project <slug> --file analysis/review/<topic>.review.md --section <§anchor>
      --text what changed in context`) and, when `task/PLAN.md` exists, one to
      `task/review/PLAN.review.md`. That feedback reopens those approvals through the existing

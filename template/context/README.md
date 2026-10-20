@@ -11,6 +11,9 @@ inputs, or write it yourself: run `/pw-context req-init --project <slug>`, fill 
 constraints, success criteria), and register it:
 `/pw-context add-input --project <slug> --file REQUIREMENTS.md --what <one line> --source <where it came from>`.
 It's optional — the pipeline never requires it — but it sharpens the analysis phase.
+Assisted preparation also creates an optional feedback record at `review/CONTEXT.review.md`.
+Add findings with `/pw-review item --project <slug> --file context/review/CONTEXT.review.md --section <§section> --text <your comment>`.
+It is not an approval gate; the human still starts analysis explicitly.
 
 **Rules**
 - Prefer a link + short excerpt over dumping a large file.

@@ -423,11 +423,25 @@ capability is verified; until then that route is recorded as a skip, never impro
 unavailable and stops at the `review-rounds` budget: pass 1 → repair 1 → verify → pass 2 → repair 2
 → verify → pass 3 → STOP, no third repair).
 
+**Context readiness.** Assisted `/pw-context prepare` saves an optional feedback record at
+`context/review/CONTEXT.review.md`; it is not a phase gate, and analysis still starts only when you
+run it. Keep findings out of `REQUIREMENTS.md` and imported sources:
+
+```
+/pw-review item --project myproj --file context/review/CONTEXT.review.md --section 'Success criteria' --text Define how existing orders remain valid
+/pw-review --project myproj --file context/review/CONTEXT.review.md
+/pw-review ai --project myproj --surface context          # optional fresh AI pass
+```
+
+For a separate reviewer session, use `prepare --surface context` below and import its report.
+Changed context over an approved readiness record is reopened before changed bytes are saved; an
+unchanged rerun leaves review history untouched.
+
 **Manual reviewer sessions — `prepare` + `import`.** When you want the review done in a separate,
 non-native session (another chat, another provider, a colleague's agent), freeze a packet first:
 
 ```
-/pw-review prepare --project myproj --surface analysis   # or: --task T01 / --surface rfc / --surface close / --file <path>
+/pw-review prepare --project myproj --surface analysis   # or: --surface context / --task T01 / --surface rfc / --surface close / --file <path>
 # → review/ai/p-analysis-…/ (manifest.json · snapshot/ · request.md); NO model is launched
 # hand request.md + the snapshot to a fresh session anywhere; it returns report JSON
 /pw-review import --project myproj --report ~/reviews/analysis.json

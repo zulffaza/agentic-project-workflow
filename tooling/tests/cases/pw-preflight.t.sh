@@ -134,7 +134,7 @@ pwtest_rc 0 "review lane task-plan finds task reviews" "$PF3" review --project "
 pwtest_rc 0 "review lane ship finds mirrored task reviews" "$PF3" review --project "$P7" --lane ship
 pwtest_rc 1 "unknown review lane word fails closed" "$PF3" review --project "$P7" --lane zzz-phase
 pwtest_err "unknown review phase-word" "refusal names the bad word"
-pwtest_err "analysis|plan|task-plan|task-exec|ship" "refusal lists every lane word"
+pwtest_err 'context\|analysis\|plan\|task-plan\|task-exec\|ship' "refusal lists every lane word"
 pwtest_fix "lane refusal actionable"
 rm -rf "$PW_PROJECTS_DIR/$P7"
 # a dashboard-phase word is NOT a lane word — executing must be refused, not checked:
@@ -143,6 +143,25 @@ pwtest_rc 1 "review executing-word (phase, not lane) fails closed" "$PF3" review
 pwtest_rc 1 "ship lane with no task reviews refuses (F1)" "$PF3" review --project "$S1" --lane ship
 pwtest_err "no task review files" "ship lane reports the real condition"
 pwtest_rc 1 "task-plan lane with no task reviews refuses (F1)" "$PF3" review --project "$S1" --lane task-plan
+# 8) context readiness lane: a brief requires its separate record; a record can stand alone for
+# index corrections; factory default discovery sees the context lane.
+P8=pre-context; rm -rf "$PW_PROJECTS_DIR/$P8"; cp -a "$F1" "$PW_PROJECTS_DIR/$P8"
+mkdir -p "$PW_PROJECTS_DIR/$P8/context"
+printf '# Requirements\n\n- **Outcome:** predictable retries\n' > "$PW_PROJECTS_DIR/$P8/context/REQUIREMENTS.md"
+pwtest_rc 1 "context lane without a record refuses" "$PF3" review --project "$P8" --lane context
+pwtest_err "context review file missing" "context lane names the missing record"
+pwtest_fix "/pw-review init --project $P8 --file context/REQUIREMENTS.md" "context lane carries the initialization fix"
+pwtest_rc 0 "explicit context review init" "$(pwtest_script pw-review.sh)" init-docs --project "$P8" --file context/REQUIREMENTS.md
+pwtest_rc 0 "context lane passes with a record" "$PF3" review --project "$P8" --lane context
+rm -f "$PW_PROJECTS_DIR/$P8/context/REQUIREMENTS.md"
+pwtest_rc 0 "context record alone covers index corrections" "$PF3" review --project "$P8" --lane context
+pwtest_rc 0 "default review discovery includes the context lane" "$PF3" review --project "$P8"
+rm -f "$PW_PROJECTS_DIR/$P8/context/review/CONTEXT.review.md"
+pwtest_rc 1 "context lane with neither brief nor record refuses" "$PF3" review --project "$P8" --lane context
+pwtest_err "no context requirements or review record" "context lane names the empty state"
+pwtest_rc 1 "default review discovery refuses with no review files" "$PF3" review --project "$P8"
+pwtest_err "no review files found" "default discovery names the empty state"
+rm -rf "$PW_PROJECTS_DIR/$P8"
 
 # --- plan 47 F11: the ship gate accepts 'accepted' tasks (accepted-but-unpublished) ------------
 AC=pre-acc; rm -rf "$PW_PROJECTS_DIR/$AC"; cp -a "$F2" "$PW_PROJECTS_DIR/$AC"

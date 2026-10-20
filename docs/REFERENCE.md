@@ -182,6 +182,7 @@ The project lives at `$PW_PROJECTS/<slug>/`.
 | `LOG.md` | Recorded actions and timestamps |
 | `context/INDEX.md` | Input provenance and repository scope |
 | `context/REQUIREMENTS.md` | Your optional requirements brief |
+| `context/review/CONTEXT.review.md` | Optional context-readiness feedback and findings; gates nothing |
 | `analysis/<topic>.md` | Proposed approach, evidence, and open questions |
 | `analysis/review/<topic>.review.md` | Analysis feedback, answers, and approval |
 | `task/PLAN.md` | Task dependencies, execution strategy, and repository manifest |

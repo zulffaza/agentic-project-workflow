@@ -1,6 +1,6 @@
 ---
 description: Apply my review comments for the current phase (or a given review file) — or, with the "ai" sub-verb, delegate a fresh cross-session review pass — or, with "prepare"/"import", freeze a reviewable packet for a manual reviewer session and import its validated report as advisory findings — or, with the write operators (init/init-all/item/answer/signoff), deterministically create review files for selected docs or the current phase and record my items, answers, and gate decisions; --skip-build-check disables the task-fix build loop
-args: "[ai | prepare | import | init | init-all | item | answer | signoff] --project <project-slug> [--phase <phase> | --task <T0n> | --file <path>] [--refresh | --repair | --skip-build-check]"
+args: "[ai | prepare | import | init | init-all | item | answer | signoff] --project <project-slug> [--surface <context|analysis|plan|task-plan|task-exec|ship|rfc|close> | --phase <phase> | --task <T0n> | --file <path>] [--refresh | --repair | --skip-build-check]"
 scope: project
 ---
 Invoke the `project-workflow` skill (review rules). Arguments: {{ARGS}}.
@@ -94,18 +94,24 @@ the fix was not re-verified; you'll re-run `/pw-execute --project <slug> --task 
 is not a phase transition — the phase only moves when the next `/pw-*` command runs. (If you meant
 to rewind a phase, that's `/pw-status rewind --project <slug> --phase <phase>`, not this command.)
 
-- **`/pw-review ai --project <project-slug> [--file <review-rel-path> | --task <T0n> | --phase <phase>] [--repair]`**
+- **`/pw-review ai --project <project-slug> [--surface <name> | --file <review-rel-path> | --task <T0n> | --phase <phase>] [--repair]`**
 
 **If the first word is literally `ai`, this is the AI-assisted review flow, not apply-comments —
-skip everything below and follow this instead** (a `--file` / `--task` / `--phase` selector narrows scope exactly
-like the apply-comments flow does; an optional `--repair` requests the bounded
-repair cycle described at step 6):
+skip everything below and follow this instead** (a `--surface` / `--file` / `--task` / `--phase`
+selector narrows scope exactly like the apply-comments flow does; an optional `--repair` requests
+the bounded repair cycle described at step 6):
 
-1. Resolve scope the same way apply-comments does (below) — `--file <rel>` > `--task <T0n>` >
-   `--phase <phase>` > infer from the current phase — and map it to one of the eight AI-Review surface keys:
+1. Resolve scope the same way apply-comments does (below) — `--surface <name>` > `--file <rel>` >
+   `--task <T0n>` > `--phase <phase>` > infer from the current phase — and map it to one of the eight AI-Review surface keys:
    `context`, `analysis`, `plan`, `task-plan`, `task-exec`, `ship`, `rfc`, `close`. Several `--task`
    values mean one reviewer pass PER named task (each task is its own artifact + review file) — never
    one pass across several tasks.
+   `--surface` is required for a surface with no artifact selector: `context` → review
+   `context/review/CONTEXT.review.md` (read `context/REQUIREMENTS.md` when present, plus the rest of
+   `context/`), `rfc` → `rfc/review/RFC-CONTENT.review.md`, `close` → `review/CLOSE.review.md`.
+   For `analysis`/`plan`/`task-plan`/`task-exec`/`ship`, `--surface` asserts the resolved surface
+   after the normal selector. Reject a surface that contradicts the resolved artifact instead of
+   reviewing a different lane.
 2. Check this project's effective mode for that surface: `…/{{PW_HOME}}/tooling/scripts/entities/pw-config.sh get --project <slug> --key ai-review` (an
    internal check — I never type this myself). The outcome axis is `advisory|auto` and defaults to
    `advisory`; a legacy stored `off` reads as effective `advisory` (the config get normalizes and
@@ -113,7 +119,10 @@ repair cycle described at step 6):
    callable. If the get reports a genuinely unavailable surface or a broken dashboard, tell me in
    one line and point me at `/pw-config ensure --project <slug>` — never at the underlying script.
 3. **Fresh-context rule — never an exception.** Ensure the review file exists
-   (`pw-review.sh init-docs --project <slug> --file <artifact-rel-path>` if not), then dispatch a reviewer in a
+   (`pw-review.sh init-docs --project <slug> --file <artifact-rel-path>` if not); for
+   `--surface context` initialize only from an existing `context/REQUIREMENTS.md`, and if that brief
+   is absent require the existing aggregate record instead of inventing a synthetic artifact.
+   Then dispatch a reviewer in a
    FRESH context: same provider → a new `pw-reviewer` sub-agent (Claude Task tool / kilo
    `mode: subagent`) per pass; cross-provider or no eligible native worker → a new
    review-specific CLI session through the configured route **only when its read-only capability
@@ -206,7 +215,7 @@ step silently — do not block.**
 
 **Resolve WHICH review files to process (apply-comments flow — do NOT scan the whole project):**
 
-**Start mechanical:** `{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh review --project <slug> [--lane <analysis|plan|task-plan|task-exec|ship>]` confirms
+**Start mechanical:** `{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh review --project <slug> [--lane <context|analysis|plan|task-plan|task-exec|ship>]` confirms
 the phase's review files exist (exit 1 + `pw-preflight:` line = report and stop — nothing to
 apply), then `{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh scan --project <slug> [--phase <phase>]` prints
 `<file>: N open[, N resolved][, N pending] (latest decision · its By actor)` per review file —
@@ -219,8 +228,9 @@ the scope set.
   still apply per named task — a `verify-failed` named task with no review file gets one created
   deterministically (rule below); a named task with no review file that ISN'T `verify-failed` is
   skipped and noted in the recap — never create an empty review file just because a task was named.
-- If `--phase` names a **phase word** (`analysis` or `task`/`plan`), process that phase's `review/` dir only.
+- If `--phase` names a **phase word** (`context`, `analysis`, or `task`/`plan`), process that phase's `review/` dir only.
 - Otherwise, infer from the current phase (`…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh phase --project <slug>`):
+  - `context` → `context/review/CONTEXT.review.md` (the optional readiness record; never fabricated)
   - `analysis` → `analysis/review/*.review.md`
   - `breakdown` → `task/review/*.review.md` (PLAN + any T0n)
   - `executing` / `review` → every task currently `verify-failed` (read the PLAN task table + task

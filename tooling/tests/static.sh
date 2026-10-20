@@ -300,6 +300,21 @@ static_t4() {
     && grep -qF 'comes before assessment' "$TOOL/skill/pw-review/SKILL.md" \
     && pwtest_ok "T4 canary: reviewer entry precedes assessment in every instruction surface" \
     || pwtest_bad "T4 canary: entry-before-assessment routing" "a reviewer instruction surface lost the entry-first contract"
+  # context review completion parity (plan 44): the shared preparation reference and the command
+  # dispatcher must both carry the optional record + completion handoff, and init-all must not send
+  # users to analysis as the first reviewable artifact.
+  grep -qF 'Run the completion handoff exactly once after verification' "$TOOL/skill/project-workflow/references/context.md" \
+    && grep -qF 'Completion review — only when configured' "$TOOL/commands/pw-context.md" \
+    && grep -qF 'Ensure the optional separate readiness record when a brief exists' "$TOOL/skill/project-workflow/references/context.md" \
+    && pwtest_ok "T4 canary: context preparation carries the review handoff" \
+    || pwtest_bad "T4 canary: context review handoff" "a preparation instruction surface lost the record/completion contract"
+  grep -qF 'context readiness review is optional' "$TOOL/scripts/entities/pw-review.sh" \
+    && ! grep -qF '/pw-analyze $slug produces the first reviewable analysis' "$TOOL/scripts/entities/pw-review.sh" \
+    && pwtest_ok "T4 canary: init-all context guidance is accurate" \
+    || pwtest_bad "T4 canary: init-all context guidance" "context init-all still claims analysis produces the first reviewable artifact"
+  grep -qF 'context|analysis|plan|task-plan|task-exec|ship' "$TOOL/scripts/entities/pw-preflight.sh" \
+    && pwtest_ok "T4 canary: review preflight accepts the context lane" \
+    || pwtest_bad "T4 canary: review preflight context lane" "context lane missing from the review gate"
   # /user/ ignore coverage: representative frame, prompt, and scratch files must be ignored, the
   # legacy location stays ignored during migration, and no user-owned customization may be tracked.
   _giterr=""

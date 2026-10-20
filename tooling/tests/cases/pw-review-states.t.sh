@@ -79,7 +79,8 @@ pwtest_rc 0 "init-all at executing" "$E" init-all --project "$IA"
 rm -rf "$I/task/review" "$I/analysis/review"
 set_phase "$IA" context
 pwtest_rc 0 "init-all at context is a no-op" "$E" init-all --project "$IA"
-pwtest_re "no review files to initialize" "context explains nothing to init"
+pwtest_re "context readiness review is optional" "context explains the optional explicit review"
+pwtest_re "/pw-review init --project $IA --file context/REQUIREMENTS.md" "context names the explicit review command"
 [ ! -d "$I/analysis/review" ] && pwtest_ok "context created nothing" || pwtest_bad "context leakage" "reviews created at context"
 set_phase "$IA" done
 pwtest_rc 0 "init-all at done is a no-op" "$E" init-all --project "$IA"
