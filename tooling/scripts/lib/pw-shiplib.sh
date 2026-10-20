@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from urllib.parse import quote, unquote, urlsplit
 
@@ -118,10 +119,65 @@ def api(mr, body=None):
 # The observed live defect: literal backslash-n text appended on the SAME line as a managed end
 # marker. The marker must end a real line, so the parser rejects this — but the repair is exact and
 # local: remove only those literal characters and leave every other byte alone.
+DOC_CAPACITY_FALLBACK = 'https://docs.gitlab.com/api/merge_requests/'
+
 LITERAL_BOUNDARY = re.compile(r'(<!-- pw-(?:mr-summary|review-changes):end -->)((?:\\n)+)')
 
 def repair_literal_boundary(body):
     return LITERAL_BOUNDARY.sub(r'\1', body)
+
+def settings_call(mr):
+    """One instance-settings request (GitLab only). Returns (rc, stdout, stderr)."""
+    command = ['glab', 'api', 'application/settings', '--hostname', mr['host']]
+    result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+    return result.returncode, result.stdout, result.stderr
+
+def discover_capacity(mr):
+    """Discover the description capacity for this host.
+
+    Order: instance settings (one request, one 403 retry after 2s), else the documented fallback.
+    The result records limit, unit, source, host, and an explicit reason so a documented fallback is
+    never presented as instance-verified.
+    """
+    if mr['forge'] != 'gitlab':
+        return {'limit': 1048576, 'unit': 'chars', 'source': DOC_CAPACITY_FALLBACK, 'host': mr['host'],
+                'verified': False, 'reason': 'no-documented-instance-setting; official-docs-fallback'}
+    rc, out, err = settings_call(mr)
+    if rc != 0 and '403' in (out + err):
+        time.sleep(2)
+        rc, out, err = settings_call(mr)
+    if rc == 0:
+        try:
+            data = json.loads(out)
+        except ValueError:
+            data = None
+        limit = data.get('max_merge_request_description_length') if isinstance(data, dict) else None
+        if isinstance(limit, int) and limit > 0:
+            return {'limit': limit, 'unit': 'chars', 'source': 'instance-settings', 'host': mr['host'],
+                    'verified': True, 'reason': 'instance-settings'}
+        return {'limit': 1048576, 'unit': 'chars', 'source': DOC_CAPACITY_FALLBACK, 'host': mr['host'],
+                'verified': False, 'reason': 'settings-no-limit-field; official-docs-fallback'}
+    reason = ('settings-403; official-docs-fallback' if '403' in (out + err)
+              else 'settings-unavailable; official-docs-fallback')
+    return {'limit': 1048576, 'unit': 'chars', 'source': DOC_CAPACITY_FALLBACK, 'host': mr['host'],
+            'verified': False, 'reason': reason}
+
+def capacity_policy(project, mr):
+    """Load or discover the persisted per-host capacity policy for this project."""
+    root = safe_path(project, directory=True)
+    directory = safe_path(root / '.ship-history', directory=True)
+    directory.mkdir(mode=0o700, exist_ok=True)
+    capdir = directory / 'capacity'
+    capdir.mkdir(mode=0o700, exist_ok=True)
+    path = capdir / (digest(mr['host']) + '.json')
+    if path.exists():
+        policy = read_json(path)
+        need(isinstance(policy, dict) and policy.get('host') == mr['host'] and isinstance(policy.get('limit'), int),
+             'malformed capacity policy')
+        return policy
+    policy = discover_capacity(mr)
+    atomic_json(path, policy)
+    return policy
 
 def verify_published(body):
     regions(body)
@@ -361,7 +417,7 @@ def validate_state(state, mr):
 def run():
     project, timestamp, mappings, registered, *arguments = sys.argv[1:]
     parser = HistoryParser(prog='pw-ship history')
-    parser.add_argument('operation', choices=['invocation', 'init', 'begin', 'checkpoint', 'freeze', 'deliver', 'pending', 'validate', 'verify', 'repair-preview'])
+    parser.add_argument('operation', choices=['invocation', 'init', 'begin', 'checkpoint', 'freeze', 'deliver', 'pending', 'validate', 'verify', 'repair-preview', 'capacity'])
     parser.add_argument('url', nargs='?')
     parser.add_argument('--invocation')
     parser.add_argument('--attempt')
@@ -408,6 +464,22 @@ def run():
         print('repair-preview: removing ' + str(len(body) - len(fixed)) + ' character(s) restores a standalone marker')
         print('repair-preview: repaired line: ' + body[line_start:match.start(1)] + match.group(1))
         print('repair-preview: dry run only — nothing was written; repair the description, then run verify')
+        return
+    if args.operation == 'capacity':
+        mr = identity(args.url or '', mappings)
+        if args.limit is not None or args.unit or args.limit_source:
+            need(args.limit and args.limit > 0 and args.unit and args.limit_source,
+                 'explicit capacity requires --limit, --unit and --limit-source')
+            policy = {'limit': args.limit, 'unit': args.unit, 'source': args.limit_source,
+                      'host': mr['host'], 'verified': False, 'reason': 'explicit-override'}
+            root = safe_path(project, directory=True)
+            capdir = safe_path(root / '.ship-history' / 'capacity', directory=True)
+            capdir.mkdir(mode=0o700, exist_ok=True)
+            atomic_json(capdir / (digest(mr['host']) + '.json'), policy)
+        else:
+            policy = capacity_policy(project, mr)
+        print('capacity: ' + str(policy['limit']) + ' ' + policy['unit'] + ' (' + policy.get('reason', 'instance-settings')
+              + '; source ' + policy['source'] + ')')
         return
     root = safe_path(project, directory=True)
     directory = safe_path(root / '.ship-history', directory=True)
@@ -505,8 +577,16 @@ def run():
                 if selected['key'] in state['pruned']:
                     print('attempt archived locally; pruned remote block will not be restored')
                     return
+                if not (args.limit and args.unit and args.limit_source):
+                    # Reuse the persisted per-host policy (or discover it once) instead of requiring
+                    # the caller to know the instance's capacity. A documented fallback is used only
+                    # when the instance settings cannot be read.
+                    policy = capacity_policy(project, mr)
+                    args.limit = policy['limit']
+                    args.unit = policy['unit']
+                    args.limit_source = policy['source']
                 need(args.limit and args.limit > 0 and args.unit and args.limit_source,
-                     'delivery requires documented --limit, --unit and --limit-source; unknown capacity is not pruning permission')
+                     'delivery requires known capacity: pass --limit/--unit/--limit-source or run history --operation capacity first')
                 need(not state.get('planned') or state['planned'].get('attempt') == selected['key'],
                      'recover the outstanding description write before delivering another attempt')
                 for retry in range(3):

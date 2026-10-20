@@ -395,3 +395,6 @@ C308-landed-descendant-republished	scripts/entities/pw-ship.sh	    if [ "$(pw_st
 # C309-C310: D01 readback must run the parser; the repair preview must never write.
 C309-verify-skips-parser	scripts/lib/pw-shiplib.sh	        verify_published(remote['body'])	        pass	T1	pw-ship-history.t.sh
 C310-repair-preview-writes	scripts/lib/pw-shiplib.sh	        print('repair-preview: dry run only — nothing was written; repair the description, then run verify')	        api(mr, fixed); print('repair-preview: applied')	T1	pw-ship-history.t.sh
+# C311-C312: D03 — the 403 fallback must be labeled; a persisted policy must be reused.
+C311-403-fallback-unlabeled	scripts/lib/pw-shiplib.sh	    reason = ('settings-403; official-docs-fallback' if '403' in (out + err)	    reason = ('settings-unavailable; official-docs-fallback' if '403' in (out + err)	T1	pw-ship-history.t.sh
+C312-capacity-policy-reprobes	scripts/lib/pw-shiplib.sh	        policy = read_json(path)	        policy = discover_capacity(mr)	T1	pw-ship-history.t.sh

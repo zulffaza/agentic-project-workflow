@@ -26,6 +26,14 @@ try:
     if len(args) not in (4, 8, 10) or args[0] != 'api' or args[2] != '--hostname':
         raise ValueError('unexpected arguments')
     endpoint, host = args[1], args[3]
+    if endpoint == 'application/settings':
+        # Instance-capacity discovery probe: the env controls whether the call is admin-forbidden
+        # or returns a specific settings document (no fixture file required).
+        if os.environ.get('PWTEST_SETTINGS_403'):
+            print('glab: 403 Forbidden', file=sys.stderr)
+            sys.exit(1)
+        print(os.environ.get('PWTEST_SETTINGS_JSON', '{}'))
+        sys.exit(0)
     writing = len(args) != 4
     if writing and args[4:] != ['--method', 'PUT' if forge == 'glab' else 'PATCH', '--input', '-',
                                 '-H', 'Content-Type: application/json']:
