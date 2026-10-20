@@ -40,11 +40,13 @@ services MR review threads · **`/pw-status`** shows where a project is · **`/p
 the context docs from your intent (`prepare`) or edits them deterministically (`req-init` ·
 `add-input` · `add-repo`) · **`/pw-review`** also
 takes write operators (`init` · `init-all` · `item` · `answer` · `signoff`) so review-file blocks are never
-hand-copied. All **five** review points
-in this pipeline — analysis, plan (breakdown), a task's plan, a task's execution result, and MR/PR
-comments (not all shown as their own row above — per-task and MR reviews are optional/side-loop)
-— each have an optional AI-assisted mode (off by default, per project/phase) — `/pw-review … ai`
-delegates a fresh review pass instead of a human doing it; see [docs/REVIEW.md](./docs/REVIEW.md).
+hand-copied. All **eight** review surfaces — context readiness, analysis, plan (breakdown), a task's
+plan, a task's execution result, the shipped MR, local RFC content, and close evidence (not all
+shown as their own row above — per-task, MR, context, RFC, and close reviews are optional) — each
+have an optional AI-assisted mode (advisory, manually triggered by default, per project/surface).
+`/pw-review … ai` delegates a fresh review pass instead of a human doing it; see
+[docs/REVIEW.md](./docs/REVIEW.md). Context readiness gates nothing: it can collect feedback and
+findings, but the human still moves to analysis explicitly.
 
 **Two ways to start:** *fresh* (`/pw-new`) or *continuation* (`/pw-adopt`, when work is already on a
 real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./docs/ADOPTION.md)**.

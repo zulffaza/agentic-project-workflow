@@ -14,7 +14,8 @@ Honor configured knowledge search rules. Continue when optional knowledge tools 
 Draft the existing requirements sections. Attribute requirements and mark suggestions and uncertainty.
 Gather relevant source material once, preserve provenance, and record supported repository guesses.
 Use entity helpers for table and workflow-state changes. Preserve user edits and adoption records.
-Save unresolved questions. Verify outputs and summarize gaps. Stop before analysis or approval.
+Ensure the optional separate readiness record when a brief exists; invalidate its approval before saving changed context.
+Run the configured context completion review after verification. Stop before analysis or approval.
 ```
 
 ## 0. Gate and phase (before any write)
@@ -130,16 +131,42 @@ Then write **one** concise preparation record through the status/log helper
 search. New index rows and log events use the shared datetime format automatically through the
 entity helpers — never rewrite historical dates, imported source dates, or review records.
 
+When `context/REQUIREMENTS.md` exists, ensure the separate optional feedback record:
+`pw-review.sh init-docs --project <slug> --file context/REQUIREMENTS.md` (idempotent; it leaves an
+existing record byte-identical). Keep findings and review discussion there, never in the brief,
+index, or imported sources. This record is a feedback surface, not a phase gate; mechanical
+`add-input`/`add-repo` calls and a brief the human is still writing do not create it.
+
+Before saving changed requirements or index bytes over a record whose current gate reads
+`approved`, reopen that record first:
+`pw-review.sh reopen --project <slug> --file context/review/CONTEXT.review.md`. If the invalidation
+write fails, do not save the changed files. Unchanged or timestamp-only reruns reopen nothing and
+preserve review history.
+
 A second run with unchanged inputs must not duplicate any row or guess. A run with new information
 incorporates it, removes resolved questions, and reports meaningful changes.
 
-## 6. Verify and stop
+## 6. Verify, hand off review, and stop
 
 Check the saved brief, index rows, and repo guesses; then reply with the brief + index links, the
-unresolved decisions, source gaps, and the next command. Offer `/pw-analyze --project <slug>` only when the
-draft is usable; when a blocking outcome decision remains, the next action is to answer that
-question and re-run preparation. There is no new context sign-off or review file — the human
-controls the transition by invoking analysis.
+unresolved decisions, source gaps, the optional review-record path, and the next command.
+
+Run the completion handoff exactly once after verification:
+
+1. Read the effective `context` review trigger and outcome
+   (`pw-config.sh get --project <slug> --key review-trigger`, then `--key ai-review`).
+2. When the trigger is `completion` and the outcome is callable, run the
+   `/pw-review ai --project <slug> --surface context` flow with a fresh reviewer. The reviewer owns
+   its correlated pass entry, findings, and guarded approval; the preparator never impersonates it.
+3. Apply bounded repairs only when `review-repair context=bounded` and within `review-rounds`.
+   After verified repairs, assess the changed context in a fresh pass. A skip or outage is recorded
+   and never becomes a clean result or approval.
+4. Never answer an open human decision, fetch new sources, approve analysis, or start it.
+
+Offer `/pw-analyze --project <slug>` only when the draft is usable; when a blocking outcome decision
+remains, the next action is to answer that question and re-run preparation. The readiness record at
+`context/review/CONTEXT.review.md` is optional and gates nothing — the human still moves to analysis
+explicitly.
 
 ## Rewind note (later phase)
 

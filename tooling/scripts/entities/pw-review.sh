@@ -78,7 +78,7 @@
 #       The sibling path gets the same containment + symlink guard as the review
 #       file; blocks are fenced with pw-archived-block markers so a failed-publish
 #       retry re-appends nothing and duplicates nothing.
-#   pw-review.sh start        --project <slug> --file <review-rel-path> [--phase <analysis|plan|task-plan|task-exec|ship>]
+#   pw-review.sh start        --project <slug> --file <review-rel-path> [--phase <context|analysis|plan|task-plan|task-exec|ship|rfc|close>]
 #                                 [--pass <id>] [--provider <actual-id>] [--model <actual-id>] [--confirm-earlier]
 #       Pass entry. Without --phase this is the normal repair pass, attributed
 #       "pw-review (repair)". With --phase it is an independent AI pass; the
@@ -393,7 +393,7 @@ cmd_init_all() {
     pw_phase_valid "$tok" || die "dashboard phase is '$tok' — cannot scope init-all → fix: $_rph"
   case "$tok" in
     context)
-      echo "$slug: phase 'context' — no review files to initialize yet (/pw-analyze $slug produces the first reviewable analysis)"
+      echo "$slug: phase 'context' — init-all creates nothing implicitly; context readiness review is optional → fix: create it explicitly with /pw-review init --project $slug --file context/REQUIREMENTS.md (assisted preparation creates it after saving the brief)"
       return 0 ;;
     done)
         echo "$slug: phase 'done' — init-all creates nothing here → fix: select explicitly (/pw-review init --project $slug --file <review-rel> --doc <doc-rel>) or rewind the dashboard first (/pw-status rewind --project $slug --phase <phase>)"
@@ -1472,8 +1472,8 @@ cmd_start() {
         esac ;;
       --confirm-earlier) confirm=1 ;;
       -h|--help) pw_usage ;;
-      -*) _pw_unknown "$a" "start --project <slug> --file <review-rel-path> [--phase <analysis|plan|task-plan|task-exec|ship>] [--pass <id>] [--provider <id>] [--model <id>] [--confirm-earlier]" ;;
-      *) _pw_positional "$a" "start --project <slug> --file <review-rel-path> [--phase <analysis|plan|task-plan|task-exec|ship>] [--pass <id>] [--provider <id>] [--model <id>] [--confirm-earlier]" ;;
+      -*) _pw_unknown "$a" "start --project <slug> --file <review-rel-path> [--phase <context|analysis|plan|task-plan|task-exec|ship|rfc|close>] [--pass <id>] [--provider <id>] [--model <id>] [--confirm-earlier]" ;;
+      *) _pw_positional "$a" "start --project <slug> --file <review-rel-path> [--phase <context|analysis|plan|task-plan|task-exec|ship|rfc|close>] [--pass <id>] [--provider <id>] [--model <id>] [--confirm-earlier]" ;;
     esac
   done
   [ -n "$slug" ] || die "start: --project is required → fix: start --project <slug> --file <review-rel-path> [--phase <phase>] [--pass <id>] [--provider <id>] [--model <id>] [--confirm-earlier]"

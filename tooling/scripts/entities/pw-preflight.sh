@@ -18,7 +18,7 @@
 #       check ≥1 task has a linked MR (comment push)
 #   pw-preflight.sh close       --project <slug>
 #       check all tasks accepted
-#   pw-preflight.sh review      --project <slug> [--lane <analysis|plan|task-plan|task-exec|ship>]
+#   pw-preflight.sh review      --project <slug> [--lane <context|analysis|plan|task-plan|task-exec|ship>]
 #       check review files exist in the lane (unknown lane words fail closed)
 #
 # Named-argument grammar: operation words first, every value named; --project
@@ -309,12 +309,21 @@ case "$COMMAND" in
     PHASE_FILTER="$LANE"
 
     # Check review files exist. The filter is a REVIEW LANE word — the /pw-review scope
-    # set (analysis|plan|task-plan|task-exec|ship), NOT a dashboard phase: task-plan and
+    # set (context|analysis|plan|task-plan|task-exec|ship), NOT a dashboard phase: task-plan and
     # task-exec review the per-task artifacts through task/review/T0n.review.md, and the
     # ship lane reviews the same mirrored task review files the MR comments fold back
     # into. An unknown lane word fails closed instead of silently skipping the check.
     if [ -n "$PHASE_FILTER" ]; then
       case "$PHASE_FILTER" in
+        context)
+          if [ -f "$D/context/review/CONTEXT.review.md" ]; then
+            :
+          elif [ -f "$D/context/REQUIREMENTS.md" ]; then
+            die_fix "context review file missing" "run /pw-review init --project $SLUG --file context/REQUIREMENTS.md (assisted preparation creates it after saving the brief)"
+          else
+            die_fix "no context requirements or review record found" "prepare the context first (/pw-context prepare --project $SLUG --brief <brief>), or create the brief by hand (/pw-context req-init --project $SLUG)"
+          fi
+          ;;
         analysis)
           if [ ! -d "$D/analysis/review" ] || [ -z "$(ls -A "$D/analysis/review"/*.review.md 2>/dev/null)" ]; then
             die_fix "no analysis review files found" "run /pw-review --project $SLUG --phase analysis to create them"
@@ -336,14 +345,19 @@ case "$COMMAND" in
           fi
           ;;
         *)
-          die_fix "unknown review phase-word '$PHASE_FILTER'" "expected one of: analysis|plan|task-plan|task-exec|ship (the /pw-review --project $SLUG scope lanes — see /pw-help project --project $SLUG --name pw-review)"
+          die_fix "unknown review phase-word '$PHASE_FILTER'" "expected one of: context|analysis|plan|task-plan|task-exec|ship (the /pw-review --project $SLUG scope lanes — see /pw-help project --project $SLUG --name pw-review)"
           ;;
       esac
     else
-      # Check any review files exist
-      if [ ! -d "$D/analysis/review" ] && [ ! -d "$D/task/review" ]; then
-        die_fix "no review directories found" "run /pw-review --project $SLUG to open the first review"
-      fi
+      # Any real review file in a shared review lane satisfies the default check. Context readiness
+      # is its own lane and must not be hidden behind analysis/task review creation.
+      _has_review=0
+      for _lane in analysis/review task/review context/review; do
+        [ -d "$D/$_lane" ] || continue
+        if [ -n "$(ls -A "$D/$_lane"/*.review.md 2>/dev/null)" ]; then _has_review=1; break; fi
+      done
+      [ "$_has_review" = 1 ] \
+        || die_fix "no review files found" "run /pw-review --project $SLUG (or create one explicitly with /pw-review init --project $SLUG --file <artifact-rel-path>)"
     fi
     ;;
 

@@ -266,6 +266,8 @@ pwtest_grep_file 'or agent-assisted preparation' "INDEX filled-by hint repaired"
 if grep -qF 'Agents only READ' "$P3/context/INDEX.md"; then pwtest_bad "INDEX legacy wording gone" "old bytes remain"; else pwtest_ok "INDEX legacy wording gone"; fi
 pwtest_grep_file 'prepare --project <slug> --brief <your brief>' "README brief hint reaches the prepare wording" "$P3/context/README.md"
 if grep -qF 'cp _REQUIREMENTS.template.md' "$P3/context/README.md"; then pwtest_bad "README legacy chain completed" "manual-copy wording remains"; else pwtest_ok "README legacy chain completed"; fi
+pwtest_grep_file 'optional feedback record at `review/CONTEXT.review.md`' "README review-record hint repaired" "$P3/context/README.md"
+pwtest_grep_file 'not an approval gate' "README review hint states the advisory role" "$P3/context/README.md"
 pwtest_grep_file '## Sign-off' "review sign-off table preserved" "$P3/task/review/T01.review.md"
 pwtest_grep_file '\| you \| approved \|' "sign-off row preserved verbatim" "$P3/task/review/T01.review.md"
 if grep -qE 'forge called during guidance' "$PWTEST_BOTH"; then pwtest_bad "no forge access" "a forge stub was invoked"

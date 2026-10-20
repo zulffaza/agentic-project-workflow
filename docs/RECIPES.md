@@ -49,6 +49,17 @@ Open questions stay listed in the brief; answer them and run `prepare` again to 
 When the draft is usable, continue with `/pw-analyze --project delivery-note`.
 Running `prepare` again updates its own rows in place; it never duplicates them.
 
+Assisted preparation also leaves an optional feedback record at `context/review/CONTEXT.review.md`.
+Add feedback and apply it without editing the brief:
+
+```text
+/pw-review item --project delivery-note --file context/review/CONTEXT.review.md --section 'Success criteria' --text Define how existing orders remain valid
+/pw-review --project delivery-note --file context/review/CONTEXT.review.md
+```
+
+It is a feedback record, not an analysis gate. For a fresh AI pass, use
+`/pw-review ai --project delivery-note --surface context`.
+
 The manual path builds the same files by hand. `req-init` preserves an existing brief.
 `add-input` records provenance; it does not write the source file:
 

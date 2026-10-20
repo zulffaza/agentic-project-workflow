@@ -133,6 +133,13 @@ pwtest_rc 0 "maintainer command view" "$C" command --name pw-review --maintainer
 _det_cmp cmdrevm "maintainer view deterministic across fresh invocations"
 pwtest_re 'entity script: tooling/scripts/entities/pw-review\.sh' "own script section (maintainer view)"
 pwtest_re '2[0-9] operators' "operator count in maintainer view (full name)"
+pwtest_rc 0 "command --full review renders the file" "$C" command --name pw-review --full
+grep -qF -- '/pw-review ai --project <project-slug> [--surface <name>' "$PWTEST_OUT" \
+  && pwtest_ok "AI review help exposes the surface selector" \
+  || pwtest_bad "AI review help surface selector" "the ai invocation lost --surface"
+grep -qF 'context/review/CONTEXT.review.md' "$PWTEST_OUT" \
+  && pwtest_ok "AI review help maps the context record" \
+  || pwtest_bad "AI review help context record" "context record path missing from the ai scope rule"
 pwtest_rc 0 "command --full renders the file" "$C" command --name pw-context --full
 grep -qF '{{PW_' "$PWTEST_OUT" && pwtest_bad "no {{PW_ leak (--full)" "the sub() helper died — placeholders surfaced" || pwtest_ok "no {{PW_ leak (--full)"
 grep -qF 'Named-argument grammar' "$PWTEST_OUT" && pwtest_ok "--full carries doctrine prose" || pwtest_bad "--full content" "body missing"

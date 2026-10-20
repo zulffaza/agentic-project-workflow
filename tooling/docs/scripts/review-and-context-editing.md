@@ -132,6 +132,11 @@ actual run metadata (`unknown` when unconfirmed), never a human row, and honors
 unresolved comments block the consuming command through `has-open` (a fix routed from RFC
 feedback acts on the analysis document's OWN review gate).
 
+**AI scope.** `ai --project <slug> (--surface <name> | --task <T0n> | --phase <phase> | --file <rel>)`
+selects the same eight surfaces; `--surface context` maps to `context/review/CONTEXT.review.md` and
+requires the brief only when its record does not exist yet. `review` preflight accepts the matching
+`--lane context`, and default discovery includes `context/review/`.
+
 **Handoff operators (advisory external reports).** `prepare --project <slug> (--task <T0n> | --surface <name> | --file <rel>) [--refresh] [--repair]
 [--pass-id <id>] [--print]` freezes ONE review unit into `review/ai/<pass-id>/` — `manifest.json`
 (surface, artifact, round/budget, reviewed-identity `fingerprint`, recorded inputs/code evidence,

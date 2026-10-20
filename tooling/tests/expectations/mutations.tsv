@@ -342,3 +342,13 @@ C272-ship-comments-ref-pointer-lost	commands/pw-ship.md	**Load `references/mr-co
 C273-ship-request-review-ref-pointer-lost	commands/pw-ship.md	**Load `references/review-request.md`**	**Load the request-review procedure**	T4	-
 C274-request-review-observed-heads-guard-lost	skill/project-workflow/references/review-request.md	Compare `observed heads`	Skip the observed-heads step	T4	-
 C275-mr-comments-inherited-round-lost	skill/project-workflow/references/mr-comments.md	inherited-update round	inherited-update pass	T4	-
+# C276–C282 minted by the context-review-and-repair plan: context apply preflight, default discovery,
+# the lane vocabulary, shared completion handoff, AI --surface selector, init-all guidance, and the
+# project guidance hint must all stay wired.
+C276-context-review-preflight-lane-dropped	scripts/entities/pw-preflight.sh	        context)	        context-disabled)	T1	pw-preflight.t.sh
+C277-context-default-discovery-dropped	scripts/entities/pw-preflight.sh	for _lane in analysis/review task/review context/review; do	for _lane in analysis/review task/review; do	T1	pw-preflight.t.sh
+C278-context-lane-word-list-dropped	scripts/entities/pw-preflight.sh	expected one of: context|analysis|plan|task-plan|task-exec|ship	expected one of: analysis|plan|task-plan|task-exec|ship	T1	pw-preflight.t.sh
+C279-context-completion-handoff-dropped	skill/project-workflow/references/context.md	Run the completion handoff exactly once after verification	Skip the completion handoff after verification	T4	-
+C280-ai-surface-selector-dropped	commands/pw-review.md	--surface <context|analysis|plan|task-plan|task-exec|ship|rfc|close>	--surface <context>	T4	-
+C281-context-initall-message-regressed	scripts/entities/pw-review.sh	context readiness review is optional	no review files to initialize yet	T1	pw-review-states.t.sh
+C282-context-guidance-hint-dropped	scripts/entities/pw-project-doctor.sh	Assisted preparation also creates an optional feedback record at `review/CONTEXT.review.md`.	Assisted preparation creates no review record.	T4	-

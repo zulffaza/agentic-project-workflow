@@ -36,18 +36,25 @@ The first word is the operator:
   3. Save through the entity helpers only — `req-init` (missing brief), `ensure-input` /
      `ensure-repo` (keyed: a repeat run updates rows in place and never duplicates them), and one
      preparation record via the status/log helper. Preserve user edits and `/pw-adopt` records.
+     When `context/REQUIREMENTS.md` exists, ensure the separate optional readiness record with
+     `pw-review.sh init-docs --project <slug> --file context/REQUIREMENTS.md` (idempotent; existing
+     comments and history stay untouched). This is not a phase gate and only assisted preparation
+     creates it implicitly. Before saving changed context over a record whose current gate is
+     `approved`, run `pw-review.sh reopen --project <slug> --file context/review/CONTEXT.review.md`
+     first; if that write fails, do not save the changed files.
   4. Verify the saved context, then reply with the brief + index links, the unresolved decisions,
-     source gaps, and the next action (`/pw-analyze --project <slug>` when the draft is usable). **Stop
-     before analysis** — no analysis, no approval, no automatic `/pw-analyze`.
+     source gaps, the review-record path when it exists, and the next action (`/pw-analyze --project <slug>`
+     when the draft is usable). **Stop before analysis** — no analysis, no approval, no automatic `/pw-analyze`.
   5. **Completion review — only when configured.** After the verification in step 4, read the
      `context` axis (`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh get --project <slug>
      --key review-trigger` and `--key ai-review`) and, ONLY when the trigger is `completion` and the outcome
      is callable (`advisory` default; a legacy `off` row reads as advisory), run the
      `/pw-review ai --project <slug> --surface context` flow — a fresh reviewer only, bounded repairs only when
      `review-repair context=bounded` within `review-rounds` passes (repairs may correct the brief
-     and index rows but can never answer my open decisions or fetch new sources). Reviewer outage
-     or an unverified route: one skip line, continue. It never approves analysis and never starts
-     it — the next action stays my explicit `/pw-analyze --project <slug>`.
+     and index rows but can never answer my open decisions or fetch new sources). The reviewer owns
+     its pass entry, findings, and guarded approval through one pass id; repaired bytes need a fresh
+     pass. Reviewer outage or an unverified route: one skip line, continue. It never approves
+     analysis and never starts it — the next action stays my explicit `/pw-analyze --project <slug>`.
   An omitted `--brief` means resume from the saved context and this conversation; if both are empty,
   ask me for the intended outcome before constructing requirements.
 

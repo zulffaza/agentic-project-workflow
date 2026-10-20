@@ -80,6 +80,16 @@ Use either path to reach analysis, and do not repeat source registration when yo
 Expected result: `context/INDEX.md` lists the requirements file and both repositories.
 Use actual source details when you add a ticket, document link, or log.
 
+Assisted preparation also leaves an optional feedback record at `context/review/CONTEXT.review.md`.
+Add an item and apply it there; requirements and sources stay clean:
+
+```text
+/pw-review item --project delivery-note --file context/review/CONTEXT.review.md --section 'Success criteria' --text Define how existing orders remain valid
+/pw-review --project delivery-note --file context/review/CONTEXT.review.md
+```
+
+The record gates nothing. When the draft is usable, start analysis explicitly.
+
 ## Analyze
 
 ```text
