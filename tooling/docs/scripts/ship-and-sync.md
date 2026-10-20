@@ -348,7 +348,7 @@ resolver as `mr-state`; the rest are offline.
 S=$PW_HOME/tooling/scripts/entities/pw-ship.sh
 $S stack --project <slug>                 # read-only topology + health: task|parent|target|branch|base|landed|freshness|debt
 $S stack-validate --project <slug>        # fail-closed topology check (cycle, unknown/cross-repo parent, base drift, shared branch, missing depends_on); exit 1 on any finding
-$S stack-plan --project <slug> [--task <T0n>]…     # root-first publication order: task|repo|branch|target|parent|ready|reason (a stacked child is ready only once its target exists on origin)
+$S stack-plan --project <slug> [--task <T0n>]…     # root-first publication order: task|repo|branch|target|parent|ready|reason (a stacked child is ready only once its target exists on origin AND that ref sits at the parent's verified head — presence alone is not proof)
 $S stack-record --project <slug> --task <T0n> --set <col=value> [--set <col=value>]…   # upsert binding columns (fork_sha, consumed_parent_sha, target, …); verification/landing columns are refused
 $S stack-verify --project <slug> --task <T0n> --evidence <path> [--head <sha>] [--ci-sha <sha|skipped|pending|failed|unknown>] [--ci-target <branch>]
                                             # bind the verification tuple (current head + parent + effective target + evidence + CI disposition) in one atomic write after ## Verify

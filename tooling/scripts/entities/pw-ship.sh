@@ -1884,9 +1884,18 @@ EOF
     elif [ "$_pf" = "unverified" ]; then
       ready="no"; reason="not verified yet — execute + verify before publishing its own work"
     elif [ -n "$parent" ] && [ "$target" != "$base" ]; then
-      if ! { pw_dir_within "$REPOS_DIR" "$REPOS_DIR/$repo" \
-             && git -C "$REPOS_DIR/$repo" rev-parse --verify "origin/$target" >/dev/null 2>&1; }; then
+      # Presence on origin is not proof: the published parent ref must sit at the parent's own
+      # verified head, or this child would be planned against a different parent state than exec
+      # requires. Both cases stay actionable.
+      _pvh="$(pw_stack_state_get "$d" "$parent" verified_head 2>/dev/null || true)"
+      _porigin=""
+      if pw_dir_within "$REPOS_DIR" "$REPOS_DIR/$repo"; then
+        _porigin="$(git -C "$REPOS_DIR/$repo" rev-parse --verify "origin/$target^{commit}" 2>/dev/null || true)"
+      fi
+      if [ -z "$_porigin" ]; then
         ready="no"; reason="parent '$target' not published on origin — publish the parent first"
+      elif [ -n "$_pvh" ] && [ "$_porigin" != "$_pvh" ]; then
+        ready="no"; reason="parent '$target' on origin is not at the parent's verified head (${_pvh:0:8}) — push the verified parent first"
       fi
     fi
     echo "$t|$repo|$br|$target|$parent|$ready|$reason"
