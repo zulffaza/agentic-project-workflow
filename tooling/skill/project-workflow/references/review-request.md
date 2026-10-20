@@ -29,6 +29,15 @@ validation — never re-order or re-word the generated MR fields yourself.
   the same evidence and retry; if it still fails, re-run with `"omit": ["<section>"]` and relay
   the omitted-section diagnostic — the deterministic message always survives AI failure. When
   no useful NOTE is supported by the evidence, use `"omit": ["note"]` instead of generic filler.
+- **Recipient context is part of the writing contract.** The copied message leaves the project: no
+  local task IDs (T08/T10/T12), plan numbers, invocation or attempt keys, lane/group labels, or
+  local file paths. Identify a change by its component, repository, or linked MR URL; express a real
+  dependency as review order between accessible, repository-scoped MR links; and never turn a review
+  dependency into a deployment or rollout instruction. Keep meaningful product and API names. This
+  applies to the summary, every per-MR summary, the note, and custom frame text. If a supplied
+  `--prose` leaks local context, regenerate the affected field once against the same evidence with
+  the violation named; if it still leaks, omit that optional field with a diagnostic outside the
+  message and keep the deterministic request.
 - **Compare `observed heads` between the two calls.** If an MR's head advanced since the first
   call, discard that MR's affected prose, regenerate once from the second call's fresh evidence,
   and re-run `--prose`. If a head moved again, omit the affected section with its diagnostic and
