@@ -364,13 +364,21 @@ $S stack-inherited --project <slug> --task <T0n> --parent <T0n> --parent-sha <sh
 $S stack-cascade --project <slug> --task <T0n> [--push] [--verify-cmd <cmd>] [--evidence-dir <dir>] [--on-conflict <abort|keep>]
                                             # parent-first descendant propagation: integrate → verify-bind → record → push (shipped only, --push required); stages persist and resume
 
+```
 **Freshness proof applies to every task, not only stacked children.** `exec` refuses to publish when
 the task has a recorded verification tuple and `_stack_stale` no longer matches live Git/state — the
 branch head moved after verification, the consumed parent advanced, the effective target changed, or
 the CI binding no longer covers the current head. A ROOT task used to bypass these gates entirely,
 so a post-verification commit could be published under stale evidence. Tasks with no recorded tuple
 keep the legacy path.
-```
+
+**Cascade verification stages.** With no `--verify-cmd`, a cascade defers: it exits `1` (pending,
+not failed), names the exact manual step, and leaves the verify stage pending. A later invocation
+resumes as soon as `stack-verify --head` has bound the child's current commit — it does not repeat
+the advice forever. When a `--verify-cmd` runs, the checkout must be unchanged afterwards: a command
+that commits or leaves tracked edits has certified a different snapshot than the one to be bound, so
+the stage blocks and nothing is pushed.
+
 
 `stack-verify` writes the tuple (head, parent, target, evidence, CI disposition) in one atomic
 record write, so a half-written binding can never certify anything; `skipped`/`pending` stay

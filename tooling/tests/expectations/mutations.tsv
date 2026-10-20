@@ -384,3 +384,6 @@ C301-github-failure-ignored	scripts/entities/pw-ship.sh	              elif any($
 C302-root-freshness-gate-lost	scripts/entities/pw-ship.sh	  if [ -n "$(pw_stack_state_get "$D" "$TASK_ID" verified_head 2>/dev/null || true)" ] \	  if false \	T1	pw-ship.t.sh
 # C303: slice 4 F16 — stack-plan readiness must compare origin against the parent's verified head.
 C303-stack-plan-ignores-verified-parent	scripts/entities/pw-ship.sh	      elif [ -n "$_pvh" ] && [ "$_porigin" != "$_pvh" ]; then	      elif false; then	T1	pw-stack.t.sh
+# C304-C305: slice 4 cascade — a manual bind must resume; a verify-time edit must not bind.
+C304-manual-bind-never-resumes	scripts/entities/pw-ship.sh	        if [ -n "$_vh" ] && [ "$_vh" = "$dh" ]; then	        if false; then	T1	pw-stack.t.sh
+C305-verify-edit-binds-anyway	scripts/entities/pw-ship.sh	          if [ "$dh2" != "$dh" ] || [ -n "$dirty2" ]; then	          if false; then	T1	pw-stack.t.sh
