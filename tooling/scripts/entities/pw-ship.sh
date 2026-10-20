@@ -490,6 +490,33 @@ _mr_unknown() {
   return 1
 }
 
+# _pw_mr_parts <mr-url> — print "<forge> <host> <repo> <iid>" for a GitLab MR or GitHub PR URL,
+# or nothing when the URL is not a recognized http(s) MR/PR. Identity is derived from the URL so a
+# state read does not depend on a checkout being present.
+_pw_mr_parts() {
+  local url="${1%%[?#]*}" host path rest repo iid
+  case "$url" in http://*|https://*) ;; *) return 1 ;; esac
+  rest="${url#*://}"
+  host="${rest%%/*}"
+  path="/${rest#*/}"
+  host="$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')"
+  case "$path" in
+    *"/-/merge_requests/"*)
+      repo="${path#/}"; repo="${repo%%/-/merge_requests/*}"
+      iid="${path##*/}"
+      case "$iid" in ''|*[!0-9]*) return 1 ;; esac
+      [ -n "$repo" ] || return 1
+      printf 'gitlab %s %s %s\n' "$host" "$repo" "$iid" ;;
+    *"/pull/"*)
+      repo="${path#/}"; repo="${repo%%/pull/*}"
+      iid="${path##*/}"
+      case "$iid" in ''|*[!0-9]*) return 1 ;; esac
+      [ -n "$repo" ] || return 1
+      printf 'github %s %s %s\n' "$host" "$(printf '%s' "$repo" | tr '[:upper:]' '[:lower:]')" "$iid" ;;
+    *) return 1 ;;
+  esac
+}
+
 _mr_state_impl() {
   local slug="$1" task="$2"
   local d; d="$(proj_dir "$slug")"
@@ -535,47 +562,50 @@ _mr_state_impl() {
       if [ "$cb" = "$branch" ]; then repo_dir="$cand"; break; fi
     done < <(find "$d/worktree" -maxdepth 4 -name .git 2>/dev/null)
   fi
-  if [ -z "$repo_dir" ] || [ ! -d "$repo_dir" ]; then
-    if [ -z "$branch" ]; then
-      find "$d/worktree" -maxdepth 4 -name .git 2>/dev/null | while read -r g; do
-        echo "  candidate: $(dirname "$g")" >&2
-      done || true
-    fi
-    _mr_unknown "no worktree found for $task (Branch: ${branch:-unset}, Worktree: field missing or not under $d/worktree)" || return 1
-  fi
-
-  local origin_url
-  origin_url="$(git -C "$repo_dir" config --get remote.origin.url 2>/dev/null || true)"
-  [ -n "$origin_url" ] || _mr_unknown "no origin remote in $repo_dir" || return 1
-
-  # Host extraction handles ssh (git@host:...) and https (https://host/...) forms.
-  local host
-  host="$(printf '%s' "$origin_url" | sed -E 's|^.*@||; s|^https?://||; s|[:/].*||')"
-  [ -n "$host" ] || _mr_unknown "could not resolve host from origin: $origin_url" || return 1
-
-  # Resolve forge: PW_FORGE_HOSTS override, else auto-detect (github.com → github, else gitlab).
-  local forge="gitlab"
-  case "$host" in
-    github.com) forge="github" ;;
-  esac
-  if [ -n "${PW_FORGE_HOSTS:-}" ]; then
-    for entry in "${PW_FORGE_HOSTS[@]}"; do
-      local h="${entry%%=*}" f="${entry#*=}"
+  # Identity comes from the MR URL, so a state read survives worktree (or checkout) removal.
+  # A validated checkout is still preferred as the CLI's context when one exists; source edits and
+  # local verification continue to require it.
+  local forge host repo iid
+  set -- $(_pw_mr_parts "$mr_url")
+  case $# in 4) forge="$1"; host="$2"; repo="$3"; iid="$4" ;; *)
+    _mr_unknown "cannot parse MR identity from URL: $mr_url" || return 1 ;; esac
+  # An exact configured host mapping wins over the URL-derived guess.
+  local entry h f
+  if [ -n "${PW_FORGE_HOSTS+x}" ]; then
+    for entry in ${PW_FORGE_HOSTS[@]+"${PW_FORGE_HOSTS[@]}"}; do
+      h="${entry%%=*}"; f="${entry#*=}"
       [ "$h" = "$host" ] && { forge="$f"; break; }
     done
   fi
+  local repo_name
+  repo_name="$(pw_field "$taskfile" Repo 2>/dev/null || true)"
+  local ctx="$repo_dir"
+  if [ -z "$ctx" ] || [ ! -d "$ctx" ]; then
+    [ -n "$repo_name" ] && [ -d "$REPOS_DIR/$repo_name" ] && ctx="$REPOS_DIR/$repo_name" || ctx=""
+  fi
 
-  # Query MR state from INSIDE the repo dir (glab resolves the project from cwd; gh from origin).
   local state=""
   case "$forge" in
     github)
-      state="$(cd "$repo_dir" && gh pr view "$mr_iid" --json state -q .state 2>/dev/null || true)"
-      ;;
+      if [ -n "$ctx" ]; then
+        state="$(cd "$ctx" && GH_HOST="$host" gh pr view "$iid" -R "$repo" --json state -q .state 2>/dev/null || true)"
+      else
+        state="$(GH_HOST="$host" gh api "repos/$repo/pulls/$iid" -q .state 2>/dev/null || true)"
+      fi ;;
     gitlab)
-      state="$(cd "$repo_dir" && GITLAB_HOST="$host" glab mr view "$mr_iid" --output json 2>/dev/null | jq -r .state 2>/dev/null || true)"
-      ;;
+      if [ -n "$ctx" ]; then
+        state="$(cd "$ctx" && GITLAB_HOST="$host" glab mr view "$iid" --output json 2>/dev/null | jq -r .state 2>/dev/null || true)"
+      else
+        state="$(GITLAB_HOST="$host" glab api "projects/$(printf '%s' "$repo" | sed 's|/|%2F|g')/merge_requests/$iid" 2>/dev/null | jq -r .state 2>/dev/null || true)"
+      fi ;;
     *) die "unknown forge: $forge" ;;
   esac
+  # Keep the worktree diagnostic only when identity could not be read at all.
+  if [ -z "$state" ] || [ "$state" = "null" ]; then
+    if [ -z "$repo_dir" ] || [ ! -d "$repo_dir" ]; then
+      echo "  (no worktree for $task; read via the shared repository/URL identity)" >&2
+    fi
+  fi
   [ -n "$state" ] && [ "$state" != "null" ] \
     || _mr_unknown "failed to query MR $mr_iid state via $forge CLI on $host (is it authenticated?)" || return 1
 
@@ -1086,10 +1116,10 @@ cmd_exec() {
         _av="$(pw_stack_state_get "$D" "$_anc" verified_head)"
         [ -n "$_av" ] \
           || die "parent $_anc has no verified binding for target '$TARGET_BRANCH' → fix: re-run /pw-ship --project $SLUG --task $_anc so the parent ships with a verified binding before this child"
-        _ohead="$(git -C "$REPO_DIR" rev-parse "origin/$TARGET_BRANCH" 2>/dev/null || true)"
+        _ohead="$(git -C "$REPO_DIR" rev-parse --verify "origin/$TARGET_BRANCH^{commit}" 2>/dev/null || true)"
         [ "$_ohead" = "$_av" ] \
           || die "parent target '$TARGET_BRANCH' on origin is not at $_anc's verified head (${_av:0:8}) → fix: push the verified parent first (/pw-ship --project $SLUG --task $_anc)"
-        _lhead="$(git -C "$REPO_DIR" rev-parse "$TARGET_BRANCH" 2>/dev/null || true)"
+        _lhead="$(git -C "$REPO_DIR" rev-parse --verify "$TARGET_BRANCH^{commit}" 2>/dev/null || true)"
         [ "$_lhead" = "$_av" ] \
           || die "local parent branch '$TARGET_BRANCH' is not at $_anc's verified head (${_av:0:8}) → fix: re-run the parent's execution/verify (/pw-execute --project $SLUG --task $_anc)"
         break
@@ -1505,7 +1535,7 @@ _stack_stale() {
   repo="$(_stack_repo_of "$d" "$t")"; branch="$(_stack_branch_of "$d" "$t")"
   cur_head=""
   if [ -n "$repo" ] && [ -n "$branch" ] && pw_dir_within "$REPOS_DIR" "$REPOS_DIR/$repo"; then
-    cur_head="$(git -C "$REPOS_DIR/$repo" rev-parse "$branch" 2>/dev/null || true)"
+    cur_head="$(git -C "$REPOS_DIR/$repo" rev-parse --verify "$branch^{commit}" 2>/dev/null || true)"
     [ -n "$cur_head" ] && [ "$vh" != "$cur_head" ] && return 0
   fi
   parent_task="$(pw_stack_parent_id "$d" "$t")"
@@ -1931,7 +1961,7 @@ cmd_stack_verify() {
   local repo branch base; repo="$(_stack_repo_of "$d" "$t")"; branch="$(_stack_branch_of "$d" "$t")"; base="$(_stack_base_of "$d" "$t")"
   [ -n "$repo" ] && [ -n "$branch" ] || die "task $t needs Repo/Branch fields to bind a verification"
   local rd="$REPOS_DIR/$repo"; [ -d "$rd" ] && pw_dir_within "$REPOS_DIR" "$rd" || die "repo not found: $rd"
-  local cur_head; cur_head="$(git -C "$rd" rev-parse "$branch" 2>/dev/null || true)"
+  local cur_head; cur_head="$(git -C "$rd" rev-parse --verify "$branch^{commit}" 2>/dev/null || true)"
   [ -n "$cur_head" ] || die "cannot resolve branch '$branch' in $repo → fix: ensure the task branch exists locally"
   if [ -n "$head" ] && [ "$head" != "$cur_head" ]; then
     die "stack-verify --head $head does not match the current $branch head ${cur_head:0:12} → fix: re-run after the branch is at the verified commit"

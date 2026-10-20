@@ -45,7 +45,7 @@ case "${1:-}" in
     case "${2:-}" in
       list) _list_json ;;
       view)
-        j="$(_json "${2##*/}")"
+        j="$(_json "${3:-0}")"
         case " $* " in
           *-q*--json*state*|*"--json state"*) : ;;
         esac

@@ -86,6 +86,16 @@ The marked body is also retained in the project record before readback. `history
 **Prerequisite it validates for you:** `Repo:`/`Branch:` set in the task file and the repo present
 locally — exit 2 messages name which is missing.
 
+## pw-ship.sh mr-state
+
+Reads the recorded MR URL from `## Result` (else the dashboard row) and derives forge, host,
+repository, and IID **from that URL**, so a state read still works after the task's worktree — or the
+whole project checkout — is gone. A validated checkout is used as the CLI context when present; the
+repository field names a shared clone otherwise, and a fully absent checkout falls back to the
+forge API with the URL's explicit repository identity (needed for enterprise GitHub, where the
+origin-pattern guess used to yield an empty repo). Configured `PW_FORGE_HOSTS` still wins over the
+URL-derived forge. `unknown` means the state could not be read (auth/URL), never a guessed value.
+
 ## pw-ship.sh mr-state-batch
 
 One call instead of N `pw-ship.sh mr-state` queries.
