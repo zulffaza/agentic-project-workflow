@@ -157,15 +157,22 @@ Two read-only/import operators on this command (no new user script):
       `PW_FORGE_HOSTS` entry wins) — GitLab: `glab` run from inside the worktree with
       `GITLAB_HOST=<resolved-host>`; GitHub: `gh pr create`. The script resolves the forge and
       requires the CLI **before** it pushes: a missing CLI refuses the shipment rather than pushing a
-      branch with no MR path, and the forge is never switched by mere CLI availability.
+      branch with no MR path, and the forge is never switched by mere CLI availability. It also
+      probes `glab mr create --help` for the `--output json` contract before the push and uses the
+      plain invocation (which prints the MR URL) when the installed release lacks it. With no
+      recorded MR, it first looks up an MR for the same source branch and adopts it rather than
+      opening a duplicate. The recorded
+      URL is verified inside `## Result` before the run reports completion.
       Never hardcode a host.
     - **If the task has a `Landing unit:` field** (a must-land-together set from PLAN's `## Landing
       units`): fill the description template's "**Landing unit:**" bullet with the unit name + the
       sibling MRs/URLs of that unit's other tasks, so reviewers review the set as one unit and don't
       mistake an interdependent MR for an independent one.
    - Record the MR in the task's `## Result → MR:` field **and** the dashboard **Merge requests**
-     table (Task · Repo · MR url · Target branch · State=open · Build), then log it:
+     table (Task · Repo · MR url · Target branch · State · Build), then log it:
      `…/{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log --project <slug> --actor ship --message "T0n pushed <branch>; MR <url>"`.
+     The dashboard State mirrors the MR that exists: a newly created MR is `open`, while a
+     continuation on an already-merged or closed MR keeps that terminal state rather than reopening it.
     - **Unless `--skip-build-check` was passed:** once the MR is open, monitor its pipeline/checks to
       a terminal state with `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh monitor --project <slug> --task <task-id>`
       (exit 0 green — or neutral `SKIPPED`, no jobs ran, which is NOT a red build — / 1 red /
@@ -218,7 +225,11 @@ even if MR creation succeeded. Preserve its source file for recovery.
 For a stacked task, derive **High-level/Low-level changes** and the reviewer diff against the
 **effective parent target**, not the ultimate destination (`git diff origin/<parent-branch>...<branch>`),
 so the reviewer sees only this task's own changes. When a child MR URL becomes available, update the
-parent MR's navigation (its description) to name the child, preserving reviewer-authored text.
+parent MR's navigation (its description) to name the child, preserving reviewer-authored text:
+append with **real line breaks** (compose the new body in a file), never literal `\n` text — the
+managed summary end marker must still end a real line. Any description that carries the managed
+markers is checked by `history --operation validate --file <body>` before `exec` publishes it, and
+the same parser is the authority afterwards; a rejected body names the boundary to fix.
 Fill every section from the task file + its `## Result` + the actual diff — don't ship a bare
 "updates X" description. Derive **High-level changes** from the task's goal/intent (behavioral,
 no paths — that forces real abstraction); derive **Low-level changes** by diffing the branch against

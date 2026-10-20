@@ -106,7 +106,7 @@ $PW_HOME/tooling/scripts/entities/pw-status.sh oneliner --project <slug> --text 
 $PW_HOME/tooling/scripts/entities/pw-status.sh adopted --project <slug> --text <text…>             # insert-or-replace, idempotent
 $PW_HOME/tooling/scripts/entities/pw-status.sh phase --project <slug>                               # read the Status token only
 $PW_HOME/tooling/scripts/entities/pw-status.sh dashboard-task-status --project <slug> --task <T0n> --status <status>
-$PW_HOME/tooling/scripts/entities/pw-status.sh task-accept --project <slug> --task <T0n>           # merged-MR acceptance: task file + PLAN cell + dashboard row in ONE call (single propagator, since 2026-09-25; dashboard best-effort, one LOG line, idempotent)
+$PW_HOME/tooling/scripts/entities/pw-status.sh task-accept --project <slug> --task <T0n> [--observed-merged]   # acceptance: task file + PLAN cell + dashboard row in ONE call (single propagator, since 2026-09-25; dashboard best-effort, one LOG line, idempotent). The LOG claims a merge only with --observed-merged (pass it when the call follows an observed merged state); otherwise the message is neutral.
 $PW_HOME/tooling/scripts/entities/pw-status.sh provider-audit --project <slug> [--task <T0n>]…      # report-only (below)
 ```
 

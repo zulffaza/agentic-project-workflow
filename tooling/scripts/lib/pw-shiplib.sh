@@ -350,7 +350,7 @@ def validate_state(state, mr):
 def run():
     project, timestamp, mappings, registered, *arguments = sys.argv[1:]
     parser = HistoryParser(prog='pw-ship history')
-    parser.add_argument('operation', choices=['invocation', 'init', 'begin', 'checkpoint', 'freeze', 'deliver', 'pending'])
+    parser.add_argument('operation', choices=['invocation', 'init', 'begin', 'checkpoint', 'freeze', 'deliver', 'pending', 'validate'])
     parser.add_argument('url', nargs='?')
     parser.add_argument('--invocation')
     parser.add_argument('--attempt')
@@ -363,6 +363,17 @@ def run():
     need(not args.reviewed or args.operation == 'init', '--reviewed applies only to an explicitly owner-requested ownership repair')
     if args.operation == 'invocation':
         print(uuid.uuid4().hex)
+        return
+    if args.operation == 'validate':
+        # Pre-publication gate: a description that carries the managed markers must satisfy the
+        # SAME parser history delivery uses, over the WHOLE body (not just the owned summary).
+        # A malformed boundary (for example literal `\n` separators after the end marker) stops
+        # here, before any workflow-owned create or update.
+        need(args.file, 'validate requires --file')
+        text = safe_path(args.file).read_bytes().decode('utf-8')
+        spans = regions(text)
+        need('mr-summary' in spans, 'validate requires the managed mr-summary region')
+        print('validate: ok (' + str(len(text)) + ' chars)')
         return
     root = safe_path(project, directory=True)
     directory = safe_path(root / '.ship-history', directory=True)

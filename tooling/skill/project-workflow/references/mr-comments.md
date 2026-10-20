@@ -86,7 +86,7 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
     - **If `merged`**: The MR was already merged downstream. Handle it:
       1. Accept the task — ONE call sets all three acceptance holders (task-file `Status:`, the
          PLAN task-table cell the close gate reads, and the dashboard task row; the dashboard is
-         best-effort): `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh task-accept --project <slug> --task <task-id>`
+         best-effort): `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh task-accept --project <slug> --task <task-id> --observed-merged`
       2. Update dashboard MR table: `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh dashboard-mr-state --project <slug> --task <task-id> --state merged`
       3. If the task is **stacked** or a stacked **parent**, settle the stack before removing
          anything: record its landing (`stack-land`) and each open child's promotion debt

@@ -321,10 +321,11 @@ cmd_phase() {
 #      but does not fail — task file + PLAN are the gate's truth; with the KI-2 fill rule a
 #      still-untouched placeholder table self-heals here)
 # Idempotent: when every holder already says accepted → exit 0 with no duplicate LOG entry;
-# otherwise ONE log line covers the whole sync. Used when the MR is already merged.
-#   task-accept --project <slug> --task <task-id>
+# otherwise ONE log line covers the whole sync. The message claims a merge ONLY when the caller
+# observed one (`--observed-merged`); a manual/execution acceptance is logged neutrally.
+#   task-accept --project <slug> --task <task-id> [--observed-merged]
 cmd_task_accept() {
-  local slug="" task="" a v
+  local slug="" task="" a v observed=0
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
     case "$a" in
@@ -335,9 +336,10 @@ cmd_task_accept() {
       --project|--task)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
         case "$a" in --project) slug="$v" ;; --task) task="$v" ;; esac ;;
+      --observed-merged) observed=1 ;;
       -h|--help) pw_usage ;;
-      -*) _pw_unknown "$a" "task-accept --project <slug> --task <task-id>" ;;
-      *) _pw_positional "$a" "task-accept --project <slug> --task <task-id>" ;;
+      -*) _pw_unknown "$a" "task-accept --project <slug> --task <task-id> [--observed-merged]" ;;
+      *) _pw_positional "$a" "task-accept --project <slug> --task <task-id> [--observed-merged]" ;;
     esac
   done
   [ -n "$slug" ] || die "task-accept: --project is required → fix: task-accept --project <slug> --task <task-id>"
@@ -385,8 +387,13 @@ cmd_task_accept() {
   fi
 
   if [ "$changed" -eq 1 ]; then
-    cmd_log --project "$slug" --actor sync --message "$task: MR already merged, marked as accepted (task file + PLAN row + dashboard)"
-    echo "$slug: $task marked as accepted (MR already merged)"
+    if [ "$observed" -eq 1 ]; then
+      cmd_log --project "$slug" --actor sync --message "$task: MR merged (observed), marked as accepted (task file + PLAN row + dashboard)"
+      echo "$slug: $task marked as accepted (MR merged)"
+    else
+      cmd_log --project "$slug" --actor sync --message "$task: marked as accepted (task file + PLAN row + dashboard)"
+      echo "$slug: $task marked as accepted"
+    fi
   else
     echo "$slug: $task already accepted in every holder — nothing to do"
   fi

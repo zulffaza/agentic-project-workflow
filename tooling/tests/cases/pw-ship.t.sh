@@ -277,3 +277,135 @@ grep -q '^glab ' "$ROOT/forge47.log" \
 git -C "$PW_REPOS/api" worktree remove --force "$PW_PROJECTS_DIR/$E2/worktree/api/T01-thing" >/dev/null 2>&1 || true
 git -C "$PW_REPOS/api" branch -D "agent/$E2/T01-thing" >/dev/null 2>&1 || true
 rm -rf "$PW_PROJECTS_DIR/$E2"
+
+# --- creation capability + Result-scoped MR write (plan 47 F12,F14) ------------------------------
+# F12: a glab release WITHOUT `mr create --output json` must still create — the capability probe
+# runs before the push and selects the supported (plain) invocation.
+E3=exec-f2cap; rm -rf "$PW_PROJECTS_DIR/$E3"; cp -a "$F2" "$PW_PROJECTS_DIR/$E3"
+pwtest_repo api "branch:agent/$E3/T01-thing"
+( cd "$PW_REPOS/api" && git worktree add "$PW_PROJECTS_DIR/$E3/worktree/api/T01-thing" "agent/$E3/T01-thing" >/dev/null 2>&1 ) || true
+sed -i '' "s|agent/$S2/T01-thing|agent/$E3/T01-thing|" "$PW_PROJECTS_DIR/$E3/task/T01.md"
+: > "$ROOT/forge47cap.log"
+pwtest_rc 0 "F12 create succeeds on a CLI without --output json" \
+  env PWTEST_GLAB_CREATE_NO_OUTPUT=1 PWTEST_FORGE_LOG="$ROOT/forge47cap.log" \
+  "$(pwtest_script $SH)" exec --project "$E3" --task T01 --file "$ROOT/desc.md"
+grep -q -- '--output' "$ROOT/forge47cap.log" \
+  && pwtest_bad "F12 unsupported flag still sent" "$(cat "$ROOT/forge47cap.log")" \
+  || pwtest_ok "F12 unsupported flag never sent to the installed CLI"
+grep -q 'merge_requests/' "$PW_PROJECTS_DIR/$E3/task/T01.md" \
+  && pwtest_ok "F12 created MR recorded from plain output" \
+  || pwtest_bad "F12 result record" "$(grep -i 'MR:' "$PW_PROJECTS_DIR/$E3/task/T01.md")"
+git -C "$PW_REPOS/api" worktree remove --force "$PW_PROJECTS_DIR/$E3/worktree/api/T01-thing" >/dev/null 2>&1 || true
+git -C "$PW_REPOS/api" branch -D "agent/$E3/T01-thing" >/dev/null 2>&1 || true
+rm -rf "$PW_PROJECTS_DIR/$E3"
+
+# F14: an MR-looking line OUTSIDE ## Result must not be the one rewritten.
+E4=exec-f2decoy; rm -rf "$PW_PROJECTS_DIR/$E4"; cp -a "$F2" "$PW_PROJECTS_DIR/$E4"
+pwtest_repo api "branch:agent/$E4/T01-thing"
+( cd "$PW_REPOS/api" && git worktree add "$PW_PROJECTS_DIR/$E4/worktree/api/T01-thing" "agent/$E4/T01-thing" >/dev/null 2>&1 ) || true
+sed -i '' "s|agent/$S2/T01-thing|agent/$E4/T01-thing|" "$PW_PROJECTS_DIR/$E4/task/T01.md"
+python3 - "$PW_PROJECTS_DIR/$E4/task/T01.md" <<'PYEOF'
+import sys
+f=sys.argv[1]; t=open(f).read()
+t=t.replace("\n## Result", "\n- **MR:** https://decoy.example.com/g/p/-/merge_requests/999\n\n## Result", 1)
+open(f,"w").write(t)
+PYEOF
+pwtest_rc 0 "F14 exec creates with an outside-Result MR decoy" \
+  "$(pwtest_script $SH)" exec --project "$E4" --task T01 --file "$ROOT/desc.md"
+grep -q 'merge_requests/999' "$PW_PROJECTS_DIR/$E4/task/T01.md" \
+  && pwtest_ok "F14 outside-Result decoy untouched" \
+  || pwtest_bad "F14 decoy rewritten" "$(grep -i 'MR:' "$PW_PROJECTS_DIR/$E4/task/T01.md")"
+awk '/^## Result/{p=1} /^## / && !/^## Result/{p=0} p && /merge_requests\/[0-9]+/ && !/999/{f=1} END{exit(f?0:1)}' "$PW_PROJECTS_DIR/$E4/task/T01.md" \
+  && pwtest_ok "F14 created URL recorded inside Result" \
+  || pwtest_bad "F14 Result record" "$(grep -i 'MR:' "$PW_PROJECTS_DIR/$E4/task/T01.md")"
+git -C "$PW_REPOS/api" worktree remove --force "$PW_PROJECTS_DIR/$E4/worktree/api/T01-thing" >/dev/null 2>&1 || true
+git -C "$PW_REPOS/api" branch -D "agent/$E4/T01-thing" >/dev/null 2>&1 || true
+rm -rf "$PW_PROJECTS_DIR/$E4"
+
+# F23: a continuation write must not reopen a merged/closed MR.
+E5=exec-f2closed; rm -rf "$PW_PROJECTS_DIR/$E5"; cp -a "$F2" "$PW_PROJECTS_DIR/$E5"
+pwtest_repo api "branch:agent/$E5/T02-thing"
+( cd "$PW_REPOS/api" && git worktree add "$PW_PROJECTS_DIR/$E5/worktree/api/T02-thing" "agent/$E5/T02-thing" >/dev/null 2>&1 ) || true
+sed -i '' "s|agent/$S2/T02-thing|agent/$E5/T02-thing|" "$PW_PROJECTS_DIR/$E5/task/T02.md"
+printf '42 closed\n' > "$ROOT/forge47closed.txt"
+pwtest_rc 0 "F23 continuation on a closed MR succeeds" \
+  env PWTEST_FORGE_STATE_FILE="$ROOT/forge47closed.txt" \
+  "$(pwtest_script $SH)" exec --project "$E5" --task T02 --file "$ROOT/desc.md"
+grep -qE '^\| T02 .*\| closed \|' "$PW_PROJECTS_DIR/$E5/README.md" \
+  && pwtest_ok "F23 closed MR stays terminal in the dashboard" \
+  || pwtest_bad "F23 dashboard state" "$(grep '^| T02 ' "$PW_PROJECTS_DIR/$E5/README.md")"
+git -C "$PW_REPOS/api" worktree remove --force "$PW_PROJECTS_DIR/$E5/worktree/api/T02-thing" >/dev/null 2>&1 || true
+git -C "$PW_REPOS/api" branch -D "agent/$E5/T02-thing" >/dev/null 2>&1 || true
+rm -rf "$PW_PROJECTS_DIR/$E5"
+
+# F13: an MR already existing for the source branch is adopted, never duplicated.
+E6=exec-f2found; rm -rf "$PW_PROJECTS_DIR/$E6"; cp -a "$F2" "$PW_PROJECTS_DIR/$E6"
+pwtest_repo api "branch:agent/$E6/T01-thing"
+( cd "$PW_REPOS/api" && git worktree add "$PW_PROJECTS_DIR/$E6/worktree/api/T01-thing" "agent/$E6/T01-thing" >/dev/null 2>&1 ) || true
+sed -i '' "s|agent/$S2/T01-thing|agent/$E6/T01-thing|" "$PW_PROJECTS_DIR/$E6/task/T01.md"
+printf '%s %s\n' "agent/$E6/T01-thing" "https://gitlab.example.com/pwtest/api/-/merge_requests/77" > "$ROOT/mrlist47.txt"
+: > "$ROOT/forge47found.log"
+pwtest_rc 0 "F13 existing MR reconciled without a duplicate create" \
+  env PWTEST_MR_LIST_FILE="$ROOT/mrlist47.txt" PWTEST_FORGE_LOG="$ROOT/forge47found.log" \
+  "$(pwtest_script $SH)" exec --project "$E6" --task T01 --file "$ROOT/desc.md"
+grep -q '^glab mr create --source-branch' "$ROOT/forge47found.log" \
+  && pwtest_bad "F13 duplicate create issued" "$(cat "$ROOT/forge47found.log")" \
+  || pwtest_ok "F13 no duplicate creation request"
+grep -q 'merge_requests/77' "$PW_PROJECTS_DIR/$E6/task/T01.md" \
+  && pwtest_ok "F13 adopted URL recorded in Result" \
+  || pwtest_bad "F13 adopted record" "$(grep -i 'MR:' "$PW_PROJECTS_DIR/$E6/task/T01.md")"
+git -C "$PW_REPOS/api" worktree remove --force "$PW_PROJECTS_DIR/$E6/worktree/api/T01-thing" >/dev/null 2>&1 || true
+git -C "$PW_REPOS/api" branch -D "agent/$E6/T01-thing" >/dev/null 2>&1 || true
+rm -rf "$PW_PROJECTS_DIR/$E6"
+
+# --- description marker boundary (plan 47 D01) -------------------------------------------------
+# The managed-marker parser requires the end marker to end a real line. Workflow-owned creation
+# must run that SAME parser over the whole body before anything is published.
+python3 - "$ROOT/desc-valid.md" "$ROOT/desc-bad.md" <<'PYEOF'
+import sys
+valid = """<!-- pw-mr-summary:start -->
+## What & why
+Fixture body.
+## High-level changes
+One thing.
+## Low-level changes
+One detail.
+## Verification
+Ran the check.
+## Notes for the reviewer
+Nothing special.
+<!-- pw-mr-summary:end -->
+"""
+open(sys.argv[1], "w").write(valid)
+# The live incident shape: literal backslash-n separators appended on the SAME line as the end
+# marker (a literal on the next line would be legal trailing text and prove nothing).
+bs = chr(92)
+bad = valid.replace("<!-- pw-mr-summary:end -->",
+                    "<!-- pw-mr-summary:end -->" + bs + "n" + bs + "n", 1)
+open(sys.argv[2], "w").write(bad)
+PYEOF
+pwtest_rc 0 "D01 valid managed description passes the parser" \
+  "$(pwtest_script $SH)" history --project "$S2" --operation validate --options --file "$ROOT/desc-valid.md"
+pwtest_rc 2 "D01 malformed marker suffix is rejected" \
+  "$(pwtest_script $SH)" history --project "$S2" --operation validate --options --file "$ROOT/desc-bad.md"
+pwtest_fix "marker rejection names the remedy"
+
+E7=exec-f2badmarker; rm -rf "$PW_PROJECTS_DIR/$E7"; cp -a "$F2" "$PW_PROJECTS_DIR/$E7"
+pwtest_repo api "branch:agent/$E7/T01-thing"
+( cd "$PW_REPOS/api" && git worktree add "$PW_PROJECTS_DIR/$E7/worktree/api/T01-thing" "agent/$E7/T01-thing" >/dev/null 2>&1 ) || true
+sed -i '' "s|agent/$S2/T01-thing|agent/$E7/T01-thing|" "$PW_PROJECTS_DIR/$E7/task/T01.md"
+: > "$ROOT/forge47marker.log"
+pwtest_rc 2 "D01 exec refuses a malformed boundary before pushing" \
+  env PWTEST_FORGE_LOG="$ROOT/forge47marker.log" \
+  "$(pwtest_script $SH)" exec --project "$E7" --task T01 --file "$ROOT/desc-bad.md"
+# The fixture branch is already pushed by pwtest_repo, so an origin ref proves nothing; the push
+# line is the real signal that publication started before validation.
+grep -q '^Pushing ' "$PWTEST_BOTH" \
+  && pwtest_bad "D01 exec pushed despite a malformed boundary" "push line present: $(cat "$PWTEST_BOTH" | head -3)" \
+  || pwtest_ok "D01 nothing was pushed"
+grep -q 'nothing was pushed' "$PWTEST_BOTH" \
+  && pwtest_ok "D01 refusal states that nothing was pushed" \
+  || pwtest_bad "D01 refusal wording" "$(cat "$PWTEST_BOTH" | head -3)"
+git -C "$PW_REPOS/api" worktree remove --force "$PW_PROJECTS_DIR/$E7/worktree/api/T01-thing" >/dev/null 2>&1 || true
+git -C "$PW_REPOS/api" branch -D "agent/$E7/T01-thing" >/dev/null 2>&1 || true
+rm -rf "$PW_PROJECTS_DIR/$E7"

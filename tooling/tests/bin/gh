@@ -26,9 +26,24 @@ _json() {
   printf '{"number":%s,"state":"%s","baseRefName":"%s","headRefName":"%s","headRefOid":"%s","url":"https://github.com/pwtest/api/pull/%s"}\n' \
     "$iid" "$st" "$tgt" "agent/x" "$hd" "$iid"
 }
+_list_json() {
+  # Seeded existing-MR lookup: PWTEST_MR_LIST_FILE lines "<source-branch> <url>".
+  local f="${PWTEST_MR_LIST_FILE:-}" b u first=1
+  printf '['
+  if [ -n "$f" ] && [ -f "$f" ]; then
+    while read -r b u; do
+      [ -n "$b" ] || continue
+      [ "$first" = 1 ] || printf ','
+      first=0
+      printf '{"url":"%s","headRefName":"%s"}' "$u" "$b"
+    done < "$f"
+  fi
+  printf ']\n'
+}
 case "${1:-}" in
   pr)
     case "${2:-}" in
+      list) _list_json ;;
       view)
         j="$(_json "${2##*/}")"
         case " $* " in

@@ -60,7 +60,11 @@ Ship execution complete for T03
 
 If the task's `- **MR:**` field holds a **real http(s) URL** it prints `MR already exists: <url>` and
 stops (idempotent re-run); placeholder values (`-`, `—`, `(none)`, or no field) never count as an
-existing MR. A successful creation upserts the URL into that same bold field. A
+existing MR. With no recorded URL, the script still looks up an MR for the same source branch before
+creating one: a previous attempt whose response was lost is adopted and recorded instead of being
+duplicated. A successful creation upserts the URL into that same bold field. The dashboard MR
+`State` mirrors what exists: a new MR writes `open`, while a continuation on a merged or closed MR
+keeps that terminal state instead of reopening it. A
 push failure dies with `pw-ship: push failed` (exit 2). If the push succeeded but the forge
 CLI returned no MR URL, stderr carries the CLI's first error line + `MR creation failed (push
 itself succeeded — safe to re-run after fixing auth/context)` — report that state honestly
@@ -68,6 +72,11 @@ itself succeeded — safe to re-run after fixing auth/context)` — report that 
 **configured** forge for the repo's origin host (an exact `PW_FORGE_HOSTS` entry wins, else
 `github.com` → `gh`, else `glab`) and resolved **before** the push: a missing required CLI
 refuses the shipment instead of pushing a branch with no MR path or silently switching forges.
+The same pre-push step probes the installed `glab` for `mr create --output json`; a release
+without that contract uses the plain invocation (which prints the MR URL) instead of failing
+after the branch is public. Creation output is parsed structurally and independently of
+whitespace, and the recorded URL is verified inside the task's `## Result` before completion is
+reported — an MR-looking line elsewhere in the file is never the one rewritten.
 
 A marked creation body is read back before its ownership snapshot is stored. Failure leaves the
 MR URL recorded and reports initial snapshot pending; retain the creation body for a safe retry.
@@ -189,7 +198,14 @@ $PW_HOME/tooling/scripts/entities/pw-ship.sh history --project <slug> --operatio
 $PW_HOME/tooling/scripts/entities/pw-ship.sh history --project <slug> --operation checkpoint --mr <MR-url> --options --attempt <key> --file <JSON>
 $PW_HOME/tooling/scripts/entities/pw-ship.sh history --project <slug> --operation freeze --mr <MR-url> --options --attempt <key>
 $PW_HOME/tooling/scripts/entities/pw-ship.sh history --project <slug> --operation deliver --mr <MR-url> --options --attempt <key> --limit <n> --unit <utf8|chars> --limit-source <reference>
+$PW_HOME/tooling/scripts/entities/pw-ship.sh history --project <slug> --operation validate --options --file <description>
 ```
+
+`validate` runs the SAME managed-marker parser delivery uses over the whole description and is a
+read-only gate: it prints `validate: ok (<n> chars)` or exits `2` naming the boundary failure. `exec`
+calls it automatically on a description that carries the managed markers, **before the push**, so a
+malformed boundary (for example literal `\n` separators appended after the end marker) cannot be
+published by a workflow-owned create.
 
 One invocation/MR produces one attempt. All intermediate fixes, commits, pipeline observations,
 and replies checkpoint under that identity. Freeze seals the Before/After/Summary bullet groups,

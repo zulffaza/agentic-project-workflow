@@ -60,5 +60,8 @@ branch — fetch first, or the branch name is wrong).
 `remove --project <slug> --task <task-id>` — one task's worktree, used when its MR is already merged (refuses
 a dirty tree or the worktree you're standing in — the guards live in `teardown`, the single
 owner). `teardown --dir <project-dir> [--task <task-id> | --all] [--worktree <path>]` — the `/pw-close` sweep;
-exit 1 = skipped with a printed reason, never a silent removal. Both were separate scripts
+exit 1 = incomplete (a removal failed, or a worktree was skipped for the current dir or a dirty
+tree), with a per-worktree reason printed; exit 0 means every selected worktree went away (or none
+was selected). Bulk mode reports the same way as a single target — "0 removed, checkouts remain" is
+not success. Both were separate scripts
 before the entity merge; operator semantics unchanged.
