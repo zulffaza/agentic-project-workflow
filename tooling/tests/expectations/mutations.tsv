@@ -80,7 +80,7 @@ C18-wholefile-verify-token-grep	pw-preflight.sh	if [ -f "$TASK_FILE" ] && [ "$(p
 C19-phase-token-no-cut	pw-common.sh	pw_phase_token() { printf '%s\n' "${1%%[[:space:]—-]*}"; }	pw_phase_token() { printf '%s\n' "$1"; }	T1	pw-status
 C20-phase-line-contract-canary	../template/PROJECT.template.md	- **Status:** context	- **Status:** <phase>	T4	-
 C21-mr-scope-to-wholefile	pw-ship.sh	  sec="$(awk '/^## Result/{p=1; next} /^## /{p=0} p' "$1" 2>/dev/null)" || return 0	  sec="$(cat "$1" 2>/dev/null)" || return 0	T1	pw-ship
-C22-forge-substring-default	pw-ship.sh	    github.com) forge="github" ;;	    *) forge="github" ;;	T1	pw-ship
+C22-forge-substring-default	scripts/entities/pw-ship.sh	  case "$host" in github.com) forge="github" ;; esac	  case "$host" in github.com) forge="github" ;; *) forge="github" ;; esac	T1	pw-stack.t.sh
 C23-doctrine-phrase-reworded	AGENTS.md	single source of truth	one source of truth	T4	-
 C24-preflight-verb-enum	pw-preflight.sh	die "unknown command: $COMMAND (expected: analyze|prepare|execute|breakdown|ship|comments|close|review)"	die "unknown command: $COMMAND (expected: execute|breakdown|ship|comments|close|review)"	T1	pw-preflight
 C24b-preflight-example-rows-count	pw-preflight.sh	        if (index($0, "_e.g._")) next	        if (index($0, "_e_NOOP_")) next	T1	pw-preflight
