@@ -378,3 +378,7 @@ C297-acceptance-claims-merge	scripts/entities/pw-status.sh	    if [ "$observed" 
 C298-mr-identity-from-url-lost	scripts/entities/pw-ship.sh	  set -- $(_pw_mr_parts "$mr_url")	  set --	T1	pw-ship.t.sh
 C299-enterprise-repo-identity-lost	scripts/entities/pw-ship.sh	        state="$(cd "$ctx" && GH_HOST="$host" gh pr view "$iid" -R "$repo" --json state -q .state 2>/dev/null || true)"	        state="$(cd "$ctx" && GH_HOST="$host" gh pr view "$iid" --json state -q .state 2>/dev/null || true)"	T1	pw-ship.t.sh
 C300-ref-lookup-accepts-token	scripts/entities/pw-ship.sh	  local cur_head; cur_head="$(git -C "$rd" rev-parse --verify "$branch^{commit}" 2>/dev/null || true)"	  local cur_head; cur_head="$(git -C "$rd" rev-parse "$branch" 2>/dev/null || true)"	T1	pw-ship.t.sh
+# C301: slice 4 F06 — a failing selected GitHub check must not be dropped from the verdict.
+C301-github-failure-ignored	scripts/entities/pw-ship.sh	              elif any($s[]; . == "FAILURE" or . == "CANCELLED" or . == "TIMED_OUT" or . == "ACTION_REQUIRED" or . == "STARTUP_FAILURE") then "failed"	              elif any($s[]; . == "NEVER") then "failure"	T1	pw-ship.t.sh
+# C302: slice 4 F17 — a root task with a verification tuple must not publish after its head moved.
+C302-root-freshness-gate-lost	scripts/entities/pw-ship.sh	  if [ -n "$(pw_stack_state_get "$D" "$TASK_ID" verified_head 2>/dev/null || true)" ] \	  if false \	T1	pw-ship.t.sh

@@ -450,3 +450,59 @@ grep -q "does-not-exist" "$PW_PROJECTS_DIR/$S47/task/stack.tsv" 2>/dev/null \
   && pwtest_bad "F28 recorded the branch token as a head" "$(grep 'does-not-exist' "$PW_PROJECTS_DIR/$S47/task/stack.tsv")" \
   || pwtest_ok "F28 no fabricated head recorded"
 rm -rf "$PW_PROJECTS_DIR/$S47"
+
+# --- GitHub check aggregation (plan 47 F06) -----------------------------------------------------
+# EVERY selected check contributes: the old table read dropped the first row and reduced the rest
+# to one sorted status, so a failing check could be reported green.
+CI47=ci47; rm -rf "$PW_PROJECTS_DIR/$CI47"; cp -a "$F2" "$PW_PROJECTS_DIR/$CI47"
+pwtest_repo ghrepo
+git -C "$PW_REPOS/ghrepo" remote set-url origin https://github.example.com/owner/ghrepo.git >/dev/null 2>&1 || true
+python3 - "$PW_PROJECTS_DIR/$CI47/task/T02.md" <<'PYEOF'
+import sys, re
+f=sys.argv[1]; t=open(f).read()
+t=re.sub(r'^- \*\*Repo:\*\*.*$', '- **Repo:** ghrepo', t, count=1, flags=re.M)
+t=t.replace("https://gitlab.example.com/pwtest/api/-/merge_requests/42",
+            "https://github.example.com/owner/ghrepo/pull/42")
+open(f,"w").write(t)
+PYEOF
+pwtest_rc 1 "F06 a failing selected check fails the run" \
+  env PWTEST_CHECKS_JSON='[{"state":"SUCCESS"},{"state":"FAILURE"}]' PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.forge.sh" \
+  "$(pwtest_script $SH)" monitor --project "$CI47" --task T02 --interval 1 --timeout 1
+grep -qi 'Build check:.*FAILED' "$PW_PROJECTS_DIR/$CI47/task/T02.md" \
+  && pwtest_ok "F06 failure is recorded" \
+  || pwtest_bad "F06 failure record" "$(grep -i 'build check' "$PW_PROJECTS_DIR/$CI47/task/T02.md")"
+pwtest_rc 2 "F06 a pending selected check blocks a green verdict" \
+  env PWTEST_CHECKS_JSON='[{"state":"SUCCESS"},{"state":"PENDING"}]' PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.forge.sh" \
+  "$(pwtest_script $SH)" monitor --project "$CI47" --task T02 --interval 1 --timeout 1
+pwtest_rc 0 "F06 all selected checks passing is green" \
+  env PWTEST_CHECKS_JSON='[{"state":"SUCCESS"},{"state":"SKIPPED"}]' PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.forge.sh" \
+  "$(pwtest_script $SH)" monitor --project "$CI47" --task T02 --interval 1 --timeout 1
+rm -rf "$PW_PROJECTS_DIR/$CI47"
+
+# --- root freshness proof (plan 47 F17) ---------------------------------------------------------
+# A ROOT task whose branch moved after verification must not publish stale evidence.
+R47=stale47; rm -rf "$PW_PROJECTS_DIR/$R47"; cp -a "$F2" "$PW_PROJECTS_DIR/$R47"
+pwtest_repo api "branch:agent/$R47/T01-thing"
+sed -i '' "s|agent/$S2/T01-thing|agent/$R47/T01-thing|" "$PW_PROJECTS_DIR/$R47/task/T01.md"
+printf 'verify ok\n' > "$ROOT/ev47f.txt"
+pwtest_rc 0 "F17 records a verification tuple for the root" \
+  "$(pwtest_script $SH)" stack-verify --project "$R47" --task T01 --evidence "$ROOT/ev47f.txt"
+# Advance the branch in the shared repo (the fixture copy's worktree path already exists, so a
+# `git worktree add` there fails; this test only needs the ref to move after verification).
+( cd "$PW_REPOS/api" && git checkout -q "agent/$R47/T01-thing" \
+  && echo post-verify >> stale47.txt && git add -A \
+  && git -c user.email=t@t -c user.name=t commit -qm "post-verify change" \
+  && git checkout -q master ) >/dev/null 2>&1
+: > "$ROOT/forge47stale.log"
+pwtest_rc 2 "F17 exec refuses stale root evidence before pushing" \
+  env PWTEST_FORGE_LOG="$ROOT/forge47stale.log" \
+  "$(pwtest_script $SH)" exec --project "$R47" --task T01 --file "$ROOT/desc-valid.md"
+grep -q '^Pushing ' "$PWTEST_BOTH" \
+  && pwtest_bad "F17 pushed stale work" "$(head -3 "$PWTEST_BOTH")" \
+  || pwtest_ok "F17 nothing was pushed"
+grep -q 'stale' "$PWTEST_BOTH" \
+  && pwtest_ok "F17 names the stale tuple" \
+  || pwtest_bad "F17 message" "$(head -3 "$PWTEST_BOTH")"
+git -C "$PW_REPOS/api" worktree remove --force "$PW_PROJECTS_DIR/$R47/worktree/api/T01-thing" >/dev/null 2>&1 || true
+git -C "$PW_REPOS/api" branch -D "agent/$R47/T01-thing" >/dev/null 2>&1 || true
+rm -rf "$PW_PROJECTS_DIR/$R47"
