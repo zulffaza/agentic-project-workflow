@@ -34,10 +34,12 @@ validation — never re-order or re-word the generated MR fields yourself.
   local file paths. Identify a change by its component, repository, or linked MR URL; express a real
   dependency as review order between accessible, repository-scoped MR links; and never turn a review
   dependency into a deployment or rollout instruction. Keep meaningful product and API names. This
-  applies to the summary, every per-MR summary, the note, and custom frame text. If a supplied
-  `--prose` leaks local context, regenerate the affected field once against the same evidence with
-  the violation named; if it still leaks, omit that optional field with a diagnostic outside the
-  message and keep the deterministic request.
+  applies to the summary, every per-MR summary, the note, and custom frame text. The script rejects a
+  known local task ID from the selection or a local `plans/`/project path in any enabled field,
+  naming the violation before anything is rendered. If a supplied `--prose` leaks local context,
+  regenerate the affected field once against the same evidence with the violation named; if it still
+  leaks, omit that optional field with a diagnostic outside the message and keep the deterministic
+  request.
 - **Compare `observed heads` between the two calls.** If an MR's head advanced since the first
   call, discard that MR's affected prose, regenerate once from the second call's fresh evidence,
   and re-run `--prose`. If a head moved again, omit the affected section with its diagnostic and
