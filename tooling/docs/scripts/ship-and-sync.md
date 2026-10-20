@@ -382,7 +382,8 @@ the stage blocks and nothing is pushed.
 **Resume semantics.** A `blocked` push stage is retried on the next authorized run (only `done` /
 `skipped` are terminal), so a transient rejection no longer strands the subtree. A completed verify
 stage is re-opened when the child head is no longer the bound commit (a later integrate can move it),
-so a stale binding can never certify newer work.
+so a stale binding can never certify newer work. A descendant recorded as landed is terminal: the
+cascade marks its stages `skipped` and never integrates, re-verifies, or pushes it again.
 
 
 `stack-verify` writes the tuple (head, parent, target, evidence, CI disposition) in one atomic

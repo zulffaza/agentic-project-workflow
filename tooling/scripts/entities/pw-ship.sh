@@ -2774,6 +2774,20 @@ cmd_stack_cascade() {
     pd="$(pw_stack_parent_id "$d" "$D")"
     [ -n "$pd" ] || continue
     case "$blocked" in *" $D "*) continue ;; esac
+    # F27: a landed descendant is terminal — its work already reached the destination. Re-running
+    # the cascade must not republish it; mark its stages skipped so the operation can complete.
+    if [ "$(pw_stack_state_get "$d" "$D" landed 2>/dev/null || true)" = "yes" ]; then
+      _sk=""
+      for _s in integrate verify record push describe; do
+        case "$stages" in *"$D:$_s="*) _sk="$_sk$D:$_s=skipped;" ;; esac
+      done
+      if [ -n "$_sk" ]; then
+        cmd_stack_op --project "$slug" set --key "$opkey" --state "${_sk%;}" >/dev/null || die "stack-cascade: stage write failed"
+        stages="$(_op_stages_of "$slug" "$opkey")"
+      fi
+      echo "stack-cascade: $D already landed — skipped (terminal)" >&2
+      continue
+    fi
     # A descendant of a blocked task is blocked with no further write (subtree rule).
     if [ "$pd" != "$root" ]; then
       case "$blocked" in
