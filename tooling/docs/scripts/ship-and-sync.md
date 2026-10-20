@@ -240,7 +240,9 @@ MRs must share host and repository, every selected attempt must be frozen, and t
 must contain that attempt's exact frozen block; a conflicting destination key or an edited block is
 refused. Migrated entries keep the original key, timestamp, block, and checkpoint, gain
 `source_mr`/`source_delivered` provenance, start undelivered (source delivery debt is never copied),
-and a retry is idempotent. The source record is never modified.
+and a retry is idempotent. The source record is never modified. When the source record is not in the
+current project, sibling project directories are searched (read-only) and the location is named, so an
+archived project's history is never reported as lost.
 
 `verify --mr <url>` is the post-navigation readback: it fetches the published body and runs that same
 parser, printing `verify: ok (head …)` or exiting `2` with the reason. Use it after an agent edits a

@@ -379,11 +379,13 @@ for forge, host, url, endpoint in [
     check(forge + ' CRLF/Unicode outside content is byte-preserved', crlf_outside in state()['response'][field])
     # Replacement-MR migration: preview, apply, idempotent retry, exact-block requirement.
     frozen_src = None
+    src_rec_path = None
     for candidate in sorted((project / '.ship-history').glob('*.json')):
         data = json.loads(candidate.read_text())
         found = next((a for a in data['attempts'] if a['frozen'] and a.get('block')), None)
         if found:
             frozen_src = (data['mr'], found)
+            src_rec_path = candidate
             break
     check(forge + ' migration source record available', frozen_src is not None)
     src_mr, frozen = frozen_src
@@ -396,7 +398,7 @@ for forge, host, url, endpoint in [
         native_dst[field] = body_text
         path.write_text(json.dumps({'response': native_dst, 'reads': 0, 'writes': 0}, ensure_ascii=False))
         return path
-    dst_num = 46 if forge == 'glab' else 48
+    dst_num = 46 if forge == 'glab' else 56
     edited_num = dst_num + 1
     dst_url = 'https://' + host + '/a/b' + sep + str(dst_num)
     dst_fixture_for(dst_num, summary('a111111') + '\n\n' + frozen['block'])
@@ -414,6 +416,16 @@ for forge, host, url, endpoint in [
     check(forge + ' migrated attempt starts undelivered', copied['delivered'] is False and copied['block'] == frozen['block'])
     again = call('migrate', dst_url, '--source', src_url, '--attempts', frozen['key'], '--apply')
     check(forge + ' migrate retry is idempotent', 'migrate: 0 attempt(s)' in again.stdout)
+    # Archived source: the record is found in a sibling project instead of being called lost.
+    archived = project.parent / 'archived-fixture' / '.ship-history'
+    archived.mkdir(parents=True, exist_ok=True)
+    src_rec_path.rename(archived / src_rec_path.name)
+    dst3_num = dst_num + 2
+    dst3_url = 'https://' + host + '/a/b' + sep + str(dst3_num)
+    dst_fixture_for(dst3_num, summary('a111111') + '\n\n' + frozen['block'])
+    (project / 'task' / 'T08.md').write_text('# T08\n## Result\n- **MR:** ' + dst3_url + '\n')
+    archived_run = call('migrate', dst3_url, '--source', src_url, '--attempts', frozen['key'], '--apply')
+    check(forge + ' migrate finds the record in an archived project', 'archived project' in archived_run.stdout)
     edited = frozen['block'].replace('#### Changes', '#### Changes (edited)')
     dst2_url = 'https://' + host + '/a/b' + sep + str(edited_num)
     dst_fixture_for(edited_num, summary('a111111') + '\n\n' + edited)

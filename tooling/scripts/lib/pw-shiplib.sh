@@ -162,6 +162,31 @@ def discover_capacity(mr):
     return {'limit': 1048576, 'unit': 'chars', 'source': DOC_CAPACITY_FALLBACK, 'host': mr['host'],
             'verified': False, 'reason': reason}
 
+def find_source_record(root, source):
+    """Locate a source record for `source`, including archived/sibling projects (read-only).
+
+    A replacement MR can be authored after the original project was archived; the record is then
+    still the authoritative history and must not be reported as lost.
+    """
+    filename = digest(json.dumps(source, sort_keys=True)) + '.json'
+    candidates = [root / '.ship-history' / filename]
+    try:
+        for sibling in sorted(root.parent.iterdir()):
+            if sibling.is_dir() and sibling != root:
+                candidates.append(sibling / '.ship-history' / filename)
+    except OSError:
+        pass
+    for path in candidates:
+        try:
+            if path.is_symlink() or not path.is_file():
+                continue
+            state = read_json(path)
+        except (OSError, ValueError):
+            continue
+        if isinstance(state, dict) and state.get('mr') == source:
+            return path
+    return None
+
 def capacity_policy(project, mr):
     """Load or discover the persisted per-host capacity policy for this project."""
     root = safe_path(project, directory=True)
@@ -519,9 +544,11 @@ def run():
         dest = identity(args.url or '', mappings)
         need((source['host'], source['repo']) == (dest['host'], dest['repo']),
              'source and destination must be the same repository on the same host')
-        src_path = directory / (digest(json.dumps(source, sort_keys=True)) + '.json')
-        need(src_path.exists(), 'source history record not found for ' + args.source
+        src_path = find_source_record(root, source)
+        need(src_path is not None, 'source history record not found for ' + args.source
              + ' → fix: confirm the source MR identity; search the project archives before restoring a backup')
+        if src_path.parent != (directory):
+            print('migrate: source record read from an archived project (' + str(src_path.parent.parent.name) + '); it is not modified')
         src_state = validate_state(read_json(src_path), source)
         wanted = [key.strip() for key in args.attempts.split(',') if key.strip()]
         chosen = []
