@@ -392,3 +392,6 @@ C306-blocked-push-never-retried	scripts/entities/pw-ship.sh	    case "$ps" in pe
 C307-verify-certifies-newer-head	scripts/entities/pw-ship.sh	      if [ -n "$_bound" ] && [ -n "$_now" ] && [ "$_bound" != "$_now" ]; then	      if false; then	T1	pw-stack.t.sh
 # C308: slice 4 F27 — a landed descendant must be skipped, never republished.
 C308-landed-descendant-republished	scripts/entities/pw-ship.sh	    if [ "$(pw_stack_state_get "$d" "$D" landed 2>/dev/null || true)" = "yes" ]; then	    if false; then	T1	pw-stack.t.sh
+# C309-C310: D01 readback must run the parser; the repair preview must never write.
+C309-verify-skips-parser	scripts/lib/pw-shiplib.sh	        verify_published(remote['body'])	        pass	T1	pw-ship-history.t.sh
+C310-repair-preview-writes	scripts/lib/pw-shiplib.sh	        print('repair-preview: dry run only — nothing was written; repair the description, then run verify')	        api(mr, fixed); print('repair-preview: applied')	T1	pw-ship-history.t.sh

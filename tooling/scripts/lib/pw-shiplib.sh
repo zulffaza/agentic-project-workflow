@@ -115,6 +115,17 @@ def api(mr, body=None):
     need(state is not None, 'unknown remote MR state')
     return {'body': text, 'head': head, 'state': state}
 
+# The observed live defect: literal backslash-n text appended on the SAME line as a managed end
+# marker. The marker must end a real line, so the parser rejects this — but the repair is exact and
+# local: remove only those literal characters and leave every other byte alone.
+LITERAL_BOUNDARY = re.compile(r'(<!-- pw-(?:mr-summary|review-changes):end -->)((?:\\n)+)')
+
+def repair_literal_boundary(body):
+    return LITERAL_BOUNDARY.sub(r'\1', body)
+
+def verify_published(body):
+    regions(body)
+
 def regions(body):
     found = {}
     for name in ('mr-summary', 'review-changes'):
@@ -350,7 +361,7 @@ def validate_state(state, mr):
 def run():
     project, timestamp, mappings, registered, *arguments = sys.argv[1:]
     parser = HistoryParser(prog='pw-ship history')
-    parser.add_argument('operation', choices=['invocation', 'init', 'begin', 'checkpoint', 'freeze', 'deliver', 'pending', 'validate'])
+    parser.add_argument('operation', choices=['invocation', 'init', 'begin', 'checkpoint', 'freeze', 'deliver', 'pending', 'validate', 'verify', 'repair-preview'])
     parser.add_argument('url', nargs='?')
     parser.add_argument('--invocation')
     parser.add_argument('--attempt')
@@ -374,6 +385,29 @@ def run():
         spans = regions(text)
         need('mr-summary' in spans, 'validate requires the managed mr-summary region')
         print('validate: ok (' + str(len(text)) + ' chars)')
+        return
+    if args.operation == 'verify':
+        # Post-navigation readback: fetch the published body and run the SAME parser delivery uses.
+        mr = identity(args.url or '', mappings)
+        remote = api(mr)
+        verify_published(remote['body'])
+        print('verify: ok (head ' + remote['head'][:12] + ')')
+        return
+    if args.operation == 'repair-preview':
+        # Scoped repair preview for the known navigation suffix. Dry run: nothing is written.
+        mr = identity(args.url or '', mappings)
+        remote = api(mr)
+        body = remote['body']
+        match = LITERAL_BOUNDARY.search(body)
+        if match is None:
+            print('repair-preview: no known boundary repair applies (the body parses, or the defect is different)')
+            return
+        fixed = repair_literal_boundary(body)
+        line_start = body.rfind('\n', 0, match.start(1)) + 1
+        print('repair-preview: end marker at offset ' + str(match.start(1)) + ' is followed by literal ' + repr(match.group(2)))
+        print('repair-preview: removing ' + str(len(body) - len(fixed)) + ' character(s) restores a standalone marker')
+        print('repair-preview: repaired line: ' + body[line_start:match.start(1)] + match.group(1))
+        print('repair-preview: dry run only — nothing was written; repair the description, then run verify')
         return
     root = safe_path(project, directory=True)
     directory = safe_path(root / '.ship-history', directory=True)

@@ -74,6 +74,20 @@ for forge, host, url, endpoint in [
         if rc:
             check(forge + ' actionable failure ' + op, '→ fix:' in result.stderr)
         return result
+    # D01: published-body readback and the scoped repair preview (dry run, no writes).
+    call('verify', url)
+    original = dict(state()['response'])
+    res = state()
+    res['response'][field] = summary('a111111') + chr(92) + 'n' + chr(92) + 'n' + outside
+    fixture.write_text(json.dumps(res, ensure_ascii=False))
+    call('verify', url, rc=2)
+    writes_before = state()['writes']
+    preview = call('repair-preview', url)
+    check(forge + ' repair preview is a dry run', state()['writes'] == writes_before)
+    check(forge + ' repair preview names the literal suffix', 'literal' in preview.stdout)
+    res = state()
+    res['response'] = original
+    fixture.write_text(json.dumps(res, ensure_ascii=False))
     def archive():
         records = [json.loads(p.read_text()) for p in (project / '.ship-history').glob('*.json')]
         return next(r for r in records if r['mr']['host'] == host and r['mr']['number'] == int(url.rsplit('/', 1)[1]))
