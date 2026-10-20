@@ -2861,24 +2861,64 @@ cmd_stack_cascade() {
       cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:integrate=done" >/dev/null || die "stack-cascade: stage write failed"
       stages="$(_op_stages_of "$slug" "$opkey")"
     fi
+    # F26: a completed verify stage must not certify a NEWER head (integrate can move it, and a
+    # later run must not inherit the old binding). Re-open verify and downstream stages.
+    if _stage_done "$stages" "$D:verify"; then
+      _bound="$(pw_stack_state_get "$d" "$D" verified_head 2>/dev/null || true)"
+      _now="$(git -C "$workdir" rev-parse HEAD 2>/dev/null || true)"
+      if [ -n "$_bound" ] && [ -n "$_now" ] && [ "$_bound" != "$_now" ]; then
+        cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:verify=pending;$D:record=pending;$D:push=pending" >/dev/null || die "stack-cascade: stage write failed"
+        stages="$(_op_stages_of "$slug" "$opkey")"
+        echo "stack-cascade: $D head moved to ${_now:0:7} after verification at ${_bound:0:7} — verify re-opened; re-run with a verify command or bind the new head" >&2
+      fi
+    fi
     # --- verify: the caller's Verify command must pass; binding goes through stack-verify ---
     if ! _stage_done "$stages" "$D:verify"; then
       local dh; dh="$(git -C "$workdir" rev-parse HEAD)"
+      local _vskip=0
       if [ -z "$vcmd" ]; then
-        echo "stack-cascade: $D integrated; no --verify-cmd supplied → run its ## Verify, bind with 'stack-verify --project $slug --task $D --evidence <evidence>', then re-run this cascade to resume (stages retained)" >&2
-        pending_any=1
-        break
+        # F20: a caller who bound THIS commit manually (stack-verify --head) has already verified
+        # it. Resume instead of repeating the same advice forever; otherwise defer and say so.
+        _vh="$(pw_stack_state_get "$d" "$D" verified_head 2>/dev/null || true)"
+        if [ -n "$_vh" ] && [ "$_vh" = "$dh" ]; then
+          cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:verify=done" >/dev/null || die "stack-cascade: stage write failed"
+          stages="$(_op_stages_of "$slug" "$opkey")"
+          _vskip=1
+          echo "stack-cascade: $D already bound at ${dh:0:7} — resuming (no --verify-cmd needed)" >&2
+        else
+          echo "stack-cascade: $D integrated; no --verify-cmd supplied → run its ## Verify, bind with 'stack-verify --project $slug --task $D --evidence <evidence>', then re-run this cascade to resume (stages retained)" >&2
+          pending_any=1
+          break
+        fi
       fi
-      local evf; evf="$evbase/$D-verify-$(printf '%s' "$dh" | cut -c1-7).log"
-      if ( cd "$workdir" && bash -c "$vcmd" ) >"$evf" 2>&1 \
-         && "$HERE/pw-ship.sh" stack-verify --project "$slug" --task "$D" --evidence "$evf" --head "$dh" >/dev/null 2>>"$evf"; then
-        cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:verify=done" >/dev/null || die "stack-cascade: stage write failed"
-        stages="$(_op_stages_of "$slug" "$opkey")"
-      else
-        cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:verify=blocked" >/dev/null || die "stack-cascade: stage write failed"
-        blocked="$blocked$D "; failed=1
-        echo "stack-cascade: $D failed verification — local commit kept, nothing pushed, subtree blocked (see $evf)" >&2
-        continue
+      if [ "$_vskip" = 0 ]; then
+        local evf; evf="$evbase/$D-verify-$(printf '%s' "$dh" | cut -c1-7).log"
+        local _vok=0 _vwhy=""
+        if ( cd "$workdir" && bash -c "$vcmd" ) >"$evf" 2>&1; then
+          # F19: the evidence must describe the commit we will bind. A Verify that commits or edits
+          # tracked files has certified a different snapshot — block instead of binding $dh.
+          local dh2 dirty2
+          dh2="$(git -C "$workdir" rev-parse HEAD)"
+          dirty2="$(git -C "$workdir" status --porcelain 2>/dev/null || true)"
+          if [ "$dh2" != "$dh" ] || [ -n "$dirty2" ]; then
+            _vwhy="verification changed the checkout (head ${dh:0:7}→${dh2:0:7}; $([ -n "$dirty2" ] && echo 'tracked edits left behind' || echo 'no dirty state')) — the evidence no longer describes the bound commit"
+          elif "$HERE/pw-ship.sh" stack-verify --project "$slug" --task "$D" --evidence "$evf" --head "$dh" >/dev/null 2>>"$evf"; then
+            _vok=1
+          else
+            _vwhy="failed verification"
+          fi
+        else
+          _vwhy="failed verification"
+        fi
+        if [ "$_vok" = 1 ]; then
+          cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:verify=done" >/dev/null || die "stack-cascade: stage write failed"
+          stages="$(_op_stages_of "$slug" "$opkey")"
+        else
+          cmd_stack_op --project "$slug" set --key "$opkey" --state "$D:verify=blocked" >/dev/null || die "stack-cascade: stage write failed"
+          blocked="$blocked$D "; failed=1
+          echo "stack-cascade: $D $_vwhy — local commit kept, nothing pushed, subtree blocked (see $evf)" >&2
+          continue
+        fi
       fi
     fi
     # --- record: inherited-update evidence (never a reviewer comment) ---
@@ -2890,7 +2930,10 @@ cmd_stack_cascade() {
     fi
     # --- push: already-shipped descendants only, and only under explicit --push authorization ---
     ps="$(_stage_state "$stages" "$D:push")"
-    if [ "$ps" = "pending" ]; then
+    # F18: a BLOCKED push is retried on a resumed invocation (the caller fixed the cause); only
+    # done/skipped are terminal. Previously the resume walked past it to the descendants.
+    case "$ps" in pending|blocked) ;; *) ps="" ;; esac
+    if [ -n "$ps" ]; then
       if [ "$push" != 1 ]; then
         pending_any=1
         echo "stack-cascade: $D integrated+verified; publication not authorized (add --push) — push/describe stages retained pending" >&2

@@ -921,3 +921,77 @@ pwtest_rc 0 "F16 plan runs after the interposed push" "$(pwtest_script $SH)" sta
 pwtest_re 'not at the parent.s verified head' "F16 names the origin/verified-head mismatch"
 pwtest_re '^T02.*\|no\|' "F16 not ready when origin moved past the verified parent"
 rm -rf "$PW_PROJECTS_DIR/$F16"
+
+# --- cascade verification stages (plan 47 F19,F20) ----------------------------------------------
+mk_cascade_pair() {
+  local c="$1" dir
+  dir="$(stack_mkproj "$c")"
+  pwtest_repo "${c}repo" "branch:agent/$c/T01-$c"
+  stack_task "$dir" T01 "${c}repo" master "agent/$c/T01-$c" none none done
+  ( cd "$PW_REPOS/${c}repo" && git checkout -q -b "agent/$c/T02-$c" "agent/$c/T01-$c" \
+    && git checkout -q master ) >/dev/null 2>&1
+  stack_task "$dir" T02 "${c}repo" master "agent/$c/T02-$c" T01 T01 todo
+}
+
+# F20: a manual stack-verify bind must let the resumed cascade advance instead of repeating advice.
+mk_cascade_pair casc20; C20_DIR="$PW_PROJECTS_DIR/casc20"
+printf 'v\n' > "$ROOT/ev-c20-t01"
+pwtest_rc 0 "F20 parent verified" "$(pwtest_script $SH)" stack-verify --project casc20 --task T01 --evidence "$ROOT/ev-c20-t01"
+pwtest_rc 1 "F20 cascade defers verification without --verify-cmd (pending, not failed)" "$(pwtest_script $SH)" stack-cascade --project casc20 --task T01
+pwtest_err 'no --verify-cmd' "F20 states the deferred step"
+C20_WT="$C20_DIR/worktree/casc20repo/T02-casc20"
+C20_HEAD="$(git -C "$C20_WT" rev-parse HEAD 2>/dev/null || true)"
+[ -n "$C20_HEAD" ] || pwtest_bad "F20 child worktree" "not rehydrated"
+printf 'v\n' > "$ROOT/ev-c20-t02"
+pwtest_rc 0 "F20 manual bind at the child head" "$(pwtest_script $SH)" stack-verify --project casc20 --task T02 --evidence "$ROOT/ev-c20-t02" --head "$C20_HEAD"
+pwtest_rc 0 "F20 cascade resumes and completes after the manual bind" "$(pwtest_script $SH)" stack-cascade --project casc20 --task T01
+C20_KEY="cascade:T01:$(git -C "$PW_REPOS/casc20repo" rev-parse "agent/casc20/T01-casc20" | cut -c1-7)"
+C20_STAGES="$("$(pwtest_script $SH)" stack-op --project casc20 list | awk -F'\t' -v k="$C20_KEY" '$1==k{print $7}')"
+case "$C20_STAGES" in *T02:verify=done*) pwtest_ok "F20 verify stage advanced on resume" ;; *) pwtest_bad "F20 verify stage" "$C20_STAGES" ;; esac
+rm -rf "$PW_PROJECTS_DIR/casc20"
+
+# F19: a Verify that edits tracked files has certified a different snapshot — block, never bind.
+mk_cascade_pair casc19; C19_DIR="$PW_PROJECTS_DIR/casc19"
+printf 'v\n' > "$ROOT/ev-c19-t01"
+pwtest_rc 0 "F19 parent verified" "$(pwtest_script $SH)" stack-verify --project casc19 --task T01 --evidence "$ROOT/ev-c19-t01"
+pwtest_rc any "F19 verify-time edit blocks the cascade" \
+  "$(pwtest_script $SH)" stack-cascade --project casc19 --task T01 --verify-cmd 'f=$(git ls-files | head -1); echo x >> "$f"'
+pwtest_err 'verification changed the checkout' "F19 names the changed snapshot"
+C19_KEY="cascade:T01:$(git -C "$PW_REPOS/casc19repo" rev-parse "agent/casc19/T01-casc19" | cut -c1-7)"
+C19_STAGES="$("$(pwtest_script $SH)" stack-op --project casc19 list | awk -F'\t' -v k="$C19_KEY" '$1==k{print $7}')"
+case "$C19_STAGES" in *T02:verify=blocked*) pwtest_ok "F19 verify stage blocked" ;; *) pwtest_bad "F19 verify stage" "$C19_STAGES" ;; esac
+rm -rf "$PW_PROJECTS_DIR/casc19"
+
+# F26: a completed verify stage must not certify a newer head.
+mk_cascade_pair casc26; C26_DIR="$PW_PROJECTS_DIR/casc26"
+printf 'v\n' > "$ROOT/ev-c26-t01"
+pwtest_rc 0 "F26 parent verified" "$(pwtest_script $SH)" stack-verify --project casc26 --task T01 --evidence "$ROOT/ev-c26-t01"
+pwtest_rc any "F26 cascade verifies the child" "$(pwtest_script $SH)" stack-cascade --project casc26 --task T01 --verify-cmd 'echo ok'
+C26_WT="$C26_DIR/worktree/casc26repo/T02-casc26"
+C26_KEY="cascade:T01:$(git -C "$PW_REPOS/casc26repo" rev-parse "agent/casc26/T01-casc26" | cut -c1-7)"
+C26_STAGES="$("$(pwtest_script $SH)" stack-op --project casc26 list | awk -F'\t' -v k="$C26_KEY" '$1==k{print $7}')"
+case "$C26_STAGES" in *T02:verify=done*) pwtest_ok "F26 verify bound" ;; *) pwtest_bad "F26 verify bound" "$C26_STAGES" ;; esac
+( cd "$C26_WT" && echo post >> post-verify.txt && git add -A \
+  && git -c user.email=t@t -c user.name=t commit -qm "post-verify change" ) >/dev/null 2>&1
+pwtest_rc any "F26 cascade re-runs after the head moved" "$(pwtest_script $SH)" stack-cascade --project casc26 --task T01
+pwtest_err 'verify re-opened' "F26 names the re-opened verification"
+C26_STAGES="$("$(pwtest_script $SH)" stack-op --project casc26 list | awk -F'\t' -v k="$C26_KEY" '$1==k{print $7}')"
+case "$C26_STAGES" in *T02:verify=pending*) pwtest_ok "F26 verify re-opened for the new head" ;; *) pwtest_bad "F26 verify re-opened" "$C26_STAGES" ;; esac
+rm -rf "$PW_PROJECTS_DIR/casc26"
+
+# F18: a blocked push is retried on a resumed invocation.
+mk_cascade_pair casc18; C18_DIR="$PW_PROJECTS_DIR/casc18"
+printf '\n## Result\n- **MR:** https://gitlab.example.com/pwtest/casc18repo/-/merge_requests/61\n' >> "$C18_DIR/task/T02.md"
+printf 'v\n' > "$ROOT/ev-c18-t01"
+pwtest_rc 0 "F18 parent verified" "$(pwtest_script $SH)" stack-verify --project casc18 --task T01 --evidence "$ROOT/ev-c18-t01"
+C18_SEED="$(git -C "$PW_REPOS/casc18repo" config --get remote.origin.url)"
+git -C "$PW_REPOS/casc18repo" remote set-url --push origin /nonexistent/pw18.git
+pwtest_rc any "F18 cascade records a failed push" "$(pwtest_script $SH)" stack-cascade --project casc18 --task T01 --verify-cmd 'echo ok' --push
+C18_KEY="cascade:T01:$(git -C "$PW_REPOS/casc18repo" rev-parse "agent/casc18/T01-casc18" | cut -c1-7)"
+C18_STAGES="$("$(pwtest_script $SH)" stack-op --project casc18 list | awk -F'\t' -v k="$C18_KEY" '$1==k{print $7}')"
+case "$C18_STAGES" in *T02:push=blocked*) pwtest_ok "F18 push stage blocked" ;; *) pwtest_bad "F18 push blocked" "$C18_STAGES" ;; esac
+git -C "$PW_REPOS/casc18repo" remote set-url --push origin "$C18_SEED"
+pwtest_rc any "F18 cascade retries the blocked push" "$(pwtest_script $SH)" stack-cascade --project casc18 --task T01 --verify-cmd 'echo ok' --push
+C18_STAGES="$("$(pwtest_script $SH)" stack-op --project casc18 list | awk -F'\t' -v k="$C18_KEY" '$1==k{print $7}')"
+case "$C18_STAGES" in *T02:push=done*) pwtest_ok "F18 blocked push retried to done" ;; *) pwtest_bad "F18 push retry" "$C18_STAGES" ;; esac
+rm -rf "$PW_PROJECTS_DIR/casc18"
