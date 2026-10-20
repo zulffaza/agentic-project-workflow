@@ -278,6 +278,7 @@ it stops when intent is ambiguous, inputs moved, or the single repair pass is ex
 | Reported outcome | What to do |
 |---|---|
 | `conflict` or `CONFLICT — needs manual resolution` | Resolve the task worktree yourself, or re-run with `--auto-resolve` |
+| `resolved content equals one side` | Merge the target's change into the task result; if one side is truly obsolete, approve `--allow-one-sided` with a reason |
 | `stale-inputs` | Fetch again and re-capture the attempt; the target or task branch moved |
 | `verify-failed` after a resolution | Inspect the kept merge, repair the regression once, then re-verify |
 | `push rejected` | Re-preview and retry a plain push; never force-push to recover a sync |

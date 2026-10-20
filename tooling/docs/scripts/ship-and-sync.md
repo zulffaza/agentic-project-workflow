@@ -470,7 +470,8 @@ $S sync-attempt show --project <slug> [--task <T0n>]     # recorded attempts (ma
 $S sync-attempt check --project <slug> --task <T0n>      # fresh (0) | stale: reason (1) against fetched refs
 $S sync-merge --project <slug> --task <T0n> --target <sha> --keep-conflict
                                                  # 0 clean/contained; 3 conflict kept for resolution; 2 aborted/failed
-$S sync-finish --project <slug> --task <T0n>     # complete the attempt-owned merge (needs staged paths, no unmerged/markers)
+$S sync-finish --project <slug> --task <T0n> [--allow-one-sided <path> --reason <text> --owner-approved]…
+                                                 # complete the merge; refuses a result identical to one side when both changed the path
 $S sync-bind --project <slug> --task <T0n> --evidence <path>
                                                  # require clean tree + recorded result HEAD, then bind verified evidence
 $S sync-attempt set --project <slug> --task <T0n> --stage <failed|pushed> [--repair 0|1]
@@ -490,6 +491,14 @@ aborting internally, it leaves the conflicted merge in the descendant worktree, 
 `integrate=blocked`, and blocks the subtree. After the agent resolves and commits, the caller marks
 the stage done (`stack-op set --key <opkey> --state <T0n>:integrate=done`) and re-runs the cascade;
 the remaining verify/record/push stages resume. This path does not push.
+
+`sync-merge --keep-conflict` records a manifest of each conflicted path with its base, task, and
+target blob ids before the agent edits anything. `sync-finish` compares the staged blob with that
+manifest. When both sides changed a path and the staged result is byte-identical to one side, it
+refuses: the other side's work was dropped. The caller must merge both intents, or obtain an owner
+decision and pass `--allow-one-sided <path> --reason <text> --owner-approved`, which writes an audit file under
+`task/.sync-evidence/`. The reason is evidence of a human decision, not permission for the agent to
+choose silently.
 
 Verification remains authoritative: `sync-bind` only records evidence for a clean worktree at the
 committed result HEAD, and a stack member must also rebind `stack-verify` (final head, verified

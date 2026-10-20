@@ -287,8 +287,12 @@ static_t4() {
     && grep -qF 'references/sync-conflict-resolution.md' "$TOOL/commands/pw-sync.md" \
     && grep -qF 'sync-finish' "$TOOL/skill/project-workflow/references/sync-conflict-resolution.md" \
     && grep -qF 'sync-bind' "$TOOL/skill/project-workflow/references/sync-conflict-resolution.md" \
+    && grep -qF 'Never resolve a path by choosing one side' "$TOOL/skill/project-workflow/references/sync-conflict-resolution.md" \
+    && grep -qF 'Preserve both sides' "$TOOL/commands/pw-sync.md" \
+    && grep -qF -- '--allow-one-sided' "$TOOL/skill/project-workflow/references/sync-conflict-resolution.md" \
+    && grep -qF -- '--owner-approved' "$TOOL/skill/project-workflow/references/sync-conflict-resolution.md" \
     && pwtest_ok "T4 canary: sync opt-in conflict resolution wiring" \
-    || pwtest_bad "T4 canary: sync opt-in conflict resolution wiring" "the --auto-resolve flag, default-abort text, reference pointer, or finish/bind procedure died"
+    || pwtest_bad "T4 canary: sync opt-in conflict resolution wiring" "the --auto-resolve flag, default-abort text, reference pointer, finish/bind procedure, or two-sided preservation rule died"
   # generation-prompt wiring: the two-call prose flow must name the editable prompt files and the
   # observed-head comparison — losing either re-opens ungrounded prose generation. The procedure
   # lives in the request-review reference; the command must still point at it.
