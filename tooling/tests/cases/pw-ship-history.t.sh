@@ -39,6 +39,7 @@ for forge, host, url, endpoint in [
     native = {'state': 'opened', 'sha': 'a111111'} if forge == 'glab' else {'state': 'open', 'head': {'sha': 'a111111'}}
     outside = '\n\n## Reviewer checklist\n- Preserve café and emoji 🧪.\n'
     native[field] = summary('a111111') + outside
+    native['private_token'] = 'glpat-SENTINEL'
     fixture = scratch / (hashlib.sha256((forge + '|' + host + '|' + endpoint).encode()).hexdigest() + '.json')
     fixture.write_text(json.dumps({'response': native, 'reads': 0, 'writes': 0}, ensure_ascii=False))
     (project / 'task').mkdir(exist_ok=True)
@@ -75,7 +76,9 @@ for forge, host, url, endpoint in [
             check(forge + ' actionable failure ' + op, '→ fix:' in result.stderr)
         return result
     # D01: published-body readback and the scoped repair preview (dry run, no writes).
-    call('verify', url)
+    verified = call('verify', url)
+    check(forge + ' forge response fields are allowlisted (no credential echo)',
+          'glpat-SENTINEL' not in (verified.stdout + verified.stderr))
     original = dict(state()['response'])
     res = state()
     res['response'][field] = summary('a111111') + chr(92) + 'n' + chr(92) + 'n' + outside
