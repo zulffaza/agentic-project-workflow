@@ -225,6 +225,14 @@ calls it automatically on a description that carries the managed markers, **befo
 malformed boundary (for example literal `\n` separators appended after the end marker) cannot be
 published by a workflow-owned create.
 
+`capacity --mr <url>` resolves the description capacity for the MR's host and persists it under
+`.ship-history/capacity/<host>.json`. Order: explicit `--limit/--unit/--limit-source` (recorded as
+`explicit-override`), then the persisted policy, then one instance-settings probe (a 403 is retried
+once after two seconds), then the documented fallback of `1048576 chars` with reason
+`settings-403; official-docs-fallback`. A fallback is never reported as instance-verified. `deliver`
+uses the persisted policy when the flags are omitted, so other MRs on the same host reuse it without
+repeating the probe.
+
 `verify --mr <url>` is the post-navigation readback: it fetches the published body and runs that same
 parser, printing `verify: ok (head …)` or exiting `2` with the reason. Use it after an agent edits a
 parent MR's navigation. `repair-preview --mr <url>` is a dry run for the known suffix: it reports the

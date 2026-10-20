@@ -88,6 +88,22 @@ for forge, host, url, endpoint in [
     res = state()
     res['response'] = original
     fixture.write_text(json.dumps(res, ensure_ascii=False))
+    # D03: capacity discovery, the documented 403 fallback, and reuse of the persisted policy.
+    if forge == 'glab':
+        doc = 'https://docs.gitlab.com/api/merge_requests/'
+        capdir = project / '.ship-history' / 'capacity'
+        if capdir.exists():
+            for item in capdir.glob('*.json'):
+                item.unlink()
+        first = call('capacity', url, env_extra={'PWTEST_SETTINGS_403': '1'})
+        check('glab capacity falls back on settings 403', 'settings-403' in first.stdout and doc in first.stdout)
+        check('glab capacity policy persisted', any(capdir.glob('*.json')))
+        reused = call('capacity', url, env_extra={'PWTEST_SETTINGS_JSON': '{"max_merge_request_description_length": 5000}'})
+        check('glab capacity policy reused (no re-probe)', '1048576' in reused.stdout)
+        for item in capdir.glob('*.json'):
+            item.unlink()
+        learned = call('capacity', url, env_extra={'PWTEST_SETTINGS_JSON': '{"max_merge_request_description_length": 5000}'})
+        check('glab capacity uses the instance limit', '5000' in learned.stdout and 'instance-settings' in learned.stdout)
     def archive():
         records = [json.loads(p.read_text()) for p in (project / '.ship-history').glob('*.json')]
         return next(r for r in records if r['mr']['host'] == host and r['mr']['number'] == int(url.rsplit('/', 1)[1]))
@@ -298,7 +314,9 @@ for forge, host, url, endpoint in [
     check(forge + ' legacy partial delivery says summary pending', 'summary refresh pending' in partial.stdout)
     pending = call('pending')
     check(forge + ' delivered history with pending summary remains discoverable', legacy_key in pending.stdout and '"summary_pending": true' in pending.stdout)
-    call('deliver', url, '--attempt', legacy_key, rc=2)
+    # Capacity now resolves from the persisted host policy, so this re-delivery proceeds instead
+    # of failing on missing --limit flags (D03 changes that contract deliberately).
+    call('deliver', url, '--attempt', legacy_key)
     record_path = next(p for p in (project / '.ship-history').glob('*.json') if json.loads(p.read_text())['mr']['host'] == host and json.loads(p.read_text())['mr']['number'] == 43)
     lock = project.parent / '.ship-history-locks' / (record_path.stem + '.lock'); lock.mkdir()
     call('freeze', url, '--attempt', legacy_key, rc=2)
