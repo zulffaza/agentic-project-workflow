@@ -225,6 +225,12 @@ calls it automatically on a description that carries the managed markers, **befo
 malformed boundary (for example literal `\n` separators appended after the end marker) cannot be
 published by a workflow-owned create.
 
+`verify --mr <url>` is the post-navigation readback: it fetches the published body and runs that same
+parser, printing `verify: ok (head …)` or exiting `2` with the reason. Use it after an agent edits a
+parent MR's navigation. `repair-preview --mr <url>` is a dry run for the known suffix: it reports the
+literal characters appended after an end marker, the exact repaired line, and how many characters the
+repair removes — and never writes. Apply the repair to the description, then run `verify`.
+
 One invocation/MR produces one attempt. All intermediate fixes, commits, pipeline observations,
 and replies checkpoint under that identity. Freeze seals the Before/After/Summary bullet groups,
 commit bullets, and combined local/pipeline Verification. It does not create an MR, push, or reply.
