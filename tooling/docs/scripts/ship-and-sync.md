@@ -60,7 +60,9 @@ Ship execution complete for T03
 
 If the task's `- **MR:**` field holds a **real http(s) URL** it prints `MR already exists: <url>` and
 stops (idempotent re-run); placeholder values (`-`, `—`, `(none)`, or no field) never count as an
-existing MR. A successful creation upserts the URL into that same bold field. A
+existing MR. A successful creation upserts the URL into that same bold field. The dashboard MR
+`State` mirrors what exists: a new MR writes `open`, while a continuation on a merged or closed MR
+keeps that terminal state instead of reopening it. A
 push failure dies with `pw-ship: push failed` (exit 2). If the push succeeded but the forge
 CLI returned no MR URL, stderr carries the CLI's first error line + `MR creation failed (push
 itself succeeded — safe to re-run after fixing auth/context)` — report that state honestly
@@ -68,6 +70,11 @@ itself succeeded — safe to re-run after fixing auth/context)` — report that 
 **configured** forge for the repo's origin host (an exact `PW_FORGE_HOSTS` entry wins, else
 `github.com` → `gh`, else `glab`) and resolved **before** the push: a missing required CLI
 refuses the shipment instead of pushing a branch with no MR path or silently switching forges.
+The same pre-push step probes the installed `glab` for `mr create --output json`; a release
+without that contract uses the plain invocation (which prints the MR URL) instead of failing
+after the branch is public. Creation output is parsed structurally and independently of
+whitespace, and the recorded URL is verified inside the task's `## Result` before completion is
+reported — an MR-looking line elsewhere in the file is never the one rewritten.
 
 A marked creation body is read back before its ownership snapshot is stored. Failure leaves the
 MR URL recorded and reports initial snapshot pending; retain the creation body for a safe retry.

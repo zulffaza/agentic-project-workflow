@@ -35,12 +35,32 @@ _state_json() {
 }
 case "${1:-}" in
   mr)
+    if [ "${2:-}" = create ] && { [ "${3:-}" = --help ] || [ "${3:-}" = -h ]; }; then
+      echo "Create a new merge request."
+      echo "  -s, --source-branch string   Source branch"
+      echo "  -b, --target-branch string   Target branch"
+      echo "  -t, --title string           Title"
+      echo "  -d, --description string     Description"
+      if [ -z "${PWTEST_GLAB_CREATE_NO_OUTPUT:-}" ]; then
+        echo "  -F, --output string          Format output as: text, json"
+      fi
+      exit 0
+    fi
     case "${2:-}" in
       view) _iid="$(printf %s "${3:-}" | awk -F/ "{print \$NF}" | tr -dc 0-9)"; _state_json "${_iid:-${3:-0}}" ;;
-      create) if [ -n "${PWTEST_FORGE_CREATE+set}" ] && [ -z "$PWTEST_FORGE_CREATE" ]; then
+      create)
+              # A release without the JSON contract must REJECT the flag: a shim that ignores it
+              # can never prove the capability check works.
+              if [ -n "${PWTEST_GLAB_CREATE_NO_OUTPUT:-}" ]; then
+                for _a in "$@"; do case "$_a" in --output|-F|--output=*) echo "glab-shim: unknown flag: $_a" >&2; exit 42 ;; esac; done
+              fi
+              if [ -n "${PWTEST_FORGE_CREATE+set}" ] && [ -z "$PWTEST_FORGE_CREATE" ]; then
                 echo "glab-shim: creation returned no URL (forced)" >&2; exit 1; fi
               n=$(( $(cat "${PWTEST_FORGE_STATE_FILE:-/dev/null}" 2>/dev/null | grep -cm 'merge_requests ' ) + 42 ))
-              _state_json "$n" ;;
+              case " $* " in
+                *" --output json "*) _state_json "$n" ;;
+                *) printf 'Creating merge request...\nhttps://gitlab.example.com/pwtest/api/-/merge_requests/%s\n' "$n" ;;
+              esac ;;
       update) _iid="$(printf %s "${3:-}" | awk -F/ "{print \$NF}" | tr -dc 0-9)"
               _tb=""; _prev=""
               for _a in "$@"; do [ "$_prev" = "--target-branch" ] && _tb="$_a"; _prev="$_a"; done

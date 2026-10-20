@@ -1073,6 +1073,15 @@ EOF
   command -v "$FORGE_CLI" >/dev/null 2>&1 \
     || die "$FORGE_CLI not found (needed to open an MR for $REPO on $_origin_host) → fix: install $FORGE_CLI"
 
+  # Creation capability, checked BEFORE the push. Some glab releases have no
+  # `mr create --output json`; an unsupported flag would fail creation after the branch is
+  # already public, leaving a pushed branch with no MR. Probe the installed CLI's own help and
+  # use the supported path (plain create prints the MR URL).
+  _GLAB_CREATE_JSON=0
+  if [ "$FORGE_CLI" = "glab" ] && glab mr create --help 2>/dev/null | grep -q -- '--output'; then
+    _GLAB_CREATE_JSON=1
+  fi
+
   # Push branch
   echo "Pushing $BRANCH to origin..."
   git -C "$REPO_DIR" push origin "$BRANCH" || die "push failed"
@@ -1104,40 +1113,63 @@ EOF
     # Create MR
     # Run from inside the repo so both CLIs resolve their project/host context (see forges.md).
     if [ "$FORGE_CLI" = "glab" ]; then
-      MR_OUTPUT="$( cd "$REPO_DIR" && glab mr create \
-        --source-branch "$BRANCH" \
-        --target-branch "$TARGET_BRANCH" \
-        --title "$MR_TITLE" \
-        --description "$DESCRIPTION" \
-        --no-editor \
-        --output json 2>&1 || true)"
-      MR_URL="$(echo "$MR_OUTPUT" | grep -o '"web_url":"[^"]*"' | sed 's/"web_url":"//;s/"//' || echo "")"
+      if [ "$_GLAB_CREATE_JSON" = 1 ]; then
+        MR_OUTPUT="$( cd "$REPO_DIR" && glab mr create \
+          --source-branch "$BRANCH" \
+          --target-branch "$TARGET_BRANCH" \
+          --title "$MR_TITLE" \
+          --description "$DESCRIPTION" \
+          --no-editor \
+          --output json 2>&1 || true)"
+      else
+        # No JSON contract on this release: the supported invocation prints the MR URL.
+        MR_OUTPUT="$( cd "$REPO_DIR" && glab mr create \
+          --source-branch "$BRANCH" \
+          --target-branch "$TARGET_BRANCH" \
+          --title "$MR_TITLE" \
+          --description "$DESCRIPTION" \
+          --no-editor 2>&1 || true)"
+      fi
+      # Whitespace-tolerant: a formatted JSON body still yields the URL.
+      MR_URL="$(printf '%s\n' "$MR_OUTPUT" | sed -n 's/.*"web_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+      [ -n "$MR_URL" ] || MR_URL="$(printf '%s\n' "$MR_OUTPUT" | grep -oE 'https?://[^[:space:]]+/merge_requests/[0-9]+' | head -1 || true)"
     elif [ "$FORGE_CLI" = "gh" ]; then
       MR_OUTPUT="$( cd "$REPO_DIR" && gh pr create \
         --head "$BRANCH" \
         --base "$TARGET_BRANCH" \
         --title "$MR_TITLE" \
         --body "$DESCRIPTION" 2>&1 || true)"
-      MR_URL="$(echo "$MR_OUTPUT" | grep -o 'https://github.com/[^ ]*' || echo "")"
+      MR_URL="$(printf '%s\n' "$MR_OUTPUT" | grep -oE 'https?://[^[:space:]]+/pull/[0-9]+' | head -1 || true)"
     fi
 
     if [ -n "$MR_URL" ]; then
       echo "MR created: $MR_URL"
 
-      # Record the MR URL in the task file's Result. Upsert the BOLD field line when present
-      # (v2 templates carry a "- **MR:** <placeholder>" bullet — appending a second plain line
-      # left the resolver reading the placeholder and re-creating the MR every run):
-      if grep -qE '^- \*\*MR:\*\*' "$TASK_FILE"; then
-_pwstage="$(pw_tmpfile "$(dirname "$TASK_FILE")")" || return 1;         awk -v mr="$MR_URL" '!d && /^- \*\*MR:\*\*/ { print "- **MR:** " mr; d=1; next } {print}' \
-          "$TASK_FILE" > "$_pwstage" && mv "$_pwstage" "$TASK_FILE"
+      # Record the MR URL in the CURRENT `## Result` record. An MR-looking line elsewhere in the
+      # file (a decoy in ## Steps, or a historical section) must never be the one rewritten — the
+      # same scoping rule the Build-check recorder uses. Legacy `- MR:` lines are preserved in
+      # their own shape rather than silently reformatted.
+      if awk '/^## Result/{p=1;next} /^## /{p=0} p && /^- (\*\*)?MR:/{f=1} END{exit(f?0:1)}' "$TASK_FILE"; then
+_pwstage="$(pw_tmpfile "$(dirname "$TASK_FILE")")" || return 1;         awk -v mr="$MR_URL" '
+          /^## Result/{p=1}
+          /^## / && !/^## Result/{p=0}
+          p && !d && /^- \*\*MR:\*\*/ { print "- **MR:** " mr; d=1; next }
+          p && !d && /^- MR:/        { print "- MR: " mr;      d=1; next }
+          {print}' "$TASK_FILE" > "$_pwstage" && mv "$_pwstage" "$TASK_FILE"
       elif grep -q '^## Result' "$TASK_FILE"; then
-        # Append MR line to Result section
-_pwstage="$(pw_tmpfile "$(dirname "$TASK_FILE")")" || return 1;         awk -v mr="$MR_URL" '/^## Result/{p=1; print; print "- MR: " mr; next} p && /^## /{p=0} {print}' \
+        # No MR field inside Result yet: insert one immediately after the heading.
+_pwstage="$(pw_tmpfile "$(dirname "$TASK_FILE")")" || return 1;         awk -v mr="$MR_URL" '/^## Result/{p=1; print; print "- **MR:** " mr; next} p && /^## /{p=0} {print}' \
           "$TASK_FILE" > "$_pwstage" && mv "$_pwstage" "$TASK_FILE"
       else
         # Add Result section
-        printf '\n## Result\n\n- MR: %s\n' "$MR_URL" >> "$TASK_FILE"
+        printf '\n## Result\n\n- **MR:** %s\n' "$MR_URL" >> "$TASK_FILE"
       fi
+      # Verify the saved identity before reporting completion: a create whose URL did not land in
+      # Result would re-create the MR on the next run.
+      _result_has_mr=0
+      awk -v u="$MR_URL" '/^## Result/{p=1} /^## / && !/^## Result/{p=0} p && index($0,u){f=1} END{exit(f?0:1)}' "$TASK_FILE" && _result_has_mr=1
+      [ "$_result_has_mr" = 1 ] \
+        || die "MR created ($MR_URL) but the task Result does not record it → fix: add the URL to the Result MR field, then re-run"
       if grep -q '<!-- pw-mr-summary:start -->' "$DESC_FILE"; then
         cmd_history --project "$SLUG" --operation init --mr "$MR_URL" --options --file "$DESC_FILE" \
           || die "MR created but initial ownership snapshot is pending → fix: retain the creation body and retry its history init after fixing readback"
@@ -1151,9 +1183,18 @@ _pwstage="$(pw_tmpfile "$(dirname "$TASK_FILE")")" || return 1;         awk -v m
     fi
   fi
 
-  # Update dashboard (only reached on creation-success or existing-MR paths). Subshell: a die()
-  # here must not exit the script — the pre-merge subprocess form only ever killed the child.
-  ( cmd_dashboard_mr_state --project "$SLUG" --task "$TASK_ID" --state "open" ) 2>/dev/null || true
+  # Update dashboard (only reached on creation-success or existing-MR paths). A CONTINUATION write
+  # must not reopen a merged/closed MR: read the observed state and mirror it. Only a newly created
+  # MR is legitimately 'open'. Subshell: a die() here must not exit the script — the pre-merge
+  # subprocess form only ever killed the child.
+  _dash_state="open"
+  if [ "$_MR_EXISTS" = 1 ]; then
+    _obs_state="$(cmd_mr_state --project "$SLUG" --task "$TASK_ID" 2>/dev/null || true)"
+    case "$_obs_state" in
+      merged|closed|open) _dash_state="$_obs_state" ;;
+    esac
+  fi
+  ( cmd_dashboard_mr_state --project "$SLUG" --task "$TASK_ID" --state "$_dash_state" ) 2>/dev/null || true
 
   # Persist the effective target for a stacked task so promotion/cascade can compare observed
   # vs recorded targets. Best-effort (a state write failure never fails an otherwise-good ship).
