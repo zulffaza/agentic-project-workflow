@@ -415,3 +415,7 @@ C322-sync-one-sided-reason-dropped	scripts/entities/pw-ship.sh	[ ${#allow[@]} -e
 C323-sync-two-sided-doctrine-dropped	skill/project-workflow/references/sync-conflict-resolution.md	Never resolve a path by choosing one side	Resolve by choosing one side	T4	-
 C324-sync-dropped-addition-guard-dropped	scripts/entities/pw-ship.sh	[ -z "$dropped" ] \	[ 1 = 1 ] \	T1	pw-sync.t.sh
 C325-sync-owner-approval-dropped	scripts/entities/pw-ship.sh	[ ${#allow[@]} -eq 0 ] || [ "$owner_approved" = 1 ] \	[ 1 = 1 ] \	T1	pw-sync.t.sh
+C326-skill-readme-conditional	skill/project-workflow/SKILL.md	Read the bundle README only	Read `agentic-project-workflow/README.md` first	T4	-
+C327-execute-routing-reference-lost	commands/pw-execute.md	Use the existing route and provider references	Use the route mechanics above	T4	-
+C328-orchestrator-ladder-pointer-lost	agents/pw-orchestrator.md	The shared skill ladder owns	The orchestrator derives all route mechanics itself	T4	-
+C329-provider-reference-conditional	commands/pw-execute.md	the selected provider's headless-hook entry under	all provider hook details under	T4	-

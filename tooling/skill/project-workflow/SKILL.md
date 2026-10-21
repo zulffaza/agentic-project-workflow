@@ -6,10 +6,10 @@ description: Run a multi-repo change through the phased AI-agent pipeline for a 
 # Project Workflow (multi-repo agentic pipeline)
 
 Canonical guide + templates live in the `agentic-project-workflow/` bundle root (wherever you
-cloned it — `$PW_HOME` if sourced). **Read
-`agentic-project-workflow/README.md` first** — it is the source of truth; this skill is the
-on-demand cheat sheet, split into `references/*.md` loaded per-phase so a single invocation doesn't
-pull in detail from every other phase. New project: `/pw-new --project <project-slug>` (in your agent CLI).
+cloned it — `$PW_HOME` if sourced). This skill is the operating guide, split into `references/*.md`
+loaded per phase so one invocation does not pull in every other phase. Read the bundle README only
+when you need its user-facing overview or onboarding path. New project: `/pw-new --project <project-slug>`
+(in your agent CLI).
 Onboarding a fresh machine or a teammate: `agentic-project-workflow/bootstrap.sh` (detects
 installed CLIs, installs this skill + the `/pw-*` commands per provider) — see
 `agentic-project-workflow/ONBOARDING.md`.

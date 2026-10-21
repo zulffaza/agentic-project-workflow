@@ -553,4 +553,43 @@ PY
     && grep -qF 'RFC comments are externally read-only' "$TOOL/scripts/entities/pw-rfc.sh" \
     && pwtest_ok "T4 canary: opt-in thread resolution + read-only RFC comments" \
     || pwtest_bad "T4 canary: opt-in thread resolution" "pw-ship.md lost the --resolve-opt-in contract (or an unconditional resolve instruction returned), or the RFC comment flow started advertising/accepting resolution"
+
+  # (q) the bundle README is optional navigation, not an unconditional prompt payload.
+  ! grep -qF 'Read `agentic-project-workflow/README.md` first' "$TOOL/../tooling/skill/project-workflow/SKILL.md" \
+    && grep -qF 'Read the bundle README only' "$TOOL/../tooling/skill/project-workflow/SKILL.md" \
+    && grep -qF 'when you need its user-facing overview or onboarding path' "$TOOL/../tooling/skill/project-workflow/SKILL.md" \
+    && pwtest_ok "T4 canary: user README is conditional, not loaded on every workflow invocation" \
+    || pwtest_bad "T4 canary: conditional README loading" "the skill must not require a blanket README read; keep the conditional overview/onboarding pointer"
+
+  # (r) execute routes through the existing ladder/provider contract; detailed routing and CLI
+  # gotchas stay in those canonical references instead of being duplicated in the command.
+  grep -qF 'references/execution-and-routing.md' "$TOOL/commands/pw-execute.md" \
+    && grep -qF 'tooling/docs/providers.md' "$TOOL/commands/pw-execute.md" \
+    && grep -qF 'only' "$TOOL/commands/pw-execute.md" \
+    && grep -qF 'resolved cross-provider/headless route' "$TOOL/commands/pw-execute.md" \
+    && grep -qF 'Same-provider routes do not load the provider guide.' "$TOOL/commands/pw-execute.md" \
+    && grep -qF 'only when the' "$TOOL/commands/pw-execute.md" \
+    && grep -qF 'task declares either field' "$TOOL/commands/pw-execute.md" \
+    && grep -qF 'model-resolve' "$TOOL/commands/pw-execute.md" \
+    && grep -qF 'PW_HEADLESS_STALL' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
+    && grep -qF '18 KB trailing argument' "$TOOL/docs/providers.md" \
+    && grep -qF '`--auto` is **required** headless' "$TOOL/docs/providers.md" \
+    && pwtest_ok "T4 canary: execute delegates routing and provider mechanics to canonical references" \
+    || pwtest_bad "T4 canary: execute routing references" "the command must retain both references and model gate; canonical references must retain headless supervision and provider-specific prompt gotchas"
+
+  # (t) provider catalog prose is conditional: only a cross-provider/headless route reads it.
+  grep -qF 'only' "$TOOL/commands/pw-execute.md" \
+    && grep -qF 'resolved cross-provider/headless route' "$TOOL/commands/pw-execute.md" \
+    && grep -qF 'Same-provider routes do not load the provider guide.' "$TOOL/commands/pw-execute.md" \
+    && grep -qF 'only when the' "$TOOL/commands/pw-execute.md" \
+    && grep -qF 'task declares either field' "$TOOL/commands/pw-execute.md" \
+    && pwtest_ok "T4 canary: provider guide is conditional on the selected route" \
+    || pwtest_bad "T4 canary: provider guide loading" "pw-execute must not require provider mechanics for same-provider execution"
+
+  # (s) the orchestrator uses the shared ladder rather than maintaining another copy of it.
+  grep -qF 'The shared skill ladder owns' "$TOOL/agents/pw-orchestrator.md" \
+    && grep -qF 'commands reference it, never re-describe it' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
+    && pwtest_ok "T4 canary: orchestrator delegates route resolution to the shared ladder" \
+    || pwtest_bad "T4 canary: orchestrator ladder reference" "the orchestrator must point to the shared ladder, which remains the canonical routing contract"
+
 }
