@@ -91,6 +91,14 @@ consumed-parent bindings and pending debt, not merely an unchanged destination. 
      `sync-merge` exits 3 only when it left the conflict in place for resolution; follow the loaded
      reference, then continue at its verification/publication steps. Exit 2 means it aborted or the
      merge failed operationally — mark the task failed and continue. A clean merge returns 0.
+   - **Preserve both sides.** Never resolve a conflicted path by taking the task side or the target
+     side as a whole. Merge both intents, including additive list/array entries. Before finishing,
+     list each side's intended change and confirm the result contains it; `sync-finish` refuses a
+     result byte-identical to one side when both sides changed the path. If the intents cannot
+     coexist, **stop and ask the owner** with the path, base/task/target snippets, and candidate
+     results. Only after the owner says one side is obsolete, run
+     `$S sync-finish --project <slug> --task <T0n> --allow-one-sided <path> --reason "<why>" --owner-approved`.
+     Do not use `git checkout --ours/--theirs` or "accept current/incoming".
    - Without `--auto-resolve`, merge the effective target directly.
    - **Conflict without the flag?** `git merge --abort`, mark the task `CONFLICT — needs manual
      resolution`, and **move on to the next task** — never leave a half-merged worktree. Do not
@@ -100,7 +108,8 @@ consumed-parent bindings and pending debt, not merely an unchanged destination. 
    - **Clean merge?** Re-run the task's `## Verify` block and capture the **real output**.
      - Verify **fails** → do NOT push. With `--auto-resolve`, if the failure is a regression caused
        by this resolution and no repair has been used, make **one** bounded repair, commit it, re-run
-       Verify once, and rebind (`sync-bind`). If it still fails, leave the merge commit for
+       Verify once, and rebind (`sync-bind`). That repair spends the shared `<task>@<branch>` budget;
+       an exhausted shared budget refuses it. If it still fails, leave the merge commit for
        inspection, mark `verify-failed after sync`, flip the task `Status: verify-failed`, and record
        the failed attempt (`$S sync-attempt set --project <slug> --task <T0n> --stage failed`).
        Continue with the others.

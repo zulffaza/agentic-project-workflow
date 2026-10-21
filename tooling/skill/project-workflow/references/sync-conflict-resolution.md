@@ -49,15 +49,51 @@ source branch, and target branch. Missing refs, forge errors, and unknown state 
    needed. Classify real unmerged paths; a nonzero merge exit alone is not proof of a content
    conflict.
 
-3. **Reconcile by intent.** For each path, explain how the result preserves the task's intended
-   behavior and the incoming target change. Edit conflicted files, then make only compatibility
-   edits required to integrate both existing changes.
+3. **Reconcile by intent, preserving both sides.** For each path, explain how the result preserves
+   the task's intended behavior and the incoming target change. Edit conflicted files, then make only
+   compatibility edits required to integrate both existing changes.
+   - **Never resolve a path by choosing one side as a whole.** Do not use `git checkout --ours`,
+     `git checkout --theirs`, "accept current", or "accept incoming" on a conflicted file. Keep every
+     change from both sides unless the owner says one is obsolete.
    - Root cause, not symptom: follow callers and shared helpers when the conflict reveals a shared
      contract change.
-   - Do not use blanket `ours`/`theirs`, drop incoming functionality, or weaken/delete checks to get
-     green output.
+   - Do not drop incoming functionality or weaken/delete checks to get green output.
    - Respect generated files: regenerate with the repository's prescribed tool.
    - Stop on binary, submodule, generated-file, or semantic conflicts without reliable evidence.
+
+   **Additive-list example.** A changelog file gains one column on each side:
+
+   ```yaml
+   # merge base
+   columns:
+     - common
+
+   # task branch adds
+     - server_key
+
+   # target adds
+     - auth_header_value
+
+   # correct resolution keeps both additions
+   columns:
+     - common
+     - server_key
+     - auth_header_value
+   ```
+
+   Follow the file's existing order. If both sides impose incompatible ordering or change the same
+   key to different values, stop and ask; do not choose.
+
+   **Two-sided audit before finishing.** For every conflicted path, compare the merge base, the task
+   side, and the target side. List each side's intended change, then confirm the staged result
+   contains it. `sync-merge` records the three blob ids; `sync-finish` uses them to refuse a result
+   that is byte-identical to one side while both sides changed the path. That refusal is a warning
+   that work was dropped, not an obstacle to bypass.
+
+   **When both intents cannot coexist**, stop and ask the owner. Present the path, the relevant base
+   / task / target snippets, the candidate resolutions, and one question about which behavior wins.
+   Do not pass `--allow-one-sided` on your own initiative. Use it only after the owner confirms that
+   one side is obsolete, pass `--owner-approved`, and record the reason.
 
 4. **Validate and complete the merge deterministically.**
 
@@ -65,10 +101,20 @@ source branch, and target branch. Missing refs, forge errors, and unknown state 
    $S sync-finish --project <slug> --task <T0n>
    ```
 
-   `sync-finish` requires an active attempt-owned merge, no unmerged paths, staged resolution
-   paths, and no introduced conflict markers in the staged diff. It completes the merge with its
-   original parents and records `resolved` at the result HEAD. Do not amend or rewrite the task's
-   earlier commits.
+   `sync-finish` requires an active attempt-owned merge, no unmerged paths, and no introduced
+   conflict markers in the staged diff. It compares each staged path with the recorded base/task/
+   target blobs, refuses a one-sided result, and refuses a result that drops a line either side
+   added. It completes the merge with its original parents and records `resolved` at the result
+   HEAD. Do not amend or rewrite the task's earlier commits.
+
+   If the owner decided one side is obsolete, pass the exact path and reason:
+
+   ```text
+   $S sync-finish --project <slug> --task <T0n> --allow-one-sided <path> --reason "<why the other side is obsolete>" --owner-approved
+   ```
+
+   The reason is written to `task/.sync-evidence/<task>-resolution.md`. It is audit evidence, not a
+   substitute for the owner's decision.
 
 5. **Write the attempt's rationale** where the project records decisions: what each side intended,
    why the resolution is compatible, and any scope limit. Keep it short and behavior-focused.
@@ -88,8 +134,11 @@ bind it again; `sync-bind` records the repair once. A second differing HEAD is r
 survives a resumed session or a new worker.
 
 At most **one** follow-up repair pass is allowed for a regression caused by this resolution,
-followed by complete re-verification. Keep that budget across resumes, executor handoffs, and CI
-repair. An environment blocker is not a code regression and never counts as a passing check.
+followed by complete re-verification. It consumes the shared persistent code-repair budget for
+`<task>@<branch>` (`repair-round`); if that budget is exhausted, the sync repair is refused. The
+attempt's own counter prevents a second sync repair even when the shared budget has room. An
+environment blocker is not a code regression and never consumes a round or counts as a passing
+check.
 
 For a stacked task, rebind the stack tuple before any descendant advances:
 

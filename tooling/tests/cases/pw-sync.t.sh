@@ -132,11 +132,12 @@ git -C "$SY_DIR/worktree/syncgit/T01-thing" -c user.email=t@t -c user.name=t com
 printf 'verify: repaired green\n' > "$ROOT/ev-sync-repair"
 pwtest_rc 0 "one bounded repair can rebind" sht sync-bind --project "$SY" --task T01 --evidence "$ROOT/ev-sync-repair"
 pwtest_eq "repair count recorded" "1" "$(awk -F'\t' '$1=="T01"{print $11}' "$SY_DIR/task/sync-attempts.tsv")"
+pwtest_grep_file 'T01@agent/' "shared repair budget consumed" "$SY_DIR/task/repair-budget.tsv"
 printf 'second-repair\n' >> "$SY_DIR/worktree/syncgit/T01-thing/shared.txt"
 git -C "$SY_DIR/worktree/syncgit/T01-thing" add -A
 git -C "$SY_DIR/worktree/syncgit/T01-thing" -c user.email=t@t -c user.name=t commit -qm "second repair"
 pwtest_rc 2 "a second repair cannot bind" sht sync-bind --project "$SY" --task T01 --evidence "$ROOT/ev-sync-repair"
-pwtest_err 'repair budget exhausted' "exhausted budget is explicit"
+pwtest_err 'already used its one follow-up repair' "exhausted sync repair is explicit"
 pwtest_rc 2 "sync-merge refuses to re-merge a verified attempt" sht sync-merge --project "$SY" --task T01 --target "$TARGET" --keep-conflict
 pwtest_rc 0 "sync-attempt sets pushed only after verification" sht sync-attempt --project "$SY" set --task T01 --stage pushed
 pwtest_re 'stage pushed' "published stage recorded"
@@ -172,3 +173,76 @@ printf 'dirty\n' >> "$SY_DIR/worktree/syncgit/T02-thing/shared.txt"
 pwtest_rc 2 "sync-merge refuses a dirty worktree" sht sync-merge --project "$SY" --task T02 --target "$(git -C "$PW_REPOS/syncgit" rev-parse refs/remotes/origin/master)" --keep-conflict
 pwtest_err 'uncommitted changes' "dirty refusal is explicit"
 git -C "$SY_DIR/worktree/syncgit/T02-thing" checkout -- shared.txt
+
+# --- two-sided preservation: never accept a whole side silently -------------
+# Base adds the file, both task branches add a different column, the target adds the other.
+git -C "$PW_REPOS/syncgit" checkout -q master
+printf 'columns:\n  - common\n' > "$PW_REPOS/syncgit/columns.yaml"
+git -C "$PW_REPOS/syncgit" add -A
+git -C "$PW_REPOS/syncgit" -c user.email=t@t -c user.name=t commit -qm "columns base"
+git -C "$PW_REPOS/syncgit" push -q origin master
+sync_cols_branch() {  # <branch> <extra-line>
+  local br="$1" extra="$2"
+  git -C "$PW_REPOS/syncgit" checkout -q -B "$br" master
+  printf 'columns:\n  - common\n  - %s\n' "$extra" > "$PW_REPOS/syncgit/columns.yaml"
+  git -C "$PW_REPOS/syncgit" add -A
+  git -C "$PW_REPOS/syncgit" -c user.email=t@t -c user.name=t commit -qm "columns $br"
+  git -C "$PW_REPOS/syncgit" push -q -u origin "$br" >/dev/null 2>&1
+  git -C "$PW_REPOS/syncgit" checkout -q master
+}
+sync_cols_branch "agent/$SY/T03-cols" server_key
+sync_cols_branch "agent/$SY/T04-cols" server_key
+git -C "$PW_REPOS/syncgit" checkout -q master
+printf 'columns:\n  - common\n  - auth_header_value\n' > "$PW_REPOS/syncgit/columns.yaml"
+git -C "$PW_REPOS/syncgit" add -A
+git -C "$PW_REPOS/syncgit" -c user.email=t@t -c user.name=t commit -qm "target adds auth header"
+git -C "$PW_REPOS/syncgit" push -q origin master
+git -C "$PW_REPOS/syncgit" checkout -q master
+sync_task "$SY_DIR" T03 syncgit master "agent/$SY/T03-cols" accepted
+sync_task "$SY_DIR" T04 syncgit master "agent/$SY/T04-cols" accepted
+sync_wt "$SY_DIR" syncgit T03-thing "agent/$SY/T03-cols"
+sync_wt "$SY_DIR" syncgit T04-thing "agent/$SY/T04-cols"
+git -C "$SY_DIR/worktree/syncgit/T03-thing" fetch -q origin
+git -C "$SY_DIR/worktree/syncgit/T04-thing" fetch -q origin
+COLS_TARGET="$(git -C "$PW_REPOS/syncgit" rev-parse refs/remotes/origin/master)"
+
+pwtest_rc 0 "T03 attempt prepared" sht sync-attempt --project "$SY" begin --task T03 --kind independent --mode auto --target-branch master
+pwtest_rc 3 "T03 additive-list conflict kept" sht sync-merge --project "$SY" --task T03 --target "$COLS_TARGET" --keep-conflict
+printf 'columns:\n  - common\n  - server_key\n' > "$SY_DIR/worktree/syncgit/T03-thing/columns.yaml"
+git -C "$SY_DIR/worktree/syncgit/T03-thing" add columns.yaml
+pwtest_rc 2 "sync-finish refuses a resolution equal to one side" sht sync-finish --project "$SY" --task T03
+pwtest_err 'equals one side' "one-sided refusal is explicit"
+pwtest_err 'merge both intents' "refusal states the required action"
+pwtest_err 'owner-approved' "refusal names the owner override"
+printf 'columns:\n  - common\n  - server_key\n  - auth_header_value\n' > "$SY_DIR/worktree/syncgit/T03-thing/columns.yaml"
+git -C "$SY_DIR/worktree/syncgit/T03-thing" add columns.yaml
+pwtest_rc 0 "a two-sided additive resolution completes" sht sync-finish --project "$SY" --task T03
+pwtest_re '^resolved ' "two-sided merge reports the result head"
+
+pwtest_rc 0 "T04 attempt prepared" sht sync-attempt --project "$SY" begin --task T04 --kind independent --mode auto --target-branch master
+pwtest_rc 3 "T04 additive-list conflict kept" sht sync-merge --project "$SY" --task T04 --target "$COLS_TARGET" --keep-conflict
+printf 'columns:\n  - common\n  - server_key\n' > "$SY_DIR/worktree/syncgit/T04-thing/columns.yaml"
+git -C "$SY_DIR/worktree/syncgit/T04-thing" add columns.yaml
+printf 'columns:\n  - common\n  - server_key\n  - a-note-that-differs\n' > "$SY_DIR/worktree/syncgit/T04-thing/columns.yaml"
+git -C "$SY_DIR/worktree/syncgit/T04-thing" add columns.yaml
+pwtest_rc 2 "a result that drops one side's added line is refused" sht sync-finish --project "$SY" --task T04
+pwtest_err 'drops added line' "dropped addition is explicit"
+pwtest_err 'auth_header_value' "the dropped line is named"
+printf 'columns:\n  - common\n  - server_key\n' > "$SY_DIR/worktree/syncgit/T04-thing/columns.yaml"
+git -C "$SY_DIR/worktree/syncgit/T04-thing" add columns.yaml
+pwtest_rc 2 "one-sided needs an explicit reason" sht sync-finish --project "$SY" --task T04 --allow-one-sided columns.yaml
+pwtest_err 'reason is required' "missing reason is named"
+pwtest_rc 2 "one-sided also needs explicit owner approval" sht sync-finish --project "$SY" --task T04 --allow-one-sided columns.yaml --reason "owner said so"
+pwtest_err 'owner-approved is required' "missing owner approval is named"
+pwtest_rc 2 "one-sided path must be conflicted" sht sync-finish --project "$SY" --task T04 --allow-one-sided columns.yaml --allow-one-sided other.yaml --reason "not conflicted" --owner-approved
+pwtest_err 'not in the conflict manifest' "unknown allow path is refused"
+pwtest_rc 0 "an explicitly justified one-sided resolution completes" sht sync-finish --project "$SY" --task T04 --allow-one-sided columns.yaml --reason "auth header column was superseded by the task's server_key migration" --owner-approved
+pwtest_grep_file 'auth header column was superseded' "one-sided reason is recorded" "$SY_DIR/task/.sync-evidence/T04-resolution.md"
+printf 'verify: T04 green\n' > "$ROOT/ev-t04"
+pwtest_rc 0 "T04 binds its resolution" sht sync-bind --project "$SY" --task T04 --evidence "$ROOT/ev-t04"
+printf 'repair\n' >> "$SY_DIR/worktree/syncgit/T04-thing/columns.yaml"
+git -C "$SY_DIR/worktree/syncgit/T04-thing" add -A
+git -C "$SY_DIR/worktree/syncgit/T04-thing" -c user.email=t@t -c user.name=t commit -qm "T04 repair"
+for _ in 1 2 3; do sht repair-round --project "$SY" --task T04 --work "T04@agent/$SY/T04-cols" --consume >/dev/null; done
+pwtest_rc 2 "an exhausted shared budget refuses a sync repair" sht sync-bind --project "$SY" --task T04 --evidence "$ROOT/ev-t04"
+pwtest_err 'repair budget exhausted' "shared exhaustion is explicit"

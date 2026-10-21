@@ -3139,6 +3139,38 @@ _sync_repo_dir() {
 # _sync_worktree <d> <task> — mounted task worktree or empty.
 _sync_worktree() { _stack_task_repo_dir "$1" "$2" 2>/dev/null || true; }
 
+# _sync_evidence_dir <d> — project-owned home for conflict/verification artifacts.
+_sync_evidence_dir() { printf '%s/task/.sync-evidence' "$1"; }
+
+# _sync_conflicts_file <d> <task> — manifest of the conflicted paths and their three blob ids.
+_sync_conflicts_file() { printf '%s/%s-conflicts.tsv' "$(_sync_evidence_dir "$1")" "$2"; }
+
+# _sync_write_conflicts <d> <task> <worktree> — snapshot unmerged path hashes BEFORE resolution.
+# Stage 1/2/3 are base/ours/theirs; a deleted side has no blob and is recorded as '-'.
+_sync_write_conflicts() {
+  local d="$1" task="$2" wt="$3" dir f
+  dir="$(_sync_evidence_dir "$d")"; f="$(_sync_conflicts_file "$d" "$task")"
+  mkdir -p "$dir" || return 1
+  pw_path_within "$d" "$f" || return 1
+  {
+    printf 'path\tbase\tours\ttheirs\n'
+    git -C "$wt" ls-files -u 2>/dev/null | awk -F'\t' '
+      {
+        split($1, a, " "); stage=a[3]; hash=a[2]; path=$2
+        if (path ~ /[\t\n]/) { print "ERR\tunsupported path characters\t-\t-"; next }
+        if (stage == 1) b[path]=hash
+        else if (stage == 2) o[path]=hash
+        else if (stage == 3) t[path]=hash
+        seen[path]=1
+      }
+      END {
+        for (p in seen) print p "\t" (b[p] == "" ? "-" : b[p]) "\t" (o[p] == "" ? "-" : o[p]) "\t" (t[p] == "" ? "-" : t[p])
+      }' | sort
+  } > "$f" || return 1
+  [ -s "$f" ] || return 1
+  printf '%s' "$f"
+}
+
 # _sync_git_op <dir> — the active operation name, or empty.
 _sync_git_op() {
   local d="$1" p
@@ -3363,10 +3395,12 @@ cmd_sync_merge() {
     return 2
   fi
   if [ "$keep" = 1 ]; then
-    _sync_attempt_upsert "$d" "$task" stage=conflict updated="$now" \
+    local cf; cf="$(_sync_write_conflicts "$d" "$task" "$wt")" \
+      || die "sync-merge: could not snapshot the conflicted path identities → fix: abort and retry"
+    _sync_attempt_upsert "$d" "$task" stage=conflict evidence="$cf" updated="$now" \
       || die "sync-merge: could not record the conflict state"
     echo "conflict: $(printf '%s' "$unmerged" | tr '\n' ' ')"
-    echo "sync-merge: conflict left in $wt for agent resolution (attempt $task)" >&2
+    echo "sync-merge: conflict left in $wt for agent resolution (attempt $task; manifest $cf)" >&2
     return 3
   fi
   if git -C "$wt" merge --abort >/dev/null 2>&1; then
@@ -3381,21 +3415,39 @@ cmd_sync_merge() {
 }
 
 cmd_sync_finish() {
-  local slug="" task="" a
+  local slug="" task="" reason="" owner_approved=0 a v
+  local -a allow=()
   while [ $# -gt 0 ]; do
-    a="$1"; shift
+    a="$1"; shift; v=""
     case "$a" in
-      --project=*) slug="${a#*=}" ;;
-      --project) [ $# -ge 1 ] || _pw_missing --project; slug="$1"; shift ;;
-      --task=*) task="${a#*=}" ;;
-      --task) [ $# -ge 1 ] || _pw_missing --task; task="$1"; shift ;;
+      --project=*) slug="${a#*=}"; a="--project" ;;
+      --task=*) task="${a#*=}"; a="--task" ;;
+      --allow-one-sided=*) v="${a#*=}"; a="--allow-one-sided" ;;
+      --reason=*) reason="${a#*=}"; a="--reason" ;;
+    esac
+    case "$a" in
+      --project|--task|--allow-one-sided|--reason)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project) slug="$v" ;; --task) task="$v" ;;
+          --allow-one-sided) allow[${#allow[@]}]="$v" ;; --reason) reason="$v" ;;
+        esac ;;
+      --owner-approved) owner_approved=1 ;;
       -h|--help) pw_usage ;;
-      -*) _pw_unknown "$a" "sync-finish --project <slug> --task <task-id>" ;;
-      *) _pw_positional "$a" "sync-finish --project <slug> --task <task-id>" ;;
+      -*) _pw_unknown "$a" "sync-finish --project <slug> --task <task-id> [--allow-one-sided <path> --reason <text> --owner-approved]…" ;;
+      *) _pw_positional "$a" "sync-finish --project <slug> --task <task-id> [--allow-one-sided <path> --reason <text> --owner-approved]…" ;;
     esac
   done
   [ -n "$slug" ] || die "sync-finish: --project is required"
   [ -n "$task" ] || die "sync-finish: --task is required"
+  [ ${#allow[@]} -eq 0 ] || [ -n "$reason" ] \
+    || die "--reason is required with --allow-one-sided → fix: name why the other side's change is obsolete"
+  [ ${#allow[@]} -eq 0 ] || [ "$owner_approved" = 1 ] \
+    || die "--owner-approved is required with --allow-one-sided → fix: ask the owner first; do not choose a side yourself"
+  [ ${#allow[@]} -gt 0 ] || [ -z "$reason" ] \
+    || die "--reason is only valid with --allow-one-sided"
+  [ ${#allow[@]} -gt 0 ] || [ "$owner_approved" = 0 ] \
+    || die "--owner-approved is only valid with --allow-one-sided"
   local d; d="$(proj_dir "$slug")"
   local st; st="$(_sync_attempt_get "$d" "$task" stage)"
   [ "$st" = "conflict" ] || die "sync attempt is at stage '${st:-none}' → fix: sync-finish only continues an active conflicted merge"
@@ -3403,16 +3455,80 @@ cmd_sync_finish() {
   [ -n "$wt" ] || die "no mounted worktree for $task"
   [ -n "$(git -C "$wt" rev-parse --verify --quiet MERGE_HEAD 2>/dev/null || true)" ] \
     || die "worktree $wt has no active merge → fix: resolve conflicts only inside the attempted merge"
+  local cf; cf="$(_sync_attempt_get "$d" "$task" evidence)"
+  [ -n "$cf" ] && [ -f "$cf" ] \
+    || die "conflict manifest missing ($cf) → fix: abort and retry the merge so path identities are recorded"
+  awk -F'\t' '$1=="ERR"{f=1} END{exit !f}' "$cf" \
+    && die "conflict manifest contains an unsupported path (TAB/newline) → fix: resolve that path manually and stop for owner review"
   local unmerged; unmerged="$(git -C "$wt" diff --name-only --diff-filter=U 2>/dev/null || true)"
   [ -z "$unmerged" ] || die "unresolved paths remain: $(printf '%s' "$unmerged" | tr '\n' ' ') → fix: reconcile every path and stage it"
-  [ -n "$(git -C "$wt" diff --cached --name-only 2>/dev/null || true)" ] \
-    || die "no staged resolution paths → fix: stage each reviewed path"
   local markers; markers="$(git -C "$wt" diff --cached -U0 2>/dev/null | grep -E '^\+(<<<<<<<|=======|>>>>>>>)' || true)"
   [ -z "$markers" ] || die "introduced conflict markers remain in the staged diff → fix: remove them before completing the merge"
+  local p b o t cur one_sided="" a2 allowed=""
+  for a2 in ${allow[@]+"${allow[@]}"}; do allowed="$allowed $a2 "; done
+  while IFS=$'\t' read -r p b o t; do
+    [ "$p" = "path" ] && continue
+    [ -n "$p" ] || continue
+    cur="$(git -C "$wt" rev-parse ":$p" 2>/dev/null || true)"; [ -n "$cur" ] || cur="-"
+    # Both sides changed the path, and the staged result is byte-identical to one side: the other
+    # side's work was dropped. This is the exact failure a blind ours/theirs choice produces.
+    if [ "$b" != "$o" ] && [ "$b" != "$t" ] && { [ "$cur" = "$o" ] || [ "$cur" = "$t" ]; }; then
+      case "$allowed" in
+        *" $p "*) : ;;
+        *) one_sided="$one_sided $p" ;;
+      esac
+    fi
+  done < "$cf"
+  [ -z "$one_sided" ] \
+    || die "resolved content equals one side for:$one_sided → fix: merge both intents; if replacing the other side is the owner's intended result, ask the owner, then pass --allow-one-sided <path> --reason <why> --owner-approved (repeat the flag per path)"
+
+  # Additive-line audit: a result can differ from both whole sides yet still drop a line one side
+  # added. Require every added line from each side to survive verbatim (base-less add/add is skipped;
+  # the equality guard above covers it). Allowed paths are skipped and recorded by the reason file.
+  local dropped="" resolved added line
+  while IFS=$'\t' read -r p b o t; do
+    [ "$p" = "path" ] && continue
+    [ -n "$p" ] || continue
+    [ "$b" = "-" ] && continue
+    case "$allowed" in *" $p "*) continue ;; esac
+    resolved="$(git -C "$wt" show ":$p" 2>/dev/null || true)"
+    for a2 in "$o" "$t"; do
+      [ "$a2" = "-" ] && continue
+      added="$(git -C "$wt" diff --no-ext-diff -U0 "$b" "$a2" 2>/dev/null | grep -E '^\+' | grep -v '^+++' | sed 's/^+//' || true)"
+      while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        printf '%s\n' "$resolved" | grep -Fqx -- "$line" && continue
+        case "$dropped" in *"[$p] $line"*) ;; *) dropped="$dropped [$p] $line" ;; esac
+      done <<EOF_ADDED
+$added
+EOF_ADDED
+    done
+  done < "$cf"
+  [ -z "$dropped" ] \
+    || die "resolution drops added line(s):$dropped → fix: keep both sides' additions (for lists/arrays, include both entries); if the owner intends to replace that side, pass --allow-one-sided <path> --reason <why> --owner-approved after the owner confirms"
+  for a2 in ${allow[@]+"${allow[@]}"}; do
+    awk -F'\t' -v p="$a2" '$1==p{f=1} END{exit !f}' "$cf" \
+      || die "--allow-one-sided path is not in the conflict manifest: $a2 → fix: pass a path reported by sync-merge"
+  done
+  local ev="$cf" now
+  now="$(pw_now_wib)"
+  if [ ${#allow[@]} -gt 0 ]; then
+    ev="$(_sync_evidence_dir "$d")/$task-resolution.md"
+    mkdir -p "$(_sync_evidence_dir "$d")" || die "sync-finish: cannot create the evidence directory"
+    pw_path_within "$d" "$ev" || die "sync-finish: refusing to write outside $d"
+    {
+      printf '# Sync resolution audit — %s\n\n' "$task"
+      printf -- '- Time: %s\n' "$now"
+      printf -- '- Reason: %s\n' "$reason"
+      printf -- '- One-sided paths:\n'
+      for a2 in ${allow[@]+"${allow[@]}"}; do printf '  - %s\n' "$a2"; done
+      printf -- '- Conflict manifest: %s\n' "$cf"
+    } > "$ev" || die "sync-finish: could not write the resolution audit"
+  fi
   git -C "$wt" commit --no-edit -q >/dev/null 2>&1 \
     || die "could not complete the merge commit in $wt → fix: inspect the merge and commit manually"
   local head; head="$(git -C "$wt" rev-parse HEAD)"
-  _sync_attempt_upsert "$d" "$task" stage=resolved result_head="$head" updated="$(pw_now_wib)" \
+  _sync_attempt_upsert "$d" "$task" stage=resolved result_head="$head" evidence="$ev" updated="$now" \
     || die "sync-finish: could not record the result head"
   echo "resolved ${head:0:12}"
 }
@@ -3448,11 +3564,16 @@ cmd_sync_bind() {
   [ -n "$wt" ] || die "no mounted worktree for $task"
   [ -z "$(git -C "$wt" status --porcelain 2>/dev/null || true)" ] \
     || die "worktree $wt is dirty after verification → fix: commit allowed changes and verify the final HEAD again"
-  local head rec next_repair; head="$(git -C "$wt" rev-parse HEAD)"; rec="$(_sync_attempt_get "$d" "$task" result_head)"
+  local head rec next_repair branch; head="$(git -C "$wt" rev-parse HEAD)"; rec="$(_sync_attempt_get "$d" "$task" result_head)"
   next_repair="${repair:-0}"
   if [ "$head" != "$rec" ]; then
     [ "$st" = "verified" ] || die "HEAD ${head:0:12} != recorded result ${rec:0:12} → fix: commit the repair and verify that HEAD"
-    [ "${repair:-0}" = "0" ] || die "repair budget exhausted (one follow-up pass) → fix: restore a verified state or stop for manual resolution"
+    [ "${repair:-0}" = "0" ] || die "sync attempt already used its one follow-up repair → fix: restore a verified state or stop for manual resolution"
+    # One shared code-repair budget per task/branch (plan 47). The sync attempt allows at most one
+    # repair, but it must spend the same round an execution or CI repair would.
+    branch="$(_sync_attempt_get "$d" "$task" branch)"
+    cmd_repair_round --project "$slug" --task "$task" --work "${task}@${branch}" --consume >/dev/null \
+      || die "shared repair budget unavailable → fix: report the unresolved failure instead of retrying"
     next_repair=1
   fi
   _sync_attempt_upsert "$d" "$task" stage=verified repair="$next_repair" result_head="$head" evidence="$ev" updated="$(pw_now_wib)" \

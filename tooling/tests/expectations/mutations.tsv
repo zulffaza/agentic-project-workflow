@@ -410,3 +410,8 @@ C318-archive-search-skipped	scripts/lib/pw-shiplib.sh	    for sibling in sorted(
 # C319-C320: cross-workflow policy — the repair budget must enforce its limit and persist consumption.
 C319-repair-budget-ignores-limit	scripts/entities/pw-ship.sh	  if [ "$consume" = 1 ] && [ "$consumed" -ge "$limit" ]; then	  if false; then	T1	pw-ship.t.sh
 C320-repair-budget-not-persisted	scripts/entities/pw-ship.sh	    consumed=$((consumed + 1))	    consumed=$((consumed))	T1	pw-ship.t.sh
+C321-sync-one-sided-guard-dropped	scripts/entities/pw-ship.sh	[ -z "$one_sided" ] \	[ 1 = 1 ] \	T1	pw-sync.t.sh
+C322-sync-one-sided-reason-dropped	scripts/entities/pw-ship.sh	[ ${#allow[@]} -eq 0 ] || [ -n "$reason" ] \	[ 1 = 1 ] \	T1	pw-sync.t.sh
+C323-sync-two-sided-doctrine-dropped	skill/project-workflow/references/sync-conflict-resolution.md	Never resolve a path by choosing one side	Resolve by choosing one side	T4	-
+C324-sync-dropped-addition-guard-dropped	scripts/entities/pw-ship.sh	[ -z "$dropped" ] \	[ 1 = 1 ] \	T1	pw-sync.t.sh
+C325-sync-owner-approval-dropped	scripts/entities/pw-ship.sh	[ ${#allow[@]} -eq 0 ] || [ "$owner_approved" = 1 ] \	[ 1 = 1 ] \	T1	pw-sync.t.sh
