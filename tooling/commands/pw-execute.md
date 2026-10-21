@@ -30,11 +30,13 @@ inside the configured api-provider prefix scope; a row pinning a since-removed p
 hard stop with the re-pin candidates); the two `pw-doc.sh lint`
 calls check PLAN/task-file format (tables, required fields/sections). Silent = pass; otherwise
 one `pw-…:` stderr line + exit 1 — **STOP, relay it verbatim** (it names the unmet gate and the
-fix; e.g. run `/pw-review` for approval). After the gates pass, run
-`{{PW_HOME}}/tooling/scripts/entities/pw-status.sh provider-audit --project <slug>` once as a **warning**
-pass (non-blocking here): `stale-provider`/`unbound` rows name exactly what to re-pin before
-spawning. Never reason past a failed pre-flight. Output
-semantics of every script: `{{PW_HOME}}/tooling/docs/scripts/README.md`.
+  fix; e.g. run `/pw-review` for approval). After the gates pass, run
+  `{{PW_HOME}}/tooling/scripts/entities/pw-status.sh provider-audit --project <slug>` once as a **warning**
+  pass (non-blocking here): `stale-provider`/`unbound` rows name exactly what to re-pin before
+  spawning. Never reason past a failed pre-flight. For an unfamiliar operator, run
+  `pw-help.sh operators --name <script>` (add `--operator <op>` for a listed operator); read the
+  owning group document under `{{PW_HOME}}/tooling/docs/scripts/` only when that operator's details
+  matter.
 
 1. Read `<project>/task/PLAN.md` fully. **Gate:** `…/{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh gate
    --project <slug> --file task/review/PLAN.review.md` — this is the file's CURRENT Sign-off decision only, never
@@ -112,9 +114,12 @@ already exists the script attaches instead of dying; re-running is idempotent.
        main repo, tell me to switch that main checkout to another branch first.
 4. **How to run each task** — resolve `Execute with: <provider>:<model-or-agent>` **and the
    task's optional `Route:` field** (ladder precedence: task `Route:` > PLAN `- Routing:` line >
-   `PW_ROUTE_DEFAULT` > `auto`; values `auto|subagent|headless`) via
-   `{{PW_HOME}}/tooling/docs/providers.md` + the routing ladder in the skill's
-   `references/execution-and-routing.md`. Tasks default to the plan's **Produced by** provider, so most
+   `PW_ROUTE_DEFAULT` > `auto`; values `auto|subagent|headless`) via the skill's
+   `references/execution-and-routing.md`. For a resolved cross-provider/headless route, read only
+   the selected provider's headless-hook entry under `## How headless invocation actually works`
+   in `{{PW_HOME}}/tooling/docs/providers.md`; read `## Effort / variant / thinking` only when the
+   task declares either field. Same-provider routes do not load the provider guide. Tasks default to
+   the plan's **Produced by** provider, so most
    run under the agent you're already in. **Before invoking**, re-check the resolved model on both
    axes — permission (allowlist; empty/unset = every model is allowed, the default) and
    availability (live catalog + api-provider prefix scope; catches a hand-edited task file AND a
@@ -133,77 +138,22 @@ already exists the script attaches instead of dying; re-running is idempotent.
    provider's bind flag (`kilo run -m`, `claude --model`, cursor `--model`, codex `codex exec -m`). Never let the
    spawner's own session tokens (your harness's `model=`/`variant=` values) ride along — that
    silently rebinds a task away from what breakdown approved.
-   - **Same provider you're running under → spawn a native, in-process SUB-AGENT** (NOT a shell      invocation). A task naming a same-provider def (`pw-executor`/custom `tooling/agents/` role)
-      spawns it; **a plain `provider:model` is not an agent name** — it runs that provider's default
-      agent on this task file as its work order (Option A: one executor concept — no bespoke
-      implementer def, ad-hoc code work belongs to the *main* agent). Native sub-agents are easier to monitor and cheaper to supervise. **Model binding is
-      best-effort in-process:** where your CLI can't bind the row's model at spawn time (kilo's
-      Task-tool has no model arg), run on the parent model and record
-      `model-degraded <row>→<used>` in the ledger + the task's `Actually used:` — unless the
-      row's `Route:` is `headless` (strict binding: stay headless to bind, supervised per §Headless
-      supervision in the ladder). If `Execute
-          with:` names a registered same-provider def (`pw-executor` or a custom          `{{PW_HOME}}/tooling/agents/<name>.md`), spawn that; otherwise — the plain `provider:model`
-          default — run a session on that **provider's default agent with the task file as its work
-          order** (Option A: one executor concept; ad-hoc non-pw code work is the *main* agent's, there
-          is deliberately no second generic-implementer def to keep in sync).
-   - **Different provider → shell out to that CLI headlessly** (per the registry's invocation
-     column), passing the task file as the work order — e.g. a Claude-Code orchestrator hands a
-     `kilo:command_code/MiniMaxAI/MiniMax-M3` task to `kilo run --auto -m … --format json`
-     (`--auto` is REQUIRED or kilo auto-rejects every permission), or a `cursor:<id>` task to
-     `agent -p --force --model <id> --output-format json` (`--force` required; prompt on plain
-     stdin — a bare `-` arg is treated as LITERAL prompt text; scrape `.result`; a blocked model
-     exits non-zero printing `ActionRequiredError` with NO json event → treat unparsable output as
-     failure), or a `codex:<slug>` task to `codex exec
-     --dangerously-bypass-approvals-and-sandbox -m <slug> -C <worktree> --json` (prompt via stdin —
-     NEVER a long trailing arg: an 18KB arg exits 0 having written nothing; capture `thread_id`
-     from the first `thread.started` event; resume = `codex exec resume <thread_id>`, cd to the
-     worktree first — resume has no `-C`). **Pipe the prompt via stdin,
-     never as a trailing CLI argument** — a long inline argument can vanish entirely across the
-     shell-out boundary (confirmed 2026-08-08, kilo→claude: `claude --print` reported no prompt was
-     received even though it was right there in the command; the CLI's own syntax was fine in
-     isolation). Stdin is immune to this — see `providers.md`'s Cross-provider execution section
-     for the verified pattern. **Sub-agents do NOT cross providers:** don't pass `--agent
-     pw-executor` (that's the *other* provider's sub-agent you can't reach) — invoke its
-     default/primary agent with the task file + skill inline; the executor discipline travels with
-     them. Route to a capable model (tiny models stop mid-task). Capture the final text for the
-     report, but **confirm the real git artifacts** (branch/commit/Verify), not the CLI's
-     self-report.
-      - **Ledger it every time.** One `pw-status.sh log` line per executor spawn —        `spawned T0n (provider:model) · via=subagent|headless · session=<id> · seed=task/T0n.md · out=worktree/<T0n>.log · state=success|failed|stalled`
-        (+ `model-degraded <row>→<used>` when degraded; `session-check=live|dead|unverified` on
-        resume paths) — plus the same session id into the task's `## Result → Session:` (executor also
-        writes it as the first line of that log when the run is theirs). A later **re-repair, Row-8
-        batch, or §3.6 dependent recheck** is routed by the ladder: resume that id
-        (`kilo run -s <id>`/`--fork`, `claude --resume <id>`/`-c`) only after
-        `pw-session.sh session-check --provider <provider> --session <id>` exits 0 (live) — never blind; cold/inline is
-        the fallback when it is dead/absent (machine restarts can invalidate ids; on-disk
-        PLAN/task state is the durable recovery).
-      - **Either way, tee the run to a log** so I can watch it: append the executor's combined output        to `{{PW_PROJECTS}}/<slug>/worktree/<T0n>.log` — the FIRST line of that log is
-        `session <id>` — and log the spawn so it's resumable:
-        `pw-status.sh log --project <slug> --actor execute --message "spawned T0n (provider:model) · via=… · session=<id> · seed=task/T0n.md ·
-        out=worktree/<T0n>.log · state=…"` + in the task's `## Result → Session: <provider>:<id>`.
-        (kilo prints a session id on headless runs; where none is observable, write `session —` and
-        cold-resume from the task file. Ids stay machine-local — never in MR text.)
-      - **Supervise every headless run to a terminal state** (ladder §Headless supervision): run
-        it as a tracked background child, poll its liveness + log growth on a fixed cadence, honor
-        `PW_HEADLESS_STALL` (no growth → kill the child tree, ledger `state=stalled`, task →
-        `verify-failed (headless-stall)`, next pass seed-patched — never resume the killed id) and
-        `PW_HEADLESS_TIMEOUT` (hard cap). `success` requires the real git artifacts, not the
-        self-report; unparsable output is `failed`, never blank success. Do not declare the run
-        done, and never move to `/pw-ship`, while a headless child is still live.
-      - **Regression-first self-repair (opt-in, PLAN `- AI execution limit:` + `PW_MAX_SELF_REPAIR`
-        default 3):** if this run owns clean execution (PLAN `- Results acceptance:` or `--acceptance`),
-        a *real regression* from the task's own change goes back to the executor (resume its session)
-        for a bounded diagnose→fix→re-verify loop, instead of jumping straight to `verify-failed`;
-        environmental/pre-existing failures follow today's `done`+caveat rule and never loop.
-   - **Apply `Effort:`/`Thinking:`** via the provider's flag (claude `--effort`, kilo
-     `--variant` + `--thinking`; cursor: choose the catalog id variant up front — effort/thinking
-     live *in* `--model <id>`, or as `[effort=…]` bracket params; codex: a per-run
-     reasoning-effort config override on the same slug — its Fast tier is another per-run
-     override, never an id segment) per `providers.md`. **Honor version pins** — a full name
-     (`claude-opus-4-8`) is passed verbatim, never swapped for the alias. Record resolved flags in
-     `Actually used:` (e.g. `claude:claude-opus-4-8 --effort high`). Don't use a bespoke executor
-     agent; the discipline comes from the skill + task file. Unverified flags → check `--help` or
-     ask me; don't guess.
+   - **Use the existing route and provider references; do not re-derive routing.** Follow the
+     §routing ladder and selected provider hook before spawning. Same provider → native in-process
+     sub-agent; different provider → supervised headless CLI. Sub-agents never cross providers.
+   - **Bind only the approved task model.** Use the canonical id printed by `model-resolve`, pass
+     it with that provider's bind flag, and never inherit the orchestrator's `model=`/`variant=`.
+     Record the actual or degraded identity in the ledger and `Actually used:`.
+   - **Preserve the spawn contract:** pass the task file as the work order; pipe prompts via stdin,
+     never a long trailing argument. Log every spawn and write the same session id to `## Result →
+     Session:`; resume only after `pw-session.sh session-check` reports live. Follow the ladder's
+     `PW_HEADLESS_STALL`/`PW_HEADLESS_TIMEOUT` supervision rules. Unparsable output is failure;
+     success requires real git artifacts and `## Verify`. Do not move to `/pw-ship` while a child
+     is live. For cross-provider runs, use the selected hook entry only; use the effort table only
+     when the task declares those fields. The routing ladder owns binding policy.
+   - **Regression-first self-repair is opt-in** under PLAN `Results acceptance` + `AI execution
+     limit` (`PW_MAX_SELF_REPAIR` defaults to 3). Repair only real regressions; environmental or
+     pre-existing failures follow the `done` + caveat rule.
 5. Each executor works ONLY in its own worktree, runs the task's `## Verify`, reports real output,
    and fills the task's `## Result` block (time, log path, commit sha(s), verify outcome).
    After each task starts or returns, and after each repair/re-verification changes its task file,
