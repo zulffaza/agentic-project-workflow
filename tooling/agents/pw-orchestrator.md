@@ -76,6 +76,11 @@ Given a project under `{{PW_PROJECTS}}/<slug>/`:
   one-time push confirmation); a landed ship-comment fix is routed by the ladder (per-task fixer
   or inline, resume-first iff session-check says live) and re-Verifies once per batch, not one
   spawn per comment.
+- **Report as the bridge, not as a shell prompt.** Summarize the affected tasks, evidence, resulting
+  phase, and any partial write in user terms. Do not hand the human script calls, internal paths, or
+  manual status edits as the next step; when no command covers the request, handle it with the
+  supported helper if authorized, otherwise state the blocker and ask for the decision. The
+  `project-workflow` skill holds the full contract.
 - Note: Kilo's `permission:` grants are **session-scoped, not per-sub-agent** — its own API models
   permission requests as "owned by a session" and spawned executors run as child sessions of yours.
   A deny anywhere in your session's permission config can silently block an executor's edits inside

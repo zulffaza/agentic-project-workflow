@@ -15,6 +15,20 @@
 #       2 = bad arguments or a missing projects root.
 #   pw-status.sh --selftest              run isolated self-test
 #
+# Facets (S1b): WRITE = update, task-accept, dashboard-task-status, log, status, oneliner, adopted
+#               READ  = --all, phase, provider-audit, stack
+#               SPECIAL = update (closed vocabulary; no raw setter fallback)
+#
+#   pw-status.sh update       --project <slug> --task <task-id> --status <complete|accepted>
+#       The single agent-mediated write route. `complete` records a verified task result as
+#       persisted `done` (no shipment); `accepted` records the human acceptance decision through
+#       the three-holder propagator. Both require matching holders and recorded evidence.
+#   pw-status.sh update       --project <slug> --status review
+#       Advance executing→review when the shared whole-PLAN readiness predicate passes (every
+#       task done/accepted, or blocked through a verify-failed dependency). Already review is a
+#       read-only no-op. Unknown values, a missing/extra task selector, or --phase fail closed
+#       before any write; nothing is inferred.
+#
 #   Project-state setters (the dashboard/LOG.md entity; merged from pw-lib, plan 20):
 #   log --project <slug> --actor <a> --message <text…> · status --project <slug> --phase <phase> [--rewind]
 #   oneliner --project <slug> --text <text…> · adopted --project <slug> --text <text…>
@@ -397,6 +411,202 @@ cmd_task_accept() {
   else
     echo "$slug: $task already accepted in every holder — nothing to do"
   fi
+}
+
+# --- status update (agent-mediated operation) -----------------------------------------
+# One public write operator with an explicit, closed vocabulary. Each value keeps its own
+# ownership rule: completion is the execution outcome, acceptance is the human decision, and
+# review is the whole-PLAN phase transition. Unknown values never fall through to a raw setter.
+PW_UPDATE_STATUSES="complete accepted review"
+
+_update_phase() { cmd_phase --project "$1"; }
+
+_update_snapshot() { # <file…> → stable checksum of the current records
+  local f out=""
+  for f in "$@"; do
+    if [ -f "$f" ]; then out="$out$(cksum < "$f" 2>/dev/null || true)"; fi
+  done
+  printf '%s' "$out"
+}
+
+# Refuse a write when the records changed while the caller was assessing them. Bounded by
+# PW_UPDATE_STABILITY_SECONDS (default 1 s; 0 disables the wait for deterministic tests).
+_update_stability() { # <file…>
+  local secs="${PW_UPDATE_STABILITY_SECONDS:-1}" before after
+  case "$secs" in ''|*[!0-9.]*) die "update: invalid PW_UPDATE_STABILITY_SECONDS '$secs'";; esac
+  case "$secs" in 0|0.0) return 0 ;; esac
+  before="$(_update_snapshot "$@")"
+  sleep "$secs"
+  after="$(_update_snapshot "$@")"
+  [ "$before" = "$after" ] || die "update: project records changed during assessment; nothing was written → fix: re-read the task result and retry"
+}
+
+_update_task_status_holders() { # <slug> <task> → "plan|file"
+  local d; d="$(proj_dir "$1")"
+  local plan_status file_status
+  plan_status="$(pw_plan_pairs "$d/task/PLAN.md" | awk -F'|' -v t="$2" '$1==t{print $2; exit}')"
+  file_status="$(pw_field "$d/task/$2.md" Status 2>/dev/null || true)"
+  file_status="$(printf '%s' "$file_status" | sed -e 's/^[`*]*//' -e 's/[`*]*$//')"
+  printf '%s|%s' "$plan_status" "$(printf '%s' "$file_status" | pw_trim)"
+}
+
+# Evidence gate shared by complete/accept. Deterministic checks only: the recorded Result must
+# carry a passing verify outcome and a real commit marker; a placeholder or a bare failure never
+# qualifies. Whether the output genuinely supports the task outcome stays the agent's judgment.
+_update_task_evidence() { # <taskfile>
+  local f="$1" outcome commits
+  grep -q '^## Verify' "$f" || { printf 'task has no ## Verify section\n'; return 1; }
+  grep -q '^## Result' "$f" || { printf 'task has no ## Result section\n'; return 1; }
+  outcome="$(awk '/^## Result/{p=1} p && /^- \*\*Verify outcome:\*\*/{sub(/^- \*\*Verify outcome:\*\*[ \t]*/,""); print; exit}' "$f")"
+  case "$outcome" in
+    ''|'<'*) printf 'Result has no recorded Verify outcome\n'; return 1 ;;
+  esac
+  case "$(printf '%s' "$outcome" | tr '[:upper:]' '[:lower:]')" in
+    pass*) ;;
+    *) printf 'recorded Verify outcome is not a pass: %s\n' "$outcome"; return 1 ;;
+  esac
+  commits="$(awk '/^## Result/{p=1} p && /^- \*\*Commit\(s\):\*\*/{sub(/^- \*\*Commit\(s\):\*\*[ \t]*/,""); print; exit}' "$f")"
+  case "$commits" in
+    ''|'—'|'<'*) printf 'Result has no recorded commit or zero-change marker\n'; return 1 ;;
+  esac
+  return 0
+}
+
+_update_open_task_items() { # <slug> <task> → count of open review items
+  local d; d="$(proj_dir "$1")"
+  local f="$d/task/review/$2.review.md"
+  [ -f "$f" ] || { printf '0'; return 0; }
+  local counts; counts="$(pw_review_item_counts "$f")"
+  local n="${counts#open=}"; n="${n%% *}"
+  printf '%s' "${n:-0}"
+}
+
+_update_task_complete() { # <slug> <task>
+  local slug="$1" task="$2" d plan taskfile readme cur holders plan_status file_status ev phase
+  d="$(proj_dir "$slug")"
+  plan="$d/task/PLAN.md"; taskfile="$d/task/$task.md"; readme="$d/README.md"
+  [ -f "$plan" ] || die "update: no task/PLAN.md in $slug → fix: create the PLAN first (/pw-breakdown --project $slug)"
+  [ -f "$taskfile" ] || die "update: no task file task/$task.md → fix: check the task id"
+  phase="$(_update_phase "$slug")"
+  [ "$phase" = "executing" ] || die "update: cannot complete a task in phase '$phase' (must be executing) → fix: use /pw-status update --status review only after execution, or rewind with /pw-status rewind --project $slug --phase executing"
+  holders="$(_update_task_status_holders "$slug" "$task")"
+  plan_status="${holders%%|*}"; file_status="${holders#*|}"
+  [ -n "$plan_status" ] || die "update: no PLAN task-table row for $task → fix: repair the PLAN row first"
+  case "$plan_status" in
+    accepted) echo "$slug: $task already accepted — no change"; return 0 ;;
+  esac
+  case "$file_status" in
+    accepted) echo "$slug: $task already accepted — no change"; return 0 ;;
+  esac
+  [ "$plan_status" = "$file_status" ] || die "update: records disagree for $task (PLAN=$plan_status, task file=$file_status) → fix: reconcile the task file and PLAN row first"
+  case "$file_status" in
+    verify-failed) die "update: $task is verify-failed — fix the regression and re-verify before completing (/pw-review --project $slug --task $task)" ;;
+    todo) die "update: $task is todo with no recorded work → fix: run /pw-execute --project $slug --task $task first" ;;
+    done) echo "$slug: $task already done — no change"; return 0 ;;
+  esac
+  ev="$(_update_task_evidence "$taskfile")" || die "update: $task cannot be completed — $ev"
+  _update_stability "$taskfile" "$plan" "$readme"
+  _plan_cell_update "$plan" "$task" status done || die "update: could not set the PLAN Status cell for $task"
+  if grep -q '^- \*\*Status:\*\*' "$taskfile"; then
+    sed -i '' -E 's/^- \*\*Status:\*\*.*$/- **Status:** done/' "$taskfile"
+  else
+    sed -i '' '1a\
+- **Status:** done
+' "$taskfile"
+  fi
+  if [ -f "$readme" ]; then
+    _dashboard_update "$readme" 'ID' 'Status' "$task" done 2>/dev/null \
+      || echo "pw-status: warning: dashboard row for $task not updated — task file + PLAN are the gate truth" >&2
+  fi
+  cmd_log --project "$slug" --actor update --message "$task: marked as complete (task file + PLAN row + dashboard)"
+  echo "$slug: $task marked as complete"
+}
+
+_update_task_accepted() { # <slug> <task>
+  local slug="$1" task="$2" d plan taskfile readme holders plan_status file_status open dec
+  d="$(proj_dir "$slug")"
+  plan="$d/task/PLAN.md"; taskfile="$d/task/$task.md"; readme="$d/README.md"
+  [ -f "$plan" ] || die "update: no task/PLAN.md in $slug → fix: create the PLAN first (/pw-breakdown --project $slug)"
+  [ -f "$taskfile" ] || die "update: no task file task/$task.md → fix: check the task id"
+  holders="$(_update_task_status_holders "$slug" "$task")"
+  plan_status="${holders%%|*}"; file_status="${holders#*|}"
+  [ -n "$plan_status" ] || die "update: no PLAN task-table row for $task → fix: repair the PLAN row first"
+  if [ "$plan_status" = "accepted" ] && [ "$file_status" = "accepted" ]; then
+    echo "$slug: $task already accepted — no change"; return 0
+  fi
+  [ "$plan_status" = "$file_status" ] || die "update: records disagree for $task (PLAN=$plan_status, task file=$file_status) → fix: reconcile the task file and PLAN row first"
+  case "$file_status" in
+    done) ;;
+    verify-failed) die "update: $task is verify-failed — fix and re-verify before accepting (/pw-review --project $slug --task $task)" ;;
+    accepted) ;;
+    *) die "update: $task is '$file_status', not done → fix: complete the verified result first (/pw-status update --project $slug --task $task --status complete)" ;;
+  esac
+  local ev; ev="$(_update_task_evidence "$taskfile")" || die "update: $task cannot be accepted — $ev"
+  open="$(_update_open_task_items "$slug" "$task")"
+  [ "${open:-0}" = "0" ] || die "update: $task has $open open review item(s) → fix: resolve them first (/pw-review --project $slug --task $task)"
+  if [ -f "$d/task/review/$task.review.md" ]; then
+    dec="$(_signoff_latest_decision "$d/task/review/$task.review.md" 2>/dev/null || true)"
+    case "$dec" in
+      changes-requested|rejected) die "update: $task has an active human rejection ($dec) → fix: resolve or re-approve through /pw-review before accepting";;
+    esac
+  fi
+  _update_stability "$taskfile" "$plan" "$readme"
+  cmd_task_accept --project "$slug" --task "$task"
+}
+
+_update_project_review() { # <slug>
+  local slug="$1" d cur blocker
+  d="$(proj_dir "$slug")"
+  [ -f "$d/task/PLAN.md" ] || die "update: no task/PLAN.md in $slug → fix: create the PLAN first (/pw-breakdown --project $slug)"
+  cur="$(_update_phase "$slug")"
+  case "$cur" in
+    review)
+      blocker="$(pw_plan_review_ready "$d/task/PLAN.md")" || die "update: project is review but no longer ready — $blocker"
+      echo "$slug: already review — no change"; return 0 ;;
+    executing) ;;
+    *) die "update: cannot advance to review from phase '$cur' (must be executing) → fix: run the phase command that owns this transition" ;;
+  esac
+  blocker="$(pw_plan_review_ready "$d/task/PLAN.md")" || die "update: cannot advance to review — $blocker"
+  _update_stability "$d/task/PLAN.md" "$d/README.md"
+  cmd_status --project "$slug" --phase review
+}
+
+cmd_update() {
+  local slug="" task="" status="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+      --status=*)  v="${a#*=}"; a="--status" ;;
+    esac
+    case "$a" in
+      --project|--task|--status)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --task) task="$v" ;; --status) status="$v" ;; esac ;;
+      --phase|--phase=*) die "update: --phase is not valid here → fix: /pw-status update --project <slug> (--task <T0n> --status complete|accepted | --status review)" ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "update --project <slug> (--task <T0n> --status complete|accepted | --status review)" ;;
+      *) _pw_positional "$a" "update --project <slug> (--task <T0n> --status complete|accepted | --status review)" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "update: --project is required → fix: update --project <slug> (--task <T0n> --status complete|accepted | --status review)"
+  [ -n "$status" ] || die "update: --status is required (valid: $PW_UPDATE_STATUSES) → fix: --status <value>"
+  case " $PW_UPDATE_STATUSES " in
+    *" $status "*) ;;
+    *) die "update: unknown --status '$status' (valid: $PW_UPDATE_STATUSES) → fix: choose one recognized value; no aliases or case variants are accepted" ;;
+  esac
+  if [ "$status" = "review" ]; then
+    [ -z "$task" ] || die "update: --task is not valid with --status review → fix: update --project <slug> --status review"
+  else
+    [ -n "$task" ] || die "update: --status $status requires --task <T0n> → fix: update --project <slug> --task <T0n> --status $status"
+    pw_task_id_ok "$task" || die "update: invalid task id '$task' → fix: task ids look like T01"
+  fi
+  case "$status" in
+    complete) _update_task_complete "$slug" "$task" ;;
+    accepted) _update_task_accepted "$slug" "$task" ;;
+    review)   _update_project_review "$slug" ;;
+  esac
 }
 
 # Update a task's status in the dashboard README.md task status table.
@@ -937,6 +1147,7 @@ case "${1:-}" in
   phase)                 shift; cmd_phase "$@"; exit $? ;;
   dashboard-task-status) shift; cmd_dashboard_task_status "$@"; exit $? ;;
   task-accept)           shift; cmd_task_accept "$@"; exit $? ;;
+  update)                shift; cmd_update "$@"; exit $? ;;
   provider-audit)        shift; cmd_provider_audit "$@"; exit $? ;;
   stack)                 shift; cmd_stack "$@"; exit $? ;;
 esac
