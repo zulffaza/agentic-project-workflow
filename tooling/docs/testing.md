@@ -103,7 +103,9 @@ fresh build produces; only the admin path links are repaired, never "fixed" furt
 
 `_pwtest_run_row` (shared by both paths) classifies each row: `caught` (harness rc 1), `hung`
 (watchdog killed the child — file restored, sweep continues), `died` (rc 2 =
-child setup problem), `vacuous` (rc 0 = the catcher is toothless), `drift` (OLD anchor gone —
+child setup problem), `vacuous` (rc 0 = the catcher is toothless), `baselinered` (the child failed
+only on assertions the unmutated baseline already failed, so the mutation changed nothing
+observable), `drift` (OLD anchor gone —
 re-pin it against the current code, don't delete the row), `applyfail`. Child logs land in
 `<keep>/<id>.child.log` (`PWTEST_KEEP_DIR` to preserve them past cleanup).
 
@@ -112,10 +114,22 @@ re-pin it against the current code, don't delete the row), `applyfail`. Child lo
 limit killed rows that were never stuck. The watchdog is therefore **derived per row** from the
 measured per-case durations: the T1 tier records each case file's runtime (a stable table, default
 `$TMPDIR/pwtest-case-times.tsv`, `PWTEST_CASE_TIMES` overrides it), and the row's watchdog is
-3 × the selected cases' total + 60 s, clamped to 300–900 s (`PWTEST_MUT_TIMEOUT_MIN` /
-`PWTEST_MUT_TIMEOUT_MAX`). `PWTEST_MUT_TIMEOUT` still forces one value for every row. A row that
-still hits the watchdog is **re-run alone** with 4 × the ceiling before the sweep calls it hung:
-a watchdog kill is not a verdict, so the row must end with a real `caught`/`vacuous` result.
+`total × (1 + workers) / 2 + 60 s`, clamped to 300–1800 s (`PWTEST_MUT_TIMEOUT_MIN` /
+`PWTEST_MUT_TIMEOUT_MAX`). The worker term covers sweep contention: with N children on one host a
+child gets roughly 1/N of the machine, and the measured inflation over a single-child run is about
+`(1 + N) / 2`. `PWTEST_MUT_TIMEOUT` still forces one value for every row. A row that still hits the
+watchdog is **re-run alone** with its own derived watchdog doubled (capped at 1800 s) before the
+sweep calls it hung: a watchdog kill is not a verdict, so the row must end with a real verdict.
+The watchdog also escalates to SIGKILL (`--kill-after=30`), because a shell defers SIGTERM while a
+foreground command runs.
+
+**Attribution.** Before the rows run, the sweep runs one unmutated child per distinct `(tier, only)`
+selection and records its exit code and failing assertion names (`baseline.tsv`, `base.<tag>.log`).
+A row is `caught` only when its child fails an assertion the baseline did not fail, or dies before
+recording one while the baseline exited cleanly. This matters because a disposable copy is always
+red in the T4 tier: the installed provider bodies carry the source `PW_HOME` and the copy has no
+`.git`, so both checks are skipped there rather than failed. Without the baseline diff, every T4 row
+would be reported as caught without proving anything.
 
 **Fixture etiquette for case authors.** Never mutate the shared `$F1..$F3` — `cp -a "$F2"
 "$PW_PROJECTS_DIR/<private>"` first (the C22 pollution bug: one case editing shared F2 broke the
