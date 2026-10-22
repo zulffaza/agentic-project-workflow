@@ -104,7 +104,9 @@ for _pwt_t in "${_tlist[@]:-}"; do
           echo "TEST case $(basename "$_pwt_cf" .t.sh)"
           _pwt_c0="$(date +%s)"
           . "$_pwt_cf"
-          printf 'TIME case %s %ss\n' "$(basename "$_pwt_cf" .t.sh)" $(( $(date +%s) - _pwt_c0 )) >&2
+          _pwt_c1="$(date +%s)"
+          printf 'TIME case %s %ss\n' "$(basename "$_pwt_cf" .t.sh)" $(( _pwt_c1 - _pwt_c0 )) >&2
+          _pwtest_record_case_duration "$(basename "$_pwt_cf" .t.sh)" "$(( _pwt_c1 - _pwt_c0 ))"
         done ;;
     T2) battery_t2 ;;
     T3) corpus_t3 "$CORPUS" ;;
