@@ -107,8 +107,23 @@ $PW_HOME/tooling/scripts/entities/pw-status.sh adopted --project <slug> --text <
 $PW_HOME/tooling/scripts/entities/pw-status.sh phase --project <slug>                               # read the Status token only
 $PW_HOME/tooling/scripts/entities/pw-status.sh dashboard-task-status --project <slug> --task <T0n> --status <status>
 $PW_HOME/tooling/scripts/entities/pw-status.sh task-accept --project <slug> --task <T0n> [--observed-merged]   # acceptance: task file + PLAN cell + dashboard row in ONE call (single propagator, since 2026-09-25; dashboard best-effort, one LOG line, idempotent). The LOG claims a merge only with --observed-merged (pass it when the call follows an observed merged state); otherwise the message is neutral.
+$PW_HOME/tooling/scripts/entities/pw-status.sh update --project <slug> --task <T0n> --status complete|accepted
+$PW_HOME/tooling/scripts/entities/pw-status.sh update --project <slug> --status review
 $PW_HOME/tooling/scripts/entities/pw-status.sh provider-audit --project <slug> [--task <T0n>]…      # report-only (below)
 ```
+
+**`update` — the single public record-update operator.** The status is a closed,
+case-sensitive vocabulary; any other value, a missing/extra task selector, or a `--phase` input
+exits 2 before a write.
+
+| Value | Selector | Contract |
+|---|---|---|
+| `complete` | `--task <T0n>` (required) | Records persisted `done` in the task file, PLAN row, and dashboard. Requires phase `executing`, matching holders, a `## Result` with a passing `Verify outcome:` plus a commit/`zero-change` marker, and a stable-read window. No re-execution, publication, acceptance, or phase move. `verify-failed` and bare `todo` refuse; `accepted`/`done` are no-ops. |
+| `accepted` | `--task <T0n>` (required) | Records the human acceptance decision through `task-accept`. Requires both holders `done`, the same evidence, zero open items in `task/review/<T0n>.review.md`, and no active human rejection. |
+| `review` | none (rejected) | Advances `executing → review` through the shared `pw_plan_review_ready` predicate (every task `done`/`accepted`, or blocked through a `verify-failed` dependency). Already `review` with unchanged readiness is a no-op. |
+
+`PW_UPDATE_STABILITY_SECONDS` (default `1`) bounds the re-read window that refuses a write when a
+record changed during assessment; `0` disables the wait for deterministic tests.
 
 **Verified gotcha — dated record (D2 routing):** *`task-accept` synced the task file but not the
 PLAN row — **fixed 2026-09-25, mitigation built in**.* Symptom (a `/pw-close` run,

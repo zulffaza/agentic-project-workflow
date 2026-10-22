@@ -54,6 +54,11 @@ grep -q 'add-repo' "$PWTEST_OUT" && pwtest_ok "add-repo surfaces under pw-contex
 grep -q 'prepare' "$PWTEST_OUT" && pwtest_ok "prepare (reasoning operator) surfaces" || pwtest_bad "prepare" "missing"
 grep -q 'item' "$PWTEST_OUT" && pwtest_ok "sugar op item surfaces under pw-review" || pwtest_bad "sugar op item" "missing"
 grep -q '(write)' "$PWTEST_OUT" && pwtest_ok "facet labels render (S1b)" || pwtest_bad "facet labels" "no (write) in the overview"
+# plan 52: one public update operator, with the closed status vocabulary visible in the args line
+pwtest_rc 0 "help pw-status command view" "$C" command --name pw-status
+pwtest_re '/pw-status update --project <project-slug> --task <T0n> --status complete' "update operator surfaces in project help"
+pwtest_re 'complete\|accepted' "closed status vocabulary renders in the args line"
+pwtest_re '\| update --project' "update form appears in the scoped args"
 grep -qE '\(default\)' "$PWTEST_OUT" && pwtest_ok "default-flow tag renders for a defaulting command" || pwtest_bad "(default) tag" "not rendered anywhere"
 grep -q 'HUMAN-TRIGGERED ONLY' "$PWTEST_OUT" && pwtest_bad "overview C4 label" "doctrine echo belongs to command view, not overview columns" || pwtest_ok "overview stays label-free"
 

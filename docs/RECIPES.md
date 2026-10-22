@@ -373,7 +373,14 @@ Use `--fix` for its supported health repairs. `--guidance` cannot combine with `
 
 ## Accept and close
 
-Ask in chat: `Accept T01 and T02 in delivery-note; I reviewed their diffs and verification results.`
+Record your acceptance of each reviewed result:
+
+```text
+/pw-status update --project delivery-note --task T01 --status accepted
+/pw-status update --project delivery-note --task T02 --status accepted
+```
+
+You can still ask in chat: `Accept T01 and T02 in delivery-note; I reviewed their diffs and verification results.`
 Then confirm task status and close:
 
 ```text
@@ -385,3 +392,22 @@ Close requires accepted tasks. Acceptance does not merge MRs.
 For pre-reviewed plans, `/pw-execute --project <slug> --acceptance auto` opts into clean result acceptance for that run.
 Adding `--then-ship` requests chained publication, with push confirmation still required.
 Read [clean execution](EXECUTION.md#opt-in-clean-execution-pre-reviewed-plans) before using these flags.
+
+### Finish a verified task without shipping
+
+A task that already ran and verified, but will not ship, is not complete until its record says so:
+
+```text
+/pw-status update --project delivery-note --task T03 --status complete
+```
+
+Completion requires phase `executing`, a recorded passing verification outcome, and a commit or
+`zero-change` marker. It does not re-run the task, accept it, or publish anything.
+When every task is finished (or blocked by a failed dependency), advance the project:
+
+```text
+/pw-status update --project delivery-note --status review
+```
+
+Unknown status values fail without changing records. Status values are case-sensitive:
+`complete`, `accepted`, and `review`.

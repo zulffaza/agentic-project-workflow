@@ -878,6 +878,75 @@ pw_plan_execs() {
       if (id ~ /^T[0-9]+/) print v
     }' "$1"
 }
+# pw_plan_rows <plan> — "T0n|status|depends_on" per task row (column-name driven).
+# One shared reader for review readiness; never positional, never a whole-file status grep.
+pw_plan_rows() {
+  awk -F'|' '
+    function trim(s) { gsub(/^[ \t]+/, "", s); gsub(/[ \t]+$/, "", s); return s }
+    /^## Task/ { p=1; next }
+    p && /^## / { exit }
+    p && /^[ \t]*\|/ && !($0 ~ /^[ \t]*\|[ \t:|+-]*\|[ \t]*$/) {
+      n = split($0, c, "|")
+      if (!hdr) {
+        for (i = 1; i <= n; i++) {
+          v = trim(c[i]); gsub(/[`*]/, "", v); V = tolower(v); gsub(/[ \t]/, "", V)
+          if (V == "id" || V == "task") idi = i
+          if (V == "status") sti = i
+          if (V == "dependson" || V == "depends_on" || V == "depends") depi = i
+        }
+        if (idi && sti) hdr = 1
+        next
+      }
+      id = trim(c[idi + 0])
+      if (match(id, /T[0-9]+/)) { id = substr(id, RSTART, RLENGTH) } else { next }
+      st = trim(c[sti + 0]); gsub(/[`*]/, "", st); st = trim(st)
+      dep = depi ? trim(c[depi + 0]) : ""
+      print id "|" st "|" dep
+    }' "$1"
+}
+
+# pw_plan_review_ready <plan> — rc 0 when the WHOLE PLAN may enter review, else rc 1 with one
+# blocker line on stdout. A task counts as finished at done/accepted. Any other status must be
+# demonstrably blocked through a verify-failed task in its transitive depends_on chain; a bare
+# todo, in-progress, or verify-failed label alone is not enough. This is the single readiness
+# predicate shared by execution/orchestration and the status update route.
+pw_plan_review_ready() {
+  local plan="$1" rows failed=" " id st dep frontier seen next recheck="" d x found
+  rows="$(pw_plan_rows "$plan")" || { printf 'PLAN task table unreadable\n'; return 1; }
+  [ -n "$rows" ] || { printf 'PLAN task table has no task rows\n'; return 1; }
+  while IFS='|' read -r id st dep; do
+    [ "$st" = "verify-failed" ] && failed="$failed$id "
+  done <<EOF
+$rows
+EOF
+  while IFS='|' read -r id st dep; do
+    case "$st" in done|accepted) continue ;; esac
+    # bounded transitive walk: this task's deps must reach a verify-failed task
+    frontier="$id"; seen=" "; found=0
+    while [ -n "$frontier" ] && [ "$found" = 0 ]; do
+      next=""
+      for d in $frontier; do
+        case "$seen" in *" $d "*) continue ;; esac
+        seen="$seen$d "
+        case "$failed" in *" $d "*) found=1; break ;; esac
+        dep="$(printf '%s\n' "$rows" | awk -F'|' -v i="$d" '$1==i{print $3; exit}')"
+        for x in $(printf '%s' "$dep" | tr ',;' '  '); do
+          case "$x" in T[0-9]*) next="$next $x" ;; esac
+        done
+      done
+      frontier="$next"
+    done
+    [ "$found" = 1 ] || recheck="$recheck $id($st)"
+  done <<EOF
+$rows
+EOF
+  if [ -n "$recheck" ]; then
+    printf 'not review-ready — unfinished task(s):%s\n' "$recheck"
+    return 1
+  fi
+  return 0
+}
+
 _pw_url_from_line() {  # $1=line from a Result MR: bullet -> plain URL (falls back to sentinel text)
   local u
   u="$(printf '%s' "$1" | grep -oE "https?://[^ )>|\"\`]+" | head -1)"

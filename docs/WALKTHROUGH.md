@@ -280,13 +280,16 @@ If the target branch changes, `/pw-sync --project delivery-note` refreshes open 
 
 ## Accept results
 
-When the diffs, checks, and review responses satisfy you, tell the agent explicitly:
+When the diffs, checks, and review responses satisfy you, record the decision:
 
 ```text
-I reviewed T01 and T02 in delivery-note. Accept both task results and update the project records.
+/pw-status update --project delivery-note --task T01 --status accepted
+/pw-status update --project delivery-note --task T02 --status accepted
 ```
 
-This is an acceptance request in chat, not a slash command.
+You can also state the decision in chat: "I reviewed T01 and T02 in delivery-note. Accept both
+task results." The agent records the same change and reports the affected records.
+Acceptance requires verified, completed results and no open review items on the task.
 Run `/pw-status --project delivery-note` to confirm that both tasks are `accepted`.
 Approval of the PLAN, task acceptance, and merging an MR are separate decisions.
 

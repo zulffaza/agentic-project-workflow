@@ -1,10 +1,10 @@
 ---
-description: Show a project's phase, task status + open review items — or, with "rewind", move the dashboard Status back to an earlier phase
-args: "[rewind] --project <project-slug> [--phase <phase>] [--skip-cli-check] | --all [--attention] [--phase <phase>] [--json]"
+description: Show a project's phase, task status + open review items; update a verified task result, accept it, or advance to review; or with "rewind" move the dashboard Status back
+args: "[rewind] --project <project-slug> [--phase <phase>] [--skip-cli-check] | --all [--attention] [--phase <phase>] [--json] | update --project <project-slug> (--task <T0n> --status complete|accepted | --status review)"
 scope: mixed
-scope-forms: "--all=global, default=project, rewind=project"
+scope-forms: "--all=global, default=project, rewind=project, update=project"
 args-global: "--all [--attention] [--phase <phase>] [--json]"
-args-project: "--project <project-slug> [--skip-cli-check] | rewind --project <project-slug> --phase <phase>"
+args-project: "--project <project-slug> [--skip-cli-check] | rewind --project <project-slug> --phase <phase> | update --project <project-slug> (--task <T0n> --status complete|accepted | --status review)"
 ---
 Arguments: {{ARGS}}. Named-argument grammar: operator words first, every value named; the
 project is always `--project <slug>`. Project dir: `{{PW_PROJECTS}}/<slug>`.
@@ -55,6 +55,35 @@ everything below and follow this instead** (`--phase` carries the phase to rewin
    by design.
 4. Report the new phase and point me at the phase command to re-run (`/pw-analyze` / `/pw-breakdown`
    / …), then `/pw-review` to re-approve.
+
+**If the operator word is `update`, this is the record-update flow — skip the report flow.**
+One operator, three recognized values; every other value fails before any write.
+
+- **`/pw-status update --project <slug> --task <T0n> --status complete`** — record a task that
+  already ran and verified as `done`, without shipping. Requires phase `executing`, matching task
+  file/PLAN status, a recorded `## Result` with a passing `Verify outcome:` and a commit or
+  `zero-change` marker, and stable records during the check. It never re-runs the task, accepts it,
+  pushes, or moves the phase. A real `verify-failed`, a bare `todo`, or contradicting holders blocks
+  it; an already accepted task is a no-op. Before completing an `in-progress` task, confirm no
+  executor is still writing it — the stable-read check catches a record that changes during the
+  check, not a writer that has not reached it yet.
+- **`/pw-status update --project <slug> --task <T0n> --status accepted`** — record my acceptance of
+  the named result. The task must already be `done` in both holders, with recorded evidence, zero
+  open items in `task/review/<T0n>.review.md`, and no active human rejection. Use this only after I
+  say I accept that result. It does not merge, publish, or advance the phase.
+- **`/pw-status update --project <slug> --status review`** — advance the whole project from
+  `executing` to `review` when every PLAN task is `done`/`accepted` or blocked through a
+  `verify-failed` dependency. It shares the execution readiness rule, logs one transition, and is a
+  no-op when the project is already in review. Use `/pw-close` for project completion.
+- **Unknown or combined input fails closed.** Values are case-sensitive and exactly `complete`,
+  `accepted`, `review`. `--task` is required for the first two and rejected for `review`; `--phase`
+  is rejected here (use the `rewind` flow or the owning phase command). Report the valid values and
+  the correct selector; never substitute a nearby value, hand-edit a status line, or fall back to
+  the internal setters.
+
+After an update, report what changed in user terms: task and records affected, evidence used,
+resulting phase, and any warning or partial write. Do not paste the internal invocation into a
+user-facing plan or final summary unless I explicitly ask for technical details.
 
 ---
 

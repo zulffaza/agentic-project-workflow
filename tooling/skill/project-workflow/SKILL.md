@@ -52,6 +52,15 @@ phases, `--json` prints a machine-readable object. No slug; never writes.
   (`status|oneliner|adopted|adopt|review-init|log|phase`) — never hand-edit the dashboard
   `Status:` line, `LOG.md`, or a review file's structure. Exact subcommands + what each does:
   [`references/conventions-and-gotchas.md`](references/conventions-and-gotchas.md).
+- **Agent-mediated operations — the agent is the bridge, never a shell-assignment service.** The
+  `/pw-*` commands and their chat equivalents are the user interface; scripts and internal operator
+  syntax stay in the agent's working context. When no dedicated command exists, state the intended
+  change, records, and evidence in plain terms, then handle it with the supported helpers once the
+  request authorizes it. Do not tell the user to run a script, edit a status line, or use maintainer
+  help, and never invent a command. If a gate, evidence, or decision is missing, report that blocker
+  and ask for the decision instead of offering a workaround. Explicit requests for technical detail
+  remain allowed. Full rules and examples:
+  [`references/conventions-and-gotchas.md`](references/conventions-and-gotchas.md#agent-mediated-operations).
 - **Script the mechanical — call the automation scripts, don't re-implement them.** Pre-phase:
   `pw-preflight.sh <op> --project <slug>` + `pw-doc.sh lint …` (nonzero → STOP, relay stderr). Cheap reads
   instead of manual file-walking: `pw-status.sh`, `pw-review-read.sh scan`, `pw-doc.sh summary`, and

@@ -13,6 +13,37 @@ rewind flag** (`pw-status.sh status --project <slug> --phase <phase> --rewind` �
 backward, which is what stops accidental resets); then re-run that phase's command and re-approve.
 Downstream artifacts stay on disk and get regenerated once the upstream phase is re-approved.
 
+## Agent-mediated operations
+The `/pw-*` commands and the matching plain-language request are the user interface. Internal
+scripts and operator syntax are how the agent carries out the request; they are not instructions
+for the user.
+
+1. **A supported command exists.** Name the command path for discovery and carry out its
+   mechanics within the authorization already given.
+2. **No command exists.** Say what will change (records, evidence, risk) in plain terms, then use
+   the supported internal helper once the request authorizes that change. Offer the help if the
+   request was only a question or audit.
+3. **A gate or decision is missing.** Report the exact blocker and ask for that decision. Never
+   invent a command, hand-edit a load-bearing line, or propose a shell workaround.
+4. **After the write.** Read the state back and report what changed, what remains, and any warning
+   or partial write. Never describe a failed or partial write as success.
+
+Do not recommend entity-script names or paths, maintainer help, or direct state edits in ordinary
+plans, progress notes, recovery suggestions, or final summaries. A direct request for technical
+detail ("show me the command/why it failed internally") may include mechanics; that exception does
+not move execution responsibility to the user. Setup/uninstall scripts keep their documented
+exception. Errors still state the concrete cause and the supported recovery action.
+
+Use the single record operator for task and phase updates:
+`pw-status.sh update --project <slug> --task <T0n> --status complete|accepted` and
+`pw-status.sh update --project <slug> --status review`. `complete` records a verified result as
+`done` without shipping; `accepted` records the human acceptance decision; `review` advances the
+whole project only when the shared readiness rule passes. Unknown values, a missing/extra task
+selector, or any `--phase` input fail before a write. The command never infers acceptance from a
+clean result, never treats a closed/unmerged MR as done, and never advances a project whose PLAN
+still has runnable work. Before completing an `in-progress` task, confirm no executor is still
+writing it; the bounded stable-read window only detects a record that changes during the check.
+
 ## Status field + audit log (commands own these — via `pw-status.sh`)
 Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-workflow/tooling/scripts/entities/pw-status.sh`
 (deterministic, phase-validated, portable across Claude Code + shelled-out kilo executors):
@@ -22,6 +53,12 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   hand-maintained. It **refuses a backward move** (guards against accidental resets like the phase
   sliding back to `context`); pass `--rewind` to intentionally go back. `executing`↔`review` is not
   backward (re-running a task is normal).
+- `pw-status.sh update --project <slug> --task <T0n> --status complete|accepted` and
+  `pw-status.sh update --project <slug> --status review` — the only public record-update route.
+  Values are a closed, case-sensitive set; `complete` maps to persisted task `done`, `accepted`
+  uses the existing three-holder propagator, and `review` uses the shared whole-PLAN readiness
+  predicate. Unknown values fail with exit 2 before any write. Full contract:
+  [Agent-mediated operations](#agent-mediated-operations).
 - `pw-status.sh oneliner --project <slug> --text "<text>"` — set the dashboard **One-liner** (the agent does this during
   `/pw-analyze`, distilled from context/).
 - `pw-status.sh adopted --project <slug> --text "<pointer>"` — set/insert the dashboard **Adopted:** pointer (the agent

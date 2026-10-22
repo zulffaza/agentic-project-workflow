@@ -17,7 +17,7 @@ _pwtest_namedarg_scan() {
   local all R1 R1A R2 R3 R4 R5 R6 R7 R8 R8A
   all="$(cat)"
   R1='(^|[`$>:])/pw-(new|analyze|breakdown|close|sync|execute|status|ship|config|context|adopt|rfc|doctor|review) +[a-z0-9][a-z0-9-]*'
-  R1A='pw-review (init|init-all|item|answer|signoff|prepare|import|ai|config|reopen|archive|passes|read|gate|count|has-open|resolve|reindex)\b|pw-(status|ship) (rewind|comments|request-review|stack|stack-adopt)\b|pw-config (global|model-check|model-resolve|show|get|set|ensure|ai-model|ai-review|review-trigger|review-repair|review-rounds|agent-model)\b|pw-context (adopt|add-input|add-repo|fetch|prepare|req-init|scan)\b|pw-rfc (init|target|state|comment-seen|dashboard|comments|milestone|deploy)\b|pw-adopt\b|/pw-[a-z-]+ (to|for|and|or|the|an|will|can|is|runs|works|already|side-loop|command|commands|before|after|twice|again|now|still|only|users?|sessions?|without|with)\b'
+  R1A='pw-review (init|init-all|item|answer|signoff|prepare|import|ai|config|reopen|archive|passes|read|gate|count|has-open|resolve|reindex)\b|pw-(status|ship) (rewind|comments|request-review|stack|stack-adopt|update)\b|pw-config (global|model-check|model-resolve|show|get|set|ensure|ai-model|ai-review|review-trigger|review-repair|review-rounds|agent-model)\b|pw-context (adopt|add-input|add-repo|fetch|prepare|req-init|scan)\b|pw-rfc (init|target|state|comment-seen|dashboard|comments|milestone|deploy)\b|pw-adopt\b|/pw-[a-z-]+ (to|for|and|or|the|an|will|can|is|runs|works|already|side-loop|command|commands|before|after|twice|again|now|still|only|users?|sessions?|without|with)\b'
   R2='--project +[^ ]+ +(item|answer|signoff|prepare|import|ai|comments|request-review|rewind|set|ensure|global|adopt|milestone)\b'
   R3='pw-config(\.sh)? +(project|ai-review|ai-model|review-trigger|review-repair|review-rounds) +[a-z0-9<-]'
   R4='/(pw-review) +(item|answer) +([^ -][^ ]*/|<[a-z-]+>)'
@@ -195,6 +195,14 @@ static_t4() {
     && grep -qF 'final reply' "$TOOL/commands/pw-review.md" \
     && pwtest_ok "T4 canary: command relay clauses pin the command-only final reply" \
     || pwtest_bad "T4 command reply boundary" "pw-context.md/pw-review.md lost the final-reply relay contract"
+
+  # 3f) the agent-mediated operation contract (plan 52): one bridge rule in the loaded skill,
+  # one closed update operator in the status command, and the vocabulary pinned in the writer.
+  grep -qF 'Agent-mediated operations' "$TOOL/skill/project-workflow/SKILL.md" \
+    && grep -qF 'pw-status update --project' "$TOOL/commands/pw-status.md" \
+    && grep -qF 'PW_UPDATE_STATUSES="complete accepted review"' "$TOOL/scripts/entities/pw-status.sh" \
+    && pwtest_ok "T4 canary: agent-mediated operation contract" \
+    || pwtest_bad "T4 agent-mediated contract" "skill bridge rule, pw-status update forms, or the closed status vocabulary was removed"
 
   # 3b) internal plan numbers / issue-record labels never reach published prose — scope now covers
   # root *.md, template/, and tooling/docs (tooling/skill-internal is maintainer-facing, unshipped).
