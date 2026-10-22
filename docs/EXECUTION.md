@@ -117,12 +117,15 @@ forced to switch agents mid-workflow — a task is routed elsewhere only with a 
 | Claude model | `claude:opus` or `claude:sonnet` | Configured Claude aliases or a full model ID |
 | Kilo model | `kilo:<catalog-id>` | Kilo's configured gateways/backends |
 | OpenCode model | `opencode:<catalog-id>` | OpenCode's configured backends |
-| Cursor model | `cursor:<catalog-id>` | Cursor's gateway catalog |
+| Cursor model | `cursor:glm-5p3-flash[reasoning=high]` | Cursor's gateway catalog plus the CLI's own config (no desktop app needed) |
 | Codex model | `codex:<slug>` | Codex's gateway through your ChatGPT login |
 | Registered agent | `pw-executor` | A definition available on the same provider |
 
 Use the exact model ID from your enabled provider. Aliases can follow newer versions; use a full ID when reproducibility matters.
-Cursor effort/thinking variants can be catalog IDs or bracket parameters. Codex uses bare model slugs; effort and Fast are per-run settings.
+Cursor effort/thinking variants can be catalog IDs or bracket parameters. For a model with no
+catalog variants (for example `glm-5p3-flash`), use the parameter name its config entry stores:
+`cursor:glm-5p3-flash[reasoning=low]`, `[reasoning=high]`, and so on. Codex uses bare model slugs;
+effort and Fast are per-run settings.
 
 Agent definitions are provider-specific. For cross-provider work, use an explicit model and the task file as the work order.
 A custom definition is useful for a recurring role with distinct instructions. See [agents and sub-agents](#agents-vs-sub-agents-and-why-the-difference-matters-across-providers).
@@ -136,11 +139,18 @@ Claude uses the configured alias set described above.
 |---|---|
 | Kilo | `kilo models` |
 | OpenCode | `opencode models` |
-| Cursor | `agent models` |
+| Cursor | `agent models` + `~/.cursor/cli-config.json` modelParameters |
 | Codex | `codex debug models` |
 
 Use the exact catalog ID when setting a pin. Display names can differ from usable IDs:
 for example, Kilo's credential label “Kilo Gateway” uses the ID `kilo`, not `kilo_gateway`.
+Cursor's `agent models` list is incomplete: desktop-only IDs (for example `glm-5p3-flash`) live
+in `~/.cursor/cli-config.json` under `modelParameters`. The Cursor CLI creates and maintains that
+file itself, so the desktop app is not required; if the file is absent, the list simply has one
+source fewer. The resolver reads both. For an ID neither source lists, an opt-in live probe
+(`PW_CURSOR_PROBE=1`) tries one `agent -p` ask. The probe spends a real model call.
+A bracket override (`glm-5p3-flash[reasoning=low]`) tunes the same base model; the resolver
+validates the syntax, resolves the base, and passes the whole string to the CLI.
 
 ### Kilo connections with similar names
 
@@ -285,6 +295,10 @@ hand-edited task file too). Both refuse rather than silently substituting a diff
 live catalog it matches — a pattern with zero matches usually means a typo, a deprecated id, or a
 model your authenticated API Providers don't cover. This is purely informational: a ⚠ never
 blocks `/pw-doctor` or fails its exit code, since availability can legitimately change over time.
+For Cursor, the count includes desktop-only IDs from `~/.cursor/cli-config.json → modelParameters`,
+so an entry such as `glm-5p3-flash` verifies even though `agent models` omits it. A Cursor bracket
+override tunes the same model: the allowlist matches the base ID, so `glm-5p3-flash` also permits
+`glm-5p3-flash[reasoning=low]`.
 One exception — **Claude Code has a fixed alias set (`opus`/`sonnet`/`haiku`/`fable` + pinned full
 names), not a queryable catalog**, so `/pw-doctor` can't verify a claude allowlist pattern
 live; cross-check it against the table above yourself.

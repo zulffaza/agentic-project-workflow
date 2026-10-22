@@ -186,10 +186,15 @@ sync by whoever maintains the bundle, not something you edit here to change beha
   json` closes with ONE final event `{result, session_id, is_error, usage}` — `session_id` is the
   ledger/resume handle (`--resume <session_id>` round-trip verified). Blocked or plan-gated model
   ids exit non-zero with `ActionRequiredError` **text, not JSON** — treat unparsable output as an
-  error, never blank success. No `PW_CURSOR_API_PROVIDERS` axis: one gateway (`agent models` =
-   the catalog). Like kilo's rule: cross-provider `cursor:*` tasks carry the **task file as work
-   order** on a `--model <id>`; a named sub-agent can't cross the boundary (cursor has no primary
-   CLI slot at all).
+  error, never blank success. No `PW_CURSOR_API_PROVIDERS` axis: one gateway. The model set is
+  `agent models` PLUS the ids in `~/.cursor/cli-config.json` (`modelParameters`, `model`,
+  `selectedModel`, `modelSelectionHistory`, `exploreSubagentModel`) — the CLI catalog is
+  incomplete (see Verification notes). The config file is CLI-owned: an empty HOME gets one on
+  first run, so the desktop app is NOT required. `model-resolve` reads both, accepts a bracket
+  override on the base id (`glm-5p3-flash[reasoning=low]`), and `--probe` / `PW_CURSOR_PROBE=1`
+  adds one live `agent -p … --model <id>` ask for an id neither source lists. Like kilo's rule:
+  cross-provider `cursor:*` tasks carry the **task file as work order** on a `--model <id>`; a
+  named sub-agent can't cross the boundary (cursor has no primary CLI slot at all).
 - **codex** — `codex exec --dangerously-bypass-approvals-and-sandbox -m <slug> [-c
   model_reasoning_effort="<low|medium|high|xhigh>"] [-c service_tier="priority"] [-C <path>]
   [--json] [-o <last-message-file>]`. **Pipe the prompt via stdin** — and this is not just the
@@ -214,9 +219,9 @@ right CLI flag by provider:
 
 | Task field | `claude` maps to | `kilo` maps to | `cursor` maps to | `codex` maps to |
 |------------|------------------|----------------|----------------|----------------|
-| `Effort:` (`low`/`medium`/`high`/`xhigh`/`max`) | `--effort <level>` | `--variant <level>` (provider-specific: `high`/`max`/`minimal`/…; nearest match) | nearest `cursor:<id>-<level>[-fast]` catalog id (e.g. `claude-opus-5-thinking-xhigh`); bracket `[effort=…]` params per-run | `-c model_reasoning_effort="<level>"` (headless) or TUI `/model` (in-session); levels are per-model in the catalog (`supported_reasoning_levels`) |
-| `Thinking:` (`on`/`off`) | (n/a — omit; effort covers reasoning) | `--thinking` when `on` | encoded in catalog ids (`-thinking-<level>` variants); no standalone flag | (n/a — effort covers reasoning) |
-| Fast tier (no task field — per-run/PLAN note) | n/a | n/a | `-fast` catalog-id variants | `-c service_tier="priority"` on the same slug (requested-only; unverifiable from output) |
+| `Effort:` (`low`/`medium`/`high`/`xhigh`/`max`) | `--effort <level>` | `--variant <level>` (provider-specific: `high`/`max`/`minimal`/…; nearest match) | `<id>-<level>[-fast]` when the catalog lists it (e.g. `claude-opus-5-thinking-xhigh`); otherwise a bracket param on the base id — `glm-5p3-flash[reasoning=high]` (name the parameter as cli-config `modelParameters` does: `reasoning`, `effort`, `context`, `fast`) | `-c model_reasoning_effort="<level>"` (headless) or TUI `/model` (in-session); levels are per-model in the catalog (`supported_reasoning_levels`) |
+| `Thinking:` (`on`/`off`) | (n/a — omit; effort covers reasoning) | `--thinking` when `on` | encoded in catalog ids (`-thinking-<level>` variants); parameterized ids use their reasoning/effort bracket param | (n/a — effort covers reasoning) |
+| Fast tier (no task field — per-run/PLAN note) | n/a | n/a | `-fast` catalog-id variants, or `[fast=true]` on a parameterized id | `-c service_tier="priority"` on the same slug (requested-only; unverifiable from output) |
 
 - **Version pinning (Claude):** `opus`/`sonnet`/`haiku`/`fable` resolve to the *latest* of that
   family. To pin, use the full name — `claude:claude-opus-4-8` vs `claude:claude-opus-5`,
@@ -251,11 +256,13 @@ authenticated API Providers don't cover). It's informational only — never some
 running a provider's CLI by hand, and never blocks `/pw-doctor` itself. (kilo's own catalog is
 browsable directly via `kilo models` (full list; sub-provider paths are NOT valid filter
 arguments — filter the output yourself), opencode's via `opencode models
-[provider-id]`, cursor's via `agent models`, codex's via `codex debug models` (one-line JSON;
+[provider-id]`, cursor's via `agent models` PLUS `~/.cursor/cli-config.json →
+modelParameters` (the CLI list is incomplete — desktop-only ids appear only in the config;
+`model-resolve --probe` is the live check), codex's via `codex debug models` (one-line JSON;
 pw's reader prints the bare visible slugs — hidden-visibility rows still RUN if invoked, so the
 allowlist is the real gate), if you want to look yourself — but `/pw-doctor` is the one that actually validates your config.)
 
-## Verified agent/session facts (probed 2026-09-04 kilo/claude + 2026-09-09 cursor + 2026-10-04 codex, this machine — re-run before trusting elsewhere)
+## Verified agent/session facts (probed 2026-09-04 kilo/claude + 2026-09-09 and 2026-10-22 cursor + 2026-10-04 codex, this machine — re-run before trusting elsewhere)
 
 - **Registered set = ground truth via `kilo agent list`** (prints `name (mode)` + resolved
   permission JSON); `kilo debug agent <name>` prints the **effective config incl. the model a
@@ -297,6 +304,28 @@ allowlist is the real gate), if you want to look yourself — but `/pw-doctor` i
   `claude-fable-5-*`) fail loud — `ActionRequiredError: Model Blocked`, exit 1, non-JSON — so
   admin-block ≠ silent-fallback; the *silent* case is plan-gated models per Cursor docs, unprobed
   here (docs-claimed feature — noted as a risk when Cursor was onboarded 2026-09-09).
+- **Cursor's `agent models` list is NOT the full model set (probed 2026-10-22):** it omitted
+  `glm-5p3` / `glm-5p3-flash` while the desktop app offered them; both appear as keys in
+  `~/.cursor/cli-config.json → modelParameters`. The config is written by the CLI itself, not the
+  desktop: `HOME=<empty dir> agent models` created `~/.cursor/cli-config.json` and then failed
+  only on authentication. With no config, the fallback source is simply empty; `--probe` still
+  verifies a known id. `agent --list-models` prints the same 253-line list as `agent models`.
+  The command prints an `Available models` header and a blank line before the
+  `<id> - <description>` rows; pw's reader drops the header, the blank line, and the description
+  tail. A live
+  `printf 'Reply with OK' | agent -p --trust --mode ask --model glm-5p3-flash` returned `OK`
+  with exit 0, so the gateway accepts ids the CLI list never prints. An unknown id exits 1 with
+  `Cannot use this model: … Available models: …` (that list is the same incomplete catalog).
+- **Cursor bracket overrides tune the same model (probed 2026-10-22):** `glm-5p3-flash` stores
+  `[{"id":"reasoning","value":"low"}]` in cli-config; `--model 'glm-5p3-flash[reasoning=low]'`
+  and `…[reasoning=high]'` both returned `OK`, exit 0. The parameter name is model-specific
+  (`reasoning`, `effort`, `reasoning_effort`, `context`, `fast`); read the model's entry in
+  `modelParameters` instead of guessing. `model-resolve` validates the bracket syntax, resolves
+  the base id, and prints the whole string for `--model`. `model-check` matches the allowlist
+  against the base id, so an exact entry permits every tuning of that model.
+  pw reads the config keys as a second catalog source (`pw_cursor_config_models`); the live
+  probe stays opt-in (`model-resolve --probe` or `PW_CURSOR_PROBE=1`) because it spends a real
+  model call.
 - **`~/.cursor/{skills,commands,agents}` fully self-sufficient (cross-provider quarantine proof, 2026-09-09):**
   with `~/.claude/{agents,skills}` moved to quarantine, `/pw-hello` still expanded (from
   `~/.cursor/commands` — the CLI has **no** `.claude/commands` compat read at all, verified by

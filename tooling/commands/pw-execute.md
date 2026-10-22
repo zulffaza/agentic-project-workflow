@@ -25,7 +25,8 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 ```
 **Reading the pre-flight:** `pw-preflight.sh execute` checks the PLAN `approved` sign-off, a
 phase execution is legal in, and every `Execute with:` row on both axes — *permission*
-(allowlist) and *availability* (`model-resolve`: the model exists in the live catalog and sits
+(allowlist) and *availability* (`model-resolve`: the model exists in the live catalog — for
+Cursor that means `agent models` PLUS `~/.cursor/cli-config.json` → `modelParameters` — and sits
 inside the configured api-provider prefix scope; a row pinning a since-removed provider is a
 hard stop with the re-pin candidates); the two `pw-doc.sh lint`
 calls check PLAN/task-file format (tables, required fields/sections). Silent = pass; otherwise

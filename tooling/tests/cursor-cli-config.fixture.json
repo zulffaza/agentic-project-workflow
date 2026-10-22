@@ -1,0 +1,11 @@
+{
+  "model": { "modelId": "cursor-config-selected" },
+  "selectedModel": { "modelId": "cursor-config-selected", "parameters": [] },
+  "modelSelectionHistory": ["cursor-history-only", "glm-5p3-flash"],
+  "exploreSubagentModel": "cursor-explore-only",
+  "modelParameters": {
+    "cursor-config-only": [],
+    "glm-5p3-flash": [{ "id": "reasoning", "value": "high" }],
+    "composer-2.5": [{ "id": "fast", "value": "false" }]
+  }
+}
