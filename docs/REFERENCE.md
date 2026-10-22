@@ -92,6 +92,9 @@ refuse it.
 | `/pw-help workflow` | Show the phase sequence and gates |
 | `/pw-help find --term <term…>` | Search command and user documentation |
 | `/pw-status --project <slug>` | Show project progress and blockers |
+| `/pw-status update --project <slug> --task <T0n> --status complete` | Record a verified task as done without shipping |
+| `/pw-status update --project <slug> --task <T0n> --status accepted` | Record your acceptance of that task result |
+| `/pw-status update --project <slug> --status review` | Advance to review when the whole plan is finished or blocked by a failed dependency |
 | `/pw-status rewind --project <slug> --phase <phase>` | Reopen an earlier phase with a review trail |
 | `/pw-status --all` | Overview of every project: phase, attention, accepted tasks, last activity; optional `--attention`, `--phase <phase>`, `--json` |
 | `/pw-doctor [--fix]` | Check or repair installation consistency |
