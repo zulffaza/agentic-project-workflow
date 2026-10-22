@@ -194,6 +194,12 @@ direct line exists, announcing the substitution on stderr. Then verify it sits i
 stderr). Fails **open** on "can't check" (claude has no catalog; CLI off PATH; unknown provider) —
 exit 0 + an "unverified" note — so every non-zero is a positive determination safe to hard-stop
 on. `pw-preflight.sh execute` runs it per row; the routing ladder runs it before every spawn.
+Cursor adds two fallbacks: `agent models` is incomplete, so the catalog also reads
+`~/.cursor/cli-config.json → modelParameters` (desktop-only ids; a hit there is announced on
+stderr), and `--probe` (or `PW_CURSOR_PROBE=1`) makes one live `agent -p … --model <id>` ask for
+an id neither source lists — a real model call, so it stays opt-in. A bracket override
+(`glm-5p3-flash[reasoning=low]`) is validated, resolved on its base id, and printed whole;
+`model-check` matches the allowlist against that base id, so one entry permits every tuning.
 
 ## pw-project-doctor.sh
 

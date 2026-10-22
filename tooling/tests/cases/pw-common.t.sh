@@ -51,6 +51,12 @@ pwtest_eq "D13 skips survive pipefail (bootstrap context)" \
 pwtest_eq "flat providers skip no bundle skills" "$(pw_skill_skips_for cursor)" ""
 pwtest_eq "codex catalog = visible slugs only, real one-line JSON shape" \
   "$(pw_api_catalog codex)" "$(printf 'codex-test-luna\ncodex-test-astra')"
+# Cursor catalog = `agent models` PLUS cli-config modelParameters (desktop-only ids the CLI
+# omits — the glm-5p3-flash discrepancy, verified 2026-10-22). Dedup keeps a shared id once,
+# CLI order first; the fixture pins the source so a real ~/.cursor/cli-config.json never leaks.
+pwtest_eq "cursor catalog merges cli-config desktop models (deduped, CLI order first)" \
+  "$(PW_CURSOR_CLI_CONFIG="$PWTEST_TESTSDIR/cursor-cli-config.fixture.json" pw_api_catalog cursor)" \
+  "$(printf 'cursor-test-high\ncursor-test-low-fast\ncomposer-2.5\ncursor-config-only\nglm-5p3-flash\ncursor-config-selected\ncursor-history-only\ncursor-explore-only')"
 
 # generator layout contract: skill = <name>/SKILL.md + agents/openai.yaml (explicit-only);
 # flat = <name>.md unchanged (regression pin for the other four providers).

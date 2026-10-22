@@ -58,16 +58,20 @@ pl_config_selftest() {
     die "selftest FAIL: model-check allowed a model NOT in its configured allowlist"
   fi
   # ...cursor provider (2026-09): the rules are provider-generic, but the bracket-param quirk is
-  # cursor-specific and worth locking: catalog ids carry 'gpt-5.6-sol-high[effort=high]' style
-  # suffixes; model-check's shell `case` GLOB treats a bracket literal-ish (char class), so docs
-  # steer allowlist patterns to the suffix-free id part with '*' — here we assert the plain, glob,
-  # and refuse paths so a future refactor can't silently change that contract.
+  # cursor-specific and worth locking: catalog/desktop ids may carry 'glm-5p3-flash[reasoning=low]'
+  # style overrides. Bracket overrides tune the SAME model, so the allowlist matches the base id —
+  # an exact entry must permit its tuned form, while a different base is still refused.
   mc="$(PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CURSOR="" "$(pwtest_script pw-config.sh)" model-check --provider cursor --model cursor-grok-4.6-low)" \
     || die "selftest FAIL: model-check refused cursor with an empty allowlist (should always pass)"
   PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CURSOR="claude-opus-5*,gpt-5*" "$(pwtest_script pw-config.sh)" model-check --provider cursor --model gpt-5.6-sol >/dev/null \
     || die "selftest FAIL: model-check refused cursor model matching an allowlist glob"
   if PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CURSOR="claude-opus-5*" "$(pwtest_script pw-config.sh)" model-check --provider cursor --model gpt-5.6-everything >/dev/null 2>&1; then
     die "selftest FAIL: model-check allowed a cursor model NOT in its configured allowlist"
+  fi
+  PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CURSOR="glm-5p3-flash" "$(pwtest_script pw-config.sh)" model-check --provider cursor --model 'glm-5p3-flash[reasoning=low]' >/dev/null \
+    || die "selftest FAIL: model-check refused a bracket-tuned form of an allowed cursor base id"
+  if PW_CONFIG_FILE="$NOSCOPE" PW_MODEL_ALLOWLIST_CURSOR="composer-2.5" "$(pwtest_script pw-config.sh)" model-check --provider cursor --model 'glm-5p3-flash[reasoning=low]' >/dev/null 2>&1; then
+    die "selftest FAIL: model-check matched a bracket-tuned model against the wrong base entry"
   fi
   # ai-model: the lane row exists, defaults to all-—, updates one lane only, clears back, refuses
   # the executor lane and a bare model name. Regression guard behind the row: a model line that
@@ -118,6 +122,7 @@ pl_config_selftest
 # never depend on the maintainer machine's real pw.config.sh.
 CFG_SCOPED="$PWTEST_TESTSDIR/pw.config.test.sh"          # PW_KILO_API_PROVIDERS=(kilo/alibaba-token-plan)
 CFG_OPEN="$PWTEST_TESTSDIR/pw.config.test.noscope.sh"    # entries unset → no filtering
+CFG_CURSOR="$PWTEST_TESTSDIR/cursor-cli-config.fixture.json"  # desktop-only ids, hermetic
 MR="$(pwtest_script pw-config.sh)"
 
 # nested BYOK: the row's model part (no `kilo/` prefix) resolves to the CANONICAL catalog line.
@@ -172,16 +177,61 @@ PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider opencode --model testp
   || pwtest_bad "opencode axis" "refused an in-catalog id"
 # The cursor axis with the REAL catalog shape ("agent models" lines carry a " - description"
 # tail — the 09-28 corpus case where every cursor pin read false-unbound): the resolver must
-# strip the tail, bind the bare id, and still refuse a true catalog miss.
-PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model cursor-test-high >/dev/null 2>&1 \
+# strip the tail, bind the bare id, and still refuse a true catalog miss. PW_CURSOR_CLI_CONFIG
+# pins the desktop-config source to a fixture, so the maintainer's real cli-config.json never
+# leaks in (a desktop-only id there would otherwise change these outcomes).
+PW_CURSOR_CLI_CONFIG="$CFG_CURSOR" PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model cursor-test-high >/dev/null 2>&1 \
   && pwtest_ok "cursor id resolves despite ' - description' catalog lines" \
   || pwtest_bad "cursor resolve tail" "refused an in-catalog cursor model"
-mr_cur="$(PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model cursor-test-high 2>/dev/null || true)"
+mr_cur="$(PW_CURSOR_CLI_CONFIG="$CFG_CURSOR" PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model cursor-test-high 2>/dev/null || true)"
 [ "$mr_cur" = "cursor-test-high" ] && pwtest_ok "canonical cursor id printed bare" \
   || pwtest_bad "canonical cursor id" "got '$mr_cur'"
-if PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model cursor-test-gone >/dev/null 2>&1; then
+if PW_CURSOR_CLI_CONFIG="$CFG_CURSOR" PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model cursor-test-gone >/dev/null 2>&1; then
   pwtest_bad "cursor catalog miss exits 1" "resolved a model that is not in the catalog"
 else pwtest_ok "cursor catalog miss still exits 1"; fi
+# Desktop-only ids: the CLI catalog omits them; cli-config modelParameters is the second source
+# (glm-5p3-flash case, verified 2026-10-22). A config hit resolves AND announces the source.
+mr_cur="$(PW_CURSOR_CLI_CONFIG="$CFG_CURSOR" PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model glm-5p3-flash 2>"$ROOT/mr-cursor-cfg.err")" \
+  && [ "$mr_cur" = "glm-5p3-flash" ] && grep -q "cli-config modelParameters" "$ROOT/mr-cursor-cfg.err" \
+  && pwtest_ok "cursor desktop-only id resolves from cli-config and announces the source" \
+  || pwtest_bad "cursor cli-config fallback" "out='$mr_cur'; $(head -c 160 "$ROOT/mr-cursor-cfg.err")"
+# Bracket overrides are per-run tuning of the same base model: resolve the base, keep the
+# suffix in the output (the headless --model must receive the whole string).
+mr_cur="$(PW_CURSOR_CLI_CONFIG="$CFG_CURSOR" PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model 'glm-5p3-flash[reasoning=low]' 2>/dev/null)" \
+  && [ "$mr_cur" = 'glm-5p3-flash[reasoning=low]' ] \
+  && pwtest_ok "cursor bracket override resolves and is preserved" \
+  || pwtest_bad "cursor bracket override" "got '$mr_cur'"
+if PW_CURSOR_CLI_CONFIG="$CFG_CURSOR" PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model 'glm-5p3-flash[broken]' >/dev/null 2>&1; then
+  pwtest_bad "cursor malformed override refused" "accepted '[broken]' (no =value)"
+else pwtest_ok "cursor malformed bracket override refuses (exit 1)"; fi
+# The live probe is opt-in and is the LAST source: without it, an id in neither catalog is a miss.
+if PW_CURSOR_CLI_CONFIG="$CFG_CURSOR" PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model cursor-probe-ok >/dev/null 2>&1; then
+  pwtest_bad "cursor probe stays opt-in" "resolved a probe-only id without --probe"
+else pwtest_ok "cursor probe stays opt-in (probe-only id misses by default)"; fi
+mr_cur="$(PW_CURSOR_CLI_CONFIG="$CFG_CURSOR" PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model cursor-probe-ok --probe 2>/dev/null)" \
+  && [ "$mr_cur" = "cursor-probe-ok" ] \
+  && pwtest_ok "cursor --probe accepts an id neither catalog lists" \
+  || pwtest_bad "cursor probe fallback" "got '$mr_cur'"
+mr_cur="$(PW_CURSOR_CLI_CONFIG="$CFG_CURSOR" PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model 'cursor-probe-ok[reasoning=low]' --probe 2>/dev/null)" \
+  && [ "$mr_cur" = 'cursor-probe-ok[reasoning=low]' ] \
+  && pwtest_ok "cursor --probe keeps a bracket override in the canonical output" \
+  || pwtest_bad "cursor probe bracket" "got '$mr_cur'"
+PW_CURSOR_CLI_CONFIG="$CFG_CURSOR" PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model cursor-probe-dead --probe >/dev/null 2>"$ROOT/mr-cursor-dead.err"
+[ "$?" = 1 ] && grep -q "live probe failed" "$ROOT/mr-cursor-dead.err" \
+  && pwtest_ok "cursor --probe refuses a model the live surface rejects" \
+  || pwtest_bad "cursor probe refusal" "rc=$?; $(head -c 160 "$ROOT/mr-cursor-dead.err")"
+# PW_CURSOR_PROBE=1 is the environment form of the same opt-in.
+PW_CURSOR_PROBE=1 PW_CURSOR_CLI_CONFIG="$CFG_CURSOR" PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model cursor-probe-ok >/dev/null 2>&1 \
+  && pwtest_ok "PW_CURSOR_PROBE=1 enables the probe without --probe" \
+  || pwtest_bad "cursor probe env" "refused with PW_CURSOR_PROBE=1"
+# The config source is optional: a missing cli-config.json (no CLI login yet / no desktop) must
+# not break catalog resolution — it simply contributes no ids.
+PW_CURSOR_CLI_CONFIG="$ROOT/no-such-cursor-config.json" PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model cursor-test-high >/dev/null 2>&1 \
+  && pwtest_ok "cursor resolves from the CLI catalog when cli-config.json is absent" \
+  || pwtest_bad "cursor missing cli-config" "refused a catalog id without the config file"
+if PW_CURSOR_CLI_CONFIG="$ROOT/no-such-cursor-config.json" PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider cursor --model glm-5p3-flash >/dev/null 2>&1; then
+  pwtest_bad "cursor config-only id without config" "resolved a config-only id with no config file"
+else pwtest_ok "cursor config-only id misses when cli-config.json is absent"; fi
 # claude (no catalog) + unknown provider + CLI-off-PATH all FAIL OPEN as unverified — never a
 # false dead, so a non-zero is always a positive determination safe to hard-stop on.
 "$MR" model-resolve --provider claude --model anything >/dev/null 2>&1 \

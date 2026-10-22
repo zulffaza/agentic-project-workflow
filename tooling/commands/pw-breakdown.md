@@ -116,7 +116,10 @@ Then produce, from `{{PW_HOME}}/template/task/`:
       agent models                  #   nested BYOK appears as `kilo/alibaba-token-plan/<m>`),
       codex debug models            #   never as `kilo models <arg>` arguments (that errors).
                                     #   cursor: one gateway; effort/thinking are catalog-id variants
-                                    #   (e.g. claude-opus-5-thinking-xhigh)
+                                    #   (e.g. claude-opus-5-thinking-xhigh). `agent models` is
+                                    #   INCOMPLETE — desktop-only ids (e.g. glm-5p3-flash) live in
+                                    #   ~/.cursor/cli-config.json → modelParameters; model-resolve
+                                    #   reads both, `--probe` adds one live ask
                                     #   codex: one gateway; ONE-LINE JSON — pw reads the bare
                                     #   visible slugs; effort + Fast tier are per-run flags on the
                                     #   same slug, never id segments

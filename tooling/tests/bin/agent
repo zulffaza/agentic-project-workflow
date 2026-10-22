@@ -1,13 +1,33 @@
 #!/usr/bin/env bash
-# tests/bin/agent — deterministic fake of the Cursor CLI (`agent models`). One gateway, no
-# API-provider axis. REAL shape (verified 2026-09-28): "agent models" prints "<id> -
-# <description>" per line — pw_api_catalog strips the tail; tests assert the resolver on this
-# shape. `agent ls` is an interactive TUI in the real CLI and is never scripted — refuse it too.
+# tests/bin/agent — deterministic fake of the Cursor CLI. One gateway, no API-provider axis.
+# REAL shapes (verified 2026-09-28 / 2026-10-22):
+#   `agent models` prints "<id> - <description>" per line — pw_api_catalog strips the tail.
+#   `agent -p … --model <id>` is the live model surface; a fake probe answers from a fixed set
+#   so model-resolve's --probe fallback is testable without a real model call.
+# `agent ls` is an interactive TUI in the real CLI and is never scripted — refuse it too.
 case "$1" in
   models)
+    # Real shape: a header, a blank line, then "<id> - <description>" rows.
     printf '%s\n' \
+      'Available models' \
+      '' \
       'cursor-test-high - Test High' \
-      'cursor-test-low-fast - Test Low Fast' ;;
+      'cursor-test-low-fast - Test Low Fast' \
+      'composer-2.5 - Composer 2.5' ;;
+  -p)
+    shift
+    mid=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --model) mid="${2:-}"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    case "$mid" in
+      cursor-probe-ok|'cursor-probe-ok['*']')     printf 'OK\n'; exit 0 ;;
+      cursor-probe-dead|'cursor-probe-dead['*']') printf 'Cannot use this model: %s\n' "$mid" >&2; exit 1 ;;
+      *) printf 'agent-shim: probe unsupported model: %s\n' "${mid:-<none>}" >&2; exit 1 ;;
+    esac ;;
   ls)
     printf 'agent-shim: `ls` is an interactive TUI — not scriptable (use the filesystem surface)\n' >&2
     exit 1 ;;

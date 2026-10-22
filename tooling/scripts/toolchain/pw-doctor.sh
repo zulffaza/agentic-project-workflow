@@ -162,7 +162,9 @@ PY
 # or nothing on any failure — every call site treats "nothing" as "can't check", never an
 # error. kilo/opencode/cursor/codex have a queryable catalog (`kilo models | opencode models |
 # agent models | codex debug models` — the codex reader lives in pw_api_catalog and prints bare
-# visible slugs); claude alone doesn't (fixed alias set — see docs/EXECUTION.md); callers check
+# visible slugs); cursor's reader additionally merges ~/.cursor/cli-config.json →
+# modelParameters because `agent models` omits desktop-only ids (verified 2026-10-22). claude
+# alone doesn't (fixed alias set — see docs/EXECUTION.md); callers check
 # that before ever reaching here. PW_<PROVIDER>_API_PROVIDERS entries are MODEL-ID PREFIX
 # FILTERS (slashes allowed — nested BYOK ids like `kilo/alibaba-token-plan`), never catalog
 # arguments: `kilo models kilo/alibaba-token-plan` errors "Provider not found" (verified

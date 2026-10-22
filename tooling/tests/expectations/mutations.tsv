@@ -419,5 +419,10 @@ C326-skill-readme-conditional	skill/project-workflow/SKILL.md	Read the bundle RE
 C327-execute-routing-reference-lost	commands/pw-execute.md	Use the existing route and provider references	Use the route mechanics above	T4	-
 C328-orchestrator-ladder-pointer-lost	agents/pw-orchestrator.md	The shared skill ladder owns	The orchestrator derives all route mechanics itself	T4	-
 C329-provider-reference-conditional	commands/pw-execute.md	the selected provider's headless-hook entry under	all provider hook details under	T4	-
-C330-sweep-hung-row-rerun-dropped	tests/mutate.sh	_pwtest_mut_retry "$PW_HOME" "$id" "$file" "$old" "$new" "$tiers" "$only" "$rtmo" "$wbase" "$resdir"	: # the timed-out row is not re-measured	T1	^pw-test-harness\.t\.sh$
-C331-sweep-attribution-inverted	tests/mutate.sh	comm -13 <(_pwtest_fail_names "$base") <(_pwtest_fail_names "$child") | tr '\n' ' '	comm -13 <(_pwtest_fail_names "$child") <(_pwtest_fail_names "$base") | tr '\n' ' '	T1	^pw-test-harness\.t\.sh$
+C330-cursor-desktop-model-fallback	pw-common.sh	{ pw_cursor_cli_models; pw_cursor_config_models; } | awk 'NF && !seen[$0]++' || true	"$bin" models 2>/dev/null | sed 's/ - .*//' || true	T1	pw-common
+C331-cursor-probe-opt-in-dropped	scripts/entities/pw-config.sh	[ "$probe" = 1 ] || [ "${PW_CURSOR_PROBE:-0}" = 1 ]	[ "$probe" = 0 ] && [ "${PW_CURSOR_PROBE:-0}" = 0 ]	T1	pw-config
+C332-cursor-catalog-header-kept	pw-common.sh	sed -e '/^Available models$/d' -e 's/ - .*//' | awk 'NF' || true	sed 's/ - .*//' || true	T1	pw-common
+C333-cursor-bracket-base-resolve	scripts/entities/pw-config.sh	base="${model%%\[*}"	base="$model"	T1	pw-config
+C334-cursor-allowlist-bracket-normalize	scripts/entities/pw-config.sh	case "$match_model" in *'['*']') match_model="${match_model%%\[*}" ;; esac	:	T1	pw-config
+C335-sweep-hung-row-rerun-dropped	tests/mutate.sh	_pwtest_mut_retry "$PW_HOME" "$id" "$file" "$old" "$new" "$tiers" "$only" "$rtmo" "$wbase" "$resdir"	: # the timed-out row is not re-measured	T1	^pw-test-harness\.t\.sh$
+C336-sweep-attribution-inverted	tests/mutate.sh	comm -13 <(_pwtest_fail_names "$base") <(_pwtest_fail_names "$child") | tr '\n' ' '	comm -13 <(_pwtest_fail_names "$child") <(_pwtest_fail_names "$base") | tr '\n' ' '	T1	^pw-test-harness\.t\.sh$

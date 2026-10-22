@@ -35,6 +35,10 @@ PW_PROVIDERS=(claude)
 #   kilo_skilldir() { echo "$HOME/.kilocode/skills"; }
 #   # if the binary is named differently on your PATH:
 #   kilo_bin()      { echo kilo; }
+#   # Cursor's desktop-only model ids live in cli-config.json; point at another file if needed:
+#   PW_CURSOR_CLI_CONFIG="$HOME/.cursor/cli-config.json"
+#   # Let model-resolve spend one live `agent -p` ask for a Cursor id neither catalog lists:
+#   PW_CURSOR_PROBE=1
 
 # --- KiloCode API Providers (one OR MORE) -----------------------------------
 # KiloCode (an Agent Provider) can connect to several model API Providers at the same time —
@@ -130,9 +134,11 @@ PW_MEMORY_NOTES=""
 #                                    # against a live list (see docs/EXECUTION.md).
 #   PW_MODEL_ALLOWLIST_KILO=""       # e.g. "command_code/deepseek/*,kilo/anthropic/claude-haiku*"
 #   PW_MODEL_ALLOWLIST_OPENCODE=""   # e.g. "anthropic/claude-haiku*"
-#   PW_MODEL_ALLOWLIST_CURSOR=""     # e.g. "claude-opus-5*,gpt-5*" — ids from `agent models`;
-#                                    # prefer suffix-free id forms + '*' — model-check globs treat
-#                                    # a literal '[…]' bracket awkwardly (see selftest asserts)
+#   PW_MODEL_ALLOWLIST_CURSOR=""     # e.g. "claude-opus-5*,gpt-5*,glm-5p3-flash" — ids from
+#                                    # `agent models` OR the ids in ~/.cursor/cli-config.json
+#                                    # (desktop-only models; the CLI owns that file). A bracket
+#                                    # override tunes the same model, so an entry matches its
+#                                    # BASE id: "glm-5p3-flash" permits "[reasoning=low]".
 #   PW_MODEL_ALLOWLIST_CODEX=""      # e.g. "gpt-6*" — BARE slugs from `codex debug models`
 #                                    # (visible rows only; hidden slugs like gpt-reserve still
 #                                    # RUN if invoked, so the allowlist is the real gate). The

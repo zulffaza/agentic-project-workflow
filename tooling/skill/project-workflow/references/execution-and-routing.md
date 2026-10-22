@@ -49,9 +49,12 @@ is the one case that *does* stop after just that task.
 
 Every task carries `Execute with: <provider>:<model-or-agent>` + `Why:` + `Story points:`, and
 optional `Effort:` (`low`/`medium`/`high`/`xhigh`/`max` → claude `--effort`, kilo `--variant`,
-cursor nearest id-variant / `[effort=…]` bracket param, codex a per-run reasoning-effort override
-on the same bare slug — its Fast tier is a separate per-run override, never an id segment) +
-`Thinking:` (kilo `--thinking`; cursor via `-thinking-` id segment; codex n/a — effort covers it).
+cursor nearest id-variant when the catalog lists it, otherwise a bracket param on the base id
+using the model's own parameter name (`glm-5p3-flash[reasoning=high]`), codex a per-run
+reasoning-effort override on the same bare slug — its Fast tier is a separate per-run override,
+never an id segment) +
+`Thinking:` (kilo `--thinking`; cursor via `-thinking-` id segment or a reasoning/effort bracket
+param; codex n/a — effort covers it).
 `PLAN.md` mirrors it in **Execute with** + **SP** columns.
 **Default the provider to the plan's "Produced by"** (the agent that did the breakdown) so a run
 doesn't force an agent switch; route a task to a different provider only with a stated `Why:`.
@@ -77,13 +80,23 @@ discovery bullet below).
   codex prints one-line JSON; pw's reader emits the bare visible slugs). There's no fixed roster to read off anymore; a plausible-looking id can simply
   not exist, or a display name can differ from the real id (verified case: KiloCode's own `auth
   list` shows "Kilo Gateway," but the id it actually resolves under is `kilo`, not `kilo_gateway`
-  — `kilo models kilo_gateway` errors). Before writing a task's `Execute with:`:
+  — `kilo models kilo_gateway` errors). Cursor's `agent models` is incomplete: ids the desktop
+  offers can appear only in `~/.cursor/cli-config.json` → `modelParameters` (verified case:
+  `glm-5p3-flash`). That file is CLI-owned — the desktop app is not required, and a missing file
+  just means one source fewer. `pw-config.sh model-resolve` already reads both; add `--probe` to
+  test one live call for an id neither lists (it spends a model request). A bracket override
+  (`glm-5p3-flash[reasoning=low]`) tunes the same model; use the parameter name recorded for it
+  in `modelParameters` (`reasoning`, `effort`, `context`, `fast`). Before writing a task's
+  `Execute with:`:
   ```bash
   kilo models                   # full catalog; PW_KILO_API_PROVIDERS entries are model-id
   opencode models               # PREFIX FILTERS over these lines (slashes allowed — a
   agent models                  # gateway-nested BYOK is `kilo/alibaba-token-plan/<m>`, a
                                 # direct provider `alibaba-token-plan/<m>`), never as
                                 # arguments: `kilo models kilo/alibaba-token-plan` ERRORS.
+  # cursor extras (CLI list is incomplete):
+  python3 -c 'import json,os; print("\n".join(json.load(open(os.path.expanduser("~/.cursor/cli-config.json")))["modelParameters"]))'
+  pw-config.sh model-resolve --provider cursor --model <id> [--probe]   # live check (opt-in)
   ```
   Pick an id from that actual output; resolve a row to its canonical bind id with
   `pw-config.sh model-resolve --provider <provider> --model <model-id>` (it also enforces the prefix scope).
@@ -341,4 +354,5 @@ columns with the generic `stack-record` — it refuses them, so no manual flag c
   yields one final `{result, session_id, is_error, usage}` only on success, so treat unparsable
   output as failure. `session_id` (plain UUID) feeds the ledger; resume with `--resume <id>`.
   `agent ls` is an interactive TUI and errors on non-tty stdin — don't script it (use workspace
-  files + `agent models`).
+  files + `agent models`; for ids the CLI list omits, read `~/.cursor/cli-config.json` →
+  `modelParameters` or let `model-resolve --probe` try one live ask).

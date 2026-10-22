@@ -64,7 +64,11 @@ declare -p PW_FORGE_HOSTS >/dev/null 2>&1 || PW_FORGE_HOSTS=()
 
 # Cursor — its own single gateway (api2.cursor.sh); no PW_CURSOR_API_PROVIDERS axis (the
 # API-Provider concept doesn't apply to it). Model ids: `agent models` (200+ entries incl.
-# per-variant ids and [param=…] syntax); `cursor:<id>` is the explicit-prefix form in tasks.
+# per-variant ids and [param=…] syntax) PLUS the ids in ~/.cursor/cli-config.json →
+# `modelParameters` (desktop-only ids such as glm-5p3-flash are absent from `agent models`,
+# verified 2026-10-22). That file is CLI-owned — written on first run, so no desktop install is
+# required; a missing file just means one source fewer. `cursor:<id>` is the explicit-prefix
+# form in tasks; `<id>[reasoning=low]` tunes a parameterized model.
 # Codex — same single-gateway shape (ChatGPT auth); no PW_CODEX_API_PROVIDERS axis. Model ids
 # are BARE SLUGS from `codex debug models` (no effort/variant/fast suffixes — reasoning effort
 # and the Fast service tier are per-run flags, not id segments); `codex:<slug>` in tasks.
@@ -126,17 +130,90 @@ pw_api_bin() {  # <agent-provider> -> its CLI binary name (hook-resolved), or th
   printf '%s\n' "$prov"
 }
 
+# --- Cursor model sources: CLI catalog, desktop config, opt-in live probe ------------------
+# `agent models` is NOT the complete Cursor model set (verified 2026-10-22): the desktop app
+# exposes ids the CLI catalog omits. On the maintainer machine `agent models` listed only
+# glm-5.2 while the desktop offered glm-5.3 flash as `glm-5p3-flash`; the id is a key in
+# ~/.cursor/cli-config.json → modelParameters and runs fine through `agent -p`. Read that file
+# as a second source. A live probe is the third source — one real model call, therefore opt-in
+# (PW_CURSOR_PROBE=1 or `model-resolve --probe`), never a default in preflight paths.
+# cli-config.json is app/user-owned: this bundle only READS it, never writes it.
+: "${PW_CURSOR_CLI_CONFIG:=$HOME/.cursor/cli-config.json}"
+: "${PW_CURSOR_PROBE_TIMEOUT:=90}"
+: "${PW_CURSOR_PROBE:=0}"
+
+pw_cursor_cli_models() {  # -> ids from `agent models` (header + description tail stripped)
+  local bin; bin="$(pw_api_bin cursor)"
+  command -v "$bin" >/dev/null 2>&1 || return 0
+  # Real shape: "Available models" header, a blank line, then "<id> - <description>" rows.
+  # Drop the header/blank lines and the tail so consumers match ids, never descriptions.
+  "$bin" models 2>/dev/null | sed -e '/^Available models$/d' -e 's/ - .*//' | awk 'NF' || true
+}
+
+pw_cursor_config_models() {  # -> ids from cli-config modelParameters (+ model/selectedModel ids)
+  [ -f "$PW_CURSOR_CLI_CONFIG" ] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 - "$PW_CURSOR_CLI_CONFIG" <<'PY' 2>/dev/null || true
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    raise SystemExit(0)
+ids = []
+mp = d.get("modelParameters")
+if isinstance(mp, dict):
+    ids.extend(mp.keys())
+for key in ("model", "selectedModel"):
+    v = d.get(key)
+    if isinstance(v, dict) and isinstance(v.get("modelId"), str):
+        ids.append(v["modelId"])
+hist = d.get("modelSelectionHistory")
+if isinstance(hist, list):
+    ids.extend(i for i in hist if isinstance(i, str))
+v = d.get("exploreSubagentModel")
+if isinstance(v, str):
+    ids.append(v)
+for mid in dict.fromkeys(ids):
+    if mid and mid != "default":
+        print(mid)
+PY
+}
+
+pw_cursor_probe_model() {  # <model-id> -> 0 when a one-shot headless ask gets a reply
+  local bin out rc=0
+  case "${1:-}" in ''|-*) return 1 ;; esac
+  bin="$(pw_api_bin cursor)"
+  command -v "$bin" >/dev/null 2>&1 || return 1
+  # --mode ask keeps the probe tool-free; --trust clears the per-folder gate. The prompt rides
+  # stdin (the documented cursor shape); the id is one quoted argv value, never eval'd.
+  if command -v timeout >/dev/null 2>&1; then
+    out="$(printf 'Reply with OK' | timeout "$PW_CURSOR_PROBE_TIMEOUT" "$bin" -p --trust --mode ask --model "$1" 2>&1)" || rc=$?
+  else
+    out="$(printf 'Reply with OK' | "$bin" -p --trust --mode ask --model "$1" 2>&1)" || rc=$?
+  fi
+  [ "$rc" -eq 0 ] || return "$rc"
+  case "$out" in
+    *"Cannot use this model"*|*"ActionRequiredError"*|*"Workspace Trust Required"*) return 1 ;;
+  esac
+  return 0
+}
+
 pw_api_catalog() {  # <agent-provider> -> live catalog lines (provider prefix included), nothing on failure
   local prov="$1" bin
   case "$prov" in
     kilo|opencode|cursor)
       bin="$(pw_api_bin "$prov")"
       command -v "$bin" >/dev/null 2>&1 || return 0
-      # Cursor's `agent models` prints "<id> - <description>"; kilo/opencode print bare ids.
-      # Normalize centrally: strip the first " - " tail so every exact-line consumer
-      # (model-resolve, provider-audit, the spawn availability gate, doctor allowlist counts)
-      # matches ids, not descriptions (corpus 09-28: every cursor pin read false-unbound).
-      "$bin" models 2>/dev/null | sed 's/ - .*//' || true ;;
+      if [ "$prov" = cursor ]; then
+        # Two sources, deduped CLI-first: `agent models` is incomplete — desktop-only ids
+        # live as cli-config modelParameters keys (see the Cursor sources block above).
+        { pw_cursor_cli_models; pw_cursor_config_models; } | awk 'NF && !seen[$0]++' || true
+      else
+        # kilo/opencode print bare ids; normalize centrally so every exact-line consumer
+        # (model-resolve, provider-audit, the spawn availability gate, doctor allowlist counts)
+        # matches ids, not descriptions (corpus 09-28: every cursor pin read false-unbound).
+        "$bin" models 2>/dev/null | sed 's/ - .*//' || true
+      fi ;;
     codex)
       bin="$(pw_api_bin "$prov")"
       command -v "$bin" >/dev/null 2>&1 || return 0
@@ -392,9 +469,10 @@ Pipe the prompt via STDIN as a plain redirect — printf '%s' "$PROMPT" | agent 
 --output-format json emits ONE final event: {result, session_id, is_error, usage} — the session_id
 resumes with --resume (live round-trip verified 2026-09-09). Blocked/gated models exit non-zero
 with "ActionRequiredError" text (no JSON event) — treat unparsable output as an error, never blank
-success. Model ids from `agent models` (per-variant ids, e.g. claude-opus-5-thinking-xhigh; bracket
-params like '[context=1m,effort=high]' also accepted). --workspace targets a tree different from
-the invocation cwd (verified).
+success. Model ids from `agent models` PLUS ~/.cursor/cli-config.json → modelParameters (the CLI
+catalog omits desktop-only ids such as glm-5p3-flash, verified 2026-10-22; per-variant ids, e.g.
+claude-opus-5-thinking-xhigh; bracket params like '[context=1m,effort=high]' also accepted).
+--workspace targets a tree different from the invocation cwd (verified).
 EOF
 }
 

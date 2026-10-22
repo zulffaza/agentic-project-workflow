@@ -78,13 +78,19 @@
 #   pw-config.sh model-check --provider <p> --model <m>
 #       Pass/refuse a model against PW_MODEL_ALLOWLIST_<PROVIDER> from
 #       pw.config.sh (empty/unset = all allowed — the default rule).
-#   pw-config.sh model-resolve --provider <p> --model <m>
+#   pw-config.sh model-resolve --provider <p> --model <m> [--probe]
 #       AVAILABILITY check (the sibling of model-check's PERMISSION check): match the model
-#       against the provider's live catalog, verify it sits inside the
+#       against the provider's catalog, verify it sits inside the
 #       PW_<PROVIDER>_API_PROVIDERS prefix scope, and print the CANONICAL catalog id that a
-#       headless `-m`/`--model` must receive. exit 0 resolved / 1 not in catalog /
-#       2 matched but out of configured scope. Providers with no queryable catalog (claude)
-#       or no catalog reachable (CLI off PATH) exit 0 "unverified" — never a false dead.
+#       headless `-m`/`--model` must receive. Cursor reads TWO catalog sources — `agent models`
+#       plus the desktop app's ~/.cursor/cli-config.json → modelParameters (desktop-only ids
+#       such as glm-5p3-flash are absent from the CLI catalog) — and `--probe` (or
+#       PW_CURSOR_PROBE=1) additionally accepts an id neither source lists when one live
+#       `agent -p … --model <id>` ask succeeds (a real model call; opt-in). A bracket override
+#       (`glm-5p3-flash[reasoning=low]`) resolves on its BASE id and is printed whole. exit 0
+#       resolved / 1 not in catalog / 2 matched but out of configured scope. Providers with no
+#       queryable catalog (claude) or no catalog reachable (CLI off PATH) exit 0 "unverified" —
+#       never a false dead.
 #
 # Named-argument grammar: operation words stay first and positional; every value is
 # named. Scalar values are ONE token (quote spaces); --flag=value carries one literal
@@ -559,6 +565,8 @@ cmd_review_rounds() {
 # Guard against an agent picking an unexpectedly expensive model. Reads PW_MODEL_ALLOWLIST_<PROVIDER>
 # (uppercased) from pw.config.sh — a comma-separated list of glob patterns matched against the
 # model id (the part after the provider prefix, e.g. "opus" or "command_code/deepseek/*").
+# Cursor bracket overrides (`glm-5p3-flash[reasoning=low]`) tune the same model, so matching uses
+# the BASE id — one allowlist entry permits every tuning of it.
 # THE RULE: empty or unset = ALL models allowed for that provider — this is the default, and it's
 # deliberate: nothing is restricted unless you explicitly configure a pattern. Never taken on the
 # caller's word — this re-reads the config itself, same spirit as auto-signoff re-checking its own
@@ -591,7 +599,13 @@ cmd_model_check() {
   # where pins are WRITTEN (_model_pin_validate); model-check itself keeps its documented
   # semantics (an unset/empty PW_MODEL_ALLOWLIST_<PROVIDER> = all models allowed).
   case "$prov" in *[!A-Za-z0-9_-]*) die "model-check: invalid provider token '$prov' → fix: use a provider name (letters, digits, dash, underscore)" ;; esac
-  local upper var allow pats pat matched=0
+  local upper var allow pats pat matched=0 match_model="$model"
+  # Cursor's bracket overrides (`glm-5p3-flash[reasoning=low]`) tune a model per run; they are
+  # NOT a different model, so the allowlist matches the base id. Otherwise every variant would
+  # need its own `*` pattern and an exact allowlist would silently refuse the tuned form.
+  if [ "$prov" = cursor ]; then
+    case "$match_model" in *'['*']') match_model="${match_model%%\[*}" ;; esac
+  fi
   upper="$(printf '%s' "$prov" | tr '[:lower:]' '[:upper:]')"
   var="PW_MODEL_ALLOWLIST_${upper}"
   allow="${!var:-}"
@@ -602,7 +616,7 @@ cmd_model_check() {
   IFS=',' read -ra pats <<< "$allow"
   for pat in "${pats[@]}"; do
     pat="$(printf '%s' "$pat" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-    case "$model" in
+    case "$match_model" in
       $pat) matched=1; break ;;
     esac
   done
@@ -627,9 +641,13 @@ cmd_model_check() {
 # Fail-open on "can't check" (claude has no catalog; a CLI off
 # PATH, an empty catalog, or an unknown provider = unverified, exit 0) — a non-zero here is a
 # POSITIVE determination, which is what makes it safe as a pre-spawn hard stop.
-#   model-resolve --provider <p> --model <m>
+# Cursor has THREE sources (verified 2026-10-22): `agent models`, then cli-config.json
+# modelParameters (desktop-only ids — `pw_api_catalog` merges both, so a config-only id
+# resolves in the normal path and is announced on stderr), then an opt-in live probe
+# (`--probe` / PW_CURSOR_PROBE=1) for an id neither source lists.
+#   model-resolve --provider <p> --model <m> [--probe]
 cmd_model_resolve() {
-  local prov="" model="" a v
+  local prov="" model="" a v probe=0
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
     case "$a" in
@@ -640,14 +658,16 @@ cmd_model_resolve() {
       --provider|--model)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
         case "$a" in --provider) prov="$v" ;; --model) model="$v" ;; esac ;;
+      --probe)    probe=1 ;;
+      --no-probe) probe=0 ;;
       -h|--help) pw_usage ;;
-      -*) _pw_unknown "$a" "model-resolve --provider <p> --model <m>" ;;
-      *) _pw_positional "$a" "model-resolve --provider <p> --model <m>" ;;
+      -*) _pw_unknown "$a" "model-resolve --provider <p> --model <m> [--probe]" ;;
+      *) _pw_positional "$a" "model-resolve --provider <p> --model <m> [--probe]" ;;
     esac
   done
-  [ -n "$prov" ] || die "model-resolve: --provider is required → fix: model-resolve --provider <p> --model <m>   (prints the canonical catalog id on exit 0)"
-  [ -n "$model" ] || die "model-resolve: --model is required → fix: model-resolve --provider <p> --model <m>   (prints the canonical catalog id on exit 0)"
-  local catalog line cands upper via=0
+  [ -n "$prov" ] || die "model-resolve: --provider is required → fix: model-resolve --provider <p> --model <m> [--probe]   (prints the canonical catalog id on exit 0)"
+  [ -n "$model" ] || die "model-resolve: --model is required → fix: model-resolve --provider <p> --model <m> [--probe]   (prints the canonical catalog id on exit 0)"
+  local catalog cli_catalog="" line cands upper via=0 base="" model_suffix="" pids params _p _k _v
   case "$prov" in
     claude)
       echo "model-resolve: $prov:$model — unverified (Claude Code has a fixed alias set, no queryable catalog; model-check governs)"
@@ -662,22 +682,84 @@ cmd_model_resolve() {
     echo "model-resolve: $prov:$model — unverified ('$prov' catalog empty or CLI not on PATH)" >&2
     return 0
   fi
+  # Cursor parameter overrides: `glm-5p3-flash[reasoning=low]` (the `agent --model` bracket
+  # syntax) is a base model plus per-run tuning, not a catalog id. Validate the suffix shape,
+  # resolve the BASE against the catalogs, and print the canonical base WITH the suffix intact
+  # (the headless `--model` needs the whole string).
+  base="$model"
+  if [ "$prov" = cursor ]; then
+    case "$model" in
+      *'['*']')
+        base="${model%%\[*}"
+        model_suffix="${model#"$base"}"
+        params="${model_suffix#\[}"; params="${params%\]}"
+        if [ -z "$base" ]; then
+          echo "model-resolve: $prov:$model — malformed parameter override (empty base id) (exit 1)" >&2
+          return 1
+        fi
+        case "$params" in
+          ''|*[!A-Za-z0-9_,.=:-]*)
+            echo "model-resolve: $prov:$model — malformed parameter override; expected '<id>[<param>=<value>,…]' (exit 1)" >&2
+            return 1 ;;
+        esac
+        IFS=',' read -ra pids <<< "$params"
+        for _p in "${pids[@]}"; do
+          case "$_p" in *=*) _k="${_p%%=*}"; _v="${_p#*=}" ;; *)
+            echo "model-resolve: $prov:$model — malformed parameter '$_p'; expected <param>=<value> (exit 1)" >&2
+            return 1 ;;
+          esac
+          case "$_k" in ''|*[!A-Za-z0-9_]*)
+            echo "model-resolve: $prov:$model — malformed parameter name '$_k' (exit 1)" >&2
+            return 1 ;;
+          esac
+          case "$_v" in ''|*[!A-Za-z0-9._:-]*)
+            echo "model-resolve: $prov:$model — malformed value for '$_k' (exit 1)" >&2
+            return 1 ;;
+          esac
+        done ;;
+      *'['*|*']'*)
+        echo "model-resolve: $prov:$model — malformed parameter override; expected '<id>[<param>=<value>,…]' (exit 1)" >&2
+        return 1 ;;
+    esac
+  fi
+  # Cursor's merged catalog hides which source matched; keep the CLI-only list so a
+  # desktop-config hit is announced rather than silently treated as a CLI catalog line.
+  if [ "$prov" = cursor ]; then cli_catalog="$(pw_cursor_cli_models)"; fi
   # EXACT catalog line first — the prefix distinguishes connections (see header), so a bare
   # row must never silently bind the gateway line when a direct provider line exists.
-  line="$(printf '%s\n' "$catalog" | grep -F -x "$model" | head -1 || true)"
+  line="$(printf '%s\n' "$catalog" | grep -F -x "$base" | head -1 || true)"
   if [ -z "$line" ]; then
-    line="$(printf '%s\n' "$catalog" | grep -F -x "$prov/$model" | head -1 || true)"
+    line="$(printf '%s\n' "$catalog" | grep -F -x "$prov/$base" | head -1 || true)"
     via=1
+  fi
+  if [ -z "$line" ] && [ "$prov" = cursor ] && { [ "$probe" = 1 ] || [ "${PW_CURSOR_PROBE:-0}" = 1 ]; }; then
+    # Last source: one live ask. Reached only when BOTH catalogs miss, so a normal pin never
+    # pays for a probe; a success proves the gateway accepts the id even though nothing lists it.
+    if pw_cursor_probe_model "$model"; then
+      echo "model-resolve: $prov:$model — absent from 'agent models' and cli-config modelParameters; verified by live probe" >&2
+      printf '%s\n' "$model"
+      return 0
+    fi
+    echo "model-resolve: $prov:$model — live probe failed (model refused, gated, or unreachable) (exit 1)" >&2
   fi
   if [ -z "$line" ]; then
     echo "model-resolve: $prov:$model — not in the live catalog (exit 1)" >&2
-    echo "  → fix: re-pin the row to a real id — candidates from the '$prov' live catalog (\`pw-help\` lists each provider's catalog command):" >&2
-    cands="$(printf '%s\n' "$catalog" | grep -F "${model##*/}" | head -5 || true)"
-    [ -n "$cands" ] && printf '%s\n' "$cands" | sed 's/^/      /' >&2 || echo "      (none matching '${model##*/}' — check the provider scope too)" >&2
+    if [ "$prov" = cursor ]; then
+      echo "  → sources checked: \`agent models\` and ${PW_CURSOR_CLI_CONFIG:-~/.cursor/cli-config.json} modelParameters. Add PW_CURSOR_PROBE=1 (or --probe) to try one live call for a desktop-only id." >&2
+    fi
+    echo "  → fix: re-pin the row to a real id — candidates from the '$prov' catalog (\`pw-help\` lists each provider's catalog command):" >&2
+    cands="$(printf '%s\n' "$catalog" | grep -F "${base##*/}" | head -5 || true)"
+    [ -n "$cands" ] && printf '%s\n' "$cands" | sed 's/^/      /' >&2 || echo "      (none matching '${base##*/}' — check the provider scope too)" >&2
     return 1
   fi
   if [ "$via" = 1 ]; then
-    echo "model-resolve: $prov:$model — no exact catalog line; bound the gateway-nested '$line'. A direct provider '$model' is a different connection; pin the full id if you meant the other." >&2
+    echo "model-resolve: $prov:$model — no exact catalog line; bound the gateway-nested '$line'. A direct provider '$base' is a different connection; pin the full id if you meant the other." >&2
+  fi
+  if [ "$prov" = cursor ] && [ -n "$cli_catalog" ]; then
+    # grep -F -x without -q: a -q early exit SIGPIPEs printf under pipefail (bundle lesson).
+    if ! printf '%s\n' "$cli_catalog" | grep -F -x -- "$line" >/dev/null; then
+      echo "model-resolve: $prov:$line — resolved from cli-config modelParameters (absent from 'agent models'; desktop-only id)" >&2
+    fi
   fi
   if ! pw_api_in_scope "$prov" "$line"; then
     upper="$(printf '%s' "$prov" | tr '[:lower:]' '[:upper:]')"
@@ -686,7 +768,7 @@ cmd_model_resolve() {
     pw_api_entries "$prov" | sed 's/^/      /' >&2
     return 2
   fi
-  printf '%s\n' "$line"
+  printf '%s\n' "$line$model_suffix"
 }
 
 # --- per-project config (top-level show/get/set/ensure) + global floors ------------------------
@@ -1058,6 +1140,7 @@ cmd_global() {
   done
   echo "  route-default    : $PW_ROUTE_DEFAULT   (task Route: > PLAN Routing: > this > auto)"
   echo "  headless budgets : stall ${PW_HEADLESS_STALL}m / timeout ${PW_HEADLESS_TIMEOUT}m"
+  echo "  cursor probe     : ${PW_CURSOR_PROBE} (live model probe, timeout ${PW_CURSOR_PROBE_TIMEOUT}s; --probe overrides per call)"
   echo "  max-self-repair  : $PW_MAX_SELF_REPAIR"
   echo "  rfc-backend      : ${PW_RFC_BACKEND:-markdown}"
   echo "  review-frame     : $(pw_review_template_path) ($(pw_review_template_source); placeholders validated on use)"
