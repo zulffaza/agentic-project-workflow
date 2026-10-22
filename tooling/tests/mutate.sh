@@ -387,5 +387,9 @@ pwtest_run_mutations() {
   printf '\nmutate: %d mutations, %d caught, %d hung, %d vacuous/drift — %ss total\n' "$n" "$caught" "$hung" "$((n-caught-hung))" "$_el" >&2
   [ -n "$hung_ids" ] && printf 'mutate: HUNG rows:%s\n' "$hung_ids" >&2
   [ "$_el" -gt 600 ] && printf 'mutate: WARN sweep took %ss (>600) — see tooling/docs/testing.md (timing canary, non-blocking)\n' "$_el" >&2
-  [ "$n" -gt 0 ] && [ "$caught" -eq "$n" ]
+  # Fail loudly unless every selected row reached a caught verdict. State the result
+  # explicitly: a bare `[ … ] && [ … ]` tail made a red sweep look green in one run.
+  [ "$n" -gt 0 ] || return 1
+  [ "$caught" -eq "$n" ] || return 1
+  return 0
 }
