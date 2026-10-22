@@ -491,3 +491,159 @@ grep -q "MR merged (observed)" "$PW_PROJECTS_DIR/$A47/LOG.md" \
   && pwtest_ok "F22 observed merge is logged as observed" \
   || pwtest_bad "F22 observed log" "$(tail -2 "$PW_PROJECTS_DIR/$A47/LOG.md")"
 rm -rf "$PW_PROJECTS_DIR/$A47"
+
+# --- plan 52: the single `update` operator (agent-mediated record writes) ---------------------
+# One public write route with a closed status vocabulary. Each value keeps its own gate:
+# complete = verified execution outcome, accepted = human decision, review = whole-PLAN
+# readiness. Unknown input must fail before any write.
+p52_write_task() { # <project> <task> <status> <deps> [placeholder]
+  local p="$1" t="$2" st="$3" dep="$4" ph="${5:-}"
+  printf -- '- **Status:** %s\n- **Execute with:** kilotest/test-model\n' "$st" > "$p/task/$t.md"
+  printf '\n## Verify (Definition of Done)\n```bash\ntrue\n```\n\n## Result (filled by the executor at run time)\n' >> "$p/task/$t.md"
+  if [ -n "$ph" ]; then
+    printf -- '- **Commit(s):** <sha or zero-change>\n- **Verify outcome:** <pass / fail>\n' >> "$p/task/$t.md"
+  else
+    printf -- '- **Commit(s):** zero-change\n- **Verify outcome:** pass — no change required; `true` returned 0\n' >> "$p/task/$t.md"
+  fi
+  p52_plan_row "$p" "$t" "$st" "$dep"
+}
+p52_plan_row() { # upsert one row in the PLAN task table
+  local p="$1" t="$2" st="$3" dep="$4"
+  local row="| [$t](./$t.md) | task $t | api | $dep | G1 | kilotest/test-model | 1 | $st | — | — |"
+  if grep -q "^| \[$t\]" "$p/task/PLAN.md"; then
+    awk -v t="$t" -v r="$row" '$0 ~ "^\\| \\[" t "\\]" {print r; next} {print}' \
+      "$p/task/PLAN.md" > "$p/task/PLAN.md.tmp" && mv "$p/task/PLAN.md.tmp" "$p/task/PLAN.md"
+  else
+    printf '%s\n' "$row" >> "$p/task/PLAN.md"
+  fi
+}
+p52_selftest() {
+  local SL=p52ops P ST
+  rm -rf "$PW_PROJECTS_DIR/$SL"; pwtest_scaffold_into "$SL"
+  P="$PW_PROJECTS_DIR/$SL"; ST="$(pwtest_script pw-status.sh)"
+  cat > "$P/task/PLAN.md" <<'PLAN'
+# PLAN — p52ops
+## Task table
+| ID | Title | Repo | depends_on | Group | Execute with | SP | Status | Time | Result |
+|----|-------|------|------------|-------|--------------|----|--------|------|--------|
+PLAN
+  p52_write_task "$P" T01 in-progress "—"
+  p52_write_task "$P" T02 todo "—"
+  p52_write_task "$P" T03 todo T02
+  p52_write_task "$P" T04 verify-failed "—"
+  p52_write_task "$P" T05 in-progress "—" placeholder
+  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" status --project "$SL" --phase executing >/dev/null
+
+  # closed vocabulary: unknown, misspelled, legacy status, and case variants fail before a write
+  local before; before="$(cat "$P/task/T01.md")$(cat "$P/task/PLAN.md")"
+  local bad
+  for bad in done Complete complete_ accepted-x ''; do
+    if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" update --project "$SL" --task T01 --status "$bad" >/dev/null 2>"$ROOT/p52err"; then
+      pwtest_bad "p52 rejects status '$bad'" "exit 0"
+    else
+      grep -qE 'unknown --status|--status is required' "$ROOT/p52err" \
+        && pwtest_ok "p52 rejects status '$bad' (rc=2, named)" || pwtest_bad "p52 reject '$bad'" "$(cat "$ROOT/p52err")"
+    fi
+  done
+  [ "$before" = "$(cat "$P/task/T01.md")$(cat "$P/task/PLAN.md")" ] \
+    && pwtest_ok "p52 invalid values write nothing" || pwtest_bad "p52 invalid values" "records changed"
+
+  # selector rules: task required for complete/accepted, rejected for review, --phase rejected
+  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" update --project "$SL" --status complete >/dev/null 2>"$ROOT/p52err"; then
+    pwtest_bad "p52 complete without --task" "accepted"
+  else grep -q 'requires --task' "$ROOT/p52err" && pwtest_ok "p52 complete without --task refuses" || pwtest_bad "p52 selector" "$(cat "$ROOT/p52err")"; fi
+  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" update --project "$SL" --status review --task T01 >/dev/null 2>"$ROOT/p52err"; then
+    pwtest_bad "p52 review with --task" "accepted"
+  else grep -q 'not valid with --status review' "$ROOT/p52err" && pwtest_ok "p52 review rejects --task" || pwtest_bad "p52 review selector" "$(cat "$ROOT/p52err")"; fi
+  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" update --project "$SL" --status review --phase review >/dev/null 2>"$ROOT/p52err"; then
+    pwtest_bad "p52 update with --phase" "accepted"
+  else grep -q -- '--phase is not valid here' "$ROOT/p52err" && pwtest_ok "p52 update rejects --phase" || pwtest_bad "p52 phase flag" "$(cat "$ROOT/p52err")"; fi
+
+  # complete: a verified zero-change result becomes done in task + PLAN (dashboard best-effort)
+  pwtest_rc 0 "p52 complete records done" env PW_PROJECTS_DIR="$PW_PROJECTS_DIR" PW_UPDATE_STABILITY_SECONDS=0 "$ST" update --project "$SL" --task T01 --status complete
+  grep -q '^- \*\*Status:\*\* done$' "$P/task/T01.md" && pwtest_ok "p52 complete task file = done" || pwtest_bad "p52 complete task file" "$(head -3 "$P/task/T01.md")"
+  grep -q '^| \[T01\].*| done |' "$P/task/PLAN.md" && pwtest_ok "p52 complete PLAN row = done" || pwtest_bad "p52 complete PLAN row" "$(grep T01 "$P/task/PLAN.md")"
+  grep -qE '^\| T01 \|.*\| done \|' "$P/README.md" && pwtest_ok "p52 complete dashboard row updated" || pwtest_bad "p52 complete dashboard" "no T01 done row"
+  [ "$(grep -c 'marked as complete' "$P/LOG.md")" = 1 ] && pwtest_ok "p52 complete logs once" || pwtest_bad "p52 complete log" "$(grep -c 'marked as complete' "$P/LOG.md")"
+  grep -q '^- \*\*Status:\*\* executing$' "$P/README.md" && pwtest_ok "p52 complete does not move the phase" || pwtest_bad "p52 complete phase" "phase changed"
+
+  # idempotence: no second log, byte-identical holders
+  before="$(cat "$P/task/T01.md")$(cat "$P/task/PLAN.md")"
+  pwtest_rc 0 "p52 complete idempotent" env PW_PROJECTS_DIR="$PW_PROJECTS_DIR" PW_UPDATE_STABILITY_SECONDS=0 "$ST" update --project "$SL" --task T01 --status complete
+  [ "$before" = "$(cat "$P/task/T01.md")$(cat "$P/task/PLAN.md")" ] && pwtest_ok "p52 complete no-op leaves holders" || pwtest_bad "p52 complete no-op" "holders changed"
+  [ "$(grep -c 'marked as complete' "$P/LOG.md")" = 1 ] && pwtest_ok "p52 complete no-op logs nothing" || pwtest_bad "p52 complete no-op log" "duplicate entry"
+
+  # complete refusals: bare todo, verify-failed, placeholder evidence, disagreeing holders
+  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" update --project "$SL" --task T02 --status complete >/dev/null 2>"$ROOT/p52err"; then
+    pwtest_bad "p52 complete todo" "accepted"
+  else grep -q 'is todo with no recorded work' "$ROOT/p52err" && pwtest_ok "p52 complete refuses bare todo" || pwtest_bad "p52 complete todo" "$(cat "$ROOT/p52err")"; fi
+  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" update --project "$SL" --task T04 --status complete >/dev/null 2>"$ROOT/p52err"; then
+    pwtest_bad "p52 complete verify-failed" "accepted"
+  else grep -q 'is verify-failed' "$ROOT/p52err" && pwtest_ok "p52 complete refuses verify-failed" || pwtest_bad "p52 complete verify-failed" "$(cat "$ROOT/p52err")"; fi
+  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" update --project "$SL" --task T05 --status complete >/dev/null 2>"$ROOT/p52err"; then
+    pwtest_bad "p52 complete placeholder evidence" "accepted"
+  else grep -q 'Verify outcome' "$ROOT/p52err" && pwtest_ok "p52 complete refuses placeholder evidence" || pwtest_bad "p52 evidence" "$(cat "$ROOT/p52err")"; fi
+  printf -- '- **Status:** done\n' > "$P/task/T06.md"
+  p52_plan_row "$P" T06 in-progress "—"
+  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" update --project "$SL" --task T06 --status complete >/dev/null 2>"$ROOT/p52err"; then
+    pwtest_bad "p52 complete disagreeing holders" "accepted"
+  else grep -q 'records disagree' "$ROOT/p52err" && pwtest_ok "p52 complete refuses disagreeing holders" || pwtest_bad "p52 disagree" "$(cat "$ROOT/p52err")"; fi
+  rm -f "$P/task/T06.md"; awk '!/T06/' "$P/task/PLAN.md" > "$P/task/PLAN.md.tmp" && mv "$P/task/PLAN.md.tmp" "$P/task/PLAN.md"
+
+  # acceptance: done + evidence + no open items; refuses todo / verify-failed / open item
+  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" update --project "$SL" --task T03 --status accepted >/dev/null 2>"$ROOT/p52err"; then
+    pwtest_bad "p52 accept todo" "accepted"
+  else grep -q "not done" "$ROOT/p52err" && pwtest_ok "p52 accept refuses a non-done task" || pwtest_bad "p52 accept todo" "$(cat "$ROOT/p52err")"; fi
+  mkdir -p "$P/task/review"
+  printf '# T01 review\n\n## Items\n\n### R1 · §Scope — [OPEN] (you, 2026-10-22)\nNeeds a look.\n' > "$P/task/review/T01.review.md"
+  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" update --project "$SL" --task T01 --status accepted >/dev/null 2>"$ROOT/p52err"; then
+    pwtest_bad "p52 accept open item" "accepted"
+  else grep -q 'open review item' "$ROOT/p52err" && pwtest_ok "p52 accept refuses open review items" || pwtest_bad "p52 accept open item" "$(cat "$ROOT/p52err")"; fi
+  rm -f "$P/task/review/T01.review.md"
+  pwtest_rc 0 "p52 accept records the decision" env PW_PROJECTS_DIR="$PW_PROJECTS_DIR" PW_UPDATE_STABILITY_SECONDS=0 "$ST" update --project "$SL" --task T01 --status accepted
+  grep -q '^- \*\*Status:\*\* accepted$' "$P/task/T01.md" && pwtest_ok "p52 accept task file" || pwtest_bad "p52 accept task file" "$(head -2 "$P/task/T01.md")"
+  grep -q '^| \[T01\].*| accepted |' "$P/task/PLAN.md" && pwtest_ok "p52 accept PLAN row" || pwtest_bad "p52 accept PLAN" "$(grep T01 "$P/task/PLAN.md")"
+  [ "$(grep -c 'marked as accepted' "$P/LOG.md")" = 1 ] && pwtest_ok "p52 accept logs once" || pwtest_bad "p52 accept log" "count=$(grep -c 'marked as accepted' "$P/LOG.md")"
+  before="$(cat "$P/task/T01.md")$(cat "$P/task/PLAN.md")"; local lc; lc="$(grep -c '^- \*\*' "$P/LOG.md")"
+  pwtest_rc 0 "p52 accept idempotent" env PW_PROJECTS_DIR="$PW_PROJECTS_DIR" PW_UPDATE_STABILITY_SECONDS=0 "$ST" update --project "$SL" --task T01 --status accepted
+  [ "$before" = "$(cat "$P/task/T01.md")$(cat "$P/task/PLAN.md")" ] && [ "$(grep -c '^- \*\*' "$P/LOG.md")" = "$lc" ] \
+    && pwtest_ok "p52 accept no-op leaves holders and log" || pwtest_bad "p52 accept no-op" "changed"
+
+  # review readiness: runnable todo blocks; the failed-dependency exception then allows review
+  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" update --project "$SL" --status review >/dev/null 2>"$ROOT/p52err"; then
+    pwtest_bad "p52 review with runnable work" "accepted"
+  else grep -q 'not review-ready' "$ROOT/p52err" && pwtest_ok "p52 review refuses runnable todo" || pwtest_bad "p52 review runnable" "$(cat "$ROOT/p52err")"; fi
+  p52_plan_row "$P" T02 todo T04
+  p52_plan_row "$P" T05 in-progress T04
+  pwtest_rc 0 "p52 review advances when blocked by a failed dependency" env PW_PROJECTS_DIR="$PW_PROJECTS_DIR" PW_UPDATE_STABILITY_SECONDS=0 "$ST" update --project "$SL" --status review
+  grep -q '^- \*\*Status:\*\* review$' "$P/README.md" && pwtest_ok "p52 review sets the phase" || pwtest_bad "p52 review phase" "$(grep Status "$P/README.md" | head -1)"
+  [ "$(grep -c 'Status -> review' "$P/LOG.md")" = 1 ] && pwtest_ok "p52 review logs one transition" || pwtest_bad "p52 review log" "count=$(grep -c 'Status -> review' "$P/LOG.md")"
+  lc="$(grep -c '^- \*\*' "$P/LOG.md")"
+  pwtest_rc 0 "p52 review already review" env PW_PROJECTS_DIR="$PW_PROJECTS_DIR" PW_UPDATE_STABILITY_SECONDS=0 "$ST" update --project "$SL" --status review
+  [ "$(grep -c '^- \*\*' "$P/LOG.md")" = "$lc" ] && pwtest_ok "p52 review no-op logs nothing" || pwtest_bad "p52 review no-op" "logged again"
+
+  # complete refuses outside executing; invalid slug stays a clean exit 2
+  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" update --project "$SL" --task T02 --status complete >/dev/null 2>"$ROOT/p52err"; then
+    pwtest_bad "p52 complete in review phase" "accepted"
+  else grep -q "must be executing" "$ROOT/p52err" && pwtest_ok "p52 complete refuses a later phase" || pwtest_bad "p52 complete phase" "$(cat "$ROOT/p52err")"; fi
+  pwtest_rc 2 "p52 unknown project exits 2" env PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" update --project no-such-project --task T01 --status complete
+
+  # stability guard: a record that changes during assessment is never overwritten
+  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" status --project "$SL" --phase executing >/dev/null
+  p52_write_task "$P" T07 in-progress "—"
+  ( i=0; while [ "$i" -lt 6 ]; do sleep 0.4; printf '\nwriter touched\n' >> "$P/task/T07.md"; i=$((i+1)); done ) &
+  local wpid=$!
+  if PW_PROJECTS_DIR="$PW_PROJECTS_DIR" PW_UPDATE_STABILITY_SECONDS=2 "$ST" update --project "$SL" --task T07 --status complete >/dev/null 2>"$ROOT/p52err"; then
+    pwtest_bad "p52 stability guard" "write proceeded while the record changed"
+  else grep -q 'changed during assessment' "$ROOT/p52err" && pwtest_ok "p52 stability guard refuses a moving record" || pwtest_bad "p52 stability guard" "$(cat "$ROOT/p52err")"; fi
+  wait "$wpid" 2>/dev/null || true
+  grep -q '^- \*\*Status:\*\* in-progress$' "$P/task/T07.md" && pwtest_ok "p52 stability refusal writes nothing" || pwtest_bad "p52 stability write" "status changed"
+
+  # reads stay read-only: report + help never run a mutation
+  before="$(cat "$P/README.md")$(cat "$P/task/PLAN.md")"
+  PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$ST" --project "$SL" --skip-cli-check >/dev/null
+  [ "$before" = "$(cat "$P/README.md")$(cat "$P/task/PLAN.md")" ] && pwtest_ok "p52 report stays read-only" || pwtest_bad "p52 report write" "records changed"
+  rm -rf "$P" "$ROOT/p52err"
+  pwtest_ok "plan-52 update operator matrix (all asserts passed)"
+}
+p52_selftest
