@@ -109,7 +109,7 @@ C35-phase-map-drops-a-command	pw-help.sh	executing|pw-execute pw-verify pw-sync	
 C33-path-substitution-dead	pw-help.sh	    _l="${_l//\{\{PW_HOME\}\}/$PW_HOME}"	    _l="${_l}"	T1	pw-help
 C34-C4-echo-dropped-from-renderer	pw-help.sh	awk '/DOCTRINE|HUMAN-TRIGGERED ONLY/{print	awk '/DOCTRINE/{print	T1	pw-help
 C32-project-render-writes	pw-help.sh	raw="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" phase --project "$slug" 2>/dev/null)" || raw="?"	raw="$(PW_PROJECTS_DIR="$PROJECTS_DIR" "$ST" phase --project "$slug" 2>/dev/null)" || raw="?" ; mkdir -p "$d/.c32-bleed" 2>/dev/null || true	T1	pw-help
-C49-model-resolve-nested-byok	pw-config.sh	grep -F -x "$prov/$model" | head -1	grep -F -x "$model" | head -1	T1	pw-config
+C49-model-resolve-nested-byok	pw-config.sh	grep -F -x "$prov/$base" | head -1	grep -F -x "$base" | head -1	T1	pw-config
 C50-api-prefix-filter-exact	pw-common.sh	case "$line" in "$e"*) found=1; break ;; esac	case "$line" in "$e") found=1; break ;; esac	T1	pw-config
 C51-session-check-kilo-grep	pw-session.sh	printf '%s' "$out" | grep -qF "$id"	printf '%s' "$out" | grep -qF "ses_"	T1	pw-session
 C52-doctor-catalog-arg-bug	pw-doctor.sh	raw="$(pw_api_catalog "$prov")"	raw="$(for ap in $(pw_api_entries "$prov"); do kilo models "$ap" 2>/dev/null || true; done); [ -n "$(pw_api_entries "$prov")" ] || raw="$(kilo models 2>/dev/null || true)"	T1	pw-doctor
@@ -120,7 +120,7 @@ C56-plan-exec-idi-reader	pw-common.sh	awk -F'|' -v idi="$idi" -v bei="$bei" '	aw
 C57-audit-unbound-verdict	pw-status.sh	1) verdict="unbound" ;;	1) verdict="ok" ;;	T1	pw-status
 C58-session-check-task-form	pw-session.sh	[ -n "$slug" ] && [ -n "$task" ] || die "session-check: --project and --task go together → fix: session-check --project <slug> --task <T0n>"	[ -n "$slug" ] && [ -n "$task" ] && die "session-check: --project and --task go together → fix: session-check --project <slug> --task <T0n>"	T1	pw-session
 C59-supervision-contract-text	skill/project-workflow/references/execution-and-routing.md	**Headless supervision (never fire-and-forget):**	**Headless supervision (optional):**	T4	-
-C60-model-resolve-exact-preferred	pw-config.sh	grep -F -x "$model" | head -1	grep -F -x "$prov/$model" | head -1	T1	pw-config
+C60-model-resolve-exact-preferred	pw-config.sh	grep -F -x "$base" | head -1	grep -F -x "$prov/$base" | head -1	T1	pw-config
 C61-monitor-skipped-red	pw-ship.sh	      failed|FAILURE|failed|canceled|CANCELLED|failing)	      failed|FAILURE|failed|canceled|skipped|CANCELLED|SKIPPED|failing)	T1	pw-ship.t.sh
 C62-monitor-no-sha-select	pw-ship.sh	(if ($s | length) > 0 and (any(.[]?; has("sha"))) then (map(select(.sha == $s))) else . end) as $sel	(.) as $sel	T1	pw-ship.t.sh
 C63-template-ai-review-line-gone	../template/PROJECT.template.md	- **AI Review:** <AI_REVIEW_DEFAULT>	- **AI Review:** analysis=off	T4	-
@@ -143,7 +143,7 @@ C82-doctor-mismatch-must-not-fail	scripts/entities/pw-project-doctor.sh	        
 C83-doctor-rfc-engaged-must-fail	scripts/entities/pw-project-doctor.sh	    if [ "$rfc_used" = 1 ]; then bad "$@"; else note "$@ (warning only — RFC side-loop not engaged yet)"	    if false; then bad "$@"; else note "$@ (warning only — RFC side-loop not engaged yet)"	T1	pw-project-doctor
 C84-doctor-mr-table-scope	scripts/entities/pw-project-doctor.sh	'/^## Merge requests/{sec=1; next} /^##[ ]/{sec=0} sec && $2 ~	'$2 ~	T1	pw-project-doctor
 C85-doctor-accepted-pin-history	scripts/entities/pw-project-doctor.sh	      if [ "$(pw_field "$f" Status)" = "accepted" ]; then	      if false; then	T1	pw-project-doctor
-C86-doctor-catalog-desc-strip	pw-common.sh	      "$bin" models 2>/dev/null | sed 's/ - .*//' || true ;;	      "$bin" models 2>/dev/null || true ;;	T1	pw-config
+C86-doctor-catalog-desc-strip	pw-common.sh	  "$bin" models 2>/dev/null | sed -e '/^Available models$/d' -e 's/ - .*//' | awk 'NF' || true	  "$bin" models 2>/dev/null | sed -e '/^Available models$/d' | awk 'NF' || true	T1	pw-config
 C87-doclint-fix-hint-command-only	pw-doc.sh	"tell your agent to rebuild the dashboard task table from the task files (task-file truth is authoritative)"	"run: pw-doc.sh sync <slug> --dashboard-only (rebuilds the table from task-file truth)"	T4	-
 C88-codex-catalog-visibility	pw-common.sh	| grep '"visibility":"list"' \	| grep '"slug"' \	T1	pw-config
 C89-gen-commands-skill-layout	gen-commands.sh	    if [ "$style" = "skill" ]; then	    if false; then	T1	pw-common
@@ -416,9 +416,9 @@ C323-sync-two-sided-doctrine-dropped	skill/project-workflow/references/sync-conf
 C324-sync-dropped-addition-guard-dropped	scripts/entities/pw-ship.sh	[ -z "$dropped" ] \	[ 1 = 1 ] \	T1	pw-sync.t.sh
 C325-sync-owner-approval-dropped	scripts/entities/pw-ship.sh	[ ${#allow[@]} -eq 0 ] || [ "$owner_approved" = 1 ] \	[ 1 = 1 ] \	T1	pw-sync.t.sh
 C326-skill-readme-conditional	skill/project-workflow/SKILL.md	Read the bundle README only	Read `agentic-project-workflow/README.md` first	T4	-
-C327-execute-routing-reference-lost	commands/pw-execute.md	Use the existing route and provider references	Use the route mechanics above	T4	-
+C327-execute-routing-reference-lost	commands/pw-execute.md	references/execution-and-routing.md	the execution routing reference	T4	-
 C328-orchestrator-ladder-pointer-lost	agents/pw-orchestrator.md	The shared skill ladder owns	The orchestrator derives all route mechanics itself	T4	-
-C329-provider-reference-conditional	commands/pw-execute.md	the selected provider's headless-hook entry under	all provider hook details under	T4	-
+C329-provider-reference-conditional	commands/pw-execute.md	Same-provider routes do not load the provider guide.	Load the provider guide on every route.	T4	-
 C330-cursor-desktop-model-fallback	pw-common.sh	{ pw_cursor_cli_models; pw_cursor_config_models; } | awk 'NF && !seen[$0]++' || true	"$bin" models 2>/dev/null | sed 's/ - .*//' || true	T1	pw-common
 C331-cursor-probe-opt-in-dropped	scripts/entities/pw-config.sh	[ "$probe" = 1 ] || [ "${PW_CURSOR_PROBE:-0}" = 1 ]	[ "$probe" = 0 ] && [ "${PW_CURSOR_PROBE:-0}" = 0 ]	T1	pw-config
 C332-cursor-catalog-header-kept	pw-common.sh	sed -e '/^Available models$/d' -e 's/ - .*//' | awk 'NF' || true	sed 's/ - .*//' || true	T1	pw-common
