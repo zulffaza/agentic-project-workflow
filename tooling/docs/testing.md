@@ -42,7 +42,8 @@ only when the selected tiers consume them, so a filtered run is genuinely fast.
 For the **meta-test**, scope to what you touched: `--mutation '<id-filter>'` runs only matching
 register rows — during development use it per changed file (e.g. `--mutation 'C2[5-9]'`), and the
 **full sweep belongs at the ship gate only** (or when a shared library — `pw-common.sh`,
-`pw-mdlib.sh` — or the register itself changes). A full sweep is **~1 min** (parallel, warm cache).
+`pw-mdlib.sh` — or the register itself changes). A full sweep is **~1 min** for a small register (parallel, warm cache); the cost tracks the sum of
+the T1 case runtimes the rows select, so it grows as the register and the T1 cases grow.
 
 ## The meta-test (`--mutation`)
 
@@ -101,10 +102,20 @@ fresh build produces; only the admin path links are repaired, never "fixed" furt
   churn); that bug was a 2026-09-18 "parent-side hang" (clean tree, child done, CPU spin).
 
 `_pwtest_run_row` (shared by both paths) classifies each row: `caught` (harness rc 1), `hung`
-(watchdog `PWTEST_MUT_TIMEOUT`, default 300 s — file restored, sweep continues), `died` (rc 2 =
+(watchdog killed the child — file restored, sweep continues), `died` (rc 2 =
 child setup problem), `vacuous` (rc 0 = the catcher is toothless), `drift` (OLD anchor gone —
 re-pin it against the current code, don't delete the row), `applyfail`. Child logs land in
 `<keep>/<id>.child.log` (`PWTEST_KEEP_DIR` to preserve them past cleanup).
+
+**Watchdog sizing.** A flat 300 s ceiling outlived the T1 case files: the slowest ones now take
+90–200 s each, and the parallel sweep inflates that further through host contention, so a flat
+limit killed rows that were never stuck. The watchdog is therefore **derived per row** from the
+measured per-case durations: the T1 tier records each case file's runtime (a stable table, default
+`$TMPDIR/pwtest-case-times.tsv`, `PWTEST_CASE_TIMES` overrides it), and the row's watchdog is
+3 × the selected cases' total + 60 s, clamped to 300–900 s (`PWTEST_MUT_TIMEOUT_MIN` /
+`PWTEST_MUT_TIMEOUT_MAX`). `PWTEST_MUT_TIMEOUT` still forces one value for every row. A row that
+still hits the watchdog is **re-run alone** with 4 × the ceiling before the sweep calls it hung:
+a watchdog kill is not a verdict, so the row must end with a real `caught`/`vacuous` result.
 
 **Fixture etiquette for case authors.** Never mutate the shared `$F1..$F3` — `cp -a "$F2"
 "$PW_PROJECTS_DIR/<private>"` first (the C22 pollution bug: one case editing shared F2 broke the
@@ -129,7 +140,9 @@ machine-independent. New shims must fail LOUD on unknown invocations (a silent e
 reads as "can't check" and hides regressions).
 
 **Env knobs:** `PWTEST_MUT_JOBS` (parallelism; `1` = serial live-tree), `PWTEST_MUT_TIMEOUT`
-(watchdog seconds), `PWTEST_MUT_CACHE` (cache dir), `PWTEST_FIXTURE_CACHE=` (disable cache),
+(force one watchdog value for every row), `PWTEST_MUT_TIMEOUT_MIN` / `PWTEST_MUT_TIMEOUT_MAX`
+(clamp for the derived watchdog), `PWTEST_CASE_TIMES` (per-case duration table path),
+`PWTEST_MUT_CACHE` (cache dir), `PWTEST_FIXTURE_CACHE=` (disable cache),
 `PWTEST_KEEP_DIR` (child-log dir), `PWTEST_VERBOSE=1`. Internal (don't set by hand):
 `PWTEST_WARM`/`PWTEST_FORCE_FIXTURES` (warm pass), `PWTEST_INNER` (sweep children),
 `PWTEST_MUT_NESTED` (recursion guard in `cases/pw-test-harness.t.sh`).
@@ -146,7 +159,10 @@ same commit (S7).
    occurrence, and drift only detects absence. Check: `grep -cF '<OLD>' <file>` → `1`.
 2. Pick the cheapest `tier` + `only` whose checks actually exercise the reverted fix
    (`T1` + the script's case name is the usual shape; `-` in `only` matches all T1 case names —
-   every name contains a hyphen, so it is effectively "no filter").
+   every name contains a hyphen, so it is effectively "no filter"). `only` is a **substring** match
+   on the case file name, so an unanchored value over-matches: `pw-doc` also selects
+   `pw-doctor.t.sh` and doubles the row's cost. Anchor it (`^pw-doc\.t\.sh$`) when the name is a
+   prefix of another case file.
 3. The catcher must fail **iff** the mutation is applied — and must not depend on the mutation
    changing fixture BYTES (recipe-hash convention above).
 4. IDs: take the next free number **and** check the register plus the draft-plan reservations

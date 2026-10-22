@@ -22,8 +22,11 @@ grep -q 'TEST fixtures built: none' "$PWTEST_ROOT/$TH.a.out" && ! grep -q 'fixtu
 # remains fully enforced in every real-tree run.
 _arc=0; bash "$PWTEST_TESTSDIR/pw_test.sh" --tier T4 </dev/null >"$PWTEST_ROOT/$TH.b.out" 2>&1 || _arc=$?
 _th_install_only() {
+  # a disposable copy cannot match the installed provider bodies (they are stamped with the
+  # SOURCE PW_HOME), so the sync check fails once per configured provider. Accept one or
+  # more sync failures and nothing else.
   awk '/^  FAIL / { n++; if ($0 !~ /^  FAIL T4 pw-doctor reports in sync .*OUT OF SYNC/) bad=1 }
-       END { exit !(n == 1 && !bad) }'
+       END { exit !(n >= 1 && !bad) }'
 }
 printf '%s\n' '  FAIL T4 pw-doctor reports in sync — OUT OF SYNC' | _th_install_only \
   && pwtest_ok "inner T4 allows only the expected install mismatch" \
@@ -140,3 +143,51 @@ else
   pwtest_bad "F3 cache-restore repairs worktree links" "restored worktree cannot resolve its gitdir"
 fi
 rm -rf "$_FR"
+
+# h) the sweep sizes each row's watchdog to the work that row actually does. A flat
+#    ceiling outlived the T1 case files: the slowest ones now take 90-200 s, and the
+#    parallel sweep inflates that through host contention, so a flat limit killed rows
+#    that were never stuck. The estimator reads the measured per-case durations.
+_TT="$PWTEST_ROOT/case-times.tsv"
+printf 'pw-common\t300\n' > "$_TT"
+_saved_ct="$PWTEST_CASE_TIMES"; _saved_mt="${PWTEST_MUT_TIMEOUT:-}"
+PWTEST_CASE_TIMES="$_TT"
+PWTEST_MUT_TIMEOUT=""
+# one worker: the measured case time plus a small margin
+_t1="$(_pwtest_row_timeout T1 '^pw-common\.t\.sh$' "$PW_HOME" 1)"
+[ "$_t1" = 360 ] && pwtest_ok "row watchdog covers the measured case duration" \
+  || pwtest_bad "row watchdog covers the measured case duration" "expected 360 (300s case + 60), got $_t1"
+# eight workers share the host: the same row needs proportionally more time
+_t2="$(_pwtest_row_timeout T1 '^pw-common\.t\.sh$' "$PW_HOME" 8)"
+[ "$_t2" = 1410 ] && pwtest_ok "row watchdog scales with the number of sweep workers" \
+  || pwtest_bad "row watchdog scales with the number of sweep workers" "expected 1410 (300s case x 9/2 + 60), got $_t2"
+PWTEST_MUT_TIMEOUT=42
+_t3="$(_pwtest_row_timeout T1 '^pw-common\.t\.sh$' "$PW_HOME" 8)"
+[ "$_t3" = 42 ] && pwtest_ok "explicit PWTEST_MUT_TIMEOUT wins over the derived watchdog" \
+  || pwtest_bad "explicit PWTEST_MUT_TIMEOUT wins over the derived watchdog" "expected 42, got $_t3"
+PWTEST_MUT_TIMEOUT="$_saved_mt"
+PWTEST_CASE_TIMES="$_saved_ct"
+rm -f "$_TT"
+
+# i) a watchdog kill is not a verdict: the sweep re-runs a timed-out row alone with a
+#    longer watchdog before it calls the row hung.
+grep -qF '_pwtest_mut_retry "$PW_HOME" "$id"' "$TOOL/tests/mutate.sh" \
+  && pwtest_ok "the sweep re-runs a timed-out row before reporting it hung" \
+  || pwtest_bad "the sweep re-runs a timed-out row before reporting it hung" \
+       "mutate.sh must re-measure a row that hit the watchdog; a kill is not a verdict"
+
+# j) attribution: a catch needs a failing assertion the unmutated baseline did not have.
+#    A tree that is red for an environmental reason must not turn every row into a false
+#    catch, and a red baseline must not mask a real catch.
+_TA="$PWTEST_ROOT/attr.a"; _TB="$PWTEST_ROOT/attr.b"
+printf '%s\n' '  FAIL pre-existing — detail' > "$_TA"
+printf '%s\n' '  FAIL pre-existing — detail' '  FAIL caused-by-mutation — detail' > "$_TB"
+_att="$(_pwtest_attribute "$_TA" "$_TB")"
+case "$_att" in
+  *caused-by-mutation*) pwtest_ok "attribution reports the new failure the mutation caused" ;;
+  *) pwtest_bad "attribution reports the new failure the mutation caused" "expected the mutation's failure, got [$_att]" ;;
+esac
+_att2="$(_pwtest_attribute "$_TB" "$_TB")"
+[ -z "$_att2" ] && pwtest_ok "attribution reports nothing when the baseline already failed" \
+  || pwtest_bad "attribution reports nothing when the baseline already failed" "expected empty, got [$_att2]"
+rm -f "$_TA" "$_TB"

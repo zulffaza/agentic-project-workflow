@@ -65,7 +65,7 @@ C3-plan-columns-positional	pw-common.sh	        if (V == "status") sti = i	     
 C4-linked-cell-normalize	pw-common.sh	      if (match(id, /T[0-9]+/)) { id = substr(id, RSTART, RLENGTH) } else { id = "" }	      if (id !~ /^T[0-9]+$/) id = ""	T1	pw-ship.t.sh
 C5-plain-approved-legacy-only	pw-mdlib.sh	    "approved"|"approved ✅") return 0 ;;	    "approved ✅") return 0 ;;	T2	-
 C6-mr-url-sentinel-counts	pw-ship.sh	case "$MR_URL" in http*) _MR_EXISTS=1;; *) _MR_EXISTS=0;; esac	case "$MR_URL" in *) _MR_EXISTS=1;; esac	T1	pw-ship.t.sh
-C7-dashboard-preserve-miskeys	pw-doc.sh	          for (i = 0; i < n; i++) { v = $(i + 2); gsub(/^[ \t]+/, "", v); gsub(/[ \t|]+$/, "", v); print id "\t" NAME[i + 1] "\t" v } }	          for (i = 0; i < n; i++) { v = $(i + 2); gsub(/^[ \t]+/, "", v); gsub(/[ \t|]+$/, "", v); print id "\t" NAME[n] "\t" v } }	T1	pw-doc
+C7-dashboard-preserve-miskeys	pw-doc.sh	          for (i = 0; i < n; i++) { v = $(i + 2); gsub(/^[ \t]+/, "", v); gsub(/[ \t|]+$/, "", v); print id "\t" NAME[i + 1] "\t" v } }	          for (i = 0; i < n; i++) { v = $(i + 2); gsub(/^[ \t]+/, "", v); gsub(/[ \t|]+$/, "", v); print id "\t" NAME[n] "\t" v } }	T1	^pw-doc\.t\.sh$
 C8-mr-state-exit1-abort	pw-ship.sh	  STATE="$(_mr_state_impl "$SLUG" "$task_id" 2>/dev/null || true)"	  STATE="$(_mr_state_impl "$SLUG" "$task_id" 2>/dev/null)"	T2	-
 C9-index-registry-drop-entry	docs/scripts/README.md	`pw-rfc.sh` `pw-worktree.sh`	`pw-rfc-comments.sh` `pw-adopt-snapshot.sh` `pw-worktree-create.sh`	T4	-
 C10-repo-missing-lost-remedy	pw-worktree.sh	repo not found: $REPO_DIR → fix: pass the repo dir name (repos live under $REPOS_DIR — clone it there first)	repo not found: $REPO_DIR	T1	pw-worktree
@@ -165,8 +165,8 @@ C104-human-signoff-spoofs-machine	scripts/entities/pw-review.sh	  [ "$by_kind" =
 C105-header-splice-failure-swallowed	scripts/lib/pw-reviewlib.sh	  if ! md_replace_line "$f" "$hl" "$_gate"; then rm -f "$_gate"; return 1; fi	  md_replace_line "$f" "$hl" "$_gate"	T1	pw-review-hardening
 C106-task-plan-policy-approves-plan	scripts/lib/pw-reviewlib.sh	    task-plan)  [ "$lane" = "task" ] ;;	    task-plan)  return 0 ;;	T1	pw-review-binding
 C107-lock-holder-removed	scripts/lib/pw-reviewlib.sh	    tries=$((tries + 1))	    rm -rf "$lock"; tries=$((tries + 1))	T1	pw-review-hardening
-C108-plan-table-sync-disabled	pw-doc.sh	  mv "$work/PLAN.md" "$PLAN"	  rm -f "$work/PLAN.md"	T1	pw-doc
-C109-plan-table-crlf-status-bleed	pw-doc.sh	    st="$(pw_field "$tf" Status | tr -d '\r')"	    st="$(pw_field "$tf" Status)"	T1	pw-doc
+C108-plan-table-sync-disabled	pw-doc.sh	  mv "$work/PLAN.md" "$PLAN"	  rm -f "$work/PLAN.md"	T1	^pw-doc\.t\.sh$
+C109-plan-table-crlf-status-bleed	pw-doc.sh	    st="$(pw_field "$tf" Status | tr -d '\r')"	    st="$(pw_field "$tf" Status)"	T1	^pw-doc\.t\.sh$
 C110-pw-rfc-isolated-slice-coupled-RI	tests/cases/pw-rfc.t.sh	RI=rfcown; rm -rf "$PW_PROJECTS_DIR/$RI"; cp -a "$F2" "$PW_PROJECTS_DIR/$RI"	: "${RI:?pw-rfc must own its RI fixture}"	T1	pw-rfc
 C111-f3-cache-restore-links-unrepaired	tests/pw_test_lib.sh	    for sfx in "$S2" "$S3"; do	    for sfx in "$S2"; do	T1	pw-test-harness
 C112-ops-detail-delimiter-collapses-blank-fields	pw-help.sh	          printf "%s\037%s\037%s\037%s\n", o, sigs[o], paras[o], facs[o] }	          printf "%s\t%s\t%s\t%s\n", o, sigs[o], paras[o], facs[o] }	T1	pw-help
@@ -361,7 +361,7 @@ C286-sync-target-staleness-dropped	scripts/entities/pw-ship.sh	[ "$cur_target" =
 C287-cascade-keep-handoff-dropped	scripts/entities/pw-ship.sh	if [ "$on_conflict" = keep ] && [ -n "$cpaths" ]; then	if false; then	T1	pw-stack.t.sh
 C288-sync-remote-head-staleness-dropped	scripts/entities/pw-ship.sh	[ "$cur_remote" = "$rec_remote" ] ||	[ "$cur_remote" = "$cur_remote" ] ||	T1	pw-sync.t.sh
 C289-sync-conflict-reference-pointer-lost	commands/pw-sync.md	references/sync-conflict-resolution.md	the conflict procedure	T4	-
-C290-sync-second-repair-allowed	scripts/entities/pw-ship.sh	[ "${repair:-0}" = "0" ] || die "repair budget exhausted	[ "${repair:-0}" = "0" ] || true #	T1	pw-sync.t.sh
+C290-sync-second-repair-allowed	scripts/entities/pw-ship.sh	    die "repair budget exhausted for $work ($consumed/$limit) → fix: report the unresolved failure and its evidence instead of retrying; a new explicitly requested run uses a new work identity"	    true # repair budget guard removed by the mutation	T1	pw-sync.t.sh
 # C268-C270 continue slice 3: the pre-push creation capability probe, the Result-scoped
 # MR write, and mirroring a terminal MR state on a continuation write.
 C291-create-capability-probe-lost	scripts/entities/pw-ship.sh	  if [ "$FORGE_CLI" = "glab" ] && glab mr create --help 2>/dev/null | grep -q -- '--output'; then	  if [ "$FORGE_CLI" = "glab" ]; then	T1	pw-ship.t.sh
@@ -419,3 +419,5 @@ C326-skill-readme-conditional	skill/project-workflow/SKILL.md	Read the bundle RE
 C327-execute-routing-reference-lost	commands/pw-execute.md	Use the existing route and provider references	Use the route mechanics above	T4	-
 C328-orchestrator-ladder-pointer-lost	agents/pw-orchestrator.md	The shared skill ladder owns	The orchestrator derives all route mechanics itself	T4	-
 C329-provider-reference-conditional	commands/pw-execute.md	the selected provider's headless-hook entry under	all provider hook details under	T4	-
+C330-sweep-hung-row-rerun-dropped	tests/mutate.sh	_pwtest_mut_retry "$PW_HOME" "$id" "$file" "$old" "$new" "$tiers" "$only" "$rtmo" "$wbase" "$resdir"	: # the timed-out row is not re-measured	T1	^pw-test-harness\.t\.sh$
+C331-sweep-attribution-inverted	tests/mutate.sh	comm -13 <(_pwtest_fail_names "$base") <(_pwtest_fail_names "$child") | tr '\n' ' '	comm -13 <(_pwtest_fail_names "$child") <(_pwtest_fail_names "$base") | tr '\n' ' '	T1	^pw-test-harness\.t\.sh$

@@ -110,7 +110,13 @@ static_t4() {
   # 1) providers in sync (doctor compares generated vs installed; run before any regen)
   # real PATH during the real-install check: the forge shims change `command -v` answers and
   # would make gen render differently than the installed copy.
-  if env -u PWTEST_FORGE_STATE_FILE -u PW_PROJECTS_DIR -u PW_REPOS -u PW_PROJECTS PATH="$PWTEST_ORIG_PATH" "$(pwtest_script pw-doctor.sh)" >"$ROOT/doctor.out" 2>&1; then pwtest_ok "T4 pw-doctor reports in sync"
+  if [ "${PWTEST_INNER:-}" = 1 ] && [ ! -d "$TOOL/../.git" ]; then
+    # A disposable copy is not installed anywhere: the provider bodies under $HOME are
+    # stamped with the SOURCE PW_HOME, so they can never match this copy. The check is
+    # about the installed state of a real tree, and a red verdict here would make every
+    # sweep child fail for a reason no mutation caused.
+    pwtest_ok "T4 pw-doctor in-sync check skipped (disposable copy, not installed anywhere)"
+  elif env -u PWTEST_FORGE_STATE_FILE -u PW_PROJECTS_DIR -u PW_REPOS -u PW_PROJECTS PATH="$PWTEST_ORIG_PATH" "$(pwtest_script pw-doctor.sh)" >"$ROOT/doctor.out" 2>&1; then pwtest_ok "T4 pw-doctor reports in sync"
   else pwtest_bad "T4 pw-doctor reports in sync" "fix: $TOOL/pw-doctor.sh --fix — $(grep -i 'out of sync\|drift\|missing' "$ROOT/doctor.out" | head -1)"; fi
 
   # 2) registry symmetry: index file == automation set; refs ⊆ known; every file wired
@@ -127,11 +133,23 @@ static_t4() {
   [ -z "$unreferenced" ] && pwtest_ok "T4 every automation script wired to an entry path" \
     || pwtest_bad "T4 every automation script wired" "unreferenced: $(printf '%s' "$unreferenced" | tr '\n' ' ') $(printf '%s\n' "$unreferenced" | while read -r z; do grep -l "$z" "$TOOL"/commands/* >/dev/null 2>&1 && echo "(in commands)"; done)"
 
-  # 3) information boundary — only registry names; pw-env.sh remains the allowed human ref
+  # 3) information boundary — only registry names; pw-env.sh remains the allowed human ref.
+  #    A name that is NOT in the registry is worse: the reader is pointed at a file that does
+  #    not exist. The allowed human refs are the ones the docs own.
   hits=""
   for n in $PWTEST_AUTOMATION; do
     for f in "$TOOL/../README.md" "$TOOL/../AGENTS.md" "$TOOL/../CLAUDE.md" "$TOOL/../ONBOARDING.md" "$TOOL/../docs/"*.md; do
       [ -f "$f" ] && grep -qF "$n" "$f" && hits="$hits $n@$(basename "$f")"
+    done
+  done
+  for f in "$TOOL/../README.md" "$TOOL/../AGENTS.md" "$TOOL/../CLAUDE.md" "$TOOL/../ONBOARDING.md" "$TOOL/../docs/"*.md; do
+    [ -f "$f" ] || continue
+    for n in $(grep -ohE '[A-Za-z0-9._-]+\.sh' "$f" 2>/dev/null | sort -u); do
+      case "$n" in
+        pw.config.sh|pw.config.example.sh|pw-env.sh|bootstrap.sh|offboard.sh) continue ;;
+      esac
+      case " $PWTEST_AUTOMATION " in *" $n "*) continue ;; esac
+      hits="$hits $n@$(basename "$f")"
     done
   done
   [ -z "$hits" ] && pwtest_ok "T4 user docs free of automation-script names" \
@@ -217,6 +235,7 @@ static_t4() {
     || pwtest_bad "T4 canary: no agent file invokes signoff" "C4 violation in: $hits — only a human triggers a gate decision (agent path: pw-review.sh auto-signoff)"
   grep -qF 'pw-review.sh init-docs --project <slug> --file <artifact-rel-path>' "$TOOL/commands/pw-review.md" \
     && grep -qF '/pw-review init --project <project-slug> --file <artifact-rel-path>' "$TOOL/commands/pw-review.md" \
+    && ! grep -qF 'pw-review.sh init --project <slug> --file <artifact-rel-path>' "$TOOL/commands/pw-review.md" \
     && pwtest_ok "T4 canary: selected document command maps to list initialization" \
     || pwtest_bad "T4 canary: selected document command mapping" "public init must accept artifact paths and call init-docs, not the legacy review/doc pair API"
   grep -qF "The reviewer must confirm its own execution identity." "$TOOL/commands/pw-review.md" \
@@ -261,9 +280,9 @@ static_t4() {
 
   # (g) plan-22 routing-ladder canaries: the ONE ladder text lives in the skill reference and is
   # referenced (not re-described) by the entry paths…
-  grep -qF 'AVAILABILITY GATE first' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
+  grep -qF 'AVAILABILITY GATE first — on EVERY path, including resume:' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
     && grep -qF 'Route resolution' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
-    && grep -qF 'Headless supervision' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
+    && grep -qF 'Headless supervision (never fire-and-forget):' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
     && grep -qF 'session-check' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
     && grep -qF 'session-check' "$TOOL/skill/project-workflow/references/review.md" \
     && pwtest_ok "T4 canary: one ladder + script-decided liveness in the skill reference" \
@@ -293,15 +312,26 @@ static_t4() {
     && grep -qF -- '--owner-approved' "$TOOL/skill/project-workflow/references/sync-conflict-resolution.md" \
     && pwtest_ok "T4 canary: sync opt-in conflict resolution wiring" \
     || pwtest_bad "T4 canary: sync opt-in conflict resolution wiring" "the --auto-resolve flag, default-abort text, reference pointer, finish/bind procedure, or two-sided preservation rule died"
+  # assisted preparation writes an optional feedback record; the doctor must say so, or the
+  # user never learns the record exists.
+  grep -qF 'Assisted preparation also creates an optional feedback record at `review/CONTEXT.review.md`.' "$TOOL/scripts/entities/pw-project-doctor.sh" \
+    && pwtest_ok "T4 canary: assisted preparation feedback record is documented" \
+    || pwtest_bad "T4 canary: assisted preparation feedback record" "pw-project-doctor.sh lost the note about the optional review/CONTEXT.review.md record"
   # generation-prompt wiring: the two-call prose flow must name the editable prompt files and the
   # observed-head comparison — losing either re-opens ungrounded prose generation. The procedure
   # lives in the request-review reference; the command must still point at it.
-  grep -qF 'references/review-request.md' "$TOOL/commands/pw-ship.md" \
+  grep -qF '**Load `references/review-request.md`**' "$TOOL/commands/pw-ship.md" \
+    && grep -qF 'references/review-request.md' "$TOOL/commands/pw-ship.md" \
     && grep -qF 'user/prompts/review-request-summary.md' "$TOOL/skill/project-workflow/references/review-request.md" \
     && grep -qF 'PW_REVIEW_REQUEST_NOTE_PROMPT_FILE' "$TOOL/skill/project-workflow/references/review-request.md" \
     && grep -qF 'Compare `observed heads`' "$TOOL/skill/project-workflow/references/review-request.md" \
     && pwtest_ok "T4 canary: pw-ship generation-prompt wiring text" \
     || pwtest_bad "T4 canary: pw-ship generation-prompt wiring" "the command lost its request-review reference, or the editable prompt files / observed-head comparison died from the request-review reference"
+  # the review command must offer the whole --surface list: a narrowed list silently drops
+  # surfaces the agent can select (the surface vocabulary is the review scope contract).
+  grep -qF '[--surface <context|analysis|plan|task-plan|task-exec|ship|rfc|close>' "$TOOL/commands/pw-review.md" \
+    && pwtest_ok "T4 canary: pw-review offers the full --surface list" \
+    || pwtest_bad "T4 canary: pw-review --surface list" "the --surface vocabulary in pw-review.md lost a surface; the list is the review scope contract"
   # named dispatch + entry-before-assessment doctrine (plan 46): the ship command selects modes by
   # operation word (never an ordinal argument slot), and every reviewer instruction surface keeps
   # the correlated pass entry strictly before assessment.
@@ -332,12 +362,18 @@ static_t4() {
   # /user/ ignore coverage: representative frame, prompt, and scratch files must be ignored, the
   # legacy location stays ignored during migration, and no user-owned customization may be tracked.
   _giterr=""
-  for _u in user/templates/review-request.md user/prompts/review-request-summary.md \
-            user/prompts/review-request-note.md user/scratch.txt user-templates/legacy.md; do
-    git -C "$TOOL/.." check-ignore -q "$_u" 2>/dev/null || _giterr="$_giterr $_u"
-  done
-  [ -z "$_giterr" ] && pwtest_ok "T4 canary: /user/ gitignore covers frame, prompts, and scratch files" \
-    || pwtest_bad "T4 canary: /user/ gitignore coverage" "not ignored:$_giterr"
+  if [ -d "$TOOL/../.git" ]; then
+    for _u in user/templates/review-request.md user/prompts/review-request-summary.md \
+              user/prompts/review-request-note.md user/scratch.txt user-templates/legacy.md; do
+      git -C "$TOOL/.." check-ignore -q "$_u" 2>/dev/null || _giterr="$_giterr $_u"
+    done
+    [ -z "$_giterr" ] && pwtest_ok "T4 canary: /user/ gitignore covers frame, prompts, and scratch files" \
+      || pwtest_bad "T4 canary: /user/ gitignore coverage" "not ignored:$_giterr"
+  else
+    # a disposable copy carries no .git: ignore coverage cannot be checked here, and a
+    # failed check would make every sweep child red for a reason no mutation caused.
+    pwtest_ok "T4 canary: /user/ gitignore coverage skipped (no .git in this tree)"
+  fi
   _tracked="$(git -C "$TOOL/.." ls-files 'user/**' 'user-templates/**' 2>/dev/null)"
   [ -z "$_tracked" ] && pwtest_ok "T4 canary: no user-owned customization is tracked" \
     || pwtest_bad "T4 canary: no tracked user customization" "tracked: $_tracked — untrack it with git rm --cached (the local file stays)"
@@ -374,7 +410,7 @@ static_t4() {
   hits="$(grep -rl 'Mitigation (built in)' "$TOOL/../docs/"*.md 2>/dev/null | tr '\n' ' ')"
   [ -z "$hits" ] && pwtest_ok "T4 canary: no maintainer-shape records in user docs (D1)" \
     || pwtest_bad "T4 user-doc record shape" "$hits — settled-gotcha records belong in tooling/docs/ (D2), user docs carry symptoms+actions only"
-  grep -qF 'D-rules' "$TOOL/docs/conventions.md" \
+  grep -qF '## D-rules' "$TOOL/docs/conventions.md" \
     && [ -f "$TOOL/docs/known-issues.md" ] && grep -qF 'known-issues.md' "$TOOL/README.md" \
     && grep -qF 'TROUBLESHOOTING' "$TOOL/docs/known-issues.md" \
     && pwtest_ok "T4 canary: D-rules doctrine + maintainer backlog present and linked" \
@@ -591,5 +627,13 @@ PY
     && grep -qF 'commands reference it, never re-describe it' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
     && pwtest_ok "T4 canary: orchestrator delegates route resolution to the shared ladder" \
     || pwtest_bad "T4 canary: orchestrator ladder reference" "the orchestrator must point to the shared ladder, which remains the canonical routing contract"
+
+  # (u) the mutation sweep sizes each row's watchdog to the work that row does, and
+  #     re-measures a row that hit the watchdog: a kill is not a verdict.
+  grep -qF '_pwtest_row_timeout' "$TOOL/tests/mutate.sh" \
+    && grep -qF '_pwtest_mut_retry' "$TOOL/tests/mutate.sh" \
+    && grep -qF '_pwtest_record_case_duration' "$TOOL/tests/pw_test_lib.sh" \
+    && pwtest_ok "T4 canary: sweep watchdog follows the measured case cost and re-measures a killed row" \
+    || pwtest_bad "T4 canary: sweep watchdog" "the sweep must derive a per-row watchdog from the measured case durations and re-run a row that hit the watchdog"
 
 }

@@ -38,6 +38,20 @@ PWTEST_VERBOSE="${PWTEST_VERBOSE:-0}"
 pwtest_note(){ printf 'TEST %s\n' "$1" >&2; }
 pwtest_ok()  { PWTEST_PASS=$((PWTEST_PASS+1)); [ "$PWTEST_VERBOSE" = 1 ] && printf '  ok   %s\n' "$1" >&2; return 0; }
 pwtest_bad() { PWTEST_FAIL=$((PWTEST_FAIL+1)); printf '  FAIL %s — %s\n' "$1" "$2" >&2; }
+
+# Per-case duration table. The T1 tier records how long each case file took, and the
+# mutation sweep reads the table to size each row's watchdog to the work that row
+# really does. The path is stable across runs and outside PWTEST_ROOT (the EXIT trap
+# wipes that): PWTEST_CASE_TIMES overrides it.
+PWTEST_CASE_TIMES="${PWTEST_CASE_TIMES:-${TMPDIR:-/tmp}/pwtest-case-times.tsv}"
+_pwtest_record_case_duration() { # <case> <seconds> — best-effort append
+  [ "${PWTEST_INNER:-}" = 1 ] && return 0   # sweep children must not skew the table
+  local c="${1:-}" s="${2:-}"
+  [ -n "$c" ] || return 0
+  mkdir -p "$(dirname "$PWTEST_CASE_TIMES")" 2>/dev/null || return 0
+  printf '%s\t%s\n' "$c" "$s" >> "$PWTEST_CASE_TIMES" 2>/dev/null || true
+  return 0
+}
 pwtest_skip(){ PWTEST_SKIP=$((PWTEST_SKIP+1)); printf '  skip %s (%s)\n' "$1" "${2:-}" >&2; return 0; }
 
 # pwtest_rc <want|any> <label> [cmd…] — run capturing out/err to $PWTEST_ROOT/out.$/err.$
