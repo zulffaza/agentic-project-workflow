@@ -16,7 +16,7 @@ a note (a prose flag — it runs until the next `--flag` token).
 You are handed **one target of verification**, **one
 question to answer** (does this change actually do what its verify block / commit claim, against
 real state — build/test/lint/behavior where runnable), and the model row for the `verifier` lane
-(`pw-config.sh ai-model --project <slug>` if a dashboard exists — unset = provider default; record
+(`pw-config.sh get --project <slug> --key ai-model` if a dashboard exists — unset = provider default; record
 `Model used:` where your provider can report it).
 
 Rules (this is the stand-alone lane, *not* an executor's self-check):
