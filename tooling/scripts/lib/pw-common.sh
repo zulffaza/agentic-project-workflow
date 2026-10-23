@@ -51,6 +51,63 @@ declare -p PW_FORGE_HOSTS >/dev/null 2>&1 || PW_FORGE_HOSTS=()
 # which wins over this env value. Default 3.
 : "${PW_MAX_SELF_REPAIR:=3}"
 
+# --- Global project-setting defaults ---------------------------------------------------------
+# Values written by `/pw-config global set` and copied into a NEW project's dashboard. They are
+# creation-time defaults, never live inheritance: an existing project keeps its captured values.
+# Empty means "use the compatibility fallback" (the matching floor or built-in default).
+: "${PW_PROJECT_DEFAULT_ROUTING:=}"
+: "${PW_PROJECT_DEFAULT_EXECUTION_LIMIT:=}"
+: "${PW_PROJECT_DEFAULT_MAX_PARALLEL:=}"
+: "${PW_PROJECT_DEFAULT_REVIEW_TRIGGER:=}"
+: "${PW_PROJECT_DEFAULT_REVIEW_REPAIR:=}"
+: "${PW_PROJECT_DEFAULT_REVIEW_ROUNDS:=}"
+: "${PW_PROJECT_DEFAULT_AI_REVIEW:=}"
+
+# Role model defaults + optional tuning. Tuning is stored per role so a binding keeps its
+# variant/reasoning/effort when it is copied into a project.
+PW_PROJECT_AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier"
+for _pw_role in $PW_PROJECT_AI_MODEL_ROLES; do
+  _pw_ru="$(printf '%s' "$_pw_role" | tr '[:lower:]-' '[:upper:]_')"
+  for _pw_axis in MODEL VARIANT REASONING EFFORT; do
+    _pw_var="PW_PROJECT_DEFAULT_AI_MODEL_${_pw_ru}_${_pw_axis}"
+    if ! declare -p "$_pw_var" >/dev/null 2>&1; then printf -v "$_pw_var" '%s' ""; fi
+  done
+done
+unset _pw_role _pw_ru _pw_axis _pw_var
+
+# Resolve one global project default with its compatibility fallback.
+#   pw_project_default_value <routing|execution-limit|max-parallel|review-rounds>
+pw_project_default_value() {
+  case "$1" in
+    routing)         printf '%s' "${PW_PROJECT_DEFAULT_ROUTING:-$PW_ROUTE_DEFAULT}" ;;
+    execution-limit) printf '%s' "${PW_PROJECT_DEFAULT_EXECUTION_LIMIT:-$PW_MAX_SELF_REPAIR}" ;;
+    max-parallel)    printf '%s' "${PW_PROJECT_DEFAULT_MAX_PARALLEL:-}" ;;
+    review-rounds)   printf '%s' "${PW_PROJECT_DEFAULT_REVIEW_ROUNDS:-3}" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Resolve a per-role model default and its tuning fields (empty tuning = provider default).
+#   pw_project_default_role <role> -> model
+#   pw_project_default_tuning <role> -> variant=<v>,reasoning=<r>,effort=<e> (empty fields omitted)
+pw_project_default_role() {
+  local u; u="$(printf '%s' "$1" | tr '[:lower:]-' '[:upper:]_')"
+  local v="PW_PROJECT_DEFAULT_AI_MODEL_${u}_MODEL"
+  local legacy="PW_AI_MODEL_DEFAULT_${u}"
+  if [ -n "${!v:-}" ]; then printf '%s' "${!v}"; else printf '%s' "${!legacy:-—}"; fi
+}
+pw_project_default_tuning() {
+  local u; u="$(printf '%s' "$1" | tr '[:lower:]-' '[:upper:]_')"
+  local out="" axis var
+  for axis in VARIANT REASONING EFFORT; do
+    var="PW_PROJECT_DEFAULT_AI_MODEL_${u}_${axis}"
+    [ -n "${!var:-}" ] || continue
+    [ -n "$out" ] && out="$out,"
+    out="$out$(printf '%s' "$axis" | tr '[:upper:]' '[:lower:]'):${!var}"
+  done
+  printf '%s' "$out"
+}
+
 # Model allowlist (see docs/EXECUTION.md's "Model allowlist" section) — one optional scalar per
 # Agent Provider, a comma-separated list of glob patterns. THE RULE: empty/unset = ALL models
 # allowed for that provider — the default, deliberately, so nothing is restricted unless you set

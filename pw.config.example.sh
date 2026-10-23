@@ -161,6 +161,26 @@ PW_MODEL_ALLOWLIST_CODEX=""
 #                                     # a legacy "off" here normalizes to "advisory"
 PW_AI_REVIEW_DEFAULT="advisory"
 
+# --- Global PROJECT defaults (NEW projects only; manage via /pw-config global) ----------------
+# These are creation-time defaults copied into a new project's dashboard. They are NOT live
+# inheritance: an existing project keeps its captured values. `/pw-config global set` writes one
+# managed assignment block at the end of this file; hand-editing the named variables is also valid.
+# `routing` / `execution-limit` / `max-parallel` are captured in the dashboard's `Project Defaults`
+# line until /pw-breakdown creates PLAN, then PLAN owns them.
+#   PW_PROJECT_DEFAULT_ROUTING=""            # auto|subagent|headless (fallback: PW_ROUTE_DEFAULT)
+#   PW_PROJECT_DEFAULT_EXECUTION_LIMIT=""    # 0..99 (fallback: PW_MAX_SELF_REPAIR)
+#   PW_PROJECT_DEFAULT_MAX_PARALLEL=""       # 1..99 (unset = planner chooses)
+#   PW_PROJECT_DEFAULT_REVIEW_TRIGGER=""     # surface=manual|completion pairs (unset = manual)
+#   PW_PROJECT_DEFAULT_REVIEW_REPAIR=""      # surface=manual|bounded pairs (unset = manual)
+#   PW_PROJECT_DEFAULT_REVIEW_ROUNDS=""      # 1..3 (unset = 3)
+#   PW_PROJECT_DEFAULT_AI_REVIEW=""          # surface=advisory|auto pairs (unset = PW_AI_REVIEW_DEFAULT)
+# Role model defaults + tuning. The MODEL value falls back to PW_AI_MODEL_DEFAULT_<ROLE>.
+#   PW_PROJECT_DEFAULT_AI_MODEL_RESEARCHER_MODEL=""    # provider:model
+#   PW_PROJECT_DEFAULT_AI_MODEL_RESEARCHER_VARIANT=""  # provider-supported variant (see model-check)
+#   PW_PROJECT_DEFAULT_AI_MODEL_RESEARCHER_REASONING=""
+#   PW_PROJECT_DEFAULT_AI_MODEL_RESEARCHER_EFFORT=""
+# (analyst / writer-task / reviewer / verifier follow the same four-variable pattern.)
+
 # --- Review-request frame and generation prompts (OPTIONAL — defaults are seeded at install) --
 # /pw-ship request-review --project <slug> renders its copyable message through one editable Markdown
 # frame — $PW_HOME/user/templates/review-request.md by default (seeded by bootstrap.sh / repaired

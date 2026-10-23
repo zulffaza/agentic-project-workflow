@@ -1,10 +1,10 @@
 ---
-description: The one per-project config surface — show/get/set validated knobs (routing, limits, models, review outcome/scheduling/repair axes, RFC target), plus the effective global floors
-args: "[show | get | set | ensure] --project <project-slug> … | global show | model-check --provider <provider> --model <model-id>"
+description: The one configuration surface — validated per-project knobs, creation-time global project defaults in pw.config.sh, and model permission/capability checks
+args: "[show | get | set | ensure | materialize] --project <project-slug> … | global [show | get | set | unset] … | model-check --provider <provider> --model <model-id> [--variant <v>] [--reasoning <v>] [--effort <v>] [--json]"
 scope: mixed
-scope-forms: "default=project, show=project, get=project, set=project, ensure=project, global=global, model-check=global, model-resolve=global, ai-model=project, ai-review=project, review-trigger=project, review-repair=project, review-rounds=project"
-args-global: "global show | model-check --provider <provider> --model <model-id>"
-args-project: "show --project <project-slug> [--json] | get --project <project-slug> --key <key> | set --project <project-slug> --key <key> [--value <v> | --set <member=value>]… | ensure --project <project-slug>"
+scope-forms: "global=global, default=project, show=project, get=project, set=project, ensure=project, materialize=project, global show=global, global get=global, global set=global, global unset=global, model-check=global, model-resolve=global, ai-model=project, ai-review=project, review-trigger=project, review-repair=project, review-rounds=project"
+args-global: "global show [--json] | global get --key <key> [--json] | global set --key <key> [--value <v> | --set <member=value>]… | global unset --key <key> | model-check --provider <provider> --model <model-id> [--tuning] [--json]"
+args-project: "show --project <project-slug> [--json] | get --project <project-slug> --key <key> [--json] | set --project <project-slug> --key <key> [--value <v> | --set <member=value>]… [--variant <v> --reasoning <v> --effort <v>] | ensure --project <project-slug> | materialize --project <project-slug>"
 ---
 Arguments: {{ARGS}}. Project dir: `{{PW_PROJECTS}}/<slug>`.
 
@@ -31,7 +31,7 @@ The keys you can `set`, and their legal values (the same list `show` prints as i
 | `review-trigger` | `<surface>=<value>` pairs or `all=<value>`; values `manual|completion` | WHEN a pass starts: `manual` (only an explicit `/pw-review … ai`, default) or `completion` (also after a succeeded producing command's verification); `completion` never disables explicit requests |
 | `review-repair` | `<surface>=<value>` pairs or `all=<value>`; values `manual`·`bounded` | whether a completion review may run the bounded repair cycle (`review → repair → verify → fresh review`); `manual` = findings stop for me (default) |
 | `review-rounds` | integer `1..3` | total reviewer passes in a bounded cycle (default `3` — at most two intervening verified repairs) |
-| `ai-model` | `<role>=<provider>:<model>` or `<role>=—` pairs; roles `researcher`·`analyst`·`writer-task`·`reviewer`·`verifier` | spawn-lane model rows; `—` = provider/session default; values are validated live (allowlist + catalog + scope) at write time |
+| `ai-model` | `<role>=<provider>:<model>` or `<role>=—` pairs; roles `researcher`·`analyst`·`writer-task`·`reviewer`·`verifier`; optional `--variant`/`--reasoning`/`--effort` on a ONE-role write | spawn-lane model rows; `—` = provider/session default; model is validated live (allowlist + catalog + scope), tuning against the provider capability table. Unsupported or unverified tuning is refused, never silently dropped. Tuning is read with `get --key ai-model --json`; plain `get` stays `role=model` compatible |
 | `pin` | `<T0n>=<provider>:<model>` or `<T0n>=—` pairs | per-task executor pins; written to **both holders** (task-file `Execute with:` + PLAN cell) by one propagator, so gate/audit never see drift; same live validation at write time |
 | `rfc-target` | a doc ref/URL | where `/pw-rfc` publishes |
 
@@ -75,8 +75,24 @@ The operators (operator words first; every value named — `--project <slug>` se
   and the **request-review frame + generation prompts** — each effective path plus
   `default`/`custom` source).
   Read-only by design: `pw.config.sh` is the human-owned floor file — there is no `global set`.
-- **`/pw-config model-check --provider <provider> --model <model-id>`** → `…/pw-config.sh model-check --provider <provider> --model <model-id>` —
-  the permission oracle (empty allowlist = all allowed); handy for probing a pin before setting it.
+- **`/pw-config global show [--json]`** → the machine floors **plus** every inherited project
+  default, each with `inherited: yes|no`, destination, effective value, and source. Defaults are
+  copied into NEW projects only; a global change never rewrites an existing project.
+- **`/pw-config global get --key <key>`** → one inherited default and its source.
+- **`/pw-config global set --key <key> …`** → validated write into one managed assignment block in
+  `pw.config.sh` (no second config file). Scalars take `--value`; `ai-review`, `review-trigger`,
+  `review-repair`, and `ai-model` take `--set` pairs. Unrelated shell settings are preserved and
+  the staged file is `bash -n` checked before an atomic replace.
+- **`/pw-config global unset --key <key>`** → removes that override, revealing the previous
+  assignment or built-in fallback.
+- **`…/pw-config.sh materialize --project <slug>`** → internal breakdown step: copies the dashboard
+  `Project Defaults` seed into a newly created PLAN once. Explicit PLAN values win; the seed is
+  never re-read.
+- **`/pw-config model-check --provider <provider> --model <model-id> [--variant <v>] [--reasoning <v>] [--effort <v>] [--json]`** → `…/pw-config.sh model-check …` —
+  the permission oracle (empty allowlist = all allowed) plus the local, documented tuning
+  capability table. With no tuning flags it lists supported variants/reasoning/effort; with flags
+  it validates the requested combination. Capability metadata is `unsupported`, `unknown`, or a
+  value list — never guessed from another provider. No model request is spent.
 
 **This is the whole configuration domain.** It used to hang off `/pw-review` as a sub-verb —
 reviewing is not configuring; `/pw-review` now only reviews. View what each axis means in

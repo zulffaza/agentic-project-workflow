@@ -297,10 +297,29 @@ apply anything to a review file, check it has ELIGIBLE work: at least one real u
 item or a question whose answer needs incorporating (template stubs, resolved/archived rows,
 settled questions, unanswered waiting-human `Qn`s, malformed entries, out-of-scope asks don't
 count — the script's own detector decides). If yes, run
-`{{PW_HOME}}/tooling/scripts/entities/pw-review.sh start --project <slug> --file <review-rel-path>` — it appends one
-`changes-requested` row attributed `pw-review (repair)` before the work set, per artifact; only
-files with eligible work get a row. If the set is empty (no-op invocation, stubs only, everything
-resolved), skip `start` entirely — no row, signoff history unchanged, and say what was skipped.
+`{{PW_HOME}}/tooling/scripts/entities/pw-review.sh start --project <slug> --file <review-rel-path> --receipt <receipt-id>` — it appends one
+`changes-requested` row attributed `pw-review (repair; receipt=<receipt-id>)` before the work set,
+per artifact; only files with eligible work get a row. Generate ONE receipt id for this invocation
+(e.g. a UTC timestamp plus a short random suffix) and reuse it for every file.
+
+**Read the gate result, then branch — never chain.** Capture the decision and its exit status
+separately (a bare `gate && start` or `gate || skip-repair` is wrong under `set -e`):
+- `in-review` / `changes-requested` with the ordinary non-approved status is EXPECTED here; continue
+  to repair admission after any required same-phase/earlier-phase check below.
+- A consumable `approved` row follows the same-phase invalidation or earlier-phase confirmation
+  rules in this document before editing.
+- Missing/malformed records, an unrecognized decision, a path failure, or an operational error STOP.
+  Do not treat every nonzero as ordinary non-approval.
+
+**Check the admission report before editing anything.** `start` prints one typed first token:
+- `__entered__`: verify its persisted repair row, then work.
+- `__resume__`: an applicable repair pass is already active; resume it, do not duplicate the row.
+- `__clean__`: no eligible work; do not apply fixes or resolve entries through this pass.
+- Nonzero / missing / unknown: STOP this file and report the failure; no fallback edits.
+
+If the set is empty (no-op invocation, stubs only, everything resolved), skip `start` entirely —
+no row, signoff history unchanged, and say what was skipped. Never create repair history for a
+no-op.
 A resume/retry of the same pass doesn't duplicate the row, and item writes inside an active pass
 don't toggle the state back. `start` refuses to write `approved` — approval stays with me (or the
 guarded `auto` path). An explicit `changes-requested`/rejection row **I** recorded stands until I
@@ -324,7 +343,7 @@ For each `[OPEN]` item in the resolved files:
   round be the one that does it,
 - then flip the item + reply **deterministically** — never hand-edit the heading/reply block:
   ```bash
-  {{PW_HOME}}/tooling/scripts/entities/pw-review.sh resolve --project <slug> --file <review-rel-path> --item <Rn> --stdin <<'EOF'
+  {{PW_HOME}}/tooling/scripts/entities/pw-review.sh resolve --project <slug> --file <review-rel-path> --item <Rn> --repair-receipt <receipt-id> --stdin <<'EOF'
   <section(s) + exactly what changed — concrete, never a bare "fixed"/"done", never a restatement of my ask>
   EOF
   ```
@@ -336,9 +355,18 @@ For each `[OPEN]` item in the resolved files:
   is already sitting right there as the item's own body text. (Hand-syntax fallback if the script
   is unavailable: the template's "Add an item" hint block documents the exact shape.)
 
+**Completion check before the summary — mandatory when this pass resolved anything.** For each
+file, run:
+```bash
+{{PW_HOME}}/tooling/scripts/entities/pw-review.sh repair-check --project <slug> --file <review-rel-path> --receipt <receipt-id>
+```
+A failure means edits/resolutions lack recorded admission history. STOP claiming success, preserve
+the actual edits as incomplete evidence, and report the ordering discrepancy. Never backdate a
+row or invent earlier admission; recover by recording the real current ordering and re-verifying.
+
 **Also process the "## Open questions" section (QnA):** for each `Qn` whose `> ↳ **you**:` line has
 an answer, fold that answer into the reviewed doc, then flip + reply deterministically:
-`{{PW_HOME}}/tooling/scripts/entities/pw-review.sh resolve --project <slug> --file <review-rel-path> --item <Qn> --stdin` (heredoc =
+`{{PW_HOME}}/tooling/scripts/entities/pw-review.sh resolve --project <slug> --file <review-rel-path> --item <Qn> --repair-receipt <receipt-id> --stdin` (heredoc =
 your `↳ agent:` reply: what was folded in, where). It edits that SAME `### Qn · …` heading in
 place (`[PENDING]` → `[ANSWERED]` + marker — never a second heading), appends the reply right
 after my `↳ you:` line inside the same quoted block (blank quoted `>` line between), keeps the

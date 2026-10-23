@@ -10,11 +10,11 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 <!-- Pre-flight: deterministic checks before agent reasoning -->
 ```bash
 {{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh breakdown --project <slug> || exit 1
-{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind analysis --project <slug> --all || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind analysis --project <slug> --all --stage ready || exit 1
 ```
 **Reading the pre-flight:** `pw-preflight.sh breakdown` checks every analysis review file is
 `approved` (and RFC open items are clear if the side-loop runs); `pw-doc.sh lint --kind analysis --all`
-checks each analysis doc's §1–5. Silent = pass; a non-zero exit + `pw-…:` stderr line is a hard
+checks each analysis doc's §1–5 and requires the approach decision (`--stage ready`). A complete draft may still be AI-reviewed with `--stage reviewable`; breakdown is a consumer, so it refuses `_pending`. Silent = pass; a non-zero exit + `pw-…:` stderr line is a hard
 STOP — relay it (it names which doc/gate needs `/pw-review` first), don't draft a PLAN on
 unapproved analysis. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
 
@@ -206,6 +206,14 @@ sharing the **same** adopted branch get a **linear dependency chain** (one share
 run in sequence); tasks on **different** adopted branches, and all fresh tasks, stay independent and
 run in parallel. Split into tasks for reviewability as usual; adopted tasks' changes extend the
 existing branch (and its MR, if any), fresh tasks open new branches.
+
+Then materialize the creation seed **exactly once**, before the review file exists:
+```bash
+{{PW_HOME}}/tooling/scripts/entities/pw-config.sh materialize --project <slug> || exit 1
+```
+It copies `routing` / `execution-limit` / `max-parallel` from the dashboard `Project Defaults`
+into PLAN. Explicit PLAN values always win; the seed is never re-read, so later global changes do
+not rewrite an existing plan. It changes no task scope, review, status, or approval.
 
 Then, **create the PLAN review file (idempotent)** — never hand-write it:
 ```bash

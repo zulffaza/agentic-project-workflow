@@ -126,6 +126,85 @@ LITERAL_BOUNDARY = re.compile(r'(<!-- pw-(?:mr-summary|review-changes):end -->)(
 def repair_literal_boundary(body):
     return LITERAL_BOUNDARY.sub(r'\1', body)
 
+# --- managed-boundary recovery -----------------------------------------------------------------
+# The strict parser stays authoritative. Recovery is a separate, ownership-proven step: it may
+# only re-insert a missing DELIMITER around the exact saved summary interior. It never adopts
+# headings, never rewrites outside bytes, and never reconstructs edited history.
+SUMMARY_START = '<!-- pw-mr-summary:start -->'
+SUMMARY_END = '<!-- pw-mr-summary:end -->'
+
+def _marker_counts(body):
+    return (body.count(SUMMARY_START), body.count(SUMMARY_END))
+
+def boundary_state(body):
+    ns, ne = _marker_counts(body)
+    if (ns, ne) == (1, 1):
+        try:
+            regions(body)
+            return 'valid'
+        except HistoryError as exc:
+            return 'malformed: ' + str(exc)
+    if (ns, ne) == (0, 0):
+        return 'absent'
+    if ns == 0:
+        return 'end-only'
+    if ne == 0:
+        return 'start-only'
+    return 'malformed/duplicate'
+
+def _summary_interior(saved):
+    need(isinstance(saved, str) and saved, 'no saved summary ownership snapshot')
+    need(saved.count(SUMMARY_START) == 1 and saved.count(SUMMARY_END) == 1,
+         'saved ownership snapshot is not one complete summary block')
+    need(saved.lstrip().startswith(SUMMARY_START), 'saved ownership snapshot does not start with the summary marker')
+    interior = saved.strip()[len(SUMMARY_START):]
+    need(interior.rstrip().endswith(SUMMARY_END), 'saved ownership snapshot does not end with the summary marker')
+    interior = interior.rstrip()[:-len(SUMMARY_END)]
+    return interior.strip('\n')
+
+def recover_plan(body, state):
+    """Return (candidate, inserts) or raise. Only whole missing delimiters are restored."""
+    status = boundary_state(body)
+    if status == 'valid':
+        raise HistoryError('boundaries are valid; no recovery applies')
+    if status.startswith('malformed'):
+        raise HistoryError('boundary defect is not a missing delimiter (' + status + '); repair is ambiguous → use a scoped manual repair')
+    saved = state.get('last_summary')
+    if not saved and state.get('initial_body'):
+        try:
+            spans = regions(state['initial_body'])
+        except HistoryError:
+            spans = {}
+        if 'mr-summary' in spans:
+            saved = spans['mr-summary'][2]
+    interior = _summary_interior(saved)
+    occurrences = []
+    start = 0
+    while True:
+        at = body.find(interior, start)
+        if at < 0:
+            break
+        occurrences.append(at)
+        start = at + 1
+    need(len(occurrences) == 1, 'saved summary interior occurs ' + str(len(occurrences)) +
+         ' times in the remote body; automatic ownership cannot be proven')
+    at = occurrences[0]
+    inserts = []
+    candidate = body
+    if SUMMARY_START not in candidate:
+        prefix = '' if at == 0 or candidate[at - 1] == '\n' else '\n'
+        candidate = candidate[:at] + prefix + SUMMARY_START + '\n' + candidate[at + (len(prefix)):]
+        inserts.append(('start', at))
+    end_at = candidate.find(interior, at) + len(interior)
+    if SUMMARY_END not in candidate:
+        prefix = '' if end_at > 0 and candidate[end_at - 1] == '\n' else '\n'
+        suffix = '' if end_at == len(candidate) or candidate[end_at:end_at + 1] == '\n' else '\n'
+        candidate = candidate[:end_at] + prefix + SUMMARY_END + suffix + candidate[end_at:]
+        inserts.append(('end', end_at))
+    need(inserts, 'no missing delimiter found around the unique saved interior')
+    verify_published(candidate)
+    return candidate, inserts
+
 def settings_call(mr):
     """One instance-settings request (GitLab only). Returns (rc, stdout, stderr)."""
     command = ['glab', 'api', 'application/settings', '--hostname', mr['host']]
@@ -449,7 +528,7 @@ def validate_state(state, mr):
 def run():
     project, timestamp, mappings, registered, *arguments = sys.argv[1:]
     parser = HistoryParser(prog='pw-ship history')
-    parser.add_argument('operation', choices=['invocation', 'init', 'begin', 'checkpoint', 'freeze', 'deliver', 'pending', 'validate', 'verify', 'repair-preview', 'capacity', 'migrate'])
+    parser.add_argument('operation', choices=['invocation', 'init', 'begin', 'checkpoint', 'freeze', 'deliver', 'pending', 'validate', 'verify', 'repair-preview', 'recover-preview', 'recover', 'capacity', 'migrate'])
     parser.add_argument('url', nargs='?')
     parser.add_argument('--invocation')
     parser.add_argument('--attempt')
@@ -673,6 +752,34 @@ def run():
                         'timestamp': timestamp, 'before_head': remote['head'], 'before_body': remote['body'],
                         'checkpoint': None, 'frozen': False, 'delivered': False, 'block': None}
             state['attempts'].append(existing)
+        elif args.operation in ('recover-preview', 'recover'):
+            need(args.url, 'recover requires an MR URL')
+            remote = api(mr)
+            status = boundary_state(remote['body'])
+            if status == 'valid':
+                print(status + ': boundaries are valid; no recovery applies')
+                return
+            try:
+                candidate, inserts = recover_plan(remote['body'], state)
+            except HistoryError as exc:
+                print('recover-preview: ' + str(exc))
+                print('recover-preview: nothing was written; a human must resolve the description boundary')
+                return
+            labels = ', '.join(name + '@' + str(where) for name, where in inserts)
+            if args.operation == 'recover-preview' or not args.apply:
+                print('recover-preview: state=' + status + '; ownership proof=exact unique saved summary interior')
+                print('recover-preview: would re-insert: ' + labels)
+                print('recover-preview: outside bytes preserved; nothing was written (add --apply to restore delimiters)')
+                return
+            need(remote['state'] == 'open', 'MR is closed/merged; no description write')
+            api(mr, candidate)
+            updated = api(mr)
+            verify_published(updated['body'])
+            spans = regions(updated['body'])
+            need('mr-summary' in spans, 'recovered description lost its summary region on readback')
+            print('recover: restored missing delimiter(s): ' + labels + ' (head ' + updated['head'][:12] + ')')
+            print('recover: raw readback verified both markers; outside bytes were preserved')
+            return
         else:
             need(args.attempt and re.fullmatch(r'[0-9a-f]{32}', args.attempt), 'operation requires a recorded attempt key')
             selected = next((a for a in state['attempts'] if a['key'] == args.attempt), None)

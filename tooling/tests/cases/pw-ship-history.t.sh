@@ -130,6 +130,30 @@ for forge, host, url, endpoint in [
     check(forge + ' failed initial readback is discoverable without a review attempt', 'initial_snapshot_pending' in call('pending').stdout and not archive()['attempts'])
     creation_body.unlink(); edit(mode=None); call('init', url)
     check(forge + ' creation body survives lost temporary source', archive()['initial_body'] == native[field])
+    # D02: ownership-proven delimiter recovery. Only the exact saved summary interior may be
+    # re-wrapped; a repeated/edited interior stops without writing.
+    saved = archive()['last_summary']
+    interior = saved[saved.index('-->') + 3:saved.rindex('<!-- pw-mr-summary:end')].strip('\n')
+    broken = native[field].replace('<!-- pw-mr-summary:start -->\n', '').replace('\n<!-- pw-mr-summary:end -->', '')
+    res = state(); res['response'][field] = broken; fixture.write_text(json.dumps(res, ensure_ascii=False))
+    before = state()['writes']
+    rp = call('recover-preview', url)
+    check(forge + ' recovery preview is a dry run', state()['writes'] == before)
+    check(forge + ' recovery preview names both missing delimiters', 'start@' in rp.stdout and 'end@' in rp.stdout)
+    ra = call('recover', url, '--apply')
+    body = state()['response'][field]
+    check(forge + ' recovery restores both markers with raw readback evidence',
+          body.count('<!-- pw-mr-summary:start -->') == 1 and body.count('<!-- pw-mr-summary:end -->') == 1
+          and 'restored missing delimiter' in ra.stdout)
+    check(forge + ' recovery preserves every outside byte', body.endswith(outside.lstrip('\n')) and 'café' in body)
+    check(forge + ' recovery reuses the saved summary interior', interior in body)
+    res = state(); res['response'][field] = interior + '\n\n' + interior + '\n' + outside
+    fixture.write_text(json.dumps(res, ensure_ascii=False))
+    before = state()['writes']
+    amb = call('recover-preview', url)
+    check(forge + ' ambiguous duplicate interior is refused without writing',
+          state()['writes'] == before and ('occur' in amb.stdout) and 'nothing was written' in amb.stdout)
+    res = state(); res['response'][field] = native[field]; fixture.write_text(json.dumps(res, ensure_ascii=False))
     key1 = begin('invocation-1')
     check(forge + ' invocation/MR idempotent', begin('invocation-1') == key1)
     call('begin', url, '--invocation', 'other-active', rc=2)

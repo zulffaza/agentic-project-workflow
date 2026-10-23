@@ -908,11 +908,27 @@ _resolve_body() {
 }
 
 cmd_resolve() {
-  _parse_edit_flags resolve --reply "--item" "resolve --project <slug> --file <review-rel-path> --item <Rid|Qid> (--reply <text…> | --stdin)" "" 0 "$@"
+  local _receipt=""
+  # Scoped guard: callers in the apply-feedback repair flow pass the admission receipt. Callers
+  # with other legitimate resolution purposes omit it, preserving their documented behavior.
+  local -a _args; _args=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --repair-receipt=*) _receipt="${1#*=}" ;;
+      --repair-receipt) shift; [ $# -gt 0 ] || die "resolve: --repair-receipt needs a value"; _receipt="$1" ;;
+      *) _args+=("$1") ;;
+    esac
+    shift
+  done
+  _parse_edit_flags resolve --reply "--item" "resolve --project <slug> --file <review-rel-path> --item <Rid|Qid> (--reply <text…> | --stdin) [--repair-receipt <id>]" "" 0 ${_args[@]+"${_args[@]}"}
   local slug="$MP_PROJECT" rel="$MP_FILE" id="$MP_ITEM" TEXT="$MP_TEXT"
   [ -n "$id" ] || die "resolve: --item is required → fix: resolve --project <slug> --file <review-rel-path> --item <Rid|Qid> (--reply <text…> | --stdin)"
   case "$id" in R[0-9]*|Q[0-9]*) ;; *) die "resolve: id must look like R3 or Q2 (got '$id')" ;; esac
   local f; f="$(review_file "$slug" "$rel")" || return 2
+  if [ -n "$_receipt" ]; then
+    _repair_entry_present "$f" "$_receipt" \
+      || die "resolve: no matching repair admission entry (receipt=$_receipt) on $rel — refusing to flip an item without recorded repair history → fix: run /pw-review start --receipt $_receipt before applying feedback; nothing was changed"
+  fi
   RS_TEXT="$TEXT" RS_REL="$rel"
   # a fixer reply inside a pass is NOT a human-feedback cycle: no state transition here
   staged_or_die "$f" _resolve_body "$id"
@@ -1447,8 +1463,50 @@ _start_body() {
   printf '__entered__ %s\n' "$counts" > "$_START_REPORT"
 }
 
+# Read-only evidence that an apply-feedback repair was admitted. The latest Sign-off row must be a
+# changes-requested repair row; with --receipt, that row must carry the same receipt token. This
+# correlates one invocation instead of accepting any historical repair row.
+_repair_entry_present() { # <review-file> [receipt]
+  local f="$1" receipt="${2:-}" decision actor
+  decision="$(_signoff_latest_decision "$f" 2>/dev/null || true)"
+  actor="$(_signoff_latest_actor "$f" 2>/dev/null || true)"
+  [ "$decision" = "changes-requested" ] || return 1
+  case "$actor" in "pw-review (repair"*) ;; *) return 1 ;; esac
+  [ -z "$receipt" ] || { case "$actor" in *"receipt=$receipt"*) return 0 ;; *) return 1 ;; esac; }
+  return 0
+}
+
+cmd_repair_check() {
+  local slug="" rel="" receipt="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --file=*)    v="${a#*=}"; a="--file" ;;
+      --receipt=*) v="${a#*=}"; a="--receipt" ;;
+    esac
+    case "$a" in
+      --project|--file|--receipt)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --file) rel="$v" ;; --receipt) receipt="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "repair-check --project <slug> --file <review-rel-path> [--receipt <id>]" ;;
+      *) _pw_positional "$a" "repair-check --project <slug> --file <review-rel-path> [--receipt <id>]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "repair-check: --project is required → fix: repair-check --project <slug> --file <review-rel-path> [--receipt <id>]"
+  [ -n "$rel" ] || die "repair-check: --file is required → fix: repair-check --project <slug> --file <review-rel-path>"
+  local f; f="$(review_file "$slug" "$rel")" || return 2
+  if _repair_entry_present "$f" "$receipt"; then
+    echo "repair-check: ok — $rel has an applicable pw-review (repair) entry${receipt:+ for receipt=$receipt}"
+    return 0
+  fi
+  echo "repair-check: FAILED — $rel has no applicable pw-review (repair) entry${receipt:+ for receipt=$receipt} → fix: run /pw-review start --project $slug --file $rel${receipt:+ --receipt $receipt} before applying feedback; do not backdate or fabricate a row" >&2
+  return 1
+}
+
 cmd_start() {
-  local slug="" rel="" phase="" provider="" model="" pass="" confirm=0 a v
+  local slug="" rel="" phase="" provider="" model="" pass="" confirm=0 a v receipt=""
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
     case "$a" in
@@ -1458,9 +1516,10 @@ cmd_start() {
       --pass=*)     v="${a#*=}"; a="--pass" ;;
       --provider=*) v="${a#*=}"; a="--provider" ;;
       --model=*)    v="${a#*=}"; a="--model" ;;
+      --receipt=*)  v="${a#*=}"; a="--receipt" ;;
     esac
     case "$a" in
-      --project|--file|--phase|--pass|--provider|--model)
+      --project|--file|--phase|--pass|--provider|--model|--receipt)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
         case "$a" in
           --project)  slug="$v" ;;
@@ -1469,6 +1528,7 @@ cmd_start() {
           --pass)     pass="$v" ;;
           --provider) provider="$v" ;;
           --model)    model="$v" ;;
+          --receipt)  receipt="$v" ;;
         esac ;;
       --confirm-earlier) confirm=1 ;;
       -h|--help) pw_usage ;;
@@ -1503,7 +1563,12 @@ cmd_start() {
       ST_BY="pw-reviewer ($mode; provider=$prov; model=$mdl)"
     fi
   else
-    ST_BY="pw-review (repair)"
+    if [ -n "$receipt" ]; then
+      _pass_token_ok "$receipt" || die "invalid --receipt id '$receipt' → fix: 1-64 characters of A-Z a-z 0-9 . _ - (one id per apply-feedback invocation)"
+      ST_BY="pw-review (repair; receipt=$receipt)"
+    else
+      ST_BY="pw-review (repair)"
+    fi
   fi
   local st; st="$(_dash_lane_state "$slug" "$rel")"
   [ "$st" = unknown ] && die "dashboard phase is missing or non-canonical — cannot judge consumed-phase safety → fix: repair the dashboard Status line (/pw-status --project $slug shows the current phase)"
@@ -1520,7 +1585,7 @@ cmd_start() {
   fi
   local report kind; report="$(cat "$_START_REPORT")"; rm -f "$_START_REPORT"; kind="${report%% *}"; local counts="${report#* }"
   _log "$slug" pw-review "pass entry on $rel: mode=$mode phase=${phase:-repair} pass=${pass:-none} provider=$prov model=$mdl decision=$kind ($counts)"
-  echo "$slug: $rel → pass entry ($kind by $ST_BY, mode=$mode${phase:+, phase=$phase}${pass:+, pass=$pass}) — $counts"
+  echo "$slug: $rel → pass entry ($kind by $ST_BY, mode=$mode${phase:+, phase=$phase}${pass:+, pass=$pass}${receipt:+, receipt=$receipt}) — $counts"
   return 0
 }
 
@@ -2324,6 +2389,7 @@ case "$OP" in
   answer)       cmd_answer "$@" ;;
   add-question) cmd_add_question "$@" ;;
   resolve)      cmd_resolve "$@" ;;
+  repair-check) cmd_repair_check "$@" ;;
   start)        cmd_start "$@" ;;
   init)         cmd_init "$@" ;;
   gate)         exec "$HERE/pw-review-read.sh" gate "$@" ;;

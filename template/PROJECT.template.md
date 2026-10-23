@@ -36,6 +36,18 @@
        stop for you; `bounded` = a completion review may run the bounded cycle
        (review → repair → verify → fresh review) within the Review Budget. -->
 - **Review Budget:** <REVIEW_BUDGET_DEFAULT>
+- **AI Model Tuning:** <AI_MODEL_TUNING_DEFAULT>
+  <!-- 🤖 machine-owned companion to AI Models. Kept on its own line so older readers of the
+       role=model row keep working: `role=variant:x,reasoning:y,effort:z`. Empty = every lane uses
+       its provider/session default tuning. Set with
+       `/pw-config set --project <slug> --key ai-model --set <role>=<provider:model> --variant <v> --reasoning <v> --effort <v>`.
+       A binding is either honored exactly or refused; it is never silently downgraded. -->
+- **Project Defaults:** <PROJECT_DEFAULTS_DEFAULT>
+  <!-- 🤖 creation seed for PLAN-owned settings (`routing`, `execution-limit`, optional
+       `max-parallel`). Captured when the project was created, so later global-default changes do
+       NOT rewrite this project. Before task/PLAN.md exists, /pw-config show/get/set reads and
+       updates these values (source: README Project Defaults, pending PLAN). /pw-breakdown copies
+       them into PLAN once, then PLAN is authoritative and this line is creation history. -->
   <!-- 🤖 set via `/pw-config set --project <slug> --key review-rounds --value <1..3>` — total reviewer passes in a
        bounded cycle; 3 allows at most two intervening verified repairs. -->
 

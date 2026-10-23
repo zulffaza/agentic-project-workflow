@@ -19,33 +19,55 @@ PW_REPOS="${PW_REPOS:-$(cd "$PW_PROJECTS/.." && pwd)}"
 AI_REVIEW_PHASES="context analysis plan task-plan task-exec ship rfc close"
 # New rows start advisory (a legacy env floor of `off` normalizes — an explicit /pw-review … ai
 # request must never be silently dead; the removed `off` value is not a write target anymore).
-review_default="${PW_AI_REVIEW_DEFAULT:-advisory}"
-case "$review_default" in advisory|auto) ;; *) review_default="advisory" ;; esac
+review_default="${PW_PROJECT_DEFAULT_AI_REVIEW:-${PW_AI_REVIEW_DEFAULT:-advisory}}"
+case "$review_default" in *'='*) ;; advisory|auto) ;; *) review_default="advisory" ;; esac
 ai_review_default_line=""
-for p in $AI_REVIEW_PHASES; do ai_review_default_line="$ai_review_default_line $p=$review_default"; done
+if [ "${review_default#*=}" != "$review_default" ]; then
+  for p in $AI_REVIEW_PHASES; do
+    v=""
+    for kv in $review_default; do [ "${kv%%=*}" = "$p" ] && v="${kv#*=}"; done
+    case "$v" in advisory|auto) ;; *) v="advisory" ;; esac
+    ai_review_default_line="$ai_review_default_line $p=$v"
+  done
+else
+  for p in $AI_REVIEW_PHASES; do ai_review_default_line="$ai_review_default_line $p=$review_default"; done
+fi
 ai_review_default_line="${ai_review_default_line# }"
-# Scheduling/repair/budget floors: manual/manual/3 — completion review and bounded repair are
-# opt-in per project; the bounded cycle allows at most two intervening verified repairs.
-review_trigger_default_line=""
-review_repair_default_line=""
-for p in $AI_REVIEW_PHASES; do
-  review_trigger_default_line="$review_trigger_default_line $p=manual"
-  review_repair_default_line="$review_repair_default_line $p=manual"
-done
-review_trigger_default_line="${review_trigger_default_line# }"
-review_repair_default_line="${review_repair_default_line# }"
-review_budget_default_line="rounds=3"
-# spawn-lane model rows (docs/EXECUTION.md §Spawning phase work) — every lane defaults unbound
-# (`—` = provider's own default), same config-driven shape as the AI Review line above.
+# Scheduling/repair/budget: global project defaults when set, else the manual/manual/3 floor.
+_review_axis_line() { # <configured-string> <default-value>
+  local cfg="$1" dflt="$2" p out="" kv v
+  if [ -n "$cfg" ]; then
+    for p in $AI_REVIEW_PHASES; do
+      v="$dflt"
+      for kv in $cfg; do [ "${kv%%=*}" = "$p" ] && v="${kv#*=}"; done
+      out="$out $p=$v"
+    done
+  else
+    for p in $AI_REVIEW_PHASES; do out="$out $p=$dflt"; done
+  fi
+  printf '%s' "${out# }"
+}
+review_trigger_default_line="$(_review_axis_line "$PW_PROJECT_DEFAULT_REVIEW_TRIGGER" manual)"
+review_repair_default_line="$(_review_axis_line "$PW_PROJECT_DEFAULT_REVIEW_REPAIR" manual)"
+review_rounds="${PW_PROJECT_DEFAULT_REVIEW_ROUNDS:-3}"
+case "$review_rounds" in 1|2|3) ;; *) review_rounds=3 ;; esac
+review_budget_default_line="rounds=$review_rounds"
+# spawn-lane model rows (docs/EXECUTION.md §Spawning phase work): the global project default when
+# set, else the legacy PW_AI_MODEL_DEFAULT_<ROLE> floor, else unbound (`—`).
 AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier"
 ai_model_default_line=""
+ai_model_tuning_default_line=""
 for r in $AI_MODEL_ROLES; do
-  rv="$(printf '%s' "$r" | tr '[:lower:]' '[:upper:]' | tr '-' '_')"
-  _rv_var="PW_AI_MODEL_DEFAULT_${rv}"
-  rv_val="${!_rv_var:-—}"
+  rv_val="$(pw_project_default_role "$r")"
   ai_model_default_line="$ai_model_default_line $r=$rv_val"
+  _rt="$(pw_project_default_tuning "$r")"
+  [ -n "$_rt" ] && ai_model_tuning_default_line="$ai_model_tuning_default_line $r=$_rt"
 done
 ai_model_default_line="${ai_model_default_line# }"
+ai_model_tuning_default_line="${ai_model_tuning_default_line# }"
+# Creation seed for PLAN-owned settings. It is consumed once, when breakdown first creates PLAN.
+project_defaults_default_line="routing=$(pw_project_default_value routing) execution-limit=$(pw_project_default_value execution-limit)"
+[ -n "$(pw_project_default_value max-parallel)" ] && project_defaults_default_line="$project_defaults_default_line max-parallel=$(pw_project_default_value max-parallel)"
 
 
 slug=""
@@ -76,12 +98,15 @@ fi
 # Format before creating anything; Created and LOG describe the same event.
 created="$(pw_now_wib)" || { echo "scaffold: cannot format event timestamp → fix: check the date command and retry" >&2; exit 1; }
 
-# Copy the template tree (dashboard template is rendered separately, below).
-mkdir -p "$dest"
+# Stage the complete project, then publish it with one rename. A failure never leaves a partial
+# destination that later looks like a legitimate project.
+stage="$(mktemp -d "${dest}.stage.XXXXXX")" || { echo "scaffold: cannot create a staging dir beside $dest" >&2; exit 1; }
+cleanup_stage() { [ -n "${stage:-}" ] && [ -d "$stage" ] && rm -rf "$stage"; }
+trap cleanup_stage EXIT HUP INT TERM
 rsync -a \
   --exclude '/PROJECT.template.md' \
   --exclude '.DS_Store' \
-  "$TEMPLATE_DIR"/ "$dest"/
+  "$TEMPLATE_DIR"/ "$stage"/
 
 # Render the project dashboard as the project's README.md. Bash string replacement, never a
 # sed program string: the config-derived default lines are data (a `|` in a config value
@@ -94,21 +119,23 @@ while IFS= read -r _rl || [ -n "$_rl" ]; do
   _rl="${_rl//<REVIEW_REPAIR_DEFAULT>/$review_repair_default_line}"
   _rl="${_rl//<REVIEW_BUDGET_DEFAULT>/$review_budget_default_line}"
   _rl="${_rl//<AI_MODELS_DEFAULT>/$ai_model_default_line}"
+  _rl="${_rl//<AI_MODEL_TUNING_DEFAULT>/$ai_model_tuning_default_line}"
+  _rl="${_rl//<PROJECT_DEFAULTS_DEFAULT>/$project_defaults_default_line}"
   printf '%s\n' "$_rl"
-done < "$TEMPLATE_DIR/PROJECT.template.md" > "$dest/README.md"
+done < "$TEMPLATE_DIR/PROJECT.template.md" > "$stage/README.md"
 
 # Stamp {{PW_*}} tokens (absolute paths) into every copied markdown file. Shared helper —
 # bash replacement + pw_tmpfile staging; install paths never become perl program text.
-find "$dest" -type f -name '*.md' -print0 | while IFS= read -r -d '' md; do
+find "$stage" -type f -name '*.md' -print0 | while IFS= read -r -d '' md; do
   pw_stamp_tokens "$md" || { echo "scaffold: token stamping failed for $md" >&2; exit 1; }
 done
 
 # Keep empty phase dirs present even if rsync left them out; add the review/ subdirs.
 # (No per-project sub-agent/ dir — reusable agents are seeded from tooling/agents/ via bootstrap.)
-mkdir -p "$dest/context" "$dest/analysis/review" "$dest/task/review" "$dest/worktree"
+mkdir -p "$stage/context" "$stage/analysis/review" "$stage/task/review" "$stage/worktree"
 
 # Seed the append-only activity log.
-cat > "$dest/LOG.md" <<LOGEOF
+cat > "$stage/LOG.md" <<LOGEOF
 # Activity log — $slug
 
 Append-only audit trail. One line per meaningful action: phase transitions, sub-agent spawns,
@@ -121,6 +148,14 @@ Format: a bullet per entry — "- **DD MMMM YYYY - HH.mm WIB** · \`<phase/actor
 
 - **$created** · \`scaffold\` — project created
 LOGEOF
+
+if [ -e "$dest" ]; then
+  echo "Error: $dest already exists." >&2
+  exit 1
+fi
+mv "$stage" "$dest" || { echo "scaffold: could not publish the staged project to $dest" >&2; exit 1; }
+stage=""
+trap - EXIT HUP INT TERM
 
 cat <<EOF
 Created $dest

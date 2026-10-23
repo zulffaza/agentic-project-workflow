@@ -158,6 +158,14 @@ decisions (options not converged, Q0 rules, the final doc) stay yours.
    <slug> --file <artifact-rel-path> [--file <artifact-rel-path>]…` creates exactly the docs listed — neither ever spawns earlier- or later-phase reviews as a side
    effect; my review items/answers/sign-off rows are written deterministically via the
    `/pw-review item|answer|signoff --project <slug>` operators — never hand-copied template blocks.)
+**Pre-finalization lint — reviewable, not decision-ready.** Run:
+```bash
+{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind analysis --project <slug> --file <topic> --stage reviewable || exit 1
+```
+`--stage reviewable` accepts the template's pending `Chosen approach` line only when a linked
+blocking `Q0` exists. Any other failure is a real structural defect and stops finalization. A
+pending decision is normal here: it is yours to answer later, never the agent's to fill.
+
 6. **MANDATORY final step — do NOT skip.** Set the dashboard one-liner + Status + audit log via the
    helper (never hand-edit these lines). Run all three, then confirm the dashboard now shows
    `Status: analysis`:
@@ -167,8 +175,8 @@ decisions (options not converged, Q0 rules, the final doc) stay yours.
    {{PW_HOME}}/tooling/scripts/entities/pw-status.sh log --project <slug> --actor analyze --message "wrote analysis/<topic>.md (N open questions)"
    ```
 
-**Completion review — only when this project configured it (never assumed).** After the analysis doc
-and its lint pass, read the `analysis` axis (`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh
+**Completion review — only when this project configured it (never assumed).** After the analysis doc,
+its reviewable lint pass, and the dashboard phase update above, read the `analysis` axis (`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh
 get --project <slug> --key review-trigger` and `… --key ai-review`) and, ONLY when the trigger is
 `completion`
 and the outcome is callable (`advisory` default; a legacy `off` row reads as advisory), run the

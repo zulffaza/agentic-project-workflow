@@ -73,8 +73,8 @@ Rules you MUST follow:
   resolved. Agents record **operational** rows only through the entity's transition writers: a
   first real item/answer after an approval appends one attributed `in-review` row
   (`pw-review (feedback)`, written by the item/answer writer itself), and `pw-review.sh start
-  --project <slug> --file <review-rel-path>` before a repair pass appends `changes-requested` attributed
-  `pw-review (repair)` — only when that file has genuinely eligible open work (stub-only,
+  --project <slug> --file <review-rel-path> --receipt <id>` before a repair pass appends
+  `changes-requested` attributed `pw-review (repair; receipt=<id>)` — only when that file has genuinely eligible open work (stub-only,
   resolved/archived-only, malformed-only, or waiting-human-only sets add NO row); no-op calls,
   failed writes, and retries of the active pass never duplicate or toggle state, and later item
   writes inside an active pass don't flip the operational state back. The writers can never say
@@ -82,6 +82,14 @@ Rules you MUST follow:
   replaces it — operational rows never erase a human rejection. Repairing or reopening an
   EARLIER phase's approved gate needs the human's explicit confirmation
   (`pw-review.sh start … --confirm-earlier`).
+- **Read the gate result and the start report separately.** A valid `in-review`/`changes-requested`
+  gate with the ordinary non-approved exit status is NORMAL here; never write `gate && start`.
+  After `start`, `__entered__` and `__resume__` permit work only with the persisted repair row;
+  `__clean__` means no eligible work; nonzero or an unknown report stops. Before reporting
+  success, run `repair-check --project <slug> --file <path> --receipt <id>` for every touched file.
+  A missing applicable row means edits lack recorded admission: keep them as incomplete evidence,
+  never backdate a row. `resolve --repair-receipt <id>` enforces the same admission for the
+  apply-feedback flow; other legitimate resolution paths omit it.
 - Rejected execution result → the human adds items to `task/review/T0n.review.md` and sets the task
   `Status: verify-failed`; re-run it in its worktree and re-verify.
 - **Open questions (QnA):** when you can't resolve something during analysis, don't guess — list

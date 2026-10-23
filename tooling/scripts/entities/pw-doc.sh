@@ -35,26 +35,28 @@ proj_dir() { local d; d="$(pw_proj_dir "$1")" || die "no such project: $1 ($PROJ
 
 
 cmd_lint() {
-local kind="" slug="" file="" all=0 a v
+local kind="" slug="" file="" all=0 stage="ready" a v
 while [ $# -gt 0 ]; do
   a="$1"; shift; v=""
   case "$a" in
     --kind=*)    v="${a#*=}"; a="--kind" ;;
     --project=*) v="${a#*=}"; a="--project" ;;
     --file=*)    v="${a#*=}"; a="--file" ;;
+    --stage=*)   v="${a#*=}"; a="--stage" ;;
   esac
   case "$a" in
-    --kind|--project|--file)
+    --kind|--project|--file|--stage)
       [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
-      case "$a" in --kind) kind="$v" ;; --project) slug="$v" ;; --file) file="$v" ;; esac ;;
+      case "$a" in --kind) kind="$v" ;; --project) slug="$v" ;; --file) file="$v" ;; --stage) stage="$v" ;; esac ;;
     --all) all=1 ;;
     -h|--help) pw_usage ;;
-    -*) _pw_unknown "$a" "lint --kind <analysis|task|plan|review|dashboard|all> --project <slug> [--file <topic|T0n|path> | --all]" ;;
-    *) _pw_positional "$a" "lint --kind <analysis|task|plan|review|dashboard|all> --project <slug> [--file <topic|T0n|path> | --all]" ;;
+    -*) _pw_unknown "$a" "lint --kind <analysis|task|plan|review|dashboard|all> --project <slug> [--file <topic|T0n|path> | --all] [--stage ready|reviewable]" ;;
+    *) _pw_positional "$a" "lint --kind <analysis|task|plan|review|dashboard|all> --project <slug> [--file <topic|T0n|path> | --all] [--stage ready|reviewable]" ;;
   esac
 done
-[ -n "$kind" ] || die "lint: --kind is required → fix: lint --kind <analysis|task|plan|review|dashboard|all> --project <slug> [--file <topic|T0n|path> | --all]"
-[ -n "$slug" ] || die "lint: --project is required → fix: lint --kind <analysis|task|plan|review|dashboard|all> --project <slug> [--file <topic|T0n|path> | --all]"
+[ -n "$kind" ] || die "lint: --kind is required → fix: lint --kind <analysis|task|plan|review|dashboard|all> --project <slug> [--file <topic|T0n|path> | --all] [--stage ready|reviewable]"
+[ -n "$slug" ] || die "lint: --project is required → fix: lint --kind <analysis|task|plan|review|dashboard|all> --project <slug> [--file <topic|T0n|path> | --all] [--stage ready|reviewable]"
+case "$stage" in ready|reviewable) ;; *) die "lint: --stage expects ready or reviewable, got '$stage'" ;; esac
 
 D="$(proj_dir "$slug")"
 ERRORS=()
@@ -104,11 +106,29 @@ lint_analysis() {
     add_error "$f: (Rn)/(Qn) tags belong in §5.1 only, not §1-4" "move each '(Rn)'/'(Qn)' citation into §5.1; §1–4 prose refers to decisions by name, not tag"
   fi
   
-  # Check chosen approach is filled
-  if grep -q '^\*\*Chosen approach:\*\*' "$f"; then
-    if grep '^\*\*Chosen approach:\*\*' "$f" | grep -q '_pending'; then
-      add_error "$f: 'Chosen approach' is not filled in" "fill the '**Chosen approach:**' line with the picked §4 option (human decision)"
-    fi
+  # Decision readiness is SEPARATE from reviewability. A complete draft awaiting a human choice
+  # can be reviewed and recorded at phase `analysis`; breakdown/RFC readiness still refuses it.
+  local chosen
+  chosen="$(grep -m1 '^\*\*Chosen approach:\*\*' "$f" | sed 's/^\*\*Chosen approach:\*\*[[:space:]]*//' || true)"
+  if ! grep -q '^\*\*Chosen approach:\*\*' "$f"; then
+    add_error "$f: missing '**Chosen approach:**' line" "add '**Chosen approach:** _pending your review_' after §4 (2+ options), or name the single justified approach"
+  elif [ "$stage" = "ready" ]; then
+    case "$chosen" in
+      ''|_pending*|_pending\ your\ review_|—|-)
+        add_error "$f: 'Chosen approach' is not decided yet" "a human must pick a §4 option (or record the single-approach justification); /pw-review ai can still review the draft with --stage reviewable" ;;
+    esac
+  else
+    # reviewable: a pending marker is legal only when a linked blocking decision question exists.
+    case "$chosen" in
+      ''|_pending*|—|-)
+        local topic rv
+        topic="$(basename "$f" .md)"
+        rv="$D/analysis/review/$topic.review.md"
+        if [ ! -f "$rv" ] || ! grep -qE '^#{2,6}[[:space:]]+Q0([[:space:]]|·|$)' "$rv" \
+           || ! grep -A3 -E '^#{2,6}[[:space:]]+Q0([[:space:]]|·|$)' "$rv" | grep -qE '\[PENDING\]|pw-item-status:[[:space:]]*open'; then
+          add_error "$f: 'Chosen approach' is pending without a linked blocking Q0" "seed '### Q0 · §4 — which approach should we proceed with? [PENDING]' in analysis/review/$topic.review.md (the decision is the human's)"
+        fi ;;
+    esac
   fi
 }
 

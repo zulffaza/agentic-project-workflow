@@ -439,3 +439,7 @@ C342-update-stability-guard-dropped	scripts/entities/pw-status.sh	  [ "$before" 
 C343-cursor-catalog-desc-strip-dropped	pw-common.sh	  "$bin" models 2>/dev/null | sed -e '/^Available models$/d' -e 's/ - .*//' | awk 'NF' || true	  "$bin" models 2>/dev/null | sed -e '/^Available models$/d' | awk 'NF' || true	T1	pw-config
 
 C344-breakdown-analysis-lint-selector	commands/pw-breakdown.md	{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind analysis --project <slug> --all || exit 1	{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind analysis --project <slug> || exit 1	T4	-
+C345-global-managed-value-guard-dropped	scripts/entities/pw-config.sh	  _global_safe_value "$val" \	  : # managed value guard dropped	T1	^pw-project-defaults\.t\.sh$
+C346-lint-stage-ready-ignored	scripts/entities/pw-doc.sh	  elif [ "$stage" = "ready" ]; then	  elif false; then	T1	^pw-project-defaults\.t\.sh$
+C347-repair-receipt-correlation-dropped	scripts/entities/pw-review.sh	  [ -z "$receipt" ] || { case "$actor" in *"receipt=$receipt"*) return 0 ;; *) return 1 ;; esac; }	  : # repair receipt correlation dropped	T1	^pw-project-defaults\.t\.sh$
+C348-recovery-unique-interior-proof-dropped	scripts/lib/pw-shiplib.sh	    need(len(occurrences) == 1, 'saved summary interior occurs ' + str(len(occurrences)) +	    need(True, 'saved summary interior occurs ' + str(len(occurrences)) +	T1	^pw-ship-history\.t\.sh$

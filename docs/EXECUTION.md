@@ -268,6 +268,28 @@ capability. How a Claude-only session still runs the phases:
 Same rule as model lanes (above): document per-provider capability where it bites, not in prose
 that implies symmetry.
 
+### Role-model tuning
+
+A role binding can carry a provider-supported variant, reasoning level, or effort level. Configure
+it with one role per invocation:
+
+```text
+/pw-config set --project delivery-note --key ai-model --set analyst=kilo:command_code/model --variant high
+/pw-config global set --key ai-model --set reviewer=cursor:model --reasoning high
+```
+
+Ask what the provider supports before choosing a value:
+
+```text
+/pw-config model-check --provider kilo --model command_code/model
+/pw-config model-check --provider codex --model gpt-6-sol --reasoning high
+```
+
+Capability output is `unsupported`, `unknown`, or an explicit value list, with local evidence. An
+explicit configured binding is honored exactly or refused; it is never silently downgraded to a
+nearby variant, and a missing capability is never treated as support. Requested and confirmed
+bindings are recorded separately in spawn evidence.
+
 ## Model allowlist (optional — a cost guard, not a routing mechanism)
 
 There's no fixed, pre-approved model list in this bundle — an agent (during `/pw-breakdown`) or

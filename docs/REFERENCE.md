@@ -105,8 +105,11 @@ refuse it.
 | `/pw-config get --project <slug> --key <key>` | Read one value |
 | `/pw-config set --project <slug> --key <key> --value <value…>` | Validate and change a project setting |
 | `/pw-config ensure --project <slug>` | Add missing config fields with defaults |
-| `/pw-config global show` | Read machine settings; no project slug |
-| `/pw-config model-check --provider <provider> --model <model-id>` | Check model permission against the allowlist; no project slug |
+| `/pw-config global show [--json]` | Read machine settings and which global project defaults are inherited; no project slug |
+| `/pw-config global get --key <key>` | Read one inherited project default and its source |
+| `/pw-config global set --key <key> …` | Change a default copied into NEW projects only |
+| `/pw-config global unset --key <key>` | Remove an override and reveal its fallback |
+| `/pw-config model-check --provider <provider> --model <model-id> [--variant/--reasoning/--effort] [--json]` | Check model permission and list/validate supported tuning; no project slug |
 
 Guidance preview writes nothing. Applying it repairs recognized prose, preserving project state and custom content outside the matches.
 Health repair (`--fix`) and guidance repair are separate modes. See the [preview/apply recipe](RECIPES.md#refresh-old-project-guidance-after-a-workflow-update).
@@ -127,7 +130,7 @@ The [RFC guide](RFC.md) explains publication, targets, and the local comment loo
 | `review-trigger` | `surface=value` pairs or `all=value` | WHEN a pass starts — `manual` (default) or `completion` (also after a succeeded producing command's verification) |
 | `review-repair` | `surface=value` pairs or `all=value` | Whether a completion review may repair+re-review — `manual` (default) or `bounded` (within the budget) |
 | `review-rounds` | Integer `1..3` | Total reviewer passes in a bounded cycle (default `3`; at most two intervening repairs) |
-| `ai-model` | `role=provider:model` or `role=—` pairs | Model for a workflow role; `—` clears the override |
+| `ai-model` | `role=provider:model` or `role=—` pairs; one role may add `--variant`, `--reasoning`, `--effort` | Model for a workflow role, optionally with provider-supported tuning. `—` clears the override. Read the complete binding with `get --key ai-model --json` |
 | `pin` | `T01=provider:model` or `T01=—` pairs | Executor model in both task and PLAN |
 | `rfc-target` | A document reference or URL | RFC destination |
 
@@ -138,6 +141,11 @@ For the three per-surface axes, `all=<value>` sets every surface and explicitly 
 override the baseline regardless of argument order. `off` writes are refused with the replacement
 named (`off` was the pre-migration outcome value — reads normalize it to `advisory`).
 Model roles: `researcher`, `analyst`, `writer-task`, `reviewer`, `verifier`.
+
+Global project defaults live in `pw.config.sh`, not a second file. They are copied into a new
+project's dashboard and never re-applied to an existing project. Routing, execution limit, and
+maximum parallelism wait in the dashboard `Project Defaults` line until `/pw-breakdown` creates
+PLAN; after that, PLAN is authoritative.
 
 For `ai-review`/`review-trigger`/`review-repair`, `ai-model`, and `pin`, a batch validates every
 pair before writing any value:

@@ -367,6 +367,19 @@ asked and what changed?" entirely from the project dir, without opening the MR.
 
 ---
 
+## Decision-pending drafts and repair history
+
+A complete analysis can be AI-reviewed while a human decision is still open. Draft validation uses
+the analysis linter with `--stage reviewable`, which accepts a pending `Chosen approach`
+only when a linked blocking `Q0` exists. Downstream consumers (breakdown, RFC solution generation)
+require `--stage ready`. Dashboard phase `analysis` records the produced artifact, not approval of
+an approach.
+
+When applying review feedback, the repair pass is admitted before edits and verified at completion.
+The canonical command passes one receipt id to `start` and to each guarded `resolve`, then runs
+`repair-check` per file. A non-approved gate is normal input to this flow; a missing repair row at
+completion is a real failure, and the workflow never backdates or fabricates one.
+
 ## 3. AI-assisted review (optional; advisory + manual by default)
 
 Everything above assumes a human. You can instead (or additionally, as a pre-filter) delegate any

@@ -22,6 +22,29 @@ Context → Analysis → Plan → Execute → Ship → Close
 During [setup](ONBOARDING.md#setup-in-4-steps), select your provider in `pw.config.sh` before installing.
 The example config enables Claude only.
 
+### Defaults for new projects
+
+Set reusable project defaults once with `/pw-config global set`. A new project copies those values
+into its dashboard; an existing project keeps its captured values, so changing a default never
+rewrites work in progress. Review modes, role models, routing, execution limit, and maximum
+parallelism are supported.
+
+```text
+/pw-config global show
+/pw-config global set --key review-trigger --set all=completion --set ship=manual
+/pw-config global set --key ai-model --set analyst=kilo:command_code/model --variant high
+```
+
+Role models can carry a provider-supported variant, reasoning level, or effort level. Ask what is
+supported before choosing a value:
+
+```text
+/pw-config model-check --provider kilo --model command_code/model
+```
+
+`model-check` lists supported controls and validates a requested combination without spending a
+model request. Unsupported or unverified tuning is refused, never silently dropped.
+
 Once installed, run workflow commands in your agent session. In Codex, select the installed `pw-*` skill for the corresponding command.
 Examples use the shared `/pw-*` names throughout these guides.
 
