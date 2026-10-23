@@ -143,7 +143,7 @@ C82-doctor-mismatch-must-not-fail	scripts/entities/pw-project-doctor.sh	        
 C83-doctor-rfc-engaged-must-fail	scripts/entities/pw-project-doctor.sh	    if [ "$rfc_used" = 1 ]; then bad "$@"; else note "$@ (warning only — RFC side-loop not engaged yet)"	    if false; then bad "$@"; else note "$@ (warning only — RFC side-loop not engaged yet)"	T1	pw-project-doctor
 C84-doctor-mr-table-scope	scripts/entities/pw-project-doctor.sh	'/^## Merge requests/{sec=1; next} /^##[ ]/{sec=0} sec && $2 ~	'$2 ~	T1	pw-project-doctor
 C85-doctor-accepted-pin-history	scripts/entities/pw-project-doctor.sh	      if [ "$(pw_field "$f" Status)" = "accepted" ]; then	      if false; then	T1	pw-project-doctor
-C86-doctor-catalog-desc-strip	pw-common.sh	  "$bin" models 2>/dev/null | sed -e '/^Available models$/d' -e 's/ - .*//' | awk 'NF' || true	  "$bin" models 2>/dev/null | sed -e '/^Available models$/d' | awk 'NF' || true	T1	pw-config
+C86-doctor-catalog-desc-strip	pw-common.sh	        "$bin" models 2>/dev/null | sed 's/ - .*//' || true	        "$bin" models 2>/dev/null || true	T1	pw-config
 C87-doclint-fix-hint-command-only	pw-doc.sh	"tell your agent to rebuild the dashboard task table from the task files (task-file truth is authoritative)"	"run: pw-doc.sh sync <slug> --dashboard-only (rebuilds the table from task-file truth)"	T4	-
 C88-codex-catalog-visibility	pw-common.sh	| grep '"visibility":"list"' \	| grep '"slug"' \	T1	pw-config
 C89-gen-commands-skill-layout	gen-commands.sh	    if [ "$style" = "skill" ]; then	    if false; then	T1	pw-common
@@ -432,3 +432,5 @@ C339-complete-evidence-gate-dropped	scripts/entities/pw-status.sh	  ev="$(_updat
 C340-accept-open-items-ignored	scripts/entities/pw-status.sh	  [ "${open:-0}" = "0" ] || die "update: $task has $open open review item(s) → fix: resolve them first (/pw-review --project $slug --task $task)"	  open=0	T1	^pw-status\.t\.sh$
 C341-review-readiness-ignores-blocked-work	pw-common.sh	    [ "$found" = 1 ] || recheck="$recheck $id($st)"	    : # any unfinished task is tolerated	T1	^pw-status\.t\.sh$
 C342-update-stability-guard-dropped	scripts/entities/pw-status.sh	  [ "$before" = "$after" ] || die "update: project records changed during assessment; nothing was written → fix: re-read the task result and retry"	  : # no stability check	T1	^pw-status\.t\.sh$
+C343-cursor-catalog-desc-strip-dropped	pw-common.sh	  "$bin" models 2>/dev/null | sed -e '/^Available models$/d' -e 's/ - .*//' | awk 'NF' || true	  "$bin" models 2>/dev/null | sed -e '/^Available models$/d' | awk 'NF' || true	T1	pw-config
+

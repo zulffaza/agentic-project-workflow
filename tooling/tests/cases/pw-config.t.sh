@@ -145,6 +145,14 @@ mr_out3="$(PWTEST_KILO_CATALOG_EXTRA='alibaba-token-plan/test-model' PW_CONFIG_F
   && [ "$mr_out3" = "alibaba-token-plan/test-model" ] \
   && pwtest_ok "model-resolve exact line wins over the gateway-prefixed form" \
   || pwtest_bad "model-resolve exact-preferred" "got '$mr_out3'"
+# The kilo/opencode catalog reader strips a ' - description' tail before exact matching (the
+# real CLIs have varied on whether they print one). Guards the kilo/opencode branch of
+# pw_api_catalog; the cursor assertions below cover only the cursor branch.
+mr_desc="$(PWTEST_KILO_CATALOG_EXTRA='kilo/alibaba-token-plan/described-model - A described model' \
+  PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider kilo --model kilo/alibaba-token-plan/described-model 2>/dev/null)" \
+  && [ "$mr_desc" = "kilo/alibaba-token-plan/described-model" ] \
+  && pwtest_ok "kilo catalog description tails are stripped before exact match" \
+  || pwtest_bad "kilo catalog description strip" "got '$mr_desc'"
 # …and a coexisting DIRECT line that is OUT of scope is a hard exit 2 — never silently re-bound
 # to the in-scope gateway line.
 PW_CONFIG_FILE="$CFG_SCOPED" PWTEST_KILO_CATALOG_EXTRA='alibaba-token-plan/test-model' \
