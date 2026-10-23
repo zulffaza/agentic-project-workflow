@@ -25,7 +25,13 @@ rm -rf "$PW_PROJECTS_DIR/$B_PROJECT"
 # A callback runs inside a conditional transaction, where errexit cannot protect it.
 # Import only the trusted callback and inject a header-splice failure.
 . "$TOOL/scripts/lib/pw-mdlib.sh"
-. <(awk '/^_start_body\(\) \{/{p=1} p{print} p&&/^}/{exit}' "$TOOL/scripts/entities/pw-review.sh")
+# Source from a real file: `. <(awk …)` is racy on bash 3.2 (the source builtin can read
+# EOF before the external awk writes), which silently defined nothing and made the two
+# assertions below pass on "command not found" instead of the transaction under test.
+B_BODY="$ROOT/start-body.sh"
+awk '/^_start_body\(\) \{/{p=1} p{print} p&&/^}/{exit}' "$TOOL/scripts/entities/pw-review.sh" > "$B_BODY"
+. "$B_BODY"
+declare -F _start_body >/dev/null && pwtest_ok "start callback extracted" || pwtest_bad "start callback extracted" "awk produced no _start_body definition (retry the extraction)"
 B_CALLBACK="$ROOT/start-callback.review.md"
 printf '# Review\nGate: see Sign-off\n## Items\n### R1 · §1 — [OPEN] (you, 2026-10-05 12:00) <!-- pw-item-status: open -->\nA real actionable request.\n---\n## Sign-off\n| Date-time | By | Decision |\n|---|---|---|\n| 2026-10-05 11:00 | you | approved |\n' > "$B_CALLBACK"
 B_BEFORE="$(cksum < "$B_CALLBACK")"
