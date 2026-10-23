@@ -54,6 +54,10 @@
 # preview-vs-strict freshness split (a done/accepted task without its binding must never get the
 # unverified exemption). Catcher case: pw-stack.t.sh.
 # Next free: C179 (C70–C72 stay reserved).
+# C344 pins the /pw-breakdown analysis-lint selector: the named-flag migration dropped the
+# `--all` that the old positional form carried, so the preflight died rc 2 (usage) before any
+# PLAN or task file. The T4 guard asserts every entry-path pw-doc lint for a selector-required
+# kind names --all or --file.
 # C77–C81 minted by the project-doctor live-triage plan (fix-hint command-only scrubber,
 # token-expansion reader, depends_on full-id universe, accepted-teardown status-awareness,
 # backtick-first field reader).
@@ -434,3 +438,4 @@ C341-review-readiness-ignores-blocked-work	pw-common.sh	    [ "$found" = 1 ] || 
 C342-update-stability-guard-dropped	scripts/entities/pw-status.sh	  [ "$before" = "$after" ] || die "update: project records changed during assessment; nothing was written → fix: re-read the task result and retry"	  : # no stability check	T1	^pw-status\.t\.sh$
 C343-cursor-catalog-desc-strip-dropped	pw-common.sh	  "$bin" models 2>/dev/null | sed -e '/^Available models$/d' -e 's/ - .*//' | awk 'NF' || true	  "$bin" models 2>/dev/null | sed -e '/^Available models$/d' | awk 'NF' || true	T1	pw-config
 
+C344-breakdown-analysis-lint-selector	commands/pw-breakdown.md	{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind analysis --project <slug> --all || exit 1	{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind analysis --project <slug> || exit 1	T4	-

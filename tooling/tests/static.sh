@@ -133,6 +133,15 @@ static_t4() {
   [ -z "$unreferenced" ] && pwtest_ok "T4 every automation script wired to an entry path" \
     || pwtest_bad "T4 every automation script wired" "unreferenced: $(printf '%s' "$unreferenced" | tr '\n' ' ') $(printf '%s\n' "$unreferenced" | while read -r z; do grep -l "$z" "$TOOL"/commands/* >/dev/null 2>&1 && echo "(in commands)"; done)"
 
+  # 2b) selector kinds need a selector: `pw-doc.sh lint --kind analysis|task` has no implicit
+  #     "all". A preflight that omits --all/--file dies rc 2 before the phase can start (the
+  #     /pw-breakdown block lost its --all during the named-flag migration and blocked every
+  #     breakdown). Entry paths must spell the selector out.
+  hits="$(grep -rnE 'pw-doc\.sh lint --kind (analysis|task)( |$)' "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" \
+    | grep -vE -- '--all|--file' || true)"
+  [ -z "$hits" ] && pwtest_ok "T4 canary: pw-doc lint analysis/task calls name their selector" \
+    || pwtest_bad "T4 canary: pw-doc lint --kind analysis|task needs --all or --file" "$(printf '%s' "$hits" | head -2 | cut -c1-140 | tr '\n' '|')"
+
   # 3) information boundary — only registry names; pw-env.sh remains the allowed human ref.
   #    A name that is NOT in the registry is worse: the reader is pointed at a file that does
   #    not exist. The allowed human refs are the ones the docs own.
