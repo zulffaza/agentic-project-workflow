@@ -86,9 +86,15 @@ Examples:
     5. /pw-config set --key review-rounds --value 2
     6. /pw-help overview
 
+Repeated `--file` on `init` and same-key `--set` on a config item stay one item each.
+
 Refused forms include `prepare`, `import`, `ai`, apply-comments, `auto-signoff`, `materialize`,
 `model-resolve`, status `update`/`rewind`, doctor `--fix`/`--apply`, ship `stack adopt`, and every
 unlisted command or flag.
+
+Not batch items: `pw-new`, `pw-adopt`, `pw-research`, `pw-analyze`, `pw-breakdown`, `pw-execute`,
+`pw-verify`, `pw-sync`, `pw-rfc`, `pw-close`, and `pw-independent-review`.
+Later candidates: status update, review packet prepare/import, and project guidance apply.
 <!-- batch-ops:end -->
 
 **Literal payloads.** Only review `item` and `answer` accept `--stdin`. End that item's header with

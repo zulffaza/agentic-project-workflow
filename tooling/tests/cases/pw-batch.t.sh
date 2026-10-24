@@ -75,7 +75,7 @@ done
 pwtest_rc 0 "overview renders" "$C" overview
 grep -qF '/pw-batch' "$PWTEST_OUT" && pwtest_ok "overview lists pw-batch" || pwtest_bad "overview" "pw-batch absent"
 pwtest_rc 0 "command how-to renders" "$C" command --name pw-batch
-for _h in 'Supported operations in this first release' '| `/pw-review` |' '| `/pw-config global` |' 'Refused forms include' 'completed writes remain, with no rollback or automatic replay' 'A `signoff` item records a decision only when it names the review file and decision' 'Literal review text ends the item with `--stdin`' '$ /pw-batch preview --project <project-slug>' '$ /pw-batch apply --project <project-slug>'; do
+for _h in 'Supported operations in this first release' '| `/pw-review` |' '| `/pw-config global` |' 'Refused forms include' 'completed writes remain, with no rollback or automatic replay' 'A `signoff` item records a decision only when it names the review file and decision' 'Literal review text ends the item with `--stdin`' 'Not batch items: `pw-new`, `pw-adopt`' 'Later candidates: status update, review packet prepare/import' '$ /pw-batch preview --project <project-slug>' '$ /pw-batch apply --project <project-slug>'; do
   grep -qF "$_h" "$PWTEST_OUT" && pwtest_ok "help renders: $_h" || pwtest_bad "help render" "missing: $_h"
 done
 pwtest_rc 0 "command --json renders" "$C" command --name pw-batch --json
