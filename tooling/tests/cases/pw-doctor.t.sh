@@ -39,17 +39,24 @@ pwtest_rc 0 "doctor --fix installs a bare provider surface" env HOME="$FH" bash 
   && pwtest_ok "skill-layout provider carries the shared skill after --fix" \
   || pwtest_bad "skill-layout shared skill survives --fix" "missing $FH/.codex/skills/pw-guide-workflow"
 # 1b) exclusive formats: bundle-generated residue in the OTHER format still loads, so the
-# doctor names it and --fix removes it (entry skills vs flat commands).
-mkdir -p "$FH/.claude/commands" "$FH/.kilocode/skills/pw-execute"
+# doctor names it and --fix removes it. The skill-format side (a) is the unique catcher: no other
+# pass looks in the flat command dir. The command-format side (b) also covers the inverse.
+mkdir -p "$FH/.claude/commands"
 printf '<!-- pw-generated: build artifact -->\n' > "$FH/.claude/commands/pw-execute.md"
-printf '<!-- pw-generated: build artifact -->\n' > "$FH/.kilocode/skills/pw-execute/SKILL.md"
-pwtest_rc 1 "wrong-format entry residue fails the check" env HOME="$FH" bash "$DOCTOR"
-pwtest_rc 0 "--fix removes wrong-format entry residue" env HOME="$FH" bash "$DOCTOR" --fix
-[ ! -e "$FH/.claude/commands/pw-execute.md" ] && [ ! -e "$FH/.kilocode/skills/pw-execute" ] \
-  && pwtest_ok "exclusive-format residue removed" \
-  || pwtest_bad "wrong-format cleanup" "residue remains after --fix"
+pwtest_rc 1 "skill-format wrong-format residue fails the check" env HOME="$FH" bash "$DOCTOR"
+pwtest_rc 0 "--fix removes the flat residue for a skill-format provider" env HOME="$FH" bash "$DOCTOR" --fix
+[ ! -e "$FH/.claude/commands/pw-execute.md" ] \
+  && pwtest_ok "flat residue removed for claude" \
+  || pwtest_bad "wrong-format cleanup (skill)" "residue remains after --fix"
 [ -f "$FH/.claude/skills/pw-execute/SKILL.md" ] && pwtest_ok "claude entry skill kept" \
   || pwtest_bad "claude entry skill" "missing after wrong-format cleanup"
+mkdir -p "$FH/.kilocode/skills/pw-execute"
+printf '<!-- pw-generated: build artifact -->\n' > "$FH/.kilocode/skills/pw-execute/SKILL.md"
+pwtest_rc 1 "command-format wrong-format residue fails the check" env HOME="$FH" bash "$DOCTOR"
+pwtest_rc 0 "--fix removes the skill residue for a command-format provider" env HOME="$FH" bash "$DOCTOR" --fix
+[ ! -e "$FH/.kilocode/skills/pw-execute" ] \
+  && pwtest_ok "skill residue removed for kilo" \
+  || pwtest_bad "wrong-format cleanup (command)" "residue remains after --fix"
 [ -f "$FH/.config/kilo/command/pw-execute.md" ] && pwtest_ok "kilo entry command kept" \
   || pwtest_bad "kilo entry command" "missing after wrong-format cleanup"
 

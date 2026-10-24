@@ -343,9 +343,9 @@ allowlist is the real gate), if you want to look yourself — but `/pw-doctor` i
     (`~/.codex/prompts`) were deprecated, then **removed in 0.117.0** (upstream: "convert your
     custom prompts to skills"; GitHub #15941/#15939). The ONLY slash surface is **skills**
     (`~/.codex/skills/<name>/SKILL.md`; "a skill is a reusable slash-command package"). pw
-    therefore generates its 17 `/pw-*` commands AS command-skills (`command_style=skill`) with
-    `agents/openai.yaml → policy.allow_implicit_invocation: false` — explicit-invocation-only,
-    the closest parity to a typed slash command. Verified: a **symlinked** skill dir is followed;
+    therefore installs its 18 human entries as explicit-only skills (`entry_format=skill`) with
+    `agents/openai.yaml → policy.allow_implicit_invocation: false`, the closest parity to a typed
+    slash command. No flat command copy is generated. Verified: a **symlinked** skill dir is followed;
     explicit invocation ("Use the <name> skill" / `$<name>` / the TUI `/skills` picker) loads the
     body and the skill's scripts run; an explicit-only skill is **absent from the model's
     available-skills listing by design** (not injected unless invoked) — invisibility to

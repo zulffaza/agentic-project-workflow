@@ -150,9 +150,10 @@ scripts** — everything else also goes in `../pw.config.sh`:
    `render_claude_command`/`render_kilo_command`/`render_cursor_command`/`render_codex_command`
    from `pw-common.sh` as a starting point; full
    variable contract in [ONBOARDING.md](../ONBOARDING.md#register-a-new-provider). *(Optional)*
-   for a CLI with NO native command surface, define `<name>_command_style` → `skill` (+
-   `render_<name>_skill_policy`) and commands generate as `<name>/SKILL.md` skill dirs — codex is
-   the built-in precedent. *(Optional)*
+   define `<name>_entry_format` → `skill` (with `render_<name>_entry_skill` or the generic
+   fallback, plus `render_<name>_skill_policy` when the harness needs a sidecar) or `command`.
+   The two formats are exclusive. Without the hook, a custom provider inherits its legacy
+   `command_style`. *(Optional)*
    to also seed the sub-agents for it, define `<name>_agentdir` + `render_<name>_agent`;
    providers without those just skip agent-seeding (codex ships this way — no agent surface).
 3. *(Optional)* define `<name>_headless()` — its exact non-interactive invocation template, so an

@@ -447,3 +447,4 @@ C349-exclusive-entry-format	pw-common.sh	declare -f claude_entry_format >/dev/nu
 C350-entry-orchestration-load-dropped	skills/human/pw-execute/SKILL.md	**Load shared guidance first.** Read the `pw-orchestration` skill's common rules	**Load shared guidance first.** Read the `pw-guide-workflow` skill's common rules	T4	-
 C351-codex-manual-policy-lost	pw-common.sh	  printf 'policy:\n  allow_implicit_invocation: false\n'	  printf 'policy:\n  allow_implicit_invocation: true\n'	T4	-
 C352-orchestration-primary-claim	skills/model/pw-orchestration/SKILL.md	no custom primary agent	one managed primary agent	T4	-
+C353-wrong-format-residue-unreported	pw-doctor.sh	  if [ -n "$wfmt" ]; then	  if false; then	T1	pw-doctor
