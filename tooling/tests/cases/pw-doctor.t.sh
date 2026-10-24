@@ -14,7 +14,7 @@ cp "$REAL/pw.config.sh" "$PW/pw.config.sh"
 cat >> "$PW/pw.config.sh" <<CFG
 # --- test overrides: two providers (kilo = file commands; codex = SKILL-layout commands),
 # all dirs under \$FH ---
-PW_PROVIDERS=(kilo codex)
+PW_PROVIDERS=(kilo codex claude)
 # plan-22: a nested-BYOK-scoped allowlist exercises the catalog fetch (prefix-filter entries +
 # short-form pattern matching against the tests/bin/kilo shim's provider-prefixed lines).
 # The API-provider scope is PINNED here (hermetic): the machine's real config may narrow
@@ -38,6 +38,21 @@ pwtest_rc 0 "doctor --fix installs a bare provider surface" env HOME="$FH" bash 
 [ -e "$FH/.codex/skills/pw-guide-workflow" ] \
   && pwtest_ok "skill-layout provider carries the shared skill after --fix" \
   || pwtest_bad "skill-layout shared skill survives --fix" "missing $FH/.codex/skills/pw-guide-workflow"
+# 1b) exclusive formats: bundle-generated residue in the OTHER format still loads, so the
+# doctor names it and --fix removes it (entry skills vs flat commands).
+mkdir -p "$FH/.claude/commands" "$FH/.kilocode/skills/pw-execute"
+printf '<!-- pw-generated: build artifact -->\n' > "$FH/.claude/commands/pw-execute.md"
+printf '<!-- pw-generated: build artifact -->\n' > "$FH/.kilocode/skills/pw-execute/SKILL.md"
+pwtest_rc 1 "wrong-format entry residue fails the check" env HOME="$FH" bash "$DOCTOR"
+pwtest_rc 0 "--fix removes wrong-format entry residue" env HOME="$FH" bash "$DOCTOR" --fix
+[ ! -e "$FH/.claude/commands/pw-execute.md" ] && [ ! -e "$FH/.kilocode/skills/pw-execute" ] \
+  && pwtest_ok "exclusive-format residue removed" \
+  || pwtest_bad "wrong-format cleanup" "residue remains after --fix"
+[ -f "$FH/.claude/skills/pw-execute/SKILL.md" ] && pwtest_ok "claude entry skill kept" \
+  || pwtest_bad "claude entry skill" "missing after wrong-format cleanup"
+[ -f "$FH/.config/kilo/command/pw-execute.md" ] && pwtest_ok "kilo entry command kept" \
+  || pwtest_bad "kilo entry command" "missing after wrong-format cleanup"
+
 pwtest_rc 0 "doctor clean after fix" env HOME="$FH" bash "$DOCTOR"
 # plan-22: catalog fetched ONCE and filtered locally (entries are prefix filters, never `kilo
 # models` args — the shim errors on slash args, pinning that), allowlist patterns validated

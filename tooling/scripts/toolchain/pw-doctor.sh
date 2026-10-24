@@ -388,6 +388,38 @@ for p in "${PW_PROVIDERS[@]}"; do
     echo "    ✓ no orphan entry points"
   fi
 
+  # wrong-format residue: human entries are EXCLUSIVE per provider. A copy left in the other
+  # format still loads and duplicates the entry (e.g. flat pw-*.md commands after Claude/Cursor
+  # moved to skills). Only bundle-generated files are touched.
+  wfmt=""
+  if [ "$entry_fmt" = "skill" ]; then
+    cdir="$("${p}_commanddir")"
+    if [ "$cdir" != "$odir" ]; then
+      for inst in "$cdir"/pw-*.md; do
+        [ -e "$inst" ] || continue
+        grep -qF 'pw-generated' "$inst" 2>/dev/null && wfmt="$wfmt $(basename "$inst")"
+      done
+    fi
+  else
+    for inst in "$skilldir"/pw-*/SKILL.md; do
+      [ -e "$inst" ] || continue
+      n="$(basename "$(dirname "$inst")")"
+      [ -f "$PW_HOME/tooling/skills/human/$n/SKILL.md" ] || continue
+      grep -qF 'pw-generated' "$inst" 2>/dev/null && wfmt="$wfmt $n/"
+    done
+  fi
+  if [ -n "$wfmt" ]; then
+    echo "    ✗ wrong-format entry residue (formats are exclusive):$wfmt"; issues=$((issues+1))
+    if [ "$FIX" -eq 1 ]; then
+      for n in $wfmt; do
+        case "$n" in */) rm -rf "$skilldir/${n%/}" ;; *) rm -f "$cdir/$n" ;; esac
+      done
+      echo "      fixed: removed wrong-format entry residue"
+    fi
+  else
+    echo "    ✓ no wrong-format entry residue"
+  fi
+
   # {{ARGS}} conformance: a render_<prov>_command hook that forgets to substitute the {{ARGS}}
   # token leaves it literally in the rendered file — that CLI's argument placeholder never gets
   # filled in at all. Check the freshly-generated output (not the installed copy), so this catches
