@@ -23,9 +23,9 @@ Run the project-workflow sync check and show its output:
 ```bash
 {{PW_HOME}}/tooling/scripts/toolchain/pw-doctor.sh {{ARGS}}
 ```
-It verifies, per enabled provider (from `pw.config.sh`), that the installed `project-workflow`
-skill and the generated `/pw-*` command files match what this bundle would produce now — catching a
-moved/renamed bundle, edited command sources, or a stale skill. It also checks the
+It verifies, per enabled provider (from `pw.config.sh`), that the installed shared skills and the
+generated entry points match what this bundle would produce now — catching a moved/renamed bundle,
+edited sources, a stale skill, or a legacy link. It also checks the
 **request-review frame and generation prompts** independently of provider sync: the effective
 `user/templates/review-request.md` (or the `PW_REVIEW_REQUEST_TEMPLATE_FILE` path) must exist and
 carry each block placeholder exactly once, and the effective `user/prompts/review-request-summary.md`
