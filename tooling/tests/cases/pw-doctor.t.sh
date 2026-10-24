@@ -104,6 +104,16 @@ rm -rf "$FH/.agents/skills/pw-guide-workflow"
 cp -R "$PW/tooling/skills/model/pw-guide-workflow" "$FH/.agents/skills/pw-guide-workflow"
 pwtest_rc 0 "identical foreign copy passes (only staleness is a defect)" env HOME="$FH" bash "$DOCTOR"
 
+# 5b) a dangling legacy link into a retired bundle layout (older checkout/worktree) is bundle
+# residue, not a foreign skill: the doctor names it and --fix removes it.
+mkdir -p "$FH/.kilocode/skills"
+ln -s "$DOCDIR/old/tooling/skill/project-workflow" "$FH/.kilocode/skills/project-workflow"
+pwtest_rc 1 "dangling legacy bundle link fails the check" env HOME="$FH" bash "$DOCTOR"
+pwtest_rc 0 "--fix removes the dangling legacy link" env HOME="$FH" bash "$DOCTOR" --fix
+[ ! -L "$FH/.kilocode/skills/project-workflow" ] \
+  && pwtest_ok "dangling legacy link removed" \
+  || pwtest_bad "legacy link removal" "still present: $FH/.kilocode/skills/project-workflow"
+
 # 6) strict-YAML frontmatter guard (kilo 7.8.8 regression): a canonical source with an
 # unquoted flow-leading `args:` is NAMED (manual fix) and --fix must NOT report success —
 # the doctor never rewrites canonical sources. Restoring the source returns to clean.
