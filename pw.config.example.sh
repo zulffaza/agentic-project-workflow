@@ -231,7 +231,7 @@ PW_RFC_NOTES=""
 #   myprov_commanddir() { echo "$HOME/.myprov/commands"; } # where its slash-commands go
 #   render_myprov_command() { … }   # prints ONE finished command file to stdout — see below
 #
-# render_myprov_command() is called once per canonical file in tooling/commands/*.md. Before
+# render_myprov_command() is called once per canonical file in tooling/skills/human/*/SKILL.md. Before
 # calling it, gen-commands.sh sets these plain shell variables (it inherits them — no arguments
 # are passed): $desc (one-line description) $args (argument hint, may be empty) $agent (optional
 # provider-agent name, may be empty) $bodytext (the prompt body, with {{PW_*}} tokens already

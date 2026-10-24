@@ -61,28 +61,27 @@ this section owns the contract). **You don't edit any script** — everything go
        printf -- '---\ndescription: %s\n---\n%s' "$desc" "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
      }
      ```
-  3. *(Optional)* `<name>_command_style()` — the command LAYOUT: `flat` (the default; one
-     `<name>.md` file per command in `commanddir`) or `skill` (one `<name>/SKILL.md` skill dir per
-     command). **For CLIs with no native command surface at all** — codex is the first and the
-     reason this hook exists: OpenAI removed custom prompts (`~/.codex/prompts`) in codex-cli
-     0.117.0 ("convert your custom prompts to skills"), so its ONLY slash surface is skills. With
-     `skill` layout, `gen-commands.sh` writes `$outdir/<name>/SKILL.md` (the render hook must emit
-     the skill frontmatter contract — `name:` matching the dir + `description:`), and an optional
-     `render_<name>_skill_policy()` hook writes `agents/openai.yaml` beside it (codex's harness-read
-     policy file; pw uses it for `allow_implicit_invocation: false` so phase-driver bodies are
-     explicit-invocation-only, never auto-injected). **Namespace consequence:** skills and commands
-     share ONE dir on such providers — a bundle skill colliding with a canonical command name is
-     skipped at install and the generated command-skill owns the name (`pw_skill_skips_for`;
-     bootstrap/doctor/offboard all honor the derived skip list — never hardcode the pair).
-  4. *(Optional)* `<name>_agentdir()` + `render_<name>_agent()` to also seed the sub-agents
-     (`pw-orchestrator`, `pw-executor`, `pw-reviewer`) for it. Same idea as `render_<name>_command`,
-     but `gen-agents.sh` sets a different variable set beforehand: `$agentname` (the file's
-     basename), `$desc`, `$displayName`, `$role`, `$claude_tools`, `$model`, `$bodytext` — see
-     `render_claude_agent`/`render_kilo_agent`/`render_cursor_agent` in `tooling/scripts/lib/pw-common.sh`.
-     Providers without these two hooks just skip agent-seeding — the `/pw-*` commands still work
-     (codex ships this way on purpose: it has no user-facing agent-def surface — `codex agents`
-     browses sessions, not definitions — so it drives Flow B: the main session orchestrates and
-     the inline lane personas in the command bodies carry the lanes).
+  3. `<name>_entry_format()` — the human-entry OUTPUT TYPE: `skill` (one `<name>/SKILL.md`
+     invocable skill per entry; no command file) or `command` (one `<name>.md` command file; no
+     entry skill). The two are EXCLUSIVE per provider. Built-ins: Claude Code, Cursor, and Codex
+     install skills only; KiloCode and OpenCode install commands only. A custom provider without
+     this hook inherits its legacy `command_style` (`skill` → skill, otherwise command).
+     With `skill`, `gen-commands.sh` writes `$outdir/<name>/SKILL.md` and the render hook
+     `<name>_entry_skill()` must emit the skill frontmatter contract (`name:` matching the dir,
+     `description:`, and explicit-only invocation — `disable-model-invocation: true` on
+     Claude/Cursor, or an `agents/openai.yaml` policy sidecar from `render_<name>_skill_policy()`).
+     Every human entry is explicit-only: the human starts the operation.
+     Shared procedural skills live in `tooling/skills/model/` and are installed separately; they
+     use distinct `pw-guide-*` / `pw-orchestration` names, so no namespace collision remains.
+  4. *(Optional)* `<name>_agentdir()` + `render_<name>_agent()` to also seed the five worker
+     sub-agents (`pw-executor`, `pw-reviewer`, `pw-researcher`, `pw-analyst`, `pw-writer-task`).
+     Same idea as `render_<name>_command`, but `gen-agents.sh` sets a different variable set
+     beforehand: `$agentname` (the file's basename), `$desc`, `$displayName`, `$role`,
+     `$claude_tools`, `$model`, `$bodytext` — see
+     `render_claude_agent`/`render_kilo_agent`/`render_cursor_agent` in
+     `tooling/scripts/lib/pw-common.sh`. Providers without these two hooks just skip agent-seeding —
+     the `/pw-*` entries still work (codex ships this way on purpose: it has no user-facing
+     agent-def surface, so it plays worker roles inline or through a supervised headless session).
   5. *(Optional)* `<name>_headless()` — makes the provider a cross-provider execution **target**;
      contract below in §"Adding cross-provider execution for a new Agent Provider". Without it the
      provider is fully usable same-provider.
@@ -354,7 +353,7 @@ allowlist is the real gate), if you want to look yourself — but `/pw-doctor` i
   - **Namespace sharing (D13):** commands and skills live in ONE dir → the bundle skills
     `pw-review`/`pw-rfc` collide with the same-named commands; the generated command-skill owns
     the name, bootstrap skips the bundle-skill install (derived skip list), and the review/rfc
-    METHOD travels as read-as-file (`$PW_HOME/tooling/skill/pw-review/SKILL.md` paths in spawn
+    METHOD travels as read-as-file (`$PW_HOME/tooling/skills/model/pw-guide-review-method/SKILL.md` paths in spawn
     prompts) instead of a skill load.
   - **Skill roots:** codex reads `$CODEX_HOME/skills` natively and ALSO `~/.agents/skills` (vendor
     root — duplication there is cosmetic bleed, never a pw dependency; quarantine-proven
@@ -392,7 +391,7 @@ than inline here.
    prefix** — always present, never inferred — then apply the availability gate + route
    (`pw-config.sh model-resolve` → canonical id or hard stop; task `Route:` > PLAN `- Routing:` >
    `PW_ROUTE_DEFAULT` > `auto`, values `auto|subagent|headless` — full ladder:
-   `tooling/skill/project-workflow/references/execution-and-routing.md`).
+   `tooling/skills/model/pw-guide-workflow/references/execution-and-routing.md`).
    Scope note: `model-check`/`model-resolve` are deliberately **global, slug-less validators**
    (they answer machine-level questions); per-project settings live behind `pw-config.sh show|get|set --project …`
    and delegate here rather than duplicating the check.
@@ -409,7 +408,7 @@ than inline here.
    *sub-agent* here (e.g. a Claude orchestrator can't use kilo's `pw-executor` sub-agent) —
    sub-agents don't cross a provider boundary; only a provider's own primary agents are invocable
    from outside, and a lone task just needs the default agent + task file. The discipline travels
-   with the task, not the provider — the other CLI still follows the `project-workflow` skill + the
+   with the task, not the provider — the other CLI still follows the `pw-guide-workflow` skill + the
    task file.
       Concretely (`-m <model>` always carries the routing; `--agent` is optional and names **primary**
    agents only — a `mode: subagent` def is rejected headless, verified 2026-09-04 — so the portable

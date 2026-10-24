@@ -8,7 +8,7 @@ DOCDIR="$(mktemp -d "${TMPDIR:-/tmp}/pwdoc.XXXXXX")"
 REAL="$TOOL/.."
 PW="$DOCDIR/bundle"; FH="$DOCDIR/home"
 mkdir -p "$PW/tooling" "$FH"
-cp -R "$TOOL/scripts" "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" "$TOOL/templates" "$TOOL/prompts" "$PW/tooling/"
+cp -R "$TOOL/scripts" "$TOOL/skills" "$TOOL/agents" "$TOOL/templates" "$TOOL/prompts" "$PW/tooling/"
 cp "$REAL/offboard.sh" "$PW/offboard.sh"
 cp "$REAL/pw.config.sh" "$PW/pw.config.sh"
 cat >> "$PW/pw.config.sh" <<CFG
@@ -32,12 +32,12 @@ DOCTOR="$PW/tooling/scripts/toolchain/pw-doctor.sh"
 
 # 1) --fix on a bare fake HOME installs everything; a follow-up check must be clean
 pwtest_rc 0 "doctor --fix installs a bare provider surface" env HOME="$FH" bash "$DOCTOR" --fix
-# skill-layout provider (codex commands ARE skill dirs in ONE root): a shipped PLAIN skill
-# named pw-* (pw-independent-review) must be installed there and must NOT be swept as an
-# orphan command by the same --fix (regression: the orphan-command pass deleted it).
-[ -e "$FH/.codex/skills/pw-independent-review" ] \
-  && pwtest_ok "skill-layout provider carries the pw-* plain skill after --fix" \
-  || pwtest_bad "skill-layout plain skill survives --fix" "missing $FH/.codex/skills/pw-independent-review"
+# skill-layout provider (codex entries ARE skill dirs in ONE root): a shipped shared skill
+# (pw-guide-workflow) must be installed there and must NOT be swept as an orphan entry by the
+# same --fix (regression: the orphan pass deleted a same-root plain skill).
+[ -e "$FH/.codex/skills/pw-guide-workflow" ] \
+  && pwtest_ok "skill-layout provider carries the shared skill after --fix" \
+  || pwtest_bad "skill-layout shared skill survives --fix" "missing $FH/.codex/skills/pw-guide-workflow"
 pwtest_rc 0 "doctor clean after fix" env HOME="$FH" bash "$DOCTOR"
 # plan-22: catalog fetched ONCE and filtered locally (entries are prefix filters, never `kilo
 # models` args — the shim errors on slash args, pinning that), allowlist patterns validated
@@ -89,34 +89,34 @@ rm -rf "$FH/.config/kilo/command/pw-gone.md" "$FH/.config/kilo/agent/pw-gone.md"
 
 # 4) foreign skill root: a stale real-dir copy under ~/.agents/skills is caught + symlinked
 mkdir -p "$FH/.agents/skills"
-cp -R "$PW/tooling/skill/project-workflow" "$FH/.agents/skills/project-workflow"
-echo "stale line" >> "$FH/.agents/skills/project-workflow/SKILL.md"
+cp -R "$PW/tooling/skills/model/pw-guide-workflow" "$FH/.agents/skills/pw-guide-workflow"
+echo "stale line" >> "$FH/.agents/skills/pw-guide-workflow/SKILL.md"
 pwtest_rc 1 "stale foreign skill copy fails the check" env HOME="$FH" bash "$DOCTOR"
 grep -q "foreign skill copy STALE" "$PWTEST_BOTH" \
   && pwtest_ok "foreign copy named in report" \
   || pwtest_bad "foreign copy named" "$(grep '✗' "$PWTEST_BOTH" | tr '\n' ' ')"
 pwtest_rc 0 "--fix resolves the foreign copy" env HOME="$FH" bash "$DOCTOR" --fix
-[ -L "$FH/.agents/skills/project-workflow" ] && pwtest_ok "--fix replaced foreign copy with bundle symlink" \
-  || pwtest_bad "--fix foreign symlink" "not a symlink: $FH/.agents/skills/project-workflow"
+[ -L "$FH/.agents/skills/pw-guide-workflow" ] && pwtest_ok "--fix replaced foreign copy with bundle symlink" \
+  || pwtest_bad "--fix foreign symlink" "not a symlink: $FH/.agents/skills/pw-guide-workflow"
 
 # 5) a foreign copy that MATCHES the bundle (identical real dir) stays tolerated
-rm -rf "$FH/.agents/skills/project-workflow"
-cp -R "$PW/tooling/skill/project-workflow" "$FH/.agents/skills/project-workflow"
+rm -rf "$FH/.agents/skills/pw-guide-workflow"
+cp -R "$PW/tooling/skills/model/pw-guide-workflow" "$FH/.agents/skills/pw-guide-workflow"
 pwtest_rc 0 "identical foreign copy passes (only staleness is a defect)" env HOME="$FH" bash "$DOCTOR"
 
 # 6) strict-YAML frontmatter guard (kilo 7.8.8 regression): a canonical source with an
 # unquoted flow-leading `args:` is NAMED (manual fix) and --fix must NOT report success —
 # the doctor never rewrites canonical sources. Restoring the source returns to clean.
-sed -i '' 's#^args: .*#args: [--fix | --project <slug> [--fix]]#' "$PW/tooling/commands/pw-doctor.md"
+sed -i '' 's#^args: .*#args: [--fix | --project <slug> [--fix]]#' "$PW/tooling/skills/human/pw-doctor/SKILL.md"
 pwtest_rc 1 "canonical flow-leading args fails the check" env HOME="$FH" bash "$DOCTOR"
-grep -q "canonical tooling/commands/pw-doctor.md" "$PWTEST_BOTH" && grep -q "quote it" "$PWTEST_BOTH" \
+grep -q "canonical tooling/skills/human/pw-doctor/SKILL.md" "$PWTEST_BOTH" && grep -q "quote it" "$PWTEST_BOTH" \
   && pwtest_ok "canonical frontmatter issue is named with the fix" \
   || pwtest_bad "canonical frontmatter issue named" "$(grep '✗' "$PWTEST_BOTH" | tr '\n' ' ')"
 pwtest_rc 1 "doctor --fix cannot silently clear a canonical issue" env HOME="$FH" bash "$DOCTOR" --fix
 grep -q "need a hand fix" "$PWTEST_BOTH" \
   && pwtest_ok "--fix output points at the manual canonical fix" \
   || pwtest_bad "--fix manual note" "$(tail -2 "$PWTEST_BOTH" | tr '\n' ' ')"
-cp "$TOOL/commands/pw-doctor.md" "$PW/tooling/commands/pw-doctor.md"
+cp "$TOOL/skills/human/pw-doctor/SKILL.md" "$PW/tooling/skills/human/pw-doctor/SKILL.md"
 pwtest_rc 0 "restored canonical source returns to clean" env HOME="$FH" bash "$DOCTOR" --fix
 
 # 7) request-review user files: --fix seeds the new default frame + both prompts; a
@@ -192,17 +192,17 @@ pwtest_eq "env restored to the real bundle path" "$PW_NORM" "$(sed -n 's/^export
 
 # 10) offboard dry-run: a hand-edited directory COPY of a skill is reported + skipped; only a
 # whole-tree match is queued for removal (tree content-check, not SKILL.md alone).
-rm -f "$FH/.kilocode/skills/pw-independent-review"
-cp -R "$PW/tooling/skill/pw-independent-review" "$FH/.kilocode/skills/pw-independent-review"
-printf 'my extra notes\n' > "$FH/.kilocode/skills/pw-independent-review/EXTRA.md"
+rm -f "$FH/.kilocode/skills/pw-guide-workflow"
+cp -R "$PW/tooling/skills/model/pw-guide-workflow" "$FH/.kilocode/skills/pw-guide-workflow"
+printf 'my extra notes\n' > "$FH/.kilocode/skills/pw-guide-workflow/EXTRA.md"
 pwtest_rc 0 "offboard dry-run covers the hand-edited copy" env HOME="$FH" bash "$PW/offboard.sh"
 grep -q 'not touching it' "$PWTEST_BOTH" \
   && pwtest_ok "hand-edited skill copy skipped" \
-  || pwtest_bad "offboard tree check" "$(grep -a 'pw-independent-review' "$PWTEST_BOTH" | head -2 | tr '\n' ' ')"
-rm -f "$FH/.kilocode/skills/pw-independent-review/EXTRA.md"
+  || pwtest_bad "offboard tree check" "$(grep -a 'pw-guide-workflow' "$PWTEST_BOTH" | head -2 | tr '\n' ' ')"
+rm -f "$FH/.kilocode/skills/pw-guide-workflow/EXTRA.md"
 pwtest_rc 0 "offboard dry-run queues the identical copy" env HOME="$FH" bash "$PW/offboard.sh"
 grep -q 'remove directory copy' "$PWTEST_BOTH" \
   && pwtest_ok "identical tree copy queued for removal" \
-  || pwtest_bad "offboard identical copy" "$(grep -a 'pw-independent-review' "$PWTEST_BOTH" | head -2 | tr '\n' ' ')"
+  || pwtest_bad "offboard identical copy" "$(grep -a 'pw-guide-workflow' "$PWTEST_BOTH" | head -2 | tr '\n' ' ')"
 
 rm -rf "$DOCDIR"

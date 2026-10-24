@@ -8,7 +8,7 @@ review → close**, driven by `/pw-*` slash commands. Work happens in scaffolded
 
 ## Start here (do this in order)
 
-1. **Is the machine set up?** If `/pw-*` commands or the `project-workflow` skill aren't available,
+1. **Is the machine set up?** If `/pw-*` commands or the `pw-guide-workflow` skill aren't available,
    onboard first:
    ```bash
    ./bootstrap.sh        # reads pw.config.sh, installs the skill + /pw-* commands + agents for your CLIs
@@ -17,7 +17,7 @@ review → close**, driven by `/pw-*` slash commands. Work happens in scaffolded
    Verify or repair drift any time: `/pw-doctor` (`/pw-doctor --fix` to repair). Full setup /
    fresh-machine recovery: **[ONBOARDING.md](./ONBOARDING.md)**. Leaving/uninstalling? `./offboard.sh`
    is the exact inverse — see ONBOARDING.md's [Offboarding](./ONBOARDING.md#offboarding--uninstalling) section.
-2. **Invoke the `project-workflow` skill.** It's your working cheat-sheet — the detailed rules for
+2. **Invoke the `pw-guide-workflow` skill.** It's your working cheat-sheet — the detailed rules for
    each phase, routing, and the deterministic helpers. Load it before driving any project.
 3. **Orient by what you're being asked to do** — map it to a phase + command below, then follow the
    command's prompt. Never free-wheel past a gate.
@@ -90,4 +90,4 @@ real branch). Continuation is its own workflow — see **[docs/ADOPTION.md](./do
   it to *use* the pipeline. Curious how it's wired? [docs/TOOLING.md](./docs/TOOLING.md).
 
 Human-facing overview: **[README.md](./README.md)**. Restated working rules on demand: the
-**`project-workflow` skill**.
+**`pw-guide-workflow` skill**.

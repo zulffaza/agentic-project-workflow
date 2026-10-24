@@ -14,7 +14,7 @@ For the user/maintainer boundary and issue routing, read its [boundary reference
 
 ## Ground the instructions in the current bundle
 
-Read the affected guide and its canonical command definition under `tooling/commands/`.
+Read the affected guide and its canonical command definition under `tooling/skills/human/`.
 If the definition leaves behavior unclear, inspect the owning implementation or existing fixture tests.
 Use current sources to settle argument syntax, defaults, scope, and side effects; do not copy a remembered command into the guide.
 

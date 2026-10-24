@@ -2,8 +2,8 @@
 # ============================================================================
 # offboard.sh — the exact inverse of bootstrap.sh: cleanly remove this
 # bundle's INSTALLED artifacts from a machine, per provider — every shipped
-# skill (project-workflow, pw-review), generated /pw-* commands, and seeded
-# sub-agents (pw-orchestrator, pw-executor, pw-reviewer).
+# shared procedural skill, every generated human entry (in its provider's selected format),
+# and the seeded worker sub-agents.
 #
 #   ./offboard.sh                        dry-run: report what WOULD be removed
 #   ./offboard.sh --yes                  actually remove it
@@ -20,7 +20,7 @@
 #    differs — hand-edited, or just a foreign file that happens to share a name — is reported
 #    and skipped, never guessed at.
 #  - Each skill's "install" is only removed if it's literally a symlink pointing at THIS bundle's
-#    tooling/skill/<name>, or a directory copy whose WHOLE TREE matches the bundle's (diff -rq —
+#    tooling/skills/model/<name>, or a directory copy whose WHOLE TREE matches the bundle's (diff -rq —
 #    a hand-edited references file, or an added file, keeps the copy reported-but-untouched).
 #
 # NEVER touched, by design: pw.config.sh (your config), $PW_PROJECTS/* (your project data —
@@ -52,7 +52,7 @@ done
 PW_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_PROJECTS="${PW_PROJECTS:-$(cd "$PW_HOME/.." && pwd)}"
 PW_REPOS="${PW_REPOS:-$(cd "$PW_PROJECTS/.." && pwd)}"
-SKILL_DIR="$PW_HOME/tooling/skill"   # every subdir with a SKILL.md here is a shippable skill
+SKILL_DIR="$PW_HOME/tooling/skills/model"   # shared procedural skills only
 export PW_PROJECTS PW_REPOS
 
 # shared plumbing: sources pw.config.sh (if present; falls back to the example) + provider hooks.
@@ -103,18 +103,12 @@ plan_provider() {
   local p="$1"
   echo "  $p:"
 
-  # --- skills (every tooling/skill/*/ with a SKILL.md) ---
+  # --- shared skills (tooling/skills/model/*) ---
   local skilldir; skilldir="$("${p}_skilldir")"
   pw_hook_dir_ok "$skilldir" || die "offboard: provider hook ${p}_skilldir returned an unsafe path ('$skilldir') → fix: hooks must print a non-empty absolute path"
-  local skips; skips=" $(pw_skill_skips_for "$p" | tr '\n' ' ') "   # D13 collision skips (case-matched: pipefail-proof)
   for skill_src in "$SKILL_DIR"/*/; do
     [ -f "${skill_src}SKILL.md" ] || continue
     skill_src="${skill_src%/}"; local skill_name; skill_name="$(basename "$skill_src")"
-    case "$skips" in
-      *" $skill_name "*)
-        echo "    skill '$skill_name': not installed by design (name owned by its generated command-skill)"
-        continue ;;
-    esac
     local starget sfile; starget="$skilldir/$skill_name"; sfile="$starget/SKILL.md"
     if [ -L "$starget" ]; then
       local real; real="$(readlink "$starget")"
@@ -145,9 +139,9 @@ plan_provider() {
   # matches the fresh generation byte-for-byte (diff -rq), so a foreign/hand-edited skill of the
   # same name is never touched.
   local odir rm_c=0 skip_c=0 absent_c=0 style exp n
-  odir="$("${p}_commanddir")"
-  pw_hook_dir_ok "$odir" || die "offboard: provider hook ${p}_commanddir returned an unsafe path ('$odir') → fix: hooks must print a non-empty absolute path"
-  style="$(pw_provider_command_style "$p")"
+  style="$(pw_provider_entry_format "$p")"
+  if [ "$style" = "skill" ]; then odir="$skilldir"; else odir="$("${p}_commanddir")"; fi
+  pw_hook_dir_ok "$odir" || die "offboard: provider hook commanddir returned an unsafe path ('$odir') → fix: hooks must print a non-empty absolute path"
   "$PW_HOME/tooling/scripts/toolchain/gen-commands.sh" --outdir "$tmp/cmd" "$p" >/dev/null 2>&1 || true
   if [ -d "$tmp/cmd/$p" ]; then
     if [ "$style" = "skill" ]; then
@@ -177,7 +171,7 @@ plan_provider() {
       done
     fi
   fi
-  echo "    commands: $rm_c to remove, $skip_c skipped (modified/foreign), $absent_c already absent  ($odir, $style layout)"
+  echo "    entries: $rm_c to remove, $skip_c skipped (modified/foreign), $absent_c already absent  ($odir, $style format)"
   skipped_count=$((skipped_count+skip_c))
 
   # --- agents (only if this provider has agent-seeding hooks) ---

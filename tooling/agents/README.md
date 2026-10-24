@@ -8,14 +8,13 @@ copies; edit the canonical file here and re-run [`gen-agents.sh`](../gen-agents.
 
 ```
 tooling/agents/
-├── pw-orchestrator.md   ← reads task/PLAN.md, owns the DAG, spawns executors; never edits repo code
 ├── pw-executor.md       ← runs ONE task in ONE worktree, runs ## Verify, reports; nothing else
 ├── pw-researcher.md     ← context/answer lane (Mode A answer w/ evidence; Mode B ground a scope →
                             pack + seed); reads context + docs + tickets; never decides
 ├── pw-analyst.md        ← drafts an analysis doc from a seed (options, trade-offs, Qn); read-only
 ├── pw-writer-task.md    ← drafts task docs from a caller's decisions; never fills ## Result
 └── pw-reviewer.md       ← optional, fresh-session review pass on ONE artifact; never edits it —
-                            see docs/REVIEW.md + the `pw-review` skill
+                            see docs/REVIEW.md + the `pw-guide-review-method` skill
 ```
 
 **Where they land** (per provider, via each provider's `<name>_agentdir` hook):
@@ -56,7 +55,7 @@ The six shipped agents cover the workflow's roles (orchestrator, researcher, ana
 executor, reviewer — `pw-reviewer` is spawned only by `/pw-review ai …`). **Execution can still
 reuse an existing agent you already have** (e.g. `pw-executor`) — a task's `Execute with:` names
 whatever should run it, and the discipline (worktree isolation, running `## Verify`, faithful
-reporting) comes from the `project-workflow` skill + the task file, not from a bespoke agent. Ship
+reporting) comes from the `pw-guide-workflow` skill + the task file, not from a bespoke agent. Ship
 `pw-executor` is the *single* dedicated executor concept (ad-hoc non-pw implementation runs on the
 main agent or a default-agent session named by provider+model — not a second implementer
 definition). `pw-reviewer` is optional —
@@ -83,14 +82,11 @@ model: <optional default model>
 <the agent's system prompt / brief, using {{PW_*}} path tokens>
 ```
 
-## Agents are provider-bound — and sub-agents don't cross providers
-Two kinds of thing live here, and the difference is load-bearing:
-- **`pw-executor` and `pw-reviewer` are sub-agents** — spawned *in-process* (Claude Task
-  `subagent_type`; kilo `mode: subagent`). A provider can spawn only its **own** sub-agents.
-  `pw-reviewer` is spawned by whichever agent is running `/pw-review ai --project <slug> …`, not only by
-  `pw-orchestrator` — any primary agent on that provider can spawn it.
-- **`pw-orchestrator` is a primary/invocable agent** — run through a provider's CLI, the only unit
-  that crosses a provider boundary.
+## Five worker sub-agents — no bundle primary
+Everything here is a **sub-agent**, spawned *in-process* by the normal session (Claude Task
+`subagent_type`; kilo `mode: subagent`). A provider can spawn only its **own** sub-agents.
+The bundle installs no primary agent, persona, or mode: driver procedures live in the
+`pw-orchestration` skill, which runs in the ordinary session.
 
 When a task's `Execute with:` names an agent, resolve its provider: an explicit prefix wins
 (`kilo:db-migration-runner`, `claude:db-migration-runner`, `cursor:db-migration-runner`) → else the
@@ -131,10 +127,9 @@ never overrides a task file.
 - No CLI primary-agent slot: cross-provider → cursor is always **model + task file**
   (`agent -p --force --model <id>` per `cursor_headless()`), never `--agent <name>`.
 - Spawn is ambient: a sub-agent is picked by `description` match or explicit `/pw-<agent>`. A
-  **direct** sub-agent may itself spawn one more level (verified 2-level; grandchildren-of-grandchildren
-  not attempted) — that fan-out is what makes Flow C (spawn `/pw-orchestrator` for one bounded wave)
-  workable on cursor; fast-tier ids are unreliable at it — route orchestrator/executors to capable
-  models (same doctrine as kilo's MiniMax-vs-flash-lite line in providers.md).
+  **direct** sub-agent may itself spawn one more level (verified 2-level) — enough for one bounded
+  wave; fast-tier ids are unreliable at it, so route executors to capable models (same doctrine as
+  kilo's MiniMax-vs-flash-lite line in providers.md).
 
 ## Codex-specifics (probed 2026-10-04)
 - No agent defs, no in-process spawn, no Flow C — a codex driver IS the orchestrator (Flow B) and

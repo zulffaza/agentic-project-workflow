@@ -129,7 +129,7 @@ pwtest_rc 2 'review formatter failure aborts staged write' env PATH="$WD_PATH" P
 pwtest_eq 'failed review write keeps bytes' "$WD_BEFORE" "$(cksum < "$WD_P/$WD_RF")"
 pwtest_rc 1 'scaffold formatter failure before directory creation' env PATH="$WD_PATH" PWTEST_NATIVE_DATE="$WD_REAL_DATE" PWTEST_CLOCK="$WD_CLOCK" PWTEST_DATE_FAIL=1 PW_PROJECTS="$PW_PROJECTS_DIR" PW_REPOS="$PW_REPOS" bash "$(pwtest_script scaffold.sh)" --project wib-failed
 [ ! -e "$PW_PROJECTS_DIR/wib-failed" ] && pwtest_ok 'failed scaffold creates nothing' || pwtest_bad 'failed scaffold' 'partial project remains'
-for WD_SOURCE in template/analysis/_TEMPLATE.md template/task/_TEMPLATE-orchestration-plan.md template/PROJECT.template.md template/_REVIEW.template.md tooling/skill/project-workflow/SKILL.md tooling/skill/pw-review/SKILL.md tooling/skill/pw-rfc/SKILL.md; do
+for WD_SOURCE in template/analysis/_TEMPLATE.md template/task/_TEMPLATE-orchestration-plan.md template/PROJECT.template.md template/_REVIEW.template.md tooling/skills/model/pw-guide-workflow/SKILL.md tooling/skills/model/pw-guide-review-method/SKILL.md tooling/skills/model/pw-guide-authoring/SKILL.md; do
   pwtest_grep_file 'DD MMMM YYYY - HH.mm WIB' "canonical timestamp guidance $WD_SOURCE" "$PW_HOME/$WD_SOURCE"
 done
 rm -rf "$WD_BIN" "$WD_P"

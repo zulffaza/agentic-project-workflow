@@ -57,7 +57,7 @@ tooling/
 ├── scripts/lib/pw-common.sh (shared plumbing) · scripts/toolchain/pw-doctor.sh (sync + --fix + --test)
 ├── automation scripts (pw-status … pw-context)  ← usage: docs/scripts/ (index + groups); registry: tests/static.sh
 ├── pw-worktree.sh teardown       ← safe worktree removal at close-out (refuses CWD/dirty trees)
-├── commands/ · agents/ · skill/           ← canonical sources (provider-neutral; tokens {{PW_HOME}} …)
+├── skills/human/ · skills/model/ · agents/ ← canonical sources (provider-neutral; tokens {{PW_HOME}} …)
 ├── skill-internal/pw-maintainer/          ← maintainer cheat-sheet skill — read-as-file, NOT provider-installed (outside the skill/ glob)
 ├── docs/                                  ← registries/policy docs the AGENTS read
 │   ├── scripts/                           ← script usage contracts (exit codes, → fix: lines)
@@ -89,7 +89,7 @@ Before editing anything under `tests/` or authoring a register row, read
 recipe rule, watchdog, fixture-pollution etiquette: clone `$F2`, never mutate it) and
 §Writing a mutation row. Change type → minimum tiers: the table in
 [`docs/testing.md`](./docs/testing.md). Re-run `pw-doctor.sh` (expect **All synced**) after any
-`commands/`/`agents/`/`skill/`/`template/` edit — it compares generated-vs-installed.
+`skills/`/`agents/`/`template/` edit — it compares generated-vs-installed.
 
 ## Information boundary (what users must never learn here)
 

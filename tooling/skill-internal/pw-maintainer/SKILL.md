@@ -63,5 +63,5 @@ that matches your task.
 | need the live command / operator map (read-only) | `pw-help.sh overview` · `command --name <name>` · `operators --name <name>` · `find --term <term…>` |
 
 `pw-maintainer` is a **reserved name** — never reuse it for a `/pw-*` user command or a
-`tooling/skill/` user skill. The durable reservation lives in
+`tooling/skills/model/` user skill. The durable reservation lives in
 [`tooling/docs/conventions.md`](../../docs/conventions.md) beside the C-rules.

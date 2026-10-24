@@ -27,8 +27,9 @@ The remaining sections explain advanced execution behavior. You can run a first 
 - **Executor** — handed one task file, owns one worktree, edits code, runs Verify, reports. Does
   **not** touch files outside its worktree or pick up work from other tasks.
 
-The bundle supplies six seedable roles: `pw-orchestrator`, `pw-executor`, `pw-reviewer`,
-`pw-researcher`, `pw-analyst`, and `pw-writer-task`. Installation depends on the provider's agent support.
+The bundle supplies five worker sub-agents: `pw-executor`, `pw-reviewer`, `pw-researcher`,
+`pw-analyst`, and `pw-writer-task`. Driver procedures live in the `pw-orchestration` skill and run
+in the normal session; the bundle installs no primary agent.
 Independent verification is available through `/pw-verify`.
 
 Tasks can use either:
@@ -36,7 +37,7 @@ Tasks can use either:
 - A registered agent definition, such as `pw-executor`, on the same provider.
 - A `provider:model` choice, which runs a session with the task file as its work order. This is the portable form across providers.
 
-The task file and `project-workflow` skill supply the worktree, verification, and reporting rules.
+The task file and `pw-guide-workflow` skill supply the worktree, verification, and reporting rules.
 You can reuse an existing registered agent. Ad-hoc code work uses the main agent or a generic session.
 
 ## Full resume vs one wave at a time
@@ -233,37 +234,26 @@ dependents branched from stale state. The driver fans **one capped pass** per ca
 The sections below explain how the workflow runs agents, binds model choices, and records sessions.
 For everyday execution, the scopes and model settings above are enough to start.
 
-## Running the pipeline on a provider without a main-agent slot (Claude Code class)
+## How the pipeline runs (every provider)
 
-`pw-orchestrator` renders `mode: primary` where the provider has a selectable primary agent — Kilo
-does; **Claude Code does not** (its main is always the built-in default; custom defs are
-*sub-agents* under `~/.claude/agents/`). "Primary" is therefore provider-bound, never a universal
-capability. How a Claude-only session still runs the phases:
+The bundle installs no primary agent, persona, or custom mode. The ordinary session drives the
+pipeline through `/pw-*` entries plus the `pw-orchestration` skill, and spawns same-provider worker
+sub-agents in-process. Tool permissions come from the application's normal ask/allow-all setting;
+workflow gates remain separate.
 
-- **Flow B (default):** the main session *is* the orchestrator per the `project-workflow` skill +
-  `/pw-*` commands — it spawns `claude:pw-executor` sub-agents in-process and **must not edit repo
-  code itself**. The long-lived-driver benefit is replaced by disk state + bounded units: one
-  `--wave` per invocation, human gate between waves, `/compact` between waves; resumed work is a
-  plain `/pw-execute --project <slug>` walking the PLAN (the on-disk PLAN/dashboard/worktree commits are the
-  resumable state; session ids are machine-local only).
-- **Flow C (bulk wave):** spawn `pw-orchestrator` as a *sub-agent* for **one bounded wave** — it
-  fans out to its own `pw-executor` sub-agents and reports; it works today because the canonical def
-  carries `claude_tools: … Task` (keep it there). Nested sub-agents can't surface approvals usefully
-  → run with `--permission-mode auto` (or `acceptEdits`). A sub-agent runs to completion in one
-  turn → waves must be atomic; seeds stay tight (§Seeds, cost §) since nested spawns don't share the
-  parent's context.
-- **Spawn-less fallbacks everywhere:** if even a spawn is unavailable/denied, the `pw-*` role defs
-  are readable prompt bodies (installed as each provider's agent files) — play the role yourself, or
-  hand a session the task file as its work order (exactly what `/pw-execute --project <slug> --task <T0n>`'s
-  `provider:model` default already is). The commands' `agent:` frontmatter that starts a *Kilo* session with a
-  primary role is **Kilo-only sugar** — on Claude-like providers it does nothing.
-- **Codex twist (Flow B only):** codex has **no sub-agent surface at all** — no defs are seeded and
-  no in-process spawn exists. A codex driver session plays the orchestrator inline (the `/pw-*`
-  command bodies are self-contained lane personas), and every delegated or bulk run is a
-  **supervised headless `codex exec` session over the work order** — the same machinery as a
-  cross-provider handoff, aimed at itself — ledger-recorded like any headless spawn (prompt via
-  stdin; the `thread_id` is the resume handle). There is no Flow C on codex; role defs it can't
-  spawn stay readable-as-file prompt bodies (the spawn-less fallback, as its normal mode).
+- **Default:** the main session *is* the orchestrator per `pw-orchestration` + `pw-guide-workflow`
+  and the `/pw-*` entry — it spawns `pw-executor` sub-agents in-process and **must not edit repo
+  code itself** outside the documented single-task repair exception. Durable state is disk state:
+  one `--wave` per invocation, human gate between waves, `/compact` between waves; resume is a
+  plain `/pw-execute --project <slug>` walking the PLAN.
+- **Cross-provider / headless:** shell out to that provider's CLI with the task file + the
+  `pw-orchestration`/`pw-guide-workflow` skills as the work order, under supervision. No primary
+  agent is named.
+- **Codex:** codex has no sub-agent surface, so a codex session plays the worker roles inline or
+  runs a supervised headless `codex exec` session over the work order (prompt via stdin; the
+  `thread_id` is the resume handle).
+- **Spawn-less fallback:** if a spawn is unavailable or denied, the role defs remain readable
+  prompt bodies — play the role yourself, or hand a session the task file as its work order.
 
 Same rule as model lanes (above): document per-provider capability where it bites, not in prose
 that implies symmetry.
@@ -334,13 +324,13 @@ These two words are **not** interchangeable — the distinction decides how a ta
 | What | spawned **in-process** by an orchestrator | a top-level agent invoked through a provider's **CLI** |
 | How | Claude's Task tool `subagent_type`; KiloCode `mode: subagent`; Cursor auto-delegation on def `description` (or explicit `/pw-<agent>` — and a **direct** cursor sub-agent can itself fan out one more level, verified 2026-09-09); **codex: this bundle uses inline lanes or headless sessions** (inline lane personas, or a headless `codex exec` session as the spawn) | that provider's CLI: `kilo run --agent <primary-agent>` / `claude -p` / cursor `agent -p --force --model <id>`+task file / codex `codex exec -m <slug>`+task file via stdin (a sub-agent def is NOT nameable from across the boundary; cursor has no CLI primary-agent slot at all; codex has no agent defs at all) |
 | Boundary | **same provider only** — a provider can spawn only its *own* sub-agents | the **only** unit that crosses a provider boundary |
-| Here | `pw-executor` | `pw-orchestrator` |
+| Here | `pw-executor` | none shipped — the normal session drives via `pw-orchestration` |
 
 **The cross-provider rule (important, and easy to get wrong):** an orchestrator on provider A that
 routes a task to provider B **cannot spawn B's sub-agent** — sub-agents are same-provider-only. So a
 **Claude orchestrator delegating to KiloCode does *not* name `pw-executor`** (that's a *kilo*
 sub-agent it can't reach). It invokes KiloCode's CLI headlessly with the **task file + the
-`project-workflow` skill as the work order**, and kilo's own default/primary agent executes it. The
+`pw-guide-workflow` skill as the work order**, and kilo's own default/primary agent executes it. The
 executor discipline travels with the skill + task file, so no named agent is needed across the
 boundary. Symmetrically, the shipped `pw-executor` is only usable **when its own provider is the
 orchestrator** (Claude `pw-executor` ⇐ Claude orchestrator; kilo `pw-executor` ⇐ kilo orchestrator).
@@ -352,8 +342,7 @@ So routing a task resolves to exactly one of:
 - **Different provider → shell out to that CLI headlessly**, passing the task file inline to *its*
   default/primary agent. **Do not pass `--agent <a-sub-agent>` across the boundary** — only a
   provider's own primary agents are invocable from outside, and for a single task the default agent
-  + task file is enough. (If you *want* a specific primary agent on B, name a **primary** one, e.g.
-  `kilo:pw-orchestrator` is primary — but a lone task normally just needs the default.)
+  + task file is enough. No bundle primary agent is named across the boundary.
 
 ## Spawning phase work (the `pw-*` lanes)
 Not every phase step needs the orchestrator slot: analysis grounding, analysis drafting, and task
@@ -369,7 +358,7 @@ authoring are lane spawns from whichever driver is running the phase (rows 2/4 o
   + a runnable `## Verify`. Decisions stay with the caller; batching is per task (parallelizable —
   the writer doesn't edit shared state).
 
-Seeds are a contract, not a vibe (lane defs + the `project-workflow` skill's
+Seeds are a contract, not a vibe (lane defs + the `pw-guide-workflow` skill's
 execution-and-routing reference, §Seed contracts): a dense executive summary + pointer list, **pre-flight before spawn** (a seed gap
 is fixed at the producer — a cheap researcher pass — never by spawning a floundering analyst),
 pointers-as-menu, never raw dumps/credentials. After a draft, an **exit check**: diff result vs the
@@ -390,11 +379,10 @@ can start a session per model and per-spawn override is real; **kilo**'s Task-to
 — its levers are a map-block pin (user's own config) or running the lane **headless**:
 `kilo run --auto -m <provider/model> [--dir <repo/path>]` with the task file/work order + skill
 inline (`--dir` carries the cwd — no local path needed if the driver runs elsewhere). A spawn records
-`Model used:` (row vs floor vs actual) so a row that couldn't fire is visible, not folklore. A
-provider without a main-agent slot carries the *orchestrator* the same way the lanes are carried
-elsewhere: run the row/role as a headless session — Flow B/C above
-(Claude Code has no custom
-**primary** agent: only sub-agents + the built-in main), or drive from Kilo with `pw-orchestrator`.
+`Model used:` (row vs floor vs actual) so a row that couldn't fire is visible, not folklore. Every
+provider runs the driver in its normal session via `pw-orchestration`; where a provider cannot
+spawn in-process, run the row/role as a supervised headless session instead (above). No provider
+needs a named primary agent for this.
 
 ## The per-spawn ledger (why it exists: resume > re-derive) and the routing ladder
 

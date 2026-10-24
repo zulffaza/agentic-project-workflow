@@ -384,8 +384,19 @@ declare -f claude_bin        >/dev/null 2>&1 || claude_bin()        { echo claud
 declare -f claude_skilldir   >/dev/null 2>&1 || claude_skilldir()   { echo "$HOME/.claude/skills"; }
 declare -f claude_commanddir >/dev/null 2>&1 || claude_commanddir() { echo "$HOME/.claude/commands"; }
 declare -f claude_agentdir   >/dev/null 2>&1 || claude_agentdir()   { echo "$HOME/.claude/agents"; }
+# entry_format: "skill" = the 18 human entry points install as invocable skills ONLY;
+# "command" = they install as native commands ONLY. Never both for one provider.
+declare -f claude_entry_format >/dev/null 2>&1 || claude_entry_format() { echo skill; }
+# render_<prov>_entry_skill: gen-commands.sh sets $name $desc $args $bodytext before calling
+# this — print a human-entry SKILL.md. Explicit-only invocation is mandatory: the human starts
+# the operation; the model must not select it on its own.
+declare -f render_claude_entry_skill >/dev/null 2>&1 || render_claude_entry_skill() {
+  printf -- '---\nname: %s\ndescription: %s\n' "$name" "$(pw_yaml_quote "$desc")"
+  [ -n "$args" ] && printf -- 'argument-hint: %s\n' "$(pw_yaml_quote "$args")"
+  printf -- 'disable-model-invocation: true\n---\n%s' "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
+}
 # render_<prov>_command: gen-commands.sh sets $desc $args $agent $bodytext (from the canonical
-# tooling/commands/*.md file) before calling this — print the finished command file to stdout.
+# tooling/skills/human/*/SKILL.md file) before calling this — print the finished command file to stdout.
 declare -f render_claude_command >/dev/null 2>&1 || render_claude_command() {
   printf -- '---\ndescription: %s\n' "$(pw_yaml_quote "$desc")"
   [ -n "$args" ] && printf -- 'argument-hint: %s\n' "$(pw_yaml_quote "$args")"
@@ -423,8 +434,9 @@ declare -f render_kilo_command >/dev/null 2>&1 || render_kilo_command() {
   [ -n "$agent" ] && printf -- 'agent: %s\n' "$agent"
   printf -- '---\n%s' "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
 }
-declare -f render_kilo_agent >/dev/null 2>&1 || render_kilo_agent() {  local mode="subagent"; [ "$role" = "orchestrator" ] && mode="primary"
-  printf -- '---\nmode: %s\ndescription: %s\n' "$mode" "$(pw_yaml_quote "$desc")"
+declare -f render_kilo_agent >/dev/null 2>&1 || render_kilo_agent() {
+  # Worker sub-agents only: the bundle no longer installs a primary orchestrator agent.
+  printf -- '---\nmode: subagent\ndescription: %s\n' "$(pw_yaml_quote "$desc")"
   # A canonical `model:` now renders through to kilo as well (verified 2026-09-04 with a probe md:
   # an `agent/*.md` file with `mode:`+`options:` registers without any kilo.jsonc map block, and a
   # `model:` line in that md binds the agent — outranking a map block for the same name if both
@@ -434,10 +446,8 @@ declare -f render_kilo_agent >/dev/null 2>&1 || render_kilo_agent() {  local mod
   [ -n "$model" ] && printf -- 'model: %s\n' "$model"
   printf -- 'options:\n  displayName: %s\n  id: %s\n' "${displayName:-$agentname}" "$agentname"
   printf -- 'permission:\n  read: allow\n'
-  # Do not put a worktree edit denial on the orchestrator session. Kilo propagates
-  # session permissions to child agents, which would prevent implementation agents
-  # from editing their assigned worktrees. The orchestrator's no-source-edit rule
-  # is enforced by its prompt and workflow instructions instead.
+  # Never deny worktree edits in a generated worker definition: Kilo propagates session
+  # permissions to child agents, which would block an executor inside its own worktree.
   printf -- '  edit:\n    "*": allow\n'
   printf -- '  bash: allow\n  grep: allow\n  glob: allow\n  task: allow\n  skill: allow\n'
   printf -- '---\n%s' "$bodytext"
@@ -466,10 +476,10 @@ declare -f render_opencode_command >/dev/null 2>&1 || render_opencode_command() 
   printf -- '---\n%s' "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
 }
 declare -f render_opencode_agent >/dev/null 2>&1 || render_opencode_agent() {
-  local mode="subagent"; [ "$role" = "orchestrator" ] && mode="primary"
-  printf -- '---\ndescription: %s\nmode: %s\n' "$(pw_yaml_quote "$desc")" "$mode"
+  # Worker sub-agents only: no primary orchestrator agent is installed.
+  printf -- '---\ndescription: %s\nmode: subagent\n' "$(pw_yaml_quote "$desc")"
   [ -n "$model" ] && printf -- 'model: %s\n' "$model"
-  # Same defensive stance as render_kilo_agent: never deny the orchestrator worktree edits.
+  # Same defensive stance as render_kilo_agent: never deny a worker its worktree edits.
   # Unconfirmed whether OpenCode propagates session permissions to spawned sub-agents the way
   # Kilo does, but a blanket allow here costs nothing and sidesteps the same bug if it does.
   printf -- 'permission:\n  edit: allow\n  bash: allow\n  read: allow\n'
@@ -497,6 +507,14 @@ declare -f cursor_bin        >/dev/null 2>&1 || cursor_bin()        { echo agent
 declare -f cursor_skilldir   >/dev/null 2>&1 || cursor_skilldir()   { echo "$HOME/.cursor/skills"; }   # never skills-cursor/ (Cursor's own built-ins)
 declare -f cursor_commanddir >/dev/null 2>&1 || cursor_commanddir() { echo "$HOME/.cursor/commands"; }
 declare -f cursor_agentdir   >/dev/null 2>&1 || cursor_agentdir()   { echo "$HOME/.cursor/agents"; }
+declare -f cursor_entry_format >/dev/null 2>&1 || cursor_entry_format() { echo skill; }
+declare -f render_cursor_entry_skill >/dev/null 2>&1 || render_cursor_entry_skill() {
+  # Manual-only skill: Cursor's documented command-migration policy. $ARGUMENTS is the documented
+  # command-compatibility token; arguments otherwise arrive as the invocation text.
+  printf -- '---\nname: %s\ndescription: %s\n' "$name" "$(pw_yaml_quote "$desc")"
+  [ -n "$args" ] && printf -- 'argument-hint: %s\n' "$(pw_yaml_quote "$args")"
+  printf -- 'disable-model-invocation: true\n---\n%s' "${bodytext//\{\{ARGS\}\}/\$ARGUMENTS}"
+}
 declare -f render_cursor_command >/dev/null 2>&1 || render_cursor_command() {
   # Command name derives from the FILENAME (pw-status.md -> /pw-status); `agent:` is Kilo-only
   # sugar and has no cursor equivalent — omitted (inline lane-persona bodies self-execute).
@@ -549,12 +567,9 @@ declare -f codex_bin        >/dev/null 2>&1 || codex_bin()        { echo codex; 
 declare -f codex_skilldir   >/dev/null 2>&1 || codex_skilldir()   { echo "$HOME/.codex/skills"; }
 declare -f codex_commanddir >/dev/null 2>&1 || codex_commanddir() { echo "$HOME/.codex/skills"; }  # commands ARE skills on codex
 declare -f codex_command_style >/dev/null 2>&1 || codex_command_style() { echo skill; }
-declare -f render_codex_command >/dev/null 2>&1 || render_codex_command() {
-  # SKILL.md contract (codex's own built-in skill-creator spec, verified 2026-10-04): frontmatter
-  # requires `name` (must equal the skill dir name) + `description`; body loads on invocation.
-  # {{ARGS}} → `<arguments>`: codex skills have NO argument-expansion token — arguments arrive as
-  # the user's invocation text and `<arguments>` is self-describing to the model (canonical bodies
-  # already say "Arguments: … (first token = project slug …)").
+declare -f codex_entry_format >/dev/null 2>&1 || codex_entry_format() { echo skill; }
+declare -f render_codex_entry_skill >/dev/null 2>&1 || render_codex_entry_skill() {
+  # Codex skills have no argument-expansion token: arguments arrive as the invocation text.
   printf -- '---\nname: %s\ndescription: %s\n---\n%s' "$name" "$(pw_yaml_quote "$desc")" "${bodytext//\{\{ARGS\}\}/<arguments>}"
 }
 declare -f render_codex_skill_policy >/dev/null 2>&1 || render_codex_skill_policy() {
@@ -585,51 +600,54 @@ invocation cwd: printf '%s' "$PROMPT" | codex exec resume <thread_id>
 EOF
 }
 
+# entry_format <provider> -> "skill" (human entries install as invocable skills only) or
+# "command" (native command files only). Built-in providers declare it explicitly; a custom
+# provider inherits its legacy command_style so existing hooks keep working.
+pw_provider_entry_format() {
+  declare -f "${1}_entry_format" >/dev/null 2>&1 && { "${1}_entry_format"; return 0; }
+  [ "$(pw_provider_command_style "$1")" = "skill" ] && { echo skill; return 0; }
+  printf 'command\n'
+}
+
 # command_style <provider> -> "flat" (default: commands are <name>.md files in commanddir) or
-# "skill" (commands are <name>/SKILL.md skill dirs — providers with no native command surface;
-# codex is the first: its custom prompts were removed in codex-cli 0.117.0).
+# "skill" (commands are <name>/SKILL.md skill dirs). Kept as the custom-provider compatibility
+# and codex-layout hook; human-entry output type is decided by pw_provider_entry_format.
 pw_provider_command_style() {
   declare -f "${1}_command_style" >/dev/null 2>&1 && { "${1}_command_style"; return 0; }
   printf 'flat\n'
 }
 
-# Canonical command basenames (no .md) — the names a skill-layout provider's generated
-# command-skills own inside its (shared) skills dir.
+# Canonical human-entry names — one directory per entry under tooling/skills/human/.
 pw_canonical_command_names() {
-  local f
-  for f in "$PW_HOME"/tooling/commands/*.md; do
-    [ -e "$f" ] || continue
-    basename "$f" .md
+  local d
+  for d in "$PW_HOME"/tooling/skills/human/*/; do
+    [ -f "${d}SKILL.md" ] || continue
+    basename "${d%/}"
   done
 }
 
-# Bundle skill names that must be SKIPPED when installing skills for <provider>: on a
-# skill-layout provider, skills and commands share one namespace, and a bundle skill colliding
-# with a canonical command name (pw-review, pw-rfc today) would collide with its generated
-# command-skill. Derived dynamically — never a hardcoded pair. Flat-layout providers: nothing.
-# Membership is case-glob, NOT `… | grep -q`: under `set -o pipefail` (bootstrap/offboard/
-# doctor all run it) grep -q exits at the first match, SIGPIPEs the writer, and the pipeline's
-# 141 silently swallows the result — the skip list came back EMPTY on the first live run
-# (2026-10-04). Space-padded whole-word case matching is pipefail-proof and bash-3.2-safe.
+# Bundle skill names skipped at install. The old collision workaround is retired: human entry
+# names and shared guide names are now disjoint (pw-review vs pw-guide-review-method), and each
+# entry is emitted in exactly one format. Kept as a no-op for custom hooks that still call it.
 pw_skill_skips_for() {
-  [ "$(pw_provider_command_style "$1")" = "skill" ] || return 0
-  local s n cmds
-  cmds=" $(pw_canonical_command_names | tr '\n' ' ') "
-  for s in "$PW_HOME"/tooling/skill/*/; do
-    [ -f "${s}SKILL.md" ] || continue
-    n="$(basename "$s")"
-    case "$cmds" in *" $n "*) printf '%s\n' "$n" ;; esac
-  done
   return 0
 }
 
-# has_hooks <provider> -> 0 if the four REQUIRED hooks exist (bin/skilldir/commanddir/render_*_command)
+# has_hooks <provider> -> 0 if the required hooks exist: bin/skilldir/commanddir plus the
+# renderer for the provider's selected entry format. Command format needs render_<p>_command;
+# skill format needs render_<p>_entry_skill (generic fallback allowed, so a legacy
+# render_<p>_command also satisfies it).
 pw_provider_has_hooks() {
   local p="$1" fn
-  for fn in "${p}_bin" "${p}_skilldir" "${p}_commanddir" "render_${p}_command"; do
+  for fn in "${p}_bin" "${p}_skilldir" "${p}_commanddir"; do
     declare -f "$fn" >/dev/null 2>&1 || return 1
   done
-  return 0
+  if [ "$(pw_provider_entry_format "$p")" = "skill" ]; then
+    declare -f "render_${p}_entry_skill" >/dev/null 2>&1 && return 0
+    declare -f "render_${p}_command" >/dev/null 2>&1 && return 0
+    return 1
+  fi
+  declare -f "render_${p}_command" >/dev/null 2>&1
 }
 
 # has_agent_hooks <provider> -> 0 if the two OPTIONAL agent-seeding hooks exist

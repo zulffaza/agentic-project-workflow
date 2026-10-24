@@ -21,10 +21,10 @@ _det_cmp() {
 # 1) overview — runtime-derived completeness: every command file (independent recount)
 pwtest_rc 0 "overview exits 0" "$C" overview
 _det ov
-_cnt_files="$(ls "$TOOLDIR/commands/"*.md | wc -l | tr -d ' ')"
+_cnt_files="$(ls "$TOOLDIR"/skills/human/*/SKILL.md | wc -l | tr -d ' ')"
 _cnt_seen=0
-for _cf in "$TOOLDIR"/commands/*.md; do
-  _cn="$(basename "$_cf" .md)"
+for _cf in "$TOOLDIR"/skills/human/*/SKILL.md; do
+  _cn="$(basename "$(dirname "$_cf")")"
   if grep -qF "/$_cn " "$PWTEST_OUT" || grep -qE "/$_cn\$" "$PWTEST_OUT"; then
     _cnt_seen=$((_cnt_seen+1))
   else
@@ -42,9 +42,9 @@ pwtest_re 'Project Operations - explicitly select --project <project-slug>' "pro
 pwtest_re 'Create or Attach - an existing scaffold is not required' "create/attach label"
 # 1b) bare /pw-help self-maps (owner 09-24): the injected command file must SPELL OUT the
 # no-argument mapping, so a reader can never guess an operator from its own examples.
-grep -qF 'maps to `overview`' "$TOOLDIR/commands/pw-help.md" \
+grep -qF 'maps to `overview`' "$TOOLDIR/skills/human/pw-help/SKILL.md" \
   && pwtest_ok "bare /pw-help mapping spelled out" || pwtest_bad "bare mapping" "command file lost the explicit overview default"
-grep -qF 'Never guess an operator from this file' "$TOOLDIR/commands/pw-help.md" \
+grep -qF 'Never guess an operator from this file' "$TOOLDIR/skills/human/pw-help/SKILL.md" \
   && pwtest_ok "guess prohibition present" || pwtest_bad "guess prohibition" "missing"
 
 # 2) per-command + per-operator lines: pw-context exposes all operator words (named grammar)
@@ -189,7 +189,7 @@ pwtest_rc 0 "overview --json parses (python, stable keys)" "$C" overview --json
 python3 - "$PWTEST_OUT" <<'PY' && pwtest_ok "json shape: 17 cmds, scopes on every cmd+op, facets stable" || pwtest_bad "json shape" "schema violation"
 import json,sys
 d=json.load(open(sys.argv[1]))
-assert isinstance(d,list) and len(d)==17, len(d)
+assert isinstance(d,list) and len(d)==18, len(d)
 ctx=next(c for c in d if c["cmd"]=="pw-context")
 names={o["name"] for o in ctx["ops"]}
 assert {"req-init","add-input","add-repo","prepare"} <= names, names
@@ -220,7 +220,7 @@ pwtest_rc 0 "bare --json maps to overview --json" "$C" --json
 python3 - "$PWTEST_OUT" <<'PYB' && pwtest_ok "bare --json is the overview json" || pwtest_bad "bare --json" "not overview json"
 import json,sys
 d=json.load(open(sys.argv[1]))
-assert isinstance(d,list) and len(d)==17
+assert isinstance(d,list) and len(d)==18
 PYB
 
 # 7) read-only contract: a projects tree is byte-identical around a full surface pass
@@ -400,7 +400,7 @@ grep -qF 'scope: project' "$PWTEST_OUT" && pwtest_ok "project scope line renders
 
 # 8d) find: bounded literal discovery + json contract + surface integrity (plan 18 H3/Q1)
 pwtest_rc 0 "find literal phrase hits" "$C" find --term HUMAN-TRIGGERED
-pwtest_re "command[[:space:]]+commands/pw-review.md:[0-9]+" "hit prints surface+path:line"
+pwtest_re "command[[:space:]]+skills/human/pw-review/SKILL.md:[0-9]+" "hit prints surface+path:line"
 pwtest_rc 0 "find multi-word phrase works" "$C" find --term "phase map"
 pwtest_rc 0 "find zero-hits exits 0 (result, not error)" "$C" find --term zqx-nothing-here-xyz
 pwtest_re "no matches" "zero-hits prints the hint line"
@@ -420,12 +420,12 @@ pwtest_rc 2 "find without term refuses" "$C" find
 # 8g) scope declarations (plan 42): every command declares its scope, and the renderer's
 # own canary (HELP_GLOBAL_ORDER vs declared scopes) already ran on every render above.
 _miss=""
-for _cf in "$TOOLDIR"/commands/*.md; do
+for _cf in "$TOOLDIR"/skills/human/*/SKILL.md; do
   grep -qE '^scope: (global|project|mixed)$' "$_cf" || _miss="$_miss $(basename "$_cf")"
 done
 [ -z "$_miss" ] && pwtest_ok "every command declares scope:" || pwtest_bad "scope declarations" "$_miss"
 _missm=""
-for _cf in "$TOOLDIR"/commands/*.md; do
+for _cf in "$TOOLDIR"/skills/human/*/SKILL.md; do
   grep -qE '^scope: mixed$' "$_cf" || continue
   grep -qE '^scope-forms: ".*=global' "$_cf" && grep -qE '=project' "$_cf" || _missm="$_missm $(basename "$_cf")"
 done
@@ -461,7 +461,7 @@ _gist_ref() { printf '%s' "$1" | awk '{
     for (i=1; i<=length(s); i++)
       if (substr(s,i,1)=="." && (i==length(s) || substr(s,i+1,1)==" ")) { print substr(s,1,i-1); exit }
     print s }'; }
-for _pf in "$TOOLDIR"/commands/*.md; do
+for _pf in "$TOOLDIR"/skills/human/*/SKILL.md; do
   for _k in description args agent; do
     pwtest_eq "fmof parity $(basename "$_pf" .md) [$_k]" "$(_fmof_ref "$_pf" "$_k")" "$(fmof "$_pf" "$_k")"
   done

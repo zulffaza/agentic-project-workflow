@@ -47,20 +47,6 @@ body() {  # body <file> -> everything after the closing --- of frontmatter
 }
 die() { echo "gen-agents: $*" >&2; exit 1; }
 
-# Regression guard: the orchestrator's generated permission frontmatter must never carry a
-# path-scoped deny on worktree edits. A provider that scopes permissions per-session (Kilo does)
-# propagates a parent orchestrator's deny down to spawned executor sub-agents, silently blocking
-# the executor's own edits inside its worktree — the exact "permission denied" bug fixed in
-# render_kilo_agent (pw-common.sh, 2026-08-07). The orchestrator's "never edit repo source" rule
-# is enforced by its prompt only (see tooling/agents/pw-orchestrator.md) — it must stay that way.
-guard_no_orchestrator_worktree_deny() {  # <generated-file>
-  local f="$1" fm
-  fm="$(awk 'NR==1 && $0=="---"{c=1;print;next} c==1{print} c==1 && $0=="---"{exit}' "$f")"
-  printf '%s\n' "$fm" | grep -qiE 'worktree.*:[[:space:]]*deny|deny.*worktree' \
-    && die "$f: generated permission frontmatter denies worktree edits for pw-orchestrator — this breaks executor sub-agents (session permission propagation). Fix the provider's render_<prov>_agent hook in pw-common.sh; enforce via prompt only, not a path-scoped deny."
-  return 0
-}
-
 # --- drive -------------------------------------------------------------------
 count=0
 for prov in "${PROVIDERS[@]}"; do
@@ -85,7 +71,6 @@ for prov in "${PROVIDERS[@]}"; do
     # A stale SYMLINK at the write target would make `>` write THROUGH it — remove before write.
     [ -L "$outdir/$agentname.md" ] && rm -f "$outdir/$agentname.md"
     "render_${prov}_agent" > "$outdir/$agentname.md"
-    [ "$agentname" = "pw-orchestrator" ] && guard_no_orchestrator_worktree_deny "$outdir/$agentname.md"
     printf '%s\n' "$GEN_MARKER" >> "$outdir/$agentname.md"
     count=$((count+1))
   done

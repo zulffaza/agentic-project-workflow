@@ -459,7 +459,7 @@ matching an ancestor branch.
 resolution. With `--auto-resolve`, the command records one attempt, leaves the conflict in place for
 the agent, and publishes only after verification binds to the final HEAD. The deterministic surface
 is these operators; the reasoning procedure lives in
-`tooling/skill/project-workflow/references/sync-conflict-resolution.md` and loads only for an
+`tooling/skills/model/pw-guide-workflow/references/sync-conflict-resolution.md` and loads only for an
 opt-in run or a resume.
 
 ```bash

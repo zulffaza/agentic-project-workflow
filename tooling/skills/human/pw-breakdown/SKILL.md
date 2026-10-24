@@ -1,0 +1,254 @@
+---
+name: pw-breakdown
+description: Break approved analysis into PLAN.md + task files
+args: "--project <project-slug>"
+scope: project
+---
+
+**Load shared guidance first.** Read the `pw-orchestration` skill's common rules
+(`references/common.md`) before acting: authorization, operation scope, helper ownership, and
+reporting. Load only the phase-specific references this operation needs. A read-only operation
+must not run execution or mutation procedures.
+Invoke the `pw-guide-workflow` skill. Arguments: {{ARGS}} — `--project <project-slug>` selects the project.
+
+Project dir: `{{PW_PROJECTS}}/<slug>`.
+
+<!-- Pre-flight: deterministic checks before agent reasoning -->
+```bash
+{{PW_HOME}}/tooling/scripts/entities/pw-preflight.sh breakdown --project <slug> || exit 1
+{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind analysis --project <slug> --all --stage ready || exit 1
+```
+**Reading the pre-flight:** `pw-preflight.sh breakdown` checks every analysis review file is
+`approved` (and RFC open items are clear if the side-loop runs); `pw-doc.sh lint --kind analysis --all`
+checks each analysis doc's §1–5 and requires the approach decision (`--stage ready`). A complete draft may still be AI-reviewed with `--stage reviewable`; breakdown is a consumer, so it refuses `_pending`. Silent = pass; a non-zero exit + `pw-…:` stderr line is a hard
+STOP — relay it (it names which doc/gate needs `/pw-review` first), don't draft a PLAN on
+unapproved analysis. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
+
+**Drafting lanes (optional — skill: `references/execution-and-routing.md` §Spawn lanes):** the
+*decisions* in steps 1–4 below are yours (boundaries, DAG, per-task provider, SP, landing units);
+**task-file drafting can delegate per task to `pw-writer-task`** — one spawn per task-doc,
+independent ones batched in parallel (they write different files, so batching is capped by `- Max parallelism:`
+n at a time), each getting the task's decisions as a compact seed + the template. It cannot change
+what the step does; a spawn that goes beyond its decisions gets stopped (exit-check like every
+lane result). Read the lane models from `- **AI Models:**` (`pw-config.sh get --project <slug> --key ai-model` — no row =
+provider default) and log each spawn with its `session=<id>` for later repair/§review-batch
+resumption.
+
+First check the analysis gate — **per analysis doc, its CURRENT Sign-off decision, not "was it
+ever approved":** for each real `<project>/analysis/<topic>.md`, run
+`{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh gate --project <slug> --file analysis/review/<topic>.review.md` (the file
+doesn't exist yet → treat as not approved). If it exits non-zero for **any** topic, STOP and ask me
+to (re-)approve that analysis first — quote the decision it printed (`in-review` or
+`changes-requested`). **Do not fall back to scanning the file for an `approved` string anywhere
+in its history** — a doc reopened after approval (e.g. an RFC comment folded back in post-approval,
+see [`docs/RFC.md`](../../docs/RFC.md)) still has an old approved row sitting earlier in the same
+file; `review gate` deliberately reads only the table's current/last row so a stale historical
+approval can never satisfy this gate on its own. This is also why a *folded-in* RFC comment doesn't
+need its own separate approval concept: once folded in, it reopens *this exact* gate, and your
+fresh `approved` here is what unblocks breakdown. That reopen only fires retroactively, though —
+it says nothing about a comment that's been pulled but never folded in. That gap is the third check
+below, a genuinely separate mechanism from this Sign-off read.
+
+**Third check — an open RFC negotiation blocks breakdown outright:** run
+`{{PW_HOME}}/tooling/scripts/entities/pw-review-read.sh has-open --project <slug> --file analysis/review/RFC.review.md`. If it prints
+`yes` (exit 0), STOP — do not produce `PLAN.md` or any task file, even if the analysis Sign-off
+above reads `approved`. Tell me which item(s) are still [OPEN]/[PENDING] in that file
+and that I need to either fold each one into the analysis via `/pw-review` (which reopens the
+analysis gate above until re-approved) or resolve it directly in the review file myself, then
+re-run `/pw-breakdown`. This closes the gap where analysis got approved on its own merits while a
+live external RFC comment thread is still sitting unresolved — see
+[`docs/RFC.md`](../../docs/RFC.md). A missing `RFC.review.md` (no RFC side-loop ever used, or no
+comments pulled yet) prints `no`/exits 1 — not an error, nothing to block on.
+
+**Second check, per analysis doc — a chosen approach, not just approval:** read that doc's §4.
+If it lists 2+ options, `**Chosen approach:**` must be filled in (not `_pending your review_`). If
+it's still pending, STOP and ask me to answer `Q0` in the review file first — **even if Sign-off
+already reads `approved`**, since approving without choosing leaves nothing concrete to build a
+plan from. Build the PLAN and every task **only from the chosen option** — unchosen ones stay in
+the doc as record; never implement them, even partially "just in case."
+
+**If more than one `analysis/<topic>.md` exists** (a project whose work is several large,
+mostly-independent solution areas, each analyzed separately — see the analysis template's
+"MULTIPLE LARGE SOLUTION AREAS" note): the checks above already loop over **every** real analysis
+doc, per-topic. Read **every** approved doc's chosen approach and produce **ONE merged `PLAN.md` +
+one task set spanning all of them** — never a separate PLAN per analysis doc. The repo manifest,
+dependency DAG, and task table naturally end up reflecting work from every solution area in one
+place; a task from one area may depend on a task from another exactly like any other cross-task
+dependency.
+
+Then produce, from `{{PW_HOME}}/template/task/`:
+1. `<project>/task/PLAN.md` (from `_TEMPLATE-orchestration-plan.md`) — repo manifest as
+   **`(repo, base branch)` pairs** (a repo may appear on **multiple rows** if tasks target different
+   base branches, e.g. `master` and `spring3` — that's a normal case, not adoption-only), global
+   rules, **breakdown rules / execution routing**, dependency DAG, and the task table
+   **including the Execute with column and clickable `[T0n](./T0n.md)` links**. Fill **Produced
+   by:** with the provider you (this breakdown agent) are running under — that becomes the
+   **default execution provider** for every task (see routing).
+2. One `<project>/task/T01.md … Tnn.md` per task (from `_TEMPLATE-task.md`), each self-contained —   **drafted via `pw-writer-task` when a spawn is available** (per-task; parallelizable with the
+   plan's `Parallelism:`, independent tasks batched together with one shared decisions seed — the
+   same batching rule as §4.8 fixes, never one spawn per file; log each spawn + `Session:`), you
+   fill/verify the decisions fields below and `PLAN.md` yourself:
+
+   Task files must be **final, never template-shaped** (they are written after scaffold ran, so
+   nothing stamps them):
+   - Replace every literal `PW_HOME`/`PW_PROJECTS`/`PW_REPOS` brace-token copied from the template
+     with its real absolute path before saving (same render scaffold applies to copied files).
+   - Machine fields (`Repo:`, `Base branch:`, `Branch:`, `Worktree:`, `depends_on:`, `Stacked on:`,
+     `Status:`, `Execute with:`) carry a single value only — no prose after it; the reasoning belongs in
+     `Why:` or an HTML comment. `Worktree:` stays project-relative exactly as the template shows
+     (`worktree/<repo>/<T0n>-<slug>/`); absolute paths appear only inside `## Steps` commands.
+   with its **`Repo:` + `Base branch:`** set (the base the task forks from — two tasks in the same
+   repo may declare different bases, e.g. `master` vs `spring3`), a runnable `## Verify` block, an
+   `Execute with: <provider>:<model-or-agent>` + `Why:`, a **`Story points:`** estimate, optional
+   **`Effort:`**/**`Thinking:`**/**`Route:`** (route = `auto|subagent|headless` spawn-routing per
+   the ladder — only write it when the task needs strict binding (`headless`) or forced
+   in-process (`subagent`); omit for `auto`), and an empty `## Result` block.
+      - **Per-lane model default on top of "Produced by":** the dashboard's `- **AI Models:**` line is        what the *next* run's lane spawns will use (`pw-config.sh get --project <slug> --key ai-model` reads it;
+        `pw-config.sh set --project <slug> --key ai-model --set <role>=<provider:model>` writes it —
+        researcher/analyst/writer-task/reviewer/verifier; the **executor is never a
+        row**, a task's `Execute with:` is its only pin). Surface the current rows in your summary so I
+        can change one before I sign off (e.g. "writer-task=— → say the word to pin it cheap").
+      - **Default the provider to "Produced by"** (this agent) so I don't have to switch agents;
+     only route a task elsewhere when it genuinely needs a stronger/cheaper/open-weight model, and
+     justify it in `Why:`. Fold in any custom routing I gave ("run the mechanical bumps in
+     KiloCode", "T03 → opus"). Resolve providers via `{{PW_HOME}}/tooling/docs/providers.md`. **Pin the
+     Claude version** (full name like `claude-opus-4-8`) on risky tasks; raise `Effort:` for complex ones.
+    - **Picking a kilo, opencode, cursor, or codex model: query the live catalog, never recall/guess an
+      id from memory.** A plausible-looking id can simply not exist, or its display name can differ
+      from the real id.
+      ```bash
+      kilo models                   # full catalog; PW_KILO_API_PROVIDERS entries are model-id
+      opencode models               #   prefix FILTERS over these lines (slashes allowed — a
+      agent models                  #   nested BYOK appears as `kilo/alibaba-token-plan/<m>`),
+      codex debug models            #   never as `kilo models <arg>` arguments (that errors).
+                                    #   cursor: one gateway; effort/thinking are catalog-id variants
+                                    #   (e.g. claude-opus-5-thinking-xhigh). `agent models` is
+                                    #   INCOMPLETE — desktop-only ids (e.g. glm-5p3-flash) live in
+                                    #   ~/.cursor/cli-config.json → modelParameters; model-resolve
+                                    #   reads both, `--probe` adds one live ask
+                                    #   codex: one gateway; ONE-LINE JSON — pw reads the bare
+                                    #   visible slugs; effort + Fast tier are per-run flags on the
+                                    #   same slug, never id segments
+      ```
+     Pick the id from that actual output; confirm it resolves (and get its canonical bind id) with
+     `pw-config.sh model-resolve --provider <provider> --model <model-id>` before writing the row. Claude has no live
+     catalog — its fixed alias set is
+     already fully documented in `{{PW_HOME}}/tooling/docs/providers.md`.
+   - **Before finalizing each task's `Execute with:`**, check the chosen model against the
+     project's model allowlist (empty/unset = every model is allowed, the default — see
+     `pw.config.sh`), and confirm it actually resolves right now (live catalog + api-provider
+     prefix scope — a row pinning a model/provider that isn't available fails the execute gate
+     later, so don't write it now):
+     ```bash
+     {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-check --provider <provider> --model <model-id>
+     {{PW_HOME}}/tooling/scripts/entities/pw-config.sh model-resolve --provider <provider> --model <model-id>
+     ```
+     If it refuses, pick a different allowed model for that task rather than writing one the
+     allowlist excludes — don't silently override it.
+   - **Write DETAILED `## Steps`** — name the exact file, the exact change (before/after snippet or
+     literal edit), and the exact command per step, so the executor needs minimal independent
+     reasoning (cheaper, more reliable — a small model shouldn't re-derive the work). **The only
+     thinking a step should leave to the executor is debugging why THIS exact step didn't work —
+     never deciding what a step should do.** Any unresolved judgement call is a `Q` for
+     analysis/review, not something left to the executor. See the level-of-detail example in
+     `_TEMPLATE-task.md` — including its sub-sectioning rule (`### A.`/`### B.`/… phase headings,
+     numbering continuous across them) once a task's Steps would run past ~8-10 flat items.
+3. **Estimate manual effort/timeline** (`2 SP = 1 person-day`): give each task a story-point value
+   in the task table's `SP` column, then fill PLAN's "## Manual-execution estimate" — total SP,
+   sequential person-days (ΣSP÷2), and critical-path calendar days (ΣSP along the longest
+   dependency chain ÷2). This is the *manual* estimate for planning; agent execution is faster.
+
+**Task boundary rules — one task = one independently shippable change.** A task's MR must be
+mergeable on its own with the system staying coherent. **If an MR would be broken or meaningless
+without a sibling MR merged, those pieces are NOT separate tasks** — make them ONE task (use the
+`### A./### B./…` sub-phase headings inside it), or — only when they're in different repos or
+otherwise can't share one worktree — an explicitly-marked **landing unit** (below).
+- **Split ONLY on an independently-shippable seam:** (i) a different repo — forced, a worktree can't
+  span two; (ii) a genuinely separable increment that's valuable on its own (a feature-flagged or
+  backward-compatible layer); (iii) a raw review-size ceiling on a change that IS already one unit.
+- **Do NOT split by internal mechanics** — not "one task per step of a pipeline", not per file,
+  per module, per endpoint, or per code-path. A tightly-coupled change gets FEWER, larger MRs, not a
+  train of interdependent ones reviewers must hold in their heads together. (Real example that drove
+  this rule: one CDC-sync API change was cut into several tasks/MRs that only made sense as a set —
+  hard to review, hard to maintain, no single MR reviewable alone.)
+- **Landing unit (must-land-together set):** when a change is one logical unit but genuinely can't
+  be one task (cross-repo, or repo-internal seams that are only shippable together):
+  - Give every task in the set the same `Landing unit: <short-name>` field (task file + PLAN), and
+    add a `## Landing units` note to PLAN naming the set.
+  - Each task's MR description carries "**Landing unit:** <name> — MRs …, merge as a set" so
+    reviewers treat them as one unit (see `/pw-ship`). A set whose members are only coherent when
+    ALL land is still a smell — prefer shrinking to one task where the repos allow it.
+
+- **Stacked tasks (same-repo inherited code):** classify **why** each dependency exists — inherited
+  code, an external artifact/version, or pure execution order. Only a **same-repo inherited-code**
+  dependency becomes a stack: give the child `Stacked on: <immediate-parent-task>` (and mirror it in
+  PLAN's `Stacked on` column — the mirror is reconciled by the owning writer, never a second
+  authority). The parent must be in that child's `depends_on`, in the same repo, share one ultimate
+  `Base branch`, and have a distinct branch. Do **not** stack tasks merely because their IDs are
+  consecutive or their files overlap — a scheduling dependency alone is not a stack. Show ultimate
+  destinations, immediate parents, branch names, and the **root-first merge order** under PLAN's
+  `## Stacks` section before I approve:
+  - `T03 → T02 → master` means T03's branch forks T02's verified commit and T03's MR targets T02
+    until T02 lands; merge order is T02, then T03.
+  - With multiple code prerequisites, choose the deepest parent only when its ancestry demonstrably
+    includes the other prerequisite commits; otherwise **stop and ask for a reviewed sequencing or
+    an integration-task decision** — never invent a temporary integration branch. Independent
+    prerequisites in other repositories stay ordinary `depends_on` edges (no branch spans repos).
+
+Size each task as one worktree / one reviewable unit.
+
+**Adopted units present?** If the dashboard has an `Adopted:` note (from `/pw-adopt`; the units are
+in `context/ADOPTED.md`), read every adopted unit `(repo, branch, base)` and route **per task** —
+this works whether the project is pure-continuation OR a **mixed** project (`/pw-new` fresh tasks
+plus adopted branches folded in with `/pw-adopt`; see the WORKFLOW "mixed projects" note):
+- A task that **extends an adopted unit** (touches that unit's repo *and* belongs to that
+  in-progress branch's work) → set its `Branch:` to that **adopted branch** (not a new `agent/…`
+  branch); it will continue-on-that-branch.
+- Every **other** task → a normal fresh `Branch: agent/<slug>/<Tid>-…` forked from its `Base branch:`.
+
+State the routing in PLAN's global rules. If any task is adopted, add "**adopted branches:
+per-branch serial; cross-branch parallel; fresh tasks independent**". Then shape the DAG: tasks
+sharing the **same** adopted branch get a **linear dependency chain** (one shared worktree → must
+run in sequence); tasks on **different** adopted branches, and all fresh tasks, stay independent and
+run in parallel. Split into tasks for reviewability as usual; adopted tasks' changes extend the
+existing branch (and its MR, if any), fresh tasks open new branches.
+
+Then materialize the creation seed **exactly once**, before the review file exists:
+```bash
+{{PW_HOME}}/tooling/scripts/entities/pw-config.sh materialize --project <slug> || exit 1
+```
+It copies `routing` / `execution-limit` / `max-parallel` from the dashboard `Project Defaults`
+into PLAN. Explicit PLAN values always win; the seed is never re-read, so later global changes do
+not rewrite an existing plan. It changes no task scope, review, status, or approval.
+
+Then, **create the PLAN review file (idempotent)** — never hand-write it:
+```bash
+{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init --project <slug> --file task/review/PLAN.review.md --doc task/PLAN.md
+```
+No-ops if it already exists; otherwise creates it verbatim from the template so I don't have to
+copy it myself. (Task review files T0n.review.md are created the same way per task — or in one
+pass via `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh init-docs --project <slug> --file task/PLAN.md [--file <named-task-path>]…`,
+which creates only the chosen docs. `init-all` applies only after the dashboard actually enters
+breakdown; before that move it still selects analysis. My own items/answers/sign-off
+rows go through the `/pw-review item|answer|signoff --project <slug>` operators, never hand-copied blocks.)
+
+Then **MANDATORY final step — do NOT skip** — update status + log via the helper
+(never hand-edit the Status line), and confirm the dashboard now shows `Status: breakdown`:
+```bash
+{{PW_HOME}}/tooling/scripts/entities/pw-status.sh status --project <slug> --phase breakdown
+{{PW_HOME}}/tooling/scripts/entities/pw-status.sh log --project <slug> --actor breakdown --message "wrote PLAN.md + N task files (ΣSP=<n>)"
+```
+
+**Completion review — only when configured.** After PLAN + task files are written and linted, read
+the `plan` axis (`{{PW_HOME}}/tooling/scripts/entities/pw-config.sh get --project <slug>
+--key review-trigger` and `… --key ai-review`) and, ONLY when the trigger is `completion` and the outcome is
+callable (`advisory` default; legacy `off` reads as advisory), run the `/pw-review ai --project <slug> --surface plan`
+flow BEFORE your summary — fresh reviewer only, bounded repairs only when `review-repair
+plan=bounded` within `review-rounds` passes. Outage or unverified route: one skip line, continue.
+It never signs off by itself (advisory), never fails breakdown, and never starts `/pw-execute`.
+
+Stop and summarize the plan + task list (chosen provider:model per task, SP, and the total manual
+estimate: person-days + critical-path days). Remind me that **only the PLAN review gates execution**
+— `task/review/PLAN.review.md` is already there for me; I just add items and sign off before
+`/pw-execute`. **Per-task reviews are optional** (`task/review/T0n.review.md`) — created on demand
+only if I send a specific task back.

@@ -1,0 +1,41 @@
+---
+name: pw-verify
+description: Independent, fresh-context verification of one change (the §3.4 stand-alone verifier) — "verify this branch/commit/MR separately", never a re-derive of the producer's reasoning
+args: "--repo-ref <repo@ref>  |  --worktree <path>  |  --task <T0n|task-file> [--commit <sha>] [--note <prose…>]"
+scope: global
+---
+
+**Load shared guidance first.** Read the `pw-orchestration` skill's common rules
+(`references/common.md`) before acting: authorization, operation scope, helper ownership, and
+reporting. Load only the phase-specific references this operation needs. A read-only operation
+must not run execution or mutation procedures.
+Invoke the `pw-guide-workflow` skill only if the target is a pw project; otherwise work plainly —
+the contract is the same. Arguments: {{ARGS}} — exactly one target form:
+
+- **`/pw-verify --repo-ref <repo@ref>`** — a repo@branch/SHA target.
+- **`/pw-verify --worktree <path>`** — a worktree path.
+- **`/pw-verify --task <T0n|task-file>`** — a task file with its `## Verify` block as the definition-of-done.
+
+Optional on any form: `[--commit <sha>]` pins the exact commit to verify, `[--note <prose…>]` adds
+a note (a prose flag — it runs until the next `--flag` token).
+
+You are handed **one target of verification**, **one
+question to answer** (does this change actually do what its verify block / commit claim, against
+real state — build/test/lint/behavior where runnable), and the model row for the `verifier` lane
+(`pw-config.sh get --project <slug> --key ai-model --json` if a dashboard exists — use its complete provider/model/tuning binding; unset = provider default; record
+`Model used:` where your provider can report it).
+
+Rules (this is the stand-alone lane, *not* an executor's self-check):
+- **Fresh context is the point.** You received a seed (scope + pointers), not the producer's chat.
+  Never re-trace how it was made — verify the *result* on real state.
+- **Run the checks; paste real output.** The definition of done is concrete (commands or assertions
+  named in the brief). An environmental failure is reported as environmental (does it reproduce on
+  base?) — never silently "passed", never "will pass later".
+- **Findings go back as review items in ONE batch** (the §4.8 queue: one `[OPEN]` item per finding,
+  where the brief named a review file — `analysis/review/…`, `task/review/T0n.review.md`, or your
+  answer text for an ad-hoc ask): they arrive together for **one** executor fix pass, with
+  per-item replies — never one handoff per finding.
+- At most **one** independent re-check after a fix round — and only when the caller asks for it;
+  you never own a fix↔verify loop (that loop is the executor's own self-repair, §3.5).
+- You edit nothing outside your report: no fixes, no status flips (statuses are the driver's), no
+  MR writes.

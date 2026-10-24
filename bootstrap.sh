@@ -13,8 +13,8 @@
 # It:
 #   1. resolves the three path roots from its own location,
 #   2. reads pw.config.sh for which agent CLIs you use (PW_PROVIDERS),
-#   3. installs every shipped skill (tooling/skill/*/) into each enabled+detected provider,
-#   4. generates the /pw-* slash-commands for them,
+#   3. installs the shared procedural skills (tooling/skills/model/*) into each provider,
+#   4. generates the 18 human entry points in the provider's selected format (skills or commands),
 #   5. writes pw-env.sh (source it for $PW_HOME/$PW_PROJECTS/$PW_REPOS).
 #
 # You never edit THIS script to change providers — edit pw.config.sh.
@@ -35,7 +35,7 @@ done
 PW_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PW_PROJECTS="${PW_PROJECTS:-$(cd "$PW_HOME/.." && pwd)}"
 PW_REPOS="${PW_REPOS:-$(cd "$PW_PROJECTS/.." && pwd)}"
-SKILL_DIR="$PW_HOME/tooling/skill"   # every subdir with a SKILL.md here is a shippable skill
+SKILL_DIR="$PW_HOME/tooling/skills/model"   # shared procedural skills only (never human entries)
 
 # --- 2. load config (create it from the example on first run) ----------------
 # --check must change nothing, so it reads the example in place without creating the file.
@@ -129,18 +129,8 @@ install_skill() {
 for p in "${DETECTED[@]}"; do
   echo "  $p:"
   skdir="$("${p}_skilldir")"
-  # Skill-layout providers (codex): skills and generated command-skills share ONE namespace —
-  # a bundle skill whose name collides with a canonical command is skipped here (the generated
-  # command-skill owns the name; see pw_skill_skips_for / tooling/docs/providers.md).
-  skips=" $(pw_skill_skips_for "$p" | tr '\n' ' ') "   # space-padded for pipefail-proof case matching
   for src in "$SKILL_DIR"/*/; do
     [ -f "${src}SKILL.md" ] || continue   # skip any non-skill subdir
-    sname="$(basename "${src%/}")"
-    case "$skips" in
-      *" $sname "*)
-        echo "    skill: '$sname' skipped for $p — name owned by its generated command-skill (shared namespace)"
-        continue ;;
-    esac
     install_skill "$skdir" "${src%/}"
   done
 done
@@ -153,7 +143,7 @@ if [ "${#DETECTED[@]}" -gt 0 ]; then
     "$PW_HOME/tooling/scripts/toolchain/gen-commands.sh" "${DETECTED[@]}" | sed 's/^/    /'
   echo
 
-  echo "  seeding sub-agents (pw-orchestrator, pw-executor, pw-reviewer):"
+  echo "  seeding the five worker sub-agents:"
   PW_PROJECTS="$PW_PROJECTS" PW_REPOS="$PW_REPOS" \
     "$PW_HOME/tooling/scripts/toolchain/gen-agents.sh" "${DETECTED[@]}" | sed 's/^/    /'
   echo

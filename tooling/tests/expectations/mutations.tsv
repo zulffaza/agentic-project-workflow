@@ -77,7 +77,7 @@ C11-bash4-idiom-injects	pw-review.sh	if [ "${1:-}" = "--selftest" ]; then exec "
 C12-respawn-by-zero	pw-status.sh	if [ "${1:-}" = "--selftest" ]; then exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../tests/selftest_entry.sh" "$(basename "${BASH_SOURCE[0]}" .sh)"; fi	if [ "${1:-}" = "--selftest" ]; then bash "$0" "$@"; fi	T0	-
 C13-user-doc-leaks-script	../docs/EXECUTION.md	execution, and the multi-repo worktree mechanics.	execution (via pw-ship-exec.sh), and the multi-repo worktree mechanics.	T4	-
 C14-xargs-trim-returns	pw-ship.sh	task_id="$(echo "$task_id" | pw_trim)"	task_id="$(echo "$task_id" | xargs)"	T0	-
-C15-command-canonical-drifts-install	commands/pw-execute.md	pw-worktree.sh create --project <slug> --task <T0n> --repo <repo> --base <base-branch>	pw-worktree-create.sh --project <slug> --task <T0n> --repo <repo> --base <base-branch>	T4	-
+C15-command-canonical-drifts-install	skills/human/pw-execute/SKILL.md	pw-worktree.sh create --project <slug> --task <T0n> --repo <repo> --base <base-branch>	pw-worktree-create.sh --project <slug> --task <T0n> --repo <repo> --base <base-branch>	T4	-
 C16-projects-dir-hardwired	pw-status.sh	PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"	PROJECTS_DIR="$(cd "$HERE/../.." && pwd)"	T1	pw-status
 C17-field-bullet-rule-gone	../template/task/_TEMPLATE-task.md	FIELD-BULLET RULE	field bullet rule	T4	-
 C18-wholefile-verify-token-grep	pw-preflight.sh	if [ -f "$TASK_FILE" ] && [ "$(pw_field "$TASK_FILE" Status)" = "verify-failed" ]; then	if grep -qF verify-failed "$TASK_FILE"; then	T0	-
@@ -93,19 +93,19 @@ C26-add-item-drops-marker	pw-review.sh	local heading="### R$n · $SECTION — [O
 C27-stub-filter-gone	pw-mdlib.sh	_comment_blanked "$1" | awk '/^###+ / && !/<YYYY-MM-DD/ && !/<DD MMMM YYYY/ && !/<§section/'	_comment_blanked "$1" | awk '/^###+ /'	T1	pw-review-read
 C28-context-row-clobbers-last	pw-context.sh	    md_insert_lines_after "$f" "$last" "$tmp"	    md_replace_line "$f" "$last" "$tmp"	T1	pw-context
 C29-resolve-duplicates-heading	pw-review.sh	  if md_replace_line "$f" "$hl" "$f.hdr"; then rm -f "$f.hdr"	  if md_insert_lines_after "$f" "$hl" "$f.hdr"; then rm -f "$f.hdr"	T1	pw-review\.t\.sh
-C30-signoff-doctrine-line-gone	commands/pw-review.md	**HUMAN-TRIGGERED ONLY (C4): run this operator ONLY when my message explicitly asks to sign	**Run this operator proactively whenever the pass leaves nothing open, e.g. when asked to sign	T4	-
+C30-signoff-doctrine-line-gone	skills/human/pw-review/SKILL.md	**HUMAN-TRIGGERED ONLY (C4): run this operator ONLY when my message explicitly asks to sign	**Run this operator proactively whenever the pass leaves nothing open, e.g. when asked to sign	T4	-
 # plan 19 rows (C41/C42; C31-C35 + C36+ reserved by draft plans 18/20): harness speedup machinery.
 C41-fixture-cache-hash-frozen	tests/pw_test_lib.sh	print(h.hexdigest()[:16])	print("0"*16)	T1	pw-test-harness
 C42-lazy-scan-always-builds	tests/pw_test_lib.sh	NEED_F1=0; NEED_F2=0; NEED_F3=0	NEED_F1=1; NEED_F2=1; NEED_F3=1	T1	pw-test-harness
 C43-mutable-stack-exponential-pop	tests/pw_test_lib.sh	local e _new=""	local e _new="$PWTEST_MUT_STACK"	T1	pw-test-harness
 C44-worker-copy-skipped	tests/mutate.sh	  if ! rsync -a --exclude .git --exclude .cache "$src/" "$wt/"; then	  if ! false; then	T1	pw-test-harness
 C45-harness-internals-doc-dies	docs/testing.md	## Inside the harness (read this before editing tests/ or writing mutation rows)	## Internals (read this before editing tests/ or writing mutation rows)	T4	-
-C36-deadpath-canary-fails-open	commands/pw-status.md	project is always `--project <slug>`. Project dir: `{{PW_PROJECTS}}/<slug>`.	project is always `--project <slug>`. Project dir: `{{PW_PROJECTS}}/<slug>` `tooling/pw-doc-lint.sh`.	T4	-
-C37-lib-invisible-canary	commands/pw-sync.md	Follow the `project-workflow` skill. Arguments: {{ARGS}} — `--project <project-slug>` selects the	Follow the `project-workflow` skill. Arguments: {{ARGS}} `tooling/scripts/lib/pw-mdlib.sh` — `--project <project-slug>` selects the	T4	-
-C38-toolchain-allowlist-canary	commands/pw-ship.md	Follow the `project-workflow` skill. Arguments: {{ARGS}}. The first word selects the mode:	Follow the `project-workflow` skill. Arguments: {{ARGS}}. The first word selects the mode: `tooling/scripts/toolchain/gen-commands.sh`	T4	-
+C36-deadpath-canary-fails-open	skills/human/pw-status/SKILL.md	project is always `--project <slug>`. Project dir: `{{PW_PROJECTS}}/<slug>`.	project is always `--project <slug>`. Project dir: `{{PW_PROJECTS}}/<slug>` `tooling/pw-doc-lint.sh`.	T4	-
+C37-lib-invisible-canary	skills/human/pw-sync/SKILL.md	Follow the `pw-guide-workflow` skill. Arguments: {{ARGS}} — `--project <project-slug>` selects the	Follow the `pw-guide-workflow` skill. Arguments: {{ARGS}} `tooling/scripts/lib/pw-mdlib.sh` — `--project <project-slug>` selects the	T4	-
+C38-toolchain-allowlist-canary	skills/human/pw-ship/SKILL.md	Follow the `pw-guide-workflow` skill. Arguments: {{ARGS}}. The first word selects the mode:	Follow the `pw-guide-workflow` skill. Arguments: {{ARGS}}. The first word selects the mode: `tooling/scripts/toolchain/gen-commands.sh`	T4	-
 C39-usage-string-dead-script	pw-doc.sh	die "usage: pw-doc.sh lint --kind analysis --project <slug> [--file <topic> | --all]"	die "usage: pw-doc-lint.sh lint --kind analysis --project <slug> [--file <topic> | --all]"	T4	-
 C40-doctor-orphan-check-disabled	pw-doctor.sh	corph="$corph $(basename "$inst")"	corph=""	T1	pw-doctor
-C46-operator-cross-attribution	skill/project-workflow/references/conventions-and-gotchas.md	`pw-status.sh adopted --project <slug> --text "<pointer>"`	`pw-context.sh adopted --project <slug> --text "<pointer>"`	T4	-
+C46-operator-cross-attribution	skills/model/pw-guide-workflow/references/conventions-and-gotchas.md	`pw-status.sh adopted --project <slug> --text "<pointer>"`	`pw-context.sh adopted --project <slug> --text "<pointer>"`	T4	-
 C31-frontmatter-derivation-canned	pw-help.sh	      desc="$(fmof "$file" description)"; args="$(fmof "$file" args)"	      desc="Scaffold a new agentic-workflow project"; args="canned-args"	T1	pw-help
 C31a-overview-scoped-desc-canned	pw-help.sh	desc="$(fmof "$file" description)"; args="$(scope_args "$cmd" "$sec")"	desc="Canned overview description"; args="canned-args"	T1	pw-help
 C31b-command-view-desc-canned	pw-help.sh	desc="$(fmof "$file" description)"; args="$(fmof "$file" args)"; agn="$(fmof "$file" agent)"	desc="Scaffold a new agentic-workflow project"; args="canned-args"; agn="$(fmof "$file" agent)"	T1	pw-help
@@ -119,17 +119,17 @@ C51-session-check-kilo-grep	pw-session.sh	printf '%s' "$out" | grep -qF "$id"	pr
 C52-doctor-catalog-arg-bug	pw-doctor.sh	raw="$(pw_api_catalog "$prov")"	raw="$(for ap in $(pw_api_entries "$prov"); do kilo models "$ap" 2>/dev/null || true; done); [ -n "$(pw_api_entries "$prov")" ] || raw="$(kilo models 2>/dev/null || true)"	T1	pw-doctor
 C53-doctor-allowlist-shortform	pw-doctor.sh	case "${line#"$p"/}" in $allow_pat) n=$((n+1)) ;; esac	case "$line" in $allow_pat_zz) n=$((n+1)) ;; esac	T1	pw-doctor
 C54-preflight-availability-gate	pw-preflight.sh	_mr_err="$("$HERE/pw-config.sh" model-resolve --provider "$PROVIDER" --model "$MODEL" 2>&1 >/dev/null)" || _mr_rc=$?	_mr_rc=0	T1	pw-preflight
-C55-ladder-availability-text	skill/project-workflow/references/execution-and-routing.md	0. AVAILABILITY GATE first — on EVERY path, including resume:	0. AVAILABILITY GATE first — on execute paths only:	T4	-
+C55-ladder-availability-text	skills/model/pw-guide-workflow/references/execution-and-routing.md	0. AVAILABILITY GATE first — on EVERY path, including resume:	0. AVAILABILITY GATE first — on execute paths only:	T4	-
 C56-plan-exec-idi-reader	pw-common.sh	awk -F'|' -v idi="$idi" -v bei="$bei" '	awk -F'|' -v bei="$bei" '	T1	pw-preflight
 C57-audit-unbound-verdict	pw-status.sh	1) verdict="unbound" ;;	1) verdict="ok" ;;	T1	pw-status
 C58-session-check-task-form	pw-session.sh	[ -n "$slug" ] && [ -n "$task" ] || die "session-check: --project and --task go together → fix: session-check --project <slug> --task <T0n>"	[ -n "$slug" ] && [ -n "$task" ] && die "session-check: --project and --task go together → fix: session-check --project <slug> --task <T0n>"	T1	pw-session
-C59-supervision-contract-text	skill/project-workflow/references/execution-and-routing.md	**Headless supervision (never fire-and-forget):**	**Headless supervision (optional):**	T4	-
+C59-supervision-contract-text	skills/model/pw-guide-workflow/references/execution-and-routing.md	**Headless supervision (never fire-and-forget):**	**Headless supervision (optional):**	T4	-
 C60-model-resolve-exact-preferred	pw-config.sh	grep -F -x "$base" | head -1	grep -F -x "$prov/$base" | head -1	T1	pw-config
 C61-monitor-skipped-red	pw-ship.sh	      failed|FAILURE|failed|canceled|CANCELLED|failing)	      failed|FAILURE|failed|canceled|skipped|CANCELLED|SKIPPED|failing)	T1	pw-ship.t.sh
 C62-monitor-no-sha-select	pw-ship.sh	(if ($s | length) > 0 and (any(.[]?; has("sha"))) then (map(select(.sha == $s))) else . end) as $sel	(.) as $sel	T1	pw-ship.t.sh
 C63-template-ai-review-line-gone	../template/PROJECT.template.md	- **AI Review:** <AI_REVIEW_DEFAULT>	- **AI Review:** analysis=off	T4	-
 C64-scaffold-ai-review-render-dropped	scaffold.sh	_rl="${_rl//<AI_REVIEW_DEFAULT>/$ai_review_default_line}"	_rl="${_rl}"	T4	-
-C65-config-recipe-resumes	commands/pw-config.md	reviewing is not configuring;	reviewing is not configuring; legacy: /pw-review <slug> config plan auto	T4	-
+C65-config-recipe-resumes	skills/human/pw-config/SKILL.md	reviewing is not configuring;	reviewing is not configuring; legacy: /pw-review <slug> config plan auto	T4	-
 C66-task-accept-plan-sync-reverted	pw-status.sh	  if [ "$plan_status" != "accepted" ]; then	  if false; then	T1	pw-status
 C67-dashboard-fill-reverted	pw-mdlib.sh	    if grep -q '^ERR: no row with' "$errfile" 2>/dev/null \	    if false && grep -q '^ERR: no row with' "$errfile" 2>/dev/null \	T1	pw-status
 C68-dashboard-call-fatal	pw-status.sh	      echo "pw-status: warning: dashboard row for $task not updated (no row and no fillable placeholder) — task file + PLAN are the gate truth" >&2	      die "dashboard row for $task not updated"	T1	pw-status
@@ -150,13 +150,13 @@ C85-doctor-accepted-pin-history	scripts/entities/pw-project-doctor.sh	      if [
 C86-doctor-catalog-desc-strip	pw-common.sh	        "$bin" models 2>/dev/null | sed 's/ - .*//' || true	        "$bin" models 2>/dev/null || true	T1	pw-config
 C87-doclint-fix-hint-command-only	pw-doc.sh	"tell your agent to rebuild the dashboard task table from the task files (task-file truth is authoritative)"	"run: pw-doc.sh sync <slug> --dashboard-only (rebuilds the table from task-file truth)"	T4	-
 C88-codex-catalog-visibility	pw-common.sh	| grep '"visibility":"list"' \	| grep '"slug"' \	T1	pw-config
-C89-gen-commands-skill-layout	gen-commands.sh	    if [ "$style" = "skill" ]; then	    if false; then	T1	pw-common
-C90-skill-skips-flat-only	pw-common.sh	  [ "$(pw_provider_command_style "$1")" = "skill" ] || return 0	  return 0	T1	pw-common
+C89-gen-commands-skill-layout	gen-commands.sh	  if [ "$fmt" = "skill" ]; then	  if false; then	T1	pw-common
+C90-entry-format-dispatch	pw-common.sh	  declare -f "${1}_entry_format" >/dev/null 2>&1 && { "${1}_entry_format"; return 0; }	  declare -f "${1}_entry_format" >/dev/null 2>&1 && { echo command; return 0; }	T1	pw-common
 C91-codex-session-glob	scripts/entities/pw-session.sh	  for f in "$HOME"/.codex/sessions/*/*/*/*"$id"*.jsonl; do	  for f in "$HOME"/.codex/sessions/*"$id"*.jsonl; do	T1	pw-session
 C92-codex-args-substitution	pw-common.sh	"${bodytext//\{\{ARGS\}\}/<arguments>}"	"$bodytext"	T1	pw-common
 C93-model-resolve-codex-case	scripts/entities/pw-config.sh	    kilo|opencode|cursor|codex) ;;	    kilo|opencode|cursor) ;;	T1	pw-config
-C94-selected-review-command-regresses	commands/pw-review.md	pw-review.sh init-docs --project <slug> --file <artifact-rel-path>…	pw-review.sh init --project <slug> --file <artifact-rel-path>…	T4	-
-C95-reviewer-identity-becomes-orchestrator	commands/pw-review.md	The reviewer must confirm its own execution identity.	The reviewer uses the spawning agent's execution identity.	T4	-
+C94-selected-review-command-regresses	skills/human/pw-review/SKILL.md	pw-review.sh init-docs --project <slug> --file <artifact-rel-path>…	pw-review.sh init --project <slug> --file <artifact-rel-path>…	T4	-
+C95-reviewer-identity-becomes-orchestrator	skills/human/pw-review/SKILL.md	The reviewer must confirm its own execution identity.	The reviewer uses the spawning agent's execution identity.	T4	-
 C96-review-gate-ignores-open-work	scripts/entities/pw-review-read.sh	  if _review_approval_valid "$f"; then return 0; fi	  if _decision_is_approved "$decision"; then return 0; fi	T1	pw-review-read
 C97-review-read-lane-leaks	scripts/entities/pw-review-read.sh	      task-plan|task-exec|ship) [ "$lane" = task ] || continue ;;	      task-plan|task-exec|ship) : ;;	T1	pw-review-read
 C98-deep-open-heading-missed	scripts/lib/pw-mdlib.sh	      if (t == "OPEN" || t == "PENDING" || t == "CONFLICT") { found = 1 }	      if ($0 ~ /^### .*pw-item-status: open/) { found = 1 }	T1	pw-review-hardening
@@ -234,7 +234,7 @@ C169-preview-writes	pw-project-doctor.sh	if [ "$apply" -eq 0 ]; then	if [ "$appl
 C170-guidance-count-nonzero	pw-project-doctor.sh	PW_G_N="$n"	PW_G_N="$n"; [ "$PW_G_N" -eq 0 ] && PW_G_N=1	T1	^pw-guidance\.t\.sh$
 C171-tooling-deep-link	../docs/TOOLING.md	read [onboarding](../ONBOARDING.md).	read [onboarding](../tooling/AGENTS.md).	T4	-
 C172-preflight-accept-leak	pw-preflight.sh	die_fix "not all tasks are accepted:$UNACCEPTED" "acceptance is a human decision — tell your agent to \"accept $SLUG <T0n>\" (one step records the task file + PLAN row + dashboard), then re-run /pw-close"	die_fix "not all tasks are accepted:$UNACCEPTED" "a human accepts each shipped task — the mechanical way to set all three holders at once is: pw-status.sh task-accept $SLUG <T0n> (task file + PLAN row + dashboard; the decision to accept stays human)"	T4	-
-C173-relay-clause-revert	commands/pw-context.md	and the recovery as a `/pw-*` action — quote the raw error line too when it carries evidence.	and the recovery as a script rerun — quote the raw error line too when it carries evidence.	T4	-
+C173-relay-clause-revert	skills/human/pw-context/SKILL.md	and the recovery as a `/pw-*` action — quote the raw error line too when it carries evidence.	and the recovery as a script rerun — quote the raw error line too when it carries evidence.	T4	-
 C174-phasefix-close-leak	pw-preflight.sh	close) PHASE_FIX="close runs after acceptance (/pw-ship handles MRs; accept each done task — tell the agent to record it)"	close) PHASE_FIX="close runs after acceptance (/pw-ship handles MRs; accepted tasks then pw-status.sh status $SLUG done)"	T1	^pw-guidance\.t\.sh$
 C175-history-write-ctype-dropped	pw-shiplib.sh	['--method', 'PATCH' if github else 'PUT', '--input', '-', '-H', 'Content-Type: application/json']	['--method', 'PATCH' if github else 'PUT', '--input', '-']	T1	^pw-ship-history\.t\.sh$
 C176-guidance-rewind-rule-revert	pw-project-doctor.sh	`/pw-status rewind --project <slug> --phase <phase>`	`pw-status.sh status --project <slug> --phase <phase> --rewind`	T1	^pw-guidance\.t\.sh$
@@ -253,7 +253,7 @@ C188-rr-wrapper-close	pw-shiplib.sh	            + attempt['block'] + '</details>
 C189-rr-label-dash	pw-shiplib.sh	        return match.group(1) + ' - ' + match.group(2)	        return match.group(1) + ' ' + match.group(2)	T1	^pw-ship-history\.t\.sh$
 C190-rr-legacy-parse	pw-shiplib.sh	        elif inner.startswith('### '):	        elif False and inner.startswith('### '):	T1	^pw-ship-history\.t\.sh$
 C191-rr-draft-marker	pw-shiplib.sh	            lines.append('  - Draft : early feedback requested')	            pass	T1	^pw-ship-review-request\.t\.sh$
-C192-rr-command-routing	commands/pw-ship.md	returns BEFORE the pre-flight block	then run the pre-flight block	T4	-
+C192-rr-command-routing	skills/human/pw-ship/SKILL.md	returns BEFORE the pre-flight block	then run the pre-flight block	T4	-
 C193-ensure-input-conflict-guard	pw-context.sh	die "duplicate input rows for '$FILEV' disagree	: "duplicate input rows for '$FILEV' disagree	T1	^pw-context\.t\.sh$
 C194-ensure-key-backticks	pw-context.sh	    \`*\`) v="${v#\`}"; v="${v%\`}" ;;	    __never__) : ;;	T1	^pw-context\.t\.sh$
 C195-ensure-repo-marker-skip	pw-context.sh	    case "$cwhy" in *"pw-adopt-scope:"*) continue ;; esac	    :	T1	^pw-context\.t\.sh$
@@ -323,7 +323,7 @@ C255-pass-transition-approves	scripts/entities/pw-review.sh	      pw_signoff_row
 # wrapped operator-after-flag template, positional dispatch prose, maintainer helper signature).
 C256-walkthrough-slug-first-regresses	../docs/WALKTHROUGH.md	/pw-new --project delivery-note	/pw-new delivery-note	T4	-
 C257-template-operator-wraps-after-flag	../template/_REVIEW.template.md	— `/pw-review item --project <slug>	— `/pw-review --project <slug> item	T4	-
-C258-ship-dispatch-prose-positional	commands/pw-ship.md	skill. Arguments: {{ARGS}}. The first word selects the mode:	skill. Arguments: {{ARGS}} (first token = project slug; the word `comments` = MR-comment mode:	T4	-
+C258-ship-dispatch-prose-positional	skills/human/pw-ship/SKILL.md	skill. Arguments: {{ARGS}}. The first word selects the mode:	skill. Arguments: {{ARGS}} (first token = project slug; the word `comments` = MR-comment mode:	T4	-
 C259-maintainer-signature-slug-first	docs/scripts/status-and-preflight.md	pw-status.sh log --project <slug> --actor <a> --message <text…>	pw-status.sh log <slug> --actor <a> --message <text…>	T4	-
 # C260–C263 minted by the harness-state-correctness plan: resolver reads the LOCAL branch (not a
 # remote task ref), stacked children compare against their parent, worktree reuse verifies branch
@@ -340,20 +340,20 @@ C266-result-scope-lost	scripts/entities/pw-ship.sh	      p && !d && /^[*+-] Buil
 C267-forge-override-ignored	scripts/entities/pw-ship.sh	  if declare -p PW_FORGE_HOSTS >/dev/null 2>&1; then	  if false; then	T1	pw-ship.t.sh
 C268-comment-seen-evidence-marker	scripts/entities/pw-ship.sh	[ -n "$feedback$reply_id$head" ] && evmarker="<!-- pw-mr-ev:$thread;f=$feedback;r=$reply_id;h=$head -->"	[ -n "$feedback$reply_id$head" ] && evmarker=""	T1	pw-ship.t.sh
 C269-comment-seen-evidence-guard-vacuous	scripts/entities/pw-ship.sh	case "$_tok" in *[!A-Za-z0-9._:-]*)	case "" in *[!A-Za-z0-9._:-]*)	T1	pw-ship.t.sh
-C270-ship-resolve-optin-doctrine	commands/pw-ship.md	`--resolve` is a comment-mode-only switch	`--resolve` is a switch	T4	-
+C270-ship-resolve-optin-doctrine	skills/human/pw-ship/SKILL.md	`--resolve` is a comment-mode-only switch	`--resolve` is a switch	T4	-
 C271-rfc-comments-refuses-resolve	scripts/entities/pw-rfc.sh	die "comments: $a is not supported → fix: RFC comments are externally read-only; reply to and resolve the external thread yourself (only MR review via '/pw-ship comments … --resolve' closes threads)"	:	T1	pw-rfc.t.sh
-C272-ship-comments-ref-pointer-lost	commands/pw-ship.md	**Load `references/mr-comments.md`**	**Load the comments procedure**	T4	-
-C273-ship-request-review-ref-pointer-lost	commands/pw-ship.md	**Load `references/review-request.md`**	**Load the request-review procedure**	T4	-
-C274-request-review-observed-heads-guard-lost	skill/project-workflow/references/review-request.md	Compare `observed heads`	Skip the observed-heads step	T4	-
-C275-mr-comments-inherited-round-lost	skill/project-workflow/references/mr-comments.md	inherited-update round	inherited-update pass	T4	-
+C272-ship-comments-ref-pointer-lost	skills/human/pw-ship/SKILL.md	**Load `references/mr-comments.md`**	**Load the comments procedure**	T4	-
+C273-ship-request-review-ref-pointer-lost	skills/human/pw-ship/SKILL.md	**Load `references/review-request.md`**	**Load the request-review procedure**	T4	-
+C274-request-review-observed-heads-guard-lost	skills/model/pw-guide-workflow/references/review-request.md	Compare `observed heads`	Skip the observed-heads step	T4	-
+C275-mr-comments-inherited-round-lost	skills/model/pw-guide-workflow/references/mr-comments.md	inherited-update round	inherited-update pass	T4	-
 # C276–C282 minted by the context-review-and-repair plan: context apply preflight, default discovery,
 # the lane vocabulary, shared completion handoff, AI --surface selector, init-all guidance, and the
 # project guidance hint must all stay wired.
 C276-context-review-preflight-lane-dropped	scripts/entities/pw-preflight.sh	        context)	        context-disabled)	T1	pw-preflight.t.sh
 C277-context-default-discovery-dropped	scripts/entities/pw-preflight.sh	for _lane in analysis/review task/review context/review; do	for _lane in analysis/review task/review; do	T1	pw-preflight.t.sh
 C278-context-lane-word-list-dropped	scripts/entities/pw-preflight.sh	expected one of: context|analysis|plan|task-plan|task-exec|ship	expected one of: analysis|plan|task-plan|task-exec|ship	T1	pw-preflight.t.sh
-C279-context-completion-handoff-dropped	skill/project-workflow/references/context.md	Run the completion handoff exactly once after verification	Skip the completion handoff after verification	T4	-
-C280-ai-surface-selector-dropped	commands/pw-review.md	--surface <context|analysis|plan|task-plan|task-exec|ship|rfc|close>	--surface <context>	T4	-
+C279-context-completion-handoff-dropped	skills/model/pw-guide-workflow/references/context.md	Run the completion handoff exactly once after verification	Skip the completion handoff after verification	T4	-
+C280-ai-surface-selector-dropped	skills/human/pw-review/SKILL.md	--surface <context|analysis|plan|task-plan|task-exec|ship|rfc|close>	--surface <context>	T4	-
 C281-context-initall-message-regressed	scripts/entities/pw-review.sh	context readiness review is optional	no review files to initialize yet	T1	pw-review-states.t.sh
 C282-context-guidance-hint-dropped	scripts/entities/pw-project-doctor.sh	Assisted preparation also creates an optional feedback record at `review/CONTEXT.review.md`.	Assisted preparation creates no review record.	T4	-
 # C283–C288 minted by the sync auto conflict-resolution plan: keep-conflict handoff, finish marker guard,
@@ -364,7 +364,7 @@ C285-sync-bind-clean-guard-dropped	scripts/entities/pw-ship.sh	|| die "worktree 
 C286-sync-target-staleness-dropped	scripts/entities/pw-ship.sh	[ "$cur_target" = "$rec_target" ] ||	[ "$cur_target" = "$cur_target" ] ||	T1	pw-sync.t.sh
 C287-cascade-keep-handoff-dropped	scripts/entities/pw-ship.sh	if [ "$on_conflict" = keep ] && [ -n "$cpaths" ]; then	if false; then	T1	pw-stack.t.sh
 C288-sync-remote-head-staleness-dropped	scripts/entities/pw-ship.sh	[ "$cur_remote" = "$rec_remote" ] ||	[ "$cur_remote" = "$cur_remote" ] ||	T1	pw-sync.t.sh
-C289-sync-conflict-reference-pointer-lost	commands/pw-sync.md	references/sync-conflict-resolution.md	the conflict procedure	T4	-
+C289-sync-conflict-reference-pointer-lost	skills/human/pw-sync/SKILL.md	references/sync-conflict-resolution.md	the conflict procedure	T4	-
 C290-sync-second-repair-allowed	scripts/entities/pw-ship.sh	    die "repair budget exhausted for $work ($consumed/$limit) → fix: report the unresolved failure and its evidence instead of retrying; a new explicitly requested run uses a new work identity"	    true # repair budget guard removed by the mutation	T1	pw-sync.t.sh
 # C268-C270 continue slice 3: the pre-push creation capability probe, the Result-scoped
 # MR write, and mirroring a terminal MR state on a continuation write.
@@ -416,13 +416,13 @@ C319-repair-budget-ignores-limit	scripts/entities/pw-ship.sh	  if [ "$consume" =
 C320-repair-budget-not-persisted	scripts/entities/pw-ship.sh	    consumed=$((consumed + 1))	    consumed=$((consumed))	T1	pw-ship.t.sh
 C321-sync-one-sided-guard-dropped	scripts/entities/pw-ship.sh	[ -z "$one_sided" ] \	[ 1 = 1 ] \	T1	pw-sync.t.sh
 C322-sync-one-sided-reason-dropped	scripts/entities/pw-ship.sh	[ ${#allow[@]} -eq 0 ] || [ -n "$reason" ] \	[ 1 = 1 ] \	T1	pw-sync.t.sh
-C323-sync-two-sided-doctrine-dropped	skill/project-workflow/references/sync-conflict-resolution.md	Never resolve a path by choosing one side	Resolve by choosing one side	T4	-
+C323-sync-two-sided-doctrine-dropped	skills/model/pw-guide-workflow/references/sync-conflict-resolution.md	Never resolve a path by choosing one side	Resolve by choosing one side	T4	-
 C324-sync-dropped-addition-guard-dropped	scripts/entities/pw-ship.sh	[ -z "$dropped" ] \	[ 1 = 1 ] \	T1	pw-sync.t.sh
 C325-sync-owner-approval-dropped	scripts/entities/pw-ship.sh	[ ${#allow[@]} -eq 0 ] || [ "$owner_approved" = 1 ] \	[ 1 = 1 ] \	T1	pw-sync.t.sh
-C326-skill-readme-conditional	skill/project-workflow/SKILL.md	Read the bundle README only	Read `agentic-project-workflow/README.md` first	T4	-
-C327-execute-routing-reference-lost	commands/pw-execute.md	references/execution-and-routing.md	the execution routing reference	T4	-
-C328-orchestrator-ladder-pointer-lost	agents/pw-orchestrator.md	The shared skill ladder owns	The orchestrator derives all route mechanics itself	T4	-
-C329-provider-reference-conditional	commands/pw-execute.md	Same-provider routes do not load the provider guide.	Load the provider guide on every route.	T4	-
+C326-skill-readme-conditional	skills/model/pw-guide-workflow/SKILL.md	Read the bundle README only	Read `agentic-project-workflow/README.md` first	T4	-
+C327-execute-routing-reference-lost	skills/human/pw-execute/SKILL.md	references/execution-and-routing.md	the execution routing reference	T4	-
+C328-orchestrator-ladder-pointer-lost	skills/model/pw-orchestration/references/execution.md	The shared skill ladder owns	The orchestrator derives all route mechanics itself	T4	-
+C329-provider-reference-conditional	skills/human/pw-execute/SKILL.md	Same-provider routes do not load the provider guide.	Load the provider guide on every route.	T4	-
 C330-cursor-desktop-model-fallback	pw-common.sh	{ pw_cursor_cli_models; pw_cursor_config_models; } | awk 'NF && !seen[$0]++' || true	"$bin" models 2>/dev/null | sed 's/ - .*//' || true	T1	pw-common
 C331-cursor-probe-opt-in-dropped	scripts/entities/pw-config.sh	[ "$probe" = 1 ] || [ "${PW_CURSOR_PROBE:-0}" = 1 ]	[ "$probe" = 0 ] && [ "${PW_CURSOR_PROBE:-0}" = 0 ]	T1	pw-config
 C332-cursor-catalog-header-kept	pw-common.sh	sed -e '/^Available models$/d' -e 's/ - .*//' | awk 'NF' || true	sed 's/ - .*//' || true	T1	pw-common
@@ -438,8 +438,12 @@ C341-review-readiness-ignores-blocked-work	pw-common.sh	    [ "$found" = 1 ] || 
 C342-update-stability-guard-dropped	scripts/entities/pw-status.sh	  [ "$before" = "$after" ] || die "update: project records changed during assessment; nothing was written → fix: re-read the task result and retry"	  : # no stability check	T1	^pw-status\.t\.sh$
 C343-cursor-catalog-desc-strip-dropped	pw-common.sh	  "$bin" models 2>/dev/null | sed -e '/^Available models$/d' -e 's/ - .*//' | awk 'NF' || true	  "$bin" models 2>/dev/null | sed -e '/^Available models$/d' | awk 'NF' || true	T1	pw-config
 
-C344-breakdown-analysis-lint-selector	commands/pw-breakdown.md	{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind analysis --project <slug> --all || exit 1	{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind analysis --project <slug> || exit 1	T4	-
+C344-breakdown-analysis-lint-selector	skills/human/pw-breakdown/SKILL.md	{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind analysis --project <slug> --all --stage ready || exit 1	{{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind analysis --project <slug> || exit 1	T4	-
 C345-global-managed-value-guard-dropped	scripts/entities/pw-config.sh	  _global_safe_value "$val" \	  : # managed value guard dropped	T1	^pw-project-defaults\.t\.sh$
 C346-lint-stage-ready-ignored	scripts/entities/pw-doc.sh	  elif [ "$stage" = "ready" ]; then	  elif false; then	T1	^pw-project-defaults\.t\.sh$
 C347-repair-receipt-correlation-dropped	scripts/entities/pw-review.sh	  [ -z "$receipt" ] || { case "$actor" in *"receipt=$receipt"*) return 0 ;; *) return 1 ;; esac; }	  : # repair receipt correlation dropped	T1	^pw-project-defaults\.t\.sh$
 C348-recovery-unique-interior-proof-dropped	scripts/lib/pw-shiplib.sh	    need(len(occurrences) == 1, 'saved summary interior occurs ' + str(len(occurrences)) +	    need(True, 'saved summary interior occurs ' + str(len(occurrences)) +	T1	^pw-ship-history\.t\.sh$
+C349-exclusive-entry-format	pw-common.sh	declare -f claude_entry_format >/dev/null 2>&1 || claude_entry_format() { echo skill; }	declare -f claude_entry_format >/dev/null 2>&1 || claude_entry_format() { echo command; }	T4	-
+C350-entry-orchestration-load-dropped	skills/human/pw-execute/SKILL.md	**Load shared guidance first.** Read the `pw-orchestration` skill's common rules	**Load shared guidance first.** Read the `pw-guide-workflow` skill's common rules	T4	-
+C351-codex-manual-policy-lost	pw-common.sh	  printf 'policy:\n  allow_implicit_invocation: false\n'	  printf 'policy:\n  allow_implicit_invocation: true\n'	T4	-
+C352-orchestration-primary-claim	skills/model/pw-orchestration/SKILL.md	no custom primary agent	one managed primary agent	T4	-

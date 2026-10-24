@@ -163,11 +163,12 @@ reads as "can't check" and hides regressions).
 
 ## Writing a mutation row
 
-`expectations/mutations.tsv` columns: `id \t file(basename) \t OLD \t NEW \t tier \t only`.
-The `file` column is a **basename** — `_pwt_resolve` finds it under
-`tooling/scripts/{entities,lib,toolchain}/` or the tooling root — so a layout move never touches
-anchors; a code MOVE (entity consolidation) does: re-point `file` + `only` and re-verify in the
-same commit (S7).
+`expectations/mutations.tsv` columns: `id \t file \t OLD \t NEW \t tier \t only`.
+`_pwt_resolve` searches `tooling/scripts/{entities,lib,toolchain}/`, then the tooling root, then the
+repo root. A bare basename therefore survives a scripts layout move; an explicit relative path
+(e.g. `skills/human/pw-execute/SKILL.md` or `skills/model/pw-guide-workflow/references/review.md`)
+targets a nested source exactly. A code MOVE still needs `file` + `only` re-pointed and re-verified
+in the same commit (S7).
 
 1. `OLD` must be **byte-exact and unique** in the file — the apply step replaces *every*
    occurrence, and drift only detects absence. Check: `grep -cF '<OLD>' <file>` → `1`.

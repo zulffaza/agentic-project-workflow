@@ -116,6 +116,14 @@ static_t4() {
     # about the installed state of a real tree, and a red verdict here would make every
     # sweep child fail for a reason no mutation caused.
     pwtest_ok "T4 pw-doctor in-sync check skipped (disposable copy, not installed anywhere)"
+  elif [ -f "$TOOL/../.git" ]; then
+    # A git worktree is a development copy, never the installed source; its stamped paths cannot
+    # match the provider artifacts. The real installed tree (a .git DIRECTORY) runs the check.
+    pwtest_ok "T4 pw-doctor in-sync check skipped (development worktree)"
+  elif [ ! -f "$TOOL/../pw-env.sh" ] || ! grep -qF "export PW_HOME=\"$TOOL/..\"" "$TOOL/../pw-env.sh"; then
+    # A worktree or uninstalled export is not the provider's install source: its stamped paths
+    # can never match. This check belongs to the tree that actually owns the installed artifacts.
+    pwtest_ok "T4 pw-doctor in-sync check skipped (bundle tree is not the installed source)"
   elif env -u PWTEST_FORGE_STATE_FILE -u PW_PROJECTS_DIR -u PW_REPOS -u PW_PROJECTS PATH="$PWTEST_ORIG_PATH" "$(pwtest_script pw-doctor.sh)" >"$ROOT/doctor.out" 2>&1; then pwtest_ok "T4 pw-doctor reports in sync"
   else pwtest_bad "T4 pw-doctor reports in sync" "fix: $TOOL/pw-doctor.sh --fix — $(grep -i 'out of sync\|drift\|missing' "$ROOT/doctor.out" | head -1)"; fi
 
@@ -124,20 +132,20 @@ static_t4() {
   idx="$(sed -n '/^## Index/,/^## /p' "$TOOL/docs/scripts/README.md" 2>/dev/null | grep -oE '`pw-[a-z0-9-]+\.sh`' | tr -d '`' | sort -u)"
   known="$(printf '%s\n' $PWTEST_AUTOMATION | sort -u)"
   if [ "$idx" = "$known" ]; then pwtest_ok "T4 docs/scripts index == the automation registry" ; else pwtest_bad "T4 docs/scripts index == the automation registry" "diff: $(comm -3 <(printf '%s\n' "$known") <(printf '%s\n' "$idx") | tr '\n' ' ')"; fi
-  refs="$(grep -rhoE 'pw-[a-z-]+\.sh' "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" | sort -u)"
+  refs="$(grep -rhoE 'pw-[a-z-]+\.sh' "$TOOL/skills/human" "$TOOL/agents" "$TOOL/skills/model" | sort -u)"
   allow="$(awk -F'\t' '!/^#/ && $1 {print $1}' "$TOOL/tests/expectations/unwired.ok" 2>/dev/null | sort -u)"
   hits="$(comm -23 <(printf '%s\n' "$refs") <(printf '%s\n' "$known" "$allow" | sort -u) )"
   [ -z "$hits" ] && pwtest_ok "T4 entry paths reference only registry/allowlisted scripts" \
     || pwtest_bad "T4 entry paths reference known scripts" "$hits"
   local unreferenced="$(comm -13 <(printf '%s\n' "$refs" "$allow" | sort -u) <(printf '%s\n' "$known"))"
   [ -z "$unreferenced" ] && pwtest_ok "T4 every automation script wired to an entry path" \
-    || pwtest_bad "T4 every automation script wired" "unreferenced: $(printf '%s' "$unreferenced" | tr '\n' ' ') $(printf '%s\n' "$unreferenced" | while read -r z; do grep -l "$z" "$TOOL"/commands/* >/dev/null 2>&1 && echo "(in commands)"; done)"
+    || pwtest_bad "T4 every automation script wired" "unreferenced: $(printf '%s' "$unreferenced" | tr '\n' ' ') $(printf '%s\n' "$unreferenced" | while read -r z; do grep -l "$z" "$TOOL"/skills/human/*/SKILL.md >/dev/null 2>&1 && echo "(in commands)"; done)"
 
   # 2b) selector kinds need a selector: `pw-doc.sh lint --kind analysis|task` has no implicit
   #     "all". A preflight that omits --all/--file dies rc 2 before the phase can start (the
   #     /pw-breakdown block lost its --all during the named-flag migration and blocked every
   #     breakdown). Entry paths must spell the selector out.
-  hits="$(grep -rnE 'pw-doc\.sh lint --kind (analysis|task)( |$)' "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" \
+  hits="$(grep -rnE 'pw-doc\.sh lint --kind (analysis|task)( |$)' "$TOOL/skills/human" "$TOOL/agents" "$TOOL/skills/model" \
     | grep -vE -- '--all|--file' || true)"
   [ -z "$hits" ] && pwtest_ok "T4 canary: pw-doc lint analysis/task calls name their selector" \
     || pwtest_bad "T4 canary: pw-doc lint --kind analysis|task needs --all or --file" "$(printf '%s' "$hits" | head -2 | cut -c1-140 | tr '\n' '|')"
@@ -199,16 +207,16 @@ static_t4() {
 
   # 3e) the command relay clauses pin the command-only final-reply contract (plan 30): raw script
   # diagnostics stay in the agent's working context; the user reply carries cause + /pw-* recovery.
-  grep -qF 'final reply' "$TOOL/commands/pw-context.md" \
-    && grep -qF '/pw-*` action' "$TOOL/commands/pw-context.md" \
-    && grep -qF 'final reply' "$TOOL/commands/pw-review.md" \
+  grep -qF 'final reply' "$TOOL/skills/human/pw-context/SKILL.md" \
+    && grep -qF '/pw-*` action' "$TOOL/skills/human/pw-context/SKILL.md" \
+    && grep -qF 'final reply' "$TOOL/skills/human/pw-review/SKILL.md" \
     && pwtest_ok "T4 canary: command relay clauses pin the command-only final reply" \
     || pwtest_bad "T4 command reply boundary" "pw-context.md/pw-review.md lost the final-reply relay contract"
 
   # 3f) the agent-mediated operation contract (plan 52): one bridge rule in the loaded skill,
   # one closed update operator in the status command, and the vocabulary pinned in the writer.
-  grep -qF 'Agent-mediated operations' "$TOOL/skill/project-workflow/SKILL.md" \
-    && grep -qF 'pw-status update --project' "$TOOL/commands/pw-status.md" \
+  grep -qF 'Agent-mediated operations' "$TOOL/skills/model/pw-guide-workflow/SKILL.md" \
+    && grep -qF 'pw-status update --project' "$TOOL/skills/human/pw-status/SKILL.md" \
     && grep -qF 'PW_UPDATE_STATUSES="complete accepted review"' "$TOOL/scripts/entities/pw-status.sh" \
     && pwtest_ok "T4 canary: agent-mediated operation contract" \
     || pwtest_bad "T4 agent-mediated contract" "skill bridge rule, pw-status update forms, or the closed status vocabulary was removed"
@@ -217,7 +225,7 @@ static_t4() {
   # root *.md, template/, and tooling/docs (tooling/skill-internal is maintainer-facing, unshipped).
   hits=""
   for f in "$TOOL/../"*.md "$TOOL/../docs/"*.md "$TOOL/../template/"*.md "$TOOL/../template/"*/*.md \
-           "$TOOL"/commands/*.md "$TOOL"/agents/*.md "$TOOL"/skill/*/*.md "$TOOL"/skill/*/*/*.md \
+           "$TOOL"/skills/human/*/SKILL.md "$TOOL"/agents/*.md "$TOOL"/skills/model/*/*.md "$TOOL"/skills/model/*/*/*.md \
            "$TOOL"/docs/*.md "$TOOL"/docs/scripts/*.md; do
     [ -f "$f" ] && grep -qE '\b[Pp]lans?[ .-]?[1-9][0-9]\b|\bKI-[0-9]\b' "$f" && hits="$hits $f"
   done
@@ -243,19 +251,19 @@ static_t4() {
     || pwtest_bad "T4 canary: verify-failed token" "$(basename "$PWTEST_TEMPLATE_DIR") template lost it"
   # plan-17 doc-authoring doctrine canaries:
   # (a) the signoff operator's C4 human-only doctrine line lives in the command file…
-  grep -qF 'HUMAN-TRIGGERED ONLY' "$TOOL/commands/pw-review.md" \
+  grep -qF 'HUMAN-TRIGGERED ONLY' "$TOOL/skills/human/pw-review/SKILL.md" \
     && pwtest_ok "T4 canary: signoff C4 doctrine line in pw-review.md" \
     || pwtest_bad "T4 canary: signoff C4 doctrine line" "pw-review.md lost the 'HUMAN-TRIGGERED ONLY' label on the signoff operator — the gate doctrine's only command-side guard"
   # (b) …and NO agent file may ever invoke it (anti-idiom: agent-side path is auto-signoff only)
   hits="$(grep -lE 'pw-review\.sh signoff|pw-review-edit\.sh' "$TOOL"/agents/*.md 2>/dev/null | tr '\n' ' ')"
   [ -z "$hits" ] && pwtest_ok "T4 canary: no agent file invokes signoff" \
     || pwtest_bad "T4 canary: no agent file invokes signoff" "C4 violation in: $hits — only a human triggers a gate decision (agent path: pw-review.sh auto-signoff)"
-  grep -qF 'pw-review.sh init-docs --project <slug> --file <artifact-rel-path>' "$TOOL/commands/pw-review.md" \
-    && grep -qF '/pw-review init --project <project-slug> --file <artifact-rel-path>' "$TOOL/commands/pw-review.md" \
-    && ! grep -qF 'pw-review.sh init --project <slug> --file <artifact-rel-path>' "$TOOL/commands/pw-review.md" \
+  grep -qF 'pw-review.sh init-docs --project <slug> --file <artifact-rel-path>' "$TOOL/skills/human/pw-review/SKILL.md" \
+    && grep -qF '/pw-review init --project <project-slug> --file <artifact-rel-path>' "$TOOL/skills/human/pw-review/SKILL.md" \
+    && ! grep -qF 'pw-review.sh init --project <slug> --file <artifact-rel-path>' "$TOOL/skills/human/pw-review/SKILL.md" \
     && pwtest_ok "T4 canary: selected document command maps to list initialization" \
     || pwtest_bad "T4 canary: selected document command mapping" "public init must accept artifact paths and call init-docs, not the legacy review/doc pair API"
-  grep -qF "The reviewer must confirm its own execution identity." "$TOOL/commands/pw-review.md" \
+  grep -qF "The reviewer must confirm its own execution identity." "$TOOL/skills/human/pw-review/SKILL.md" \
     && grep -qF 'never substitute the configured model pin' "$TOOL/agents/pw-reviewer.md" \
     && pwtest_ok "T4 canary: AI identity belongs to the reviewer, not the orchestrator" \
     || pwtest_bad "T4 canary: actual AI reviewer identity" "review handoff must distinguish actual reviewer runtime identity from requested routing and the spawning agent"
@@ -282,7 +290,7 @@ static_t4() {
   local mapcmds treecmds
   mapcmds="$(sed -n 's/^HELP_PHASE_MAP="\(.*\)"$/\1/p' "$TOOL/scripts/entities/pw-help.sh")"
   mapcmds="$(printf '%s\n' "$mapcmds" | tr ';|' '\n\n' | tr ' ' '\n' | grep -E '^pw-[a-z0-9-]+$' | sort -u)"
-  treecmds="$(cd "$TOOL/commands" && ls *.md | sed 's/\.md$//' | sort -u)"
+  treecmds="$(cd "$TOOL/skills/human" && ls -d */ | sed 's#/##' | sort -u)"
   [ "$mapcmds" = "$treecmds" ] && pwtest_ok "T4 canary: pw-help phase map == the commands tree (forcing function)" \
     || pwtest_bad "T4 canary: pw-help phase map == commands tree" "$(comm -3 <(printf '%s\n' "$mapcmds") <(printf '%s\n' "$treecmds") | tr '\n' ' ') — add the command to HELP_PHASE_MAP in the same commit (conventions.md checklist)"
   grep -qF 'phase map' "$TOOL/docs/conventions.md" \
@@ -297,36 +305,36 @@ static_t4() {
 
   # (g) plan-22 routing-ladder canaries: the ONE ladder text lives in the skill reference and is
   # referenced (not re-described) by the entry paths…
-  grep -qF 'AVAILABILITY GATE first — on EVERY path, including resume:' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
-    && grep -qF 'Route resolution' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
-    && grep -qF 'Headless supervision (never fire-and-forget):' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
-    && grep -qF 'session-check' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
-    && grep -qF 'session-check' "$TOOL/skill/project-workflow/references/review.md" \
+  grep -qF 'AVAILABILITY GATE first — on EVERY path, including resume:' "$TOOL/skills/model/pw-guide-workflow/references/execution-and-routing.md" \
+    && grep -qF 'Route resolution' "$TOOL/skills/model/pw-guide-workflow/references/execution-and-routing.md" \
+    && grep -qF 'Headless supervision (never fire-and-forget):' "$TOOL/skills/model/pw-guide-workflow/references/execution-and-routing.md" \
+    && grep -qF 'session-check' "$TOOL/skills/model/pw-guide-workflow/references/execution-and-routing.md" \
+    && grep -qF 'session-check' "$TOOL/skills/model/pw-guide-workflow/references/review.md" \
     && pwtest_ok "T4 canary: one ladder + script-decided liveness in the skill reference" \
     || pwtest_bad "T4 canary: routing ladder text" "the ladder/availability-gate/session-check text died from execution-and-routing.md or review.md — commands must *reference* it, commands+agents+refs must not re-describe policy" ;\
-  grep -qF 'ladder' "$TOOL/commands/pw-ship.md" && grep -qF 'ladder' "$TOOL/commands/pw-review.md" \
-    && grep -qF 'model-resolve' "$TOOL/commands/pw-execute.md" \
+  grep -qF 'ladder' "$TOOL/skills/human/pw-ship/SKILL.md" && grep -qF 'ladder' "$TOOL/skills/human/pw-review/SKILL.md" \
+    && grep -qF 'model-resolve' "$TOOL/skills/human/pw-execute/SKILL.md" \
     && pwtest_ok "T4 canary: entry paths reference the ladder (no per-command policy rewording)" \
     || pwtest_bad "T4 canary: entry-path ladder references" "pw-ship/pw-review lost the ladder reference, or pw-execute lost the availability gate"
   # request-review routing: the read-only message mode must stay documented in /pw-ship and must
   # stay positioned BEFORE the ship pre-flight (its tokens are a selector, not ship task IDs).
-  grep -qF 'pw-ship.sh request-review' "$TOOL/commands/pw-ship.md" \
-    && grep -qF 'returns BEFORE the pre-flight block' "$TOOL/commands/pw-ship.md" \
-    && grep -qF -- '--prose <file>' "$TOOL/commands/pw-ship.md" \
+  grep -qF 'pw-ship.sh request-review' "$TOOL/skills/human/pw-ship/SKILL.md" \
+    && grep -qF 'returns BEFORE the pre-flight block' "$TOOL/skills/human/pw-ship/SKILL.md" \
+    && grep -qF -- '--prose <file>' "$TOOL/skills/human/pw-ship/SKILL.md" \
     && pwtest_ok "T4 canary: pw-ship request-review routing text" \
     || pwtest_bad "T4 canary: pw-ship request-review routing" "the read-only request-review mode (selector mapping, pre-flight ordering, --prose flow) died from the command file"
   # sync opt-in conflict resolution (plan 48): the boolean flag, the default-abort contract, and
   # the conditionally loaded procedure must all stay wired; the procedure must keep the
   # deterministic finish/bind path rather than re-describing a raw edit-and-push loop.
-  grep -qF -- '[--auto-resolve]' "$TOOL/commands/pw-sync.md" \
-    && grep -qF 'Conflict without the flag?' "$TOOL/commands/pw-sync.md" \
-    && grep -qF 'references/sync-conflict-resolution.md' "$TOOL/commands/pw-sync.md" \
-    && grep -qF 'sync-finish' "$TOOL/skill/project-workflow/references/sync-conflict-resolution.md" \
-    && grep -qF 'sync-bind' "$TOOL/skill/project-workflow/references/sync-conflict-resolution.md" \
-    && grep -qF 'Never resolve a path by choosing one side' "$TOOL/skill/project-workflow/references/sync-conflict-resolution.md" \
-    && grep -qF 'Preserve both sides' "$TOOL/commands/pw-sync.md" \
-    && grep -qF -- '--allow-one-sided' "$TOOL/skill/project-workflow/references/sync-conflict-resolution.md" \
-    && grep -qF -- '--owner-approved' "$TOOL/skill/project-workflow/references/sync-conflict-resolution.md" \
+  grep -qF -- '[--auto-resolve]' "$TOOL/skills/human/pw-sync/SKILL.md" \
+    && grep -qF 'Conflict without the flag?' "$TOOL/skills/human/pw-sync/SKILL.md" \
+    && grep -qF 'references/sync-conflict-resolution.md' "$TOOL/skills/human/pw-sync/SKILL.md" \
+    && grep -qF 'sync-finish' "$TOOL/skills/model/pw-guide-workflow/references/sync-conflict-resolution.md" \
+    && grep -qF 'sync-bind' "$TOOL/skills/model/pw-guide-workflow/references/sync-conflict-resolution.md" \
+    && grep -qF 'Never resolve a path by choosing one side' "$TOOL/skills/model/pw-guide-workflow/references/sync-conflict-resolution.md" \
+    && grep -qF 'Preserve both sides' "$TOOL/skills/human/pw-sync/SKILL.md" \
+    && grep -qF -- '--allow-one-sided' "$TOOL/skills/model/pw-guide-workflow/references/sync-conflict-resolution.md" \
+    && grep -qF -- '--owner-approved' "$TOOL/skills/model/pw-guide-workflow/references/sync-conflict-resolution.md" \
     && pwtest_ok "T4 canary: sync opt-in conflict resolution wiring" \
     || pwtest_bad "T4 canary: sync opt-in conflict resolution wiring" "the --auto-resolve flag, default-abort text, reference pointer, finish/bind procedure, or two-sided preservation rule died"
   # assisted preparation writes an optional feedback record; the doctor must say so, or the
@@ -337,36 +345,36 @@ static_t4() {
   # generation-prompt wiring: the two-call prose flow must name the editable prompt files and the
   # observed-head comparison — losing either re-opens ungrounded prose generation. The procedure
   # lives in the request-review reference; the command must still point at it.
-  grep -qF '**Load `references/review-request.md`**' "$TOOL/commands/pw-ship.md" \
-    && grep -qF 'references/review-request.md' "$TOOL/commands/pw-ship.md" \
-    && grep -qF 'user/prompts/review-request-summary.md' "$TOOL/skill/project-workflow/references/review-request.md" \
-    && grep -qF 'PW_REVIEW_REQUEST_NOTE_PROMPT_FILE' "$TOOL/skill/project-workflow/references/review-request.md" \
-    && grep -qF 'Compare `observed heads`' "$TOOL/skill/project-workflow/references/review-request.md" \
+  grep -qF '**Load `references/review-request.md`**' "$TOOL/skills/human/pw-ship/SKILL.md" \
+    && grep -qF 'references/review-request.md' "$TOOL/skills/human/pw-ship/SKILL.md" \
+    && grep -qF 'user/prompts/review-request-summary.md' "$TOOL/skills/model/pw-guide-workflow/references/review-request.md" \
+    && grep -qF 'PW_REVIEW_REQUEST_NOTE_PROMPT_FILE' "$TOOL/skills/model/pw-guide-workflow/references/review-request.md" \
+    && grep -qF 'Compare `observed heads`' "$TOOL/skills/model/pw-guide-workflow/references/review-request.md" \
     && pwtest_ok "T4 canary: pw-ship generation-prompt wiring text" \
     || pwtest_bad "T4 canary: pw-ship generation-prompt wiring" "the command lost its request-review reference, or the editable prompt files / observed-head comparison died from the request-review reference"
   # the review command must offer the whole --surface list: a narrowed list silently drops
   # surfaces the agent can select (the surface vocabulary is the review scope contract).
-  grep -qF '[--surface <context|analysis|plan|task-plan|task-exec|ship|rfc|close>' "$TOOL/commands/pw-review.md" \
+  grep -qF '[--surface <context|analysis|plan|task-plan|task-exec|ship|rfc|close>' "$TOOL/skills/human/pw-review/SKILL.md" \
     && pwtest_ok "T4 canary: pw-review offers the full --surface list" \
     || pwtest_bad "T4 canary: pw-review --surface list" "the --surface vocabulary in pw-review.md lost a surface; the list is the review scope contract"
   # named dispatch + entry-before-assessment doctrine (plan 46): the ship command selects modes by
   # operation word (never an ordinal argument slot), and every reviewer instruction surface keeps
   # the correlated pass entry strictly before assessment.
-  grep -qF 'The first word selects the mode:' "$TOOL/commands/pw-ship.md" \
-    && ! grep -qF '2nd argument' "$TOOL/commands/pw-ship.md" \
+  grep -qF 'The first word selects the mode:' "$TOOL/skills/human/pw-ship/SKILL.md" \
+    && ! grep -qF '2nd argument' "$TOOL/skills/human/pw-ship/SKILL.md" \
     && pwtest_ok "T4 canary: ship dispatch prose selects operation words" \
     || pwtest_bad "T4 canary: ship dispatch prose" "pw-ship.md lost the first-word dispatch contract (or an ordinal-slot phrase returned)"
-  grep -qF 'FIRST records the entry with' "$TOOL/commands/pw-review.md" \
+  grep -qF 'FIRST records the entry with' "$TOOL/skills/human/pw-review/SKILL.md" \
     && grep -qF 'and FIRST record that' "$TOOL/agents/pw-reviewer.md" \
-    && grep -qF 'comes before assessment' "$TOOL/skill/pw-review/SKILL.md" \
+    && grep -qF 'comes before assessment' "$TOOL/skills/model/pw-guide-review-method/SKILL.md" \
     && pwtest_ok "T4 canary: reviewer entry precedes assessment in every instruction surface" \
     || pwtest_bad "T4 canary: entry-before-assessment routing" "a reviewer instruction surface lost the entry-first contract"
   # context review completion parity (plan 44): the shared preparation reference and the command
   # dispatcher must both carry the optional record + completion handoff, and init-all must not send
   # users to analysis as the first reviewable artifact.
-  grep -qF 'Run the completion handoff exactly once after verification' "$TOOL/skill/project-workflow/references/context.md" \
-    && grep -qF 'Completion review — only when configured' "$TOOL/commands/pw-context.md" \
-    && grep -qF 'Ensure the optional separate readiness record when a brief exists' "$TOOL/skill/project-workflow/references/context.md" \
+  grep -qF 'Run the completion handoff exactly once after verification' "$TOOL/skills/model/pw-guide-workflow/references/context.md" \
+    && grep -qF 'Completion review — only when configured' "$TOOL/skills/human/pw-context/SKILL.md" \
+    && grep -qF 'Ensure the optional separate readiness record when a brief exists' "$TOOL/skills/model/pw-guide-workflow/references/context.md" \
     && pwtest_ok "T4 canary: context preparation carries the review handoff" \
     || pwtest_bad "T4 canary: context review handoff" "a preparation instruction surface lost the record/completion contract"
   grep -qF 'context readiness review is optional' "$TOOL/scripts/entities/pw-review.sh" \
@@ -396,7 +404,7 @@ static_t4() {
     || pwtest_bad "T4 canary: no tracked user customization" "tracked: $_tracked — untrack it with git rm --cached (the local file stays)"
   # …and the RETIRED repair-routing policy text never creeps back (resume-first default, the `!`
   # shorthand, the dropped global flag, the merged fourth Route value, the producer-resume clause).
-  hits="$(grep -rlE 'Execute with!|PW_STRICT_MODELS|Route: resume|resume that producer|batched, resume-first|batched \+ resume-first' "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" "$TOOL/docs" 2>/dev/null | tr '\n' ' ')"
+  hits="$(grep -rlE 'Execute with!|PW_STRICT_MODELS|Route: resume|resume that producer|batched, resume-first|batched \+ resume-first' "$TOOL/skills/human" "$TOOL/agents" "$TOOL/skills/model" "$TOOL/docs" 2>/dev/null | tr '\n' ' ')"
   [ -z "$hits" ] && pwtest_ok "T4 canary: retired repair-routing text stays retired" \
     || pwtest_bad "T4 canary: retired repair-routing text" "reappeared in: $hits"
 
@@ -412,7 +420,7 @@ static_t4() {
     || pwtest_bad "T4 canary: scaffold AI-Review render" "scaffold.sh no longer seds <AI_REVIEW_DEFAULT> — the template token would ship unexpanded"
   # (i) the configuration domain left /pw-review for /pw-config — the retired recipe form must
   # never resurface in any published surface (pattern kept backtick-free: it runs unquoted).
-  hits="$(grep -rlE 'pw-review [^ ]+ config (model|analysis|plan|task-plan|task-exec|ship|<phase>)' "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" "$TOOL/docs" "$TOOL/../docs" "$TOOL/../README.md" "$TOOL/../AGENTS.md" 2>/dev/null | tr '\n' ' ')"
+  hits="$(grep -rlE 'pw-review [^ ]+ config (model|analysis|plan|task-plan|task-exec|ship|<phase>)' "$TOOL/skills/human" "$TOOL/agents" "$TOOL/skills/model" "$TOOL/docs" "$TOOL/../docs" "$TOOL/../README.md" "$TOOL/../AGENTS.md" 2>/dev/null | tr '\n' ' ')"
   [ -z "$hits" ] && pwtest_ok "T4 canary: retired /pw-review config recipes stay retired" \
     || pwtest_bad "T4 canary: retired config recipes" "reappeared in: $hits — configuration lives on /pw-config"
 
@@ -438,32 +446,32 @@ static_t4() {
   # carry the stacked branch where the old wording was independent-only (selection, target, diff,
   # merged-parent settle-before-remove, no-comment cascade, fixer ordering) — a regression there
   # would re-describe policy the scripts no longer follow.
-  grep -qF 'transitive stack descendants' "$TOOL/skill/project-workflow/references/mr-comments.md" \
-    && grep -qF 'effective target' "$TOOL/commands/pw-ship.md" \
-    && grep -qF 'never** fixed concurrently' "$TOOL/skill/project-workflow/references/mr-comments.md" \
-    && grep -qF 'transitive stack descendants' "$TOOL/commands/pw-sync.md" \
-    && grep -qF 'settle the stack before removing' "$TOOL/commands/pw-sync.md" \
-    && grep -qF 'effective target' "$TOOL/commands/pw-sync.md" \
-    && grep -qF 'never concurrently' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
+  grep -qF 'transitive stack descendants' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
+    && grep -qF 'effective target' "$TOOL/skills/human/pw-ship/SKILL.md" \
+    && grep -qF 'never** fixed concurrently' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
+    && grep -qF 'transitive stack descendants' "$TOOL/skills/human/pw-sync/SKILL.md" \
+    && grep -qF 'settle the stack before removing' "$TOOL/skills/human/pw-sync/SKILL.md" \
+    && grep -qF 'effective target' "$TOOL/skills/human/pw-sync/SKILL.md" \
+    && grep -qF 'never concurrently' "$TOOL/skills/model/pw-guide-workflow/references/execution-and-routing.md" \
     && pwtest_ok "T4 canary: ship/sync commands carry the stacked-policy branches" \
     || pwtest_bad "T4 canary: ship/sync stacked-policy branches" "a stacked branch died from pw-ship.md/pw-sync.md/mr-comments.md or the routing ladder — the command prose fell back to independent-only instructions the scripts no longer match"
 
   # (l) the commands bind verification/landing through the deterministic operators: stack-verify is
   # the only verification writer the execution path names, promotion uses stack-retarget, and no
   # command asks the generic stack-record to certify a verified_head.
-  grep -qF 'stack-verify --project <slug> --task <T0n>' "$TOOL/commands/pw-execute.md" \
-    && grep -qF 'stack-retarget' "$TOOL/commands/pw-sync.md" \
-    && ! grep -qE 'stack-record [^`]*verified_head=' "$TOOL/commands/pw-execute.md" \
+  grep -qF 'stack-verify --project <slug> --task <T0n>' "$TOOL/skills/human/pw-execute/SKILL.md" \
+    && grep -qF 'stack-retarget' "$TOOL/skills/human/pw-sync/SKILL.md" \
+    && ! grep -qE 'stack-record [^`]*verified_head=' "$TOOL/skills/human/pw-execute/SKILL.md" \
     && pwtest_ok "T4 canary: commands bind verification via stack-verify and promote via stack-retarget" \
     || pwtest_bad "T4 canary: stack verification wiring" "pw-execute.md must call stack-verify (not stack-record verified_head=) and pw-sync.md must call stack-retarget"
 
   # (m) the cascade/history interop stays wired in prose: the command protocol names the
   # deterministic cascade + inherited-update writers (descendants update without fabricated
   # reviewer requests, as a distinct inherited round) and the maintainer doc lists the cascade.
-  grep -qF 'references/mr-comments.md' "$TOOL/commands/pw-ship.md" \
-    && grep -qF 'stack-cascade' "$TOOL/skill/project-workflow/references/mr-comments.md" \
-    && grep -qF 'stack-inherited' "$TOOL/skill/project-workflow/references/mr-comments.md" \
-    && grep -qF 'inherited-update round' "$TOOL/skill/project-workflow/references/mr-comments.md" \
+  grep -qF 'references/mr-comments.md' "$TOOL/skills/human/pw-ship/SKILL.md" \
+    && grep -qF 'stack-cascade' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
+    && grep -qF 'stack-inherited' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
+    && grep -qF 'inherited-update round' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
     && grep -qF 'stack-cascade' "$TOOL/docs/scripts/ship-and-sync.md" \
     && pwtest_ok "T4 canary: stack cascade + inherited-update writers named in command and maintainer docs" \
     || pwtest_bad "T4 canary: stack cascade wiring" "pw-ship.md must point at references/mr-comments.md, which must name stack-cascade/stack-inherited (distinct inherited-update round), and ship-and-sync.md must list stack-cascade"
@@ -488,13 +496,13 @@ static_t4() {
   [ "$ents" = "$known" ] && pwtest_ok "T4: scripts/entities/ == the registry (L1)" \
     || pwtest_bad "T4: scripts/entities/ == registry" "$(comm -3 <(printf '%s\n' "$known") <(printf '%s\n' "$ents") | tr '\n' ' ')"
   # (c) libraries invisible to callers (L2)
-  hits="$(grep -rl 'scripts/lib/' "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" 2>/dev/null | tr '\n' ' ')"
+  hits="$(grep -rl 'scripts/lib/' "$TOOL/skills/human" "$TOOL/agents" "$TOOL/skills/model" 2>/dev/null | tr '\n' ' ')"
   [ -z "$hits" ] && pwtest_ok "T4: no entry path references scripts/lib/ (L2)" \
     || pwtest_bad "T4: no entry path references scripts/lib/" "$hits"
   # (d) toolchain allowlist (L3): entry paths may name scripts/toolchain/ only per toolchain.ok
   local ok f2 pair hits2=""
   ok="$TOOL/tests/expectations/toolchain.ok"
-  hits2="$(grep -rlE 'scripts/toolchain/[a-z-]+\.sh' "$TOOL/commands" "$TOOL/agents" "$TOOL/skill" 2>/dev/null | while read -r f2; do
+  hits2="$(grep -rlE 'scripts/toolchain/[a-z-]+\.sh' "$TOOL/skills/human" "$TOOL/agents" "$TOOL/skills/model" 2>/dev/null | while read -r f2; do
       grep -ohE 'scripts/toolchain/[a-z-]+\.sh' "$f2" | sed "s|^|${f2#$TOOL/}\t|"
     done | sort -u)"
   known="$(grep -v '^#' "$ok" 2>/dev/null | sort -u)"
@@ -524,7 +532,7 @@ for f in glob.glob(tool + "/scripts/entities/pw-*.sh"):
     ents[os.path.basename(f)] = set(re.findall(r'^ {2,4}([a-z][a-z0-9-]*)\)', open(f).read(), re.M))
 globops = set().union(*ents.values())
 hits = set()
-for r in [tool+"/commands", tool+"/agents", tool+"/skill", tool+"/docs", root+"/docs", root+"/template"]:
+for r in [tool+"/skills/human", tool+"/agents", tool+"/skills/model", tool+"/docs", root+"/docs", root+"/template"]:
     for dp, _, fs in os.walk(r):
         for fn in fs:
             if not fn.endswith(".md"): continue
@@ -539,12 +547,50 @@ PY
    [ -z "$xref" ] && pwtest_ok "T4: entity refs use that entity's own operators (L5c)" \
      || pwtest_bad "T4: entity refs vs operator sets" "misattributed operators: $xref — L5c: the entity owning the artifact owns the operator"
 
+  # (g2) plan 29: human-entry / shared-skill split, exclusive provider output, no primary agent.
+  local hcount mcount missing_entry bad_entry rendered
+  hcount="$(ls -d "$TOOL/skills/human"/*/ 2>/dev/null | wc -l | tr -d ' ')"
+  mcount="$(ls -d "$TOOL/skills/model"/*/ 2>/dev/null | wc -l | tr -d ' ')"
+  [ "$hcount" = 18 ] && [ "$mcount" = 4 ] \
+    && pwtest_ok "T4 canary: 18 human entries and 4 shared skills (plan 29)" \
+    || pwtest_bad "T4 canary: skill inventory" "expected 18 human + 4 shared; got $hcount + $mcount"
+  missing_entry="$(grep -L '`pw-orchestration`' "$TOOL"/skills/human/*/SKILL.md 2>/dev/null | tr '\n' ' ')"
+  [ -z "$missing_entry" ] \
+    && pwtest_ok "T4 canary: every human entry loads the shared orchestration rules" \
+    || pwtest_bad "T4 canary: orchestration wiring" "entry files without the orchestration load: $missing_entry"
+  [ -f "$TOOL/skills/model/pw-orchestration/references/common.md" ] \
+    && [ -f "$TOOL/skills/model/pw-orchestration/references/execution.md" ] \
+    && grep -qF 'no custom primary agent' "$TOOL/skills/model/pw-orchestration/SKILL.md" \
+    && ! ls "$TOOL/agents/pw-orchestrator.md" >/dev/null 2>&1 \
+    && [ "$(ls "$TOOL"/agents/pw-*.md | wc -l | tr -d ' ')" = 5 ] \
+    && pwtest_ok "T4 canary: normal-session orchestration with five workers and no primary agent" \
+    || pwtest_bad "T4 canary: orchestration inventory" "orchestration references/declaration missing, or the agent set is not exactly five workers"
+  rendered="$ROOT/plan29-entries"
+  "$TOOL/scripts/toolchain/gen-commands.sh" --outdir "$rendered" claude cursor codex kilo opencode >/dev/null 2>&1
+  bad_entry=""
+  for _pf in claude cursor; do
+    [ "$(ls -d "$rendered/$_pf"/*/ 2>/dev/null | wc -l | tr -d ' ')" = 18 ] || bad_entry="$bad_entry $_pf:skill-count"
+    grep -qF 'disable-model-invocation: true' "$rendered/$_pf/pw-execute/SKILL.md" 2>/dev/null || bad_entry="$bad_entry $_pf:explicit-only"
+    ls "$rendered/$_pf"/*.md >/dev/null 2>&1 && bad_entry="$bad_entry $_pf:command-files"
+  done
+  [ "$(ls -d "$rendered/codex"/*/ 2>/dev/null | wc -l | tr -d ' ')" = 18 ] || bad_entry="$bad_entry codex:skill-count"
+  grep -qF 'allow_implicit_invocation: false' "$rendered/codex/pw-execute/agents/openai.yaml" 2>/dev/null || bad_entry="$bad_entry codex:policy"
+  grep -qF '<arguments>' "$rendered/codex/pw-execute/SKILL.md" 2>/dev/null || bad_entry="$bad_entry codex:args-token"
+  grep -qF '$ARGUMENTS' "$rendered/codex/pw-execute/SKILL.md" 2>/dev/null && bad_entry="$bad_entry codex:claude-token"
+  for _pf in kilo opencode; do
+    [ "$(ls "$rendered/$_pf"/*.md 2>/dev/null | wc -l | tr -d ' ')" = 18 ] || bad_entry="$bad_entry $_pf:command-count"
+    ls -d "$rendered/$_pf"/pw-*/ >/dev/null 2>&1 && bad_entry="$bad_entry $_pf:entry-skills"
+  done
+  [ -z "$bad_entry" ] \
+    && pwtest_ok "T4 canary: exclusive provider output (skills-only claude/cursor/codex, commands-only kilo/opencode)" \
+    || pwtest_bad "T4 canary: exclusive provider output" "unexpected artifacts:$bad_entry"
+
   # (h) codex provider doctrine (plan 28): codex is the FIRST built-in with no native command
   # surface (custom prompts removed upstream in codex-cli 0.117.0) — its /pw-* commands are
   # generated SKILL DIRS in the shared skills root. The layout hook, the derived D13 skip
   # policy, the config.toml hands-off rule, and offboard's built-in list are one contract.
-  grep -qF 'pw_provider_command_style' "$TOOL/scripts/toolchain/gen-commands.sh" \
-    && grep -qF 'codex_command_style' "$TOOL/scripts/lib/pw-common.sh" \
+  grep -qF 'pw_provider_entry_format' "$TOOL/scripts/toolchain/gen-commands.sh" \
+    && grep -qF 'codex_entry_format' "$TOOL/scripts/lib/pw-common.sh" \
     && grep -qF 'pw_skill_skips_for' "$TOOL/scripts/lib/pw-common.sh" \
     && grep -qF 'NEVER write ~/.codex/config.toml' "$TOOL/scripts/lib/pw-common.sh" \
     && grep -qF 'KNOWN_PROVIDERS=(claude kilo opencode cursor codex)' "$TOOL/../offboard.sh" \
@@ -559,9 +605,8 @@ PY
     README.md AGENTS.md CLAUDE.md ONBOARDING.md \
     docs/*.md template/*.md template/*/*.md \
     tooling/README.md tooling/AGENTS.md tooling/CLAUDE.md \
-    tooling/commands/*.md tooling/agents/*.md \
+    tooling/skills/human/*/SKILL.md tooling/skills/model/*/SKILL.md tooling/skills/model/*/*/*.md tooling/agents/*.md \
     tooling/docs/*.md tooling/docs/scripts/*.md \
-    tooling/skill/*/*.md tooling/skill/*/*/*.md \
     tooling/skill-internal/*/*.md tooling/skill-internal/*/*/*.md 2>/dev/null | sort -u \
     | while read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done)"
   na_cand="$(cd "$TOOL/.." && grep -nH '/pw-' $na_files 2>/dev/null | grep -vE '^[^:]*:[0-9]+:#' || true)"
@@ -599,51 +644,51 @@ PY
   # (n) opt-in review-thread resolution (plan 49): `/pw-ship … comments` leaves handled threads OPEN
   # by default and closes them only under `--resolve`; the RFC comment flow stays externally
   # read-only and refuses a resolve flag. Losing either half re-opens silent auto-resolution.
-  grep -qF '`--resolve` is a comment-mode-only switch' "$TOOL/commands/pw-ship.md" \
-    && grep -qF 'leaves every thread open for your review' "$TOOL/commands/pw-ship.md" \
-    && ! grep -qF 'also explicitly resolve it:' "$TOOL/commands/pw-ship.md" \
-    && ! grep -qE '^args:.*--resolve' "$TOOL/commands/pw-rfc.md" \
+  grep -qF '`--resolve` is a comment-mode-only switch' "$TOOL/skills/human/pw-ship/SKILL.md" \
+    && grep -qF 'leaves every thread open for your review' "$TOOL/skills/human/pw-ship/SKILL.md" \
+    && ! grep -qF 'also explicitly resolve it:' "$TOOL/skills/human/pw-ship/SKILL.md" \
+    && ! grep -qE '^args:.*--resolve' "$TOOL/skills/human/pw-rfc/SKILL.md" \
     && grep -qF 'RFC comments are externally read-only' "$TOOL/scripts/entities/pw-rfc.sh" \
     && pwtest_ok "T4 canary: opt-in thread resolution + read-only RFC comments" \
     || pwtest_bad "T4 canary: opt-in thread resolution" "pw-ship.md lost the --resolve-opt-in contract (or an unconditional resolve instruction returned), or the RFC comment flow started advertising/accepting resolution"
 
   # (q) the bundle README is optional navigation, not an unconditional prompt payload.
-  ! grep -qF 'Read `agentic-project-workflow/README.md` first' "$TOOL/../tooling/skill/project-workflow/SKILL.md" \
-    && grep -qF 'Read the bundle README only' "$TOOL/../tooling/skill/project-workflow/SKILL.md" \
-    && grep -qF 'when you need its user-facing overview or onboarding path' "$TOOL/../tooling/skill/project-workflow/SKILL.md" \
+  ! grep -qF 'Read `agentic-project-workflow/README.md` first' "$TOOL/../tooling/skills/model/pw-guide-workflow/SKILL.md" \
+    && grep -qF 'Read the bundle README only' "$TOOL/../tooling/skills/model/pw-guide-workflow/SKILL.md" \
+    && grep -qF 'when you need its user-facing overview or onboarding path' "$TOOL/../tooling/skills/model/pw-guide-workflow/SKILL.md" \
     && pwtest_ok "T4 canary: user README is conditional, not loaded on every workflow invocation" \
     || pwtest_bad "T4 canary: conditional README loading" "the skill must not require a blanket README read; keep the conditional overview/onboarding pointer"
 
   # (r) execute routes through the existing ladder/provider contract; detailed routing and CLI
   # gotchas stay in those canonical references instead of being duplicated in the command.
-  grep -qF 'references/execution-and-routing.md' "$TOOL/commands/pw-execute.md" \
-    && grep -qF 'tooling/docs/providers.md' "$TOOL/commands/pw-execute.md" \
-    && grep -qF 'only' "$TOOL/commands/pw-execute.md" \
-    && grep -qF 'resolved cross-provider/headless route' "$TOOL/commands/pw-execute.md" \
-    && grep -qF 'Same-provider routes do not load the provider guide.' "$TOOL/commands/pw-execute.md" \
-    && grep -qF 'only when the' "$TOOL/commands/pw-execute.md" \
-    && grep -qF 'task declares either field' "$TOOL/commands/pw-execute.md" \
-    && grep -qF 'model-resolve' "$TOOL/commands/pw-execute.md" \
-    && grep -qF 'PW_HEADLESS_STALL' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
+  grep -qF 'references/execution-and-routing.md' "$TOOL/skills/human/pw-execute/SKILL.md" \
+    && grep -qF 'tooling/docs/providers.md' "$TOOL/skills/human/pw-execute/SKILL.md" \
+    && grep -qF 'only' "$TOOL/skills/human/pw-execute/SKILL.md" \
+    && grep -qF 'resolved cross-provider/headless route' "$TOOL/skills/human/pw-execute/SKILL.md" \
+    && grep -qF 'Same-provider routes do not load the provider guide.' "$TOOL/skills/human/pw-execute/SKILL.md" \
+    && grep -qF 'only when the' "$TOOL/skills/human/pw-execute/SKILL.md" \
+    && grep -qF 'task declares either field' "$TOOL/skills/human/pw-execute/SKILL.md" \
+    && grep -qF 'model-resolve' "$TOOL/skills/human/pw-execute/SKILL.md" \
+    && grep -qF 'PW_HEADLESS_STALL' "$TOOL/skills/model/pw-guide-workflow/references/execution-and-routing.md" \
     && grep -qF '18 KB trailing argument' "$TOOL/docs/providers.md" \
     && grep -qF '`--auto` is **required** headless' "$TOOL/docs/providers.md" \
     && pwtest_ok "T4 canary: execute delegates routing and provider mechanics to canonical references" \
     || pwtest_bad "T4 canary: execute routing references" "the command must retain both references and model gate; canonical references must retain headless supervision and provider-specific prompt gotchas"
 
   # (t) provider catalog prose is conditional: only a cross-provider/headless route reads it.
-  grep -qF 'only' "$TOOL/commands/pw-execute.md" \
-    && grep -qF 'resolved cross-provider/headless route' "$TOOL/commands/pw-execute.md" \
-    && grep -qF 'Same-provider routes do not load the provider guide.' "$TOOL/commands/pw-execute.md" \
-    && grep -qF 'only when the' "$TOOL/commands/pw-execute.md" \
-    && grep -qF 'task declares either field' "$TOOL/commands/pw-execute.md" \
+  grep -qF 'only' "$TOOL/skills/human/pw-execute/SKILL.md" \
+    && grep -qF 'resolved cross-provider/headless route' "$TOOL/skills/human/pw-execute/SKILL.md" \
+    && grep -qF 'Same-provider routes do not load the provider guide.' "$TOOL/skills/human/pw-execute/SKILL.md" \
+    && grep -qF 'only when the' "$TOOL/skills/human/pw-execute/SKILL.md" \
+    && grep -qF 'task declares either field' "$TOOL/skills/human/pw-execute/SKILL.md" \
     && pwtest_ok "T4 canary: provider guide is conditional on the selected route" \
     || pwtest_bad "T4 canary: provider guide loading" "pw-execute must not require provider mechanics for same-provider execution"
 
   # (s) the orchestrator uses the shared ladder rather than maintaining another copy of it.
-  grep -qF 'The shared skill ladder owns' "$TOOL/agents/pw-orchestrator.md" \
-    && grep -qF 'commands reference it, never re-describe it' "$TOOL/skill/project-workflow/references/execution-and-routing.md" \
-    && pwtest_ok "T4 canary: orchestrator delegates route resolution to the shared ladder" \
-    || pwtest_bad "T4 canary: orchestrator ladder reference" "the orchestrator must point to the shared ladder, which remains the canonical routing contract"
+  grep -qF 'The shared skill ladder owns' "$TOOL/skills/model/pw-orchestration/references/execution.md" \
+    && grep -qF 'commands reference it, never re-describe it' "$TOOL/skills/model/pw-guide-workflow/references/execution-and-routing.md" \
+    && pwtest_ok "T4 canary: orchestration delegates route resolution to the shared ladder" \
+    || pwtest_bad "T4 canary: orchestration ladder reference" "pw-orchestration must point to the shared ladder, which remains the canonical routing contract"
 
   # (u) the mutation sweep sizes each row's watchdog to the work that row does, and
   #     re-measures a row that hit the watchdog: a kill is not a verdict.

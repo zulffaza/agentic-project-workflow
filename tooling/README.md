@@ -10,7 +10,7 @@ The `/pw-*` slash commands are duplicated across agent tools (Claude Code, kilo,
 ```
 tooling/
 ├── scripts/                  ← every executable script (L-rules: tooling/docs/conventions.md)
-│   ├── entities/             the 10 entity entry points — what commands/agents/skills invoke
+│   ├── entities/             the 10 entity entry points — what entries/agents/guides invoke
 │   │   ├── pw-status.sh        project state: status report + dashboard/LOG setters
 │   │   │                       (log · status · oneliner · adopted · phase · dashboard-task-status · task-accept)
 │   │   ├── pw-preflight.sh     gate validation before expensive agent invocations
@@ -36,15 +36,19 @@ tooling/
 │   └── toolchain/            bundle-maintenance scripts — the toolchain test: operand = the
 │                             bundle itself (L3); never in the automation registry
 │       ├── scaffold.sh         creates a new project from ../../template/
-│       ├── gen-commands.sh     stamps commands/ into each provider's format + location
+│       ├── gen-commands.sh     stamps skills/human/ into each provider's selected format
 │       ├── gen-agents.sh       seeds agents/ into each provider's agent dir
 │       └── pw-doctor.sh        checks installed skills + commands + agents match this bundle (--fix repairs)
-├── commands/           ← THE source of truth for /pw-* (provider-neutral)
-│   ├── pw-new.md        frontmatter: description, args, [agent]; body uses {{ARGS}} + {{PW_*}}
-│   ├── pw-analyze.md
-│   ├── … (pw-adopt, pw-breakdown, pw-review, pw-execute, pw-ship, pw-sync, pw-status, pw-doctor)
-│   └── pw-close.md
-├── agents/             ← THE source of truth for seedable sub-agents: pw-orchestrator, pw-executor,
+├── skills/human/       ← THE source of truth for the 18 human entry points (provider-neutral)
+│   ├── pw-new/SKILL.md  frontmatter: name, description, args, scope, [agent]; body uses {{ARGS}}
+│   ├── pw-execute/SKILL.md
+│   └── … (17 commands + pw-independent-review)
+├── skills/model/       ← shared procedural skills (installed as-is on every provider)
+│   ├── pw-guide-workflow/       pipeline map + phase references
+│   ├── pw-guide-review-method/  managed review method
+│   ├── pw-guide-authoring/      RFC authoring method
+│   └── pw-orchestration/        driver rules for the normal session
+├── agents/             ← THE source of truth for the five worker sub-agents: pw-executor,
 │                         pw-reviewer (optional, only spawned by /pw-review … ai), pw-researcher,
 │                         pw-analyst, pw-writer-task (the phase lanes — see agents/README.md)
 ├── docs/               ← registries/policy the AGENTS read (each has a human-facing peer doc);
@@ -122,15 +126,18 @@ pipeline works with **no** backend configured (`/pw-rfc` still generates a local
 publishing to a real platform is the opt-in part).
 
 ## Regenerate after any change
-Edit a file in `commands/`, then (`$PW_HOME` = the bundle dir; `bootstrap.sh` exports it):
+Edit a human entry in `skills/human/<name>/SKILL.md`, then (`$PW_HOME` = the bundle dir; `bootstrap.sh` exports it):
 ```bash
 $PW_HOME/tooling/scripts/toolchain/gen-commands.sh
 ```
-Outputs (overwritten each run):
-- **Claude Code** → `~/.claude/commands/*.md` (frontmatter `description` + `argument-hint`)
-- **kilo CLI** → `~/.config/kilo/command/*.md` (frontmatter `description` + `agent:` when set)
+Outputs are EXCLUSIVE per provider (overwritten each run):
+- **Claude Code / Cursor / Codex** → `<name>/SKILL.md` invocable skills only, no command files.
+  Claude/Cursor carry `disable-model-invocation: true`; Codex carries `agents/openai.yaml`
+  `allow_implicit_invocation: false`.
+- **KiloCode / OpenCode** → `<name>.md` commands only, no matching entry skills.
+- Shared `skills/model/*` are linked into every provider by `bootstrap.sh`.
 
-`{{ARGS}}` is replaced with each provider's argument placeholder (both use `$ARGUMENTS` today).
+`{{ARGS}}` becomes each provider's placeholder (`$ARGUMENTS`; `<arguments>` on Codex).
 
 ## Add / enable an Agent Provider
 Already `claude`, `kilo`, `opencode`, `cursor`, or `codex`? Those are **built in** — just add the name to
@@ -158,18 +165,19 @@ That's the whole cost of onboarding a provider — the phase prompts themselves 
 ## Canonical file format
 ```markdown
 ---
-description: <one line, becomes the command description>
+name: <must equal the directory name>
+description: <one line, becomes the entry description>
 args: <named-argument hint, e.g. "--project <project-slug> [--focus <prose…>]">
 scope: <global | project | mixed — required; "mixed" also needs per-form scope-forms>
-agent: <optional — a provider agent to run the command under, e.g. pw-orchestrator>
+agent: <optional legacy field; no primary agent is shipped>
 ---
 <prompt body, using {{ARGS}} where the invocation's arguments go>
 ```
 
 > Sub-agents **are** generated — from [`agents/`](./agents/README.md), seeded into each provider's
 > agent dir by `gen-agents.sh` (kilo `~/.config/kilo/agent/`, Claude Code `~/.claude/agents/`,
-> Cursor `~/.cursor/agents/`; codex gets none — it has no agent-def surface and drives Flow B). The
-> six shipped roles: `pw-orchestrator`, `pw-executor`, `pw-reviewer` (optional — every review
+> Cursor `~/.cursor/agents/`; codex gets none — it has no agent-def surface). The
+> five shipped worker roles: `pw-executor`, `pw-reviewer` (optional — every review
 > point defaults to human-only `advisory`; a pass only starts when scheduled for that phase) and the spawn-lanes `pw-researcher` / `pw-analyst` / `pw-writer-task`; execution can
 > still reuse a registered agent (e.g. `pw-executor`) by naming it in a task's `Execute with:` —
 > or, the portable Option-A form, route a `provider:model` and let the task file be the work order

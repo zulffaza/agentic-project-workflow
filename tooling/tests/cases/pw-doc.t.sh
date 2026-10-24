@@ -258,7 +258,7 @@ pwtest_rc 2 "E: missing task row fails the sync" "$(pwtest_script pw-doc.sh)" sy
 pwtest_err 'no row for T03' "E: failure names the missing row"
 [ "$before" = "$(tsync_cksum "$PF")" ] && pwtest_ok "E: earlier staged rows rolled back too" || pwtest_bad "E: atomic (missing row)" "partial PLAN edits survived the failure"
 rm -rf "$PW_PROJECTS_DIR/$S"
-for f in "$TOOL/commands/pw-execute.md" "$TOOL/agents/pw-orchestrator.md" "$TOOL/skill/project-workflow/references/execution-and-routing.md"; do
+for f in "$TOOL/skills/human/pw-execute/SKILL.md" "$TOOL/skills/model/pw-guide-workflow/references/execution-and-routing.md"; do
   b="$(basename "$f")"
   if grep -qF 'sync --project <slug> --plan-only' "$f" && grep -qF 'sync --project <slug> --dashboard-only' "$f" \
      && grep -qiF 'resolving scope' "$f" && grep -qiF 'starts or returns' "$f" \

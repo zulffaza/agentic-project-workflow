@@ -87,22 +87,24 @@ TOOL="$PW_HOME/tooling"
 . "$HERE/../lib/pw-mdlib.sh"
 
 PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
-CMDS="$TOOL/commands"
+CMDS="$TOOL/skills/human"
 # the READ-ONLY subprocess trio (the §3.4.1 whitelist; the T1 case pins it mechanically):
 ST="$HERE/pw-status.sh"
 RV="$HERE/pw-review-read.sh"
 CFG="$HERE/pw-config.sh"
 
 die() { printf "%s\n" "pw-help: $*" | flowline 98 >&2; exit 2; }
+# cmdfile <name> — one canonical human entry source: <name>/SKILL.md.
+cmdfile() { printf '%s/%s/SKILL.md' "$CMDS" "$1"; }
 
 # --- the phase -> command map (embedded knowledge; the static.sh set-equality
 # canary pins its names against $CMDS, so a new command cannot stay invisible) ---
-HELP_PHASE_MAP="setup|pw-new pw-adopt pw-context pw-doctor;analysis|pw-research pw-analyze pw-review;breakdown|pw-breakdown pw-rfc;executing|pw-execute pw-verify pw-sync;ship|pw-ship;close|pw-close;anytime|pw-status pw-help pw-config"
+HELP_PHASE_MAP="setup|pw-new pw-adopt pw-context pw-doctor;analysis|pw-research pw-analyze pw-review;breakdown|pw-breakdown pw-rfc;executing|pw-execute pw-verify pw-sync;ship|pw-ship;close|pw-close;anytime|pw-status pw-help pw-config pw-independent-review"
 
 # --- the Global Operations order (the overview's first section). Every command whose
 # frontmatter scope is global|mixed MUST be listed here and every listed command MUST
 # carry global forms; render_overview validates both directions on every run. ---
-HELP_GLOBAL_ORDER="pw-help pw-doctor pw-config pw-status pw-research pw-verify"
+HELP_GLOBAL_ORDER="pw-help pw-doctor pw-config pw-status pw-research pw-verify pw-independent-review"
 
 # --- shared helpers -------------------------------------------------------------
 # Token substitution for rendered help text. Bash string replacement, never a sed program
@@ -334,7 +336,7 @@ script_path() {
 
 # scripts_of <cmd> — entity/toolchain script basenames a command file references, deduped.
 scripts_of() {
-  { grep -ohE '(tooling/)?scripts/(entities|toolchain)/[a-z][a-z0-9-]+\.sh' "$CMDS/$1.md" 2>/dev/null || true; } \
+  { grep -ohE '(tooling/)?scripts/(entities|toolchain)/[a-z][a-z0-9-]+\.sh' "$(cmdfile "$1")" 2>/dev/null || true; } \
     | sed 's|.*/||' | sort -u
 }
 
@@ -385,7 +387,7 @@ selector_tokens() {
 # operator definition sentence. Script-form lines are NOT surface proof — C3 mapping bodies
 # name internal steps.
 has_shape() {
-  local f="$CMDS/$1.md"
+  local f="$(cmdfile "$1")"
   grep -qE "/$1 $2([ ]|$BT|$TF|,|\.|\)|\$)" "$f" \
     || grep -qF -e "literally $TF$2$TF" -e "literally $BT$2$BT" -e "literally \"$2\"" "$f"
 }
@@ -509,7 +511,7 @@ cmd_shape_line() {
       sub(/ +$/, "", rest)
       if (rest == "") print tok; else print tok " " rest
       exit
-    }' "$CMDS/$cmd.md" 2>/dev/null || true
+    }' "$(cmdfile "$cmd")" 2>/dev/null || true
   return 0
 }
 
@@ -519,13 +521,13 @@ token_use_clause() {
   # continuation lines (command-file paragraphs wrap mid-sentence), then cut at the
   # first sentence terminator after the token marker.
   local n para out
-  n="$(grep -m1 -nE "literally [$TF$BT]$2[$TF$BT]" "$CMDS/$1.md" | cut -d: -f1)" || return 1
+  n="$(grep -m1 -nE "literally [$TF$BT]$2[$TF$BT]" "$(cmdfile "$1")" | cut -d: -f1)" || return 1
   [ -n "$n" ] || return 1
   para="$(awk -v n="$n" 'NR == n { p = $0; ok = 1; next }
       ok && /^[[:space:]]*$/ { exit }
       ok && /^([-*] |[0-9]+[.)] |#|> |[|]{3})/ { exit }
       ok && (p != "") { p = p " " $0; next }
-      END { print p }' "$CMDS/$1.md")"
+      END { print p }' "$(cmdfile "$1")")"
   [ -n "$para" ] || return 1
   out="$(printf '%s' "$para" | sed -E -e "s/.*literally [$TF$BT]$2[$TF$BT][^a-zA-Z]*//" -e 's/[.,;:].*//' -e 's/^[ ]+//')"
   # If the author continues the definition after an em-dash and the pre-dash part is a
@@ -542,9 +544,9 @@ token_use_clause() {
 # operator invoked from the token\'s bullet block (<=9 lines under the shape).
 r2_alias() {
   local cmd="$1" tok="$2" ln win pair script op sp
-  ln="$(grep -m1 -n -E "^[[:space:]]*-[[:space:]]+\*\*[\`]?/$cmd ${tok}([ ]|\`|\*|$)" "$CMDS/$cmd.md" 2>/dev/null | cut -d: -f1 || true)"
+  ln="$(grep -m1 -n -E "^[[:space:]]*-[[:space:]]+\*\*[\`]?/$cmd ${tok}([ ]|\`|\*|$)" "$(cmdfile "$cmd")" 2>/dev/null | cut -d: -f1 || true)"
   [ -n "$ln" ] || return 1
-  win="$(sed -n "${ln},$((ln+9))p" "$CMDS/$cmd.md")"
+  win="$(sed -n "${ln},$((ln+9))p" "$(cmdfile "$cmd")")"
   while IFS= read -r pair; do
     [ -n "$pair" ] || continue
     script="${pair%% *}"; op="${pair##* }"
@@ -625,8 +627,8 @@ ov_emit() {
 # ops_surfaced <cmd> — rendered operator lines: "name<TAB>args<TAB>use<TAB>facet".
 ops_surfaced() {
   local cmd="$1" text script sp op seen="$TABS" tok ali ascript aop args use fac alias_use alias_fac alias_f first_arg_flow shape_ok d _dop a2 par
-  text="$(< "$CMDS/$cmd.md")"
-  case "$(fmof "$CMDS/$cmd.md" args)" in \[*|\"[\"]*) first_arg_flow=1 ;; *) first_arg_flow="" ;; esac
+  text="$(< "$(cmdfile "$cmd")")"
+  case "$(fmof "$(cmdfile "$cmd")" args)" in \[*|\"[\"]*) first_arg_flow=1 ;; *) first_arg_flow="" ;; esac
   # R1: real script operators whose command-form span exists.
   for script in $(own_first "$cmd" $(scripts_of "$cmd")); do
     sp="$(script_path "$script" 2>/dev/null || true)" || continue
@@ -657,7 +659,7 @@ ops_surfaced() {
     done
   done
   # R2: frontmatter selector sugar ops (ai/config/item...) not already listed.
-  for tok in $(selector_tokens "$(fmof "$CMDS/$cmd.md" args)"); do
+  for tok in $(selector_tokens "$(fmof "$(cmdfile "$cmd")" args)"); do
     case "$seen" in *"$TABS$tok$TABS"*) continue ;; esac
     shape_ok=""
     has_shape "$cmd" "$tok" && shape_ok=1
@@ -697,13 +699,13 @@ ops_surfaced() {
 #           defect and fails loudly — same discipline as the phase-map canary.
 scope_of() {
   local cmd="$1" tok="$2" sc forms v
-  sc="$(fmof "$CMDS/$cmd.md" scope)"
+  sc="$(fmof "$(cmdfile "$cmd")" scope)"
   case "$sc" in
     global|project) printf '%s' "$sc"; return 0 ;;
     mixed) ;;
     *) die "BUG: commands/$cmd.md scope must be global|project|mixed (got: '${sc:-missing}') → fix: add the scope: line in the same commit as the command" ;;
   esac
-  forms="$(fmof "$CMDS/$cmd.md" scope-forms)"
+  forms="$(fmof "$(cmdfile "$cmd")" scope-forms)"
   [ -n "$forms" ] || die "BUG: mixed command $cmd carries no scope-forms map → fix: scope-forms: \"tok=project, other=global\" in commands/$cmd.md"
   v="$(printf '%s' "$forms" | tr ',' '\n' | awk -F= -v k="$tok" '
     { key=$1; sub(/^[ \t]+/,"",key); sub(/[ \t]+$/,"",key)
@@ -718,18 +720,18 @@ scope_of() {
 # carry args-global/args-project; a single-scope command uses its one args line.
 scope_args() {
   local cmd="$1" sec="$2" v
-  v="$(fmof "$CMDS/$cmd.md" "args-$sec")"
-  [ -n "$v" ] || v="$(fmof "$CMDS/$cmd.md" args)"
+  v="$(fmof "$(cmdfile "$cmd")" "args-$sec")"
+  [ -n "$v" ] || v="$(fmof "$(cmdfile "$cmd")" args)"
   printf '%s' "$v"
 }
 
 # has_scope_form <cmd> <global|project> — the command exposes at least one form of that scope.
 has_scope_form() {
   local cmd="$1" sec="$2" sc
-  sc="$(fmof "$CMDS/$cmd.md" scope)"
+  sc="$(fmof "$(cmdfile "$cmd")" scope)"
   case "$sc" in
     "$sec") return 0 ;;
-    mixed) printf '%s' "$(fmof "$CMDS/$cmd.md" scope-forms)" | grep -q "=$sec" ; return $? ;;
+    mixed) printf '%s' "$(fmof "$(cmdfile "$cmd")" scope-forms)" | grep -q "=$sec" ; return $? ;;
   esac
   return 1
 }
@@ -739,7 +741,7 @@ has_scope_form() {
 # opens an optional-arg bracket or closes right after (quote/backtick/comma/period), or
 # the C1 exception (bare `/pw-help` → overview).
 has_default() {
-  local f="$CMDS/$1.md"
+  local f="$(cmdfile "$1")"
   if [ "$1" = pw-help ]; then
     grep -qF "/pw-help$BT" "$f" && return 0
     grep -qF "/pw-help$TF" "$f" && return 0
@@ -750,7 +752,7 @@ has_default() {
 
 did_you_mean() {
   local in="$1" c best="" bestscore=0 score i ch shared
-  for c in $(cd "$CMDS" && ls *.md | sed 's/\.md$//'); do
+  for c in $(cd "$CMDS" && ls -d */ | sed 's#/##'); do
     score=0; shared=""
     for ((i=1; i<=${#c}; i++)); do
       ch="${c:$((i-1)):1}"
@@ -758,6 +760,12 @@ did_you_mean() {
         *"$ch"*) case "$shared" in *"$ch"*) : ;; *) shared="$shared$ch"; score=$((score+1)) ;; esac ;;
       esac
     done
+    # Prefer the candidate sharing the longest PREFIX with the bad input: for "pw-revieww"
+    # the short "pw-review" must beat "pw-independent-review" despite shared letters.
+    for ((i=1; i<=${#in} && i<=${#c}; i++)); do
+      [ "${in:$((i-1)):1}" = "${c:$((i-1)):1}" ] || break
+    done
+    score=$((score + i - 1))
     [ "$score" -gt "$bestscore" ] && { bestscore=$score; best="$c"; }
   done
   if [ -n "$best" ] && [ "$bestscore" -ge 6 ]; then printf 'did you mean "%s"? (list all: /pw-help overview)' "$best"
@@ -786,7 +794,7 @@ stamp() {
 # ov_cmd_block <cmd> <global|project> — one overview command block for one scope section.
 ov_cmd_block() {
   local cmd="$1" sec="$2" file desc args ops_lines dflt dsc sc op bargs buse bfac bscript
-  file="$CMDS/$cmd.md"
+  file="$(cmdfile "$cmd")"
   [ -f "$file" ] || die "BUG: $cmd is missing $file → fix: keep the overview groups and the commands dir in sync"
   sc="$(fmof "$file" scope)"
   desc="$(fmof "$file" description)"; args="$(scope_args "$cmd" "$sec")"
@@ -824,8 +832,8 @@ render_overview() {
   local entry bucket cmd file desc args ops_lines op bargs buse bfac bscript dflt fmfacs sc jop jonsep
   # scope-declaration canary (both directions) — a new command or a stale group entry
   # fails loudly, same discipline as the phase-map set-equality canary.
-  for cmd in $(cd "$CMDS" && ls *.md | sed 's/\.md$//'); do
-    sc="$(fmof "$CMDS/$cmd.md" scope)"
+  for cmd in $(cd "$CMDS" && ls -d */ | sed 's#/##'); do
+    sc="$(fmof "$(cmdfile "$cmd")" scope)"
     case "$sc" in
       global|mixed) case " $HELP_GLOBAL_ORDER " in *" $cmd "*) ;; *) die "BUG: $cmd declares scope $sc but is not in HELP_GLOBAL_ORDER → fix: add it in this script" ;; esac ;;
       project) case " $HELP_GLOBAL_ORDER " in *" $cmd "*) die "BUG: HELP_GLOBAL_ORDER names $cmd but it declares scope: project → fix: remove it in this script" ;; esac ;;
@@ -839,8 +847,8 @@ render_overview() {
       IFS="$saveIFS"
       bucket="${entry%%|*}"
       for cmd in ${entry#*|}; do
-        file="$CMDS/$cmd.md"
-        [ -f "$file" ] || die "BUG: the phase map names $cmd but $CMDS/$cmd.md is missing → fix: update HELP_PHASE_MAP in this script in the same commit as the command"
+        file="$(cmdfile "$cmd")"
+        [ -f "$file" ] || die "BUG: the phase map names $cmd but $(cmdfile "$cmd") is missing → fix: update HELP_PHASE_MAP in this script in the same commit as the command"
         desc="$(fmof "$file" description)"; args="$(fmof "$file" args)"
         ops_lines="$(ops_surfaced "$cmd")"
         [ "$ofirst" = 1 ] || printf ',\n'; ofirst=0
@@ -913,9 +921,9 @@ EOPS
 # the human-facing prose is lifted verbatim, never re-written.
 cmd_block() {
   local cmd="$1" tok="$2" ln
-  ln="$(grep -m1 -n -E "^[[:space:]]*-[[:space:]]+\*\*[\`]?/$cmd ${tok}([ ]|\`|\*|$)|^[[:space:]]*\*\*If the (1st|2nd) (word|argument) is literally [$TF$BT]${tok}[$TF$BT]" "$CMDS/$cmd.md" 2>/dev/null | cut -d: -f1 || true)"
+  ln="$(grep -m1 -n -E "^[[:space:]]*-[[:space:]]+\*\*[\`]?/$cmd ${tok}([ ]|\`|\*|$)|^[[:space:]]*\*\*If the (1st|2nd) (word|argument) is literally [$TF$BT]${tok}[$TF$BT]" "$(cmdfile "$cmd")" 2>/dev/null | cut -d: -f1 || true)"
   [ -n "$ln" ] || return 0
-  awk -v from="$ln" 'NR<from{next} NR>from && (/^- \*\*/ || /^## / || /^[0-9]+\. \*\*/){exit} NR>=from{print}' "$CMDS/$cmd.md"
+  awk -v from="$ln" 'NR<from{next} NR>from && (/^- \*\*/ || /^## / || /^[0-9]+\. \*\*/){exit} NR>=from{print}' "$(cmdfile "$cmd")"
 }
 
 strip_md() { sed -e 's/\*\*//g' -e 's/\*//g' -e 's/`//g' -e 's/^[ >-]\{1,3\}//' -e 's/^[[:space:]]*//'; }
@@ -923,7 +931,7 @@ strip_md() { sed -e 's/\*\*//g' -e 's/\*//g' -e 's/`//g' -e 's/^[ >-]\{1,3\}//' 
 # scope_tokens <cmd> <global|project> — comma-joined form tokens of that scope from the
 # scope-forms map (display only; scope_of stays the single classification authority).
 scope_tokens() {
-  printf '%s' "$(fmof "$CMDS/$1.md" scope-forms)" | tr ',' '\n' | awk -F= -v s="$2" '
+  printf '%s' "$(fmof "$(cmdfile "$1")" scope-forms)" | tr ',' '\n' | awk -F= -v s="$2" '
     { k=$1; sub(/^[ \t]+/,"",k); sub(/[ \t]+$/,"",k); v=$2; sub(/^[ \t]+/,"",v); sub(/[ \t]+$/,"",v)
       if (v==s && k!="") { out=out sep k; sep=", " } } END { printf "%s", out }'
 }
@@ -946,7 +954,7 @@ render_command() {
   done
   [ -n "$name" ] || die "command: --name is required → fix: /pw-help command --name <name> [--project <slug>]"
   local c; c="$(canon "$name")"
-  local file="$CMDS/$c.md"
+  local file="$(cmdfile "$c")"
   [ -f "$file" ] || die "no such command: $(canon "$name") → fix: $(did_you_mean "$c")"
   local desc args agn sc
   desc="$(fmof "$file" description)"; args="$(fmof "$file" args)"; agn="$(fmof "$file" agent)"
@@ -1164,7 +1172,7 @@ render_operators() {
   done
   [ -n "$name" ] || die "operators: --name is required → fix: /pw-help operators --name <name> [--operator <op>]"
   c="$(canon "$name")"
-  if [ -f "$CMDS/$c.md" ]; then
+  if [ -f "$(cmdfile "$c")" ]; then
     for sp in $(scripts_of "$c"); do
       sp="$(script_path "$sp" 2>/dev/null)" || continue
       scripts="$scripts$sp
@@ -1248,7 +1256,7 @@ render_workflow() {
 find_surfaces() { # "<label>\t<root>" sources. Default (USER) domain: the command files +
   # the root docs. Maintainer domain (-maintainer): entity/toolchain usage headers +
   # tooling/docs. L2 libraries are never searched.
-  printf 'command\t%s/commands\n' "$TOOL"
+  printf 'command\t%s/skills/human\n' "$TOOL"
   printf 'doc\t%s/../docs\n' "$TOOL"
   [ "${1:-user}" = maint ] || return 0
   printf 'script\t%s/scripts/entities\n' "$TOOL"
@@ -1420,7 +1428,7 @@ EXN
 render_project_cmd() {
   local slug="$1" phase="$2" name="$3" plan="$4" planrev="$5" adocs="$6" trevs="$7" tids="$8" d="$9"
   local c; c="$(canon "$name")"
-  [ -f "$CMDS/$c.md" ] || die "no such command: $c -> fix: $(did_you_mean "$c")"
+  [ -f "$(cmdfile "$c")" ] || die "no such command: $c -> fix: $(did_you_mean "$c")"
   if [ "$c" = "pw-review" ]; then
     local rel rvf st sep=""
     echo "/pw-review targets in $slug (phase: $phase; live gate/open states below)"

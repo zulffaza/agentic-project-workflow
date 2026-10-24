@@ -45,8 +45,11 @@ supported before choosing a value:
 `model-check` lists supported controls and validates a requested combination without spending a
 model request. Unsupported or unverified tuning is refused, never silently dropped.
 
-Once installed, run workflow commands in your agent session. In Codex, select the installed `pw-*` skill for the corresponding command.
-Examples use the shared `/pw-*` names throughout these guides.
+Once installed, run a workflow entry in your agent session. Claude Code, Cursor, and Codex install
+the 18 `pw-*` entries as explicit-only skills (select one, or type its `$pw-*` form on Codex).
+KiloCode and OpenCode install the same entries as `/pw-*` commands. Both groups also get the shared
+`pw-guide-*` / `pw-orchestration` skills. Examples use the shared `/pw-*` names throughout these
+guides.
 
 ```text
 /pw-new --project delivery-note

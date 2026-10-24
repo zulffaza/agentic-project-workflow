@@ -116,16 +116,17 @@ is normative.
   path can grant approval.
 - **Reserved names.** `pw-maintainer` and `pw-maintainer-user-documentation` are reserved for internal maintainer skills under
   `tooling/skill-internal/` (read-as-file, NOT provider-installed) — never reuse these names for a `/pw-*`
-  user command or a `tooling/skill/` user skill. This bullet is the durable registry of reserved
+  user command or a `tooling/skills/model/` user skill. This bullet is the durable registry of reserved
   names: check it before proposing a new command/skill name, and append any new reservation **here**
   (not only in the proposing plan — a plan is single-use, this doc is not).
 
-- **C5 — commands dispatch; an operation's procedure lives in a skill reference loaded on demand.**
-  A command file keeps its frontmatter, its dispatch sentence (operation words select the mode), its
+- **C5 — human entries dispatch; an operation's procedure lives in a skill reference loaded on demand.**
+  A human entry (`tooling/skills/human/<name>/SKILL.md`, installed as an explicit-only skill or a
+  command depending on the provider) keeps its frontmatter, its dispatch sentence (operation words select the mode), its
   non-negotiable contract (authorization, refusal, ordering, and the safety literals the canaries
   pin), and the operator→script invocation lines the operator map derives. The long *procedure* for
   one operation (step lists, per-forge mechanics, probe and recovery detail) lives in
-  `tooling/skill/project-workflow/references/*.md`, and the command points at the exact file with a
+  `tooling/skills/model/pw-guide-workflow/references/*.md`, and the command points at the exact file with a
   `**Load \`references/<name>.md\`**` line. Rationale: a single invocation must not pull every other
   operation's detail. Never move a pinned safety literal out of the command to shorten it; when a
   canary's text legitimately moves with its procedure, re-point the canary at the reference in the
@@ -222,26 +223,21 @@ detail — two audiences, one page, neither served.
   and where must I re-sync it?" always has one answer. Before minting a twin, check whether
   `docs/TOOLING.md` (the D3 hub) is the sufficient user-layer answer; twins are for behavior the
   user's workflow *depends on*, not for curiosity.
-- **D6 — a provider with no command surface gets commands as WRAPPED SKILLS, visibly distinct
-  from normal skills.** Codex forced this doctrine (2026-10-04): OpenAI removed custom prompts in
-  codex-cli 0.117.0, making codex the first registered provider with **no native command surface
-  at all** — its only slash mechanism is skills. The bundle answer is the optional
-  `<name>_command_style` hook (`flat` = the historical `<name>.md` layout; `skill` = generated
-  `<name>/SKILL.md` dirs via `render_<name>_command` + an optional `render_<name>_skill_policy`
-  for the harness-side invocation policy — explicit-only, so phase-driver bodies never
-  auto-inject). Two invariants travel with it: **(a)** skills and commands then share ONE
-  namespace, so a bundle skill colliding with a canonical command name is skipped at install and
-  the command-skill owns the name (derived skip list — `pw_skill_skips_for`, never hardcoded),
-  and the skill's method content travels read-as-file in spawn prompts; **(b)** generated
-  command-skills are build artifacts like any other rendered command — doctor/offboard treat the
-  dir as the unit, byte-exact as always. The next command-less provider inherits this pattern
-  instead of re-deriving it.
+- **D6 — human entries install in exactly ONE format per provider.** `<name>_entry_format`
+  returns `skill` (invocable, explicit-only `<name>/SKILL.md`; no command file) or `command`
+  (native `<name>.md`; no entry skill). Built-ins: Claude Code, Cursor, and Codex install skills
+  only; KiloCode and OpenCode install commands only. Skills are the primary design. Shared
+  procedural skills (`tooling/skills/model/*`: `pw-guide-workflow`, `pw-guide-review-method`,
+  `pw-guide-authoring`, `pw-orchestration`) install on every provider under distinct names, so
+  the old same-name collision skip (`pw_skill_skips_for`) is retired. Generated entries and
+  doctor/offboard treat a skill directory as the unit, byte-exact as always. A provider that
+  fails its selected format is blocked, never silently switched to the other one.
 
 ## Duplication registry (D5)
 
 | User-layer twin (behavior voice) | Maintainer detail (mechanism voice) | Sync trigger |
 |---|---|---|
-| `docs/EXECUTION.md` §Spawning phase work (seed-contract summary) | `tooling/skill/project-workflow/references/execution-and-routing.md` §Seed contracts | change to seed/exit-check contract → update both |
+| `docs/EXECUTION.md` §Spawning phase work (seed-contract summary) | `tooling/skills/model/pw-guide-workflow/references/execution-and-routing.md` §Seed contracts | change to seed/exit-check contract → update both |
 | `docs/EXECUTION.md` §The per-spawn ledger and the routing ladder (+ `Route:` bullets in `template/task/_TEMPLATE-task.md`, `- **Routing:**` in `_TEMPLATE-orchestration-plan.md`) | `tooling/docs/providers.md` (§headless mechanics, hooks) | change to routing precedence / binding honesty / supervision contract → update both |
 | `ONBOARDING.md` §Register a new provider (facts: `pw.config.sh` hooks, no script editing, re-run bootstrap) | `tooling/docs/providers.md` §Registering a new Agent Provider (hook contract + worked example) | hook contract or renderer variables change → update both |
 | `docs/RFC.md` §Doc hygiene (the fixed rule list) | `tooling/docs/rfc.md` (agent-facing publishing rules) | change to publish-hygiene rules → update both |

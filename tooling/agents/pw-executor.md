@@ -55,6 +55,15 @@ Hard rules:
   or an external reviewer who has no access to this project's internal docs. Never put internal
   pipeline IDs (`Rn`/`Qn`/`Pn`, review anchors, `task/T0n.md` headings) in committed code, commit
   messages, or MR-visible text — those go in the project record, not the artifact.
+- **Comment necessity test:** default to none. Add a comment only for a non-obvious reason,
+  constraint, invariant, or externally imposed behavior that clear names and structure cannot
+  express. Keep it local and brief; omit implementation diaries, obvious step headings, generic
+  TODOs, and unsupported claims such as "safe" or "robust". Keep review IDs, task IDs, model
+  identity, and who requested a fix in the project record. Preserve required license/generated
+  markers, API documentation, lint/type directives, and justified security or concurrency warnings.
+  Before committing, inspect newly added or modified comments in your task diff and remove any that
+  teach a maintainer nothing beyond the surrounding code. The full policy is in
+  `pw-guide-workflow/references/conventions-and-gotchas.md`.
 - Fill the task file's `## Result` (what changed, verify output, timing, `Actually used:`,
   `Session:`, model) and hand back to the orchestrator. **`Verify outcome:`/`Notes:` are one
   distinct fact per (sub-)bullet, never a single run-on paragraph** — see `_TEMPLATE-task.md`'s

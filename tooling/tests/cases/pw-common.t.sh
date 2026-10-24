@@ -39,16 +39,11 @@ pwtest_eq "Steps decoy NEVER resolves (C21)" "$(pw_task_mr_url "$F3/task/T05.md"
 # the catalog reader parses the REAL one-line JSON shape (tests/bin/codex shim, captured from
 # codex-cli 0.160.0 — plan-27 rev-h lesson: shims match real CLI byte-shape). ---
 pwtest_eq "codex command_style = skill" "$(pw_provider_command_style codex)" "skill"
-pwtest_eq "flat providers keep the flat command layout" "$(pw_provider_command_style cursor)" "flat"
-pwtest_eq "codex commanddir IS the skills root (commands are skills)" "$(codex_commanddir)" "$(codex_skilldir)"
-pwtest_eq "D13 skips derived from canonical command names" "$(pw_skill_skips_for codex | sort | tr '\n' ' ')" "pw-review pw-rfc "
-# pipefail regression (shipped once, 2026-10-04): bootstrap/offboard/doctor run `set -o pipefail`
-# — an early-exit `grep -q` inside the helper SIGPIPEs its writer and the skip list comes back
-# EMPTY, silently installing colliding skills. The helper must produce identical output under
-# pipefail; re-introducing a grep -q pipeline fails this assert.
-pwtest_eq "D13 skips survive pipefail (bootstrap context)" \
-  "$(set -o pipefail; pw_skill_skips_for codex | sort | tr '\n' ' ')" "pw-review pw-rfc "
-pwtest_eq "flat providers skip no bundle skills" "$(pw_skill_skips_for cursor)" ""
+pwtest_eq "claude/cursor/codex entry_format = skill" "$(printf '%s %s %s' "$(pw_provider_entry_format claude)" "$(pw_provider_entry_format cursor)" "$(pw_provider_entry_format codex)")" "skill skill skill"
+pwtest_eq "kilo/opencode entry_format = command" "$(printf '%s %s' "$(pw_provider_entry_format kilo)" "$(pw_provider_entry_format opencode)")" "command command"
+pwtest_eq "codex commanddir IS the skills root (entries are skills)" "$(codex_commanddir)" "$(codex_skilldir)"
+pwtest_eq "collision skip list retired (distinct guide names)" "$(pw_skill_skips_for codex)" ""
+pwtest_eq "no provider skips a shipped skill" "$(pw_skill_skips_for kilo)" ""
 pwtest_eq "codex catalog = visible slugs only, real one-line JSON shape" \
   "$(pw_api_catalog codex)" "$(printf 'codex-test-luna\ncodex-test-astra')"
 # Cursor catalog = `agent models` PLUS cli-config modelParameters (desktop-only ids the CLI
@@ -77,9 +72,9 @@ if grep -rl '{{ARGS}}' "$GD/codex" >/dev/null 2>&1; then
 else
   pwtest_ok "codex {{ARGS}} substituted (<arguments>)"
 fi
-[ -f "$GD/cursor/pw-status.md" ] && [ ! -d "$GD/cursor/pw-status" ] \
-  && pwtest_ok "flat providers still generate <name>.md (no regression)" \
-  || pwtest_bad "flat layout regression" "cursor output shape changed under $GD/cursor"
+[ -f "$GD/cursor/pw-status/SKILL.md" ] && [ ! -f "$GD/cursor/pw-status.md" ] \
+  && pwtest_ok "cursor generates an explicit-only skill, not a command" \
+  || pwtest_bad "cursor entry layout" "cursor output shape changed under $GD/cursor"
 rm -rf "$GD"
 
 # --- strict-YAML frontmatter safety (2026-10-08): Kilo 7.8.8 made a command frontmatter with
@@ -118,7 +113,7 @@ printf -- '# no frontmatter\n' > "$tf"
 
 # every live canonical source must be clean (the doctor reports these by hand)
 _canon_bad=""
-for _cf in "$TOOL"/commands/*.md "$TOOL"/agents/*.md; do
+for _cf in "$TOOL"/skills/human/*/SKILL.md "$TOOL"/agents/*.md; do
   [ -f "$_cf" ] || continue
   [ -z "$(pw_frontmatter_error "$_cf")" ] || _canon_bad="$_canon_bad $(basename "$_cf")"
 done

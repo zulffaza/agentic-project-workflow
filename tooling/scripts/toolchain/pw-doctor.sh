@@ -23,7 +23,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # tooling/
 PW_HOME="$(cd "$HERE/../../.." && pwd)"
 . "$HERE/../lib/pw-common.sh"
-SKILL_DIR="$PW_HOME/tooling/skill"   # every subdir with a SKILL.md here is a shippable skill
+SKILL_DIR="$PW_HOME/tooling/skills/model"   # shared procedural skills only; human entries live in skills/human/
 CANON_AGENTS="$PW_HOME/tooling/agents"
 KJCF="$HOME/.config/kilo/kilo.jsonc"
 
@@ -190,7 +190,7 @@ _pw_doctor_model_catalog() {
 # human-authored and this doctor never rewrites them, so flag them for a manual fix — and keep
 # the verdict failing even under --fix, because --fix cannot repair them.
 manual_issues=0
-for cf in "$PW_HOME"/tooling/commands/*.md "$PW_HOME"/tooling/agents/*.md; do
+for cf in "$PW_HOME"/tooling/skills/human/*/SKILL.md "$PW_HOME"/tooling/skills/model/*/SKILL.md "$PW_HOME"/tooling/agents/*.md; do
   [ -f "$cf" ] || continue
   cf_err="$(pw_frontmatter_error "$cf")"
   if [ -n "$cf_err" ]; then
@@ -199,7 +199,7 @@ for cf in "$PW_HOME"/tooling/commands/*.md "$PW_HOME"/tooling/agents/*.md; do
   fi
 done
 if [ "$manual_issues" -eq 0 ]; then
-  echo "  ✓ canonical command/agent frontmatter strict-YAML clean (tooling/{commands,agents})"
+  echo "  ✓ canonical skill/agent frontmatter strict-YAML clean (tooling/skills + agents)"
 fi
 echo
 
@@ -220,7 +220,7 @@ for p in "${PW_PROVIDERS[@]}"; do
   # skills — compare the WHOLE directory tree of EACH shipped skill (SKILL.md + any
   # references/*.md), not just the single SKILL.md file, so drift in a reference file is actually
   # caught on a copy-fallback filesystem (a symlink install is trivially "in sync" since diff -rq
-  # dereferences it). Loops every tooling/skill/*/ dir — adding a new skill needs no change here.
+  # dereferences it). Loops every tooling/skills/model/*/ dir — adding a new skill needs no change here.
   skilldir="$("${p}_skilldir")"
   pw_hook_dir_ok "$skilldir" || { echo "pw-doctor: provider hook ${p}_skilldir returned an unsafe path ('$skilldir') → fix: hooks must print a non-empty absolute path" >&2; exit 2; }
   # Skill-layout providers (codex): bundle skills whose names collide with canonical commands
@@ -263,13 +263,13 @@ for p in "${PW_PROVIDERS[@]}"; do
   # they are command artifacts, not orphan skills, so canonical command names are excluded here
   # (the command sync check below owns them).
   sorph=""
-  cmdstyle="$(pw_provider_command_style "$p")"
+  entry_fmt="$(pw_provider_entry_format "$p")"
   cmdnames=" $(pw_canonical_command_names | tr '\n' ' ') "   # case-matched below (pipefail-proof)
   for inst in "$skilldir"/project-workflow "$skilldir"/pw-*; do
     { [ -e "$inst" ] || [ -L "$inst" ]; } || continue
     iname="$(basename "$inst")"
     [ -d "$SKILL_DIR/$iname" ] && continue
-    case "$cmdstyle:$cmdnames" in skill:*" $iname "*) continue ;; esac   # generated command-skill, not an orphan
+    case "$entry_fmt:$cmdnames" in skill:*" $iname "*) continue ;; esac   # generated command-skill, not an orphan
     sorph="$sorph $iname"
   done
   if [ -n "$sorph" ]; then
@@ -280,6 +280,9 @@ for p in "${PW_PROVIDERS[@]}"; do
         # marker), never a foreign or hand-made entry that merely shares the namespace.
         if grep -qF 'pw-generated' "$skilldir/$n/SKILL.md" 2>/dev/null; then
           rm -rf "$skilldir/$n"
+        elif [ -L "$skilldir/$n" ] && case "$(readlink "$skilldir/$n")" in "$PW_HOME"/*) true ;; *) false ;; esac; then
+          # Bundle-owned legacy link (e.g. the retired project-workflow guide) — safe to remove.
+          rm -f "$skilldir/$n"
         else
           echo "      SKIPPED '$n' (no bundle marker — foreign or hand-made; remove by hand if obsolete)"
         fi
@@ -293,13 +296,13 @@ for p in "${PW_PROVIDERS[@]}"; do
   # commands: generate to temp, diff against what's installed.
   # Layout-aware: flat = <name>.md files; skill = <name>/ dirs (SKILL.md + agents/openai.yaml)
   # compared as whole trees, so drift in the policy file counts too.
-  odir="$("${p}_commanddir")"
+  if [ "$entry_fmt" = "skill" ]; then odir="$skilldir"; else odir="$("${p}_commanddir")"; fi
   pw_hook_dir_ok "$odir" || { echo "pw-doctor: provider hook ${p}_commanddir returned an unsafe path ('$odir') → fix: hooks must print a non-empty absolute path" >&2; exit 2; }
   "$HERE/gen-commands.sh" --outdir "$tmp" "$p" >/dev/null
   # strict-YAML frontmatter of the freshly rendered copies — never trust the render hooks alone;
   # this is the same code path that installs them (kilo 7.8.8 made bad frontmatter fatal).
   fw_bad=0
-  if [ "$cmdstyle" = "skill" ]; then
+  if [ "$entry_fmt" = "skill" ]; then
     for exp in "$tmp/$p"/*/SKILL.md; do
       [ -e "$exp" ] || continue
       fw_err="$(pw_frontmatter_error "$exp")"
@@ -320,7 +323,7 @@ for p in "${PW_PROVIDERS[@]}"; do
     echo "    ✗ $fw_bad rendered command file(s) with invalid frontmatter — fix the render_${p}_command hook / pw_yaml_quote"; issues=$((issues+1))
   fi
   drift=0; missing=0
-  if [ "$cmdstyle" = "skill" ]; then
+  if [ "$entry_fmt" = "skill" ]; then
     for exp in "$tmp/$p"/*/; do
       [ -d "$exp" ] || continue
       n="$(basename "$exp")"
@@ -335,11 +338,11 @@ for p in "${PW_PROVIDERS[@]}"; do
     done
   fi
   if [ $((drift+missing)) -eq 0 ]; then
-    echo "    ✓ commands in sync ($odir, $cmdstyle layout)"
+    echo "    ✓ entry points in sync ($odir, $entry_fmt format)"
   else
-    echo "    ✗ commands OUT OF SYNC ($odir): $drift changed, $missing missing"; issues=$((issues+1))
+    echo "    ✗ entry points OUT OF SYNC ($odir): $drift changed, $missing missing"; issues=$((issues+1))
     if [ "$FIX" -eq 1 ]; then
-      "$HERE/gen-commands.sh" "$p" >/dev/null && echo "      fixed: regenerated commands"
+      "$HERE/gen-commands.sh" "$p" >/dev/null && echo "      fixed: regenerated entry points"
     fi
   fi
 
@@ -349,7 +352,7 @@ for p in "${PW_PROVIDERS[@]}"; do
   # skills — a shipped plain skill named pw-* (e.g. pw-independent-review) is NOT a command,
   # so bundle skill sources are excluded here (the orphan-skill pass above owns their drift).
   corph=""
-  if [ "$cmdstyle" = "skill" ]; then
+  if [ "$entry_fmt" = "skill" ]; then
     for inst in "$odir"/pw-*/; do
       [ -d "$inst" ] || continue
       n="$(basename "$inst")"
@@ -363,11 +366,11 @@ for p in "${PW_PROVIDERS[@]}"; do
     done
   fi
   if [ -n "$corph" ]; then
-    echo "    ✗ orphan command file(s) — installed but no longer generated:$corph"; issues=$((issues+1))
+    echo "    ✗ orphan entry point(s) — installed but no longer generated:$corph"; issues=$((issues+1))
     if [ "$FIX" -eq 1 ]; then
       for n in $corph; do
         # content-check-and-skip (S10): only bundle-generated residue (marker) is removed.
-        if [ "$cmdstyle" = "skill" ]; then
+        if [ "$entry_fmt" = "skill" ]; then
           if grep -qF 'pw-generated' "$odir/$n/SKILL.md" 2>/dev/null; then rm -rf "$odir/$n"
           else echo "      SKIPPED '$n' (no bundle marker — foreign or hand-made; remove by hand if obsolete)"; fi
         else
@@ -375,10 +378,10 @@ for p in "${PW_PROVIDERS[@]}"; do
           else echo "      SKIPPED '$n' (no bundle marker — foreign or hand-made; remove by hand if obsolete)"; fi
         fi
       done
-      echo "      fixed: removed marked orphan commands"
+      echo "      fixed: removed marked orphan entry points"
     fi
   else
-    echo "    ✓ no orphan commands"
+    echo "    ✓ no orphan entry points"
   fi
 
   # {{ARGS}} conformance: a render_<prov>_command hook that forgets to substitute the {{ARGS}}
@@ -386,7 +389,7 @@ for p in "${PW_PROVIDERS[@]}"; do
   # filled in at all. Check the freshly-generated output (not the installed copy), so this catches
   # a broken render hook even before the drift check above would ever surface it via --fix.
   unsub=0
-  if [ "$cmdstyle" = "skill" ]; then
+  if [ "$entry_fmt" = "skill" ]; then
     for exp in "$tmp/$p"/*/SKILL.md; do
       [ -e "$exp" ] || continue
       grep -q '{{ARGS}}' "$exp" 2>/dev/null && unsub=$((unsub+1))
@@ -609,8 +612,8 @@ done
 # offboard.sh --provider claude's job, never this check's.
 if printf '%s\n' "${PW_PROVIDERS[@]:-}" | grep -qx cursor; then
   _bleed=()
-  for _f in "$HOME"/.claude/agents/pw-*.md "$HOME"/.claude/skills/project-workflow \
-            "$HOME"/.claude/skills/pw-review "$HOME"/.claude/skills/pw-rfc; do
+  for _f in "$HOME"/.claude/agents/pw-*.md "$HOME"/.claude/skills/pw-guide-workflow \
+            "$HOME"/.claude/skills/pw-guide-review-method "$HOME"/.claude/skills/pw-guide-authoring; do
     [ -e "$_f" ] || continue
     _bleed+=("$_f")
   done

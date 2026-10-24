@@ -18,6 +18,6 @@ the end of [`conventions.md`](../../../docs/conventions.md) walks the whole sequ
 command surface → args → docs → tests).
 
 **Reserved names.** `pw-maintainer` (this skill) is reserved — never reuse it for a `/pw-*` user
-command or a `tooling/skill/` user skill. The durable note lives in
+command or a `tooling/skills/model/` user skill. The durable note lives in
 [`conventions.md`](../../../docs/conventions.md) beside the C-rules; add any future reservation there
 too, so the registry outlives whichever plan proposed it.

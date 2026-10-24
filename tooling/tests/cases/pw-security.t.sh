@@ -154,13 +154,21 @@ grep -q '^repos=/x/r$' "$_stf" && pwtest_ok "{{PW_REPOS}} replaced" || pwtest_ba
 
 # --- Phase 3: generators replace symlinked targets instead of writing through them, and every
 # rendered artifact carries the bundle marker the doctor's orphan sweep requires.
-_genout="$PWTEST_ROOT/pwsec-gen"; rm -rf "$_genout"; mkdir -p "$_genout/claude"
+_genout="$PWTEST_ROOT/pwsec-gen"; rm -rf "$_genout"; mkdir -p "$_genout/claude/pw-help"
 _genvictim="$PWTEST_ROOT/pwsec-victim"; printf 'keep me\n' > "$_genvictim"
-ln -s "$_genvictim" "$_genout/claude/pw-help.md"
-pwtest_rc 0 "gen-commands replaces a symlinked command target" "$TOOL/scripts/toolchain/gen-commands.sh" --outdir "$_genout" claude
+ln -s "$_genvictim" "$_genout/claude/pw-help/SKILL.md"
+pwtest_rc 0 "gen-commands replaces a symlinked skill target" "$TOOL/scripts/toolchain/gen-commands.sh" --outdir "$_genout" claude
 [ "$(cat "$_genvictim")" = "keep me" ] && pwtest_ok "symlink target untouched" || pwtest_bad "gen symlink guard" "victim overwritten"
-[ ! -L "$_genout/claude/pw-help.md" ] && pwtest_ok "target replaced by a regular file" || pwtest_bad "gen symlink guard" "still a symlink"
-grep -q 'pw-generated' "$_genout/claude/pw-help.md" && pwtest_ok "generated artifact carries the bundle marker" || pwtest_bad "gen marker" "marker missing"
+[ ! -L "$_genout/claude/pw-help/SKILL.md" ] && pwtest_ok "target replaced by a regular file" || pwtest_bad "gen symlink guard" "still a symlink"
+grep -q 'pw-generated' "$_genout/claude/pw-help/SKILL.md" && pwtest_ok "generated artifact carries the bundle marker" || pwtest_bad "gen marker" "marker missing"
+# Flat (command-format) providers keep the same guard: kilo writes <name>.md.
+_genout_k="$PWTEST_ROOT/pwsec-gen-k"; rm -rf "$_genout_k"; mkdir -p "$_genout_k/kilo"
+_genvictim_k="$PWTEST_ROOT/pwsec-victim-k"; printf 'keep me\n' > "$_genvictim_k"
+ln -s "$_genvictim_k" "$_genout_k/kilo/pw-help.md"
+pwtest_rc 0 "gen-commands replaces a symlinked command target" "$TOOL/scripts/toolchain/gen-commands.sh" --outdir "$_genout_k" kilo
+[ "$(cat "$_genvictim_k")" = "keep me" ] && pwtest_ok "flat symlink target untouched" || pwtest_bad "gen flat symlink guard" "victim overwritten"
+[ ! -L "$_genout_k/kilo/pw-help.md" ] && pwtest_ok "flat target replaced by a regular file" || pwtest_bad "gen flat symlink guard" "still a symlink"
+grep -q 'pw-generated' "$_genout_k/kilo/pw-help.md" && pwtest_ok "flat generated artifact carries the bundle marker" || pwtest_bad "gen flat marker" "marker missing"
 
 # --- refusals are pure: no sentinel, no stray project, and the fixture stayed intact.
 [ ! -e "$PWN" ] && pwtest_ok "no refusal leaked a side effect" || pwtest_bad "refusal purity" "sentinel present"
@@ -168,4 +176,4 @@ grep -q 'pw-generated' "$_genout/claude/pw-help.md" && pwtest_ok "generated arti
 [ -f "$SEC_DIR/task/PLAN.md" ] && pwtest_ok "fixture intact after refusals" || pwtest_bad "fixture integrity" "PLAN.md vanished"
 
 # cleanup — leave shared fixtures as found.
-rm -rf "$SEC_DIR" "$S23_DIR" "$PWTEST_ROOT/outside-repo" "$PWTEST_ROOT/outside-proj" "$PWTEST_ROOT/pwsec-desc" "$_cellf" "$_stf" "$PWTEST_ROOT/pwsec-cell.md" "$_genout" "$_genvictim"
+rm -rf "$SEC_DIR" "$S23_DIR" "$PWTEST_ROOT/outside-repo" "$PWTEST_ROOT/outside-proj" "$PWTEST_ROOT/pwsec-desc" "$_cellf" "$_stf" "$PWTEST_ROOT/pwsec-cell.md" "$_genout" "$_genvictim" "$_genout_k" "$_genvictim_k"

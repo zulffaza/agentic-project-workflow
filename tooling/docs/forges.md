@@ -140,14 +140,14 @@ note ID (the old freshness-guard approach) still misses older unindexed notes.
    `unresolvable` with a note explaining the degraded reply, so a **human** re-checks once the real
    discussion eventually appears (don't try to auto-reconcile the two IDs later — flag it instead).
 
-See [`tooling/commands/pw-ship.md`](../commands/pw-ship.md)'s MR-comment mode step 1 for the full flow.
+See [`tooling/skills/human/pw-ship/SKILL.md`](../skills/human/pw-ship/SKILL.md)'s MR-comment mode step 1 for the full flow.
 
 ## Build/CI status (runs by default — `/pw-ship … --skip-build-check` opts out)
 
 Build-check monitoring is **on by default** for `/pw-ship`, not a gate: it doesn't block the push
 or the MR open/update, but it does mean a plain run now waits on CI before finishing. This is the
 invocation an agent polls, per repo, after a push (see
-[`tooling/commands/pw-ship.md`](../commands/pw-ship.md)'s own "Build check" section for exactly when
+[`tooling/skills/human/pw-ship/SKILL.md`](../skills/human/pw-ship/SKILL.md)'s own "Build check" section for exactly when
 it fires in each mode, and how `--skip-build-check` disables it for a given run).
 
 **Terminal states** (stop polling once you see one of these — anything else means keep polling):
@@ -174,7 +174,7 @@ the message — never a readiness claim.
 
 **What the command does with a terminal state** — this registry only defines the polling mechanics;
 the command-level contract lives in
-[`tooling/commands/pw-ship.md`](../commands/pw-ship.md)'s "Build-check fix loop":
+[`tooling/skills/human/pw-ship/SKILL.md`](../skills/human/pw-ship/SKILL.md)'s "Build-check fix loop":
 - `green` → the task is done for this round.
 - `red` → the task is **NOT done**: `/pw-ship` diagnoses the failing job's output, fixes the change
   in the task's worktree, re-runs the task's `## Verify`, pushes, and re-monitors until the pipeline
