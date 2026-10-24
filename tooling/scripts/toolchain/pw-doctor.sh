@@ -280,8 +280,12 @@ for p in "${PW_PROVIDERS[@]}"; do
         # marker), never a foreign or hand-made entry that merely shares the namespace.
         if grep -qF 'pw-generated' "$skilldir/$n/SKILL.md" 2>/dev/null; then
           rm -rf "$skilldir/$n"
-        elif [ -L "$skilldir/$n" ] && case "$(readlink "$skilldir/$n")" in "$PW_HOME"/*) true ;; *) false ;; esac; then
+        elif [ -L "$skilldir/$n" ] && { case "$(readlink "$skilldir/$n")" in "$PW_HOME"/*) true ;; esac; } 2>/dev/null; then
           # Bundle-owned legacy link (e.g. the retired project-workflow guide) — safe to remove.
+          rm -f "$skilldir/$n"
+        elif [ -L "$skilldir/$n" ] && [ ! -e "$skilldir/$n" ] && case "$(readlink "$skilldir/$n")" in */tooling/skill/*) true ;; *) false ;; esac; then
+          # Dangling link into a retired bundle source layout (an older checkout/worktree):
+          # bundle install residue, not a foreign skill.
           rm -f "$skilldir/$n"
         else
           echo "      SKIPPED '$n' (no bundle marker — foreign or hand-made; remove by hand if obsolete)"
