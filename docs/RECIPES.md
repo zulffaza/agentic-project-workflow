@@ -142,6 +142,48 @@ To apply feedback to several tasks in one invocation:
 /pw-review --project delivery-note --task T01 --task T02
 ```
 
+## Batch several mechanical operations
+
+Preview a mixed list first. Nothing is written:
+
+```text
+/pw-batch preview --project delivery-note
+1. /pw-context add-input --file notes.md --what "Kickoff notes" --source "Team meeting"
+2. /pw-context add-repo --repo storefront --base main --why "Owns checkout"
+3. /pw-review init --file task/PLAN.md
+4. /pw-review item --file task/review/PLAN.review.md --section "Rollback" --text "Name the restore point."
+5. /pw-config set --key review-rounds --value 2
+```
+
+Then apply the same list:
+
+```text
+/pw-batch apply --project delivery-note
+… same numbered items …
+```
+
+Items run in order. A failed item stops the list, so inspect completed writes before resuming with the remaining items.
+Adding feedback does not approve anything. Record a decision only by naming the file and decision:
+
+```text
+/pw-batch apply --project delivery-note
+1. /pw-review signoff --file task/review/PLAN.review.md --decision approved
+```
+
+For a longer comment, end the item header with `--stdin` and put one indented fenced block beneath it:
+
+````text
+/pw-batch apply --project delivery-note
+1. /pw-review item --file task/review/PLAN.review.md --section "Failure handling" --stdin
+   ```text
+   Name the retry owner.
+   Include the second-failure path.
+   ```
+````
+
+Only `item` and `answer` accept this literal block.
+See [batch syntax](REFERENCE.md#run-several-operations-at-once) and `/pw-help command --name pw-batch`.
+
 ## Resume or limit execution
 
 | You want to… | Command | Result |

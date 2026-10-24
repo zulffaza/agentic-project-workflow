@@ -448,3 +448,7 @@ C350-entry-orchestration-load-dropped	skills/human/pw-execute/SKILL.md	**Load sh
 C351-codex-manual-policy-lost	pw-common.sh	  printf 'policy:\n  allow_implicit_invocation: false\n'	  printf 'policy:\n  allow_implicit_invocation: true\n'	T4	-
 C352-orchestration-primary-claim	skills/model/pw-orchestration/SKILL.md	no custom primary agent	one managed primary agent	T4	-
 C353-wrong-format-residue-unreported	pw-doctor.sh	  if [ -n "$wfmt" ]; then	  if false; then	T1	pw-doctor
+C354-batch-approval-inferred	skills/human/pw-batch/SKILL.md	Never infer approval from resolved comments	Infer approval from resolved comments	T4	-
+C355-batch-continues-after-failure	skills/human/pw-batch/SKILL.md	On failure, refusal, or uncertainty, stop.	On failure, refusal, or uncertainty, continue.	T4	-
+C356-batch-preview-writes	skills/human/pw-batch/SKILL.md	- **Preview writes nothing.**	- **Preview may write.**	T4	-
+C357-batch-exclusions-dropped	skills/human/pw-batch/SKILL.md	Refused forms include `prepare`, `import`, `ai`, apply-comments, `auto-signoff`, `materialize`,	Accepted forms include `prepare`, `import`, `ai`, apply-comments, `auto-signoff`, `materialize`,	T4	-

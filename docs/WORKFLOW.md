@@ -156,6 +156,14 @@ For example: `I reviewed T01 and T02 in delivery-note. Accept both results.`
 Use `/pw-status --project <slug>` to confirm acceptance. There is no separate public acceptance slash command.
 In clean execution's optional auto mode, only eligible verified tasks without open review or dependency-impact items become accepted.
 
+## Several mechanical steps in one request
+
+Use `/pw-batch` when one message should record several context inputs, review items or answers, explicit review decisions, and configuration changes.
+Preview the list with `/pw-batch preview --project <slug>`, then submit it again with `apply`.
+Each item runs through its owning command in the order written. The first failure stops the list, and completed writes remain.
+A review decision is recorded only when the item names the exact review file and decision.
+See [batch syntax](REFERENCE.md#run-several-operations-at-once) for the accepted forms.
+
 ## Step 9 — Learn + close (`/pw-close`)
 
 Run `/pw-close --project <slug>` after all task results are accepted.

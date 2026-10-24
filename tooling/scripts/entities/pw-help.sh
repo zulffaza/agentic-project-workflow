@@ -99,12 +99,12 @@ cmdfile() { printf '%s/%s/SKILL.md' "$CMDS" "$1"; }
 
 # --- the phase -> command map (embedded knowledge; the static.sh set-equality
 # canary pins its names against $CMDS, so a new command cannot stay invisible) ---
-HELP_PHASE_MAP="setup|pw-new pw-adopt pw-context pw-doctor;analysis|pw-research pw-analyze pw-review;breakdown|pw-breakdown pw-rfc;executing|pw-execute pw-verify pw-sync;ship|pw-ship;close|pw-close;anytime|pw-status pw-help pw-config pw-independent-review"
+HELP_PHASE_MAP="setup|pw-new pw-adopt pw-context pw-doctor;analysis|pw-research pw-analyze pw-review;breakdown|pw-breakdown pw-rfc;executing|pw-execute pw-verify pw-sync;ship|pw-ship;close|pw-close;anytime|pw-status pw-help pw-config pw-batch pw-independent-review"
 
 # --- the Global Operations order (the overview's first section). Every command whose
 # frontmatter scope is global|mixed MUST be listed here and every listed command MUST
 # carry global forms; render_overview validates both directions on every run. ---
-HELP_GLOBAL_ORDER="pw-help pw-doctor pw-config pw-status pw-research pw-verify pw-independent-review"
+HELP_GLOBAL_ORDER="pw-help pw-doctor pw-config pw-batch pw-status pw-research pw-verify pw-independent-review"
 
 # --- shared helpers -------------------------------------------------------------
 # Token substitution for rendered help text. Bash string replacement, never a sed program
@@ -683,7 +683,10 @@ ops_surfaced() {
         [ -n "$use" ] || use="$(gist "$(para_of "$sp" "$aop")")"
       fi
     fi
-    printf '%s\t%s\t%s\t%s\t%s\n' "$tok" "$args" "$(printf '%s' "${use:-see: /pw-help operators --name $cmd}" | user_prose)" "$fac" "${ascript:-$cmd.sh}"
+    # No fabricated script: a selector-only command (e.g. the batch coordinator) has no
+    # entity helper of its own, so an unresolved alias stays blank rather than inventing
+    # "$cmd.sh" — help must not imply a mutation entry point that does not exist.
+    printf '%s\t%s\t%s\t%s\t%s\n' "$tok" "$args" "$(printf '%s' "${use:-see: /pw-help operators --name $cmd}" | user_prose)" "$fac" "${ascript:-}"
   done
   return 0
 }
@@ -936,6 +939,25 @@ scope_tokens() {
       if (v==s && k!="") { out=out sep k; sep=", " } } END { printf "%s", out }'
 }
 
+# render_batch_ops <file> — the /pw-batch allowlist block, lifted verbatim from its command
+# file (single source of truth; no snapshot). The block is user-facing by design: it explains
+# the closed first-release surface inside the command's own how-to view. Other commands render
+# nothing. Table lines keep their columns (no flowline wrap).
+render_batch_ops() {
+  local file="$1" on=0 line
+  [ "$(basename "$(dirname "$file")")" = pw-batch ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      '<!-- batch-ops:begin -->') on=1; continue ;;
+      '<!-- batch-ops:end -->') on=0; continue ;;
+    esac
+    [ "$on" = 1 ] || continue
+    printf '  %s\n' "$line"
+  done < "$file"
+  echo
+  return 0
+}
+
 render_command() {
   local name="" slug="" a full=0 json=0 mant=0
   while [ $# -gt 0 ]; do
@@ -1116,6 +1138,7 @@ E
     printf '  (single flow - no operator dispatch on this command)\n'
   fi
   echo
+  render_batch_ops "$file"
   local script sp nops
   if [ "$mant" = 1 ]; then
   for script in $(own_first "$c" $(scripts_of "$c")); do

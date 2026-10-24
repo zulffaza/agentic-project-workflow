@@ -45,6 +45,7 @@ phases, `--json` prints a machine-readable object. No slug; never writes.
 | handle MR review comments post-ship (`/pw-ship comments`, cascade) | [`references/mr-comments.md`](references/mr-comments.md) |
 | reconcile a sync conflict, or resume a recorded attempt (`/pw-sync --auto-resolve`) | [`references/sync-conflict-resolution.md`](references/sync-conflict-resolution.md) |
 | compose a read-only review-request message (`/pw-ship request-review`) | [`references/review-request.md`](references/review-request.md) |
+| run several supported mechanical operations in one request (`/pw-batch preview` or `apply`) | [`references/batch.md`](references/batch.md) |
 | close out a finished project | [`references/close.md`](references/close.md) |
 | call an automation script (gates, lint, status, ship, fetch — the 14 `pw-*.sh` helpers) | [`tooling/docs/scripts/README.md`](../../docs/scripts/README.md) |
 | need the live command/operator map or an exact invocation line | `pw-help.sh` — `overview` · `command --name <name> [--project <slug>]` · `operators --name <name> [--operator <op>]` · `project --project <slug> [--name <command>]` · `workflow` · `find --term <term…>` (`--json` for bounded agent use) |

@@ -114,6 +114,15 @@ is normative.
   item/answer writers their attributed `in-review` row, and neither can ever produce `approved`.
   Keep both separations pinned: no agent file names the human operator, and no operational writer
   path can grant approval.
+- **C6 — one coordination entry may dispatch several existing commands.** `/pw-batch` is the
+  single, narrow exception to C1: it carries no entity script and no artifact ownership, and it
+  only sequences operators that their owning command already exposes. Its closed allowlist lives in
+  the command file between the `batch-ops` markers, and `pw-help command --name pw-batch` renders
+  that block so the surface cannot stay invisible. Every item is dispatched through the owning
+  command's helper mapping; the entry never edits project records, widens a gate, or adds a
+  mutation path. New allowlist entries require an explicit command-file update, user documentation,
+  and tests. Do not generalize this into a shell executor or a second catch-all core (S2).
+
 - **Reserved names.** `pw-maintainer` and `pw-maintainer-user-documentation` are reserved for internal maintainer skills under
   `tooling/skill-internal/` (read-as-file, NOT provider-installed) — never reuse these names for a `/pw-*`
   user command or a `tooling/skills/model/` user skill. This bullet is the durable registry of reserved

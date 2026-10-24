@@ -39,7 +39,7 @@ tooling/
 │       ├── gen-commands.sh     stamps skills/human/ into each provider's selected format
 │       ├── gen-agents.sh       seeds agents/ into each provider's agent dir
 │       └── pw-doctor.sh        checks installed skills + commands + agents match this bundle (--fix repairs)
-├── skills/human/       ← THE source of truth for the 18 human entry points (provider-neutral)
+├── skills/human/       ← THE source of truth for the 19 human entry points (provider-neutral)
 │   ├── pw-new/SKILL.md  frontmatter: name, description, args, scope, [agent]; body uses {{ARGS}}
 │   ├── pw-execute/SKILL.md
 │   └── … (17 commands + pw-independent-review)

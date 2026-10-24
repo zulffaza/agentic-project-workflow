@@ -384,7 +384,7 @@ declare -f claude_bin        >/dev/null 2>&1 || claude_bin()        { echo claud
 declare -f claude_skilldir   >/dev/null 2>&1 || claude_skilldir()   { echo "$HOME/.claude/skills"; }
 declare -f claude_commanddir >/dev/null 2>&1 || claude_commanddir() { echo "$HOME/.claude/commands"; }
 declare -f claude_agentdir   >/dev/null 2>&1 || claude_agentdir()   { echo "$HOME/.claude/agents"; }
-# entry_format: "skill" = the 18 human entry points install as invocable skills ONLY;
+# entry_format: "skill" = the 19 human entry points install as invocable skills ONLY;
 # "command" = they install as native commands ONLY. Never both for one provider.
 declare -f claude_entry_format >/dev/null 2>&1 || claude_entry_format() { echo skill; }
 # render_<prov>_entry_skill: gen-commands.sh sets $name $desc $args $bodytext before calling

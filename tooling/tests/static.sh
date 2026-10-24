@@ -551,9 +551,9 @@ PY
   local hcount mcount missing_entry bad_entry rendered
   hcount="$(ls -d "$TOOL/skills/human"/*/ 2>/dev/null | wc -l | tr -d ' ')"
   mcount="$(ls -d "$TOOL/skills/model"/*/ 2>/dev/null | wc -l | tr -d ' ')"
-  [ "$hcount" = 18 ] && [ "$mcount" = 4 ] \
-    && pwtest_ok "T4 canary: 18 human entries and 4 shared skills (plan 29)" \
-    || pwtest_bad "T4 canary: skill inventory" "expected 18 human + 4 shared; got $hcount + $mcount"
+  [ "$hcount" = 19 ] && [ "$mcount" = 4 ] \
+    && pwtest_ok "T4 canary: 19 human entries and 4 shared skills (plan 29)" \
+    || pwtest_bad "T4 canary: skill inventory" "expected 19 human + 4 shared; got $hcount + $mcount"
   missing_entry="$(grep -L '`pw-orchestration`' "$TOOL"/skills/human/*/SKILL.md 2>/dev/null | tr '\n' ' ')"
   [ -z "$missing_entry" ] \
     && pwtest_ok "T4 canary: every human entry loads the shared orchestration rules" \
@@ -569,21 +569,50 @@ PY
   "$TOOL/scripts/toolchain/gen-commands.sh" --outdir "$rendered" claude cursor codex kilo opencode >/dev/null 2>&1
   bad_entry=""
   for _pf in claude cursor; do
-    [ "$(ls -d "$rendered/$_pf"/*/ 2>/dev/null | wc -l | tr -d ' ')" = 18 ] || bad_entry="$bad_entry $_pf:skill-count"
+    [ "$(ls -d "$rendered/$_pf"/*/ 2>/dev/null | wc -l | tr -d ' ')" = 19 ] || bad_entry="$bad_entry $_pf:skill-count"
     grep -qF 'disable-model-invocation: true' "$rendered/$_pf/pw-execute/SKILL.md" 2>/dev/null || bad_entry="$bad_entry $_pf:explicit-only"
     ls "$rendered/$_pf"/*.md >/dev/null 2>&1 && bad_entry="$bad_entry $_pf:command-files"
   done
-  [ "$(ls -d "$rendered/codex"/*/ 2>/dev/null | wc -l | tr -d ' ')" = 18 ] || bad_entry="$bad_entry codex:skill-count"
+  [ "$(ls -d "$rendered/codex"/*/ 2>/dev/null | wc -l | tr -d ' ')" = 19 ] || bad_entry="$bad_entry codex:skill-count"
   grep -qF 'allow_implicit_invocation: false' "$rendered/codex/pw-execute/agents/openai.yaml" 2>/dev/null || bad_entry="$bad_entry codex:policy"
   grep -qF '<arguments>' "$rendered/codex/pw-execute/SKILL.md" 2>/dev/null || bad_entry="$bad_entry codex:args-token"
   grep -qF '$ARGUMENTS' "$rendered/codex/pw-execute/SKILL.md" 2>/dev/null && bad_entry="$bad_entry codex:claude-token"
   for _pf in kilo opencode; do
-    [ "$(ls "$rendered/$_pf"/*.md 2>/dev/null | wc -l | tr -d ' ')" = 18 ] || bad_entry="$bad_entry $_pf:command-count"
+    [ "$(ls "$rendered/$_pf"/*.md 2>/dev/null | wc -l | tr -d ' ')" = 19 ] || bad_entry="$bad_entry $_pf:command-count"
     ls -d "$rendered/$_pf"/pw-*/ >/dev/null 2>&1 && bad_entry="$bad_entry $_pf:entry-skills"
   done
   [ -z "$bad_entry" ] \
     && pwtest_ok "T4 canary: exclusive provider output (skills-only claude/cursor/codex, commands-only kilo/opencode)" \
     || pwtest_bad "T4 canary: exclusive provider output" "unexpected artifacts:$bad_entry"
+
+  # (g3) plan 59: one batch coordination entry over existing commands — a closed allowlist in
+  # the command file, explicit authorization, stop-first partial reporting, and NO second
+  # mutation engine (a pw-batch.sh entry point would turn coordination into a catch-all core).
+  b_entry="$TOOL/skills/human/pw-batch/SKILL.md"
+  b_ref="$TOOL/skills/model/pw-guide-workflow/references/batch.md"
+  b_miss=""
+  [ -f "$b_entry" ] || b_miss="$b_miss entry"
+  [ -f "$b_ref" ] || b_miss="$b_miss reference"
+  [ -f "$TOOL/scripts/entities/pw-batch.sh" ] && b_miss="$b_miss unexpected-script"
+  grep -qE '^scope: mixed$' "$b_entry" 2>/dev/null || b_miss="$b_miss scope"
+  grep -qE '^scope-forms: ".*=global' "$b_entry" 2>/dev/null && grep -qE '=project' "$b_entry" 2>/dev/null || b_miss="$b_miss scope-forms"
+  grep -qF 'references/batch.md' "$b_entry" 2>/dev/null || b_miss="$b_miss reference-pointer"
+  grep -qF '<!-- batch-ops:begin -->' "$b_entry" 2>/dev/null || b_miss="$b_miss allowlist-begin"
+  grep -qF '<!-- batch-ops:end -->' "$b_entry" 2>/dev/null || b_miss="$b_miss allowlist-end"
+  for _bneed in 'Never infer approval' 'On failure, refusal, or uncertainty, stop.' 'Preview writes nothing' 'No implicit repair' 'Refused forms include'; do
+    grep -qF "$_bneed" "$b_entry" 2>/dev/null || b_miss="$b_miss missing:$_bneed"
+  done
+  for _bowner in '/pw-context' '/pw-review' '/pw-config' '/pw-status' '/pw-help' '/pw-doctor' '/pw-ship stack'; do
+    grep -qF "$_bowner" "$b_entry" 2>/dev/null || b_miss="$b_miss owner:$_bowner"
+  done
+  b_rows="$(sed -n 's/^| `\(\/pw-[a-z-]*\).*/\1/p' "$b_entry" 2>/dev/null | sort -u)"
+  [ -n "$b_rows" ] || b_miss="$b_miss allowlist-rows"
+  for _bc in $b_rows; do
+    [ -d "$TOOL/skills/human/${_bc#/}" ] || b_miss="$b_miss unknown:$_bc"
+  done
+  [ -z "$b_miss" ] \
+    && pwtest_ok "T4 canary: pw-batch closed allowlist, authorization, stop-first, no new engine" \
+    || pwtest_bad "T4 canary: pw-batch contract" "missing or drifted:$b_miss — keep the allowlist markers, contract anchors, and helper-free coordination intact"
 
   # (h) codex provider doctrine (plan 28): codex is the FIRST built-in with no native command
   # surface (custom prompts removed upstream in codex-cli 0.117.0) — its /pw-* commands are

@@ -46,7 +46,7 @@ supported before choosing a value:
 model request. Unsupported or unverified tuning is refused, never silently dropped.
 
 Once installed, run a workflow entry in your agent session. Claude Code, Cursor, and Codex install
-the 18 `pw-*` entries as explicit-only skills (select one, or type its `$pw-*` form on Codex).
+the 19 `pw-*` entries as explicit-only skills (select one, or type its `$pw-*` form on Codex).
 KiloCode and OpenCode install the same entries as `/pw-*` commands. Both groups also get the shared
 `pw-guide-*` / `pw-orchestration` skills. Examples use the shared `/pw-*` names throughout these
 guides.
@@ -59,6 +59,7 @@ guides.
 The first command creates a project. The second shows its phase, review state, and suggested commands.
 A project slug uses lowercase letters, digits, and hyphens, starting with a letter or digit. Use `delivery-note`, not a title with spaces.
 Next, [add your inputs and repositories](docs/WALKTHROUGH.md#drop-context), then request analysis.
+To run several mechanical steps in one request, use [batch operations](docs/REFERENCE.md#run-several-operations-at-once).
 
 ### Already mid-development? Adopt it instead of starting fresh
 

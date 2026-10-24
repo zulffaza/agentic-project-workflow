@@ -14,7 +14,7 @@
 #   1. resolves the three path roots from its own location,
 #   2. reads pw.config.sh for which agent CLIs you use (PW_PROVIDERS),
 #   3. installs the shared procedural skills (tooling/skills/model/*) into each provider,
-#   4. generates the 18 human entry points in the provider's selected format (skills or commands),
+#   4. generates the 19 human entry points in the provider's selected format (skills or commands),
 #   5. writes pw-env.sh (source it for $PW_HOME/$PW_PROJECTS/$PW_REPOS).
 #
 # You never edit THIS script to change providers — edit pw.config.sh.
