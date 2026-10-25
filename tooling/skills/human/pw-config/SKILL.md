@@ -80,7 +80,8 @@ The operators (operator words first; every value named — `--project <slug>` se
   (providers, API-provider scopes, model allowlists, route default, repair budgets, RFC backend,
   and the **request-review frame + generation prompts** — each effective path plus
   `default`/`custom` source).
-  Read-only by design: `pw.config.sh` is the human-owned floor file — there is no `global set`.
+  This read form writes nothing. `global set` / `global unset` below are the only managed writers;
+  they change one managed block and preserve unrelated shell settings.
 - **`/pw-config global show [--json]`** → the machine floors **plus** every inherited project
   default, each with `inherited: yes|no`, destination, effective value, and source. Defaults are
   copied into NEW projects only; a global change never rewrites an existing project.
