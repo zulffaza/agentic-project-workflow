@@ -117,7 +117,7 @@ pw-config|get show global model-check model-resolve review-trigger review-repair
 pw-session|session-check
 pw-review-read|gate has-open count eligible scan passes
 pw-status|provider-audit --all
-pw-ship|history request-review"
+pw-ship|history request-review draft ready"
 
 pwtest_is_crash() {  # file → 0 if output looks like a *script* defect (not a clean failure)
   grep -qE "^(pw-[a-z-]+\.sh|.*\.sh): line [0-9]+:|unbound variable|syntax error near|command not found|Traceback|glab-shim: unexpected|gh-shim: unexpected" "$1"

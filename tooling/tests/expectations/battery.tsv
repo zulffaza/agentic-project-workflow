@@ -37,6 +37,8 @@ summary-project pwt-f2-mid	pw-doc.sh	summary --kind project --project pwt-f2-mid
 summary-task pwt-f2-mid	pw-doc.sh	summary --kind task --project pwt-f2-mid --file T01	0	-
 summary-analysis pwt-f2-mid	pw-doc.sh	summary --kind analysis --project pwt-f2-mid	2	-
 resolve pwt-f2-mid	pw-ship.sh	resolve --project pwt-f2-mid	0	-
+draft-preview pwt-f2-mid	pw-ship.sh	draft --project pwt-f2-mid --task T02	0	-
+ready-preview pwt-f2-mid	pw-ship.sh	ready --project pwt-f2-mid --task T02	0	-
 batch pwt-f2-mid	pw-ship.sh	mr-state-batch --project pwt-f2-mid	0	-
 stack-preview pwt-f2-mid	pw-ship.sh	stack --project pwt-f2-mid	0	-
 stack-validate pwt-f2-mid	pw-ship.sh	stack-validate --project pwt-f2-mid	0	-

@@ -73,8 +73,12 @@ Supported operations in this first release. Anything not listed is refused befor
 | `/pw-help` | `overview`, `command`, `operators`, `project`, `workflow`, `find` | global |
 | `/pw-doctor` | global check, project check, project `--guidance` preview | global / project |
 | `/pw-ship stack` | topology and health preview only | project |
+| `/pw-ship` | normal or `--draft` shipment (`--task`…, `--skip-build-check`) | project |
+| `/pw-ship ready` / `/pw-ship draft` | preview; `--apply --expect <token>`; `--apply --resume <attempt-id>` | project |
 
 Rules: `preview` writes nothing. `apply` runs in order and stops at the first failure; completed writes remain, with no rollback or automatic replay. A `signoff` item records a decision only when it names the review file and decision. Literal review text ends the item with `--stdin` and uses one indented fenced block beneath it. Read-only forms report only during apply.
+
+Shipment items run the owning ship procedure, including its gates and concrete publication confirmation: the generic batch `apply` word does not authorize a publication list. A readiness item without its own `--apply` stays a preview. A readiness apply must carry the token from its own preview, or `--resume` for a recorded attempt. Batch preview never publishes, opens an MR, or writes a readiness journal.
 
 Examples:
 
@@ -84,13 +88,15 @@ Examples:
     3. /pw-review item --file task/review/PLAN.review.md --section "Failure handling" --text "Say who retries."
     4. /pw-review signoff --file task/review/PLAN.review.md --decision approved
     5. /pw-config set --key review-rounds --value 2
-    6. /pw-help overview
+    6. /pw-ship --task T01 --draft
+    7. /pw-ship ready --task T02 --apply --expect <T02-token>
+    8. /pw-help overview
 
 Repeated `--file` on `init` and same-key `--set` on a config item stay one item each.
 
-Refused forms include `prepare`, `import`, `ai`, apply-comments, `auto-signoff`, `materialize`,
-`model-resolve`, status `update`/`rewind`, doctor `--fix`/`--apply`, ship `stack adopt`, and every
-unlisted command or flag.
+Refused forms include `prepare`, `import`, `ai`, ship `comments` / `--resolve`, `auto-signoff`,
+`materialize`, `model-resolve`, status `update`/`rewind`, doctor `--fix`/`--apply`, ship
+`stack adopt`, readiness `--apply` without a token or resume, and every unlisted command or flag.
 
 Not batch items: `pw-new`, `pw-adopt`, `pw-research`, `pw-analyze`, `pw-breakdown`, `pw-execute`,
 `pw-verify`, `pw-sync`, `pw-rfc`, `pw-close`, and `pw-independent-review`.

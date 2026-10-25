@@ -260,6 +260,9 @@ See [AI-assisted review](REVIEW.md#3-ai-assisted-review-optional-advisory--manua
 
 ```text
 /pw-ship --project delivery-note --task T01
+/pw-ship --project delivery-note --task T01 --draft
+/pw-ship ready --project delivery-note --task T01
+/pw-ship ready --project delivery-note --task T01 --apply --expect <preview-token>
 /pw-ship comments --project delivery-note --task T01
 /pw-ship comments --project delivery-note --task T01 --resolve
 /pw-sync --project delivery-note

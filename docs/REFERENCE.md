@@ -64,9 +64,11 @@ See [review](REVIEW.md) for scope, gate transitions, and AI approval safeguards.
 | `/pw-execute --project <slug> --task T02 --model <provider:model\|agent>` | Override execution choice for the selected task |
 | `/pw-execute --project <slug> --acceptance <manual\|auto>` | Override result acceptance for one run |
 | `/pw-execute --project <slug> --then-ship` | Request shipping after execution, with push confirmation |
-| `/pw-ship --project <slug> [--task <task-id>]… [--skip-build-check]` | Push verified branches, open MRs, and monitor CI |
+| `/pw-ship --project <slug> [--task <task-id>]… [--draft] [--skip-build-check]` | Push verified branches, open MRs (draft with `--draft`), and monitor CI |
 | `/pw-ship comments --project <slug> [--task <task-id>]… [--skip-build-check] [--resolve]` | Handle MR feedback: fixes, pushes, and replies; `--resolve` also closes the fixed threads |
 | `/pw-ship request-review --project <slug> [--all \| --task <task-id>]… [--to <names>] [--summary] [--mr-summary] [--note] [--no-reviewers] [--prose <file>]` | Read-only: one copyable teammate review request for the open MRs |
+| `/pw-ship ready --project <slug> [--task <task-id>]… [--apply --expect <token>]` | Preview or apply draft-to-ready |
+| `/pw-ship draft --project <slug> [--task <task-id>]… [--apply --expect <token>]` | Preview or apply ready-to-draft |
 | `/pw-ship stack --project <slug>` | Preview stack topology and health without writes |
 | `/pw-ship stack adopt --project <slug> [--task <task-id>]… [--apply]` | Preview an existing stack import; `--apply` records it |
 | `/pw-sync --project <slug> [--task <task-id>]… [--auto-resolve]` | Refresh open MR branches against changed targets, verify, and push; `--auto-resolve` lets the agent reconcile conflicts and verify before publishing |

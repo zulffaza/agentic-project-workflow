@@ -1,7 +1,7 @@
 ---
 name: pw-ship
 description: Push verified task branches and open MRs with rich descriptions
-args: "[comments | request-review | stack] --project <project-slug> [--task <T0n>]… [--skip-build-check] [--resolve]"
+args: "[comments | request-review | stack | draft | ready] --project <project-slug> [--task <T0n>]… [--draft] [--apply (--expect <token> | --resume <attempt-id>)] [--skip-build-check] [--resolve]"
 scope: project
 ---
 
@@ -11,10 +11,11 @@ reporting. Load only the phase-specific references this operation needs. A read-
 must not run execution or mutation procedures.
 Follow the `pw-guide-workflow` skill. Arguments: {{ARGS}}. The first word selects the mode:
 `comments` = MR-comment mode (below); `request-review` = read-only request-message mode (below);
-anything else = ship mode (default). Every value is named: `--project <slug>` is required, and
+`stack` = stacked-MR surface (below); `draft` / `ready` = MR readiness (below); anything else = ship
+mode (default). Every value is named: `--project <slug>` is required, and
 optional task IDs scope to a subset by REPEATING `--task <T0n>` (e.g. `--task T01 --task T03`);
 `--skip-build-check`
-may appear in either ship/comment mode. Task IDs are **optional in both
+may appear in ship/comment mode; `draft`/`ready` refuse it because they never run CI. Task IDs are **optional in both
 ship modes** — with none, the command applies to **every** eligible task (all shippable tasks in
 ship mode; all tasks with an open MR in comment mode).
 
@@ -22,7 +23,7 @@ ship mode; all tasks with an open MR in comment mode).
 run close the MR threads whose fixes it just verified (see "Handling and resolution are separate").
 Without it, a comments run still fixes, verifies, pushes, replies, and records the work — it just
 **leaves every thread open for your review**, so a human can check the fix against the live thread
-before anything is closed. In any other mode (`ship`, `request-review`, `stack`) `--resolve` is a
+before anything is closed. In any other mode (`ship`, `request-review`, `stack`, `draft`, `ready`) `--resolve` is a
 usage error: refuse with that reason and do nothing — never push, comment, or write state. This flag
 is unrelated to `pw-ship.sh resolve`, the internal operator that lists shippable candidates.
 
@@ -81,6 +82,37 @@ mechanical halves are scripted:
 Publishing is **outward-facing** — this is the explicit "make it public" step, kept separate from
 `/pw-execute` so nothing pushes until you run it. `/pw-execute` already committed + verified each
 task; here we push branches and open MRs.
+
+## Draft and readiness (`draft` / `ready`)
+
+Shipment can create a draft MR with `--draft`; without it, creation stays non-draft. Readiness is
+separate from lifecycle (`open` / `merged` / `closed`) and never changes task status, acceptance,
+verification, stack state, or project phase. Draft creation keeps every normal ship gate.
+
+```
+/pw-ship draft --project <slug> --task <T0n>…                     # preview only
+/pw-ship ready --project <slug> --task <T0n>…                     # preview only
+/pw-ship draft --project <slug> --task <T0n>… --apply --expect <token>
+/pw-ship ready --project <slug> --task <T0n>… --apply --expect <token>
+/pw-ship draft --project <slug> --task <T0n>… --apply --resume <attempt-id>
+```
+
+- **Preview is the default and writes nothing.** It prints each selected MR's current readiness, the
+  requested state, and a freshness token. Never apply without the human's explicit request and that
+  token; never mint a token yourself.
+- **Open MR only.** A missing URL, merged, closed, unreadable, or malformed MR refuses the whole
+  selection before any write. A readiness change does not need the task's worktree.
+- **Apply is freshness-bound.** Re-read the selection before writing; a changed title, readiness,
+  lifecycle, or task-to-MR mapping rejects the apply. Run a fresh preview instead of retrying blindly.
+- **Readback decides success.** Only the observed requested state on the same MR counts. A remote
+  success with failed local recording is partial: report the URL and resume the recorded attempt.
+- **Resume reconciles; it never widens scope.** `--apply --resume <attempt-id>` finishes an interrupted
+  attempt. It skips completed MRs, confirms an already-observed change without another forge write,
+  and returns an unchanged or externally changed MR for a fresh preview.
+- **Existing MRs keep their readiness.** `--draft` only affects newly created MRs. Use `ready`/`draft`
+  to change an existing one.
+- GitLab readiness uses the title marker; GitHub uses the pull request's native draft state. Never
+  infer GitHub readiness from a `Draft:` title prefix.
 
 ## Stacked MRs
 
