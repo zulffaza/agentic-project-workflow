@@ -1185,7 +1185,7 @@ if [ "$SELFTEST" -eq 1 ]; then
 - **Status:** executing
 - **One-liner:** Test project for selftest
 - **AI Review:** analysis=off plan=off task-plan=off task-exec=off ship=off
-- **AI Models:** researcher=— analyst=— writer-task=— reviewer=— verifier=—
+- **AI Models:** researcher=— analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=—
 
 ## Task status
 

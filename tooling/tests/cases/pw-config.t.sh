@@ -79,14 +79,14 @@ pl_config_selftest() {
   # its task file, never here (§5.1). The row IS advisory on kilo at Task-spawn time (a headless
   # session carries it instead, §8c) — recorded in the result, never silently ignored.
   local got_m; got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" get --project demo2 --key ai-model 2>/dev/null)"
-  [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=—" ] \
+  [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=—" ] \
     || die "selftest FAIL: ai-model default line wrong: '$got_m'"
   # write-time validation (permission + availability + provider membership) rides the shim
   # catalog + noscope fixture config: only rows that can actually bind are accepted.
   PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" \
     "$(pwtest_script pw-config.sh)" set --project demo2 --key ai-model --set researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 >/dev/null 2>&1 || die "selftest FAIL: project set ai-model refused a resolvable in-scope row"
   got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" get --project demo2 --key ai-model 2>/dev/null)"
-  [ "$got_m" = "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 analyst=— writer-task=— reviewer=— verifier=—" ] \
+  [ "$got_m" = "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=—" ] \
     || die "selftest FAIL: ai-model set not isolated to researcher: '$got_m'"
   # a catalog miss is refused AT WRITE TIME (not discovered at spawn), leaving the line intact:
   if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" \
@@ -99,11 +99,11 @@ pl_config_selftest() {
     die "selftest FAIL: project set ai-model accepted a provider that is not enabled"
   fi
   got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" get --project demo2 --key ai-model 2>/dev/null)"
-  [ "$got_m" = "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 analyst=— writer-task=— reviewer=— verifier=—" ] \
+  [ "$got_m" = "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=—" ] \
     || die "selftest FAIL: refused ai-model sets still mutated the line: '$got_m'"
   PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model --project demo2 --set researcher=— >/dev/null 2>&1
   got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model --project demo2)"
-  [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=—" ] \
+  [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=—" ] \
     || die "selftest FAIL: ai-model clear-to-default failed: '$got_m'"
   if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model --project demo2 --set executor=claude:sonnet >/dev/null 2>&1; then
     die "selftest FAIL: ai-model accepted the executor lane (the task file binds the executor)"
@@ -113,6 +113,20 @@ pl_config_selftest() {
   fi
   grep -q '^- \*\*AI Models:\*\*' "$tmp/demo2/README.md" \
     || die "selftest FAIL: ai-model line vanished after clears"
+  # ship-comment-analyst is an INDEPENDENT lane: binding it must not touch `analyst`, and it must
+  # round-trip like every other role (the /pw-ship comments prerequisite reads this row).
+  PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" \
+    "$(pwtest_script pw-config.sh)" set --project demo2 --key ai-model --set ship-comment-analyst=kilo:command_code/MiniMaxAI/MiniMax-M3 >/dev/null 2>&1 \
+    || die "selftest FAIL: project set ai-model refused ship-comment-analyst"
+  got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" get --project demo2 --key ai-model 2>/dev/null)"
+  [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=kilo:command_code/MiniMaxAI/MiniMax-M3" ] \
+    || die "selftest FAIL: ship-comment-analyst binding leaked into another lane: '$got_m'"
+  PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" \
+    "$(pwtest_script pw-config.sh)" set --project demo2 --key ai-model --set analyst=kilo:command_code/MiniMaxAI/MiniMax-M3 >/dev/null 2>&1 \
+    || die "selftest FAIL: analyst set refused after ship-comment-analyst"
+  got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" get --project demo2 --key ai-model 2>/dev/null)"
+  [ "$got_m" = "researcher=— analyst=kilo:command_code/MiniMaxAI/MiniMax-M3 writer-task=— reviewer=— verifier=— ship-comment-analyst=kilo:command_code/MiniMaxAI/MiniMax-M3" ] \
+    || die "selftest FAIL: ship-comment-analyst and analyst are not independent lanes: '$got_m'"
   rm -rf "$tmp"
 }
 pl_config_selftest
@@ -369,7 +383,7 @@ _aim_after="$(grep -m1 '^- \*\*AI Models:\*\*' "$PRJ/README.md" | sed 's/^- \*\*
 # batch ai-model with all-valid pairs lands in one write + one log.
 pwtest_rc 0 "project set ai-model batch valid" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key ai-model --set "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3" --set "reviewer=—"
 pwtest_rc 0 "batch ai-model get" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" get --project pcfg-demo --key ai-model
-pwtest_re 'researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 analyst=— writer-task=— reviewer=— verifier=—' "model batch landed both kinds of pair"
+pwtest_re 'researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=—' "model batch landed both kinds of pair"
 # rfc-target delegates to the rfc entity (META gets created + stamped).
 pwtest_rc 0 "project set rfc-target" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PC" set --project pcfg-demo --key rfc-target --value "https://example/rfcs/42"
 grep -qF 'https://example/rfcs/42' "$PRJ/rfc/META.md" 2>/dev/null && pwtest_ok "rfc-target persisted to META" || pwtest_bad "rfc-target META" "$(cat "$PRJ/rfc/META.md" 2>/dev/null | head -3)"

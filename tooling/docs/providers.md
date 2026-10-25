@@ -73,8 +73,9 @@ this section owns the contract). **You don't edit any script** — everything go
      Every human entry is explicit-only: the human starts the operation.
      Shared procedural skills live in `tooling/skills/model/` and are installed separately; they
      use distinct `pw-guide-*` / `pw-orchestration` names, so no namespace collision remains.
-  4. *(Optional)* `<name>_agentdir()` + `render_<name>_agent()` to also seed the five worker
-     sub-agents (`pw-executor`, `pw-reviewer`, `pw-researcher`, `pw-analyst`, `pw-writer-task`).
+  4. *(Optional)* `<name>_agentdir()` + `render_<name>_agent()` to also seed the six worker
+     sub-agents (`pw-executor`, `pw-reviewer`, `pw-researcher`, `pw-analyst`, `pw-writer-task`,
+     `pw-ship-comment-analyst`).
      Same idea as `render_<name>_command`, but `gen-agents.sh` sets a different variable set
      beforehand: `$agentname` (the file's basename), `$desc`, `$displayName`, `$role`,
      `$claude_tools`, `$model`, `$bodytext` — see

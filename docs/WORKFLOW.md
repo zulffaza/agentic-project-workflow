@@ -109,6 +109,7 @@ The command monitors CI by default and reports or repairs failures within its li
 `--skip-build-check` skips CI monitoring; it still pushes and opens MRs.
 
 When reviewers leave comments, `/pw-ship comments --project <slug> [--task <T0n>]…` reads them, applies justified fixes, verifies, pushes, and replies.
+One read-only analysis pass interprets and groups the whole selected set before any edit; independent MRs may then run concurrently within `max-parallel`, while groups inside one MR stay sequential.
 Each attempt keeps a local record and MR description history. See [MR review](REVIEW.md#2-the-mr-review-flow-post-ship).
 
 To invite review, `/pw-ship request-review --project <slug>` builds one copyable message for the open MRs —

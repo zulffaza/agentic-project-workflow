@@ -65,7 +65,7 @@ declare -p PW_FORGE_HOSTS >/dev/null 2>&1 || PW_FORGE_HOSTS=()
 
 # Role model defaults + optional tuning. Tuning is stored per role so a binding keeps its
 # variant/reasoning/effort when it is copied into a project.
-PW_PROJECT_AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier"
+PW_PROJECT_AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier ship-comment-analyst"
 for _pw_role in $PW_PROJECT_AI_MODEL_ROLES; do
   _pw_ru="$(printf '%s' "$_pw_role" | tr '[:lower:]-' '[:upper:]_')"
   for _pw_axis in MODEL VARIANT REASONING EFFORT; do

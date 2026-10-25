@@ -68,11 +68,17 @@ python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["capabilit
   && pwtest_ok "model-check json carries capabilities and permission" \
   || pwtest_bad "model-check json carries capabilities and permission" "$(head -c 200 "$PWTEST_OUT")"
 
+# The comments-analysis lane is a normal global role: its default rides into a NEW project like
+# every other spawn lane (and nowhere else).
+pwtest_rc 0 "global set ship-comment-analyst" gpd global set --key ai-model --set ship-comment-analyst=kilo:command_code/model
+gpd_re 'ship-comment-analyst=kilo:command_code/model' "$(gpd global get --key ai-model 2>/dev/null)" "global get lists the comments-analysis lane"
+
 # --- creation snapshot: new project inherits, existing is untouched ------------------------
 pwtest_rc 0 "scaffold inherits global defaults" gpd_scaffold demo-defaults
 R="$GPD/projects/demo-defaults/README.md"
 gpd_re 'analyst=kilo:command_code/model' "$(grep '^- \*\*AI Models:\*\*' "$R")" "dashboard inherits the tuned role"
 gpd_re 'analyst=variant:high' "$(grep '^- \*\*AI Model Tuning:\*\*' "$R")" "dashboard inherits companion tuning"
+gpd_re 'ship-comment-analyst=kilo:command_code/model' "$(grep '^- \*\*AI Models:\*\*' "$R")" "dashboard inherits the comments-analysis lane"
 gpd_re 'analysis=completion' "$(grep '^- \*\*Review Trigger:\*\*' "$R")" "dashboard inherits review trigger"
 gpd_re 'ship=manual' "$(grep '^- \*\*Review Trigger:\*\*' "$R")" "dashboard keeps named review-trigger member"
 gpd_re 'routing=headless' "$(grep '^- \*\*Project Defaults:\*\*' "$R")" "dashboard captures the PLAN seed"
@@ -80,7 +86,7 @@ pwtest_rc 0 "project ai-model json" gpd get --project demo-defaults --key ai-mod
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["roles"]["analyst"]["tuning"]=="variant:high" and d["roles"]["analyst"]["model"]=="command_code/model"' "$PWTEST_OUT" \
   && pwtest_ok "structured read keeps the complete binding" \
   || pwtest_bad "structured read keeps the complete binding" "$(head -c 200 "$PWTEST_OUT")"
-pwtest_eq "plain read stays role=model compatible" "researcher=— analyst=kilo:command_code/model writer-task=— reviewer=— verifier=—" \
+pwtest_eq "plain read stays role=model compatible" "researcher=— analyst=kilo:command_code/model writer-task=— reviewer=— verifier=— ship-comment-analyst=kilo:command_code/model" \
   "$(gpd get --project demo-defaults --key ai-model)"
 
 gpd global set --key routing --value auto >/dev/null

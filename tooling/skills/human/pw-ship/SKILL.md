@@ -278,9 +278,12 @@ reviewer sees only this task's own changes. Group per file/module with real iden
 ## MR-comment mode  (`/pw-ship comments --project <slug> [--task <T0n>]…`)
 
 **Load `references/mr-comments.md`** and run its procedure — invocation and pending delivery,
-MR-state resolution, one fixer pass per MR, reply/resolve under the `--resolve` policy above,
-the recap, and the stacked cascade. Routing follows the §routing ladder in
-`references/execution-and-routing.md`. The pre-flight `comments` gate above must pass first.
+MR-state resolution, the single read-only `pw-ship-comment-analyst` prerequisite, one fixer pass
+per MR with groups applied sequentially, reply/resolve under the `--resolve` policy above, the
+recap, and the stacked cascade. No fixer starts before the analysis artifact is complete and
+validated; independent MR fixers overlap only within the project `max-parallel` ceiling. Routing
+follows the §routing ladder in `references/execution-and-routing.md`. The pre-flight `comments`
+gate above must pass first.
 
 
 ## Build check (on by default — `--skip-build-check` to opt out, either mode)

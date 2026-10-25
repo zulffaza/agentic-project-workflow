@@ -12,7 +12,7 @@
   <!-- 🤖 set by /pw-analyze. Leave the placeholder until analysis fills it. -->
 - **AI Models:** <AI_MODELS_DEFAULT>
   <!-- 🤖 set via `/pw-config set --project <slug> --key ai-model --set <role>=<provider:model>` — one row per spawn
-       lane (researcher/analyst/writer-task/reviewer/verifier); `—` = no row = the provider's own
+       lane (researcher/analyst/writer-task/reviewer/verifier/ship-comment-analyst); `—` = no row = the provider's own
        default (kilo `small_model`/`subagent_model`; claude the session model; cursor the `auto`/
        `selectedModel` floor; codex its own configured default). The EXECUTOR is not
        a row — its pin is the task file's `Execute with:`/the PLAN's produced-by. Where a spawn

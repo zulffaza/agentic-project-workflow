@@ -131,9 +131,10 @@ discovery bullet below).
   Code ⇄ KiloCode, and any future provider). The discipline travels with the task (skill + task
   file), not the provider. Unverified headless flags → check `--help` or ask; don't guess.
 - The orchestrator spawns (or shells out to) whatever `Execute with:` names — a `provider:model`  (the default: run the model with the task file as the work order, no named def), the shipped
-  `pw-executor`, or a same-provider custom def. Five worker sub-agents ship and are seeded per
+  `pw-executor`, or a same-provider custom def. Six worker sub-agents ship and are seeded per
   provider from `tooling/agents/`: `pw-executor`, `pw-researcher`, `pw-analyst`, `pw-writer-task`,
-  and `pw-reviewer` (optional — spawned only by `/pw-review ai --project <slug> …`). No primary
+  `pw-reviewer` (optional — spawned only by `/pw-review ai --project <slug> …`), and
+  `pw-ship-comment-analyst` (read-only prerequisite of `/pw-ship comments`). No primary
   orchestrator agent ships; the normal session drives via `pw-orchestration`. Add another def only
   for a genuinely new recurring role. Ad-hoc (non-pw) *implementation*
   is not a second executor def (Option A): that work belongs to the main agent or `pw-executor`

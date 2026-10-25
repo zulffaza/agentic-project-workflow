@@ -31,13 +31,13 @@ The keys you can `set`, and their legal values (the same list `show` prints as i
 |---|---|---|
 | `routing` | `auto` · `subagent` · `headless` | default route for every task; `headless` = **strict** model binding, no silent downgrade |
 | `execution-limit` | integer `0..99` | self-repair rounds per run (floor: `PW_MAX_SELF_REPAIR`) |
-| `max-parallel` | integer `1..99` | concurrent executors at `/pw-execute` |
+| `max-parallel` | integer `1..99` | concurrent executors at `/pw-execute`, and concurrent MR comment fixers at `/pw-ship comments` |
 | `produced-by` | a provider from `PW_PROVIDERS` (see `global show`) | default executor provider for new task pins |
 | `ai-review` | `<surface>=<mode>` pairs or `all=<mode>` (+ named overrides); surfaces `context`·`analysis`·`plan`·`task-plan`·`task-exec`·`ship`·`rfc`·`close`; modes `advisory|auto` | review OUTCOME per surface: `advisory` = findings + a human still signs off (default); `auto` may self-sign a genuinely clean managed pass (the removed `off` reads as advisory; persist with `ensure`) |
 | `review-trigger` | `<surface>=<value>` pairs or `all=<value>`; values `manual|completion` | WHEN a pass starts: `manual` (only an explicit `/pw-review … ai`, default) or `completion` (also after a succeeded producing command's verification); `completion` never disables explicit requests |
 | `review-repair` | `<surface>=<value>` pairs or `all=<value>`; values `manual`·`bounded` | whether a completion review may run the bounded repair cycle (`review → repair → verify → fresh review`); `manual` = findings stop for me (default) |
 | `review-rounds` | integer `1..3` | total reviewer passes in a bounded cycle (default `3` — at most two intervening verified repairs) |
-| `ai-model` | `<role>=<provider>:<model>` or `<role>=—` pairs; roles `researcher`·`analyst`·`writer-task`·`reviewer`·`verifier`; optional `--variant`/`--reasoning`/`--effort` on a ONE-role write | spawn-lane model rows; `—` = provider/session default; model is validated live (allowlist + catalog + scope), tuning against the provider capability table. Unsupported or unverified tuning is refused, never silently dropped. Tuning is read with `get --key ai-model --json`; plain `get` stays `role=model` compatible |
+| `ai-model` | `<role>=<provider>:<model>` or `<role>=—` pairs; roles `researcher`·`analyst`·`writer-task`·`reviewer`·`verifier`·`ship-comment-analyst`; optional `--variant`/`--reasoning`/`--effort` on a ONE-role write | spawn-lane model rows; `—` = provider/session default; model is validated live (allowlist + catalog + scope), tuning against the provider capability table. Unsupported or unverified tuning is refused, never silently dropped. Tuning is read with `get --key ai-model --json`; plain `get` stays `role=model` compatible |
 | `pin` | `<T0n>=<provider>:<model>` or `<T0n>=—` pairs | per-task executor pins; written to **both holders** (task-file `Execute with:` + PLAN cell) by one propagator, so gate/audit never see drift; same live validation at write time |
 | `rfc-target` | a doc ref/URL | where `/pw-rfc` publishes |
 
@@ -54,13 +54,13 @@ The operators (operator words first; every value named — `--project <slug>` se
 - **`/pw-config get --project <slug> --key <key>`** → `…/pw-config.sh get --project <slug> --key <key>` — one key's stored
   value, or `(unset — effective: <floor>)`.
 - **`/pw-config set --project <slug> --key <key> [--value <v> | --set <member=value>]…`** → `…/pw-config.sh set --project <slug> --key <key> …` —
-  the validated write, per-key values: `routing`∈`auto|subagent|headless` (headless = strict binding) · `execution-limit`∈int `0..99` · `max-parallel`∈int `1..99` · `produced-by`∈ an enabled
+  the validated write, per-key values: `routing`∈`auto|subagent|headless` (headless = strict binding) · `execution-limit`∈int `0..99` · `max-parallel`∈int `1..99` (execute executors and MR comment fixers) · `produced-by`∈ an enabled
   provider (`global show`) · `ai-review` = `surface=mode` pairs (surfaces
   `context|analysis|plan|task-plan|task-exec|ship|rfc|close`, modes `advisory|auto`; `all=<mode>`
   expands over every surface with named overrides winning regardless of argument order) ·
   `review-trigger` / `review-repair` = `surface=value` pairs (same `all=` expansion; trigger
   values `manual|completion`, repair values `manual|bounded`) ·
-  `review-rounds` = one integer `1..3` · `ai-model` = `role=value` pairs (roles `researcher|analyst|writer-task|reviewer|verifier`, value `provider:model` or `—`) ·
+  `review-rounds` = one integer `1..3` · `ai-model` = `role=value` pairs (roles `researcher|analyst|writer-task|reviewer|verifier|ship-comment-analyst`, value `provider:model` or `—`) ·
   `pin` = `T0n=value` pairs (value `provider:model` or `—` to clear; each pin lands in BOTH
   holders — task-file `Execute with:` and the PLAN cell — via the single propagator) ·
   `rfc-target` = a doc ref. Scalar keys take **`--value <v>`**; the pair-taking keys take repeated

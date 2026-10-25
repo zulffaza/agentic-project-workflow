@@ -29,7 +29,8 @@ not run preflight mutations, spawn workers, or write state.
   repair batch the routing ladder routes driver-inline. Only that batch's listed items, in that
   task's worktree, with its `## Verify` run and committed.
 - **Workers stay native sub-agents.** `pw-executor`, `pw-reviewer`, `pw-researcher`,
-  `pw-analyst`, and `pw-writer-task` keep isolated contexts and their model bindings.
+  `pw-analyst`, `pw-writer-task`, and `pw-ship-comment-analyst` keep isolated contexts and their
+  model bindings.
 - **Guides do not operate.** Loading `pw-guide-review-method` or `pw-guide-authoring` teaches a
   method; the human entry point owns dispatch, publishing, and sign-off.
 - **Report faithfully.** "Done" only after the task's `## Verify` ran and real output was pasted.

@@ -379,7 +379,7 @@ grep -qF 'advisory|auto' "$PWTEST_OUT" && pwtest_ok "set block carries ai-review
   || pwtest_bad "review values" "modes missing"
 grep -qF 'manual|completion' "$PWTEST_OUT" && pwtest_ok "set block carries review-trigger values" \
   || pwtest_bad "trigger values" "trigger enum missing"
-grep -qF 'researcher|analyst|writer-task|reviewer|verifier' "$PWTEST_OUT" \
+grep -qF 'researcher|analyst|writer-task|reviewer|verifier|ship-comment-analyst' "$PWTEST_OUT" \
   && pwtest_ok "set block carries ai-model roles" || pwtest_bad "model roles" "roles missing"
 # 8b-2) scope boundary (plan 42): the declared global vs project split must RENDER as the
 # two overview labels (never a flat same-tier list), and global forms must print their
