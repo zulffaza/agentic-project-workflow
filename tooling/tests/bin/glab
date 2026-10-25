@@ -12,6 +12,19 @@ fi
 if [ -n "${PWTEST_REVIEW_FORGE_DIR:-}" ] && [ "${1:-}" = api ]; then
   exec python3 "$(dirname "$0")/forge-review.py" glab "$@"
 fi
+_draft_of() {  # <iid> -> draft|ready|""
+  local k="$1" v=""
+  [ -n "${PWTEST_FORGE_STATE_FILE:-}" ] && [ -f "$PWTEST_FORGE_STATE_FILE" ] && \
+    v="$(awk -v k="$k" '$1==k{print $3; exit}' "$PWTEST_FORGE_STATE_FILE")"
+  printf '%s' "$v"
+}
+_draft_json() { [ "$(_draft_of "$1")" = draft ] && printf true || printf false; }
+_title_of() {
+  local k="$1" t=""
+  [ -n "${PWTEST_MR_TITLE_FILE:-}" ] && [ -f "$PWTEST_MR_TITLE_FILE" ] && \
+    t="$(awk -v k="$k" '$1==k{sub($1" ",""); print; exit}' "$PWTEST_MR_TITLE_FILE")"
+  printf '%s' "${t:-Fixture MR}"
+}
 _state_json() {
   local iid="$1" st="opened" tgt="${PWTEST_MR_TARGET:-master}" t hd="dead000f" h
   if [ -n "${PWTEST_FORGE_STATE_FILE:-}" ] && [ -f "$PWTEST_FORGE_STATE_FILE" ]; then
@@ -28,9 +41,9 @@ _state_json() {
   # A real forge may pretty-print its JSON; PWTEST_MR_PRETTY=1 pins that shape so a
   # whitespace-sensitive reader cannot pass by accident. Falls back to compact without jq.
   if [ -n "${PWTEST_MR_PRETTY:-}" ] && command -v jq >/dev/null 2>&1; then
-    printf '{"iid":"%s","state":"%s","sha":"%s","target_branch":"%s","web_url":"https://gitlab.example.com/pwtest/api/-/merge_requests/%s"}\n' "$iid" "$st" "$hd" "$tgt" "$iid" | jq .
+    printf '{"iid":"%s","state":"%s","sha":"%s","target_branch":"%s","draft":%s,"title":"%s","web_url":"https://gitlab.example.com/pwtest/api/-/merge_requests/%s"}\n' "$iid" "$st" "$hd" "$tgt" "$(_draft_json "$iid")" "$(_title_of "$iid")" "$iid" | jq .
   else
-    printf '{"iid":"%s","state":"%s","sha":"%s","target_branch":"%s","web_url":"https://gitlab.example.com/pwtest/api/-/merge_requests/%s"}\n' "$iid" "$st" "$hd" "$tgt" "$iid"
+    printf '{"iid":"%s","state":"%s","sha":"%s","target_branch":"%s","draft":%s,"title":"%s","web_url":"https://gitlab.example.com/pwtest/api/-/merge_requests/%s"}\n' "$iid" "$st" "$hd" "$tgt" "$(_draft_json "$iid")" "$(_title_of "$iid")" "$iid"
   fi
 }
 _list_json() {
@@ -55,6 +68,7 @@ case "${1:-}" in
       echo "  -b, --target-branch string   Target branch"
       echo "  -t, --title string           Title"
       echo "  -d, --description string     Description"
+      [ -n "${PWTEST_GLAB_CREATE_NO_DRAFT:-}" ] || echo "      --draft                  Mark the merge request as a draft"
       if [ -z "${PWTEST_GLAB_CREATE_NO_OUTPUT:-}" ]; then
         echo "  -F, --output string          Format output as: text, json"
       fi
@@ -70,7 +84,22 @@ case "${1:-}" in
               fi
               if [ -n "${PWTEST_FORGE_CREATE+set}" ] && [ -z "$PWTEST_FORGE_CREATE" ]; then
                 echo "glab-shim: creation returned no URL (forced)" >&2; exit 1; fi
-              n=$(( $(cat "${PWTEST_FORGE_STATE_FILE:-/dev/null}" 2>/dev/null | grep -cm 'merge_requests ' ) + 42 ))
+              n=$(( $(wc -l < "${PWTEST_FORGE_STATE_FILE:-/dev/null}" 2>/dev/null || echo 0) + 42 ))
+              _d=""; _title=""
+              _prev=""
+              for _a in "$@"; do
+                [ "$_prev" = "--title" ] && _title="$_a"
+                [ "$_prev" = "--draft" ] && _d=draft
+                _prev="$_a"
+                [ "$_a" = "--draft" ] && _d=draft
+              done
+              case " $* " in *" --draft "*) _d=draft ;; esac
+              if [ -n "${PWTEST_FORGE_STATE_FILE:-}" ]; then
+                printf '%s opened %s\n' "$n" "$_d" >> "$PWTEST_FORGE_STATE_FILE"
+              fi
+              if [ -n "$_title" ] && [ -n "${PWTEST_MR_TITLE_FILE:-}" ]; then
+                printf '%s %s\n' "$n" "$_title" >> "$PWTEST_MR_TITLE_FILE"
+              fi
               case " $* " in
                 *" --output json "*) _state_json "$n" ;;
                 *) printf 'Creating merge request...\nhttps://gitlab.example.com/pwtest/api/-/merge_requests/%s\n' "$n" ;;
@@ -96,6 +125,48 @@ case "${1:-}" in
       *) printf 'glab-shim: unexpected mr sub: %s\n' "$2" >&2; exit 42 ;;
     esac ;;
   api)
+    case " $* " in
+      *" --method PUT "*)
+        _iid="${2##*/}"; _payload="$(cat)"
+        python3 - "$_iid" "$_payload" "${PWTEST_FORGE_STATE_FILE:-/dev/null}" "${PWTEST_MR_TITLE_FILE:-/dev/null}" <<'PYG'
+import json, re, sys
+iid, payload, state_file, title_file = sys.argv[1:5]
+data = json.loads(payload or '{}')
+title = data.get('title') if isinstance(data.get('title'), str) else None
+draft = 'draft' if title is not None and re.match(r'^(draft|wip)\s*:', title, re.I) else ('ready' if title is not None else '')
+try:
+    lines = open(state_file).read().splitlines()
+except OSError:
+    lines = []
+out, found = [], False
+for line in lines:
+    parts = line.split()
+    if parts and parts[0] == iid:
+        st = parts[1] if len(parts) > 1 else 'opened'
+        mark = draft if draft else (parts[2] if len(parts) > 2 else '')
+        out.append(' '.join([iid, st, mark]).strip()); found = True
+    else:
+        out.append(line)
+if not found:
+    out.append(' '.join([iid, 'opened', draft]).strip())
+open(state_file, 'w').write('\n'.join(out) + '\n')
+if title is not None:
+    try:
+        tl = open(title_file).read().splitlines()
+    except OSError:
+        tl = []
+    tout, tfound = [], False
+    for line in tl:
+        if line.split(' ', 1)[0] == iid:
+            tout.append(iid + ' ' + title); tfound = True
+        else:
+            tout.append(line)
+    if not tfound:
+        tout.append(iid + ' ' + title)
+    open(title_file, 'w').write('\n'.join(tout) + '\n')
+PYG
+        _state_json "$_iid"; exit 0 ;;
+    esac
     case "${2:-}" in
       *'merge_requests?'*) _list_json ;;
       *pipelines*) printf '%s\n' "${PWTEST_PIPELINE:-}"; exit 0 ;;

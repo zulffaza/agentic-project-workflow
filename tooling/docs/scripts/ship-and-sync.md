@@ -38,6 +38,36 @@ task with no MR is still eligible for an explicit shipment. When a candidate can
 **without emitting a partial list** — resolve the named item, then re-run. `0` lines = nothing
 shippable (that's exit `0`, not an error). Exit `2` = usage / missing project / no PLAN.md.
 
+## pw-ship.sh exec --draft
+
+`exec` accepts `--draft` for a newly created MR. The flag never affects an existing or
+reconciled MR, and ordinary creation stays non-draft. The capability is checked before the
+push: a CLI whose `create --help` lacks `--draft` is refused with nothing published. After
+creation the recorded URL's readiness is read back; a mismatch is reported as partial
+delivery (the URL is already in `## Result`) and never causes a second MR.
+
+## pw-ship.sh draft / ready
+
+Explicit readiness transitions on the open MRs recorded in each selected task's `## Result`:
+
+```bash
+$PW_HOME/tooling/scripts/entities/pw-ship.sh draft --project <slug> --task <T0n>… [--apply (--expect <token> | --resume <attempt-id>)]
+$PW_HOME/tooling/scripts/entities/pw-ship.sh ready --project <slug> --task <T0n>… [--apply (--expect <token> | --resume <attempt-id>)]
+```
+
+The default form is a read-only preview. It prints one `T0n|url|current|requested|outcome` line
+per unique MR (`change` or `noop`) and a `token:` line. `--apply --expect <token>` re-reads the
+whole selection and refuses a changed title, lifecycle, readiness, or task-to-MR mapping before
+any write. `--apply --resume <attempt-id>` reconciles an interrupted attempt recorded under
+`task/ship-readiness/<attempt-id>.json`; it does not widen the selection or repeat a completed
+write.
+
+Readiness changes require open MRs and one or more explicit tasks. They never need a worktree,
+a `done` task, ship candidate gates, CI polling, or verification. Success requires forge
+readback of the requested state. A confirmed change is logged once with its attempt identity;
+an already-correct MR is a no-op with no write and no log event. GitLab changes the recognized
+draft marker on the title; GitHub uses its native draft state, never a title prefix.
+
 ## pw-ship.sh exec
 
 The mechanical half of shipping **one task**, after the agent has confirmed the push list and

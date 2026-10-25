@@ -32,11 +32,15 @@ OPS="$(awk '/<!-- batch-ops:begin -->/{on=1;next} /<!-- batch-ops:end -->/{on=0}
 for _need in '/pw-context' '/pw-review' '/pw-config' '/pw-status' '/pw-help' '/pw-doctor' '/pw-ship stack'; do
   printf '%s' "$OPS" | grep -qF "$_need" && pwtest_ok "allowlist owner $_need" || pwtest_bad "allowlist owner" "missing $_need"
 done
-for _op in req-init add-input add-repo init init-all item answer signoff model-check '--all' '--guidance' stack; do
+for _op in req-init add-input add-repo init init-all item answer signoff model-check '--all' '--guidance' stack '/pw-ship ready' '/pw-ship draft' '--draft'; do
   printf '%s' "$OPS" | grep -qF -- "$_op" && pwtest_ok "allowlist form $_op" || pwtest_bad "allowlist form" "missing $_op"
 done
 printf '%s' "$OPS" | grep -qF 'Refused forms include' \
   && pwtest_ok "allowlist states the refused forms" || pwtest_bad "refusals" "Refused forms line missing"
+printf '%s' "$OPS" | grep -qF 'concrete publication confirmation' \
+  && pwtest_ok "shipment retains concrete publication confirmation" || pwtest_bad "shipment confirmation" "missing"
+printf '%s' "$OPS" | grep -qF 'readiness apply must carry the token' \
+  && pwtest_ok "readiness apply is token-bound" || pwtest_bad "readiness token" "missing"
 for _bad in prepare import auto-signoff materialize model-resolve '--fix' '--apply' 'stack adopt' update rewind; do
   printf '%s' "$OPS" | grep -qF -- "$_bad" && pwtest_ok "excluded form named: $_bad" || pwtest_bad "exclusions" "missing $_bad"
 done

@@ -61,9 +61,10 @@ Structural validation covers the whole list and happens before any helper runs:
 3. Required selectors and values are present for that form.
 4. Project inheritance is consistent; global forms carry no injected project.
 5. A literal payload satisfies section 2.
-6. The form has no excluded flag or mode: `--fix`, `--apply`, `stack adopt`, status `update` or
-   `rewind`, `auto-signoff`, `materialize`, `model-resolve`, `prepare`, `import`, `ai`, or an
-   apply-comments flow.
+6. The form has no excluded flag or mode: `--fix`, `stack adopt`, ship `comments`/`--resolve`,
+   status `update` or `rewind`, `auto-signoff`, `materialize`, `model-resolve`, `prepare`, `import`,
+   `ai`, or an apply-comments flow. A `/pw-ship ready|draft` item may carry `--apply` only with its
+   own `--expect <token>` or `--resume <attempt-id>`; every other item-level `--apply` is refused.
 7. Duplicate non-repeatable selectors and conflicting duplicate config members are refused.
    Deliberate repeated items are not deduplicated.
 8. An item that targets a review file created by an earlier `init` item is allowed. Do not require
@@ -73,6 +74,14 @@ Semantic validation stays with the owning helper at execution time: enum values,
 document metadata, question state, review gates, and task evidence.
 Do not duplicate those rules here, and do not run a mutating helper as a speculative check.
 Preview reports state-dependent checks as deferred when it cannot prove them without execution.
+
+**Shipment and readiness dependencies.** A shipment item runs with the owning ship gates and a
+concrete publication confirmation; the generic batch `apply` never authorizes a publication list.
+A later readiness item may target an MR created earlier in the same batch, but it must not invent
+an expectation token for it. Use a readiness preview after the shipment, then a separately
+authorized apply with that token. Batch preview never publishes, opens an MR, or writes a readiness
+journal. A batch applies serially; a failed or uncertain item stops later items, and successful
+shipments are neither replayed nor rolled back.
 
 ## 4. Dispatch map
 
@@ -100,6 +109,9 @@ Use the owning command's mapping. These are the concrete helpers behind the allo
 | `/pw-doctor` (global) | `pw-doctor.sh` |
 | `/pw-doctor --project` | `pw-doctor.sh --project <slug> [--guidance]` |
 | `/pw-ship stack` | `pw-ship.sh stack --project <slug>` |
+| `/pw-ship` | the human `pw-ship` entry's full ship procedure (never a direct `exec` shortcut) |
+| `/pw-ship ready` | `pw-ship.sh ready --project <slug> --task <T0n>… [--apply --expect <token> \| --apply --resume <id>]` |
+| `/pw-ship draft` | `pw-ship.sh draft --project <slug> --task <T0n>… [--apply --expect <token> \| --apply --resume <id>]` |
 
 Run each helper exactly once for its item. Do not add flags the human did not supply.
 Do not convert a read-only item into a repair. Do not run any helper the table does not name.

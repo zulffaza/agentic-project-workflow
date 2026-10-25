@@ -1633,3 +1633,518 @@ except (OSError, ValueError, TypeError, KeyError) as error:
     sys.exit(2)
 PY
 }
+
+# Source-only draft/ready readiness: read-only preview, freshness-bound apply, interrupted-write
+# recovery, and forge readback. Lifecycle state stays separate from readiness.
+#   preview --project-dir <d> --slug <slug> --direction <draft|ready> --task <T0n>… [--mappings <lines>]
+#   apply   --project-dir <d> --slug <slug> --direction <draft|ready> --task <T0n>… [--mappings <lines>]
+#           --status-script <path> (--expect <token> | --resume <attempt-id>)
+#   inspect --project-dir <d> --task <T0n>
+pw_ship_readiness() {
+  python3 - "$@" <<'PY'
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+from urllib.parse import quote, unquote, urlsplit
+
+class Need(Exception):
+    pass
+
+def need(condition, message):
+    if not condition:
+        raise Need(message)
+
+def digest(value):
+    return hashlib.sha256(value.encode('utf-8')).hexdigest()
+
+TASK_RE = re.compile(r'^T[0-9]{2,}$')
+ATTEMPT_RE = re.compile(r'^[0-9a-f]{32}$')
+DRAFT_PREFIX = re.compile(r'^\s*(?:draft|wip)\s*:\s*', re.I)
+
+def safe_dir(path):
+    p = Path(path).resolve()
+    need(p.is_dir(), 'project directory not found: ' + str(p))
+    return p
+
+def read_task_mr(task_file):
+    text = Path(task_file).read_text(encoding='utf-8', errors='replace')
+    section = []
+    active = False
+    for line in text.splitlines():
+        if line.startswith('## '):
+            active = line.startswith('## Result')
+            continue
+        if active:
+            section.append(line)
+    body = '\n'.join(section)
+    if not body:
+        return ''
+    field = re.search(r'^[ \t]*(?:[-*][ \t]*)?\**MR\**[ \t]*:[ \t]*(.*)$', body, re.M)
+    if field:
+        value = re.sub(r'[ \t]+\*\*.*$', '', field.group(1)).strip()
+        value = re.sub(r'^[*_\s]+', '', value)
+        url = re.search(r'https?://[^ )>|"`]+', value)
+        if url:
+            return url.group(0)
+        if value:
+            return value
+    url = re.search(r'https?://[^ )>|"`]+', body)
+    return url.group(0) if url else ''
+
+def identity(url, mappings):
+    parsed = urlsplit(url)
+    need(parsed.scheme in ('http', 'https') and not parsed.username and not parsed.password,
+         'MR URL must be http(s) without credentials')
+    host = parsed.netloc.lower()
+    need(re.fullmatch(r'[a-z0-9][a-z0-9.-]*(?::[0-9]+)?', host), 'invalid MR hostname')
+    need(not parsed.query and not parsed.fragment, 'MR URL must not contain query or fragment')
+    path = unquote(parsed.path).rstrip('/')
+    match = re.fullmatch(r'/(.+)/-/merge_requests/([1-9][0-9]*)', path)
+    forge = 'gitlab'
+    if not match:
+        match = re.fullmatch(r'/([^/]+/[^/]+)/pull/([1-9][0-9]*)', path)
+        forge = 'github'
+    need(match is not None, 'unrecognized MR/PR URL: ' + url)
+    repo, number = match.groups()
+    need(all(re.fullmatch(r'[A-Za-z0-9_.-]+', part) and part not in ('.', '..') for part in repo.split('/')),
+         'unsafe repository identity')
+    if forge == 'github':
+        repo = repo.lower()
+    for mapping in (mappings or '').splitlines():
+        if '=' in mapping:
+            configured_host, configured_forge = mapping.split('=', 1)
+            if configured_host.lower() == host:
+                need(configured_forge == forge, 'MR URL conflicts with configured forge')
+    # The URL path shape already distinguishes GitLab (/-/merge_requests/) from GitHub (/pull/).
+    # Unlike description ownership, readiness needs no host registry entry: self-hosted forges are
+    # common, and an explicit mapping conflict above still refuses an ambiguous host.
+    return {'forge': forge, 'host': host, 'repo': repo, 'number': int(number)}
+
+def forge_json(mr, endpoint):
+    binary = 'gh' if mr['forge'] == 'github' else 'glab'
+    try:
+        result = subprocess.run([binary, 'api', endpoint, '--hostname', mr['host']],
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=90)
+    except subprocess.SubprocessError:
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        return json.loads(result.stdout)
+    except ValueError:
+        return None
+
+def metadata(mr):
+    if mr['forge'] == 'github':
+        endpoint = 'repos/' + mr['repo'] + '/pulls/' + str(mr['number'])
+    else:
+        endpoint = 'projects/' + quote(mr['repo'], safe='') + '/merge_requests/' + str(mr['number'])
+    data = forge_json(mr, endpoint)
+    if not isinstance(data, dict):
+        return None
+    if mr['forge'] == 'github':
+        raw_state = data.get('state')
+        if data.get('merged') is True:
+            state = 'merged'
+        elif raw_state == 'open':
+            state = 'open'
+        elif raw_state == 'closed':
+            state = 'closed'
+        else:
+            state = None
+        title = data.get('title') if isinstance(data.get('title'), str) else ''
+        native = data.get('draft')
+        if native is True:
+            readiness = 'draft'
+        elif native is False:
+            readiness = 'ready'
+        else:
+            readiness = 'unknown'
+        node = data.get('node_id') if isinstance(data.get('node_id'), str) else ''
+        return {'state': state, 'title': title, 'readiness': readiness, 'node': node}
+    raw_state = data.get('state')
+    if data.get('merged') is True or raw_state == 'merged':
+        state = 'merged'
+    elif raw_state in ('opened', 'open', ''):
+        state = 'open'
+    elif raw_state in ('closed', 'locked'):
+        state = 'closed'
+    else:
+        state = None
+    title = data.get('title') if isinstance(data.get('title'), str) else ''
+    native = data.get('draft') if isinstance(data.get('draft'), bool) else data.get('work_in_progress')
+    if isinstance(native, bool):
+        readiness = 'draft' if native else 'ready'
+    elif title:
+        readiness = 'draft' if DRAFT_PREFIX.match(title) else 'ready'
+    else:
+        readiness = 'unknown'
+    return {'state': state, 'title': title, 'readiness': readiness, 'node': ''}
+
+def load_tasks(project, tasks):
+    need(tasks, 'at least one --task is required')
+    out = []
+    seen = set()
+    for task in tasks:
+        need(TASK_RE.fullmatch(task) is not None, 'invalid task id: ' + task)
+        need(task not in seen, 'duplicate task selection: ' + task)
+        seen.add(task)
+        path = project / 'task' / (task + '.md')
+        need(path.is_file(), 'task file not found: ' + str(path))
+        url = read_task_mr(path)
+        need(url.startswith('http'), task + ' has no recorded MR URL in its Result section')
+        out.append((task, url))
+    return out
+
+def selection(project, slug, direction, tasks, mappings):
+    rows = []
+    by_url = {}
+    for task, url in load_tasks(project, tasks):
+        mr = identity(url, mappings)
+        meta = metadata(mr)
+        need(meta is not None, 'cannot read ' + url + ' → fix: check forge authentication and the recorded MR')
+        need(meta['state'] == 'open', url + ' is ' + str(meta['state']) + '; readiness changes require an open MR')
+        key = (mr['forge'], mr['host'], mr['repo'], mr['number'])
+        entry = by_url.get(key)
+        if entry is None:
+            entry = {'url': url, 'tasks': [], 'mr': mr, 'meta': meta}
+            by_url[key] = entry
+            rows.append(entry)
+        entry['tasks'].append(task)
+    canonical = {'slug': slug, 'direction': direction,
+                 'items': [{'tasks': e['tasks'], 'url': e['url'], 'state': e['meta']['state'],
+                            'readiness': e['meta']['readiness'], 'title': e['meta']['title']}
+                           for e in rows]}
+    token = digest(json.dumps(canonical, sort_keys=True, separators=(',', ':')))
+    return rows, token
+
+def write_gitlab(mr, meta, desired):
+    title = meta['title'] or ''
+    if desired == 'draft':
+        new_title = title if DRAFT_PREFIX.match(title) else 'Draft: ' + title
+    else:
+        new_title = DRAFT_PREFIX.sub('', title, count=1).strip()
+        need(new_title, 'cannot remove the draft marker: the MR title would become empty')
+    endpoint = 'projects/' + quote(mr['repo'], safe='') + '/merge_requests/' + str(mr['number'])
+    command = ['glab', 'api', endpoint, '--hostname', mr['host'], '--method', 'PUT', '--input', '-',
+               '-H', 'Content-Type: application/json']
+    result = subprocess.run(command, input=json.dumps({'title': new_title}),
+                            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=90)
+    need(result.returncode == 0, 'forge refused the readiness change')
+    return True
+
+def write_github(mr, meta, desired):
+    node = meta.get('node') or ''
+    if not node:
+        need(False, 'GitHub PR has no node identity for a readiness change')
+    if desired == 'draft':
+        query = 'mutation($id:ID!){convertPullRequestToDraft(input:{pullRequestId:$id}){pullRequest{isDraft}}}'
+    else:
+        query = 'mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{isDraft}}}'
+    command = ['gh', 'api', 'graphql', '--hostname', mr['host'], '-f', 'query=' + query,
+               '-f', 'pullRequestId=' + node]
+    result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=90)
+    need(result.returncode == 0, 'forge refused the readiness change')
+    return True
+
+def atomic_json(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix='.readiness-', dir=str(path.parent))
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+            json.dump(value, stream, ensure_ascii=False, indent=2, sort_keys=True)
+            stream.write('\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+class Lock:
+    def __init__(self, directory):
+        self.path = directory / '.lock'
+        self.directory = directory
+
+    def __enter__(self):
+        self.directory.mkdir(parents=True, exist_ok=True)
+        for _ in range(2):
+            try:
+                self.path.mkdir()
+                atomic_json(self.path / 'owner.json', {'pid': os.getpid(), 'host': socket.gethostname(),
+                                                       'started': int(time.time())})
+                return self
+            except FileExistsError:
+                owner = {}
+                try:
+                    owner = json.loads((self.path / 'owner.json').read_text(encoding='utf-8'))
+                except (OSError, ValueError):
+                    pass
+                same_host = owner.get('host') == socket.gethostname()
+                pid = owner.get('pid')
+                if same_host and isinstance(pid, int) and not self._alive(pid):
+                    try:
+                        (self.path / 'owner.json').unlink()
+                    except OSError:
+                        pass
+                    try:
+                        self.path.rmdir()
+                    except OSError:
+                        pass
+                    continue
+                need(False, 'another readiness apply holds ' + str(self.path)
+                     + ' → fix: finish or stop that run; do not remove a live lock')
+        need(False, 'could not acquire the readiness lock')
+
+    @staticmethod
+    def _alive(pid):
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+
+    def __exit__(self, *_):
+        try:
+            (self.path / 'owner.json').unlink()
+        except OSError:
+            pass
+        try:
+            self.path.rmdir()
+        except OSError:
+            pass
+
+def attempt_id():
+    return hashlib.sha256((str(time.time_ns()) + str(os.getpid())).encode()).hexdigest()[:32]
+
+def journal_path(project, attempt):
+    return project / 'task' / 'ship-readiness' / (attempt + '.json')
+
+def load_journal(project, attempt):
+    need(ATTEMPT_RE.fullmatch(attempt or '') is not None, 'invalid attempt id')
+    path = journal_path(project, attempt)
+    need(path.is_file(), 'no readiness attempt: ' + attempt)
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+    except ValueError:
+        need(False, 'readiness attempt journal is malformed: ' + attempt)
+    return data, path
+
+def state_line(entry, outcome):
+    return '|'.join([entry['tasks'][0] + ('+%d' % (len(entry['tasks']) - 1) if len(entry['tasks']) > 1 else ''),
+                     entry['url'], entry['pre_state'], entry['desired'], outcome])
+
+def apply_readiness(args, project, slug, direction, rows, token):
+    attempt = args.resume or attempt_id()
+    journal_dir = project / 'task' / 'ship-readiness'
+    with Lock(journal_dir):
+        if args.resume:
+            state, path = load_journal(project, attempt)
+            need(state.get('slug') == slug and state.get('direction') == direction,
+                 'attempt ' + attempt + ' belongs to another project or direction')
+            need(sorted(t for e in state['entries'] for t in e['tasks']) == sorted(args.task),
+                 'attempt ' + attempt + ' does not match the selected tasks')
+            entries = state['entries']
+            print('readiness resume: ' + direction + ' attempt=' + attempt)
+        else:
+            for other in journal_dir.glob('*.json'):
+                try:
+                    prior = json.loads(other.read_text(encoding='utf-8'))
+                except (OSError, ValueError):
+                    prior = {}
+                if prior.get('status') != 'done':
+                    need(False, 'unresolved readiness attempt ' + other.stem
+                         + ' → fix: resume it with --apply --resume ' + other.stem)
+            state = {'version': 1, 'attempt': attempt, 'slug': slug, 'direction': direction,
+                     'created': int(time.time()), 'preview_token': token, 'status': 'prepared',
+                     'entries': [{'tasks': e['tasks'], 'url': e['url'], 'mr': e['mr'],
+                                  'pre_state': e['meta']['readiness'], 'desired': direction,
+                                  'title': e['meta']['title'], 'status': 'prepared', 'logged': False,
+                                  'observed': '', 'observed_title': ''} for e in rows]}
+            path = journal_path(project, attempt)
+            atomic_json(path, state)
+            entries = state['entries']
+            print('readiness apply: ' + direction + ' attempt=' + attempt)
+
+        confirmed = noop = 0
+        stopped = False
+        for entry in entries:
+            if stopped:
+                if entry['status'] == 'prepared':
+                    entry['status'] = 'unattempted'
+                continue
+            if entry['status'] == 'recorded':
+                if entry['pre_state'] == entry['desired'] or entry['observed'] == entry['desired']:
+                    noop += 1 if entry['observed'] == '' else 0
+                continue
+            if entry['status'] == 'confirmed':
+                if not entry['logged']:
+                    log_event(args, slug, direction, attempt, entry)
+                entry['status'] = 'recorded'
+                confirmed += 1
+                continue
+            if entry['status'] in ('unattempted', 'blocked', 'failed'):
+                stopped = True
+                continue
+            if entry['status'] == 'prepared':
+                if args.resume:
+                    entry['status'] = 'unattempted'
+                    stopped = True
+                    continue
+                meta = metadata(entry['mr'])
+                need(meta is not None, 'lost access to ' + entry['url'] + ' before its write')
+                if (meta['state'] != 'open' or meta['title'] != entry['title']
+                        or meta['readiness'] != entry['pre_state']):
+                    entry['status'] = 'blocked'
+                    entry['observed'] = meta['readiness']
+                    stopped = True
+                    continue
+                if entry['pre_state'] == entry['desired']:
+                    entry['status'] = 'recorded'
+                    noop += 1
+                    atomic_json(path, state)
+                    continue
+                entry['status'] = 'write-uncertain'
+                atomic_json(path, state)
+                if entry['mr']['forge'] == 'github':
+                    write_github(entry['mr'], meta, entry['desired'])
+                else:
+                    write_gitlab(entry['mr'], meta, entry['desired'])
+                after = metadata(entry['mr'])
+                need(after is not None, 'forge did not return the MR after the readiness change')
+                entry['observed'] = after['readiness']
+                entry['observed_title'] = after['title']
+                if after['readiness'] == entry['desired']:
+                    entry['status'] = 'confirmed'
+                    log_event(args, slug, direction, attempt, entry)
+                    entry['status'] = 'recorded'
+                    confirmed += 1
+                elif after['readiness'] == entry['pre_state']:
+                    entry['status'] = 'failed'
+                    stopped = True
+                else:
+                    entry['status'] = 'blocked'
+                    stopped = True
+                atomic_json(path, state)
+                continue
+            if entry['status'] == 'write-uncertain':
+                after = metadata(entry['mr'])
+                if after is not None and after['readiness'] == entry['desired']:
+                    entry['status'] = 'confirmed'
+                    if not entry['logged']:
+                        log_event(args, slug, direction, attempt, entry)
+                    entry['status'] = 'recorded'
+                    confirmed += 1
+                    atomic_json(path, state)
+                    continue
+                entry['status'] = 'unattempted'
+                entry['observed'] = after['readiness'] if after else 'unknown'
+                stopped = True
+                atomic_json(path, state)
+                continue
+
+        pending = [e for e in entries if e['status'] in ('prepared', 'write-uncertain', 'blocked', 'failed')]
+        state['status'] = 'done' if not pending else 'stopped'
+        atomic_json(path, state)
+        for entry in entries:
+            if entry['status'] == 'recorded':
+                outcome = 'noop' if entry['pre_state'] == entry['desired'] and entry['observed'] == '' else 'confirmed'
+                print(state_line(entry, outcome))
+            elif entry['status'] == 'unattempted':
+                print(state_line(entry, 'unattempted'))
+            elif entry['status'] == 'blocked':
+                print(state_line(entry, 'blocked'))
+            elif entry['status'] == 'failed':
+                print(state_line(entry, 'failed'))
+        print('summary: %d confirmed, %d noop, %d pending' % (confirmed, noop, len(pending)))
+        if pending:
+            print('readiness: attempt ' + attempt + ' stopped with pending rows → fix: inspect them, then resume with --apply --resume ' + attempt
+                  + ' after the original state is confirmed', file=sys.stderr)
+            sys.exit(2)
+        return attempt
+
+def log_event(args, slug, direction, attempt, entry):
+    marker = 'attempt ' + attempt + ' ' + entry['url']
+    log_file = Path(args.project_dir) / 'LOG.md'
+    if log_file.is_file():
+        try:
+            if marker in log_file.read_text(encoding='utf-8', errors='replace'):
+                entry['logged'] = True
+                return
+        except OSError:
+            pass
+    message = ('readiness %s confirmed %s (%s -> %s) %s' %
+               (direction, entry['url'], entry['pre_state'], entry['desired'], marker))
+    need(args.status_script, 'readiness logging requires --status-script')
+    result = subprocess.run(['bash', args.status_script, 'log', '--project', slug,
+                             '--actor', 'pw-ship', '--message', message],
+                            text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+    need(result.returncode == 0, 'readiness changed but its log entry failed → fix: re-run the same resume after fixing the log writer')
+    entry['logged'] = True
+
+def run():
+    parser = argparse.ArgumentParser(prog='pw-ship readiness')
+    parser.add_argument('operation', choices=['preview', 'apply', 'inspect'])
+    parser.add_argument('--project-dir', required=True)
+    parser.add_argument('--slug', default='')
+    parser.add_argument('--direction', choices=['draft', 'ready'])
+    parser.add_argument('--task', action='append', default=[])
+    parser.add_argument('--mappings', default='')
+    parser.add_argument('--expect', default='')
+    parser.add_argument('--resume', default='')
+    parser.add_argument('--status-script', default='')
+    args = parser.parse_args()
+
+    project = safe_dir(args.project_dir)
+    if args.operation == 'inspect':
+        need(len(args.task) == 1, 'inspect requires exactly one --task')
+        task = args.task[0]
+        url = read_task_mr(project / 'task' / (task + '.md'))
+        need(url.startswith('http'), task + ' has no recorded MR URL')
+        mr = identity(url, args.mappings)
+        meta = metadata(mr)
+        need(meta is not None, 'cannot read ' + url)
+        print('|'.join([task, url, meta['state'], meta['readiness'], meta['title']]))
+        return
+
+    need(args.slug, '--slug is required')
+    need(args.direction in ('draft', 'ready'), '--direction is required')
+    rows, token = selection(project, args.slug, args.direction, args.task, args.mappings)
+    if args.operation == 'preview':
+        print('readiness preview: ' + args.direction)
+        for row in rows:
+            outcome = 'noop' if row['meta']['readiness'] == args.direction else 'change'
+            entry = {'tasks': row['tasks'], 'url': row['url'],
+                     'pre_state': row['meta']['readiness'], 'desired': args.direction}
+            print(state_line(entry, outcome))
+        print('token: ' + token)
+        return
+    need(args.expect or args.resume, '--expect or --resume is required')
+    need(not (args.expect and args.resume), '--expect and --resume are mutually exclusive')
+    if args.expect:
+        need(args.expect == token, 'selection changed since preview → fix: run a fresh preview and apply its token')
+    apply_readiness(args, project, args.slug, args.direction, rows, token)
+
+try:
+    run()
+except Need as error:
+    message = str(error)
+    if '→ fix:' not in message:
+        message += ' → fix: correct the selection or forge state and retry'
+    print('pw-ship readiness: ' + message, file=sys.stderr)
+    sys.exit(2)
+except (OSError, ValueError, KeyError) as error:
+    print('pw-ship readiness: ' + str(error) + ' → fix: inspect the project record and retry', file=sys.stderr)
+    sys.exit(2)
+PY
+}

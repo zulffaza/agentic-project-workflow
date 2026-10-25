@@ -3,7 +3,9 @@
 # pw-ship.sh — the ship/MR entity: everything /pw-ship and /pw-sync query or mutate.
 #
 #   pw-ship.sh resolve            --project <slug>
-#   pw-ship.sh exec               --project <slug> --task <task-id> --file <description-file>
+#   pw-ship.sh exec               --project <slug> --task <task-id> --file <description-file> [--draft]
+#   pw-ship.sh draft              --project <slug> --task <task-id>… [--apply (--expect <token> | --resume <attempt-id>)]
+#   pw-ship.sh ready              --project <slug> --task <task-id>… [--apply (--expect <token> | --resume <attempt-id>)]
 #   pw-ship.sh monitor            --project <slug> --task <task-id> [--timeout <minutes>] [--interval <seconds>]
 #   pw-ship.sh mr-state           --project <slug> --task <task-id>
 #   pw-ship.sh mr-state-batch     --project <slug> [--task <task-id>]…
@@ -24,8 +26,9 @@
 # --file/--attempt/--limit flags ride there unchanged). A literal value that
 # starts with -- is passed as --flag=value.
 #
-# Facets (S1b): READ  = resolve, mr-state, mr-state-batch, monitor, request-review
-#               WRITE = exec, comment-seen, dashboard-mr-state
+# Facets (S1b): READ  = resolve, mr-state, mr-state-batch, monitor, request-review,
+#                       draft/ready without --apply (preview), inspect (inside the library)
+#               WRITE = exec, draft/ready --apply, comment-seen, dashboard-mr-state
 # Merged from pw-ship-resolve.sh, pw-ship-exec.sh, pw-mr-state-batch.sh,
 # pw-pipeline-monitor.sh and pw-lib's ship/mr-state block (entity consolidation;
 # operator names and output contracts unchanged).
@@ -42,6 +45,9 @@
 # monitor — poll the MR pipeline until terminal state. Exit 0 success, 1 failed,
 #   2 timeout; records "Build check:" into the task Result (never the dashboard —
 #   CI green ≠ merged).
+# draft / ready — explicit readiness transitions (preview by default). Apply needs the exact
+#   preview token or a recorded attempt; both directions require an OPEN linked MR. Readiness
+#   never changes lifecycle, acceptance, verification, or stack state.
 # mr-state — query the forge for one task's MR state: prints open|merged|closed|
 #   unknown (exit 1 + "unknown" for any lookup failure — never dies on runtime
 #   misses, only usage errors).
@@ -1092,13 +1098,15 @@ cmd_repair_round() {
 }
 
 cmd_exec() {
-  local slug="" task="" file="" a v
+  local slug="" task="" file="" draft=0 a v
+  local -a draft_args=()
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
     case "$a" in
       --project=*) v="${a#*=}"; a="--project" ;;
       --task=*)    v="${a#*=}"; a="--task" ;;
       --file=*)    v="${a#*=}"; a="--file" ;;
+      --draft)     draft=1; continue ;;
     esac
     case "$a" in
       --project|--task|--file)
@@ -1113,6 +1121,7 @@ cmd_exec() {
   [ -n "$task" ] || die "exec: --task is required → fix: exec --project <slug> --task <task-id> --file <description-file>"
   pw_task_id_ok "$task" || die "exec: invalid task id '$task' → fix: task ids look like T01"
   [ -n "$file" ] || die "exec: --file is required → fix: exec --project <slug> --task <task-id> --file <description-file>"
+  [ "$draft" = 1 ] && draft_args=(--draft)
 
   SLUG="$slug"
   TASK_ID="$task"
@@ -1221,6 +1230,8 @@ EOF
   [ -n "$_origin_host" ] || die "cannot determine the origin host for $REPO → fix: check the repo's remote.origin.url"
   FORGE="$(_pw_forge_for_host "$_origin_host")"
   FORGE_CLI="$(_pw_forge_cli "$FORGE")"
+  _mappings=""
+  [ -n "${PW_FORGE_HOSTS[0]:-}" ] && _mappings="$(printf '%s\n' "${PW_FORGE_HOSTS[@]}")"
   command -v "$FORGE_CLI" >/dev/null 2>&1 \
     || die "$FORGE_CLI not found (needed to open an MR for $REPO on $_origin_host) → fix: install $FORGE_CLI"
 
@@ -1231,6 +1242,15 @@ EOF
   _GLAB_CREATE_JSON=0
   if [ "$FORGE_CLI" = "glab" ] && glab mr create --help 2>/dev/null | grep -q -- '--output'; then
     _GLAB_CREATE_JSON=1
+  fi
+  # Draft creation is a capability too: refuse BEFORE the push when the installed CLI cannot
+  # honour it, instead of publishing a branch and opening a normal MR by accident.
+  if [ "$draft" = 1 ]; then
+    _create_help="$("$FORGE_CLI" "$([ "$FORGE_CLI" = glab ] && echo mr || echo pr)" create --help 2>/dev/null || true)"
+    case "$_create_help" in
+      *--draft*) ;;
+      *) die "$FORGE_CLI cannot create a draft MR on this installation → fix: upgrade $FORGE_CLI; nothing was pushed" ;;
+    esac
   fi
 
   # A workflow-owned description carrying the managed markers must pass the SAME parser the
@@ -1266,6 +1286,15 @@ EOF
   fi
   if [ "$_MR_EXISTS" = 1 ]; then
     echo "MR already exists: $MR_URL"
+    # Creation-only preference: an existing MR keeps its readiness. Report the observed state and
+    # point at the explicit transition instead of silently promoting or demoting it.
+    if [ "$draft" = 1 ]; then
+      _obs_ready="$(pw_ship_readiness inspect --project-dir "$D" --task "$TASK_ID" --mappings "$_mappings" 2>/dev/null | awk -F'|' '{print $4}' || true)"
+      if [ "$_obs_ready" != draft ]; then
+        echo "Existing MR kept its readiness (${_obs_ready:-unknown}); --draft only applies to new MRs"
+        echo "→ use /pw-ship draft --project $SLUG --task $TASK_ID to preview an explicit demotion"
+      fi
+    fi
   else
     echo "Creating MR..."
 
@@ -1290,6 +1319,7 @@ EOF
           --title "$MR_TITLE" \
           --description "$DESCRIPTION" \
           --no-editor \
+          ${draft_args[@]+"${draft_args[@]}"} \
           --output json 2>&1 || true)"
       else
         # No JSON contract on this release: the supported invocation prints the MR URL.
@@ -1298,7 +1328,8 @@ EOF
           --target-branch "$TARGET_BRANCH" \
           --title "$MR_TITLE" \
           --description "$DESCRIPTION" \
-          --no-editor 2>&1 || true)"
+          --no-editor \
+          ${draft_args[@]+"${draft_args[@]}"} 2>&1 || true)"
       fi
       # Whitespace-tolerant: a formatted JSON body still yields the URL.
       MR_URL="$(printf '%s\n' "$MR_OUTPUT" | sed -n 's/.*"web_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
@@ -1308,7 +1339,8 @@ EOF
         --head "$BRANCH" \
         --base "$TARGET_BRANCH" \
         --title "$MR_TITLE" \
-        --body "$DESCRIPTION" 2>&1 || true)"
+        --body "$DESCRIPTION" \
+        ${draft_args[@]+"${draft_args[@]}"} 2>&1 || true)"
       MR_URL="$(printf '%s\n' "$MR_OUTPUT" | grep -oE 'https?://[^[:space:]]+/pull/[0-9]+' | head -1 || true)"
     fi
 
@@ -1321,6 +1353,15 @@ EOF
         cmd_history --project "$SLUG" --operation init --mr "$MR_URL" --options --file "$DESC_FILE" \
           || die "MR created but initial ownership snapshot is pending → fix: retain the creation body and retry its history init after fixing readback"
       fi
+      # Creation must land in the requested readiness. The URL is already recorded above, so a
+      # mismatch is recoverable: report it, never recreate the MR.
+      _want_ready="$([ "$draft" = 1 ] && echo draft || echo ready)"
+      _obs_ready="$(pw_ship_readiness inspect --project-dir "$D" --task "$TASK_ID" --mappings "$_mappings" 2>/dev/null | awk -F'|' '{print $4}' || true)"
+      case "$_obs_ready" in
+        "$_want_ready") echo "Readiness confirmed: $_want_ready" ;;
+        draft|ready) die "MR created and recorded ($MR_URL) but readiness is '$_obs_ready' (expected $_want_ready) → fix: use /pw-ship $_want_ready --project $SLUG --task $TASK_ID after a fresh preview" ;;
+        *) echo "Readiness unverified: forge metadata unavailable for $MR_URL (expected $_want_ready)" ;;
+      esac
     else
       # No URL back = no MR exists; do not let a partial ship pass as success, and never mark
       # the dashboard open for an MR that wasn't created.
@@ -1350,6 +1391,60 @@ EOF
   fi
 
   echo "Ship execution complete for $TASK_ID"
+}
+
+# draft / ready — explicit draft readiness transitions on already-published MRs.
+#   preview is the default and writes nothing; apply requires a matching --expect token from that
+#   preview (or --resume for an interrupted attempt). Readiness is separate from open/merged state.
+cmd_readiness() {
+  local direction="$1"; shift
+  local slug="" apply=0 expect="" resume="" a v
+  local -a tasks=()
+  local usage="$direction --project <slug> --task <T0n>… [--apply (--expect <token> | --resume <attempt-id>)]"
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
+      --expect=*)  v="${a#*=}"; a="--expect" ;;
+      --resume=*)  v="${a#*=}"; a="--resume" ;;
+      --apply)     apply=1; continue ;;
+    esac
+    case "$a" in
+      --project|--task|--expect|--resume)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project) slug="$v" ;;
+          --task)    tasks+=("$v") ;;
+          --expect)  expect="$v" ;;
+          --resume)  resume="$v" ;;
+        esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "$usage" ;;
+      *) _pw_positional "$a" "$usage" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "$direction: --project is required → fix: $usage"
+  [ "${#tasks[@]}" -gt 0 ] || die "$direction: at least one --task is required → fix: $usage"
+  local t
+  for t in "${tasks[@]}"; do pw_task_id_ok "$t" || die "$direction: invalid task id '$t' → fix: task ids look like T01"; done
+  if [ "$apply" = 0 ]; then
+    [ -z "$expect" ] || die "$direction: --expect requires --apply → fix: run the preview first, then re-run with --apply --expect <token>"
+    [ -z "$resume" ] || die "$direction: --resume requires --apply → fix: re-run with --apply --resume <attempt-id>"
+  else
+    { [ -n "$expect" ] || [ -n "$resume" ]; }       || die "$direction: --apply needs --expect <token> from a preview, or --resume <attempt-id> → fix: run the preview first"
+    [ -z "$expect" ] || [ -z "$resume" ] || die "$direction: --expect and --resume are mutually exclusive"
+  fi
+  local d mappings=""
+  d="$(proj_dir "$slug")"
+  [ -n "${PW_FORGE_HOSTS[0]:-}" ] && mappings="$(printf '%s\n' "${PW_FORGE_HOSTS[@]}")"
+  local op=preview; [ "$apply" = 1 ] && op=apply
+  local -a argv=(--project-dir "$d" --slug "$slug" --direction "$direction"
+                 --mappings "$mappings" --status-script "$ST")
+  [ -n "$expect" ] && argv+=(--expect "$expect")
+  [ -n "$resume" ] && argv+=(--resume "$resume")
+  for t in "${tasks[@]}"; do argv+=(--task "$t"); done
+  pw_ship_readiness "$op" "${argv[@]}"
 }
 
 # Ensure task/review/T0n.review.md has a "## MR comment tracking" table (create the header +
@@ -3620,6 +3715,7 @@ case "${1:-}" in
   request-review)     shift; cmd_request_review "$@" ;;
   resolve)            shift; cmd_resolve "$@" ;;
   exec)               shift; cmd_exec "$@" ;;
+  draft|ready)        _rdir="$1"; shift; cmd_readiness "$_rdir" "$@" ;;
   monitor)            shift; cmd_monitor "$@" ;;
   mr-state)           shift; cmd_mr_state "$@" ;;
   mr-state-batch)     shift; cmd_mr_state_batch "$@" ;;
@@ -3646,5 +3742,5 @@ case "${1:-}" in
   sync-finish)        shift; cmd_sync_finish "$@" ;;
   sync-bind)          shift; cmd_sync_bind "$@" ;;
   sync-abort)         shift; cmd_sync_abort "$@" ;;
-  *) die "usage: pw-ship.sh <resolve|exec|monitor|mr-state|mr-state-batch|comment-seen|dashboard-mr-state|history|request-review|stack|stack-validate|stack-plan|stack-record|stack-verify|stack-fresh|stack-stale|stack-land|stack-promote|stack-retarget|stack-op|stack-debt|stack-adopt|stack-inherited|stack-cascade|sync-attempt|sync-merge|sync-finish|sync-bind|sync-abort> … (see --help)" ;;
+  *) die "usage: pw-ship.sh <resolve|exec|draft|ready|monitor|mr-state|mr-state-batch|comment-seen|dashboard-mr-state|history|request-review|stack|stack-validate|stack-plan|stack-record|stack-verify|stack-fresh|stack-stale|stack-land|stack-promote|stack-retarget|stack-op|stack-debt|stack-adopt|stack-inherited|stack-cascade|sync-attempt|sync-merge|sync-finish|sync-bind|sync-abort> … (see --help)" ;;
 esac

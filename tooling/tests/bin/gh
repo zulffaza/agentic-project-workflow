@@ -9,6 +9,30 @@ fi
 if [ -n "${PWTEST_REVIEW_FORGE_DIR:-}" ] && [ "${1:-}" = api ]; then
   exec python3 "$(dirname "$0")/forge-review.py" gh "$@"
 fi
+_gh_draft_of() {
+  local k="$1" v=""
+  [ -n "${PWTEST_GH_DRAFT_FILE:-}" ] && [ -f "$PWTEST_GH_DRAFT_FILE" ] && \
+    v="$(awk -v k="$k" '$1==k{print $2; exit}' "$PWTEST_GH_DRAFT_FILE")"
+  printf '%s' "$v"
+}
+_gh_title_of() {
+  local k="$1" t=""
+  [ -n "${PWTEST_GH_TITLE_FILE:-}" ] && [ -f "$PWTEST_GH_TITLE_FILE" ] && \
+    t="$(awk -v k="$k" '$1==k{sub($1" ",""); print; exit}' "$PWTEST_GH_TITLE_FILE")"
+  printf '%s' "${t:-Fixture PR}"
+}
+_pr_api_json() {
+  local n="$1" st="open" tgt="${PWTEST_MR_TARGET:-main}" hd="dead000f" t
+  if [ -n "${PWTEST_FORGE_STATE_FILE:-}" ] && [ -f "$PWTEST_FORGE_STATE_FILE" ]; then
+    st="$(awk -v k="$n" '$1==k{print $2; exit}' "$PWTEST_FORGE_STATE_FILE")"
+    case "$st" in merged|MERGED) st=merged;; closed|CLOSED) st=closed;; *) st=open;; esac
+  fi
+  if [ -n "${PWTEST_MR_TARGETS_FILE:-}" ] && [ -f "$PWTEST_MR_TARGETS_FILE" ]; then
+    t="$(awk -v k="$n" '$1==k{print $2; exit}' "$PWTEST_MR_TARGETS_FILE")"; [ -n "$t" ] && tgt="$t"
+  fi
+  printf '{"number":%s,"state":"%s","draft":%s,"title":"%s","node_id":"node-%s","base":{"ref":"%s"},"head":{"sha":"%s"},"body":"","requested_reviewers":[]}\n' \
+    "$n" "$st" "$([ "$(_gh_draft_of "$n")" = draft ] && printf true || printf false)" "$(_gh_title_of "$n")" "$n" "$tgt" "$hd"
+}
 _json() {
   local iid="$1" st="OPEN" tgt="${PWTEST_MR_TARGET:-main}" t hd="dead000f" h
   if [ -n "${PWTEST_FORGE_STATE_FILE:-}" ] && [ -f "$PWTEST_FORGE_STATE_FILE" ]; then
@@ -42,6 +66,13 @@ _list_json() {
 }
 case "${1:-}" in
   pr)
+    if [ "${2:-}" = create ] && { [ "${3:-}" = --help ] || [ "${3:-}" = -h ]; }; then
+      echo "Create a pull request"
+      echo "  --draft   Create the pull request as a draft"
+      echo "  --title string   Title"
+      echo "  --body string    Body"
+      exit 0
+    fi
     case "${2:-}" in
       list) _list_json ;;
       view)
@@ -56,7 +87,16 @@ case "${1:-}" in
         esac ;;
       create) if [ -n "${PWTEST_FORGE_CREATE+set}" ] && [ -z "$PWTEST_FORGE_CREATE" ]; then
                 echo "gh-shim: creation returned no URL (forced)" >&2; exit 1; fi
-              printf 'https://github.com/pwtest/api/pull/77\n' ;;
+              _d=""; _title=""; _prev=""
+              for _a in "$@"; do
+                [ "$_prev" = "--title" ] && _title="$_a"
+                _prev="$_a"
+                [ "$_a" = "--draft" ] && _d=draft
+              done
+              _num="$(printf '%s' "${PWTEST_GH_CREATE_NUMBER:-77}" | tr -dc 0-9)"
+              [ -n "${PWTEST_GH_DRAFT_FILE:-}" ] && printf '%s %s\n' "$_num" "${_d:-ready}" >> "$PWTEST_GH_DRAFT_FILE"
+              [ -n "$_title" ] && [ -n "${PWTEST_GH_TITLE_FILE:-}" ] && printf '%s %s\n' "$_num" "$_title" >> "$PWTEST_GH_TITLE_FILE"
+              printf 'https://github.com/pwtest/api/pull/%s\n' "$_num" ;;
       edit)   _num="$(printf %s "${2##*/}" | tr -dc 0-9)"
               _tb=""; _prev=""
               for _a in "$@"; do [ "$_prev" = "--base" ] && _tb="$_a"; _prev="$_a"; done
@@ -86,6 +126,31 @@ case "${1:-}" in
     esac ;;
   issue) printf '{"title":"fake","body":"fake issue content"}\n' ;;
   auth) exit 0 ;;
-  api) printf '%s\n' "${PWTEST_API_JSON:-{\}}" ;;
+  api)
+    case "${2:-}" in
+      graphql)
+        _q=""; _id=""
+        for _a in "$@"; do
+          case "$_a" in
+            query=*) _q="$_a" ;;
+            pullRequestId=*) _id="${_a#pullRequestId=}" ;;
+          esac
+        done
+        _n="$(printf '%s' "$_id" | tr -dc 0-9)"
+        case "$_q" in
+          *convertPullRequestToDraft*) _d=draft ;;
+          *markPullRequestReadyForReview*) _d=ready ;;
+          *) echo "gh-shim: unexpected graphql mutation" >&2; exit 42 ;;
+        esac
+        if [ -n "${PWTEST_GH_DRAFT_FILE:-}" ]; then
+          awk -v k="$_n" -v d="$_d" 'BEGIN{done=0} $1==k{print k" "d; done=1; next} {print} END{if(!done) print k" "d}' \
+            "$PWTEST_GH_DRAFT_FILE" > "$PWTEST_GH_DRAFT_FILE.tmp" 2>/dev/null && mv "$PWTEST_GH_DRAFT_FILE.tmp" "$PWTEST_GH_DRAFT_FILE"
+        fi
+        printf '{"data":{"pullRequest":{"isDraft":%s}}}\n' "$([ "$_d" = draft ] && printf true || printf false)" ;;
+      repos/*/pulls/*)
+        _n="$(printf '%s' "${2##*/}" | tr -dc 0-9)"
+        _pr_api_json "$_n" ;;
+      *) printf '%s\n' "${PWTEST_API_JSON:-{\}}" ;;
+    esac ;;
   *) printf 'gh-shim: unexpected invocation: %s\n' "$*" >&2; exit 42 ;;
 esac
