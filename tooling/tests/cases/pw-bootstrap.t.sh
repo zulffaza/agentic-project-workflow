@@ -27,7 +27,7 @@ printf '#!/bin/sh\nexit 0\n' > "$BIN/kilo"; chmod +x "$BIN/kilo"
 pwtest_rc 0 "bootstrap installs into an isolated HOME" \
   env -u PW_PROJECTS_DIR -u PW_REPOS -u PW_PROJECTS HOME="$FH" PATH="$BIN:$PATH" bash "$PW/bootstrap.sh"
 pwtest_eq "claude gets 18 entry skills + 4 shared skills" \
-  "$(ls -d "$FH/.claude/skills"/*/ 2>/dev/null | wc -l | tr -d ' ')" "22"
+  "$(ls -d "$FH/.claude/skills"/*/ 2>/dev/null | wc -l | tr -d ' ')" "23"
 [ -d "$FH/.claude/skills/pw-execute" ] && [ ! -d "$FH/.claude/skills/pw-execute/agents" ] \
   && pwtest_ok "claude human entry is a skill dir" \
   || pwtest_bad "claude entry format" "pw-execute is not an installed skill dir"
@@ -37,8 +37,8 @@ grep -qF 'disable-model-invocation: true' "$FH/.claude/skills/pw-execute/SKILL.m
 for _s in pw-guide-workflow pw-guide-review-method pw-guide-authoring pw-orchestration; do
   [ -d "$FH/.claude/skills/$_s" ] || pwtest_bad "shared skill $_s" "not installed for claude"
 done
-pwtest_eq "kilo gets 18 command files and no entry skill" \
-  "$(ls "$FH/.config/kilo/command"/*.md 2>/dev/null | wc -l | tr -d ' '):$(ls -d "$FH/.kilocode/skills"/pw-execute 2>/dev/null | wc -l | tr -d ' ')" "18:0"
+pwtest_eq "kilo gets 19 command files and no entry skill" \
+  "$(ls "$FH/.config/kilo/command"/*.md 2>/dev/null | wc -l | tr -d ' '):$(ls -d "$FH/.kilocode/skills/pw-execute" 2>/dev/null | wc -l | tr -d ' ')" "19:0"
 [ -f "$FH/.config/kilo/command/pw-execute.md" ] \
   && pwtest_ok "kilo human entry is a command file" \
   || pwtest_bad "kilo entry format" "pw-execute.md missing"

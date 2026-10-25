@@ -118,6 +118,41 @@ Model permission does not prove live availability. Pin writes also validate the 
 For optional RFCs, use `/pw-rfc --project <slug> [--target <ref>]`, `/pw-rfc milestone --project <slug>`, or `/pw-rfc comments --project <slug>`.
 The [RFC guide](RFC.md) explains publication, targets, and the local comment loop.
 
+### Run several operations at once
+
+Use `/pw-batch` to submit several supported operations in one request:
+
+```text
+/pw-batch preview --project delivery-note
+1. /pw-context add-repo --repo storefront --base main --why "owns the checkout change"
+2. /pw-review item --file task/review/PLAN.review.md --section "Failure handling" --text "Say who retries."
+3. /pw-config set --key review-rounds --value 2
+```
+
+Run the same list with `apply` instead of `preview`. No mode means preview.
+Items run in the written order through their owning command. The first failure stops the list; completed writes remain, and later items are reported as unattempted.
+A batch is not a transaction, so it never claims rollback or automatic replay.
+
+The first-release surface is closed:
+
+| Owning command | Accepted forms |
+|---|---|
+| `/pw-context` | `req-init`, `add-input`, `add-repo` |
+| `/pw-review` | `init`, `init-all`, `item`, `answer`, `signoff` |
+| `/pw-config` | `show`, `get`, `set`, `ensure` |
+| `/pw-config model-check` | capability and permission check (global) |
+| `/pw-config global` | `show`, `get`, `set`, `unset` |
+| `/pw-status` | project report, `--all` portfolio report |
+| `/pw-help` | `overview`, `command`, `operators`, `project`, `workflow`, `find` |
+| `/pw-doctor` | global check, project check, project `--guidance` preview |
+| `/pw-ship stack` | topology and health preview |
+
+Longer or riskier operations stay separate: analysis, breakdown, execution, AI review, repair, status update or rewind, doctor fix, ship, sync, close, and publication.
+A review decision runs only when the request names the exact review file and decision.
+Read-only items report during `apply`; `preview` does not run them.
+Literal review text uses `--stdin` on the item plus one indented fenced block beneath it.
+See `/pw-help command --name pw-batch` for the current forms and examples.
+
 ### What you can update per project (`/pw-config`)
 
 | Key | Accepted values | Changes |

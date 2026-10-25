@@ -12,6 +12,13 @@ not authorize a different phase, a push, an approval row, or a destructive actio
 Tool auto-approval is not workflow approval. Recorded sign-off, acceptance, and push confirmation
 remain the only authorizations for those actions.
 
+## Multiple operations in one request
+
+When the human asks for several supported project operations together, use `/pw-batch` and load
+`pw-guide-workflow` → `references/batch.md`. Preview is the default; apply must be explicit.
+The `pw-batch` command file carries the closed allowlist. One request authorizes only its listed
+operations: never infer approval, task acceptance, a phase move, a repair, or publication.
+
 ## Operation ownership
 
 | Operation | Owns | Does not own |
