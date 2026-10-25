@@ -161,7 +161,7 @@ See `/pw-help command --name pw-batch` for the current forms and examples.
 |---|---|---|
 | `routing` | `auto`, `subagent`, `headless` | Default task route; headless requires strict model binding |
 | `execution-limit` | Integer `0..99`, subject to the machine floor | Self-repair budget |
-| `max-parallel` | Integer `1..99` | Concurrent executors |
+| `max-parallel` | Integer `1..99` | Concurrent executors at `/pw-execute` and concurrent MR comment fixers at `/pw-ship comments` |
 | `produced-by` | An enabled provider | Default provider for new executor pins |
 | `ai-review` | `surface=mode` pairs or `all=mode` (+ named overrides) | Review OUTCOME per surface — `advisory` (default; a legacy `off` reads as advisory) or `auto` (guarded self-approval of a clean managed pass) |
 | `review-trigger` | `surface=value` pairs or `all=value` | WHEN a pass starts — `manual` (default) or `completion` (also after a succeeded producing command's verification) |
@@ -177,7 +177,7 @@ Review outcome modes: `advisory`, `auto`. Default is `advisory` (nothing starts 
 For the three per-surface axes, `all=<value>` sets every surface and explicitly named surfaces
 override the baseline regardless of argument order. `off` writes are refused with the replacement
 named (`off` was the pre-migration outcome value — reads normalize it to `advisory`).
-Model roles: `researcher`, `analyst`, `writer-task`, `reviewer`, `verifier`.
+Model roles: `researcher`, `analyst`, `writer-task`, `reviewer`, `verifier`, `ship-comment-analyst`.
 
 Global project defaults live in `pw.config.sh`, not a second file. They are copied into a new
 project's dashboard and never re-applied to an existing project. Routing, execution limit, and

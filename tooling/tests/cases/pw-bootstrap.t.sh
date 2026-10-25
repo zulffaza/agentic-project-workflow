@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # cases/pw-bootstrap.t.sh — plan 29: the installer round-trip in an isolated HOME.
 # Covers the exclusive provider format (skills for claude, commands for kilo), the four shared
-# model skills, the five worker sub-agents (no primary orchestrator), doctor in-sync, and
+# model skills, the six worker sub-agents (no primary orchestrator), doctor in-sync, and
 # offboard --yes removing exactly what bootstrap installed. Never touches real provider dirs.
 BOOTDIR="$(mktemp -d "${TMPDIR:-/tmp}/pwboot.XXXXXX")"
 REAL="$TOOL/.."
@@ -42,8 +42,11 @@ pwtest_eq "kilo gets 19 command files and no entry skill" \
 [ -f "$FH/.config/kilo/command/pw-execute.md" ] \
   && pwtest_ok "kilo human entry is a command file" \
   || pwtest_bad "kilo entry format" "pw-execute.md missing"
-pwtest_eq "five worker sub-agents, no primary orchestrator" \
-  "$(ls "$FH/.claude/agents"/*.md 2>/dev/null | wc -l | tr -d ' '):$(ls "$FH/.claude/agents/pw-orchestrator.md" 2>/dev/null | wc -l | tr -d ' ')" "5:0"
+pwtest_eq "six worker sub-agents, no primary orchestrator" \
+  "$(ls "$FH/.claude/agents"/*.md 2>/dev/null | wc -l | tr -d ' '):$(ls "$FH/.claude/agents/pw-orchestrator.md" 2>/dev/null | wc -l | tr -d ' ')" "6:0"
+[ -f "$FH/.claude/agents/pw-ship-comment-analyst.md" ] \
+  && pwtest_ok "the comments-analysis worker is seeded like every other lane" \
+  || pwtest_bad "comments-analysis worker seeded" "pw-ship-comment-analyst.md missing from the agent dir"
 pwtest_rc 0 "doctor reports the isolated install in sync" \
   env -u PW_PROJECTS_DIR -u PW_REPOS -u PW_PROJECTS HOME="$FH" PATH="$BIN:$PATH" bash "$PW/tooling/scripts/toolchain/pw-doctor.sh"
 grep -q 'All synced' "$PWTEST_BOTH" \

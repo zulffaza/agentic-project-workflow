@@ -27,9 +27,10 @@ The remaining sections explain advanced execution behavior. You can run a first 
 - **Executor** — handed one task file, owns one worktree, edits code, runs Verify, reports. Does
   **not** touch files outside its worktree or pick up work from other tasks.
 
-The bundle supplies five worker sub-agents: `pw-executor`, `pw-reviewer`, `pw-researcher`,
-`pw-analyst`, and `pw-writer-task`. Driver procedures live in the `pw-orchestration` skill and run
-in the normal session; the bundle installs no primary agent.
+The bundle supplies six worker sub-agents: `pw-executor`, `pw-reviewer`, `pw-researcher`,
+`pw-analyst`, `pw-writer-task`, and `pw-ship-comment-analyst` (the read-only `/pw-ship comments`
+prerequisite). Driver procedures live in the `pw-orchestration` skill and run in the normal session;
+the bundle installs no primary agent.
 Independent verification is available through `/pw-verify`.
 
 Tasks can use either:
@@ -61,7 +62,7 @@ The dashboard's role settings never override this task contract.
 ### Project roles
 
 The dashboard's `AI Models` row selects models for these project roles:
-`researcher`, `analyst`, `writer-task`, `reviewer`, and `verifier`.
+`researcher`, `analyst`, `writer-task`, `reviewer`, `verifier`, and `ship-comment-analyst`.
 There is no executor row; executors use their task settings.
 Inspect or change role choices through `/pw-config show --project <slug>`.
 
@@ -357,6 +358,10 @@ authoring are lane spawns from whichever driver is running the phase (rows 2/4 o
 - **`pw-writer-task`** turns the *caller's* boundary decisions into task docs — detailed `## Steps`
   + a runnable `## Verify`. Decisions stay with the caller; batching is per task (parallelizable —
   the writer doesn't edit shared state).
+- **`pw-ship-comment-analyst`** is the read-only prerequisite of `/pw-ship comments`: it interprets
+  every actionable MR comment across the selected scope, separates cross-MR requests from
+  MR-specific ones, groups related fixes, and returns a proposed MR/fixer order. It never edits
+  source, replies, resolves, or pushes — one fixer per MR applies the accepted groups sequentially.
 
 Seeds are a contract, not a vibe (lane defs + the `pw-guide-workflow` skill's
 execution-and-routing reference, §Seed contracts): a dense executive summary + pointer list, **pre-flight before spawn** (a seed gap

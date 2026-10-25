@@ -204,7 +204,7 @@ Inspect project values and machine settings:
 /pw-config global show
 ```
 
-Set two concurrent executors:
+Set two concurrent executors (the same ceiling caps concurrent MR comment fixers):
 
 ```text
 /pw-config set --project delivery-note --key max-parallel --value 2
@@ -228,7 +228,7 @@ Executor pins apply to individual tasks. To choose a model for a project role in
 /pw-config set --project <slug> --key ai-model --set reviewer=<provider>:<model-id>
 ```
 
-Use an enabled provider and a valid model ID. Project roles are `researcher`, `analyst`, `writer-task`, `reviewer`, and `verifier`.
+Use an enabled provider and a valid model ID. Project roles are `researcher`, `analyst`, `writer-task`, `reviewer`, `verifier`, and `ship-comment-analyst`.
 There is no project executor role setting; use task pins for execution.
 Clear a task pin with `--key pin --set T02=—`, or a role override with `--key ai-model --set reviewer=—`.
 

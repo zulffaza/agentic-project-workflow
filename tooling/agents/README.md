@@ -13,8 +13,11 @@ tooling/agents/
                             pack + seed); reads context + docs + tickets; never decides
 ├── pw-analyst.md        ← drafts an analysis doc from a seed (options, trade-offs, Qn); read-only
 ├── pw-writer-task.md    ← drafts task docs from a caller's decisions; never fills ## Result
-└── pw-reviewer.md       ← optional, fresh-session review pass on ONE artifact; never edits it —
-                            see docs/REVIEW.md + the `pw-guide-review-method` skill
+├── pw-reviewer.md       ← optional, fresh-session review pass on ONE artifact; never edits it —
+│                          see docs/REVIEW.md + the `pw-guide-review-method` skill
+└── pw-ship-comment-analyst.md ← read-only /pw-ship comments prerequisite: interprets every
+                                 comment across the selected MRs, groups fixes, returns a
+                                 fixer DAG; never fixes, replies, pushes, or approves
 ```
 
 **Where they land** (per provider, via each provider's `<name>_agentdir` hook):
@@ -51,8 +54,9 @@ provider's `render_<name>_agent` hook wraps the body in that provider's frontmat
    command for the md; fixing a *map* block stays your own edit.
 
 ## Reuse before you create
-The six shipped agents cover the workflow's roles (orchestrator, researcher, analyst, writer-task,
-executor, reviewer — `pw-reviewer` is spawned only by `/pw-review ai …`). **Execution can still
+The six shipped agents cover the workflow's roles (researcher, analyst, writer-task, executor,
+reviewer, ship-comment-analyst — `pw-reviewer` is spawned only by `/pw-review ai …`, and
+`pw-ship-comment-analyst` only as the `/pw-ship comments` prerequisite). **Execution can still
 reuse an existing agent you already have** (e.g. `pw-executor`) — a task's `Execute with:` names
 whatever should run it, and the discipline (worktree isolation, running `## Verify`, faithful
 reporting) comes from the `pw-guide-workflow` skill + the task file, not from a bespoke agent. Ship
@@ -112,8 +116,8 @@ when the id is live, and cold-spawns a plain-model session with the recorded see
 dead. The session id is a machine-local pointer — never pushed into MR text or committed artifacts;
 the on-disk PLAN/dashboard/task state stays the durable cross-machine recovery.
 
-The phase roles without a task file (researcher / analyst / writer-task / reviewer / verifier)
-bind their model one rung up the ladder: an interactive override for that spawn, the project
+The phase roles without a task file (researcher / analyst / writer-task / reviewer / verifier /
+ship-comment-analyst) bind their model one rung up the ladder: an interactive override for that spawn, the project
 dashboard's `- **AI Models:**` line (`pw-config.sh set --project <slug> --key ai-model --set <role>=<provider:model>`,
 the sibling of `- **AI Review:**`; the human surface is `/pw-config`), or nothing — which
 falls through to the provider's floor (`small_model`/`subagent_model` on kilo; the session model on

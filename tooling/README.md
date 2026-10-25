@@ -48,9 +48,10 @@ tooling/
 │   ├── pw-guide-review-method/  managed review method
 │   ├── pw-guide-authoring/      RFC authoring method
 │   └── pw-orchestration/        driver rules for the normal session
-├── agents/             ← THE source of truth for the five worker sub-agents: pw-executor,
+├── agents/             ← THE source of truth for the six worker sub-agents: pw-executor,
 │                         pw-reviewer (optional, only spawned by /pw-review … ai), pw-researcher,
-│                         pw-analyst, pw-writer-task (the phase lanes — see agents/README.md)
+│                         pw-analyst, pw-writer-task (the phase lanes), and
+│                         pw-ship-comment-analyst (read-only /pw-ship comments prerequisite)
 ├── docs/               ← registries/policy the AGENTS read (each has a human-facing peer doc);
 │                         maintainer-owned reference — you never edit these, see below:
 │   ├── conventions.md    capability placement: S-rules (script), L-rules (layout),
@@ -178,8 +179,8 @@ agent: <optional legacy field; no primary agent is shipped>
 > Sub-agents **are** generated — from [`agents/`](./agents/README.md), seeded into each provider's
 > agent dir by `gen-agents.sh` (kilo `~/.config/kilo/agent/`, Claude Code `~/.claude/agents/`,
 > Cursor `~/.cursor/agents/`; codex gets none — it has no agent-def surface). The
-> five shipped worker roles: `pw-executor`, `pw-reviewer` (optional — every review
-> point defaults to human-only `advisory`; a pass only starts when scheduled for that phase) and the spawn-lanes `pw-researcher` / `pw-analyst` / `pw-writer-task`; execution can
+> six shipped worker roles: `pw-executor`, `pw-reviewer` (optional — every review
+> point defaults to human-only `advisory`; a pass only starts when scheduled for that phase), the spawn-lanes `pw-researcher` / `pw-analyst` / `pw-writer-task`, and the read-only `pw-ship-comment-analyst`; execution can
 > still reuse a registered agent (e.g. `pw-executor`) by naming it in a task's `Execute with:` —
 > or, the portable Option-A form, route a `provider:model` and let the task file be the work order
 > (Option A: one executor concept, no second implementer def). Lane spawns take their model from the

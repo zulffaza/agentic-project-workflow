@@ -459,3 +459,7 @@ C361-github-readiness-title-fallback	pw-shiplib.sh	        native = data.get('dr
 C362-resume-repeats-completed-write	pw-shiplib.sh	            if entry['status'] == 'write-uncertain':	            if entry['status'] == 'prepared':	T1	^pw-ship-readiness\.t\.sh$
 C363-batch-readiness-dropped	skills/human/pw-batch/SKILL.md	| `/pw-ship ready` / `/pw-ship draft` | preview; `--apply --expect <token>`; `--apply --resume <attempt-id>` | project |	| `/pw-ship ready` | preview only | project |	T1	^pw-batch\.t\.sh$
 C364-unresolved-attempt-overwritten	pw-shiplib.sh	                if prior.get('status') != 'done':	                if False:	T1	^pw-ship-readiness\.t\.sh$
+C365-comment-analysis-barrier-dropped	skills/model/pw-guide-workflow/references/mr-comments.md	No source edit begins until its artifact is complete and	Source edits may begin before the artifact is complete or	T4	-
+C366-parallel-group-writers-allowed	skills/model/pw-guide-workflow/references/mr-comments.md	groups never run as parallel writers	groups may run as parallel writers	T4	-
+C367-comment-analyst-role-unregistered	pw-config.sh	AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier ship-comment-analyst"	AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier"	T1	^pw-config\.t\.sh$
+C368-comment-analyst-may-fix	agents/pw-ship-comment-analyst.md	Read-only; never fixes	Read-only; may fix	T4	-

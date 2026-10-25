@@ -18,7 +18,7 @@
 #       (headless = strict binding); ai-review surfaces context|analysis|plan|task-plan|
 #       task-exec|ship|rfc|close with modes advisory|auto; review-trigger values
 #       manual|completion; review-repair values manual|bounded; ai-model roles
-#       researcher|analyst|writer-task|reviewer|verifier.
+#       researcher|analyst|writer-task|reviewer|verifier|ship-comment-analyst.
 #       ai-review/ai-model/review-trigger/review-repair accept BATCH
 #       --set pairs (`--set plan=auto --set ship=advisory`) and an
 #       `--set all=<value>` baseline that expands over every supported surface,
@@ -60,7 +60,7 @@
 #   announce the pointer on stderr; use the `set --key …` form in new invocations.
 #   pw-config.sh ai-model --project <slug> [--set <role=value>]…
 #       Get (no --set) or set spawn-lane model rows (roles: researcher analyst
-#       writer-task reviewer verifier). — clears to provider/session default. Several
+#       writer-task reviewer verifier ship-comment-analyst). — clears to provider/session default. Several
 #       --set role=<value> pairs in one call = batch (validated all-or-nothing, one write/log).
 #   pw-config.sh ai-review --project <slug> [--set <surface=mode>]…
 #       Get (no --set) or set AI-review OUTCOME modes. Two values only: advisory|auto (auto is
@@ -123,7 +123,7 @@ proj_dir() { local d; d="$(pw_proj_dir "$1")" || die "no such project: $1 ($PROJ
 # --- AI Models (per-lane model row for the spawned sub-agent lanes — plan 01 §5.1) -----------
 # The model sibling of the AI Review config block below: which model a *lane* should run on when a
 # phase spawns it, per project. Roles = spawn lanes (researcher / analyst / writer-task / reviewer /
-# verifier). The **executor is never a row** — a task's `Execute with:` already pins its per-unit
+# verifier / ship-comment-analyst). The **executor is never a row** — a task's `Execute with:` already pins its per-unit
 # model (a dashboard copy would only drift from it) — and clean-execution choices (`Results
 # acceptance`, `- AI execution limit`) live in PLAN's Execution strategy, not the dashboard.
 # `—` = no row = provider/session default (the kilo `small_model`/`subagent_model` floor, or
@@ -132,7 +132,7 @@ proj_dir() { local d; d="$(pw_proj_dir "$1")" || die "no such project: $1 ($PROJ
 # (kilo's Task-tool spawn has no model arg), the driver runs the row as a **headless session** of
 # that model over the same work order, and records what actually ran — a pin that can't fire says
 # so in the result, instead of silently running the floor model while the row claims a pin.
-AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier"
+AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier ship-comment-analyst"
 
 # Remove one member from a k=v config line (no-op when absent); other members survive.
 _line_pairs_drop() { # <file> <line-label> <member>…
@@ -177,7 +177,7 @@ _pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   awk -v t="$default" '{
 }
 
 # Get (no --set) or set (--set <role>=<value>; — clears to no-row).
-#   ai-model --project <slug>                        -> "researcher=— analyst=— writer-task=— reviewer=— verifier=—"
+#   ai-model --project <slug>                        -> "researcher=— analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=—"
 #   ai-model --project <slug> --set <role>=<provider:model|—>   -> sets just that lane, leaves the other four untouched
 _line_pairs_set() {  # <file> <line-label> <k>=<v>… — batch-update a one-line k=v config line
   local f="$1" label="$2"; shift 2

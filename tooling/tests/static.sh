@@ -562,9 +562,30 @@ PY
     && [ -f "$TOOL/skills/model/pw-orchestration/references/execution.md" ] \
     && grep -qF 'no custom primary agent' "$TOOL/skills/model/pw-orchestration/SKILL.md" \
     && ! ls "$TOOL/agents/pw-orchestrator.md" >/dev/null 2>&1 \
-    && [ "$(ls "$TOOL"/agents/pw-*.md | wc -l | tr -d ' ')" = 5 ] \
-    && pwtest_ok "T4 canary: normal-session orchestration with five workers and no primary agent" \
-    || pwtest_bad "T4 canary: orchestration inventory" "orchestration references/declaration missing, or the agent set is not exactly five workers"
+    && [ "$(ls "$TOOL"/agents/pw-*.md | wc -l | tr -d ' ')" = 6 ] \
+    && [ -f "$TOOL/agents/pw-ship-comment-analyst.md" ] \
+    && pwtest_ok "T4 canary: normal-session orchestration with six workers and no primary agent" \
+    || pwtest_bad "T4 canary: orchestration inventory" "orchestration references/declaration missing, or the agent set is not exactly six workers"
+  # 9a) /pw-ship comments analysis prerequisite: ONE read-only analyst gates every MR fixer;
+  # groups inside an MR stay sequential, and independent MRs share the max-parallel ceiling.
+  grep -qF 'Comment analysis prerequisite' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
+    && grep -qF 'No source edit begins until its artifact is complete and' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
+    && grep -qF 'groups never run as parallel writers' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
+    && grep -qF 'No fixer starts before the analysis artifact is complete and' "$TOOL/skills/human/pw-ship/SKILL.md" \
+    && grep -qF 'Read-only; never fixes' "$TOOL/agents/pw-ship-comment-analyst.md" \
+    && grep -qF 'Six worker sub-agents ship' "$TOOL/skills/model/pw-guide-workflow/references/execution-and-routing.md" \
+    && pwtest_ok "T4 canary: comment analysis prerequisite gates every MR fixer" \
+    || pwtest_bad "T4 canary: comment analysis prerequisite" "analyst barrier, sequential groups, max-parallel wording, or the six-worker inventory is missing"
+  # 9b) the ship-comment-analyst role must be registered on EVERY authoritative role surface —
+  # one missed list silently drops the row from get/set/show/ensure or the scaffolded dashboard.
+  rmiss=""
+  for rf in "$TOOL/scripts/lib/pw-common.sh" "$TOOL/scripts/entities/pw-config.sh" \
+            "$TOOL/scripts/toolchain/scaffold.sh" "$TOOL/scripts/entities/pw-status.sh" \
+            "$TOOL/skills/human/pw-config/SKILL.md" "$TOOL/../template/PROJECT.template.md"; do
+    grep -qF 'ship-comment-analyst' "$rf" || rmiss="$rmiss ${rf#"$TOOL"/../}"
+  done
+  [ -z "$rmiss" ] && pwtest_ok "T4 canary: ship-comment-analyst registered on every role surface" \
+    || pwtest_bad "T4 canary: ship-comment-analyst role surfaces" "missing:$rmiss"
   rendered="$ROOT/plan29-entries"
   "$TOOL/scripts/toolchain/gen-commands.sh" --outdir "$rendered" claude cursor codex kilo opencode >/dev/null 2>&1
   bad_entry=""

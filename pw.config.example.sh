@@ -102,7 +102,8 @@ PW_KILO_API_PROVIDERS=(kilo)
 #                                                # (legacy "off" here normalizes to "advisory")
 #   PW_AI_MODEL_DEFAULT_RESEARCHER=—             # e.g. kilo:command_code/MiniMaxAI/MiniMax-M3,
 #   PW_AI_MODEL_DEFAULT_ANALYST=—                #     claude:sonnet — `—` = provider default
-# (writer-task / reviewer / verifier follow the same PW_AI_MODEL_DEFAULT_<ROLE> pattern; the
+# (writer-task / reviewer / verifier / ship-comment-analyst follow the same
+#  PW_AI_MODEL_DEFAULT_<ROLE> pattern; the
 #  EXECUTOR is never a row — its pin is a task's `Execute with:`.)
 
 # Back-compat: the old names PW_KILO_PROVIDERS (array) and PW_KILO_PROVIDER (singular) still
@@ -169,7 +170,8 @@ PW_AI_REVIEW_DEFAULT="advisory"
 # line until /pw-breakdown creates PLAN, then PLAN owns them.
 #   PW_PROJECT_DEFAULT_ROUTING=""            # auto|subagent|headless (fallback: PW_ROUTE_DEFAULT)
 #   PW_PROJECT_DEFAULT_EXECUTION_LIMIT=""    # 0..99 (fallback: PW_MAX_SELF_REPAIR)
-#   PW_PROJECT_DEFAULT_MAX_PARALLEL=""       # 1..99 (unset = planner chooses)
+#   PW_PROJECT_DEFAULT_MAX_PARALLEL=""       # 1..99 (unset = planner chooses; also caps
+#                                             # concurrent MR comment fixers)
 #   PW_PROJECT_DEFAULT_REVIEW_TRIGGER=""     # surface=manual|completion pairs (unset = manual)
 #   PW_PROJECT_DEFAULT_REVIEW_REPAIR=""      # surface=manual|bounded pairs (unset = manual)
 #   PW_PROJECT_DEFAULT_REVIEW_ROUNDS=""      # 1..3 (unset = 3)
@@ -179,7 +181,8 @@ PW_AI_REVIEW_DEFAULT="advisory"
 #   PW_PROJECT_DEFAULT_AI_MODEL_RESEARCHER_VARIANT=""  # provider-supported variant (see model-check)
 #   PW_PROJECT_DEFAULT_AI_MODEL_RESEARCHER_REASONING=""
 #   PW_PROJECT_DEFAULT_AI_MODEL_RESEARCHER_EFFORT=""
-# (analyst / writer-task / reviewer / verifier follow the same four-variable pattern.)
+# (analyst / writer-task / reviewer / verifier / ship-comment-analyst follow the same
+#  four-variable pattern.)
 
 # --- Review-request frame and generation prompts (OPTIONAL — defaults are seeded at install) --
 # /pw-ship request-review --project <slug> renders its copyable message through one editable Markdown

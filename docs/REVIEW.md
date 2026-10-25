@@ -231,8 +231,18 @@ only. With it, a thread closes only when its fix landed, its verification passed
 
 **One MR or all of them.** `/pw-ship comments --project <slug> --task T03` handles a single task's MR;
 **`/pw-ship comments --project <slug>`** (no task IDs) sweeps **every** open MR in the project in one run —
-so you don't have to invoke it per task. It processes them serially (each is a real
-edit → verify → push) and recaps a per-task table at the end.
+so you don't have to invoke it per task.
+
+**One analysis pass, then one writer per MR.** Before anything is edited, a read-only analyst reviews
+the whole selected set: it explains what each comment asks for, separates MR-specific requests from
+ones that may apply to several MRs, groups related fixes, and reports the order the MRs can run in.
+Nothing is edited until that analysis is complete and checked. Each MR then has exactly one writer
+that applies its groups **one after another** and verifies the complete MR.
+
+**Independent MRs run concurrently; groups inside one MR never do.** The project's parallel limit
+(`/pw-config set --project <slug> --key max-parallel --value <n>`) caps how many MR fixers work at
+once, alongside reviewers and delegated verification. Stacked MRs still run parent-first, and a
+dependent MR waits for its dependency's verified update. The run recaps a per-task table at the end.
 
 **Pending description delivery is checked before MR-state skips.** A rerun recovers saved attempts
 without repeating completed pushes or replies. Closed/merged MRs retain pending project records
@@ -262,16 +272,20 @@ reviewer leaves a comment on MR !123 (thread on file X, line N — OR a general/
         │                          for reply/resolve). Classify by `system`/`resolvable`/`resolved`,
         │                          NEVER by diff position (see box below); cross-check the local
         │                          tracking table, not just the forge's resolved flag
-        ├─ 2. FIX in the worktree  worktree/<repo>/T03-<slug>/ … edit, re-run ## Verify, push
-        │                          (build-check monitors the pipeline here too, unless
-        │                          --skip-build-check was passed)
-        ├─ 3. REPLY on each thread  summarising the fix (never a bare "done") — general comments too.
+        ├─ 2. ANALYZE once         one read-only pass over the whole selected set: intent per comment,
+        │                          cross-MR vs MR-specific scope, fix groups, and the MR order.
+        │                          No edits start until this result is complete and checked.
+        ├─ 3. FIX in the worktree  worktree/<repo>/T03-<slug>/ … groups one at a time, then
+        │                          re-run ## Verify once for the MR, push (build-check monitors the
+        │                          pipeline here too, unless --skip-build-check was passed).
+        │                          Independent MRs may overlap up to the project parallel limit.
+        ├─ 4. REPLY on each thread  summarising the fix (never a bare "done") — general comments too.
         │                          Threads stay OPEN by default; with --resolve, close the ones you
         │                          fixed + verified (resolvable: true only; a general thread needs
         │                          the explicit call — a push never auto-resolves it)
-        ├─ 4. REFRESH the current MR summary and DELIVER one frozen attempt for this invocation
+        ├─ 5. REFRESH the current MR summary and DELIVER one frozen attempt for this invocation
         │                          — preserve prior attempts, reviewer text, and actual verification
-        └─ 5. MIRROR into the project dir  ← the important bit
+        └─ 6. MIRROR into the project dir  ← the important bit
                  • task/T03.md  ## Result   (what changed + verify output + build-check result)
                  • task/review/T03.review.md  (create it if missing — a [RESOLVED] item per thread,
                    PLUS a row in its `## MR comment tracking` table —

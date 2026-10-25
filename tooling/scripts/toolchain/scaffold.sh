@@ -54,7 +54,7 @@ case "$review_rounds" in 1|2|3) ;; *) review_rounds=3 ;; esac
 review_budget_default_line="rounds=$review_rounds"
 # spawn-lane model rows (docs/EXECUTION.md §Spawning phase work): the global project default when
 # set, else the legacy PW_AI_MODEL_DEFAULT_<ROLE> floor, else unbound (`—`).
-AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier"
+AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier ship-comment-analyst"
 ai_model_default_line=""
 ai_model_tuning_default_line=""
 for r in $AI_MODEL_ROLES; do

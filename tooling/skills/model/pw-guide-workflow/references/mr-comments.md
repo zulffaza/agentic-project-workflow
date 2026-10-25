@@ -164,16 +164,23 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
       recovery and any newly observed matching-head verification evidence (note it in the recap),
       **unless** it is a stacked descendant pulled in by the cascade: its inherited code changed, so
       it still gets its inherited update and its own `## Verify` (see the cascade section below).
-2. **One fixer pass per distinct MR, not per comment or shared-branch task:** apply all open
-    thread fixes once in that MR's shared **worktree**, re-run its `## Verify` once for the batch, and
-    push. For tasks sharing one MR, use the union of their comment-tracking tables, reply once per
-    thread, and mirror the result/tracking into every contributing task.
+2. **Analyze the whole set once, then fix one MR at a time:** before any fixer starts, dispatch the
+    single `pw-ship-comment-analyst` prerequisite over every MR that has actionable work (see
+    "Comment analysis prerequisite" below). No source edit begins until its artifact is complete and
+    validated. Then apply all fixes for one MR in that MR's shared **worktree**, re-run its
+    `## Verify` once for the batch, and push. Within one MR, process the analyst's fix groups
+    **sequentially**; groups never run as parallel writers. For tasks sharing one MR, use the union of
+    their comment-tracking tables, reply once per thread, and mirror the result/tracking into every
+    contributing task.
     If those tasks have incompatible execution pins, serialize bounded owner work orders under
     their recorded pins; never edit the shared branch concurrently or invent a replacement pin.
     Aggregate all such passes under the same invocation/MR attempt.
-    Fan-out per the ladder: **≥2 distinct MRs with open threads → one fixer per MR, run in
-   parallel only when they are independent** (independent worktrees; each routed by the ladder —
-    same provider → in-process sub-agent, `Route: headless`/cross-provider → supervised headless).
+    Fan-out per the ladder and the project `max-parallel`: **≥2 distinct MRs with open threads →
+    one fixer per MR, admitted only when they are independent and a slot is free** (independent
+    worktrees; each routed by the ladder — same provider → in-process sub-agent,
+    `Route: headless`/cross-provider → supervised headless). `max-parallel` is a shared project
+    ceiling across fixers, analysts, reviewers, and delegated verification — never a per-MR
+    allowance. A queued MR waits for a slot; spare capacity never justifies an extra writer.
     A stacked ancestor and its descendant are **never** fixed concurrently, and run parent-first
     per the cascade section below; **exactly one MR, same
    provider, `Route: auto|subagent` → you fix it inline** (bounded exception to the no-source-edit
@@ -249,9 +256,45 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
    `--resolve`, flag any resolve request that failed or was skipped. For `merged` tasks, note that
    the worktree was removed and docs updated.
 
-Process the set **serially by default** (each is a real edit-verify-push in a worktree); parallelize
-only independent repos if you're confident. Never merge an MR as part of this command — merging is a
-human decision downstream.
+Independent MRs may run concurrently within `max-parallel`; groups inside one MR stay sequential.
+Dependencies, stack barriers, shared-MR ownership, and provider/runtime capacity still decide what is
+ready — repository count alone proves nothing. Never merge an MR as part of this command — merging is
+a human decision downstream.
+
+### Comment analysis prerequisite
+
+One `pw-ship-comment-analyst` pass covers the whole selected scope before any fixer starts. It is
+read-only and uses the project `AI Models: ship-comment-analyst` row (provider/session default when
+unset). Do not duplicate its investigation in the driver first, and do not launch one analyst per MR.
+
+- **Work order:** the resolved task/MR set, task-to-MR mapping, pins, tracking pointers,
+  dependency/stack evidence, and a driver-assigned output path **outside the source checkout** (for
+  example `worktree/.pw-ship-comments/<invocation>.json`). The analyst fetches the comments itself.
+- **Returns:** a versioned manifest with the input snapshot (heads, tree/index state, comment IDs and
+  feedback revisions), an interpretation and disposition per actionable comment, confirmed/potential/
+  not-applicable cross-MR mapping, ordered fix groups per MR, a proposed fixer DAG with reasons, and
+  explicit pending decisions. Every discovered candidate has a disposition; nothing disappears into a
+  group.
+- **Validate before dispatch:** coverage of the selected scope, exact input freshness, proposed edges
+  against the approved execution DAG and recorded stack topology, and that no pending decision was
+  converted into work. The analysis supplements the DAG; it never removes a dependency barrier or
+  creates a stacked branch.
+- **Authorization:** a comment like "do this for the other tasks too" is a cross-MR candidate, not
+  permission to widen scope. Confirmed applicability plus an already-authorized target may become a
+  bounded work order; potential applicability or an unselected target stays pending for the human.
+- **No fabrication:** a target MR without a reviewer comment gets a bounded derived work order and
+  **no invented thread or reply**.
+- **Staleness:** re-check each fixer's head, tree/index state, feedback revisions, and pins before
+  dispatch. If they moved, invalidate affected work orders and refresh with the analyst before
+  editing; unrelated completed work is not replayed.
+- **Failure:** no valid artifact means no fixing. Report the blocker and keep pending-delivery
+  recovery separate. If the chosen route cannot enforce read-only source access, stop rather than
+  running the analyst as a writer.
+- **Bookkeeping:** log the analyst spawn through `pw-status.sh log` with its session id and output
+  path. Keep its session separate from a task's canonical executor `Session:` pointer.
+
+An empty sweep, or one whose only work is pending description delivery, needs no new analyst. New
+actionable feedback always needs the prerequisite, even for a single small comment.
 
 ### Comment fixes on a stack (cascade)
 

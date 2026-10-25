@@ -138,7 +138,7 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
   allowlist (`pw.config.sh`) is the real gate; record any requested Fast tier in `Model used:`
   (requested-only — it is not verifiable from output).
 - **Phase lanes are separate pins:** the dashboard's `- **AI Models:**` line binds the *lane* agents
-  the phases spawn (researcher/analyst/writer-task/reviewer/verifier), never this task table. The
+  the phases spawn (researcher/analyst/writer-task/reviewer/verifier/ship-comment-analyst), never this task table. The
   row is what the executor-side `Actually used:`/`Session:` ledger compares against — an unset row
   means provider default, not "anything goes".
 - **No bespoke executor agent** — the orchestrator spawns/shells out to whatever `Execute with:`
