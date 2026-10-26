@@ -190,7 +190,7 @@ Two read-only/import operators on this command (no new user script):
       **Base branch** for an independent task, or the **parent's verified-head branch** for a
       stacked task (that branch must already exist on origin; `pw-ship.sh exec` refuses otherwise),
       with a rich description (template below), title
-      per the ticket convention above. **Resolve the forge + CLI per `tooling/docs/forges.md`** (host
+      per the ticket convention above. **Resolve the forge + CLI per `{{PW_HOME}}/tooling/docs/forges.md`** (host
       from this repo's own `origin` remote → `PW_FORGE_HOSTS` override, else auto-detect; an exact
       `PW_FORGE_HOSTS` entry wins) — GitLab: `glab` run from inside the worktree with
       `GITLAB_HOST=<resolved-host>`; GitHub: `gh pr create`. The script resolves the forge and
@@ -295,7 +295,7 @@ before the single analysis artifact is complete and validated.
 ## Build check (on by default — `--skip-build-check` to opt out, either mode)
 Runs automatically, in both modes: after the MR is opened/updated (ship mode) or after each fix is
 pushed (comment mode), poll that MR's pipeline/checks until they reach a terminal state, using the
-**Build/CI status invocation** column in `tooling/docs/forges.md`'s Registry (same per-repo forge
+**Build/CI status invocation** column in `{{PW_HOME}}/tooling/docs/forges.md`'s Registry (same per-repo forge
 resolution as everything else here — never hardcode a host or a CLI). Pass `--skip-build-check` to
 skip this entirely for the run and get the old immediate-return behavior (dashboard/`## Result`
 `Build`/`Build check` fields stay `—`, recap says "skipped"). **A red build means that task is NOT

@@ -33,8 +33,8 @@ those next, per the precedence rules below. Exit 1 = a bare ticket row with no w
 CLI: STOP and ask the user (add `--ignore-errors` only if they choose to continue without it).
 (`{{PW_HOME}}/tooling/docs/scripts/workflow-automation.md`)
 
-**Optional lane spawns — see `tooling/skills/model/pw-guide-workflow/references/execution-and-routing.md`
-§Spawn lanes (seeds)/§Spawn ledger, and docs/EXECUTION.md §Spawning phase work.** Every delegated
+**Optional lane spawns — see `{{PW_HOME}}/tooling/skills/model/pw-guide-workflow/references/execution-and-routing.md`
+§Spawn lanes (seeds)/§Spawn ledger, and `{{PW_HOME}}/docs/EXECUTION.md` §Spawning phase work.** Every delegated
 step here gets: (a) a seeded brief (pointer-list, no re-gathering), (b) your **pre-flight** that the
 seed covers its scope, (c) a `LOG.md` spawn line with `· session=<id>` + `seed=` + `out=`, and
 (d) an **exit-check** against the brief — a thin result is fixed by resuming that id with a seed
@@ -68,7 +68,7 @@ decisions (options not converged, Q0 rules, the final doc) stay yours.
         researcher, never by spawning the analyst into a flounder); on a shallow return, patch the
         seed and **resume the researcher's session** (record its id in `LOG.md`), don't cold-re-spawn.
         On a provider that can't spawn lanes, run the same role per
-        docs/EXECUTION.md §Spawn lanes (headless `kilo run`/plain session on the brief; its work order
+        `{{PW_HOME}}/docs/EXECUTION.md` §Spawn lanes (headless `kilo run`/plain session on the brief; its work order
         is the same body).
    - **For any `context/INDEX.md` row whose File/link is a bare external URL** (not a local copy)
      — FETCH it before treating it as read, in this precedence order:

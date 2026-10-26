@@ -3,7 +3,7 @@
 Provider-neutral agent definitions that `bootstrap.sh` **seeds into each enabled CLI's agent dir**,
 exactly like `commands/` are seeded as slash-commands. One source here → a native agent in every
 provider you use. They are **build artifacts** in the provider dirs — never hand-edit the installed
-copies; edit the canonical file here and re-run [`gen-agents.sh`](../gen-agents.sh) (or
+copies; edit the canonical file here and re-run [`gen-agents.sh`](../scripts/toolchain/gen-agents.sh) (or
 `./bootstrap.sh`).
 
 ```

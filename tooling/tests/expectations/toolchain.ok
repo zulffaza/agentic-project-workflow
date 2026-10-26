@@ -4,3 +4,4 @@
 skills/human/pw-new/SKILL.md	scripts/toolchain/scaffold.sh
 skills/human/pw-adopt/SKILL.md	scripts/toolchain/scaffold.sh
 skills/human/pw-doctor/SKILL.md	scripts/toolchain/pw-doctor.sh
+agents/README.md	scripts/toolchain/gen-agents.sh
