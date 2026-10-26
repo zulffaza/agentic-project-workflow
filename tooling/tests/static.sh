@@ -623,7 +623,7 @@ PYP
 import re,sys,pathlib
 tool=pathlib.Path(sys.argv[1]); bad=[]
 pat=re.compile(r'\[[^\]]*\]\(([^)\s]+)\)')
-roots=[tool/'skills',tool/'agents',tool/'docs']
+roots=[tool/'skills',tool/'agents',tool/'docs',tool/'skill-internal']
 for root in roots:
     for f in root.rglob('*.md'):
         for i,l in enumerate(f.read_text().splitlines(),1):
