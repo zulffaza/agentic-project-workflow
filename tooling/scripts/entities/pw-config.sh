@@ -214,6 +214,10 @@ _project_defaults_line_ensure() { # <file>
     || die "cannot insert the Project Defaults: line in $f → fix: repair the dashboard config lines first (/pw-config ensure --project <slug>)"
 }
 
+_project_defaults_has_line() { # <file>
+  grep -q '^- \*\*Project Defaults:\*\*' "$1" 2>/dev/null
+}
+
 _project_defaults_member() { # <file> <member>
   local f="$1" m="$2" kv
   for kv in $(grep -m1 '^- \*\*Project Defaults:\*\*' "$f" 2>/dev/null | sed 's/^- \*\*Project Defaults:\*\*[[:space:]]*//' || true); do
@@ -1095,15 +1099,18 @@ cmd_show() {
   _row review-rounds config "${v:-—}" "README.md:Review Budget" "3"
   v="—"
   if [ -f "$plan" ]; then v="$(_plan_value "$plan" Routing)"; src="task/PLAN.md:Routing"
-  else v="$(_project_defaults_member "$readme" routing)"; src="README.md:Project Defaults (pending PLAN)"; fi
+  elif _project_defaults_has_line "$readme"; then v="$(_project_defaults_member "$readme" routing)"; src="README.md:Project Defaults (pending PLAN)"
+  else v=""; src="built-in default"; fi
   [ -n "$v" ] || v="—"; _row routing config "$v" "$src" "$PW_ROUTE_DEFAULT"
   v="—"
   if [ -f "$plan" ]; then v="$(_plan_value "$plan" "AI execution limit")"; src="task/PLAN.md:AI execution limit"
-  else v="$(_project_defaults_member "$readme" execution-limit)"; src="README.md:Project Defaults (pending PLAN)"; fi
+  elif _project_defaults_has_line "$readme"; then v="$(_project_defaults_member "$readme" execution-limit)"; src="README.md:Project Defaults (pending PLAN)"
+  else v=""; src="built-in default"; fi
   [ -n "$v" ] || v="—"; _row execution-limit config "$v" "$src" "$PW_MAX_SELF_REPAIR"
   v="—"
   if [ -f "$plan" ]; then v="$(_plan_get_maxparallel "$plan")"; src="task/PLAN.md:Max parallelism"
-  else v="$(_project_defaults_member "$readme" max-parallel)"; src="README.md:Project Defaults (pending PLAN)"; fi
+  elif _project_defaults_has_line "$readme"; then v="$(_project_defaults_member "$readme" max-parallel)"; src="README.md:Project Defaults (pending PLAN)"
+  else v=""; src="built-in default"; fi
   [ -n "$v" ] || v="—"; _row max-parallel config "$v" "$src" "—"
   v="—"; [ -f "$plan" ] && v="$(_plan_value "$plan" "Produced by")"; [ -n "$v" ] || v="—"
   _row produced-by config "$v" "task/PLAN.md:Produced by" "${PW_PROVIDERS[*]}"
@@ -1195,21 +1202,27 @@ cmd_get() {
       if [ -f "$d/task/PLAN.md" ]; then
         v="$(_plan_value "$d/task/PLAN.md" Routing)"; printf '%s\n' "${v:-(unset — effective: $PW_ROUTE_DEFAULT)}"
       else
-        v="$(_project_defaults_member "$d/README.md" routing)"; printf '%s\n' "${v:-(unset — effective: $PW_ROUTE_DEFAULT)} (pending PLAN seed)"
+        v="$(_project_defaults_member "$d/README.md" routing)"
+        if _project_defaults_has_line "$d/README.md"; then printf '%s\n' "${v:-(unset — effective: $PW_ROUTE_DEFAULT)} (pending PLAN seed)"
+        else printf '%s\n' "${v:-(unset — effective: $PW_ROUTE_DEFAULT)}"; fi
       fi ;;
     execution-limit)
       [ "$json" = 0 ] || die "get: --json is supported for ai-model only"
       if [ -f "$d/task/PLAN.md" ]; then
         v="$(_plan_value "$d/task/PLAN.md" "AI execution limit")"; printf '%s\n' "${v:-(unset — effective: $PW_MAX_SELF_REPAIR)}"
       else
-        v="$(_project_defaults_member "$d/README.md" execution-limit)"; printf '%s\n' "${v:-(unset — effective: $PW_MAX_SELF_REPAIR)} (pending PLAN seed)"
+        v="$(_project_defaults_member "$d/README.md" execution-limit)"
+        if _project_defaults_has_line "$d/README.md"; then printf '%s\n' "${v:-(unset — effective: $PW_MAX_SELF_REPAIR)} (pending PLAN seed)"
+        else printf '%s\n' "${v:-(unset — effective: $PW_MAX_SELF_REPAIR)}"; fi
       fi ;;
     max-parallel)
       [ "$json" = 0 ] || die "get: --json is supported for ai-model only"
       if [ -f "$d/task/PLAN.md" ]; then
         v="$(_plan_get_maxparallel "$d/task/PLAN.md")"; printf '%s\n' "${v:-(unset)}"
       else
-        v="$(_project_defaults_member "$d/README.md" max-parallel)"; printf '%s\n' "${v:-(unset)} (pending PLAN seed)"
+        v="$(_project_defaults_member "$d/README.md" max-parallel)"
+        if _project_defaults_has_line "$d/README.md"; then printf '%s\n' "${v:-(unset)} (pending PLAN seed)"
+        else printf '%s\n' "${v:-(unset)}"; fi
       fi ;;
     produced-by) v="$(_plan_value "$d/task/PLAN.md" "Produced by")"; printf '%s\n' "${v:-(unset — providers: ${PW_PROVIDERS[*]})}" ;;
     rfc-target)  v="$(pw_field "$d/rfc/META.md" Target 2>/dev/null || true)"; printf '%s\n' "${v:-(unset — backend: ${PW_RFC_BACKEND:-markdown})}" ;;

@@ -156,7 +156,8 @@ gpd_re 'auto' "$(cat "$PWTEST_OUT")" "legacy routing falls back to the built-in 
 pwtest_rc 0 "legacy get execution-limit without PLAN or seed" gpd get --project legacy --key execution-limit
 pwtest_rc 0 "legacy get max-parallel without PLAN or seed" gpd get --project legacy --key max-parallel
 pwtest_rc 0 "legacy show" gpd show --project legacy
-gpd_re 'README.md:Project Defaults \(pending PLAN\)' "$(cat "$PWTEST_OUT")" "legacy seed source is labelled pending, not managed global"
+gpd_re 'built-in default' "$(cat "$PWTEST_OUT")" "legacy source is labelled built-in, not pending seed or managed global"
+if grep -q 'pending PLAN seed' "$PWTEST_OUT"; then pwtest_bad "legacy get/show do not claim a pending seed" "no seed exists yet the output claims one"; else pwtest_ok "legacy get/show do not claim a pending seed"; fi
 if grep -q 'pw.config.sh managed global' "$PWTEST_OUT"; then
   pwtest_bad "legacy show never cites a managed global source" "managed-global source leaked into an existing project"
 else
