@@ -38,7 +38,7 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 ## Request-review mode (`request-review`)
 
 **Read-only and complete on its own: when the first word is literally `request-review`, run the
-procedure in `references/review-request.md`, relay its output, and STOP — this mode never pushes,
+procedure in the `pw-guide-workflow` skill's `references/review-request.md`, relay its output, and STOP — this mode never pushes,
 comments, polls CI, or writes project state, and it returns BEFORE the pre-flight block.** Do not treat its `--task` values as ship task
 IDs and do not run the ship/comment pre-flight or the monitor machinery for it. `--resolve` is also
 rejected here (it belongs to comment mode only): refuse and stop, writing nothing.
@@ -281,7 +281,8 @@ reviewer sees only this task's own changes. Group per file/module with real iden
 invocation and pending delivery, MR-state resolution, the single read-only
 `pw-ship-comment-analyst` prerequisite, one fixer pass per MR with groups applied sequentially,
 reply/resolve under the `--resolve` policy above, the recap, and the stacked cascade. Routing
-follows the §routing ladder in `references/execution-and-routing.md` from the same skill. The
+follows the §routing ladder in the `pw-guide-workflow` skill's
+`references/execution-and-routing.md`. The
 pre-flight `comments` gate above must pass first.
 
 **Concurrency is required, not optional.** When two or more independent MRs have actionable

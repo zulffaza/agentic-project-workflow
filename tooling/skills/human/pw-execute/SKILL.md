@@ -120,7 +120,7 @@ already exists the script attaches instead of dying; re-running is idempotent.
        main repo, tell me to switch that main checkout to another branch first.
 4. **How to run each task** — resolve `Execute with: <provider>:<model-or-agent>` **and the
    task's optional `Route:` field** (ladder precedence: task `Route:` > PLAN `- Routing:` line >
-   `PW_ROUTE_DEFAULT` > `auto`; values `auto|subagent|headless`) via the skill's
+   `PW_ROUTE_DEFAULT` > `auto`; values `auto|subagent|headless`) via the `pw-guide-workflow` skill's
    `references/execution-and-routing.md`. For a resolved cross-provider/headless route, read only
    the selected provider's headless-hook entry under `## How headless invocation actually works`
    in `{{PW_HOME}}/tooling/docs/providers.md`; read `## Effort / variant / thinking` only when the

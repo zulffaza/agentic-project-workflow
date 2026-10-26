@@ -7,7 +7,7 @@ description: Run a multi-repo change through the phased AI-agent pipeline for a 
 
 **Load `pw-orchestration` too.** Every operation loads its `references/common.md` for
 authorization, scope, helper ownership, and reporting. Operations that schedule or repair workers
-also load `references/execution.md`. This guide owns the pipeline map and phase references; it
+also load `pw-orchestration`'s `references/execution.md`. This guide owns the pipeline map and phase references; it
 does not dispatch operations or write state.
 
 
