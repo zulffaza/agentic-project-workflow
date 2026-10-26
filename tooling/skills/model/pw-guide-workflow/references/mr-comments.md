@@ -256,10 +256,11 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
    `--resolve`, flag any resolve request that failed or was skipped. For `merged` tasks, note that
    the worktree was removed and docs updated.
 
-Independent MRs may run concurrently within `max-parallel`; groups inside one MR stay sequential.
-Dependencies, stack barriers, shared-MR ownership, and provider/runtime capacity still decide what is
-ready — repository count alone proves nothing. Never merge an MR as part of this command — merging is
-a human decision downstream.
+Independent MRs run concurrently within `max-parallel`; groups inside one MR stay sequential.
+When two or more independent MRs have actionable comments, **do not process them one after another** —
+admit one fixer per ready MR together and cap the set at the ceiling. Dependencies, stack barriers,
+shared-MR ownership, and provider/runtime capacity still decide what is ready; repository count alone
+proves nothing. Never merge an MR as part of this command — merging is a human decision downstream.
 
 ### Comment analysis prerequisite
 

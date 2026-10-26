@@ -51,9 +51,9 @@ rejected here (it belongs to comment mode only): refuse and stop, writing nothin
 The script owns selection, MR metadata, ordering, rendering, and validation — run exactly this
 and relay its stdout; never re-order or re-word the generated MR fields yourself.
 
-**Load `references/review-request.md`** for the request-message procedure — selection, frame,
-the two-call AI-prose flow (its `observed heads` comparison and editable generation prompts),
-and the relay rules.
+**Load `references/review-request.md` from the `pw-guide-workflow` skill** for the request-message
+procedure — selection, frame, the two-call AI-prose flow (its `observed heads` comparison and
+editable generation prompts), and the relay rules.
 
 <!-- Pre-flight: deterministic checks before agent reasoning. Mode-scoped on purpose:
      PUSH needs shippable ('done') tasks; COMMENTS/SYNC need existing MR links but NOT
@@ -277,13 +277,18 @@ reviewer sees only this task's own changes. Group per file/module with real iden
 
 ## MR-comment mode  (`/pw-ship comments --project <slug> [--task <T0n>]…`)
 
-**Load `references/mr-comments.md`** and run its procedure — invocation and pending delivery,
-MR-state resolution, the single read-only `pw-ship-comment-analyst` prerequisite, one fixer pass
-per MR with groups applied sequentially, reply/resolve under the `--resolve` policy above, the
-recap, and the stacked cascade. No fixer starts before the analysis artifact is complete and
-validated; independent MR fixers overlap only within the project `max-parallel` ceiling. Routing
-follows the §routing ladder in `references/execution-and-routing.md`. The pre-flight `comments`
-gate above must pass first.
+**Load `references/mr-comments.md` from the `pw-guide-workflow` skill** and run its procedure —
+invocation and pending delivery, MR-state resolution, the single read-only
+`pw-ship-comment-analyst` prerequisite, one fixer pass per MR with groups applied sequentially,
+reply/resolve under the `--resolve` policy above, the recap, and the stacked cascade. Routing
+follows the §routing ladder in `references/execution-and-routing.md` from the same skill. The
+pre-flight `comments` gate above must pass first.
+
+**Concurrency is required, not optional.** When two or more independent MRs have actionable
+comments, dispatch one fixer per ready MR and let them run **concurrently** up to the project
+`max-parallel` ceiling — never process those MRs one after another. Dependencies and stack
+barriers decide readiness; each MR still applies its own groups sequentially. No fixer starts
+before the single analysis artifact is complete and validated.
 
 
 ## Build check (on by default — `--skip-build-check` to opt out, either mode)

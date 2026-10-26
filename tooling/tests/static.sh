@@ -345,7 +345,7 @@ static_t4() {
   # generation-prompt wiring: the two-call prose flow must name the editable prompt files and the
   # observed-head comparison — losing either re-opens ungrounded prose generation. The procedure
   # lives in the request-review reference; the command must still point at it.
-  grep -qF '**Load `references/review-request.md`**' "$TOOL/skills/human/pw-ship/SKILL.md" \
+  grep -qF '**Load `references/review-request.md` from the `pw-guide-workflow` skill**' "$TOOL/skills/human/pw-ship/SKILL.md" \
     && grep -qF 'references/review-request.md' "$TOOL/skills/human/pw-ship/SKILL.md" \
     && grep -qF 'user/prompts/review-request-summary.md' "$TOOL/skills/model/pw-guide-workflow/references/review-request.md" \
     && grep -qF 'PW_REVIEW_REQUEST_NOTE_PROMPT_FILE' "$TOOL/skills/model/pw-guide-workflow/references/review-request.md" \
@@ -571,9 +571,12 @@ PY
   grep -qF 'Comment analysis prerequisite' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
     && grep -qF 'No source edit begins until its artifact is complete and' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
     && grep -qF 'groups never run as parallel writers' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
-    && grep -qF 'No fixer starts before the analysis artifact is complete and' "$TOOL/skills/human/pw-ship/SKILL.md" \
+    && grep -qF 'the single analysis artifact is complete and validated.' "$TOOL/skills/human/pw-ship/SKILL.md" \
     && grep -qF 'Read-only; never fixes' "$TOOL/agents/pw-ship-comment-analyst.md" \
     && grep -qF 'Six worker sub-agents ship' "$TOOL/skills/model/pw-guide-workflow/references/execution-and-routing.md" \
+    && grep -qF '**Load `references/mr-comments.md` from the `pw-guide-workflow` skill**' "$TOOL/skills/human/pw-ship/SKILL.md" \
+    && grep -qF 'Concurrency is required, not optional.' "$TOOL/skills/human/pw-ship/SKILL.md" \
+    && grep -qF '**do not process them one after another**' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
     && pwtest_ok "T4 canary: comment analysis prerequisite gates every MR fixer" \
     || pwtest_bad "T4 canary: comment analysis prerequisite" "analyst barrier, sequential groups, max-parallel wording, or the six-worker inventory is missing"
   # 9b) the ship-comment-analyst role must be registered on EVERY authoritative role surface —
