@@ -1,6 +1,6 @@
 # Security reference — the ten-minute checklist for a change
 
-Canonical doctrine: [`tooling/docs/SECURITY.md`](../../docs/SECURITY.md) — threat model, boundary
+Canonical doctrine: [`tooling/docs/SECURITY.md`](../../../docs/SECURITY.md) — threat model, boundary
 table, accepted residuals. Load it whenever a change touches input handling or file writes.
 This reference is the prompt: run it before every bundle change that adds or moves a surface.
 

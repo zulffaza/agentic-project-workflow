@@ -467,3 +467,4 @@ C369-comment-reference-owner-dropped	skills/human/pw-ship/SKILL.md	**Load `refer
 C370-independent-mrs-may-run-serially	skills/human/pw-ship/SKILL.md	**Concurrency is required, not optional.**	Concurrency is optional.	T4	-
 C371-cross-skill-reference-owner-dropped	skills/human/pw-analyze/SKILL.md	(`pw-guide-workflow` skill: `references/execution-and-routing.md` §Spawn lanes	(skill: `references/execution-and-routing.md` §Spawn lanes	T4	-
 C372-doc-link-depth-wrong	skills/human/pw-breakdown/SKILL.md	[`docs/RFC.md`]({{PW_HOME}}/docs/RFC.md). A missing	[`docs/RFC.md`](../../docs/RFC.md). A missing	T4	-
+C373-internal-doc-link-depth-wrong	skill-internal/pw-maintainer/references/security.md	../../../docs/SECURITY.md	../../docs/SECURITY.md	T4	-
