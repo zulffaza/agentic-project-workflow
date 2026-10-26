@@ -463,3 +463,5 @@ C365-comment-analysis-barrier-dropped	skills/model/pw-guide-workflow/references/
 C366-parallel-group-writers-allowed	skills/model/pw-guide-workflow/references/mr-comments.md	groups never run as parallel writers	groups may run as parallel writers	T4	-
 C367-comment-analyst-role-unregistered	pw-config.sh	AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier ship-comment-analyst"	AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier"	T1	^pw-config\.t\.sh$
 C368-comment-analyst-may-fix	agents/pw-ship-comment-analyst.md	Read-only; never fixes	Read-only; may fix	T4	-
+C369-comment-reference-owner-dropped	skills/human/pw-ship/SKILL.md	**Load `references/mr-comments.md` from the `pw-guide-workflow` skill**	**Load `references/mr-comments.md`**	T4	-
+C370-independent-mrs-may-run-serially	skills/human/pw-ship/SKILL.md	**Concurrency is required, not optional.**	Concurrency is optional.	T4	-
