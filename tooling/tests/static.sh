@@ -589,6 +589,34 @@ PY
   done
   [ -z "$rmiss" ] && pwtest_ok "T4 canary: ship-comment-analyst registered on every role surface" \
     || pwtest_bad "T4 canary: ship-comment-analyst role surfaces" "missing:$rmiss"
+  # 9c) cross-skill reference pointers must name their owning skill. Provider installs ship an
+  # entry as SKILL.md only (no references/ beside it), so a bare `references/x.md` silently skips
+  # the procedure — the plan-07 follow-up where Cursor fixed comments sequentially.
+  unqual="$(python3 - "$TOOL" <<'PYP'
+import re,sys,pathlib
+tool=pathlib.Path(sys.argv[1]); bad=[]
+pat=re.compile(r'(?<![-/])references/([a-z0-9-]+\.md)')
+files=list((tool/'skills'/'human').glob('*/SKILL.md'))+list((tool/'agents').glob('pw-*.md')) \
+      +list((tool/'skills'/'model').glob('*/SKILL.md'))+list((tool/'skills'/'model').glob('*/references/*.md'))
+for f in files:
+    lines=f.read_text().splitlines()
+    in_refs=f.parent.name=='references'
+    local_dir=f.parent if in_refs else f.parent/'references'
+    for i,l in enumerate(lines):
+        if re.search(r'tooling/skills/model/[a-z-]+/references/', l):
+            continue
+        for m in pat.finditer(l):
+            if (local_dir/m.group(1)).exists():
+                continue
+            window=' '.join(lines[max(0,i-1):i+2])
+            if re.search(r'pw-guide-[a-z-]+|pw-orchestration', window):
+                continue
+            bad.append(f"{f.name}:{i+1}:{m.group(1)}")
+print(' '.join(bad))
+PYP
+)"
+  [ -z "$unqual" ] && pwtest_ok "T4 canary: cross-skill references name their owning skill" \
+    || pwtest_bad "T4 canary: cross-skill reference owner" "bare references/ pointer(s) unresolvable after install: $unqual"
   rendered="$ROOT/plan29-entries"
   "$TOOL/scripts/toolchain/gen-commands.sh" --outdir "$rendered" claude cursor codex kilo opencode >/dev/null 2>&1
   bad_entry=""

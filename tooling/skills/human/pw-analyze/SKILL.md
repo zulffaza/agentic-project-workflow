@@ -43,7 +43,7 @@ codex `codex exec resume <thread_id>` — cd to the worktree first),
 not by a cold respawn. Lane models come from
 the dashboard's `AI Models:` row; the executor lane never does (tasks bind it per unit).
 
-**Optional lane spawns (grounding + drafting) — see the skill's
+**Optional lane spawns (grounding + drafting) — see the `pw-guide-workflow` skill's
 `references/execution-and-routing.md` §Spawn lanes + §Spawn ledger.** If `context/` is thin or
 unverifiable, spawn `pw-researcher` (Mode B) on the dropped inputs to get a ground-truth pack +
 seed BEFORE you reason from scratch; for the drafting itself, `pw-analyst` gets the seed + scope
@@ -64,7 +64,7 @@ decisions (options not converged, Q0 rules, the final doc) stay yours.
         cleanly, an INDEX guess about repo state), spawn **`pw-researcher` Mode B** *before* drafting:
         it fetches + verifies the scope against real base-branch state and hands back a
         **ground-truth pack + a §Seed**. Pre-flight the seed covers every INDEX row / repo in scope
-        (skill: `references/execution-and-routing.md` §Spawn lanes — a seed gap is fixed by the
+        (`pw-guide-workflow` skill: `references/execution-and-routing.md` §Spawn lanes — a seed gap is fixed by the
         researcher, never by spawning the analyst into a flounder); on a shallow return, patch the
         seed and **resume the researcher's session** (record its id in `LOG.md`), don't cold-re-spawn.
         On a provider that can't spawn lanes, run the same role per

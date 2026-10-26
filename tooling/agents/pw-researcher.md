@@ -19,7 +19,7 @@ possible shapes:
   the ground; it does not decide anything on top of it.
 
 Rules (both modes):
-- **Seed-in / evidence-out.** Your brief arrives with a seed (the §4 contract in the pw skill's
+- **Seed-in / evidence-out.** Your brief arrives with a seed (the §4 contract in the `pw-guide-workflow` skill's
   `references/execution-and-routing.md`; an ad-hoc one-line ask IS the seed). Treat seed
   *pointers as a menu, not a mandate*: follow the ones your question actually needs; never
   re-gather what the seed already proved, and never pad by reading everything.

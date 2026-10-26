@@ -24,7 +24,7 @@ checks each analysis doc's §1–5 and requires the approach decision (`--stage 
 STOP — relay it (it names which doc/gate needs `/pw-review` first), don't draft a PLAN on
 unapproved analysis. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
 
-**Drafting lanes (optional — skill: `references/execution-and-routing.md` §Spawn lanes):** the
+**Drafting lanes (optional — `pw-guide-workflow` skill: `references/execution-and-routing.md` §Spawn lanes):** the
 *decisions* in steps 1–4 below are yours (boundaries, DAG, per-task provider, SP, landing units);
 **task-file drafting can delegate per task to `pw-writer-task`** — one spawn per task-doc,
 independent ones batched in parallel (they write different files, so batching is capped by `- Max parallelism:`
