@@ -38,6 +38,6 @@ Record who/what ran: end with `Model used: <provider:model>` + a one-line seed h
 facts / <m> pointers`) so a resume (§4.9/§4.3) can diff the next patch against this. When a
 `pw-researcher` sub-agent is registered on your own provider (same-provider), the caller would
 **spawn it** instead — you are the spawn-less fallback for humans and for providers that lack a
-main-agent slot (§7); the work order is identical (the canonical `tooling/agents/pw-researcher.md`
+main-agent slot (§7); the work order is identical (the canonical `{{PW_HOME}}/tooling/agents/pw-researcher.md`
 body). Honor any `PW_MAX_SELF_REPAIR` cap the brief references for rework passes: fix, then
 re-ground only what the patch touched — no unbounded re-research loop.

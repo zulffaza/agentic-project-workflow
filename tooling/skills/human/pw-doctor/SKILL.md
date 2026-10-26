@@ -27,8 +27,8 @@ It verifies, per enabled provider (from `pw.config.sh`), that the installed shar
 generated entry points match what this bundle would produce now — catching a moved/renamed bundle,
 edited sources, a stale skill, or a legacy link. It also checks the
 **request-review frame and generation prompts** independently of provider sync: the effective
-`user/templates/review-request.md` (or the `PW_REVIEW_REQUEST_TEMPLATE_FILE` path) must exist and
-carry each block placeholder exactly once, and the effective `user/prompts/review-request-summary.md`
+`{{PW_HOME}}/user/templates/review-request.md` (or the `PW_REVIEW_REQUEST_TEMPLATE_FILE` path) must exist and
+carry each block placeholder exactly once, and the effective `{{PW_HOME}}/user/prompts/review-request-summary.md`
 / `review-request-note.md` (or the `PW_REVIEW_REQUEST_SUMMARY_PROMPT_FILE` /
 `PW_REVIEW_REQUEST_NOTE_PROMPT_FILE` paths) must be readable, nonempty UTF-8 text at most 16 KiB.
 `--fix` seeds ONLY missing default files — the frame migrates a legacy `user-templates/` copy
@@ -46,7 +46,7 @@ or correct — never auto-created.
 ```bash
 {{PW_HOME}}/tooling/scripts/toolchain/pw-doctor.sh --project <slug> [--fix | --guidance [--apply]]
 ```
-(behind it: the deterministic project walk in `tooling/scripts/entities/pw-project-doctor.sh`).
+(behind it: the deterministic project walk in `{{PW_HOME}}/tooling/scripts/entities/pw-project-doctor.sh`).
 The report is grouped into 8 human-labelled sections — Documentation & template lint, RFC data
 (optional side-loop: findings are `·` warnings while the project hasn't engaged RFC — once a
 target/push/publication exists there, they are real ✗ like any other check), Plan (rows +

@@ -41,7 +41,7 @@ doesn't exist yet → treat as not approved). If it exits non-zero for **any** t
 to (re-)approve that analysis first — quote the decision it printed (`in-review` or
 `changes-requested`). **Do not fall back to scanning the file for an `approved` string anywhere
 in its history** — a doc reopened after approval (e.g. an RFC comment folded back in post-approval,
-see [`docs/RFC.md`](../../docs/RFC.md)) still has an old approved row sitting earlier in the same
+see [`docs/RFC.md`]({{PW_HOME}}/docs/RFC.md)) still has an old approved row sitting earlier in the same
 file; `review gate` deliberately reads only the table's current/last row so a stale historical
 approval can never satisfy this gate on its own. This is also why a *folded-in* RFC comment doesn't
 need its own separate approval concept: once folded in, it reopens *this exact* gate, and your
@@ -57,7 +57,7 @@ and that I need to either fold each one into the analysis via `/pw-review` (whic
 analysis gate above until re-approved) or resolve it directly in the review file myself, then
 re-run `/pw-breakdown`. This closes the gap where analysis got approved on its own merits while a
 live external RFC comment thread is still sitting unresolved — see
-[`docs/RFC.md`](../../docs/RFC.md). A missing `RFC.review.md` (no RFC side-loop ever used, or no
+[`docs/RFC.md`]({{PW_HOME}}/docs/RFC.md). A missing `RFC.review.md` (no RFC side-loop ever used, or no
 comments pulled yet) prints `no`/exits 1 — not an error, nothing to block on.
 
 **Second check, per analysis doc — a chosen approach, not just approval:** read that doc's §4.

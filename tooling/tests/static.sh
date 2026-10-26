@@ -617,6 +617,28 @@ PYP
 )"
   [ -z "$unqual" ] && pwtest_ok "T4 canary: cross-skill references name their owning skill" \
     || pwtest_bad "T4 canary: cross-skill reference owner" "bare references/ pointer(s) unresolvable after install: $unqual"
+  # 9d) relative Markdown links in agent-facing sources must resolve from THEIR OWN file — a
+  # wrong-depth link (or a path that only existed pre-install) sends the agent to nothing.
+  deadlinks="$(python3 - "$TOOL" <<'PYD'
+import re,sys,pathlib
+tool=pathlib.Path(sys.argv[1]); bad=[]
+pat=re.compile(r'\[[^\]]*\]\(([^)\s]+)\)')
+roots=[tool/'skills',tool/'agents',tool/'docs']
+for root in roots:
+    for f in root.rglob('*.md'):
+        for i,l in enumerate(f.read_text().splitlines(),1):
+            for m in pat.finditer(l):
+                t=m.group(1)
+                if t.startswith(('http://','https://','mailto:','#','{{','$')): continue
+                if '<' in t or t.startswith('./T0'): continue
+                q=t.split('#')[0]
+                if q and not (f.parent/q).exists():
+                    bad.append(f"{f.relative_to(tool)}:{i}")
+print(' '.join(bad))
+PYD
+)"
+  [ -z "$deadlinks" ] && pwtest_ok "T4 canary: relative doc links resolve from their own file" \
+    || pwtest_bad "T4 canary: relative doc links" "unresolvable link(s): $deadlinks"
   rendered="$ROOT/plan29-entries"
   "$TOOL/scripts/toolchain/gen-commands.sh" --outdir "$rendered" claude cursor codex kilo opencode >/dev/null 2>&1
   bad_entry=""

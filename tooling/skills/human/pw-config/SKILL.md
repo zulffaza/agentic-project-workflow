@@ -103,7 +103,7 @@ The operators (operator words first; every value named — `--project <slug>` se
 
 **This is the whole configuration domain.** It used to hang off `/pw-review` as a sub-verb —
 reviewing is not configuring; `/pw-review` now only reviews. View what each axis means in
-docs/REVIEW.md (AI-assisted review) and docs/EXECUTION.md (§Spawning phase work, routing ladder);
-the key table above is also in docs/REFERENCE.md.
+`{{PW_HOME}}/docs/REVIEW.md` (AI-assisted review) and `{{PW_HOME}}/docs/EXECUTION.md`
+(§Spawning phase work, routing ladder); the key table above is also in `{{PW_HOME}}/docs/REFERENCE.md`.
 
 Never change the dashboard `Status:` line from here — phase moves are `/pw-status rewind --project <slug> --phase <phase>` (or the monotonic forward moves the other commands make).

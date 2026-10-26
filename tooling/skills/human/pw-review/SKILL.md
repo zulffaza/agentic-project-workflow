@@ -61,7 +61,7 @@ Everything else below (apply-comments / `ai`) does NOT run for these operators.
 - **`/pw-review answer --project <project-slug> --file <review-rel-path> --question <Qid> (--text <answer…> | --stdin)`** — `<Qid>` like `Q2`;
   the answer arrives via a prose `--text` or `--stdin`. Run: `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh answer --project <slug> --file <path> --question <Qid>
   --stdin` (heredoc). The script never flips the question's status — the fold-in + `[ANSWERED]`
-  flip happens on the next apply-comments pass, per docs/REVIEW.md. A first answer after an approval
+  flip happens on the next apply-comments pass, per `{{PW_HOME}}/docs/REVIEW.md`. A first answer after an approval
   records the same `pw-review (feedback)` `in-review` row a new item does.
 - **`/pw-review prepare --project <project-slug> [--task <T0n> | --surface <name> | --file <artifact-rel-path>] [--refresh] [--repair]`** →
   `{{PW_HOME}}/tooling/scripts/entities/pw-review.sh prepare --project <slug> …` — freezes ONE review
@@ -413,7 +413,7 @@ heading as a fallback.
 items/questions in this file are `[RESOLVED]`/`[ANSWERED]` since the last archive, or the file
 itself has passed ~150 lines, run `…/{{PW_HOME}}/tooling/scripts/entities/pw-review.sh archive --project <slug>
 --file <review-rel-path>`. This moves them verbatim into a sibling `<topic>.archive.md`, never touches
-`[OPEN]`/`[PENDING]` headings or the Sign-off table (see `docs/REVIEW.md`), and is what keeps a
+`[OPEN]`/`[PENDING]` headings or the Sign-off table (see `{{PW_HOME}}/docs/REVIEW.md`), and is what keeps a
 long-lived review file from forcing every future round to re-read its whole resolved history.
 
 **Opportunistically seed memory too — IF a memory tool is configured** (skip silently otherwise;
@@ -437,8 +437,8 @@ changes whether a *later* command will run, so it can't just be buried in the it
 
 When the review pass is over and items exist on **one** artifact, fixes don't fan out per item:
 **one** fix pass per artifact holds all its `[OPEN]` items — human, `pw-reviewer`, verifier and
-`dep-impact:T0n` items share that queue (docs/EXECUTION.md §The per-spawn ledger;
-`tooling/skills/model/pw-guide-workflow/references/review.md` §Fixer routing). *Who* runs it: a **doc**
+`dep-impact:T0n` items share that queue (`{{PW_HOME}}/docs/EXECUTION.md` §The per-spawn ledger;
+`{{PW_HOME}}/tooling/skills/model/pw-guide-workflow/references/review.md` §Fixer routing). *Who* runs it: a **doc**
 artifact (analysis / PLAN / task doc) is edited **driver-inline** — the review file is the seed,
 no spawn, no producer-session resume (that clause is retired). A **task** artifact (post-execution
 repair) follows the §routing ladder: same provider → in-process fixer or, single task, driver

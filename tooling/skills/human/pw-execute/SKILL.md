@@ -85,7 +85,7 @@ one `pw-…:` stderr line + exit 1 — **STOP, relay it verbatim** (it names the
      adopted branches, see the WORKFLOW "mixed projects" note) is just tasks of both kinds side by side:
      - **Fresh task** (`Branch:` is a new `agent/<slug>/<T0n>-<slug>`) → **create its worktree with
        the script** — never hand-roll `git worktree add` (branch naming, path layout and attach
-       semantics live in one place: `tooling/docs/scripts/workflow-automation.md`):
+       semantics live in one place: `{{PW_HOME}}/tooling/docs/scripts/workflow-automation.md`):
        `{{PW_HOME}}/tooling/scripts/entities/pw-worktree.sh create --project <slug> --task <T0n> --repo <repo> --base <base-branch>` — it forks the
        task's `Branch:` from `origin/<base-branch>` (NOT the repo's current HEAD) at
        `worktree/<repo>/<task-id>-<slug>/` and prints the path on its last line; pass that path to
