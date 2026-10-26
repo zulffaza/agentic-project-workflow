@@ -219,7 +219,7 @@ _project_defaults_member() { # <file> <member>
   for kv in $(grep -m1 '^- \*\*Project Defaults:\*\*' "$f" 2>/dev/null | sed 's/^- \*\*Project Defaults:\*\*[[:space:]]*//' || true); do
     [ "${kv%%=*}" = "$m" ] && { printf '%s' "${kv#*=}"; return 0; }
   done
-  return 1
+  return 0   # absent seed is not an error: legacy projects follow their own/built-in defaults
 }
 
 # Companion tuning line. It is machine-owned and holds whitespace-safe `role=variant:x,...` tokens;

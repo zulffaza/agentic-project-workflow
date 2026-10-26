@@ -141,3 +141,24 @@ if [ -d "$PWTEST_F2/task/review" ]; then
   fi
   mv "$RR.bak58" "$RR"
 fi
+
+# --- legacy/outdated project: global defaults must never leak in ---------------------------
+mkdir -p "$GPD/projects/legacy"
+printf -- '- **Status:** context\n- **One-liner:** legacy project\n' > "$GPD/projects/legacy/README.md"
+: > "$GPD/projects/legacy/LOG.md"
+pwtest_rc 0 "legacy ensure succeeds" gpd ensure --project legacy
+LR="$GPD/projects/legacy/README.md"
+gpd_re 'context=manual' "$(grep '^- \*\*Review Trigger:\*\*' "$LR")" "legacy project keeps manual scheduling, not the global completion default"
+gpd_re 'analyst=—' "$(grep '^- \*\*AI Models:\*\*' "$LR")" "legacy project keeps unbound roles, not global model defaults"
+gpd_re 'context=advisory' "$(grep '^- \*\*AI Review:\*\*' "$LR")" "legacy project keeps advisory review, not global defaults"
+pwtest_rc 0 "legacy get routing without PLAN or seed" gpd get --project legacy --key routing
+gpd_re 'auto' "$(cat "$PWTEST_OUT")" "legacy routing falls back to the built-in default, not the global headless value"
+pwtest_rc 0 "legacy get execution-limit without PLAN or seed" gpd get --project legacy --key execution-limit
+pwtest_rc 0 "legacy get max-parallel without PLAN or seed" gpd get --project legacy --key max-parallel
+pwtest_rc 0 "legacy show" gpd show --project legacy
+gpd_re 'README.md:Project Defaults \(pending PLAN\)' "$(cat "$PWTEST_OUT")" "legacy seed source is labelled pending, not managed global"
+if grep -q 'pw.config.sh managed global' "$PWTEST_OUT"; then
+  pwtest_bad "legacy show never cites a managed global source" "managed-global source leaked into an existing project"
+else
+  pwtest_ok "legacy show never cites a managed global source"
+fi
