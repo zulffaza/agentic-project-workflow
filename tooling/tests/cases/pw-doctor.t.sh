@@ -224,7 +224,7 @@ pwtest_eq "env restored to the real bundle path" "$PW_NORM" "$(sed -n 's/^export
 
 # 10) offboard dry-run: a hand-edited directory COPY of a skill is reported + skipped; only a
 # whole-tree match is queued for removal (tree content-check, not SKILL.md alone).
-rm -f "$FH/.kilocode/skills/pw-guide-workflow"
+rm -rf "$FH/.kilocode/skills/pw-guide-workflow"
 cp -R "$PW/tooling/skills/model/pw-guide-workflow" "$FH/.kilocode/skills/pw-guide-workflow"
 printf 'my extra notes\n' > "$FH/.kilocode/skills/pw-guide-workflow/EXTRA.md"
 pwtest_rc 0 "offboard dry-run covers the hand-edited copy" env HOME="$FH" bash "$PW/offboard.sh"

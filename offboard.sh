@@ -20,8 +20,9 @@
 #    differs — hand-edited, or just a foreign file that happens to share a name — is reported
 #    and skipped, never guessed at.
 #  - Each skill's "install" is only removed if it's literally a symlink pointing at THIS bundle's
-#    tooling/skills/model/<name>, or a directory copy whose WHOLE TREE matches the bundle's (diff -rq —
-#    a hand-edited references file, or an added file, keeps the copy reported-but-untouched).
+#    tooling/skills/model/<name>, a rendered copy carrying the bundle's .pw-generated marker, or a
+#    directory copy whose WHOLE TREE matches the bundle's (diff -rq — a hand-edited references file,
+#    or an added file, keeps the copy reported-but-untouched).
 #
 # NEVER touched, by design: pw.config.sh (your config), $PW_PROJECTS/* (your project data —
 # a different kind of thing from installed tooling), this bundle's own repo, pw-env.sh, and
@@ -120,7 +121,12 @@ plan_provider() {
         skipped_count=$((skipped_count+1))
       fi
     elif [ -d "$starget" ]; then
-      if diff -rq "$starget" "$skill_src" >/dev/null 2>&1; then
+      if [ -f "$starget/.pw-generated" ]; then
+        # Installed procedural skills are RENDERED copies (path tokens stamped), so a raw
+        # canonical-tree diff can never match. The managed marker is the ownership record.
+        echo "    skill '$skill_name': → remove rendered copy $starget (bundle-managed)"
+        REMOVE_PATHS+=("$starget")
+      elif diff -rq "$starget" "$skill_src" >/dev/null 2>&1; then
         echo "    skill '$skill_name': → remove directory copy $starget (whole tree matches bundle)"
         REMOVE_PATHS+=("$starget")
       else

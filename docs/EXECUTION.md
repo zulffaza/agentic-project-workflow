@@ -358,6 +358,12 @@ authoring are lane spawns from whichever driver is running the phase (rows 2/4 o
 - **`pw-writer-task`** turns the *caller's* boundary decisions into task docs — detailed `## Steps`
   + a runnable `## Verify`. Decisions stay with the caller; batching is per task (parallelizable —
   the writer doesn't edit shared state).
+- **`pw-ship-comment-fixer`** (shared model skill, not a public command) is the procedure a
+  delegated comment fixer loads: inspect assigned comments, apply groups sequentially, verify,
+  push, monitor that head's CI, repair in scope, reply/deliver, and return terminal evidence.
+- **`pw-sync-conflict-fixer`** (shared model skill) is the procedure a delegated `/pw-sync`
+  conflict worker loads: confirm the attempt, reconcile both intents, finish the guarded merge,
+  verify, push, and observe CI within the single-repair allowance.
 - **`pw-ship-comment-analyst`** is the read-only prerequisite of `/pw-ship comments`: it interprets
   every actionable MR comment across the selected scope, separates cross-MR requests from
   MR-specific ones, groups related fixes, and returns a proposed MR/fixer order. It never edits

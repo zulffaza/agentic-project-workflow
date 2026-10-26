@@ -16,7 +16,7 @@ Gate: see Sign-off
   analysis/review/<topic>.review.md · task/PLAN.md → task/review/PLAN.review.md · task/T0n.md →
   task/review/T0n.review.md) — "Reviewing:" above points ../ to it.
 
-QUICK REFERENCE (full mechanics + rationale: docs/REVIEW.md):
+QUICK REFERENCE (full mechanics + rationale: {{PW_HOME}}/docs/REVIEW.md):
 - You write items/answers below; the agent never edits or deletes your text, only replies.
 - If AI Review is advisory/auto for this phase, `pw-reviewer` may also write items, tagged
   `(pw-reviewer, <timestamp>)` — treat exactly like your own.
@@ -34,7 +34,7 @@ QUICK REFERENCE (full mechanics + rationale: docs/REVIEW.md):
   when a pass starts on real open work, and for correlated AI passes the `pw-reviewer
   (advisory|auto; provider=…; model=…; pass=…)` lifecycle — an `in-review` entry when the pass
   actually begins, then `changes-requested` after real findings (or `approved` in guarded `auto`).
-  Older `pw-reviewer (…)` rows without a pass id are legacy passes. See docs/REVIEW.md.
+  Older `pw-reviewer (…)` rows without a pass id are legacy passes. See {{PW_HOME}}/docs/REVIEW.md.
 - List everything open in a project: `grep -rln "\[OPEN\]" .` (or, more robustly, the actual
   machine marker: `grep -rln "pw-item-status: open" .`).
 - Every heading carries a trailing `<!-- pw-item-status: open|resolved -->` marker alongside the
@@ -48,12 +48,12 @@ QUICK REFERENCE (full mechanics + rationale: docs/REVIEW.md):
 - **Once several items pile up `[RESOLVED]`/`[ANSWERED]`**, the review pass moves them verbatim
   into a sibling `<topic>.archive.md`, leaving a pointer row in a `## Archived items` table
   (appears once anything's been archived). This never touches `[OPEN]`/`[PENDING]` headings or the
-  Sign-off table — see docs/REVIEW.md. Keeps a long-lived review file from forcing every new round
+  Sign-off table — see {{PW_HOME}}/docs/REVIEW.md. Keeps a long-lived review file from forcing every new round
   to re-read the whole resolved history just to apply one new item.
 - **Agents:** the `> **Add an item:**` / `> **Answer a question:**` hints are permanent — never
   remove them, even once a section reads "No blocking …". Create this file with
-  `/pw-review init --project <slug> --file <doc-path>` (copies the template verbatim) — or
-  `/pw-review init-all --project <slug>` for the review files missing in the project's
+  `/pw-review init --project {{PW_PROJECT_SLUG}} --file {{PW_REVIEWED_FILE}}` (copies the template verbatim) — or
+  `/pw-review init-all --project {{PW_PROJECT_SLUG}}` for the review files missing in the project's
   CURRENT phase — never by hand. -->
 
 ## Decision status — what moves, and who moves it
@@ -68,8 +68,8 @@ You never set an item/question's own status — just leave items `[OPEN]` and ru
 
 ## Items
 
-> **Add an item:** easiest is the deterministic operator — `/pw-review item --project <slug>
-> --file <this-file> --section §4 --text <your ask, spaces and all>` (it writes the heading,
+> **Add an item:** easiest is the deterministic operator — `/pw-review item --project {{PW_PROJECT_SLUG}}
+> --file {{PW_REVIEW_FILE}} --section §4 --text <your ask, spaces and all>` (it writes the heading,
 > timestamp, marker, `---` rule, and
 > reindexes `## Contents` for you; a first new item after an `approved` row also records one
 > `pw-review (feedback)` `in-review` row, so the old approval stops being the live decision).
@@ -114,7 +114,7 @@ The agent seeds a `Qn` row here when it hits something it can't resolve (mirrors
 doc's §5). **You answer** with a `↳ you:` line; the agent then folds the answer into the doc and
 flips the row to `[ANSWERED]`. This is the QnA channel — don't answer inside the rewritten doc.
 
-> **Answer a question:** easiest is `/pw-review answer --project <slug> --file <this-file> --question Qn --text <your answer>`
+> **Answer a question:** easiest is `/pw-review answer --project {{PW_PROJECT_SLUG}} --file {{PW_REVIEW_FILE}} --question Qn --text <your answer>`
 > (it writes the styled `↳ you:` line under the question; a first answer after an `approved` row
 > records the same `pw-review (feedback)` `in-review` row as a new item).
 > By hand instead: under the `Qn` heading, add a quoted line `> ↳ **you** (<DD MMMM YYYY - HH.mm WIB>):
@@ -152,7 +152,7 @@ yours, and flips this exact heading to `[ANSWERED]` — never a second heading.
 This table is the **gate**. Add a row when you're satisfied this phase is complete — `approved`
 is what clears it for the next phase. Date-time **to the minute** (rounds often land same-day);
 new rows are stamped like `5 October 2026 11.30 WIB` and older formats stay readable.
-Easiest: `/pw-review signoff --project <slug> --file <this-file> --decision approved` — it stamps the date-time and appends
+Easiest: `/pw-review signoff --project {{PW_PROJECT_SLUG}} --file {{PW_REVIEW_FILE}} --decision approved` — it stamps the date-time and appends
 the row; **human-triggered only**, an agent never runs it on its own initiative. By hand: fill
 the row below. An `in-review`/`changes-requested` row **you** record stands until you withdraw or
 replace it — automatic operational rows never override an explicit human decision.
@@ -163,7 +163,7 @@ replace it — automatic operational rows never override an explicit human decis
 
 <!-- Your row: | 5 October 2026 11.30 WIB | you | approved |
 Agent-recorded OPERATIONAL rows also appear here — always attributed, never disguised as yours
-(full rationale: docs/REVIEW.md, docs/RFC.md):
+(full rationale: {{PW_HOME}}/docs/REVIEW.md, {{PW_HOME}}/docs/RFC.md):
 | 5 October 2026 11.45 WIB | pw-review (feedback) | in-review |          ← your first new item/answer after an approval
 | 5 October 2026 11.50 WIB | pw-review (repair) | changes-requested |    ← a pass started on real open work
 | 5 October 2026 14.10 WIB | pw-reviewer (advisory; provider=kilo; model=glm-5.2; pass=p-analysis-…) | in-review |
@@ -181,7 +181,7 @@ readable exactly as history; repairing or reopening an EARLIER phase's gate asks
 
 - Not ready yet? Leave `in-review`, or add `changes-requested` and run /pw-review again.
 - Reopening BY HAND (your own decision, not the recorded operational rows above)? Add a new "in-review" row
-  (keep the old approval), `/pw-status rewind --project <slug> --phase <phase>`, re-run the phase — see
+  (keep the old approval), `/pw-status rewind --project {{PW_PROJECT_SLUG}} --phase <phase>`, re-run the phase — see
   README "Going back a phase".
 - A review file written before this bundle's keyboard-typable-symbols migration may still show the
   legacy `approved ✅` (with a checkmark) — that's read exactly the same as `approved` by every

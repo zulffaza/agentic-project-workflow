@@ -1164,6 +1164,24 @@ pw_dir_within() {
 # install paths are operator config and must not become program text (a `}` inside $PW_HOME
 # previously broke out of the perl s{...}{...} delimiters). Staged via pw_tmpfile + mv, and
 # every line is printed exactly once (trailing-newline behavior unchanged).
+# Stamp project-context tokens into a document that belongs to ONE project. Separate from
+# pw_stamp_tokens (install paths): these values are per-project and must never leak into global
+# provider artifacts. Arguments: <file> <slug> [review-file-rel] [reviewed-file-rel].
+pw_stamp_project_tokens() {
+  local f="$1" slug="$2" rfile="${3:-}" rdoc="${4:-}" tmp
+  [ -n "$slug" ] || return 1
+  tmp="$(pw_tmpfile "$(dirname "$f")")" || return 1
+  if while IFS= read -r _ptl || [ -n "$_ptl" ]; do
+       _ptl="${_ptl//\{\{PW_PROJECT_SLUG\}\}/$slug}"
+       _ptl="${_ptl//\{\{PW_REVIEW_FILE\}\}/$rfile}"
+       _ptl="${_ptl//\{\{PW_REVIEWED_FILE\}\}/$rdoc}"
+       printf '%s\n' "$_ptl"
+     done < "$f" > "$tmp"; then
+    if mv "$tmp" "$f"; then return 0; fi
+  fi
+  rm -f "$tmp"; return 1
+}
+
 pw_stamp_tokens() {
   local f="$1" tmp
   tmp="$(pw_tmpfile "$(dirname "$f")")" || return 1

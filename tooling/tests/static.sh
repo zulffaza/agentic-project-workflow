@@ -551,9 +551,9 @@ PY
   local hcount mcount missing_entry bad_entry rendered
   hcount="$(ls -d "$TOOL/skills/human"/*/ 2>/dev/null | wc -l | tr -d ' ')"
   mcount="$(ls -d "$TOOL/skills/model"/*/ 2>/dev/null | wc -l | tr -d ' ')"
-  [ "$hcount" = 19 ] && [ "$mcount" = 4 ] \
+  [ "$hcount" = 19 ] && [ "$mcount" = 6 ] \
     && pwtest_ok "T4 canary: 19 human entries and 4 shared skills (plan 29)" \
-    || pwtest_bad "T4 canary: skill inventory" "expected 19 human + 4 shared; got $hcount + $mcount"
+    || pwtest_bad "T4 canary: skill inventory" "expected 19 human + 6 shared; got $hcount + $mcount"
   missing_entry="$(grep -L '`pw-orchestration`' "$TOOL"/skills/human/*/SKILL.md 2>/dev/null | tr '\n' ' ')"
   [ -z "$missing_entry" ] \
     && pwtest_ok "T4 canary: every human entry loads the shared orchestration rules" \
@@ -639,6 +639,20 @@ PYD
 )"
   [ -z "$deadlinks" ] && pwtest_ok "T4 canary: relative doc links resolve from their own file" \
     || pwtest_bad "T4 canary: relative doc links" "unresolvable link(s): $deadlinks"
+  # 9e) worker-invocable operation skills: comment fixers and sync conflict fixers must have ONE
+  # canonical procedure the driver passes to native, warm-resumed and headless workers.
+  [ -f "$TOOL/skills/model/pw-ship-comment-fixer/SKILL.md" ] \
+    && grep -qF 'name: pw-ship-comment-fixer' "$TOOL/skills/model/pw-ship-comment-fixer/SKILL.md" \
+    && [ -f "$TOOL/skills/model/pw-sync-conflict-fixer/SKILL.md" ] \
+    && grep -qF 'name: pw-sync-conflict-fixer' "$TOOL/skills/model/pw-sync-conflict-fixer/SKILL.md" \
+    && grep -qF 'Delegated fixers own the whole MR lifecycle.' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
+    && grep -qF 'The driver already classified a real' "$TOOL/skills/model/pw-sync-conflict-fixer/SKILL.md" \
+    && grep -qF '## Delegated conflict repair (conflict-only)' "$TOOL/skills/human/pw-sync/SKILL.md" \
+    && grep -qF 'delegate each conflicted branch to `pw-sync-conflict-fixer`' "$TOOL/skills/human/pw-sync/SKILL.md" \
+    && grep -qF 'sync-conflict-resolution.md' "$TOOL/skills/model/pw-sync-conflict-fixer/SKILL.md" \
+    && grep -qF 'Delegated worker' "$TOOL/skills/model/pw-guide-workflow/references/sync-conflict-resolution.md" \
+    && pwtest_ok "T4 canary: uniform fixer work orders for comments and sync conflicts" \
+    || pwtest_bad "T4 canary: fixer work orders" "a worker skill, its procedure pointer, or the delegated contract is missing"
   rendered="$ROOT/plan29-entries"
   "$TOOL/scripts/toolchain/gen-commands.sh" --outdir "$rendered" claude cursor codex kilo opencode >/dev/null 2>&1
   bad_entry=""

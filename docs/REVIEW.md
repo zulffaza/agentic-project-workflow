@@ -233,6 +233,9 @@ only. With it, a thread closes only when its fix landed, its verification passed
 **`/pw-ship comments --project <slug>`** (no task IDs) sweeps **every** open MR in the project in one run —
 so you don't have to invoke it per task.
 
+Generated review files already carry the real project slug and file paths in their sample
+commands, so you can copy them without editing the selector.
+
 **One analysis pass, then one writer per MR.** Before anything is edited, a read-only analyst reviews
 the whole selected set: it explains what each comment asks for, separates MR-specific requests from
 ones that may apply to several MRs, groups related fixes, and reports the order the MRs can run in.

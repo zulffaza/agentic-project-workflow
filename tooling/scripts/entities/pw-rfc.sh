@@ -75,6 +75,8 @@ cmd_rfc_init() {
   # Bash string replacement, never a sed program string: the slug is caller data and must not
   # become program text (a `/` or GNU-sed `e` would alter or execute the program).
   { while IFS= read -r _rl || [ -n "$_rl" ]; do printf '%s\n' "${_rl//<PROJECT_NAME>/$slug}"; done < "$tmpl"; } > "$f"
+  pw_stamp_tokens "$f" || die "rfc init: token stamping failed"
+  pw_stamp_project_tokens "$f" "$slug" || die "rfc init: project token stamping failed"
   "$ST" log --project "$slug" --actor rfc --message "created rfc/RFC.md from template (backend: $backend)"
   echo "$slug: rfc-init created rfc/RFC.md"
 }

@@ -301,6 +301,8 @@ _init_one() {
   pw_review_lock "$f" || { echo "pw-review: $rel is locked by another writer → fix: retry in a moment; if no writer is running, remove the stale lock directory $f.pwlock" >&2; return 1; }
   local tmpf rc=1; tmpf="$(pw_tmpfile "$(dirname "$f")")"
   if sed "s|<doc\\.md>|$docc|g" "$tmpl" > "$tmpf" 2>/dev/null \
+     && pw_stamp_tokens "$tmpf" \
+     && pw_stamp_project_tokens "$tmpf" "$slug" "$rel" "$docrel" \
      && [ ! -e "$f" ] && [ ! -L "$f" ] && mv "$tmpf" "$f" 2>/dev/null; then
     rc=0
   fi

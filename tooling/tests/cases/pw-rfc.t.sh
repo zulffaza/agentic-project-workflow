@@ -47,6 +47,10 @@ pl_rfc_selftest() {
   PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-rfc.sh)" init --project demo >/dev/null
   [ -f "$RFC" ] || die "selftest FAIL: rfc init did not create rfc/RFC.md"
   grep -q '^# RFC: demo$' "$RFC" || die "selftest FAIL: rfc init did not stamp the project slug"
+  grep -q -- '--project demo' "$RFC" || die "selftest FAIL: rfc hints do not carry the real project slug"
+  if grep -qE '\{\{PW_[A-Z_]+\}\}|--project <slug>' "$RFC"; then
+    die "selftest FAIL: rfc init left an unrendered token or placeholder selector"
+  fi
   [ -f "$META" ] || die "selftest FAIL: rfc init did not also create rfc/META.md"
   grep -q '^- \*\*Backend:\*\* markdown$' "$META" || die "selftest FAIL: rfc init (no backend arg) did not default META.md's Backend to markdown"
   printf '\nmanual edit\n' >> "$RFC"                          # simulate a human/agent edit

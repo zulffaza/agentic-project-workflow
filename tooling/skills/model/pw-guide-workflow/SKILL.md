@@ -47,7 +47,7 @@ phases, `--json` prints a machine-readable object. No slug; never writes.
 | compose a read-only review-request message (`/pw-ship request-review`) | [`references/review-request.md`](references/review-request.md) |
 | run several supported mechanical operations in one request (`/pw-batch preview` or `apply`) | [`references/batch.md`](references/batch.md) |
 | close out a finished project | [`references/close.md`](references/close.md) |
-| call an automation script (gates, lint, status, ship, fetch — the 14 `pw-*.sh` helpers) | [`tooling/docs/scripts/README.md`](../../../docs/scripts/README.md) |
+| call an automation script (gates, lint, status, ship, fetch — the 14 `pw-*.sh` helpers) | [`tooling/docs/scripts/README.md`]({{PW_HOME}}/tooling/docs/scripts/README.md) |
 | need the live command/operator map or an exact invocation line | `pw-help.sh` — `overview` · `command --name <name> [--project <slug>]` · `operators --name <name> [--operator <op>]` · `project --project <slug> [--name <command>]` · `workflow` · `find --term <term…>` (`--json` for bounded agent use) |
 | anything else — the `pw-*.sh` entity-script operators, the slash-command list, branch/worktree naming, the rewind flow | [`references/conventions-and-gotchas.md`](references/conventions-and-gotchas.md) |
 
@@ -85,7 +85,7 @@ phases, `--json` prints a machine-readable object. No slug; never writes.
   The `/pw-*` commands already invoke their share; when
   you reach a phase **without** the command (direct spawn, skill-only session), run the same calls
   yourself — identical behavior whichever path triggers the work is the point.
-  Reference: [`tooling/docs/scripts/README.md`](../../../docs/scripts/README.md).
+  Reference: [`tooling/docs/scripts/README.md`]({{PW_HOME}}/tooling/docs/scripts/README.md).
 - **Never hand-edit a generated command/agent file** (`~/.claude/commands`,
   `~/.config/kilo/command`, `~/.claude/agents`, `~/.config/kilo/agent`, `~/.cursor/commands`,
   `~/.cursor/agents`, `~/.codex/skills/pw-*` — codex commands are generated skill dirs) — they're build output from

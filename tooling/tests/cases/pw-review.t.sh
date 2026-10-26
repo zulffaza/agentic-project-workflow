@@ -14,6 +14,18 @@ for t in T01 T02 T03; do
   [ -f "$P/task/review/$t.review.md" ] && pwtest_ok "init-all created $t.review.md" \
     || pwtest_bad "init-all $t.review.md" "missing"
 done
+# Generated hints are project-aware: the initializer knows the slug and paths, so the installed
+# review file must never ask the reader to supply them or leave a render token behind.
+R1="$P/task/review/T01.review.md"
+grep -q -- "--project $RE" "$R1" \
+  && pwtest_ok "review hints carry the real project slug" \
+  || pwtest_bad "review hint slug" "expected --project $RE in $R1"
+grep -q -- "--file task/review/T01.review.md" "$R1" \
+  && pwtest_ok "review item/answer/signoff hints carry the review path" \
+  || pwtest_bad "review hint path" "review file path missing from hints"
+if grep -qE '\{\{PW_[A-Z_]+\}\}|--project <slug>' "$R1"; then
+  pwtest_bad "review hints leave no placeholders" "unrendered token or <slug> remains"
+else pwtest_ok "review hints leave no placeholders"; fi
 [ -f "$P/task/review/T04.review.md" ] && pwtest_ok "init-all left existing T04.review.md" \
   || pwtest_bad "init-all clobber" "T04.review.md gone"
 pwtest_rc 0 "init-all rerun (idempotent)" "$E" init-all --project "$RE"

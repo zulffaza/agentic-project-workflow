@@ -7,6 +7,14 @@ The flag authorizes one reconciliation attempt for this invocation. It does not 
 push, history rewrite, squash/rebase restack, MR merge, thread resolution, or a second repair
 budget. Unclear intent still stops for a human decision.
 
+## Delegated worker
+
+`/pw-sync --auto-resolve` may hand this one conflicted branch to `pw-sync-conflict-fixer` (executor
+lane, task pin) with a bounded work order. The driver owns scheduling and the attempt; the worker owns
+resolution, verification, publication and CI observation for that head. Clean merges spawn no worker.
+A descendant waits for its parent's verified head before its own conflict work becomes ready.
+Delegation does not add a repair allowance or authorize force-push, restack, MR merge or thread work.
+
 ## Inputs and attempt state
 
 `pw-ship.sh sync-attempt` records one attempt per task in `task/sync-attempts.tsv`. Use it; never

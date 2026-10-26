@@ -468,3 +468,6 @@ C370-independent-mrs-may-run-serially	skills/human/pw-ship/SKILL.md	**Concurrenc
 C371-cross-skill-reference-owner-dropped	skills/human/pw-analyze/SKILL.md	(`pw-guide-workflow` skill: `references/execution-and-routing.md` §Spawn lanes	(skill: `references/execution-and-routing.md` §Spawn lanes	T4	-
 C372-doc-link-depth-wrong	skills/human/pw-breakdown/SKILL.md	[`docs/RFC.md`]({{PW_HOME}}/docs/RFC.md). A missing	[`docs/RFC.md`](../../docs/RFC.md). A missing	T4	-
 C373-internal-doc-link-depth-wrong	skill-internal/pw-maintainer/references/security.md	../../../docs/SECURITY.md	../../docs/SECURITY.md	T4	-
+C374-comment-fixer-ownership-dropped	skills/model/pw-guide-workflow/references/mr-comments.md	Delegated fixers own the whole MR lifecycle.	Delegated fixers need only push.	T4	-
+C375-sync-conflict-delegation-dropped	skills/human/pw-sync/SKILL.md	## Delegated conflict repair (conflict-only)	## Conflict repair	T4	-
+C376-sync-worker-procedure-unlinked	skills/model/pw-sync-conflict-fixer/SKILL.md	sync-conflict-resolution.md`	plain notes`	T4	-

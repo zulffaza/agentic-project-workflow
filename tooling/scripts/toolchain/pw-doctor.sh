@@ -234,25 +234,28 @@ for p in "${PW_PROVIDERS[@]}"; do
       continue
     fi
     starget="$skilldir/$skill_name"
+    # Compare against the RENDERED expectation (tokens stamped, managed marker), not the raw
+    # canonical tree: installed skills are generated copies, so raw-source comparison would call
+    # every correct install stale and never catch an unresolved path token.
+    # gen-skills appends /<provider> to --outdir, so the expectation lives under skills-<p>/<p>/.
+    sexpect="$tmp/skills-$p/$p/$skill_name"
+    if [ ! -e "$sexpect" ]; then
+      mkdir -p "$tmp/skills-$p"
+      "$PW_HOME/tooling/scripts/toolchain/gen-skills.sh" --outdir "$tmp/skills-$p" "$p" >/dev/null 2>&1 || true
+    fi
     if [ ! -e "$starget" ]; then
       echo "    ✗ skill '$skill_name' NOT installed ($starget)"; issues=$((issues+1))
       if [ "$FIX" -eq 1 ]; then
-        mkdir -p "$skilldir"
-        ln -sfn "$skill_src" "$starget" 2>/dev/null || cp -R "$skill_src" "$starget"
-        echo "      fixed: installed skill '$skill_name'"
+        "$PW_HOME/tooling/scripts/toolchain/gen-skills.sh" --force "$p" >/dev/null 2>&1
+        echo "      fixed: rendered skill '$skill_name'"
       fi
-    elif diff -rq "$starget" "$skill_src" >/dev/null 2>&1; then
+    elif [ -e "$sexpect" ] && diff -rq "$starget" "$sexpect" >/dev/null 2>&1; then
       echo "    ✓ skill '$skill_name' up to date"
     else
-      echo "    ✗ skill '$skill_name' STALE (differs from bundle)"; issues=$((issues+1))
+      echo "    ✗ skill '$skill_name' STALE (differs from the rendered bundle output)"; issues=$((issues+1))
       if [ "$FIX" -eq 1 ]; then
-        # rm -rf FIRST, unconditionally: if $starget is a real (non-symlink) directory, `ln -sfn`
-        # against an *existing directory* target doesn't fail or replace it — it silently nests a
-        # new symlink INSIDE it (standard multi-arg `ln` semantics), leaving the stale copy in
-        # place. Removing first avoids that ambiguity entirely, for both the symlink and copy path.
-        rm -rf "$starget"
-        ln -sfn "$skill_src" "$starget" 2>/dev/null || cp -R "$skill_src" "$starget"
-        echo "      fixed: refreshed skill '$skill_name' from bundle"
+        "$PW_HOME/tooling/scripts/toolchain/gen-skills.sh" --force "$p" >/dev/null 2>&1
+        echo "      fixed: re-rendered skill '$skill_name'"
       fi
     fi
   done
