@@ -128,6 +128,7 @@ done < "$TEMPLATE_DIR/PROJECT.template.md" > "$stage/README.md"
 # bash replacement + pw_tmpfile staging; install paths never become perl program text.
 find "$stage" -type f -name '*.md' -print0 | while IFS= read -r -d '' md; do
   pw_stamp_tokens "$md" || { echo "scaffold: token stamping failed for $md" >&2; exit 1; }
+  pw_stamp_project_tokens "$md" "$slug" || { echo "scaffold: project token stamping failed for $md" >&2; exit 1; }
 done
 
 # Keep empty phase dirs present even if rsync left them out; add the review/ subdirs.

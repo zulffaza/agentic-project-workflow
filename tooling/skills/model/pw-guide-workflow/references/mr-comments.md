@@ -188,6 +188,14 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
    task → resume-try iff `pw-session.sh session-check --project <slug> --task <task-id>` exits 0, dead/failed →
    inline fallback (`resume-failed→inline` + `model-degraded` in the ledger). Where a session is
    resumed, you are handing it a work order, not re-deriving context from a cold spawn.
+   - **Delegated fixers own the whole MR lifecycle.** When the fixer is a spawned sub-agent or a
+     supervised headless session, give it the `pw-ship-comment-fixer` skill and a bounded work order
+     (see "Uniform worker handoff" below). That worker — not the driver — runs the local checks,
+     pushes the authorized head, monitors **that exact head's** CI, repairs an in-scope regression
+     within the existing repair allowance, and posts the replies/description delivery. It returns only
+     terminal evidence. The driver schedules, authorizes, supervises and validates; it must not become
+     the normal CI poller or take over the worker's first CI failure. A worker that returns right after
+     pushing has not finished the work order.
    - **A landed fix on a dependency fans the §3.6 passthrough** onto tasks *already run* from it:
      each affected dependent re-merges its dependency and re-runs **its own** `## Verify` (conflict
      = that dependent's own `verify-failed`; the driver flips statuses, never the fixer); where
@@ -296,6 +304,19 @@ unset). Do not duplicate its investigation in the driver first, and do not launc
 
 An empty sweep, or one whose only work is pending description delivery, needs no new analyst. New
 actionable feedback always needs the prerequisite, even for a single small comment.
+
+### Uniform worker handoff
+
+Every fresh or resumed fixer — native sub-agent, warm executor session, or foreign provider — loads
+the `pw-ship-comment-fixer` skill and receives the same bounded work order: invocation/attempt id, MR
+and tasks, worktree/branch, assigned comments with revisions, validated analyst artifact, approved
+group order, task pin and tuning, publication/`--resolve`/`--skip-build-check` authorization, prior
+reply ids and pending delivery, and remaining repair allowance.
+
+Warm context is not authorization: a resumed executor must be told explicitly that this is a
+comment-fixing operation, recheck the head and comment revisions, and must not inherit a previous
+task's scope. If the skill or the work order cannot be loaded, stop before editing; never fall back to
+remembered instructions or invoke `/pw-ship comments` recursively.
 
 ### Comment fixes on a stack (cascade)
 

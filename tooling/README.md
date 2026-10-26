@@ -38,6 +38,7 @@ tooling/
 │       ├── scaffold.sh         creates a new project from ../../template/
 │       ├── gen-commands.sh     stamps skills/human/ into each provider's selected format
 │       ├── gen-agents.sh       seeds agents/ into each provider's agent dir
+│       ├── gen-skills.sh       renders skills/model/ into managed provider copies (tokens stamped)
 │       └── pw-doctor.sh        checks installed skills + commands + agents match this bundle (--fix repairs)
 ├── skills/human/       ← THE source of truth for the 19 human entry points (provider-neutral)
 │   ├── pw-new/SKILL.md  frontmatter: name, description, args, scope, [agent]; body uses {{ARGS}}
@@ -52,6 +53,8 @@ tooling/
 │                         pw-reviewer (optional, only spawned by /pw-review … ai), pw-researcher,
 │                         pw-analyst, pw-writer-task (the phase lanes), and
 │                         pw-ship-comment-analyst (read-only /pw-ship comments prerequisite)
+│                         — plus two worker-invocable model skills: pw-ship-comment-fixer
+│                         and pw-sync-conflict-fixer
 ├── docs/               ← registries/policy the AGENTS read (each has a human-facing peer doc);
 │                         maintainer-owned reference — you never edit these, see below:
 │   ├── conventions.md    capability placement: S-rules (script), L-rules (layout),
@@ -130,6 +133,7 @@ publishing to a real platform is the opt-in part).
 Edit a human entry in `skills/human/<name>/SKILL.md`, then (`$PW_HOME` = the bundle dir; `bootstrap.sh` exports it):
 ```bash
 $PW_HOME/tooling/scripts/toolchain/gen-commands.sh
+$PW_HOME/tooling/scripts/toolchain/gen-skills.sh
 ```
 Outputs are EXCLUSIVE per provider (overwritten each run):
 - **Claude Code / Cursor / Codex** → `<name>/SKILL.md` invocable skills only, no command files.
@@ -160,7 +164,7 @@ scripts** — everything else also goes in `../pw.config.sh`:
 3. *(Optional)* define `<name>_headless()` — its exact non-interactive invocation template, so an
    orchestrator on a *different* provider can shell out to this one (cross-provider execution).
    Not needed for the CLI to work at all, same-provider-only. See `docs/providers.md`.
-4. Re-run `./bootstrap.sh` (or `gen-commands.sh` + `gen-agents.sh`).
+4. Re-run `./bootstrap.sh` (or `gen-commands.sh` + `gen-agents.sh` + `gen-skills.sh`).
 
 That's the whole cost of onboarding a provider — the phase prompts themselves never get copied.
 

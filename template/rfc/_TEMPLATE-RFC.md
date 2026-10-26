@@ -1,13 +1,13 @@
 # RFC: <PROJECT_NAME>
 
 <!-- [🤖 agent] generates this file locally via `/pw-rfc` — always, regardless of whether you
-     publish anywhere external (Generate vs Publish, see docs/RFC.md). Wave 1 (`/pw-rfc --project <slug>`,
+     publish anywhere external (Generate vs Publish, see {{PW_HOME}}/docs/RFC.md). Wave 1 (`/pw-rfc --project {{PW_PROJECT_SLUG}}`,
      gated on analysis `approved`) fills Background → Dependencies. Wave 2
-     (`/pw-rfc milestone --project <slug>`, gated on PLAN `approved`) fills Milestone + Conclusion.
+     (`/pw-rfc milestone --project {{PW_PROJECT_SLUG}}`, gated on PLAN `approved`) fills Milestone + Conclusion.
      Rollout/Rollback Plan are filled only if you ask. Glossary and the References subsections stay
      human-owned placeholders — the agent never fills those. Legend: 🤖 agent · 🧑 you.
 
-     HYGIENE RULES (a filled RFC must never look half-finished — see docs/RFC.md's "Doc hygiene"
+     HYGIENE RULES (a filled RFC must never look half-finished — see {{PW_HOME}}/docs/RFC.md's "Doc hygiene"
      for the concrete bug these came from):
      - Any instructional/placeholder text a template ships per section (a 🚧-style callout, a
        "Point 1/Point 2/Point 3" table stub) gets REPLACED when you write real content, never left
@@ -22,7 +22,7 @@
        approach's own subsections instead.
      - Map content to the backend's REAL fetched heading text/id (fetch_anchors), never by
        assumption — a generated "Dependencies" write has landed in the wrong anchor before (see
-       docs/RFC.md).
+       {{PW_HOME}}/docs/RFC.md).
      - Never let a `**bold**` marker span across or interleave with an inline `` `code` `` span
        (e.g. `**Single`**CdcEvent**`**proto**`) — close bold before the code span starts. -->
 
@@ -60,7 +60,7 @@
      — the section heading says "(Optional)" because that's the template's own wording (you may
      delete the subsection if you don't want it), not because generation is conditional; on a
      rendering failure this stays a placeholder and the rest of the RFC still publishes — see
-     docs/RFC.md -->
+     {{PW_HOME}}/docs/RFC.md -->
 #### Sequence Diagram (Optional)
 <!-- same auto-generate-by-default + isolation/degrade rule as Block Diagram -->
 #### Database Modelling (Optional)
@@ -103,7 +103,7 @@
 ## References
 
 ### Open questions?
-🧑 <RFC-doc comments pulled read-only via `/pw-rfc comments --project <slug>` land in
+🧑 <RFC-doc comments pulled read-only via `/pw-rfc comments --project {{PW_PROJECT_SLUG}}` land in
    analysis/review/RFC.review.md instead of here — this section is for questions you want to
    record directly in the RFC itself>
 

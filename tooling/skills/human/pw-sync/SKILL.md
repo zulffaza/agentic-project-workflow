@@ -19,6 +19,34 @@ merged result, then push through the normal path. The flag never authorizes forc
 rewriting, MR merging, or MR thread resolution, and it cannot promise that every conflict is
 resolvable. A supplied value (`--auto-resolve=true`) fails closed; no persistent setting is added.
 
+## Delegated conflict repair (conflict-only)
+
+Only a real conflict creates conflict work. A clean merge or no-op keeps its existing flow and spawns
+no worker. Without `--auto-resolve`, a conflict still aborts for manual resolution: no agent edits, and
+affected descendants stay blocked.
+
+With `--auto-resolve`, delegate each conflicted branch to `pw-sync-conflict-fixer` in an executor lane
+(or a compatible resumed executor session) under the task's existing pin. The driver keeps the attempt
+ownership and scheduling; it does not re-run the merge for the worker and does not take over normal
+verification or CI polling.
+
+**Scheduling.** Build the graph from the approved DAG and recorded stacks up front, but discover actual
+conflicts in ready waves: a descendant's effective target is its parent's *resulting verified head*, so
+its conflict cannot be predicted before that head exists. Do not merge every selected branch
+speculatively. Serialize ancestor/descendant work in one stack; independent stacks and unrelated ready
+branches may run concurrently within the project `max-parallel`. Same-repository tasks need distinct
+worktrees/branches and no shared state collision. Block only the affected subtree.
+
+**Work order.** Send invocation/attempt id, project, task, worktree/branch, pinned start/task/target
+SHAs, the conflict manifest, effective target, task pin and tuning, push authorization, prior
+publication state, and the remaining repair allowance. Warm context is not authorization: a resumed
+executor must be told this is a sync-conflict operation and must recheck freshness.
+
+The worker reconciles both intents, uses the guarded `sync-finish`/`sync-bind` path, runs the complete
+`## Verify`, pushes plainly, and observes the new head/target CI before returning. It may use the
+attempt's **single** resolution-caused repair; delegation adds no second allowance. Pending CI is not a
+clean result, and a green from an older head or pre-target context cannot release a dependent.
+
 Project dir: `{{PW_PROJECTS}}/<slug>`.
 
 **The problem this solves:** once `/pw-ship` has opened several MRs, their base branches keep

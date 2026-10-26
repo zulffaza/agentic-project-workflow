@@ -62,8 +62,8 @@ reword accordingly, don't just copy sentences across.
 Backend selection, target resolution, the section→real-heading mapping (`fetch_anchors`),
 section-scoped external writes, callout/placeholder replacement, Pros/Cons-table fill, and the
 markdown-hygiene rules (never split `**bold**` across a `` `code` `` span) — all in
-[`tooling/docs/rfc.md`](../../../docs/rfc.md)'s "Doc hygiene" section and
-[`tooling/docs/rfc-backends.md`](../../../docs/rfc-backends.md)'s per-backend rows. Diagram generation
+[`tooling/docs/rfc.md`]({{PW_HOME}}/tooling/docs/rfc.md)'s "Doc hygiene" section and
+[`tooling/docs/rfc-backends.md`]({{PW_HOME}}/tooling/docs/rfc-backends.md)'s per-backend rows. Diagram generation
 (isolated sub-agent, mermaid, degrade-to-placeholder on failure) — `rfc.md`'s Diagrams section. The
 comment-pull loop (`/pw-rfc comments --project <slug>`) — same file, "Comment loop" section; the pull itself is
 mechanical (`tooling/scripts/entities/pw-rfc.sh comments --project <slug> [--backend …]` — fetch → track against `rfc/META.md`
@@ -72,8 +72,8 @@ comments, then triage what it appended.
 
 ## Full context
 
-[`docs/RFC.md`](../../../docs/RFC.md) (human-facing guide + worked walkthrough) ·
-[`tooling/docs/rfc.md`](../../../docs/rfc.md) (policy + canonical schema + hygiene rules) ·
-[`tooling/docs/rfc-backends.md`](../../../docs/rfc-backends.md) (backend registry) ·
-[`template/rfc/_TEMPLATE-RFC.md`](../../../../template/rfc/_TEMPLATE-RFC.md) (the literal skeleton) ·
+[`docs/RFC.md`]({{PW_HOME}}/tooling/docs/RFC.md) (human-facing guide + worked walkthrough) ·
+[`tooling/docs/rfc.md`]({{PW_HOME}}/tooling/docs/rfc.md) (policy + canonical schema + hygiene rules) ·
+[`tooling/docs/rfc-backends.md`]({{PW_HOME}}/tooling/docs/rfc-backends.md) (backend registry) ·
+[`template/rfc/_TEMPLATE-RFC.md`]({{PW_HOME}}/template/rfc/_TEMPLATE-RFC.md) (the literal skeleton) ·
 the `pw-guide-workflow` skill (the pipeline this feeds into, if you have access to it).

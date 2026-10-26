@@ -103,36 +103,15 @@ if [ "$MODE" = "check" ]; then
   exit 0
 fi
 
-# --- 3. install every shipped skill, per detected provider (symlink; copy fallback) ------------
-install_skill() {
-  local dir="$1" src="$2" name; name="$(basename "$src")"
-  local target="$dir/$name"
-  mkdir -p "$dir"
-  if [ -e "$target" ] || [ -L "$target" ]; then
-    if [ "$MODE" != "force" ]; then
-      echo "    skill: '$name' already present at $target (leaving as-is; --force to re-link)"
-      return
-    fi
-    # --force + target already exists: rm -rf it FIRST. If $target is a real (non-symlink)
-    # directory, `ln -sfn` against an *existing directory* target doesn't fail or replace it —
-    # it silently nests a new symlink INSIDE it (standard multi-arg `ln` semantics), leaving the
-    # stale copy in place underneath. Removing first avoids that ambiguity entirely.
-    rm -rf "$target"
-  fi
-  if ln -sfn "$src" "$target" 2>/dev/null; then
-    echo "    skill: linked $target → $src"
-  else
-    rm -rf "$target"; cp -R "$src" "$target"
-    echo "    skill: copied $src → $target"
-  fi
-}
+# --- 3. render every shipped procedural skill, per detected provider --------------------------
+# Copies, never symlinks: the installed tree is generated (path tokens stamped), so bundle
+# relocation and doctor drift checks work like every other provider artifact.
 for p in "${DETECTED[@]}"; do
   echo "  $p:"
-  skdir="$("${p}_skilldir")"
-  for src in "$SKILL_DIR"/*/; do
-    [ -f "${src}SKILL.md" ] || continue   # skip any non-skill subdir
-    install_skill "$skdir" "${src%/}"
-  done
+  skill_args=("$p")
+  [ "$MODE" = "force" ] && skill_args=(--force "${skill_args[@]}")
+  PW_PROJECTS="$PW_PROJECTS" PW_REPOS="$PW_REPOS" \
+    "$PW_HOME/tooling/scripts/toolchain/gen-skills.sh" "${skill_args[@]}" | sed 's/^/    /'
 done
 echo
 
@@ -143,7 +122,7 @@ if [ "${#DETECTED[@]}" -gt 0 ]; then
     "$PW_HOME/tooling/scripts/toolchain/gen-commands.sh" "${DETECTED[@]}" | sed 's/^/    /'
   echo
 
-  echo "  seeding the five worker sub-agents:"
+  echo "  seeding the worker sub-agents:"
   PW_PROJECTS="$PW_PROJECTS" PW_REPOS="$PW_REPOS" \
     "$PW_HOME/tooling/scripts/toolchain/gen-agents.sh" "${DETECTED[@]}" | sed 's/^/    /'
   echo
