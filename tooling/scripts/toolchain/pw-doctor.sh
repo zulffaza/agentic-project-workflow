@@ -281,7 +281,7 @@ for p in "${PW_PROVIDERS[@]}"; do
       for n in $sorph; do
         # content-check-and-skip (S10): remove only bundle-generated residue (the generator
         # marker), never a foreign or hand-made entry that merely shares the namespace.
-        if grep -qF 'pw-generated' "$skilldir/$n/SKILL.md" 2>/dev/null; then
+        if [ -f "$skilldir/$n/.pw-generated" ] || grep -qF 'pw-generated' "$skilldir/$n/SKILL.md" 2>/dev/null; then
           rm -rf "$skilldir/$n"
         elif [ -L "$skilldir/$n" ] && { case "$(readlink "$skilldir/$n")" in "$PW_HOME"/*) true ;; esac; } 2>/dev/null; then
           # Bundle-owned legacy link (e.g. the retired project-workflow guide) — safe to remove.

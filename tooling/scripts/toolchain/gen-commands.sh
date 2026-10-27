@@ -95,6 +95,10 @@ for prov in "${PROVIDERS[@]}"; do
         generic_entry_skill > "$outdir/$name/SKILL.md"
       fi
       printf '%s\n' "$GEN_MARKER" >> "$outdir/$name/SKILL.md"
+      # This path may previously have held a RENDERED model skill (same directory name); its
+      # marker belongs to that lifecycle, not to an entry skill. Drop it so drift checks and
+      # offboard see exactly one owner.
+      rm -f "$outdir/$name/.pw-generated"
       if declare -f "render_${prov}_skill_policy" >/dev/null 2>&1; then
         mkdir -p "$outdir/$name/agents"
         [ -L "$outdir/$name/agents/openai.yaml" ] && rm -f "$outdir/$name/agents/openai.yaml"
