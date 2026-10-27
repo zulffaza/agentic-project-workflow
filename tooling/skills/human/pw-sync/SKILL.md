@@ -25,7 +25,8 @@ Only a real conflict creates conflict work. A clean merge or no-op keeps its exi
 no worker. Without `--auto-resolve`, a conflict still aborts for manual resolution: no agent edits, and
 affected descendants stay blocked.
 
-With `--auto-resolve`, delegate each conflicted branch to `pw-sync-conflict-fixer` in an executor lane
+With `--auto-resolve`, delegate each conflicted branch to `pw-sync-conflict-fixer` in an executor lane,
+passing that entry's resolved path in the work order (explicit-only — the worker reads the file)
 (or a compatible resumed executor session) under the task's existing pin. The driver keeps the attempt
 ownership and scheduling; it does not re-run the merge for the worker and does not take over normal
 verification or CI polling.

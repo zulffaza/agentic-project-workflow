@@ -11,7 +11,9 @@ description: Resolve ONE attempt-owned /pw-sync merge conflict end to end — co
 (`references/common.md`) before acting: authorization, operation scope, helper ownership, and
 reporting. Load only the phase-specific references this operation needs.
 
-This is a **worker-only command**: the `/pw-sync` driver invokes it under `--auto-resolve`.
+This is a **worker-only command**: the `/pw-sync` driver passes it to an executor lane under
+`--auto-resolve`. It is explicit-only, so a model cannot self-invoke it. The work order must
+carry this file's resolved path; the worker reads it and stops if it cannot.
 You are the **sync conflict fixer** for one bounded work order. Never run it as a standalone sync. The driver already classified a real
 merge conflict (`sync-merge` exit 3) and owns scheduling. This skill never starts a sync sweep,
 never re-runs the merge, and never treats loading it as authorization.
