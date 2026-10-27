@@ -14,10 +14,13 @@ project; each optional `--task <T0n>` (repeatable) restricts the sweep to that t
 shipped task with an open MR). Unknown flags and stray positional values fail closed.
 
 `--auto-resolve` is a boolean, off by default. Without it a conflict still aborts and returns the
-task for manual resolution. With it, reconcile that conflict during this invocation, verify the
-merged result, then push through the normal path. The flag never authorizes force-push, history
-rewriting, MR merging, or MR thread resolution, and it cannot promise that every conflict is
-resolvable. A supplied value (`--auto-resolve=true`) fails closed; no persistent setting is added.
+task for manual resolution. With it, **delegate that conflict to the `pw-sync-conflict-fixer`
+worker** (see "Delegated conflict repair" below) and wait for its terminal evidence; the driver
+session is not the default resolver. Inline resolution is allowed only where the routing ladder's
+bounded single-task inline exception applies, and must be recorded as `via=inline`. The flag never
+authorizes force-push, history rewriting, MR merging, or MR thread resolution, and it cannot promise
+that every conflict is resolvable. A supplied value (`--auto-resolve=true`) fails closed; no
+persistent setting is added.
 
 ## Delegated conflict repair (conflict-only)
 
@@ -123,9 +126,13 @@ consumed-parent bindings and pending debt, not merely an unchanged destination. 
      merge operator (`S={{PW_HOME}}/tooling/scripts/entities/pw-ship.sh`):
      `$S sync-attempt begin --project <slug> --task <T0n> --kind <independent|stack> --mode auto --target-branch <effective-target-branch>`
      then `$S sync-merge --project <slug> --task <T0n> --target <pinned-target-sha> --keep-conflict`.
-     `sync-merge` exits 3 only when it left the conflict in place for resolution; follow the loaded
-     reference, then continue at its verification/publication steps. Exit 2 means it aborted or the
-     merge failed operationally — mark the task failed and continue. A clean merge returns 0.
+     `sync-merge` exits 3 only when it left the conflict in place for resolution. **Dispatch
+     `pw-sync-conflict-fixer` for that branch** — the work order carries the installed entry's
+     resolved path, the attempt id, pinned SHAs, effective target and the remaining repair
+     allowance — then wait for terminal evidence before continuing. Do not resolve it in the driver
+     session unless the routing ladder's bounded single-task inline exception applies (record
+     `via=inline`). Exit 2 means it aborted or the merge failed operationally — mark the task failed
+     and continue. A clean merge returns 0 and needs no worker.
    - **Preserve both sides.** Never resolve a conflicted path by taking the task side or the target
      side as a whole. Merge both intents, including additive list/array entries. Before finishing,
      list each side's intended change and confirm the result contains it; `sync-finish` refuses a

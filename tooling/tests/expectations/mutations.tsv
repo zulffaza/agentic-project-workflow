@@ -472,3 +472,4 @@ C374-comment-fixer-ownership-dropped	skills/model/pw-guide-workflow/references/m
 C375-sync-conflict-delegation-dropped	skills/human/pw-sync/SKILL.md	## Delegated conflict repair (conflict-only)	## Conflict repair	T4	-
 C376-sync-worker-procedure-unlinked	skills/human/pw-sync-conflict-fixer/SKILL.md	sync-conflict-resolution.md	plain notes	T4	-
 C377-guidance-slug-upgrade-dropped	pw-project-doctor.sh	local g_old="--project <slug>" g_new="--project $SLUG"	local g_old="--project <slug>" g_new="--project <slug>"	T1	^pw-guidance\.t\.sh$
+C378-sync-auto-resolve-inline	skills/human/pw-sync/SKILL.md	With it, **delegate that conflict to the `pw-sync-conflict-fixer`	With it, reconcile that conflict during this invocation	T4	-

@@ -649,6 +649,8 @@ PYD
     && grep -qF 'The driver already classified a real' "$TOOL/skills/human/pw-sync-conflict-fixer/SKILL.md" \
     && grep -qF '## Delegated conflict repair (conflict-only)' "$TOOL/skills/human/pw-sync/SKILL.md" \
     && grep -qF 'delegate each conflicted branch to `pw-sync-conflict-fixer`' "$TOOL/skills/human/pw-sync/SKILL.md" \
+    && grep -qF 'delegate that conflict to the `pw-sync-conflict-fixer`' "$TOOL/skills/human/pw-sync/SKILL.md" \
+    && grep -qF 'then wait for terminal evidence before continuing' "$TOOL/skills/human/pw-sync/SKILL.md" \
     && grep -qF 'sync-conflict-resolution.md' "$TOOL/skills/human/pw-sync-conflict-fixer/SKILL.md" \
     && grep -qF 'Delegated worker' "$TOOL/skills/model/pw-guide-workflow/references/sync-conflict-resolution.md" \
     && pwtest_ok "T4 canary: uniform fixer work orders for comments and sync conflicts" \
