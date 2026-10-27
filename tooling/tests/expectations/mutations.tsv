@@ -473,3 +473,4 @@ C375-sync-conflict-delegation-dropped	skills/human/pw-sync/SKILL.md	## Delegated
 C376-sync-worker-procedure-unlinked	skills/human/pw-sync-conflict-fixer/SKILL.md	sync-conflict-resolution.md	plain notes	T4	-
 C377-guidance-slug-upgrade-dropped	pw-project-doctor.sh	local g_old="--project <slug>" g_new="--project $SLUG"	local g_old="--project <slug>" g_new="--project <slug>"	T1	^pw-guidance\.t\.sh$
 C378-sync-auto-resolve-inline	skills/human/pw-sync/SKILL.md	With it, **delegate that conflict to the `pw-sync-conflict-fixer`	With it, reconcile that conflict during this invocation	T4	-
+C379-comment-ci-actor-implicit	skills/model/pw-guide-workflow/references/mr-comments.md	the MR fixer — the delegated worker	this session	T4	-

@@ -17,7 +17,9 @@ shipped task with an open MR). Unknown flags and stray positional values fail cl
 task for manual resolution. With it, **delegate that conflict to the `pw-sync-conflict-fixer`
 worker** (see "Delegated conflict repair" below) and wait for its terminal evidence; the driver
 session is not the default resolver. Inline resolution is allowed only where the routing ladder's
-bounded single-task inline exception applies, and must be recorded as `via=inline`. The flag never
+bounded single-task inline exception applies, and must be recorded on the existing surfaces: the
+spawn ledger's `via=subagent|headless` for a worker, or a `pw-status.sh log` line carrying
+`via=inline` plus the attempt's evidence file for an inline run. The flag never
 authorizes force-push, history rewriting, MR merging, or MR thread resolution, and it cannot promise
 that every conflict is resolvable. A supplied value (`--auto-resolve=true`) fails closed; no
 persistent setting is added.
