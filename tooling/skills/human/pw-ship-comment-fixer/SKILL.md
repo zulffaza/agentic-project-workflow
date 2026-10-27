@@ -11,7 +11,9 @@ description: Complete ONE MR comment-fix work order end to end — inspect the a
 (`references/common.md`) before acting: authorization, operation scope, helper ownership, and
 reporting. Load only the phase-specific references this operation needs.
 
-This is a **worker-only command**: the `/pw-ship comments` driver invokes it in an executor lane.
+This is a **worker-only command**: the `/pw-ship comments` driver passes it to an executor lane.
+It is explicit-only, so a model cannot self-invoke it. The work order must carry this file's
+resolved path; the worker reads it and stops if it cannot.
 You are the **MR comment fixer** for one bounded work order. Never run it as a standalone sweep. The driver already ran the cross-MR
 comment analyst and validated the scope and fixer plan. Loading this skill does **not** widen that
 scope, grant publication authorization, or let you approve/merge anything.

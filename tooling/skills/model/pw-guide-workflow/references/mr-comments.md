@@ -189,7 +189,9 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
    inline fallback (`resume-failed→inline` + `model-degraded` in the ledger). Where a session is
    resumed, you are handing it a work order, not re-deriving context from a cold spawn.
    - **Delegated fixers own the whole MR lifecycle.** When the fixer is a spawned sub-agent or a
-     supervised headless session, give it the `pw-ship-comment-fixer` skill and a bounded work order
+     supervised headless session, give it a bounded work order that carries the resolved path of the installed
+     `pw-ship-comment-fixer` entry (explicit-only: pass the file, never assume the worker will
+     invoke a slash command itself)
      (see "Uniform worker handoff" below). That worker — not the driver — runs the local checks,
      pushes the authorized head, monitors **that exact head's** CI, repairs an in-scope regression
      within the existing repair allowance, and posts the replies/description delivery. It returns only
