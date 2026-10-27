@@ -651,6 +651,8 @@ PYD
     && grep -qF 'delegate each conflicted branch to `pw-sync-conflict-fixer`' "$TOOL/skills/human/pw-sync/SKILL.md" \
     && grep -qF 'delegate that conflict to the `pw-sync-conflict-fixer`' "$TOOL/skills/human/pw-sync/SKILL.md" \
     && grep -qF 'then wait for terminal evidence before continuing' "$TOOL/skills/human/pw-sync/SKILL.md" \
+    && grep -qF 'must be recorded on the existing surfaces' "$TOOL/skills/human/pw-sync/SKILL.md" \
+    && grep -qF 'the MR fixer — the delegated worker' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
     && grep -qF 'sync-conflict-resolution.md' "$TOOL/skills/human/pw-sync-conflict-fixer/SKILL.md" \
     && grep -qF 'Delegated worker' "$TOOL/skills/model/pw-guide-workflow/references/sync-conflict-resolution.md" \
     && pwtest_ok "T4 canary: uniform fixer work orders for comments and sync conflicts" \

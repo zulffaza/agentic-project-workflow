@@ -203,14 +203,18 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
      = that dependent's own `verify-failed`; the driver flips statuses, never the fixer); where
      file/landing-unit overlap is real, one `dep-impact` reviewer pass files items into the
      dependent's queue — no edit-backward into the fixed task, new DAG task if it needs one.
-    - **Unless `--skip-build-check` was passed:** monitor the pipeline/checks to a terminal state
-      right after this push via `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh monitor --project <slug> --task <task-id>`
-      (same contract as ship mode — see "Build check" below), before moving on to step 3 — so a failed
-      build shows up in the recap and can be mentioned in the thread reply, not discovered later.
-      A **red** build → the task is **not done**: enter the build-check fix loop below (fix in the
-      worktree, re-verify, push, re-monitor) until it passes or the cap is hit.
+    - **Unless `--skip-build-check` was passed:** the MR fixer — the delegated worker, or this
+      session only in a permitted inline run — monitors the pipeline/checks to a terminal state for
+      the head it pushed, via `{{PW_HOME}}/tooling/scripts/entities/pw-ship.sh monitor --project <slug> --task <task-id>`
+      (same contract as ship mode — see "Build check" below), before moving on to step 3. A **red**
+      build → the task is **not done**: the same fixer runs the build-check fix loop below (fix in
+      the worktree, re-verify, push, re-monitor) until it passes or the cap is hit. A delegated
+      worker returns only after that loop reaches a terminal outcome; the driver does not adopt the
+      first failure.
 3. **Reply to every thread you acted on — general/no-diff comments included — then, only with
-   `--resolve`, close the ones you fixed; and mirror the result into the internal record:**
+   `--resolve`, close the ones you fixed; and mirror the result into the internal record.** A
+   delegated fixer owns its replies and description delivery; the driver validates and records the
+   consolidated result.
    - **Reply on the thread itself — always, either mode.** GitLab: `POST` a new note into that same
      discussion (works whether or not it's resolvable). GitHub diff comments: reply in that
      review-comment thread; GitHub standalone/conversation comments have no native reply-thread API
