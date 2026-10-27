@@ -470,4 +470,5 @@ C372-doc-link-depth-wrong	skills/human/pw-breakdown/SKILL.md	[`docs/RFC.md`]({{P
 C373-internal-doc-link-depth-wrong	skill-internal/pw-maintainer/references/security.md	../../../docs/SECURITY.md	../../docs/SECURITY.md	T4	-
 C374-comment-fixer-ownership-dropped	skills/model/pw-guide-workflow/references/mr-comments.md	Delegated fixers own the whole MR lifecycle.	Delegated fixers need only push.	T4	-
 C375-sync-conflict-delegation-dropped	skills/human/pw-sync/SKILL.md	## Delegated conflict repair (conflict-only)	## Conflict repair	T4	-
-C376-sync-worker-procedure-unlinked	skills/model/pw-sync-conflict-fixer/SKILL.md	sync-conflict-resolution.md`	plain notes`	T4	-
+C376-sync-worker-procedure-unlinked	skills/human/pw-sync-conflict-fixer/SKILL.md	sync-conflict-resolution.md	plain notes	T4	-
+C377-guidance-slug-upgrade-dropped	pw-project-doctor.sh	local g_old="--project <slug>" g_new="--project $SLUG"	local g_old="--project <slug>" g_new="--project <slug>"	T1	^pw-guidance\.t\.sh$

@@ -99,7 +99,7 @@ cmdfile() { printf '%s/%s/SKILL.md' "$CMDS" "$1"; }
 
 # --- the phase -> command map (embedded knowledge; the static.sh set-equality
 # canary pins its names against $CMDS, so a new command cannot stay invisible) ---
-HELP_PHASE_MAP="setup|pw-new pw-adopt pw-context pw-doctor;analysis|pw-research pw-analyze pw-review;breakdown|pw-breakdown pw-rfc;executing|pw-execute pw-verify pw-sync;ship|pw-ship;close|pw-close;anytime|pw-status pw-help pw-config pw-batch pw-independent-review"
+HELP_PHASE_MAP="setup|pw-new pw-adopt pw-context pw-doctor;analysis|pw-research pw-analyze pw-review;breakdown|pw-breakdown pw-rfc;executing|pw-execute pw-verify pw-sync pw-ship-comment-fixer pw-sync-conflict-fixer;ship|pw-ship;close|pw-close;anytime|pw-status pw-help pw-config pw-batch pw-independent-review"
 
 # --- the Global Operations order (the overview's first section). Every command whose
 # frontmatter scope is global|mixed MUST be listed here and every listed command MUST
@@ -398,7 +398,7 @@ has_shape() {
 # voice; the renderers for the project/agent-facing surfaces pass every lifted
 # clause through here: drop provenance/history parentheticals that name internals,
 # map script names to their user-visible form, replace tooling jargon.
-CMDS_LIST=":pw-new:pw-adopt:pw-context:pw-doctor:pw-research:pw-analyze:pw-review:pw-breakdown:pw-rfc:pw-execute:pw-verify:pw-sync:pw-ship:pw-close:pw-status:pw-help:pw-ship-mr-describe:pw-test:"
+CMDS_LIST=":pw-new:pw-adopt:pw-context:pw-doctor:pw-research:pw-analyze:pw-review:pw-breakdown:pw-rfc:pw-execute:pw-verify:pw-sync:pw-ship:pw-close:pw-status:pw-help:pw-ship-mr-describe:pw-ship-comment-fixer:pw-sync-conflict-fixer:pw-test:"
 user_prose() {
   # BSD sed -E: no \b — guard with explicit char classes where needed. Literal parens
   # in ERE are ( ) — no backslash. Order: history parentheticals first, then jargon,

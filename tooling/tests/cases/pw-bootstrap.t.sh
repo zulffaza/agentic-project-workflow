@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # cases/pw-bootstrap.t.sh — plan 29: the installer round-trip in an isolated HOME.
-# Covers the exclusive provider format (skills for claude, commands for kilo), the six shared
+# Covers the exclusive provider format (skills for claude, commands for kilo), the four shared
 # model skills, the six worker sub-agents (no primary orchestrator), doctor in-sync, and
 # offboard --yes removing exactly what bootstrap installed. Never touches real provider dirs.
 BOOTDIR="$(mktemp -d "${TMPDIR:-/tmp}/pwboot.XXXXXX")"
@@ -26,7 +26,7 @@ printf '#!/bin/sh\nexit 0\n' > "$BIN/kilo"; chmod +x "$BIN/kilo"
 
 pwtest_rc 0 "bootstrap installs into an isolated HOME" \
   env -u PW_PROJECTS_DIR -u PW_REPOS -u PW_PROJECTS HOME="$FH" PATH="$BIN:$PATH" bash "$PW/bootstrap.sh"
-pwtest_eq "claude gets 19 entry skills + 6 shared skills" \
+pwtest_eq "claude gets 21 entry skills + 4 shared skills" \
   "$(ls -d "$FH/.claude/skills"/*/ 2>/dev/null | wc -l | tr -d ' ')" "25"
 [ -d "$FH/.claude/skills/pw-execute" ] && [ ! -d "$FH/.claude/skills/pw-execute/agents" ] \
   && pwtest_ok "claude human entry is a skill dir" \
@@ -34,7 +34,7 @@ pwtest_eq "claude gets 19 entry skills + 6 shared skills" \
 grep -qF 'disable-model-invocation: true' "$FH/.claude/skills/pw-execute/SKILL.md" \
   && pwtest_ok "claude human entry is explicit-only" \
   || pwtest_bad "claude explicit-only" "disable-model-invocation missing"
-for _s in pw-guide-workflow pw-guide-review-method pw-guide-authoring pw-orchestration pw-ship-comment-fixer pw-sync-conflict-fixer; do
+for _s in pw-guide-workflow pw-guide-review-method pw-guide-authoring pw-orchestration; do
   [ -d "$FH/.claude/skills/$_s" ] || pwtest_bad "shared skill $_s" "not installed for claude"
 done
 # Shared skills are RENDERED copies (not symlinks): install paths are stamped, so a moved bundle
@@ -51,8 +51,8 @@ done
 if grep -rqE '\{\{PW_[A-Z_]+\}\}' "$FH/.claude/skills/pw-guide-workflow"; then
   pwtest_bad "rendered skill has no unresolved path tokens" "a token survived rendering"
 else pwtest_ok "rendered skill has no unresolved path tokens"; fi
-pwtest_eq "kilo gets 19 command files and no entry skill" \
-  "$(ls "$FH/.config/kilo/command"/*.md 2>/dev/null | wc -l | tr -d ' '):$(ls -d "$FH/.kilocode/skills/pw-execute" 2>/dev/null | wc -l | tr -d ' ')" "19:0"
+pwtest_eq "kilo gets 21 command files and no entry skill" \
+  "$(ls "$FH/.config/kilo/command"/*.md 2>/dev/null | wc -l | tr -d ' '):$(ls -d "$FH/.kilocode/skills/pw-execute" 2>/dev/null | wc -l | tr -d ' ')" "21:0"
 [ -f "$FH/.config/kilo/command/pw-execute.md" ] \
   && pwtest_ok "kilo human entry is a command file" \
   || pwtest_bad "kilo entry format" "pw-execute.md missing"

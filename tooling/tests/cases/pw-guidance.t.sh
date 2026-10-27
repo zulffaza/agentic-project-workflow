@@ -64,18 +64,31 @@ _closeleak="$(grep -E 'pw-status\.sh|pw-preflight\.sh' "$PWTEST_ERR" | head -1)"
 G3=guidance-legacy; rm -rf "$PW_PROJECTS_DIR/$G3"; cp -a "$F2" "$PW_PROJECTS_DIR/$G3"
 P3="$PW_PROJECTS_DIR/$G3"
 python3 - "$P3" <<'PY'
-import sys
+import os, sys
 p = sys.argv[1]
 def repl(path, old, new):
+    import re
     f = p + "/" + path
     s = open(f, encoding="utf-8").read()
+    # Templates render the project slug, so a seeded anchor's `<slug>` may already be any real
+    # slug (a copied fixture keeps its original name). Match the placeholder generically.
+    if old in s:
+        open(f, "w", encoding="utf-8").write(s.replace(old, new, 1))
+        return
+    # Normalize personalized selectors back to the generic placeholder on BOTH sides, then seed
+    # the legacy text. Older anchors name this fixture's slug; newer ones use <slug>.
+    norm = re.sub(r"--project [A-Za-z0-9._-]+", "--project <slug>", s)
+    old = old.replace(os.path.basename(p), "<slug>")
+    old = re.sub(r"--project [A-Za-z0-9._-]+", "--project <slug>", old)
+    if old in norm:
+        open(f, "w", encoding="utf-8").write(norm.replace(old, new, 1))
+        return
     assert old in s, "seed anchor missing in " + path
-    open(f, "w", encoding="utf-8").write(s.replace(old, new, 1))
 # context/README.md: newest brief paragraph → legacy manual-copy paragraph (exercises BOTH
 # chained rules: manual-copy → req-init → prepare wording in one apply pass)
 repl("context/README.md",
      "**Optional — a one-page brief.** If the raw inputs don't clearly state *what you want and why*,\n"
-     "run `/pw-context prepare --project <slug> --brief <your brief>` and let the agent draft the brief with traceable\n"
+     "run `/pw-context prepare --project guidance-legacy --brief <your brief>` and let the agent draft the brief with traceable\n"
      "inputs, or write it yourself: run `/pw-context req-init --project <slug>`, fill it in (problem, goal, scope,\n"
      "constraints, success criteria), and register it:\n"
      "`/pw-context add-input --project <slug> --file REQUIREMENTS.md --what <one line> --source <where it came from>`.\n"
@@ -175,12 +188,12 @@ open(p + "/analysis/review/topic2.review.md", "w", encoding="utf-8").write(
     "> §4 <your ask, spaces and all>` (it writes the heading, timestamp, marker, `---` rule, and\n"
     "> reindexes `## Contents` for you; a first new item after an `approved` row also records one\n"
     "> `pw-review (feedback)` `in-review` row, so the old approval stops being the live decision).\n\n"
-    "> **Answer a question:** easiest is `/pw-review answer --project <slug> --file <this-file> --question Qn --text <your answer>`\n"
+    "> **Answer a question:** easiest is `/pw-review answer --project guidance-legacy --file <this-file> --question Qn --text <your answer>`\n"
     "> (it writes the styled `↳ you:` line under the question).\n\n"
     "## Sign-off\n\n| By | Decision | When |\n|----|----------|------|\n| you | approved | 1 October 2026 10.00 WIB |\n")
 # analysis/README.md: shipped positional answer row → named row
 repl("analysis/README.md",
-     "| Answer the agent's questions | `/pw-review answer --project <slug> --file analysis/review/<topic>.review.md --question Q<n> --text <your answer>` |",
+     "| Answer the agent's questions | `/pw-review answer --project guidance-legacy --file analysis/review/<topic>.review.md --question Q<n> --text <your answer>` |",
      "| Answer the agent's questions | `/pw-review --project <slug> answer analysis/review/<topic>.review.md Q<n> <your answer>` |")
 open(p + "/rfc/META.md", "w", encoding="utf-8").write(
     "# RFC metadata — guidance-legacy   [🤖-owned — never hand-edit; see `pw-rfc.sh target|state`]\n\n"
@@ -235,7 +248,7 @@ if grep -qF 'pw-status.sh' "$P3/task/review/T01.review.md"; then pwtest_bad "rev
 else pwtest_ok "review hint family leak gone"; fi
 if grep -qF 'pw-review.sh' "$P3/task/review/T01.review.md"; then pwtest_bad "review hint prose script-free" "pw-review.sh remains"
 else pwtest_ok "review hint prose script-free"; fi
-pwtest_grep_file '`/pw-status rewind --project <slug> --phase <phase>`' "rewind hint repaired" "$P3/task/review/T01.review.md"
+pwtest_grep_file '`/pw-status rewind --project guidance-legacy --phase <phase>`' "rewind hint repaired" "$P3/task/review/T01.review.md"
 pwtest_grep_file 'refreshed automatically by every write that adds or resolves a heading' "reindex hint repaired" "$P3/task/review/T01.review.md"
 grep -qF '## Contents   [agent-owned; refreshed automatically; do not edit]' "$P3/task/review/T01.review.md" && pwtest_ok "contents stamp repaired" || pwtest_bad "contents stamp repaired" "old stamp remains"
 grep -qF '## Archived items   [agent-owned; refreshed automatically; do not edit]' "$P3/task/review/T01.review.md" && pwtest_ok "archived-items heading repaired" || pwtest_bad "archived-items heading repaired" "old heading remains"
@@ -243,15 +256,15 @@ if grep -qF 'pw-status.sh' "$P3/analysis/review/topic.review.md"; then pwtest_ba
 else pwtest_ok "analysis review leak gone"; fi
 if grep -qF 'pw-review.sh' "$P3/analysis/review/topic.review.md"; then pwtest_bad "analysis review prose script-free" "pw-review.sh remains"
 else pwtest_ok "analysis review prose script-free"; fi
-pwtest_grep_file '`/pw-status rewind --project <slug> --phase <phase>`' "analysis rewind hint repaired" "$P3/analysis/review/topic.review.md"
+pwtest_grep_file '`/pw-status rewind --project guidance-legacy --phase <phase>`' "analysis rewind hint repaired" "$P3/analysis/review/topic.review.md"
 # shipped-generation rules: positional item hint + wrapped init-all comment → named forms;
 # an already-named sibling line in the same file stays byte-identical (mixed copy).
-pwtest_grep_file '`/pw-review item --project <slug>' "shipped item hint repaired to the named form" "$P3/analysis/review/topic2.review.md"
+pwtest_grep_file '`/pw-review item --project guidance-legacy' "shipped item hint repaired to the named form" "$P3/analysis/review/topic2.review.md"
 if grep -qF '/pw-review --project <slug> item <this-file>' "$P3/analysis/review/topic2.review.md"; then pwtest_bad "shipped item hint leak gone" "positional bytes remain"; else pwtest_ok "shipped item hint leak gone"; fi
-pwtest_grep_file '`/pw-review init-all --project <slug>` for the review files missing in the project' "wrapped init-all comment repaired" "$P3/analysis/review/topic2.review.md"
+pwtest_grep_file '`/pw-review init-all --project guidance-legacy` for the review files missing in the project' "wrapped init-all comment repaired" "$P3/analysis/review/topic2.review.md"
 if grep -qF '  init-all` for the review files missing' "$P3/analysis/review/topic2.review.md"; then pwtest_bad "wrapped init-all leak gone" "positional bytes remain"; else pwtest_ok "wrapped init-all leak gone"; fi
-pwtest_grep_file '`/pw-review answer --project <slug> --file <this-file> --question Qn --text <your answer>`' "already-named sibling untouched" "$P3/analysis/review/topic2.review.md"
-pwtest_grep_file '`/pw-review answer --project <slug> --file analysis/review/<topic>.review.md --question Q<n> --text <your answer>`' "analysis README answer row repaired" "$P3/analysis/README.md"
+pwtest_grep_file '`/pw-review answer --project guidance-legacy --file <this-file> --question Qn --text <your answer>`' "already-named sibling untouched" "$P3/analysis/review/topic2.review.md"
+pwtest_grep_file '`/pw-review answer --project guidance-legacy --file analysis/review/<topic>.review.md --question Q<n> --text <your answer>`' "analysis README answer row repaired" "$P3/analysis/README.md"
 if grep -qF 'answer analysis/review/<topic>.review.md Q<n>' "$P3/analysis/README.md"; then pwtest_bad "analysis README positional row gone" "old bytes remain"; else pwtest_ok "analysis README positional row gone"; fi
 if grep -qF ', by `pw-review.sh' "$P3/task/review/T01.archive.md"; then pwtest_bad "archive leak gone" "old bytes remain"
 else pwtest_ok "archive leak gone"; fi
@@ -264,7 +277,7 @@ pwtest_grep_file 'keep me exactly' "custom section preserved" "$P3/context/READM
 # (manual-copy → req-init → prepare wording) in one apply pass.
 pwtest_grep_file 'or agent-assisted preparation' "INDEX filled-by hint repaired" "$P3/context/INDEX.md"
 if grep -qF 'Agents only READ' "$P3/context/INDEX.md"; then pwtest_bad "INDEX legacy wording gone" "old bytes remain"; else pwtest_ok "INDEX legacy wording gone"; fi
-pwtest_grep_file 'prepare --project <slug> --brief <your brief>' "README brief hint reaches the prepare wording" "$P3/context/README.md"
+pwtest_grep_file 'prepare --project guidance-legacy --brief <your brief>' "README brief hint reaches the prepare wording" "$P3/context/README.md"
 if grep -qF 'cp _REQUIREMENTS.template.md' "$P3/context/README.md"; then pwtest_bad "README legacy chain completed" "manual-copy wording remains"; else pwtest_ok "README legacy chain completed"; fi
 pwtest_grep_file 'optional feedback record at `review/CONTEXT.review.md`' "README review-record hint repaired" "$P3/context/README.md"
 pwtest_grep_file 'not an approval gate' "README review hint states the advisory role" "$P3/context/README.md"

@@ -449,6 +449,41 @@ pw_guidance_engine() { # $1 = 1 apply / 0 preview
   done <<RULES
 $(pw_guidance_rules)
 RULES
+
+  # Existing projects still carry the generic `<slug>` placeholder in workflow command examples.
+  # The project slug is known here, so upgrade it in place inside allowlisted guidance files.
+  local g_old="--project <slug>" g_new="--project $SLUG"
+  local pat full rel content n out r tmp
+  for pat in $PW_GUIDANCE_ALLOW; do
+    for full in "$D"/$pat; do
+      [ -e "$full" ] || continue
+      [ -L "$full" ] && { echo "pw-guidance: refusing symlinked target: ${full#"$D"/}" >&2; exit 2; }
+      [ -f "$full" ] || continue
+      rel="${full#"$D"/}"
+      content=""; IFS= read -r -d '' content < "$full" || true
+      pw_guidance_count content "$g_old"; n="$PW_G_N"
+      [ "$n" -eq 0 ] && continue
+      if [ "$apply" -eq 0 ]; then
+        echo "  would personalize $rel: $n selector(s)"
+        G_AVAIL=$((G_AVAIL+n))
+        continue
+      fi
+      r="$content"; out=""
+      while :; do
+        case "$r" in
+          *"$g_old"*) out="$out${r%%"$g_old"*}$g_new"; r="${r#*"$g_old"}" ;;
+          *) break ;;
+        esac
+      done
+      out="$out$r"
+      tmp="$(pw_tmpfile "$(dirname "$full")")"
+      cp -p "$full" "$tmp" && printf '%s' "$out" > "$tmp" && mv -f "$tmp" "$full" \
+        || { rm -f "$tmp"; echo "pw-guidance: FAILED to write $rel — nothing changed" >&2; exit 2; }
+      echo "  personalized $rel: $n selector(s)"
+      G_CHANGES=$((G_CHANGES+n)); G_FILES=$((G_FILES+1))
+    done
+  done
+
   echo
   if [ "$apply" -eq 1 ]; then
     echo "guidance repair: $G_CHANGES occurrence(s) replaced across $G_FILES file(s); $G_SKIPPED skipped"

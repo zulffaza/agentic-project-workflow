@@ -11,8 +11,8 @@
      Tooling parses these as machine fields; anything after the value is parsed as the value. -->
 - **Repo:** <repo>
 - **Base branch:** <branch>
-- **Branch:** `agent/<project-slug>/<T0n>-<slug>`
-- **Worktree:** `worktree/<repo>/<T0n>-<slug>/`
+- **Branch:** `agent/<project-slug>/<T0n>-{{PW_PROJECT_SLUG}}`
+- **Worktree:** `worktree/<repo>/<T0n>-{{PW_PROJECT_SLUG}}/`
 - **depends_on:** <T-ids or none>
 <!-- Stacked on: OPTIONAL — the immediate PARENT TASK this branch inherits code from (a same-repo
      code dependency), or `none` for an independent task. `depends_on` stays the full execution
@@ -30,7 +30,7 @@
 - **Landing unit:** <short-name or none>
 - **Status:** todo | in-progress | verify-failed | done | accepted
 <!-- Execute with: e.g. `claude:sonnet`, `claude:claude-opus-4-8` (pinned),
-     `kilo:command_code/<model>`, `cursor:gpt-5.6-sol-high`, `codex:<slug>` (bare catalog slug);
+     `kilo:command_code/<model>`, `cursor:gpt-5.6-sol-high`, `codex:{{PW_PROJECT_SLUG}}` (bare catalog slug);
      or the same-provider `pw-executor`
      def. A plain `provider:model` = that provider's default agent on this task file as its work
      order (portable across providers); a named sub-agent only resolves when the orchestrator
@@ -132,9 +132,9 @@ internal docs) needs. Internal cross-references belong in `## Result`, not the a
    ```bash
    git -C {{PW_REPOS}}/<repo> fetch -q origin <base-branch>
    git -C {{PW_REPOS}}/<repo> worktree add \
-     "{{PW_PROJECTS}}/<project-slug>/worktree/<repo>/<T0n>-<slug>" \
-     -b agent/<project-slug>/<T0n>-<slug> origin/<base-branch>
-   cd "{{PW_PROJECTS}}/<project-slug>/worktree/<repo>/<T0n>-<slug>"
+     "{{PW_PROJECTS}}/<project-slug>/worktree/<repo>/<T0n>-{{PW_PROJECT_SLUG}}" \
+     -b agent/<project-slug>/<T0n>-{{PW_PROJECT_SLUG}} origin/<base-branch>
+   cd "{{PW_PROJECTS}}/<project-slug>/worktree/<repo>/<T0n>-{{PW_PROJECT_SLUG}}"
    ```
 2. <exact change #1 — file + what to change, with a snippet>
 3. <exact change #2 …>
@@ -147,7 +147,7 @@ internal docs) needs. Internal cross-references belong in `## Result`, not the a
 ## Verify (Definition of Done)
 Runnable — the agent must run these and paste real output before reporting done.
 ```bash
-cd {{PW_PROJECTS}}/<project-slug>/worktree/<repo>/<T0n>-<slug>
+cd {{PW_PROJECTS}}/<project-slug>/worktree/<repo>/<T0n>-{{PW_PROJECT_SLUG}}
 <build/test/lint command>
 ```
 **Expected:** <e.g. "BUILD SUCCESS, 0 failures" / "tests green" / specific assertion>.
@@ -161,7 +161,7 @@ cd {{PW_PROJECTS}}/<project-slug>/worktree/<repo>/<T0n>-<slug>
 > **If the human rejects this result:** flip `Status: verify-failed` above and either (a) add items
 > to `task/review/<T0n>.review.md`, or (b) just tell the agent what's wrong in chat — `/pw-review`
 > will create that review file from your feedback if it doesn't exist yet. Then the task is re-run
-> in its worktree (`/pw-execute --project <slug> --task <T0n>`) and re-verified. Task review is **optional**: a task
+> in its worktree (`/pw-execute --project {{PW_PROJECT_SLUG}} --task <T0n>`) and re-verified. Task review is **optional**: a task
 > only needs a review file when you're sending it back.
 
 ## Result (filled by the executor at run time)

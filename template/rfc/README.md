@@ -4,7 +4,7 @@ Entirely optional. Nothing else in the pipeline reads or requires this directory
 don't write RFCs for this project.
 
 - **`RFC.md`** — doesn't exist until the first `/pw-rfc` run. **Generated always** (from approved
-  `analysis/` for Wave 1, from an approved `task/PLAN.md` for Wave 2 — `/pw-rfc milestone --project <slug>`),
+  `analysis/` for Wave 1, from an approved `task/PLAN.md` for Wave 2 — `/pw-rfc milestone --project {{PW_PROJECT_SLUG}}`),
   regardless of whether you publish anywhere external. This file is the source of truth; publishing
   to a real doc platform is an *additional*, optional step layered on top.
 - **`META.md`** — 🤖-owned via `/pw-rfc` — never hand-edit. Tracks the publish

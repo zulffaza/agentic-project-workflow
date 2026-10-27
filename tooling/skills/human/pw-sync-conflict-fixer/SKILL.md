@@ -1,11 +1,18 @@
 ---
 name: pw-sync-conflict-fixer
+args: "--work-order <path-or-inline-json>   (worker-only: supplied by /pw-sync --auto-resolve)"
+scope: project
 description: Resolve ONE attempt-owned /pw-sync merge conflict end to end — confirm the pinned attempt, reconcile both intents, finish the guarded merge, verify, push, observe CI, and return terminal evidence within the single-repair allowance. Invoked by the /pw-sync driver under --auto-resolve; never a public command.
 ---
 
 # pw-sync-conflict-fixer
 
-You are the **sync conflict fixer** for one bounded work order. The driver already classified a real
+**Load shared guidance first.** Read the `pw-orchestration` skill's common rules
+(`references/common.md`) before acting: authorization, operation scope, helper ownership, and
+reporting. Load only the phase-specific references this operation needs.
+
+This is a **worker-only command**: the `/pw-sync` driver invokes it under `--auto-resolve`.
+You are the **sync conflict fixer** for one bounded work order. Never run it as a standalone sync. The driver already classified a real
 merge conflict (`sync-merge` exit 3) and owns scheduling. This skill never starts a sync sweep,
 never re-runs the merge, and never treats loading it as authorization.
 
