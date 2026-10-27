@@ -21,7 +21,7 @@ isolation. If a task needs two repos, split it and add a dependency edge.
 
 **Review:** comment on `PLAN.md` or a task in `review/PLAN.review.md` / `review/T0n.review.md`
 (a `review/` subdir here, from `../_REVIEW.template.md`; a missing one is created on demand with
-`/pw-review init --project <slug> --file task/T0n.md`, or with `… init-all` during the breakdown phase), not
+`/pw-review init --project {{PW_PROJECT_SLUG}} --file task/T0n.md`, or with `… init-all` during the breakdown phase), not
 inline. To reject an execution
 result, add items to `review/T0n.review.md` **and** set that task's `Status: verify-failed` so
 it's re-run. See `../README.md` → "Review & feedback".

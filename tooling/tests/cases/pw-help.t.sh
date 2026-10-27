@@ -186,10 +186,10 @@ pwtest_re 'Close out a finished project — verify, tear down, learn' "command v
 
 # 6) --json contracts
 pwtest_rc 0 "overview --json parses (python, stable keys)" "$C" overview --json
-python3 - "$PWTEST_OUT" <<'PY' && pwtest_ok "json shape: 19 cmds, scopes on every cmd+op, facets stable" || pwtest_bad "json shape" "schema violation"
+python3 - "$PWTEST_OUT" <<'PY' && pwtest_ok "json shape: 21 cmds, scopes on every cmd+op, facets stable" || pwtest_bad "json shape" "schema violation"
 import json,sys
 d=json.load(open(sys.argv[1]))
-assert isinstance(d,list) and len(d)==19, len(d)
+assert isinstance(d,list) and len(d)==21, len(d)
 ctx=next(c for c in d if c["cmd"]=="pw-context")
 names={o["name"] for o in ctx["ops"]}
 assert {"req-init","add-input","add-repo","prepare"} <= names, names
@@ -220,7 +220,7 @@ pwtest_rc 0 "bare --json maps to overview --json" "$C" --json
 python3 - "$PWTEST_OUT" <<'PYB' && pwtest_ok "bare --json is the overview json" || pwtest_bad "bare --json" "not overview json"
 import json,sys
 d=json.load(open(sys.argv[1]))
-assert isinstance(d,list) and len(d)==19
+assert isinstance(d,list) and len(d)==21
 PYB
 
 # 7) read-only contract: a projects tree is byte-identical around a full surface pass

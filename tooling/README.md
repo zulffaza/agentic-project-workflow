@@ -53,8 +53,8 @@ tooling/
 │                         pw-reviewer (optional, only spawned by /pw-review … ai), pw-researcher,
 │                         pw-analyst, pw-writer-task (the phase lanes), and
 │                         pw-ship-comment-analyst (read-only /pw-ship comments prerequisite)
-│                         — plus two worker-invocable model skills: pw-ship-comment-fixer
-│                         and pw-sync-conflict-fixer
+│                         — worker-only commands ship alongside them as human entries:
+│                         pw-ship-comment-fixer and pw-sync-conflict-fixer
 ├── docs/               ← registries/policy the AGENTS read (each has a human-facing peer doc);
 │                         maintainer-owned reference — you never edit these, see below:
 │   ├── conventions.md    capability placement: S-rules (script), L-rules (layout),

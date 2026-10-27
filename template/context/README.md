@@ -6,13 +6,13 @@ Everything the agent needs to reason well, and nothing it can re-derive from cod
 specific code paths, screenshots.
 
 **Optional — a one-page brief.** If the raw inputs don't clearly state *what you want and why*,
-run `/pw-context prepare --project <slug> --brief <your brief>` and let the agent draft the brief with traceable
-inputs, or write it yourself: run `/pw-context req-init --project <slug>`, fill it in (problem, goal, scope,
+run `/pw-context prepare --project {{PW_PROJECT_SLUG}} --brief <your brief>` and let the agent draft the brief with traceable
+inputs, or write it yourself: run `/pw-context req-init --project {{PW_PROJECT_SLUG}}`, fill it in (problem, goal, scope,
 constraints, success criteria), and register it:
-`/pw-context add-input --project <slug> --file REQUIREMENTS.md --what <one line> --source <where it came from>`.
+`/pw-context add-input --project {{PW_PROJECT_SLUG}} --file REQUIREMENTS.md --what <one line> --source <where it came from>`.
 It's optional — the pipeline never requires it — but it sharpens the analysis phase.
 Assisted preparation also creates an optional feedback record at `review/CONTEXT.review.md`.
-Add findings with `/pw-review item --project <slug> --file context/review/CONTEXT.review.md --section <§section> --text <your comment>`.
+Add findings with `/pw-review item --project {{PW_PROJECT_SLUG}} --file context/review/CONTEXT.review.md --section <§section> --text <your comment>`.
 It is not an approval gate; the human still starts analysis explicitly.
 
 **Rules**

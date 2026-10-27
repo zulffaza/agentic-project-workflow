@@ -551,9 +551,9 @@ PY
   local hcount mcount missing_entry bad_entry rendered
   hcount="$(ls -d "$TOOL/skills/human"/*/ 2>/dev/null | wc -l | tr -d ' ')"
   mcount="$(ls -d "$TOOL/skills/model"/*/ 2>/dev/null | wc -l | tr -d ' ')"
-  [ "$hcount" = 19 ] && [ "$mcount" = 6 ] \
+  [ "$hcount" = 21 ] && [ "$mcount" = 4 ] \
     && pwtest_ok "T4 canary: 19 human entries and 4 shared skills (plan 29)" \
-    || pwtest_bad "T4 canary: skill inventory" "expected 19 human + 6 shared; got $hcount + $mcount"
+    || pwtest_bad "T4 canary: skill inventory" "expected 21 human + 4 shared; got $hcount + $mcount"
   missing_entry="$(grep -L '`pw-orchestration`' "$TOOL"/skills/human/*/SKILL.md 2>/dev/null | tr '\n' ' ')"
   [ -z "$missing_entry" ] \
     && pwtest_ok "T4 canary: every human entry loads the shared orchestration rules" \
@@ -641,15 +641,15 @@ PYD
     || pwtest_bad "T4 canary: relative doc links" "unresolvable link(s): $deadlinks"
   # 9e) worker-invocable operation skills: comment fixers and sync conflict fixers must have ONE
   # canonical procedure the driver passes to native, warm-resumed and headless workers.
-  [ -f "$TOOL/skills/model/pw-ship-comment-fixer/SKILL.md" ] \
-    && grep -qF 'name: pw-ship-comment-fixer' "$TOOL/skills/model/pw-ship-comment-fixer/SKILL.md" \
-    && [ -f "$TOOL/skills/model/pw-sync-conflict-fixer/SKILL.md" ] \
-    && grep -qF 'name: pw-sync-conflict-fixer' "$TOOL/skills/model/pw-sync-conflict-fixer/SKILL.md" \
+  [ -f "$TOOL/skills/human/pw-ship-comment-fixer/SKILL.md" ] \
+    && grep -qF 'worker-only command' "$TOOL/skills/human/pw-ship-comment-fixer/SKILL.md" \
+    && [ -f "$TOOL/skills/human/pw-sync-conflict-fixer/SKILL.md" ] \
+    && grep -qF 'worker-only command' "$TOOL/skills/human/pw-sync-conflict-fixer/SKILL.md" \
     && grep -qF 'Delegated fixers own the whole MR lifecycle.' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
-    && grep -qF 'The driver already classified a real' "$TOOL/skills/model/pw-sync-conflict-fixer/SKILL.md" \
+    && grep -qF 'The driver already classified a real' "$TOOL/skills/human/pw-sync-conflict-fixer/SKILL.md" \
     && grep -qF '## Delegated conflict repair (conflict-only)' "$TOOL/skills/human/pw-sync/SKILL.md" \
     && grep -qF 'delegate each conflicted branch to `pw-sync-conflict-fixer`' "$TOOL/skills/human/pw-sync/SKILL.md" \
-    && grep -qF 'sync-conflict-resolution.md' "$TOOL/skills/model/pw-sync-conflict-fixer/SKILL.md" \
+    && grep -qF 'sync-conflict-resolution.md' "$TOOL/skills/human/pw-sync-conflict-fixer/SKILL.md" \
     && grep -qF 'Delegated worker' "$TOOL/skills/model/pw-guide-workflow/references/sync-conflict-resolution.md" \
     && pwtest_ok "T4 canary: uniform fixer work orders for comments and sync conflicts" \
     || pwtest_bad "T4 canary: fixer work orders" "a worker skill, its procedure pointer, or the delegated contract is missing"
@@ -657,16 +657,16 @@ PYD
   "$TOOL/scripts/toolchain/gen-commands.sh" --outdir "$rendered" claude cursor codex kilo opencode >/dev/null 2>&1
   bad_entry=""
   for _pf in claude cursor; do
-    [ "$(ls -d "$rendered/$_pf"/*/ 2>/dev/null | wc -l | tr -d ' ')" = 19 ] || bad_entry="$bad_entry $_pf:skill-count"
+    [ "$(ls -d "$rendered/$_pf"/*/ 2>/dev/null | wc -l | tr -d ' ')" = 21 ] || bad_entry="$bad_entry $_pf:skill-count"
     grep -qF 'disable-model-invocation: true' "$rendered/$_pf/pw-execute/SKILL.md" 2>/dev/null || bad_entry="$bad_entry $_pf:explicit-only"
     ls "$rendered/$_pf"/*.md >/dev/null 2>&1 && bad_entry="$bad_entry $_pf:command-files"
   done
-  [ "$(ls -d "$rendered/codex"/*/ 2>/dev/null | wc -l | tr -d ' ')" = 19 ] || bad_entry="$bad_entry codex:skill-count"
+  [ "$(ls -d "$rendered/codex"/*/ 2>/dev/null | wc -l | tr -d ' ')" = 21 ] || bad_entry="$bad_entry codex:skill-count"
   grep -qF 'allow_implicit_invocation: false' "$rendered/codex/pw-execute/agents/openai.yaml" 2>/dev/null || bad_entry="$bad_entry codex:policy"
   grep -qF '<arguments>' "$rendered/codex/pw-execute/SKILL.md" 2>/dev/null || bad_entry="$bad_entry codex:args-token"
   grep -qF '$ARGUMENTS' "$rendered/codex/pw-execute/SKILL.md" 2>/dev/null && bad_entry="$bad_entry codex:claude-token"
   for _pf in kilo opencode; do
-    [ "$(ls "$rendered/$_pf"/*.md 2>/dev/null | wc -l | tr -d ' ')" = 19 ] || bad_entry="$bad_entry $_pf:command-count"
+    [ "$(ls "$rendered/$_pf"/*.md 2>/dev/null | wc -l | tr -d ' ')" = 21 ] || bad_entry="$bad_entry $_pf:command-count"
     ls -d "$rendered/$_pf"/pw-*/ >/dev/null 2>&1 && bad_entry="$bad_entry $_pf:entry-skills"
   done
   [ -z "$bad_entry" ] \

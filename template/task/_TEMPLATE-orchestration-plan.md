@@ -24,8 +24,8 @@ parallel (separate per-task branches), tasks under different pairs are independe
 | valas-service | main | T02 |
 
 ## Global rules (apply to EVERY task)
-- **Branch:** `agent/<project-slug>/<task-id>-<slug>`
-- **Worktree:** `worktree/<repo>/<task-id>-<slug>/` created via `git worktree add` (never copy a repo).
+- **Branch:** `agent/<project-slug>/<task-id>-{{PW_PROJECT_SLUG}}`
+- **Worktree:** `worktree/<repo>/<task-id>-{{PW_PROJECT_SLUG}}/` created via `git worktree add` (never copy a repo).
 - **Commits:** Conventional Commits, scoped to the task's worktree only.
 - **Isolation:** an executor edits ONLY its own worktree. No cross-task edits.
 - **Verify before done:** run the task's `## Verify` block; paste real output; only then report done.
@@ -127,7 +127,7 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
 | `kilo/<model>` | kilo | KiloCode's own built-in gateway — the **default** API Provider, no separate credential |
 | `command_code/<model>` | kilo | open-weight/third-party models — needs its own credential; `kilo models command_code` for the full list |
 | `cursor-grok-4.5-high` / `…-low-fast`, `claude-opus-5-thinking-xhigh` | cursor | Cursor's own single gateway — effort/thinking are catalog-id variants (or `[context=1m,effort=…]` bracket params); `agent models` for the list |
-| `codex:<slug>` | codex | Codex's own single gateway (ChatGPT login) — ids are BARE slugs (`codex debug models`); effort + Fast tier are per-run overrides on the same slug, never id segments; no in-process spawn — every codex run is headless `codex exec` (prompt via stdin) |
+| `codex:{{PW_PROJECT_SLUG}}` | codex | Codex's own single gateway (ChatGPT login) — ids are BARE slugs (`codex debug models`); effort + Fast tier are per-run overrides on the same slug, never id segments; no in-process spawn — every codex run is headless `codex exec` (prompt via stdin) |
 | a registered agent / a model | (its provider) | same-provider reuse only — e.g. `pw-executor`; a cross-provider task always routes as `provider:model` (a *sub-agent* name is unreachable from the other CLI's headless path; `--agent` accepts **primary** defs only, verified 2026-09-04) |
 | `pw-executor` / a custom role def | (its provider) | the shipped executor, or a custom role no existing agent covers |
 
@@ -163,7 +163,7 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
   different-provider task is shelled out to that CLI headlessly. Either way the executor **tees its
   output to `worktree/<T0n>.log`** so you can `tail -f` any run in a window of your choosing.
 - **How work exits:** `/pw-execute` stops at *committed + verified*. Pushing branches and opening
-  MRs is a separate, explicit step — **`/pw-ship --project <slug> [--task <T0n>]…`** — so nothing goes outward
+  MRs is a separate, explicit step — **`/pw-ship --project {{PW_PROJECT_SLUG}} [--task <T0n>]…`** — so nothing goes outward
   until you ask. Zero-change tasks never get a branch/MR.
 - **Gate:** only the **PLAN** sign-off (`task/review/PLAN.review.md → approved`) is required to
   execute. Per-task review is **optional** — add a `task/review/T0n.review.md` only when you want to

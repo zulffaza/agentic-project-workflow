@@ -118,7 +118,7 @@ chosen option; the others stay here as record, never implemented. -->
        option list: `### 4.A Solution area: <name>` (each internally using the same Option A/B +
        fixed-skeleton structure above), `### 4.B Solution area: <name>`, etc.
      - An area needs its own independent approval timing, or is really a separate initiative that
-       happens to share this project → run `/pw-analyze --project <slug> --focus <another-area-name>` again instead,
+       happens to share this project → run `/pw-analyze --project {{PW_PROJECT_SLUG}} --focus <another-area-name>` again instead,
        producing a SEPARATE `analysis/<another-area-name>.md` with its own §4 and its own review
        file. /pw-breakdown already gates on, and merges, every analysis doc present — see its own
        instructions — so this needs no workflow change, just more files. -->

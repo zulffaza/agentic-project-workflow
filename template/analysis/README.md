@@ -22,9 +22,9 @@ text. Only you approve (guarded AI `auto` mode aside). See `../README.md` → "R
 
 | You want to… | Use |
 |---|---|
-| Start a review for this doc | `/pw-review init --project <slug> --file analysis/<topic>.md` |
-| Add feedback | `/pw-review item --project <slug> --file analysis/review/<topic>.review.md --section §<section> --text <your comment>` |
-| Answer the agent's questions | `/pw-review answer --project <slug> --file analysis/review/<topic>.review.md --question Q<n> --text <your answer>` |
-| Have the agent apply approved fixes | `/pw-review --project <slug> --file analysis/review/<topic>.review.md` |
-| Ask for an independent AI pass | `/pw-review ai --project <slug> --surface analysis` |
-| Approve (human-only) | `/pw-review signoff --project <slug> --file analysis/review/<topic>.review.md --decision approved` |
+| Start a review for this doc | `/pw-review init --project {{PW_PROJECT_SLUG}} --file analysis/<topic>.md` |
+| Add feedback | `/pw-review item --project {{PW_PROJECT_SLUG}} --file analysis/review/<topic>.review.md --section §<section> --text <your comment>` |
+| Answer the agent's questions | `/pw-review answer --project {{PW_PROJECT_SLUG}} --file analysis/review/<topic>.review.md --question Q<n> --text <your answer>` |
+| Have the agent apply approved fixes | `/pw-review --project {{PW_PROJECT_SLUG}} --file analysis/review/<topic>.review.md` |
+| Ask for an independent AI pass | `/pw-review ai --project {{PW_PROJECT_SLUG}} --surface analysis` |
+| Approve (human-only) | `/pw-review signoff --project {{PW_PROJECT_SLUG}} --file analysis/review/<topic>.review.md --decision approved` |

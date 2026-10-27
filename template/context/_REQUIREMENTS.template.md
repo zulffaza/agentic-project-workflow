@@ -1,9 +1,9 @@
 <!--
   OPTIONAL one-page brief. Use it to hand the agent a crisp statement of *what you want and why*
-  before it reads the raw context. To use: run `/pw-context prepare --project <slug> --brief <brief>` and let your
-  agent draft this brief, or run `/pw-context req-init --project <slug>` to copy this template yourself
+  before it reads the raw context. To use: run `/pw-context prepare --project {{PW_PROJECT_SLUG}} --brief <brief>` and let your
+  agent draft this brief, or run `/pw-context req-init --project {{PW_PROJECT_SLUG}}` to copy this template yourself
   (idempotent — by hand: `cp _REQUIREMENTS.template.md REQUIREMENTS.md`), fill it, and add a row
-  for it in INDEX.md (`/pw-context add-input --project <slug> --file REQUIREMENTS.md --what project brief
+  for it in INDEX.md (`/pw-context add-input --project {{PW_PROJECT_SLUG}} --file REQUIREMENTS.md --what project brief
   --source …`). Skip it entirely if the tickets/docs in context/ already say enough — the
   pipeline never requires this file.
 

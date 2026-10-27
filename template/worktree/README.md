@@ -6,7 +6,7 @@ agents each get their own worktree so their edits never collide.
 > Path vars: `$PW_REPOS` = repos root · `$PW_PROJECTS` = projects root. `bootstrap.sh` exports
 > them; see the bundle's [REFERENCE.md]({{PW_HOME}}/docs/REFERENCE.md#who-fills-what-legend) legend.
 
-Layout: `worktree/<repo>/<task-id>-<slug>/`
+Layout: `worktree/<repo>/<task-id>-{{PW_PROJECT_SLUG}}/`
 
 ## Create (per task)
 Fork from the task's **Base branch** (`origin/<base>`) — so tasks in one repo can target different
@@ -14,14 +14,14 @@ bases (e.g. `master` vs `spring3`):
 ```bash
 git -C $PW_REPOS/<repo> fetch -q origin <base-branch>
 git -C $PW_REPOS/<repo> worktree add \
-  "$PW_PROJECTS/<project-slug>/worktree/<repo>/<task-id>-<slug>" \
-  -b agent/<project-slug>/<task-id>-<slug> origin/<base-branch>
+  "$PW_PROJECTS/<project-slug>/worktree/<repo>/<task-id>-{{PW_PROJECT_SLUG}}" \
+  -b agent/<project-slug>/<task-id>-{{PW_PROJECT_SLUG}} origin/<base-branch>
 ```
 
 ## Remove (after merge/abandon)
 ```bash
 git -C $PW_REPOS/<repo> worktree remove \
-  "$PW_PROJECTS/<project-slug>/worktree/<repo>/<task-id>-<slug>"
+  "$PW_PROJECTS/<project-slug>/worktree/<repo>/<task-id>-{{PW_PROJECT_SLUG}}"
 ```
 
 ## Housekeeping
