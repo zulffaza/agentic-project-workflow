@@ -5,6 +5,7 @@
 #   tooling/tests/pw_test.sh                        default tiers T0,T1,T2,T4 (T3 needs --corpus-dir)
 #   tooling/tests/pw_test.sh --tier T0,T1           select tiers (comma list)
 #   tooling/tests/pw_test.sh --only doc-lint        filter T1 case files by name
+#                                                   (resolved once; a no-match T1 filter exits 2)
 #   tooling/tests/pw_test.sh --corpus-dir DIR       run T3 read-only over real projects
 #   tooling/tests/pw_test.sh --capture T2|gates|both    record current behavior as expectations (REVIEW the diff!)
 #   tooling/tests/pw_test.sh --mutation [filter]    meta-test: revert documented fixes, expect failures
@@ -63,6 +64,44 @@ export TOOL
 S1=pwt-f1-scaffold; S2=pwt-f2-mid; S3=pwt-f3-hostile; export S1 S2 S3
 IFS=',' read -r -a _tlist <<< "$TIERS"
 
+# T1 case selection is resolved ONCE, before fixtures or cases run. The same list
+# drives the fixture scan, execution and the evidence line, so a filter cannot
+# select one set for scanning and another for execution.
+_t1_list=""
+_t1_count=0
+_t1_active=0
+case ",$TIERS," in *T1*) _t1_active=1 ;; esac
+if [ -n "$ONLY" ]; then
+  printf '' | grep -q -- "$ONLY" 2>/dev/null
+  _only_rc=$?
+  if [ "$_only_rc" -gt 1 ]; then
+    echo "pw_test: invalid --only pattern: $ONLY" >&2
+    exit 2
+  fi
+fi
+if [ "$_t1_active" = 1 ]; then
+  for _t1_cf in "$HERE"/cases/*.t.sh; do
+    [ -f "$_t1_cf" ] || continue
+    if [ -n "$ONLY" ]; then
+      printf '%s' "$(basename "$_t1_cf")" | grep -q -- "$ONLY" || continue
+    fi
+    _t1_list="${_t1_list}${_t1_cf}"$'\n'
+    _t1_count=$((_t1_count+1))
+  done
+  if [ -n "$ONLY" ] && [ "$_t1_count" -eq 0 ]; then
+    echo "pw_test: --only '$ONLY' matched no T1 case files → fix: check the case-name pattern or drop --only" >&2
+    exit 2
+  fi
+  _t1_names=""
+  while IFS= read -r _t1_cf; do
+    [ -n "$_t1_cf" ] || continue
+    _t1_names="$_t1_names $(basename "$_t1_cf" .t.sh)"
+  done <<< "$_t1_list"
+  echo "TEST T1 selected: $_t1_count case(s):$_t1_names" >&2
+elif [ -n "$ONLY" ]; then
+  echo "TEST note: --only '$ONLY' does not apply: T1 is not selected" >&2
+fi
+
 if [ -n "$CAPTURE" ]; then
   NEED_F1=1; NEED_F2=1; NEED_F3=1     # battery captures against all fixtures
   _pwtest_materialize
@@ -82,9 +121,10 @@ fi
 for _pwt_t in "${_tlist[@]:-}"; do
   case "$_pwt_t" in
     T0|T4) _pwtest_scan "$HERE/static.sh" ;;
-    T1) for _pwt_cf in "$HERE"/cases/*.t.sh; do
-          [ "$ONLY" ] && { printf '%s' "$(basename "$_pwt_cf")" | grep -q -- "$ONLY" || continue; }
-          _pwtest_scan "$_pwt_cf"; done ;;
+    T1) while IFS= read -r _pwt_cf; do
+          [ -n "$_pwt_cf" ] || continue
+          _pwtest_scan "$_pwt_cf"
+        done <<< "$_t1_list" ;;
     T2) _pwtest_scan "$HERE/battery.sh" ;;
     T3) _pwtest_scan "$HERE/corpus.sh" ;;
   esac
@@ -99,15 +139,19 @@ for _pwt_t in "${_tlist[@]:-}"; do
     T0) static_t0 ;;
     T1) # per-script case files — each case gets its own TIME line (date-based: sourced
         # case files may clobber SECONDS, so tier totals must not depend on it).
-        for _pwt_cf in "$HERE"/cases/*.t.sh; do
-          [ "$ONLY" ] && { printf '%s' "$(basename "$_pwt_cf")" | grep -q -- "$ONLY" || continue; }
-          echo "TEST case $(basename "$_pwt_cf" .t.sh)"
-          _pwt_c0="$(date +%s)"
-          . "$_pwt_cf"
-          _pwt_c1="$(date +%s)"
-          printf 'TIME case %s %ss\n' "$(basename "$_pwt_cf" .t.sh)" $(( _pwt_c1 - _pwt_c0 )) >&2
-          _pwtest_record_case_duration "$(basename "$_pwt_cf" .t.sh)" "$(( _pwt_c1 - _pwt_c0 ))"
-        done ;;
+        if [ "$_t1_count" -eq 0 ]; then
+          echo "TEST note: no T1 case files selected" >&2
+        else
+          while IFS= read -r _pwt_cf; do
+            [ -n "$_pwt_cf" ] || continue
+            echo "TEST case $(basename "$_pwt_cf" .t.sh)"
+            _pwt_c0="$(date +%s)"
+            . "$_pwt_cf"
+            _pwt_c1="$(date +%s)"
+            printf 'TIME case %s %ss\n' "$(basename "$_pwt_cf" .t.sh)" $(( _pwt_c1 - _pwt_c0 )) >&2
+            _pwtest_record_case_duration "$(basename "$_pwt_cf" .t.sh)" "$(( _pwt_c1 - _pwt_c0 ))"
+          done <<< "$_t1_list"
+        fi ;;
     T2) battery_t2 ;;
     T3) corpus_t3 "$CORPUS" ;;
     T4) static_t4 ;;

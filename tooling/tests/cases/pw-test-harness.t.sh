@@ -191,3 +191,34 @@ _att2="$(_pwtest_attribute "$_TB" "$_TB")"
 [ -z "$_att2" ] && pwtest_ok "attribution reports nothing when the baseline already failed" \
   || pwtest_bad "attribution reports nothing when the baseline already failed" "expected empty, got [$_att2]"
 rm -f "$_TA" "$_TB"
+
+# k) T1 selection is resolved ONCE and reported: an intended multi-match runs every
+#    matched case, a no-match or invalid filter refuses before case execution, and a
+#    filter outside T1 is a note rather than a silent zero-case pass.
+_sel_rc=0
+bash "$PWTEST_TESTSDIR/pw_test.sh" --tier T1 --only '^pw-\(change-record\|instruction-register\)\.t\.sh$' </dev/null >"$PWTEST_ROOT/$TH.sel.out" 2>&1 || _sel_rc=$?
+pwtest_eq "multi-match T1 child exits 0" 0 "$_sel_rc"
+grep -q 'TEST T1 selected: 2 case(s): pw-change-record pw-instruction-register' "$PWTEST_ROOT/$TH.sel.out" \
+  && pwtest_ok "multi-match T1 child reports both selected cases" \
+  || pwtest_bad "multi-match T1 child reports both selected cases" "$(grep -E 'TEST T1 selected|TEST case|FAIL' "$PWTEST_ROOT/$TH.sel.out" | head -3 | tr '\n' ' ')"
+
+_nomatch_rc=0
+bash "$PWTEST_TESTSDIR/pw_test.sh" --tier T1 --only '^definitely-no-such-case\.t\.sh$' </dev/null >"$PWTEST_ROOT/$TH.nomatch.out" 2>&1 || _nomatch_rc=$?
+pwtest_eq "no-match T1 filter exits 2" 2 "$_nomatch_rc"
+grep -q 'matched no T1 case files' "$PWTEST_ROOT/$TH.nomatch.out" \
+  && pwtest_ok "no-match T1 filter has a precise diagnostic" \
+  || pwtest_bad "no-match T1 filter has a precise diagnostic" "$(head -2 "$PWTEST_ROOT/$TH.nomatch.out" | tr '\n' ' ')"
+
+_invalid_rc=0
+bash "$PWTEST_TESTSDIR/pw_test.sh" --tier T1 --only '[' </dev/null >"$PWTEST_ROOT/$TH.invalid.out" 2>&1 || _invalid_rc=$?
+pwtest_eq "invalid --only pattern exits 2" 2 "$_invalid_rc"
+grep -q 'invalid --only pattern' "$PWTEST_ROOT/$TH.invalid.out" \
+  && pwtest_ok "invalid --only pattern has a precise diagnostic" \
+  || pwtest_bad "invalid --only pattern has a precise diagnostic" "$(head -2 "$PWTEST_ROOT/$TH.invalid.out" | tr '\n' ' ')"
+
+_note_rc=0
+bash "$PWTEST_TESTSDIR/pw_test.sh" --tier T0 --only 'pw-whatever' </dev/null >"$PWTEST_ROOT/$TH.note.out" 2>&1 || _note_rc=$?
+pwtest_eq "T0 with --only still passes" 0 "$_note_rc"
+grep -q "does not apply: T1 is not selected" "$PWTEST_ROOT/$TH.note.out" \
+  && pwtest_ok "--only outside T1 reports that it does not apply" \
+  || pwtest_bad "--only outside T1 reports that it does not apply" "$(head -3 "$PWTEST_ROOT/$TH.note.out" | tr '\n' ' ')"

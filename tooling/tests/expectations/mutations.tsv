@@ -1,4 +1,5 @@
-# mutations.tsv — coupling register (protocol born with the 2026-09-16 harness): currently C1–C48.
+# mutations.tsv — coupling register (protocol born with the 2026-09-16 harness). Ids grow over
+# time; take the next free id from the highest row below, never from a stale reservation note.
 # Reverting a documented fix MUST fail the harness. Keep OLD byte-exact AND unique (apply
 # replaces every occurrence; drift only detects absence — verify grep -cF = 1). A drift-flagged
 # row means the anchor moved with the code: re-pin it, never delete it. Catchers must not depend
@@ -53,7 +54,7 @@
 # parent-head binding, the retarget head-move guard, and worktree rehydration. C163 guards the
 # preview-vs-strict freshness split (a done/accepted task without its binding must never get the
 # unverified exemption). Catcher case: pw-stack.t.sh.
-# Next free: C179 (C70–C72 stay reserved).
+# Next free: C412 at the 2026-10-28 register state (C70–C72 stay reserved; verify the highest row).
 # C344 pins the /pw-breakdown analysis-lint selector: the named-flag migration dropped the
 # `--all` that the old positional form carried, so the preflight died rc 2 (usage) before any
 # PLAN or task file. The T4 guard asserts every entry-path pw-doc lint for a selector-required
@@ -491,3 +492,9 @@ C403-breakdown-role-list-stale	skills/human/pw-breakdown/SKILL.md	researcher/ana
 C404-global-write-lock-dropped	pw-config.sh	while ! mkdir "$lock" 2>/dev/null; do	while false; do	T1	^pw-project-defaults\.t\.sh$
 C405-creation-axis-validation-dropped	pw-config.sh	case "$value" in advisory|auto|off) ;; *) echo "pw-config: global default ai-review '$phase'	case "$value" in *) ;; *) echo "pw-config: global default ai-review '$phase'	T1	^pw-project-defaults\.t\.sh$
 C406-spawn-args-disabled-provider-allowed	pw-config.sh	|| die "spawn-args: provider '$prov' is not an enabled Agent Provider (PW_PROVIDERS: ${PW_PROVIDERS[*]}) → fix: enable it in pw.config.sh or re-pin role '$role'"	|| true	T1	^pw-project-defaults\.t\.sh$
+C407-instruction-register-required-dropped	skills/human/pw-sync/SKILL.md	delegate each conflicted branch to	resolve each conflicted branch in the driver session	T4	-
+C408-change-record-passed-evidence-dropped	tests/change_record.sh	    if (ver == "passed") err("passed verification needs at least one evidence id")	    if (false) err("passed verification needs at least one evidence id")	T1	^pw-change-record\.t\.sh$
+C409-instruction-register-missing-section-allowed	tests/instruction_register.sh	    if (sections[i] != "-" && txt == "") { err("owner section not found or empty: " sections[i] " in " owners[i]); continue }	    if (0) { err("owner section not found or empty: " sections[i] " in " owners[i]); continue }	T1	^pw-instruction-register\.t\.sh$
+C410-instruction-register-retired-scan-dropped	tests/instruction_register.sh	        if (match(stxt, retired[i]) > 0) {	        if (0) {	T1	^pw-instruction-register\.t\.sh$
+C411-t1-no-match-guard-dropped	tests/pw_test.sh	  if [ -n "$ONLY" ] && [ "$_t1_count" -eq 0 ]; then	  if false; then	T1	^pw-test-harness\.t\.sh$
+C412-change-record-pending-evidence-allowed	tests/change_record.sh	      if (ver == "passed" && (evs[i] in pending_ev)) {	      if (0) {	T1	^pw-change-record\.t\.sh$

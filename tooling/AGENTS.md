@@ -64,8 +64,9 @@ tooling/
 │   └── testing.md · forges.md · rfc.md · rfc-backends.md · providers.md · memory.md
 └── tests/                                 ← the change-testing harness (see docs/testing.md)
     ├── pw_test.sh (runner) · pw_test_lib.sh · static.sh · battery.sh · corpus.sh · mutate.sh
+    ├── change_record.sh · instruction_register.sh  ← requirement/evidence + contract checkers
     ├── cases/*.t.sh · selftest_entry.sh · bin/{glab,gh} (offline forge shims)
-    └── expectations/{battery,gates,mutations}.tsv · unwired.ok   ← pins/meta-register
+    └── expectations/{battery,gates,mutations,instructions}.tsv · unwired.ok   ← pins/registers
 template/          ← scaffold source (FIELD-BULLET RULE banner = machine fields are value-only)
 ```
 
@@ -90,6 +91,15 @@ recipe rule, watchdog, fixture-pollution etiquette: clone `$F2`, never mutate it
 §Writing a mutation row. Change type → minimum tiers: the table in
 [`docs/testing.md`](./docs/testing.md). Re-run `pw-doctor.sh` (expect **All synced**) after any
 `skills/`/`agents/`/`template/` edit — it compares generated-vs-installed.
+
+**Cross-layer behavior change?** Keep one change record (requirement → implementation state →
+verification state → evidence) beside the task, plan or result, and validate it with
+`tooling/tests/change_record.sh check --mode complete --record <file> --evidence <file>` before
+reporting completion. Add or update a row in
+`tooling/tests/expectations/instructions.tsv` when an operative instruction changes, and run
+`tooling/tests/instruction_register.sh check`. Both formats and limits are in
+[`docs/testing.md`](./docs/testing.md) §Change records and §Instruction-consistency register.
+A valid record or green register proves structure, not approval or semantic completeness.
 
 ## Information boundary (what users must never learn here)
 
