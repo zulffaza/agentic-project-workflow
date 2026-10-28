@@ -167,8 +167,8 @@ See `/pw-help command --name pw-batch` for the current forms and examples.
 | `review-trigger` | `surface=value` pairs or `all=value` | WHEN a pass starts — `manual` (default) or `completion` (also after a succeeded producing command's verification) |
 | `review-repair` | `surface=value` pairs or `all=value` | Whether a completion review may repair+re-review — `manual` (default) or `bounded` (within the budget) |
 | `review-rounds` | Integer `1..3` | Total reviewer passes in a bounded cycle (default `3`; at most two intervening repairs) |
-| `ai-model` | `role=provider:model` or `role=—` pairs; one role may add `--variant`, `--reasoning`, `--effort` | Model for a workflow role, optionally with provider-supported tuning. `—` clears the override. Read the complete binding with `get --key ai-model --json` |
-| `pin` | `T01=provider:model` or `T01=—` pairs | Executor model in both task and PLAN |
+| `ai-model` | `role=provider:model` or `role=—` pairs; one role may add `--variant`, `--reasoning`, `--effort` | Model for a workflow role, optionally with provider-supported tuning. `—` clears the override; a replacement without tuning flags resets that role's tuning. Read the complete binding with `get --key ai-model --json` and resolve dispatch with `spawn-args --role <role>` |
+| `pin` | `T01=provider:model` or `T01=—` pairs | Executor model in both task and PLAN. Pins are intentionally untuned: the task's `Effort:`/`Thinking:` (and supported Cursor bracket ids) carry executor tuning; role-style tuning is refused rather than silently accepted |
 | `rfc-target` | A document reference or URL | RFC destination |
 
 Review surfaces: `context`, `analysis`, `plan`, `task-plan`, `task-exec`, `ship`, `rfc`, `close`.

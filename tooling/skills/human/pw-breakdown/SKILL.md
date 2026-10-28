@@ -30,9 +30,11 @@ unapproved analysis. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
 independent ones batched in parallel (they write different files, so batching is capped by `- Max parallelism:`
 n at a time), each getting the task's decisions as a compact seed + the template. It cannot change
 what the step does; a spawn that goes beyond its decisions gets stopped (exit-check like every
-lane result). Read the lane models from `- **AI Models:**` (`pw-config.sh get --project <slug> --key ai-model` — no row =
-provider default) and log each spawn with its `session=<id>` for later repair/§review-batch
-resumption.
+lane result). Read each lane's complete binding from `- **AI Models:**` with
+`pw-config.sh get --project <slug> --key ai-model --json` (no row = provider default); resolve the
+exact spawn arguments with `pw-config.sh spawn-args --project <slug> --role <role>` and stop when
+the route cannot bind the stored tuning. Log each spawn with its `session=<id>` for later
+repair/§review-batch resumption.
 
 First check the analysis gate — **per analysis doc, its CURRENT Sign-off decision, not "was it
 ever approved":** for each real `<project>/analysis/<topic>.md`, run
@@ -103,9 +105,9 @@ Then produce, from `{{PW_HOME}}/template/task/`:
    **`Effort:`**/**`Thinking:`**/**`Route:`** (route = `auto|subagent|headless` spawn-routing per
    the ladder — only write it when the task needs strict binding (`headless`) or forced
    in-process (`subagent`); omit for `auto`), and an empty `## Result` block.
-      - **Per-lane model default on top of "Produced by":** the dashboard's `- **AI Models:**` line is        what the *next* run's lane spawns will use (`pw-config.sh get --project <slug> --key ai-model` reads it;
+      - **Per-lane model default on top of "Produced by":** the dashboard's `- **AI Models:**` line is        what the *next* run's lane spawns will use (`pw-config.sh get --project <slug> --key ai-model --json` reads the complete binding;
         `pw-config.sh set --project <slug> --key ai-model --set <role>=<provider:model>` writes it —
-        researcher/analyst/writer-task/reviewer/verifier; the **executor is never a
+        researcher/analyst/writer-task/reviewer/verifier/ship-comment-analyst; the **executor is never a
         row**, a task's `Execute with:` is its only pin). Surface the current rows in your summary so I
         can change one before I sign off (e.g. "writer-task=— → say the word to pin it cheap").
       - **Default the provider to "Produced by"** (this agent) so I don't have to switch agents;

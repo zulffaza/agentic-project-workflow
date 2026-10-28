@@ -280,7 +280,11 @@ proves nothing. Never merge an MR as part of this command — merging is a human
 
 One `pw-ship-comment-analyst` pass covers the whole selected scope before any fixer starts. It is
 read-only and uses the project `AI Models: ship-comment-analyst` row (provider/session default when
-unset). Do not duplicate its investigation in the driver first, and do not launch one analyst per MR.
+unset). Read the complete binding with
+`pw-config.sh get --project <slug> --key ai-model --json` and resolve its spawn arguments with
+`pw-config.sh spawn-args --project <slug> --role ship-comment-analyst`; stop before spawning when
+that route cannot bind the stored tuning. Do not duplicate its investigation in the driver first, and
+do not launch one analyst per MR.
 
 - **Work order:** the resolved task/MR set, task-to-MR mapping, pins, tracking pointers,
   dependency/stack evidence, and a driver-assigned output path **outside the source checkout** (for

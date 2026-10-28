@@ -401,6 +401,26 @@ for forge, host, url, endpoint in [
     crlf_key = begin('crlf-call'); put(crlf_key, evidence('b222222')); call('freeze', url, '--attempt', crlf_key)
     head('b222222'); deliver(crlf_key)
     check(forge + ' CRLF/Unicode outside content is byte-preserved', crlf_outside in state()['response'][field])
+
+    # Composition auto-recovers an ownership-proven missing summary delimiter. Without this, the
+    # comments flow would leave a correct description permanently at `summary_pending`.
+    url = url.rsplit('/', 1)[0] + '/90'; endpoint = endpoint.rsplit('/', 1)[0] + '/90'
+    (project / 'task' / 'T90.md').write_text('# Task\n## Result\n- **MR:** ' + url + '\n')
+    fixture = scratch / (hashlib.sha256((forge + '|' + host + '|' + endpoint).encode()).hexdigest() + '.json')
+    native = {'state': 'opened', 'sha': 'a111111'} if forge == 'glab' else {'state': 'open', 'head': {'sha': 'a111111'}}
+    native[field] = summary('a111111') + outside
+    fixture.write_text(json.dumps({'response': native, 'reads': 0, 'writes': 0}))
+    creation_body.write_text(native[field]); call('init', url, '--file', str(creation_body))
+    comp_key = begin('compose-recovery'); put(comp_key, evidence('b222222', commits=[]))
+    call('freeze', url, '--attempt', comp_key); head('b222222')
+    res = state(); res['response'][field] = native[field].replace('\n<!-- pw-mr-summary:end -->', '')
+    fixture.write_text(json.dumps(res, ensure_ascii=False))
+    comp_out = deliver(comp_key)
+    comp_body = state()['response'][field]
+    check(forge + ' composition auto-restores a missing summary delimiter',
+          comp_body.count('<!-- pw-mr-summary:start -->') == 1 and comp_body.count('<!-- pw-mr-summary:end -->') == 1)
+    check(forge + ' composition recovery keeps outside bytes and updates the summary',
+          outside in comp_body and 'summary refresh pending' not in comp_out.stdout)
     # Replacement-MR migration: preview, apply, idempotent retry, exact-block requirement.
     frozen_src = None
     src_rec_path = None

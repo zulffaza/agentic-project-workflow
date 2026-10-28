@@ -549,7 +549,7 @@ _pass_human_row_after() {
       n = split($0, c, "|"); if (n < 5) next
       b = c[3]; gsub(/^[ \t]+|[ \t]+$/, "", b)
       if (b == "" || b == "By") next
-      if (b == "pw-review (repair)" || b == "pw-review (feedback)" \
+      if (b ~ /^pw-review \(repair(\)|;)/ || b == "pw-review (feedback)" \
           || b == "pw-review (auto-reopen)") next
       if (b ~ /^pw-reviewer/) next
       found = 1; exit

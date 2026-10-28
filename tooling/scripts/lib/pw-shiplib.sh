@@ -439,6 +439,24 @@ def history_keys(region, state):
         else:
             need(False, 'description conflict: unrecognized history content')
 
+def recover_for_compose(body, state):
+    """Recover an ownership-proven missing summary delimiter before any composition/validation.
+
+    Composition is a delivery path too: a routine description refresh must not become a permanent
+    `summary_pending` dead end merely because one delimiter vanished. The SAME planner and the same
+    ownership proof as the explicit recovery operation apply. Ambiguity refuses with a scoped hint;
+    it never adopts headings or invents history.
+    """
+    boundary = boundary_state(body)
+    if boundary in ('start-only', 'end-only') or (
+            boundary == 'absent' and (state.get('last_summary') or state.get('initial_body'))):
+        try:
+            return recover_plan(body, state)
+        except HistoryError as exc:
+            raise HistoryError('description boundary recovery refused: ' + str(exc) +
+                               ' → run history recover-preview for a scoped repair')
+    return body, []
+
 def compose(remote, state, selected, limit, unit):
     body = remote['body']
     spans = regions(body)
@@ -812,8 +830,10 @@ def run():
                 need(not state.get('planned') or state['planned'].get('attempt') == selected['key'],
                      'recover the outstanding description write before delivering another attempt')
                 for retry in range(3):
-                    remote = api(mr)
-                    need(remote['state'] == 'open', 'MR is closed/merged; pending record retained without write')
+                    raw = api(mr)
+                    need(raw['state'] == 'open', 'MR is closed/merged; pending record retained without write')
+                    body, _recovered = recover_for_compose(raw['body'], state)
+                    remote = dict(raw); remote['body'] = body
                     planned = state.get('planned')
                     spans = regions(remote['body'])
                     if planned and remote['head'] == planned['head'] and spans.get('review-changes', (None, None, None))[2] == planned['history'] \
@@ -831,7 +851,7 @@ def run():
                     proposed, summary, pruned, summary_pending = compose(remote, state, selected, args.limit, args.unit)
                     if proposed != remote['body']:
                         latest = api(mr)
-                        if latest != remote:
+                        if latest != raw:
                             continue
                         state['planned'] = {'attempt': selected['key'], 'head': remote['head'], 'summary': summary,
                                             'history': regions(proposed)['review-changes'][2], 'summary_pending': summary_pending,

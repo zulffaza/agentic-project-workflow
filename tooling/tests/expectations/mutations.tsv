@@ -474,3 +474,20 @@ C376-sync-worker-procedure-unlinked	skills/human/pw-sync-conflict-fixer/SKILL.md
 C377-guidance-slug-upgrade-dropped	pw-project-doctor.sh	local g_old="--project <slug>" g_new="--project $SLUG"	local g_old="--project <slug>" g_new="--project <slug>"	T1	^pw-guidance\.t\.sh$
 C378-sync-auto-resolve-inline	skills/human/pw-sync/SKILL.md	With it, **delegate that conflict to the `pw-sync-conflict-fixer`	With it, reconcile that conflict during this invocation	T4	-
 C379-comment-ci-actor-implicit	skills/model/pw-guide-workflow/references/mr-comments.md	the MR fixer — the delegated worker	this session	T4	-
+C390-public-set-tuneflags-dropped	pw-config.sh	${setflags[@]+"${setflags[@]}"} ${tuneflags[@]+"${tuneflags[@]}"}	${setflags[@]+"${setflags[@]}"}	T1	^pw-project-defaults\.t\.sh$
+C391-alias-tuning-token-args-dropped	pw-config.sh	token="$(_model_tuning_token "$variant" "$reasoning" "$effort")"	token="$(_model_tuning_token)"	T1	^pw-project-defaults\.t\.sh$
+C392-role-replacement-keeps-tuning	pw-config.sh	for s in "${sets[@]}"; do _line_pairs_drop "$f" "AI Model Tuning" "${s%%=*}"; done	:	T1	^pw-project-defaults\.t\.sh$
+C393-json-tuning-fields-dropped	pw-config.sh	vv="$(_tuning_field "$t" variant)"	vv=""	T1	^pw-project-defaults\.t\.sh$
+C394-scaffold-snapshot-validation-skipped	scaffold.sh	"$HERE/../entities/pw-config.sh" validate-defaults	true	T1	^pw-project-defaults\.t\.sh$
+C395-global-symlink-refusal-dropped	pw-config.sh	[ ! -L "$f" ] || { rm -f "$tmp"; die "global: refusing a symlinked configuration target ($f) → fix: point PW_CONFIG_FILE at the real file"; }	true || { rm -f "$tmp"; die "global: refusing a symlinked configuration target ($f) → fix: point PW_CONFIG_FILE at the real file"; }	T1	^pw-project-defaults\.t\.sh$
+C396-unset-fallback-reapply-dropped	pw-config.sh	if fb="$(_global_fallback_assignment "$var")"; then	if false; then	T1	^pw-project-defaults\.t\.sh$
+C397-compose-boundary-recovery-dropped	pw-shiplib.sh	body, _recovered = recover_for_compose(raw['body'], state)	body, _recovered = raw['body'], []	T1	^pw-ship-history\.t\.sh$
+C398-repair-receipt-lookup-latest-only	pw-review.sh	  _repair_lookup "$f" "$receipt"	  return 1	T1	^pw-project-defaults\.t\.sh$
+C399-doctor-draft-lint-ready-stage	pw-project-doctor.sh	lint --kind all --project "$SLUG" --stage reviewable	lint --kind all --project "$SLUG"	T1	^pw-project-doctor\.t\.sh$
+C400-repair-start-receipt-optional	pw-review.sh	      || die "start: a repair pass needs --receipt <id> → fix: generate one id for this apply-feedback invocation and pass it to every start/resolve (omitting it would bypass repair admission)"	      || true	T1	^pw-project-defaults\.t\.sh$
+C401-spawn-args-canonical-id-dropped	pw-config.sh	_resolved="$(cmd_model_resolve --provider "$prov" --model "$model" 2>/dev/null)" || _rrc=$?	_resolved="$model" || _rrc=$?	T1	^pw-project-defaults\.t\.sh$
+C402-global-stale-read-recheck-dropped	pw-config.sh	|| { rm -f "$tmp"; die "global: $f changed during this transaction — refusing to overwrite the external edit → fix: re-run the command on the current file"; }	|| true	T1	^pw-project-defaults\.t\.sh$
+C403-breakdown-role-list-stale	skills/human/pw-breakdown/SKILL.md	researcher/analyst/writer-task/reviewer/verifier/ship-comment-analyst;	researcher/analyst/writer-task/reviewer/verifier;	T4	-
+C404-global-write-lock-dropped	pw-config.sh	while ! mkdir "$lock" 2>/dev/null; do	while false; do	T1	^pw-project-defaults\.t\.sh$
+C405-creation-axis-validation-dropped	pw-config.sh	case "$value" in advisory|auto|off) ;; *) echo "pw-config: global default ai-review '$phase'	case "$value" in *) ;; *) echo "pw-config: global default ai-review '$phase'	T1	^pw-project-defaults\.t\.sh$
+C406-spawn-args-disabled-provider-allowed	pw-config.sh	|| die "spawn-args: provider '$prov' is not an enabled Agent Provider (PW_PROVIDERS: ${PW_PROVIDERS[*]}) → fix: enable it in pw.config.sh or re-pin role '$role'"	|| true	T1	^pw-project-defaults\.t\.sh$

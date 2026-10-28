@@ -104,8 +104,10 @@ phases, `--json` prints a machine-readable object. No slug; never writes.
   Session:`) with a seed patch rather than cold re-spawning, and every review item on one artifact is
   drained as **one batched fixer pass** (per-item replies unchanged) with a dependency's late fix
   fanning one capped re-verify/de-impact pass onto what already ran against the old state. Lanes
-  bind their model from the dashboard's `- **AI Models:**` line (`pw-config.sh get|set --project <slug> --key ai-model`); the executor
-  is bound by the task's `Execute with:`. Full rules: docs/EXECUTION.md +
+  bind their complete model/tuning from the dashboard's `- **AI Models:**` line
+  (`pw-config.sh get --project <slug> --key ai-model --json`, then `spawn-args --role <role>`);
+  stop when the route cannot express the stored tuning. The executor is bound by the task's
+  `Execute with:` plus its `Effort:`/`Thinking:` controls. Full rules: docs/EXECUTION.md +
   `references/execution-and-routing.md`.
 - **Report faithfully.** "Done" only after the task's `## Verify` block actually ran and you pasted
   real output. A failing or skipped step is stated, never hidden.

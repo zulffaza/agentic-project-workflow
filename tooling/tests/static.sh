@@ -516,8 +516,26 @@ static_t4() {
   for f2 in "$TOOL"/scripts/entities/*.sh "$TOOL"/scripts/toolchain/*.sh; do
     while IFS= read -r tok; do
       { [ -f "$TOOL/scripts/entities/$tok" ] || [ -f "$TOOL/scripts/lib/$tok" ] || [ -f "$TOOL/scripts/toolchain/$tok" ] || [ -f "$TOOL/../$tok" ]; } || bad="$bad $(basename "$f2")→$tok"
-    done < <(grep -E 'usage:|die_fix|add_error' "$f2" | grep -oE '[a-z][a-z0-9.-]*\.sh' | sort -u)
+    done < <(grep -E 'usage:|die_fix|add_error' "$f2" | grep -oE '[a-z][a-z0-9.-]*\.sh' | grep -vxE 'pw\.config(\.example)?\.sh' | sort -u)
   done
+  # Lane consumers must consume the COMPLETE binding through the structured reader + the one
+  # dispatch adapter, never a display string or a bare model id.
+  local lane_missing="" lane
+  for lane in skills/human/pw-analyze/SKILL.md skills/human/pw-breakdown/SKILL.md \
+              skills/human/pw-verify/SKILL.md skills/model/pw-guide-workflow/references/mr-comments.md; do
+    grep -q 'get --project <slug> --key ai-model --json' "$TOOL/$lane" \
+      && grep -q 'spawn-args' "$TOOL/$lane" || lane_missing="$lane_missing $lane"
+  done
+  [ -z "$lane_missing" ] && pwtest_ok "T4: lane consumers use structured binding + spawn-args" \
+    || pwtest_bad "T4: lane consumers use structured binding + spawn-args" "missing structured read/spawn-args:$lane_missing"
+  # The dashboard role registry appears in the breakdown guidance; a stale five-role list taught
+  # agents to omit ship-comment-analyst when surfacing config.
+  if grep -q 'researcher/analyst/writer-task/reviewer/verifier/ship-comment-analyst' "$TOOL/skills/human/pw-breakdown/SKILL.md"; then
+    pwtest_ok "T4: breakdown names every dashboard model role"
+  else
+    pwtest_bad "T4: breakdown names every dashboard model role" "role list omits ship-comment-analyst"
+  fi
+
   [ -z "$bad" ] && pwtest_ok "T4: usage/fix strings name only live scripts (L5b)" \
     || pwtest_bad "T4: usage/fix strings name only live scripts" "dead script names in runtime hints:$bad — L5b: point hints at the entity script + operator"
   # (f) operator cross-attribution: `pw-<entity>.sh <tok>` where <tok> is an operator of a

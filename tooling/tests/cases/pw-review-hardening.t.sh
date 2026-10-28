@@ -50,7 +50,7 @@ pwtest_re 'open=1' "count agrees with the gate (no false approval)"
 pwtest_rc 1 "deep malformed heading grants no eligible work" "$E" eligible --project "$HG" --file "$GRV"
 pwtest_re 'eligible=0' "repair authority stays with canonical ### items"
 HB_ROWS="$(rowcount ' changes-requested |' "$GRF")"
-pwtest_rc 0 "start reports clean with only a deep blocker" "$E" start --project "$HG" --file "$GRV"
+pwtest_rc 0 "start reports clean with only a deep blocker" "$E" start --project "$HG" --file "$GRV" --receipt rr1
 pwtest_re '__clean__' "start verdict is clean (no repair authority)"
 [ "$(rowcount ' changes-requested |' "$GRF")" = "$HB_ROWS" ] \
   && pwtest_ok "start added no row behind a malformed blocker" || pwtest_bad "deep start" "row appeared"
@@ -350,12 +350,12 @@ FRV=analysis/review/badstate.review.md
 # enum check, reporting an untrustworthy file as clean.
 printf '# Review\nGate: see Sign-off\n## Items\n\n## Open questions\n\n## Sign-off\n| Date-time | By | Decision |\n|---|---|---|\n| 2026-09-01 08:00 | you | rejected |\n' > "$F12/$FRV"
 BEF="$(md5f "$F12/$FRV")"
-pwtest_rc 2 "start fails closed on invalid decision with empty work" "$E" start --project "$HF" --file "$FRV"
+pwtest_rc 2 "start fails closed on invalid decision with empty work" "$E" start --project "$HF" --file "$FRV" --receipt rr1
 pwtest_err 'unrecognized latest decision' "invalid decision named, not swallowed"
 [ "$BEF" = "$(md5f "$F12/$FRV")" ] && pwtest_ok "fail-closed start changed no bytes" || pwtest_bad "start fail" "file mutated"
 # RFC staging still keeps no approval role at all
 printf '# RFC comment staging\n\n## Items\n' > "$F12/analysis/review/RFC.review.md"
-pwtest_rc 2 "RFC staging gets no pass entry" "$E" start --project "$HF" --file analysis/review/RFC.review.md
+pwtest_rc 2 "RFC staging gets no pass entry" "$E" start --project "$HF" --file analysis/review/RFC.review.md --receipt rr1
 pwtest_rc 2 "RFC staging gets no auto approval" "$E" auto-signoff --project "$HF" --file analysis/review/RFC.review.md --phase analysis
 rm -rf "$PW_PROJECTS_DIR/$HF"
 

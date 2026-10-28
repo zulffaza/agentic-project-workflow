@@ -192,4 +192,17 @@ pwtest_rc 0 "pin-vs-used drift on a live task informs but never fails" env PW_CO
 grep -qE '· [0-9]+ row\(s\) ran with a different model' "$PWTEST_BOTH" \
   && pwtest_ok "drift reported as ·" || pwtest_bad "C8 drift note" "$(grep -E '✗|·' "$PWTEST_BOTH" | head -3 | tr '\n' '|')"
 
+# A structurally valid analysis awaiting the human's approach choice is draft state, not a lint
+# defect. Doctor inspects with the reviewable stage; the breakdown/RFC consumers still enforce
+# the strict ready stage (covered by pw-project-defaults.t.sh).
+PDPEND="$PW_PROJECTS_DIR/pd-pending"; cp -a "$F2" "$PDPEND"
+PDAD="$PDPEND/analysis/fixture.md"; PDRV="$PDPEND/analysis/review/fixture.review.md"
+sed -i '' -e 's|^\*\*Chosen approach:\*\*.*|**Chosen approach:** _pending your review_|' "$PDAD"
+awk '!/Q0/' "$PDRV" > "$PDRV.nq" && mv "$PDRV.nq" "$PDRV"
+printf '\n### Q0 · §4 — which approach should we proceed with? [PENDING]\nDecide between §4 options.\n' >> "$PDRV"
+pwtest_rc 0 "doctor inspects a pending-choice analysis as reviewable" env PW_CONFIG_FILE="$PDF2CFG" "$PDOCTOR" --project pd-pending
+grep -q 'lint all: clean' "$PWTEST_BOTH" \
+  && pwtest_ok "pending human choice is not reported as a lint defect" \
+  || pwtest_bad "pending human choice lint stage" "$(grep -E 'lint all' "$PWTEST_BOTH" | head -2 | tr '\n' '|')"
+
 rm -rf "$PDF"

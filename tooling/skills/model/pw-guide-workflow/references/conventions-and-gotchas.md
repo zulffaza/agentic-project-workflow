@@ -114,8 +114,10 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   and the inspection command. Local records only — never writes (no config-line insertion, no
   forge/auth/model calls). Exit `1` = partial scan (unreadable/malformed records; rows kept).
 - `pw-config.sh get|set --project <slug> --key ai-review|ai-model` —
-  the two dashboard config lines (`get` prints; `set` takes `--value <v>` or `--set <member>=<value>` pairs;
-  see `docs/EXECUTION.md` for what they bind). `ai-model` lanes =
+  the two dashboard config lines (`get` prints; `set` takes `--value <v>` or `--set <member>=<value>` pairs,
+  plus `--variant/--reasoning/--effort` for exactly one `ai-model` role; see `docs/EXECUTION.md` for
+  what they bind). Read `ai-model` with `--json` for the complete binding and resolve dispatch with
+  `spawn-args --role <role>`. `ai-model` lanes =
   researcher / analyst / writer-task / reviewer / verifier / ship-comment-analyst (NOT executor —
   that pin is the task file). A bare model name or an executor lane is refused.
 - **Spawn bookkeeping (the §8.5 ledger):** every delegated spawn logs one line through

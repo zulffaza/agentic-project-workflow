@@ -301,6 +301,7 @@ _signoff_latest_actor() {
 _decision_actor_kind() {
   case "$1" in
     "pw-review (repair)")                    echo repair ;;
+    "pw-review (repair;"*)                   echo repair ;;
     "pw-review (feedback)")                  echo feedback ;;
     "pw-review (auto-reopen)")               echo reopen ;;
     pw-reviewer\ \(external\)|pw-reviewer\ \(external*\)|pw-reviewer\ \(advisory*\)|pw-reviewer\ \(auto*\)|pw-reviewer)
@@ -326,7 +327,7 @@ _signoff_human_rejection_active() {
       d = c[4]; gsub(/^[ \t]+|[ \t]+$/, "", d)
       b = c[3]; gsub(/^[ \t]+|[ \t]+$/, "", b)
       if (b == "" || b == "By") next                # placeholder / header row
-      if (b == "pw-review (repair)" || b == "pw-review (feedback)" \
+      if (b ~ /^pw-review \(repair(\)|;)/ || b == "pw-review (feedback)" \
           || b == "pw-review (auto-reopen)") next
       if (b ~ /^pw-reviewer/) next
       rows[++r] = b "\t" d

@@ -32,6 +32,9 @@
 #       validation (membership + model-check + model-resolve),
 #       written to BOTH holders — task file `Execute with:` +
 #       PLAN cell — by one propagator, ONE LOG line.
+#       With --key ai-model, one role assignment may also carry
+#       --variant/--reasoning/--effort; replacing a model without tuning
+#       resets that role's companion tuning instead of carrying it forward.
 #   pw-config.sh ensure --project <slug>
 #       insert any missing explicit dashboard config lines
 #       (AI Models: / AI Review: / Review Trigger: /
@@ -53,6 +56,12 @@
 #   pw-config.sh materialize --project <slug>
 #       Internal /pw-breakdown step: copy the dashboard `Project Defaults` seed into a newly
 #       created PLAN once. Explicit PLAN values always win and the seed is never re-read.
+#   pw-config.sh spawn-args --project <slug> --role <role> [--json]
+#       Deterministic role dispatch: the complete stored binding plus the provider-native
+#       argument array (or an explicit refusal when the route cannot bind the tuning).
+#   pw-config.sh validate-defaults
+#       Internal creation gate: validate the resolved global snapshot before a staged project
+#       is published. Refuses a removed/mistyped/forbidden binding instead of substituting.
 #   get/set on state/data keys (status, adopted, base-branches, landing-units) is REFUSED with the
 #   owning flow's command — those are derived facts, not configuration.
 #   The ai-model / ai-review / review-trigger / review-repair / review-rounds ops are
@@ -339,7 +348,7 @@ _model_tuning_token() { # <variant> <reasoning> <effort>
 }
 
 _ai_model_json() { # <file> — complete per-role bindings, including companion tuning
-  local f="$1" line tune r v t m first=1
+  local f="$1" line tune r v t m first=1 prov vv rv ev
   line="$(grep -m1 '^- \*\*AI Models:\*\*' "$f" 2>/dev/null | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//' || true)"
   tune="$(grep -m1 '^- \*\*AI Model Tuning:\*\*' "$f" 2>/dev/null | sed 's/^- \*\*AI Model Tuning:\*\*[[:space:]]*//' || true)"
   printf '{"schema_version":1,"roles":{'
@@ -351,9 +360,23 @@ _ai_model_json() { # <file> — complete per-role bindings, including companion 
     [ "$first" = 1 ] || printf ','
     first=0
     m="${v#*:}"; [ "$v" = "—" ] && m=""
-    printf '"%s":{"model":"%s","provider":"%s","tuning":"%s"}' "$r" "$m" "${v%%:*}" "$t"
+    prov="${v%%:*}"; [ "$v" = "—" ] && prov=""
+    vv="$(_tuning_field "$t" variant)"
+    rv="$(_tuning_field "$t" reasoning)"
+    ev="$(_tuning_field "$t" effort)"
+    printf '"%s":{"model":"%s","provider":"%s","variant":"%s","reasoning":"%s","effort":"%s","tuning":"%s"}' \
+      "$r" "$m" "$prov" "$vv" "$rv" "$ev" "$t"
   done
   printf '}}\n'
+}
+
+# One axis out of the stored `variant:x,reasoning:y,effort:z` token (empty when absent).
+_tuning_field() { # <token> <variant|reasoning|effort>
+  local kv
+  for kv in $(printf '%s' "${1:-}" | tr ',' ' '); do
+    [ "${kv%%:*}" = "$2" ] && { printf '%s' "${kv#*:}"; return 0; }
+  done
+  return 0
 }
 
 cmd_ai_model() {
@@ -423,17 +446,22 @@ cmd_ai_model() {
   _line_pairs_set "$f" "AI Models" "${sets[@]}"
   if [ "$tuning_given" = 1 ]; then
     local role="${sets[0]%%=*}" token
-    token="$(_model_tuning_token)"
+    token="$(_model_tuning_token "$variant" "$reasoning" "$effort")"
     _ai_model_tuning_line_ensure "$f"
     if [ -n "$token" ]; then
       _line_pairs_set "$f" "AI Model Tuning" "$role=$token"
     else
       _line_pairs_drop "$f" "AI Model Tuning" "$role"
     fi
+  else
+    # A model replacement owns the whole binding: omitted tuning resets the role's companion
+    # controls instead of carrying a possibly invalid setting forward to a different model.
+    for s in "${sets[@]}"; do _line_pairs_drop "$f" "AI Model Tuning" "${s%%=*}"; done
   fi
   if [ ${#sets[@]} -eq 1 ]; then
-    local detail="${sets[0]#*=}"
-    [ "$tuning_given" = 1 ] && [ -n "$(_model_tuning_token)" ] && detail="$detail ($(_model_tuning_token))"
+    local detail="${sets[0]#*=}" detail_token
+    detail_token="$(_model_tuning_token "$variant" "$reasoning" "$effort")"
+    [ "$tuning_given" = 1 ] && [ -n "$detail_token" ] && detail="$detail ($detail_token)"
     "$ST" log --project "$slug" --actor "ai-model" --message "${sets[0]%%=*} -> $detail"
     echo "$slug: AI Model ${sets[0]%%=*} -> $detail"
   else
@@ -1142,7 +1170,7 @@ cmd_show() {
       first=0
       printf '{"key":"%s","kind":"%s","stored":"%s","source":"%s","effective":"%s"}' "$k" "$p" "$v" "$s" "$e"
     done <<< "$rows"
-    printf ']}\n'
+    printf '],"ai_model":%s}\n' "$(_ai_model_json "$readme" | tr -d '\n')"
     return 0
   fi
   printf 'pw-config show — %s   (config = get/set knob · state/data = derived fact, show-only)\n' "$slug"
@@ -1250,6 +1278,7 @@ _pwstage="$(pw_tmpfile "$(dirname "$tf")")" || return 1;   awk -v v="$val" '!w &
 
 cmd_set() {
   local slug="" key="" val="" hasval=0 a v s
+  local variant="" reasoning="" effort="" tuning_given=0
   local -a sets; sets=()
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
@@ -1258,6 +1287,9 @@ cmd_set() {
       --key=*)     v="${a#*=}"; a="--key" ;;
       --value=*)   v="${a#*=}"; a="--value" ;;
       --set=*)     v="${a#*=}"; a="--set" ;;
+      --variant=*) v="${a#*=}"; a="--variant" ;;
+      --reasoning=*) v="${a#*=}"; a="--reasoning" ;;
+      --effort=*)  v="${a#*=}"; a="--effort" ;;
     esac
     case "$a" in
       --project|--key|--value)
@@ -1267,9 +1299,17 @@ cmd_set() {
           --key)     key="$v" ;;
           --value)   val="$v"; hasval=1 ;;
         esac ;;
+      --variant|--reasoning|--effort)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --variant) variant="$v" ;;
+          --reasoning) reasoning="$v" ;;
+          --effort) effort="$v" ;;
+        esac
+        tuning_given=1 ;;
       --set) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --set; v="$1"; shift; }; sets+=("$v") ;;
       -h|--help) pw_usage ;;
-      -*) _pw_unknown "$a" "set --project <slug> --key <key> [--value <v> | --set <member=value>]…   (keys: $CONFIG_KEYS)" ;;
+      -*) _pw_unknown "$a" "set --project <slug> --key <key> [--value <v> | --set <member=value>]… [--variant <v> --reasoning <v> --effort <v>]   (keys: $CONFIG_KEYS)" ;;
       *) _pw_positional "$a" "set --project <slug> --key <key> [--value <v> | --set <member=value>]…   (keys: $CONFIG_KEYS)" ;;
     esac
   done
@@ -1290,9 +1330,19 @@ cmd_set() {
   esac
   local -a setflags; setflags=()
   for s in ${sets[@]+"${sets[@]}"}; do setflags+=("--set" "$s"); done
+  if [ "$tuning_given" = 1 ]; then
+    [ "$key" = ai-model ] \
+      || die "set: --variant/--reasoning/--effort apply to --key ai-model only (got '$key') → fix: drop the tuning flags or set ai-model"
+    [ ${#sets[@]} -eq 1 ] \
+      || die "set: tuning flags apply to exactly ONE ai-model role per invocation → fix: give one --set <role>=<provider:model> (set roles separately, each with its own tuning)"
+  fi
+  local -a tuneflags; tuneflags=()
+  [ -n "$variant" ] && tuneflags+=(--variant "$variant")
+  [ -n "$reasoning" ] && tuneflags+=(--reasoning "$reasoning")
+  [ -n "$effort" ] && tuneflags+=(--effort "$effort")
   case "$key" in
     ai-review)      cmd_ai_review    --project "$slug" ${setflags[@]+"${setflags[@]}"} ;;
-    ai-model)       cmd_ai_model     --project "$slug" ${setflags[@]+"${setflags[@]}"} ;;
+    ai-model)       cmd_ai_model     --project "$slug" ${setflags[@]+"${setflags[@]}"} ${tuneflags[@]+"${tuneflags[@]}"} ;;
     review-trigger) cmd_review_trigger --project "$slug" ${setflags[@]+"${setflags[@]}"} ;;
     review-repair)  cmd_review_repair  --project "$slug" ${setflags[@]+"${setflags[@]}"} ;;
     review-rounds)  cmd_review_rounds  --project "$slug" --value "$val" ;;
@@ -1485,8 +1535,89 @@ _global_block_vars() { # -> one VAR=value per managed assignment (empty when no 
     inb && /^PW_PROJECT_DEFAULT_[A-Z0-9_]+=/ { print }' "$f"
 }
 
+# --- write transaction: lock, stale-read detection, symlink refusal, portable mode ----------
+_GLOBAL_LOCK_DIR=""
+_GLOBAL_TXN_DIGEST=""
+
+_global_digest() { shasum -a 256 "$1" | awk '{print $1}'; }
+
+_global_stat_mode() { # <file> -> octal mode (explicit platform branch, no GNU/BSD guessing)
+  case "$(uname -s)" in
+    Darwin) stat -f '%Lp' "$1" ;;
+    *)      stat -c '%a' "$1" ;;
+  esac
+}
+
+_global_lock_end() {
+  [ -n "${_GLOBAL_LOCK_DIR:-}" ] && rm -rf "$_GLOBAL_LOCK_DIR" 2>/dev/null || true
+  _GLOBAL_LOCK_DIR=""
+}
+
+_global_lock_begin() {
+  local f; f="$(_global_cfg_file)"
+  local lock="${f}.pwlock" i=0 tries="${PW_GLOBAL_LOCK_TRIES:-100}"
+  case "$tries" in ''|*[!0-9]*|0) tries=100 ;; esac
+  while ! mkdir "$lock" 2>/dev/null; do
+    i=$((i+1))
+    [ "$i" -le "$tries" ] \
+      || die "global: configuration is locked by another writer ($lock) → fix: retry after it finishes; if no writer is running, remove the stale lock directory $lock"
+    sleep 0.05 2>/dev/null || sleep 1
+  done
+  _GLOBAL_LOCK_DIR="$lock"
+  trap '_global_lock_end' EXIT HUP INT TERM
+  if [ -f "$f" ]; then
+    _GLOBAL_TXN_DIGEST="$(_global_digest "$f")"
+  else
+    _GLOBAL_TXN_DIGEST=""
+  fi
+}
+
+# Last literal assignment for <VAR> outside the managed block. A computed assignment cannot be
+# evaluated again safely, so only a plain literal is reported (rc 1 otherwise).
+_global_fallback_assignment() { # <VAR>
+  local f line; f="$(_global_cfg_file)"
+  [ -f "$f" ] || return 1
+  line="$(awk -v b="$_GLOBAL_BEGIN" -v e="$_GLOBAL_END" -v v="$1" '
+    $0 == b { inb = 1; next }
+    $0 == e { inb = 0; next }
+    inb { next }
+    $0 ~ "^[[:space:]]*(export[[:space:]]+)?" v "=" { last = $0 }
+    END { if (last != "") print last }' "$f")"
+  [ -n "$line" ] || return 1
+  line="${line#*=}"; line="${line#"${line%%[![:space:]]*}"}"
+  case "$line" in
+    \"*\") line="${line#\"}"; line="${line%\"}" ;;
+    \'*\') line="${line#\'}"; line="${line%\'}" ;;
+  esac
+  case "$line" in *'$'*|*'`'*|*'('*) return 1 ;; esac
+  printf '%s' "$line"
+}
+
+# Recompute one variable after its managed assignment was removed: restore the earlier literal
+# assignment when one exists, otherwise fall back to the process/built-in default.
+_global_reapply_fallback() { # <VAR>
+  local var="$1" fb
+  if fb="$(_global_fallback_assignment "$var")"; then
+    printf -v "$var" '%s' "$fb"
+    return 0
+  fi
+  unset "$var" 2>/dev/null || true
+  return 1
+}
+
 _global_write_block() { # <VAR=value>… — rewrite the managed block, preserving every other byte
   local f; f="$(_global_cfg_file)"
+  local own_lock=0
+  if [ -z "$_GLOBAL_LOCK_DIR" ]; then _global_lock_begin; own_lock=1; fi
+  if [ ! -f "$f" ]; then
+    local example="$PW_HOME/pw.config.example.sh"
+    if [ -f "$example" ]; then cp -p "$example" "$f" || die "global: cannot create $f from pw.config.example.sh"
+    else : > "$f" || die "global: cannot create $f"; fi
+    _GLOBAL_TXN_DIGEST="$(_global_digest "$f")"
+  fi
+  [ "$(_global_digest "$f")" = "$_GLOBAL_TXN_DIGEST" ] \
+    || die "global: $f changed after this transaction read it — refusing to overwrite the external edit → fix: re-run the command on the current file"
+  local mode; mode="$(_global_stat_mode "$f")"
   local tmp; tmp="$(pw_tmpfile "$(dirname "$f")")" || die "global: cannot stage $f"
   local line
   {
@@ -1519,8 +1650,18 @@ _global_write_block() { # <VAR=value>… — rewrite the managed block, preservi
     printf '%s\n' "$_GLOBAL_END"
   } > "$tmp" || { rm -f "$tmp"; die "global: failed to compose $f"; }
   bash -n "$tmp" || { rm -f "$tmp"; die "global: staged configuration failed 'bash -n'; nothing written"; }
-  chmod --reference="$f" "$tmp" 2>/dev/null || true
+  # Test-only fault injection (opt-in path): runs between staging and the pre-publication
+  # recheck so the suite can prove stale-read refusal and writer serialization without a race.
+  [ "${PW_TESTING:-0}" = 1 ] && [ -n "${PW_GLOBAL_TEST_AFTER_STAGE:-}" ] \
+    && "$PW_GLOBAL_TEST_AFTER_STAGE" "$f"
+  [ ! -L "$f" ] || { rm -f "$tmp"; die "global: refusing a symlinked configuration target ($f) → fix: point PW_CONFIG_FILE at the real file"; }
+  [ "$(_global_digest "$f")" = "$_GLOBAL_TXN_DIGEST" ] \
+    || { rm -f "$tmp"; die "global: $f changed during this transaction — refusing to overwrite the external edit → fix: re-run the command on the current file"; }
+  [ -n "$mode" ] && chmod "$mode" "$tmp" 2>/dev/null || true
   mv "$tmp" "$f" || { rm -f "$tmp"; die "global: atomic replacement failed for $f"; }
+  _GLOBAL_TXN_DIGEST="$(_global_digest "$f")"
+  [ "$own_lock" = 1 ] && _global_lock_end
+  return 0
 }
 
 _global_set_var() { # <VAR> <value> — update/append one managed assignment
@@ -1743,6 +1884,7 @@ cmd_global_set() { # --key <k> [--value <v> | --set <member=value>]… [--varian
       [ "$tuning_given" = 0 ] || die "global set: tuning flags apply to ai-model only"
       ;;
   esac
+  _global_lock_begin
   case "$key" in
     routing)
       case "$val" in auto|subagent|headless) ;; *) die "global set: routing expects auto|subagent|headless, got '$val'" ;; esac
@@ -1788,11 +1930,20 @@ cmd_global_set() { # --key <k> [--value <v> | --set <member=value>]… [--varian
           for _axis in VARIANT REASONING EFFORT; do
             case "$_axis" in VARIANT) _axis_val="$variant" ;; REASONING) _axis_val="$reasoning" ;; EFFORT) _axis_val="$effort" ;; esac
             _axis_var="$(_global_role_var "$role" "$_axis")"
-            if [ -n "$_axis_val" ]; then _global_set_var "$_axis_var" "$_axis_val"; else _global_unset_var "$_axis_var"; fi
+            if [ -n "$_axis_val" ]; then _global_set_var "$_axis_var" "$_axis_val"; else _global_unset_var "$_axis_var"; unset "$_axis_var" 2>/dev/null || true; fi
+          done
+        else
+          # Whole-binding replacement: omitted tuning resets instead of carrying stale controls.
+          local _axis_var
+          for _axis in VARIANT REASONING EFFORT; do
+            _axis_var="$(_global_role_var "$role" "$_axis")"
+            _global_unset_var "$_axis_var"
+            unset "$_axis_var" 2>/dev/null || true
           done
         fi
       done ;;
   esac
+  _global_lock_end
   echo "global: $key -> $(_global_effective "$key")"
   echo "  applies to NEW projects only; existing projects keep captured values (/pw-config set --project <slug> changes one project)."
 }
@@ -1811,18 +1962,176 @@ cmd_global_unset() { # --key <k>
   done
   [ -n "$key" ] || die "global unset: --key is required → fix: global unset --key <key>"
   case " $GLOBAL_PROJECT_KEYS " in *" $key "*) ;; *) die "global unset: unknown key '$key' (keys: $GLOBAL_PROJECT_KEYS)" ;; esac
-  local r
+  local r var restored=0
+  _global_lock_begin
   if [ "$key" = ai-model ]; then
     for r in $AI_MODEL_ROLES; do
-      _global_unset_var "$(_global_role_var "$r" MODEL)"
-      _global_unset_var "$(_global_role_var "$r" VARIANT)"
-      _global_unset_var "$(_global_role_var "$r" REASONING)"
-      _global_unset_var "$(_global_role_var "$r" EFFORT)"
+      for var in MODEL VARIANT REASONING EFFORT; do
+        var="$(_global_role_var "$r" "$var")"
+        _global_unset_var "$var"
+        _global_reapply_fallback "$var" && restored=1
+      done
     done
   else
-    _global_unset_var "$(_global_key_var "$key")"
+    var="$(_global_key_var "$key")"
+    _global_unset_var "$var"
+    _global_reapply_fallback "$var" && restored=1
   fi
+  _global_lock_end
   echo "global: $key unset -> $(_global_effective "$key")"
+  if [ "$restored" = 1 ]; then
+    echo "  source: earlier pw.config.sh assignment"
+  else
+    echo "  source: built-in / legacy fallback"
+  fi
+}
+
+# --- creation-time snapshot validation -------------------------------------------------------
+# Validate the resolved global project-default snapshot (scalars + every non-empty role binding)
+# before scaffold publishes a destination. Positive determinations refuse; unverified metadata
+# stays explicit, never a silent substitution.
+cmd_validate_defaults() {
+  local r v tun axis val bad=0
+  case "$(pw_project_default_value routing)" in auto|subagent|headless) ;; *) echo "pw-config: global default routing is not auto|subagent|headless — fix: /pw-config global set --key routing --value auto" >&2; bad=1 ;; esac
+  case "$(pw_project_default_value execution-limit)" in ''|*[!0-9]*) echo "pw-config: global default execution-limit is not an integer — fix: /pw-config global set --key execution-limit --value <0..99>" >&2; bad=1 ;; *) ;; esac
+  v="$(pw_project_default_value max-parallel)"
+  case "$v" in ''|—) ;; *[!0-9]*) echo "pw-config: global default max-parallel is not an integer — fix: /pw-config global set --key max-parallel --value <1..99>" >&2; bad=1 ;; esac
+  case "$(pw_project_default_value review-rounds)" in 1|2|3) ;; *) echo "pw-config: global default review-rounds is not 1..3 — fix: /pw-config global set --key review-rounds --value <1..3>" >&2; bad=1 ;; esac
+  local pair phase value
+  for pair in $(_global_effective ai-review); do
+    phase="${pair%%=*}"; value="${pair#*=}"
+    case " $AI_REVIEW_PHASES " in *" $phase "*) ;; *) echo "pw-config: global default ai-review has unknown surface '$phase' — fix: /pw-config global set --key ai-review --set <surface>=advisory|auto" >&2; bad=1 ;; esac
+    case "$value" in advisory|auto|off) ;; *) echo "pw-config: global default ai-review '$phase' is '$value' (allowed: advisory|auto; legacy off reads advisory) — fix: /pw-config global set --key ai-review --set $phase=advisory" >&2; bad=1 ;; esac
+  done
+  for pair in $(_global_effective review-trigger); do
+    phase="${pair%%=*}"; value="${pair#*=}"
+    case " $AI_REVIEW_PHASES " in *" $phase "*) ;; *) echo "pw-config: global default review-trigger has unknown surface '$phase' — fix: /pw-config global set --key review-trigger --set <surface>=manual|completion" >&2; bad=1 ;; esac
+    case "$value" in manual|completion) ;; *) echo "pw-config: global default review-trigger '$phase' is '$value' (allowed: manual|completion) — fix: /pw-config global set --key review-trigger --set $phase=manual" >&2; bad=1 ;; esac
+  done
+  for pair in $(_global_effective review-repair); do
+    phase="${pair%%=*}"; value="${pair#*=}"
+    case " $AI_REVIEW_PHASES " in *" $phase "*) ;; *) echo "pw-config: global default review-repair has unknown surface '$phase' — fix: /pw-config global set --key review-repair --set <surface>=manual|bounded" >&2; bad=1 ;; esac
+    case "$value" in manual|bounded) ;; *) echo "pw-config: global default review-repair '$phase' is '$value' (allowed: manual|bounded) — fix: /pw-config global set --key review-repair --set $phase=manual" >&2; bad=1 ;; esac
+  done
+  for r in $AI_MODEL_ROLES; do
+    v="$(pw_project_default_role "$r")"
+    case "$v" in ""|—) continue ;; esac
+    _model_pin_validate "global default ai-model '$r'" "$v" || bad=1
+    tun="$(pw_project_default_tuning "$r")"
+    [ -n "$tun" ] || continue
+    _model_tuning_validate "global default ai-model '$r'" "${v%%:*}" "${v#*:}" \
+      "$(_tuning_field "$tun" variant)" "$(_tuning_field "$tun" reasoning)" "$(_tuning_field "$tun" effort)" || bad=1
+  done
+  [ "$bad" = 0 ] || return 1
+  return 0
+}
+
+# --- provider binding -> spawn arguments -----------------------------------------------------
+# One adapter contract for role dispatch. The caller never re-derives provider flags from a
+# display string: this returns the validated binding plus its exact native/headless arguments.
+# Unsupported tuning refuses (exit 2); it is never silently dropped.
+_json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+_json_array() { # <arg>…
+  local out="" a
+  for a in "$@"; do out="$out${out:+,}\"$(_json_escape "$a")\""; done
+  printf '[%s]' "$out"
+}
+
+cmd_spawn_args() { # --project <slug> --role <role> [--json]
+  local slug="" role="" a v json=0
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --role=*)    v="${a#*=}"; a="--role" ;;
+    esac
+    case "$a" in
+      --project|--role)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --role) role="$v" ;; esac ;;
+      --json) json=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "spawn-args --project <slug> --role <role> [--json]   (roles: $AI_MODEL_ROLES)" ;;
+      *) _pw_positional "$a" "spawn-args --project <slug> --role <role> [--json]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "spawn-args: --project is required → fix: spawn-args --project <slug> --role <role>"
+  [ -n "$role" ] || die "spawn-args: --role is required → fix: spawn-args --project <slug> --role <role>   (roles: $AI_MODEL_ROLES)"
+  case " $AI_MODEL_ROLES " in *" $role "*) ;; *) die "spawn-args: invalid role '$role' (allowed: $AI_MODEL_ROLES)" ;; esac
+  local f; f="$(proj_dir "$slug")/README.md"
+  [ -f "$f" ] || die "spawn-args: no README.md in project $slug"
+  local line tune binding tuning prov model variant reasoning effort kv
+  line="$(grep -m1 '^- \*\*AI Models:\*\*' "$f" 2>/dev/null | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//' || true)"
+  tune="$(grep -m1 '^- \*\*AI Model Tuning:\*\*' "$f" 2>/dev/null | sed 's/^- \*\*AI Model Tuning:\*\*[[:space:]]*//' || true)"
+  binding="—"
+  for kv in $line; do [ "${kv%%=*}" = "$role" ] && binding="${kv#*=}"; done
+  tuning=""
+  for kv in $tune; do [ "${kv%%=*}" = "$role" ] && tuning="${kv#*=}"; done
+  prov=""; model=""
+  if [ "$binding" != "—" ] && [ "$binding" != "-" ]; then
+    case "$binding" in *:*) prov="${binding%%:*}"; model="${binding#*:}" ;; *) die "spawn-args: malformed stored binding '$binding' → fix: /pw-config set --project $slug --key ai-model --set $role=<provider:model>" ;; esac
+  fi
+  variant="$(_tuning_field "$tuning" variant)"
+  reasoning="$(_tuning_field "$tuning" reasoning)"
+  effort="$(_tuning_field "$tuning" effort)"
+  # Canonicalize the exact id the provider CLI must receive (the same availability gate the driver
+  # runs before spawning). "unverified" prose is not a canonical id, so the stored value stays.
+  if [ -n "$prov" ]; then
+    local _enabled=0 _p
+    for _p in "${PW_PROVIDERS[@]}"; do [ "$_p" = "$prov" ] && _enabled=1; done
+    [ "$_enabled" = 1 ] \
+      || die "spawn-args: provider '$prov' is not an enabled Agent Provider (PW_PROVIDERS: ${PW_PROVIDERS[*]}) → fix: enable it in pw.config.sh or re-pin role '$role'"
+    local _resolved _rrc=0
+    _resolved="$(cmd_model_resolve --provider "$prov" --model "$model" 2>/dev/null)" || _rrc=$?
+    [ "$_rrc" = 0 ] || die "spawn-args: $prov:$model is not available on this route (model-resolve exit $_rrc) → fix: re-pin the role with /pw-config set --project $slug --key ai-model --set $role=<provider:model>"
+    case "$_resolved" in ''|*' '*) ;; *) model="$_resolved" ;; esac
+  fi
+  local -a args; args=()
+  local supported=1 reason="" route="native" effective_prov="$prov" effective_model="$model"
+  if [ -z "$prov" ]; then
+    supported=1; reason="unbound: provider/session default"
+  else
+    case "$prov" in
+      kilo)
+        args=(-m "$model")
+        if [ -n "$variant" ]; then args+=(--variant "$variant"); fi
+        if [ -n "$reasoning" ] || [ -n "$effort" ]; then supported=0; reason="kilo has no verified reasoning/effort control in the role route (supported: variant)"; fi ;;
+      claude)
+        args=(--model "$model")
+        if [ -n "$effort" ]; then args+=(--effort "$effort"); fi
+        if [ -n "$variant" ] || [ -n "$reasoning" ]; then supported=0; reason="claude role route supports effort only (unsupported: variant/reasoning)"; fi ;;
+      cursor)
+        effective_model="$model"
+        [ -n "$variant" ] && effective_model="${model}-${variant}"
+        local bracket=""
+        [ -n "$reasoning" ] && bracket="reasoning=$reasoning"
+        [ -n "$effort" ] && bracket="${bracket:+$bracket,}effort=$effort"
+        [ -n "$bracket" ] && effective_model="${effective_model}[${bracket}]"
+        args=(--model "$effective_model") ;;
+      codex)
+        args=(-m "$model")
+        if [ -n "$reasoning" ] && [ -n "$effort" ] && [ "$reasoning" != "$effort" ]; then
+          supported=0; reason="codex has one reasoning-effort control; conflicting reasoning/effort refused"
+        elif [ -n "$reasoning" ] || [ -n "$effort" ]; then
+          args+=(-c "model_reasoning_effort=${reasoning:-$effort}")
+        fi ;;
+      *)
+        args=(-m "$model")
+        if [ -n "$variant$reasoning$effort" ]; then supported=0; reason="provider '$prov' has no verified role tuning mapping"; fi ;;
+    esac
+  fi
+  if [ "$json" = 1 ]; then
+    printf '{"role":"%s","provider":"%s","model":"%s","variant":"%s","reasoning":"%s","effort":"%s","route":"%s","supported":%s,"reason":"%s","args":%s}\n' \
+      "$(_json_escape "$role")" "$(_json_escape "$effective_prov")" "$(_json_escape "$effective_model")" \
+      "$(_json_escape "$variant")" "$(_json_escape "$reasoning")" "$(_json_escape "$effort")" "$route" \
+      "$([ "$supported" = 1 ] && echo true || echo false)" "$(_json_escape "$reason")" "$(_json_array ${args[@]+"${args[@]}"})"
+  else
+    printf 'role: %s\nprovider: %s\nmodel: %s\nvariant: %s\nreasoning: %s\neffort: %s\nsupported: %s\nreason: %s\n' \
+      "$role" "$effective_prov" "$effective_model" "$variant" "$reasoning" "$effort" "$([ "$supported" = 1 ] && echo yes || echo no)" "${reason:-exact binding}"
+    local arg
+    for arg in ${args[@]+"${args[@]}"}; do printf 'arg: %s\n' "$arg"; done
+  fi
+  [ "$supported" = 1 ] || exit 2
 }
 
 cmd_global() {
@@ -1845,6 +2154,8 @@ case "${1:-}" in
   ensure)        shift; cmd_ensure "$@" ;;
   materialize)   shift; cmd_materialize "$@" ;;
   global)        shift; cmd_global "$@" ;;
+  validate-defaults) shift; cmd_validate_defaults "$@" ;;
+  spawn-args)    shift; cmd_spawn_args "$@" ;;
   model-check)   shift; cmd_model_check "$@" ;;
   model-resolve) shift; cmd_model_resolve "$@" ;;
   ai-model)      shift; _dep_note ai-model "set --project <slug> --key ai-model --set <role=value>…"; cmd_ai_model "$@" ;;
@@ -1854,5 +2165,5 @@ case "${1:-}" in
   review-rounds)  shift; _dep_note review-rounds "set --project <slug> --key review-rounds --value <n>"; cmd_review_rounds "$@" ;;
   project) die "the 'project' operator was flattened → fix: use show|get|set|ensure --project <slug> (see --help)" ;;
   -h|--help) pw_usage ;;
-  *) die "usage: pw-config.sh <show|get|set|ensure|materialize|global|model-check|model-resolve|ai-model|ai-review|review-trigger|review-repair|review-rounds> … (see --help)" ;;
+  *) die "usage: pw-config.sh <show|get|set|ensure|materialize|global|validate-defaults|spawn-args|model-check|model-resolve|ai-model|ai-review|review-trigger|review-repair|review-rounds> … (see --help)" ;;
 esac

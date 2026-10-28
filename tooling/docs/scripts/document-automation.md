@@ -9,13 +9,20 @@ Checks the format conventions the pipeline depends on — run before breakdown/e
 so convention violations surface as cheap errors, not as agent confusion later.
 
 ```bash
-$PW_HOME/tooling/scripts/entities/pw-doc.sh lint --kind analysis  --project <slug> [--file <topic> | --all]   # analysis/<topic>.md
+$PW_HOME/tooling/scripts/entities/pw-doc.sh lint --kind analysis  --project <slug> [--file <topic> | --all] [--stage ready|reviewable]   # analysis/<topic>.md
 $PW_HOME/tooling/scripts/entities/pw-doc.sh lint --kind task      --project <slug> [--file <task-id> | --all] # task/T0n.md
 $PW_HOME/tooling/scripts/entities/pw-doc.sh lint --kind plan      --project <slug>                            # task/PLAN.md
 $PW_HOME/tooling/scripts/entities/pw-doc.sh lint --kind review    --project <slug> --file <path>              # a .review.md file
 $PW_HOME/tooling/scripts/entities/pw-doc.sh lint --kind dashboard --project <slug>                            # README.md tables
-$PW_HOME/tooling/scripts/entities/pw-doc.sh lint --kind all       --project <slug>                            # everything the project has
+$PW_HOME/tooling/scripts/entities/pw-doc.sh lint --kind all       --project <slug> [--stage ready|reviewable] # everything the project has
 ```
+
+`--stage` defaults to `ready` (conservative, for downstream consumers). Use
+`--stage reviewable` when inspecting a producing command's draft or before AI review: a
+structurally valid analysis whose `Chosen approach` is pending passes only with a linked blocking
+decision question. `ready` still rejects that pending choice. The stage does not change any other
+lint kind and does not replace `--file`/`--all` selectors. Doctor inspects with `reviewable`;
+breakdown and solution-dependent RFC generation consume with `ready`.
 
 **What each mode checks (so you know what "lint failed" implies):**
 

@@ -103,7 +103,7 @@ Continuing the [first-project walkthrough](WALKTHROUGH.md), suppose another team
    came in through `RFC.review.md`, it's the analysis doc's *own* review file that
    `/pw-breakdown` actually gates on, so that's the one that has to stop reading `approved`
    once the doc's changed out from under it. The invalidating row is recorded with the workflow's
-   own `By` attribution (`pw-review (feedback)` / `pw-review (repair)`; files may also hold the older
+   own `By` attribution (`pw-review (feedback)` / `pw-review (repair; receipt=<id>)`, with legacy receipt-less repair rows still readable; files may also hold the older
    `pw-review (auto-reopen)` tag) so you can tell at a glance it wasn't your own decision.
 6. **Push the revision:** re-run `/pw-rfc --project delivery-note` — it updates only the affected
    section(s) in the external doc, never a whole-doc overwrite, so nothing else on that page (their

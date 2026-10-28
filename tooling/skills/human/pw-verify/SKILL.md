@@ -22,7 +22,9 @@ a note (a prose flag — it runs until the next `--flag` token).
 You are handed **one target of verification**, **one
 question to answer** (does this change actually do what its verify block / commit claim, against
 real state — build/test/lint/behavior where runnable), and the model row for the `verifier` lane
-(`pw-config.sh get --project <slug> --key ai-model --json` if a dashboard exists — use its complete provider/model/tuning binding; unset = provider default; record
+(`pw-config.sh get --project <slug> --key ai-model --json` if a dashboard exists — use its complete
+provider/model/tuning binding, and `pw-config.sh spawn-args --project <slug> --role verifier` for the
+provider's argument array; unset = provider default; stop when the route cannot bind the tuning; record
 `Model used:` where your provider can report it).
 
 Rules (this is the stand-alone lane, *not* an executor's self-check):

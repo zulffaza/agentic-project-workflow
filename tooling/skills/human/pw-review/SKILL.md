@@ -281,7 +281,7 @@ Sign-off, so there's nothing to reopen.
    breakdown < executing < review < done`:
     - **Same phase** (the common case — nothing has advanced past this doc yet, e.g. mid-RFC
       negotiation where `Status:` is still `analysis`) → the pass-entry call in the rule below
-       invalidates it automatically: `pw-review.sh start --project <slug> --file <canonical-review>` appends the
+       invalidates it automatically: `pw-review.sh start --project <slug> --file <canonical-review> --receipt <receipt-id>` appends the
        attributed `changes-requested` row before the work runs. This is the ordinary case and needs
        no confirmation — a bare `/pw-review --project <slug>` used for its everyday purpose will only ever hit
       this branch, never the one below. (A fix that arrives through a DIFFERENT review file — an
@@ -295,7 +295,7 @@ Sign-off, so there's nothing to reopen.
       gate you're about to invalidate) — never do this silently. I can still ask you to record the
       item (the write succeeds; its unresolved status blocks the next phase from consuming the
       stale approval even while the historical `approved` row stands); only run the pass/repair
-      with `pw-review.sh start --project <slug> --file <canonical-review> --confirm-earlier` after I explicitly say
+      with `pw-review.sh start --project <slug> --file <canonical-review> --receipt <receipt-id> --confirm-earlier` after I explicitly say
       to proceed. Never rewind the dashboard or rewrite my earlier decision on your own.
 
 **Pass entry — record the transition, then work (per file, only with real work).** Before you
@@ -398,7 +398,7 @@ only.)
 Never edit or delete my comment text (items OR my `↳ you:` answers). Approval is mine: never run
 `pw-review.sh signoff` on your own initiative (C4) and never make `start`/`auto-signoff` say
 `approved` outside the guarded `auto` path — your only Sign-off writes are the attributed
-**operational rows** (`pw-review (feedback)` via item/answer writes, `pw-review (repair)` via
+**operational rows** (`pw-review (feedback)` via item/answer writes, `pw-review (repair; receipt=<id>)` via
 `start`) and, in `auto` mode, the tool-enforced `pw-reviewer (auto; …)` row. A row I explicitly
 rejected (my own `changes-requested`) stands until I withdraw or re-approve it — operational rows
 never clear it.

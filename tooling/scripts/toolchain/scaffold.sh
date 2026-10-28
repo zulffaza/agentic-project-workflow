@@ -69,6 +69,12 @@ ai_model_tuning_default_line="${ai_model_tuning_default_line# }"
 project_defaults_default_line="routing=$(pw_project_default_value routing) execution-limit=$(pw_project_default_value execution-limit)"
 [ -n "$(pw_project_default_value max-parallel)" ] && project_defaults_default_line="$project_defaults_default_line max-parallel=$(pw_project_default_value max-parallel)"
 
+# Creation gate: validate the ONE resolved snapshot (scalars + every non-empty role binding)
+# before staging. A removed, mistyped, forbidden, or unverifiable binding refuses creation; it is
+# never silently replaced. Existing-project adoption does not come through this path.
+"$HERE/../entities/pw-config.sh" validate-defaults \
+  || { echo "scaffold: refusing to create '$slug' — the resolved global project defaults carry an invalid or unavailable model binding (see the message above) → fix: /pw-config global set --key ai-model … or /pw-config global unset --key ai-model; existing projects are unaffected" >&2; exit 1; }
+
 
 slug=""
 while [ $# -gt 0 ]; do
