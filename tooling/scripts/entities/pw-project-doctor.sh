@@ -543,7 +543,10 @@ _field_val() { # <file> <field> — resolved + token-expanded; paths lose a trai
 
 # --- C10+C11: Documentation & template lint -------------------------------------
 echo "[1/8] Documentation & template lint"
-if LINT_OUT="$("$DOCL" lint --kind all --project "$SLUG" 2>&1)"; then
+# Doctor inspects drafts and completed artifacts alike. A structurally valid analysis still
+# awaiting the human's approach choice is expected state, not a lint defect — inspect with the
+# reviewable stage; consuming gates (breakdown/RFC) keep the strict ready stage.
+if LINT_OUT="$("$DOCL" lint --kind all --project "$SLUG" --stage reviewable 2>&1)"; then
   ok "lint all: clean"
 else
   case $? in

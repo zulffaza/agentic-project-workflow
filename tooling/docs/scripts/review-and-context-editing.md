@@ -34,7 +34,7 @@ $PW_HOME/tooling/scripts/entities/pw-review.sh init-all --project <slug>
     # stops with a command-based recovery hint. Never creates earlier/later-phase reviews and
     # never deletes previously generated ones; existing files untouched.
 
-$PW_HOME/tooling/scripts/entities/pw-review.sh start --project <slug> --file <review-rel> [--phase <analysis|plan|task-plan|task-exec|ship>] [--provider <actual-provider>] [--model <actual-model>] [--confirm-earlier]
+$PW_HOME/tooling/scripts/entities/pw-review.sh start --project <slug> --file <review-rel> [--phase <analysis|plan|task-plan|task-exec|ship>] [--provider <actual-provider>] [--model <actual-model>] [--receipt <id>] [--confirm-earlier]
     # pass-entry transition: appends ONE changes-requested row before the work set, and ONLY
     # when this file genuinely has eligible work — a real actionable OPEN item, or an answered
     # question awaiting incorporation. Template stubs, resolved/archived rows, settled
@@ -42,7 +42,7 @@ $PW_HOME/tooling/scripts/entities/pw-review.sh start --project <slug> --file <re
     # asks append NOTHING (signoff state preserved; report what was skipped). Per artifact:
     # working one selected file never changes another file's signoff. The work set is
     # re-checked under the per-file lock immediately before publishing the row.
-    # No --phase        → normal repair pass, By pw-review (repair).
+    # No --phase        → normal repair pass (requires --receipt), By pw-review (repair; receipt=<id>).
     # With --phase      → independent AI pass under that lane's configured advisory|auto mode,
     #                     By pw-reviewer (<mode>; provider=<actual>; model=<actual>) — identity
     #                     read from the actual run metadata, never the config pin, the

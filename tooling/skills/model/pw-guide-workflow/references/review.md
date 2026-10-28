@@ -41,10 +41,11 @@ Rules you MUST follow:
   of that item's edits in one coherent pass, then run consistency checks once — one combined
   `grep -rnE 'pat1|pat2|pat3'` pass, not N serial single-pattern greps.
 - Apply each `[OPEN]` item, append a `↳ agent:` reply, flip it to `[RESOLVED]` — deterministically
-  via `pw-review.sh resolve --project <slug> --file <review-rel-path> --item <Rn> --reply <what changed>` (flips the
-  SAME heading's tag + marker together, appends the styled reply, reindexes; never a second
-  heading). **Never edit or delete the human's comment text** — it's the source of truth for what
-  was asked (resolve is append-or-flip only, mutation-tested).
+  via `pw-review.sh resolve --project <slug> --file <review-rel-path> --item <Rn> --reply <what changed> --repair-receipt <id>`
+  (flips the SAME heading's tag + marker together, appends the styled reply, reindexes; never a
+  second heading). Pass the receipt used with `start`: a file carrying a receipt-bearing repair
+  admission refuses an unguarded resolution. **Never edit or delete the human's comment text** —
+  it's the source of truth for what was asked (resolve is append-or-flip only, mutation-tested).
 - **Fixing `analysis/<topic>.md` specifically:** rewrite its §1–4 prose cleanly in place — never
   append, never leave an `(Rn)`/`(Qn)` tag or "supersedes"/"the user asked" narration in §1–4. That
   history is exactly ONE terse line in §5.1's Decisions log, nowhere else — see
@@ -81,7 +82,7 @@ Rules you MUST follow:
   `approved`, and an explicit human `changes-requested` stands until the human withdraws or
   replaces it — operational rows never erase a human rejection. Repairing or reopening an
   EARLIER phase's approved gate needs the human's explicit confirmation
-  (`pw-review.sh start … --confirm-earlier`).
+  (`pw-review.sh start … --receipt <id> --confirm-earlier`; every repair-mode start needs the receipt).
 - **Read the gate result and the start report separately.** A valid `in-review`/`changes-requested`
   gate with the ordinary non-approved exit status is NORMAL here; never write `gate && start`.
   After `start`, `__entered__` and `__resume__` permit work only with the persisted repair row;

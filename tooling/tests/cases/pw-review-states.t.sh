@@ -99,7 +99,7 @@ S="$PW_PROJECTS_DIR/$SM"
 set_phase "$SM" analysis
 RVX=analysis/review/fixture.review.md
 BEFORE="$(_comment_blanked "$S/$RVX" | sed -n '/^## Sign-off/,$p')"
-pwtest_rc 0 "start on empty work set is clean" "$E" start --project "$SM" --file "$RVX"
+pwtest_rc 0 "start on empty work set is clean" "$E" start --project "$SM" --file "$RVX" --receipt rr1
 AFTER="$(_comment_blanked "$S/$RVX" | sed -n '/^## Sign-off/,$p')"
 [ "$BEFORE" = "$AFTER" ] && pwtest_ok "clean pass added no sign-off row" || pwtest_bad "clean pass transition" "sign-off history changed"
 pwtest_re '__clean__' "start reports the clean verdict"
@@ -108,12 +108,12 @@ pwtest_re 'eligible=0' "eligible counter reads stubs as zero"
 pwtest_rc 0 "add-item makes work eligible" "$E" add-item --project "$SM" --file "$RVX" --section '§2 Scope' --text widen the scope row
 pwtest_rc 0 "eligible now reports real work" "$E" eligible --project "$SM" --file "$RVX"
 pwtest_re 'eligible=1 open=1' "open item with body is actionable"
-pwtest_rc 0 "start appends pass entry" "$E" start --project "$SM" --file "$RVX"
-rowfix '| pw-review (repair) | changes-requested |' "repair pass recorded changes-requested" "$S/$RVX"
-pwtest_grep_file '^Gate: changes-requested \(pw-review \(repair\)\)$' "generated Gate header derived (script-free)" "$S/$RVX"
-pwtest_rc 0 "start rerun same attempt idempotent" "$E" start --project "$SM" --file "$RVX"
+pwtest_rc 0 "start appends pass entry" "$E" start --project "$SM" --file "$RVX" --receipt rr1
+rowfix '| pw-review (repair; receipt=rr1) | changes-requested |' "repair pass recorded changes-requested" "$S/$RVX"
+pwtest_grep_file '^Gate: changes-requested \(pw-review \(repair; receipt=rr1\)\)$' "generated Gate header derived (script-free)" "$S/$RVX"
+pwtest_rc 0 "start rerun same attempt idempotent" "$E" start --project "$SM" --file "$RVX" --receipt rr1
 pwtest_re '__resume__' "same-actor rerun reports a resume"
-[ "$(rowcount '| pw-review (repair) | changes-requested |' "$S/$RVX")" = 1 ] \
+[ "$(rowcount '| pw-review (repair; receipt=rr1) | changes-requested |' "$S/$RVX")" = 1 ] \
   && pwtest_ok "same attempt did not duplicate the row" || pwtest_bad "pass-entry idempotence" "second identical row"
 pwtest_rc 0 "configure analysis advisory" "$CFG" set --project "$SM" --key ai-review --set analysis=advisory
 pwtest_rc 0 "advisory pass with actual identity" "$E" start --project "$SM" --file "$RVX" --phase analysis --provider kilo --model openai/actual-review-model
@@ -139,18 +139,21 @@ RMQ=st-mixedq; rm -rf "$PW_PROJECTS_DIR/$RMQ"; cp -a "$F2" "$PW_PROJECTS_DIR/$RM
 M="$PW_PROJECTS_DIR/$RMQ"; set_phase "$RMQ" analysis
 MRV=analysis/review/fixture.review.md
 printf '\n### Q7 · §3 Approach — [PENDING] (agent, 2026-09-15 09:00) <!-- pw-item-status: open -->\nwhich rollout order?\n\n> ↳ **you** (2026-09-15 10:00): canary first.\n\n---\n' >> "$M/$MRV"
-pwtest_rc 0 "answered pending question is actionable" "$E" start --project "$RMQ" --file "$MRV"
+pwtest_rc 0 "answered pending question is actionable" "$E" start --project "$RMQ" --file "$MRV" --receipt rr1
 pwtest_re '__entered__' "fold-in work triggered pass entry"
-pwtest_rc 0 "resolve Q7" "$E" resolve --project "$RMQ" --file "$MRV" --item Q7 --reply 'folded: canary-first order'
-printf '\n### Q8 · §3 Approach — [PENDING] (agent, 2026-09-15 11:00) <!-- pw-item-status: open -->\nstill waiting on the human\n\n---\n' >> "$M/$MRV"
-pwtest_rc 0 "unanswered question is NOT a repair pass" "$E" start --project "$RMQ" --file "$MRV"
+pwtest_rc 0 "resolve Q7" "$E" resolve --project "$RMQ" --file "$MRV" --item Q7 --reply 'folded: canary-first order' --repair-receipt rr1
+RMQ2=st-mixedq-only; rm -rf "$PW_PROJECTS_DIR/$RMQ2"; cp -a "$F2" "$PW_PROJECTS_DIR/$RMQ2"
+M2="$PW_PROJECTS_DIR/$RMQ2"; set_phase "$RMQ2" analysis
+MRV2=analysis/review/fixture.review.md
+printf '\n### Q8 · §3 Approach — [PENDING] (agent, 2026-09-15 11:00) <!-- pw-item-status: open -->\nstill waiting on the human\n\n---\n' >> "$M2/$MRV2"
+pwtest_rc 0 "unanswered question is NOT a repair pass" "$E" start --project "$RMQ2" --file "$MRV2" --receipt rr1
 pwtest_re '__clean__' "waiting-human-only stays clean"
 pwtest_re 'awaiting=1' "the blocker is reported without inventing a row"
 MFM=st-malformed; rm -rf "$PW_PROJECTS_DIR/$MFM"; cp -a "$F2" "$PW_PROJECTS_DIR/$MFM"
 F2P="$PW_PROJECTS_DIR/$MFM"; set_phase "$MFM" analysis
 FRV=analysis/review/fixture.review.md
 printf '\n### R8 · §9 — [OPEN] (you, 2026-09-15 09:00) <!-- pw-item-status: open -->\n\n---\n' >> "$F2P/$FRV"
-pwtest_rc 0 "empty-body open item is unactionable" "$E" start --project "$MFM" --file "$FRV"
+pwtest_rc 0 "empty-body open item is unactionable" "$E" start --project "$MFM" --file "$FRV" --receipt rr1
 pwtest_re '__clean__' "malformed-only added no row"
 pwtest_re 'unactionable=1' "malformed entry reported (not counted eligible)"
 UK=st-unknown; rm -rf "$PW_PROJECTS_DIR/$UK"; cp -a "$F2" "$PW_PROJECTS_DIR/$UK"
@@ -158,7 +161,7 @@ U="$PW_PROJECTS_DIR/$UK"; set_phase "$UK" analysis
 sed -i '' 's/^| 2026-09-15 00:00 | pwtest | approved |$/| 2026-09-15 00:00 | pwtest | rejected |/' "$U/$PLAN"
 pwtest_rc 0 "seed eligible work on unknown-state file" "$E" add-item --project "$UK" --file "$PLAN" --section '§1' --text make the pass eligible
 pwtest_err 'unrecognized latest decision' "unknown decision reported at feedback time, table not invented"
-pwtest_rc 2 "start refuses unknown decision" "$E" start --project "$UK" --file "$PLAN"
+pwtest_rc 2 "start refuses unknown decision" "$E" start --project "$UK" --file "$PLAN" --receipt rr1
 pwtest_fix "unknown-decision refusal carries repair hint"
 grep -q '| pwtest | rejected |' "$U/$PLAN" && pwtest_ok "history preserved on refusal" || pwtest_bad "unknown-decision" "row rewritten"
 pwtest_rc 1 "gate fails closed on unknown decision" "$E" gate --project "$UK" --file "$PLAN"
@@ -168,18 +171,18 @@ pwtest_fix "missing-table gate refusal actionable"
 EC=st-earlier; rm -rf "$PW_PROJECTS_DIR/$EC"; cp -a "$F2" "$PW_PROJECTS_DIR/$EC"
 C="$PW_PROJECTS_DIR/$EC"
 set_phase "$EC" executing
-pwtest_rc 2 "earlier analysis repair needs confirmation" "$E" start --project "$EC" --file analysis/review/fixture.review.md
+pwtest_rc 2 "earlier analysis repair needs confirmation" "$E" start --project "$EC" --file analysis/review/fixture.review.md --receipt rr1
 pwtest_fix "confirm-earlier hint offered"
-[ "$(rowcount '| pw-review (repair) |' "$C/analysis/review/fixture.review.md")" = 0 ] \
+[ "$(rowcount '| pw-review (repair; receipt=rr1) |' "$C/analysis/review/fixture.review.md")" = 0 ] \
   && pwtest_ok "no transition before confirmation" || pwtest_bad "pre-confirm refusal wrote state" "repair row existed"
-pwtest_rc 2 "earlier PLAN repair without flag" "$E" start --project "$EC" --file "$PLAN"
+pwtest_rc 2 "earlier PLAN repair without flag" "$E" start --project "$EC" --file "$PLAN" --receipt rr1
 pwtest_rc 0 "seed PLAN work under preserved approval" "$E" add-item --project "$EC" --file "$PLAN" --section '§2' --text recheck dependency order
-pwtest_rc 0 "confirmed earlier repair proceeds" "$E" start --project "$EC" --file "$PLAN" --confirm-earlier
-rowfix '| pw-review (repair) | changes-requested |' "confirmed repair recorded" "$C/$PLAN"
-pwtest_rc 0 "confirmed retry of the same attempt is a resume" "$E" start --project "$EC" --file "$PLAN" --confirm-earlier
+pwtest_rc 0 "confirmed earlier repair proceeds" "$E" start --project "$EC" --file "$PLAN" --receipt rr1 --confirm-earlier
+rowfix '| pw-review (repair; receipt=rr1) | changes-requested |' "confirmed repair recorded" "$C/$PLAN"
+pwtest_rc 0 "confirmed retry of the same attempt is a resume" "$E" start --project "$EC" --file "$PLAN" --receipt rr1 --confirm-earlier
 pwtest_re '__resume__' "same-actor retry does not duplicate the row"
 set_phase "$EC" "executed — drifted"
-pwtest_rc 2 "non-canonical phase refuses start" "$E" start --project "$EC" --file "$PLAN"
+pwtest_rc 2 "non-canonical phase refuses start" "$E" start --project "$EC" --file "$PLAN" --receipt rr1
 pwtest_fix "phase repair hint present"
 set_phase "$EC" executing
 grep -E 'pass entry' "$C/LOG.md" | grep -qE 'provider=n/a|provider=kilo' && pwtest_ok "LOG recorded the pass audit" || pwtest_bad "pass audit" "no mode/identity in LOG"
@@ -198,7 +201,7 @@ pwtest_rc 0 "second add-item no second toggle" "$E" add-item --project "$FB" --f
 pwtest_rc 0 "reviewer files an item mid-cycle" "$E" add-item --project "$FB" --file "$BRV" --section '§1 Goal' --actor pw-reviewer --text reviewer finding
 [ "$(rowcount '| pw-review (feedback) | in-review |' "$B/$BRV")" = 1 ] \
   && pwtest_ok "internal writer did not toggle" || pwtest_bad "anti-churn" "extra feedback row"
-pwtest_rc 0 "start (repair) enters the pass" "$E" start --project "$FB" --file "$BRV"
+pwtest_rc 0 "start (repair) enters the pass" "$E" start --project "$FB" --file "$BRV" --receipt rr1
 FB_ROWS="$(rowcount '| in-review |' "$B/$BRV")"
 pwtest_rc 0 "agent item during active agent pass" "$E" add-item --project "$FB" --file "$BRV" --section '§2' --actor pw-reviewer --text more findings
 [ "$(rowcount '| in-review |' "$B/$BRV")" = "$FB_ROWS" ] \
@@ -258,10 +261,10 @@ HRV=analysis/review/fixture.review.md
 pwtest_rc 0 "configure HR auto" "$CFG" set --project "$HR" --key ai-review --set analysis=auto
 pwtest_rc 0 "human rejects" "$E" signoff --project "$HR" --file "$HRV" --decision changes-requested --by faza
 pwtest_rc 0 "reviewer files items over the rejection" "$E" add-item --project "$HR" --file "$HRV" --section '§1' --actor pw-reviewer --text reviewer note only
-pwtest_rc 0 "repair pass queues its own row" "$E" start --project "$HR" --file "$HRV"
+pwtest_rc 0 "repair pass queues its own row" "$E" start --project "$HR" --file "$HRV" --receipt rr1
 grep -qF -- '| faza | changes-requested |' "$H/$HRV" && pwtest_ok "human rejection row preserved" || pwtest_bad "rejection lost" "human row gone"
 RID="$(grep -oE '^### R[0-9]+' "$H/$HRV" | tail -1 | sed 's/^### //')"
-pwtest_rc 0 "resolve the reviewer item" "$E" resolve --project "$HR" --file "$HRV" --item "$RID" --reply 'addressed'
+pwtest_rc 0 "resolve the reviewer item" "$E" resolve --project "$HR" --file "$HRV" --item "$RID" --reply 'addressed' --repair-receipt rr1
 pwtest_rc 2 "clean auto cannot override human rejection" "$E" auto-signoff --project "$HR" --file "$HRV" --phase analysis
 pwtest_fix "rejection refusal actionable"
 pwtest_rc 0 "human withdraws explicitly" "$E" signoff --project "$HR" --file "$HRV" --decision in-review --by faza
@@ -404,8 +407,8 @@ PASSC=p-t46-c3
 pwtest_rc 0 "J: mix upstream advisory" "$CFG" set --project "$PMX" --key ai-review --set analysis=advisory
 pwtest_rc 0 "J: mix entry" "$E" start --project "$PMX" --file "$MXRV" --phase analysis --pass "$PASSC" --provider kilo --model m1
 pwtest_rc 0 "J: mix finding" "$E" add-item --project "$PMX" --file "$MXRV" --section '§2' --actor pw-reviewer --pass "$PASSC" --text finding for the mix
-pwtest_rc 0 "J: mix repair pass rides between" "$E" start --project "$PMX" --file "$MXRV"
-rowfix '| pw-review (repair) | changes-requested |' "J: repair row landed between entry and transition" "$MXF"
+pwtest_rc 0 "J: mix repair pass rides between" "$E" start --project "$PMX" --file "$MXRV" --receipt rr1
+rowfix '| pw-review (repair; receipt=rr1) | changes-requested |' "J: repair row landed between entry and transition" "$MXF"
 pwtest_rc 0 "J: transition still allowed after machine rows" "$E" start --project "$PMX" --file "$MXRV" --phase analysis --pass "$PASSC" --provider kilo --model m1
 pwtest_re '__entered__' "J: pass transition after machine rows"
 rowfix "| pw-reviewer (advisory; provider=kilo; model=m1; pass=$PASSC) | changes-requested |" "J: pass transition row present" "$MXF"

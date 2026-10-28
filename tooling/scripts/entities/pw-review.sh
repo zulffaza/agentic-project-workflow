@@ -79,9 +79,10 @@
 #       file; blocks are fenced with pw-archived-block markers so a failed-publish
 #       retry re-appends nothing and duplicates nothing.
 #   pw-review.sh start        --project <slug> --file <review-rel-path> [--phase <context|analysis|plan|task-plan|task-exec|ship|rfc|close>]
-#                                 [--pass <id>] [--provider <actual-id>] [--model <actual-id>] [--confirm-earlier]
-#       Pass entry. Without --phase this is the normal repair pass, attributed
-#       "pw-review (repair)". With --phase it is an independent AI pass; the
+#                                 [--pass <id>] [--provider <actual-id>] [--model <actual-id>]
+#                                 [--receipt <id>] [--confirm-earlier]
+#       Pass entry. Without --phase this is the normal repair pass and REQUIRES --receipt,
+#       attributed "pw-review (repair; receipt=<id>)". With --phase it is an independent AI pass; the
 #       configured mode must be advisory/auto and the row names the ACTUAL
 #       reviewer: "pw-reviewer (<mode>; provider=<p>; model=<m>)" (unknown when
 #       the runtime cannot confirm). Appends changes-requested ONLY when the
@@ -927,6 +928,9 @@ cmd_resolve() {
   [ -n "$id" ] || die "resolve: --item is required → fix: resolve --project <slug> --file <review-rel-path> --item <Rid|Qid> (--reply <text…> | --stdin)"
   case "$id" in R[0-9]*|Q[0-9]*) ;; *) die "resolve: id must look like R3 or Q2 (got '$id')" ;; esac
   local f; f="$(review_file "$slug" "$rel")" || return 2
+  if [ -z "$_receipt" ] && _repair_receipt_required "$f"; then
+    die "resolve: $rel carries a receipt-bearing repair admission — an unguarded resolution would bypass admission → fix: pass --repair-receipt <the receipt used with start>; other resolution purposes (MR tracking, independent assessment) do not start a repair pass"
+  fi
   if [ -n "$_receipt" ]; then
     _repair_entry_present "$f" "$_receipt" \
       || die "resolve: no matching repair admission entry (receipt=$_receipt) on $rel — refusing to flip an item without recorded repair history → fix: run /pw-review start --receipt $_receipt before applying feedback; nothing was changed"
@@ -1466,16 +1470,53 @@ _start_body() {
 }
 
 # Read-only evidence that an apply-feedback repair was admitted. The latest Sign-off row must be a
-# changes-requested repair row; with --receipt, that row must carry the same receipt token. This
-# correlates one invocation instead of accepting any historical repair row.
+# changes-requested repair row; with --receipt, that row must carry the same receipt token. When an
+# ordinary feedback row moved the latest row on inside the SAME admitted pass, fall back to an
+# exact receipt lookup that refuses if a later human/approval decision superseded the admission.
+# This correlates one invocation instead of accepting any historical repair row.
+_repair_lookup() { # <review-file> <receipt>
+  local file="$1" want="$2"
+  _comment_blanked "$file" | awk -v want="$want" '
+    /^## Sign-off/ { s = 1; next }
+    s && /^\|/ {
+      t = $0; gsub(/[ \t|:-]/, "", t)
+      if (t == "") { sep = 1; next }
+      if (!sep) next
+      if ($0 ~ /^\| \| \| in-review \|$/) next
+      n = split($0, c, "|"); by = c[3]; dec = c[4]
+      gsub(/^[ \t]+|[ \t]+$/, "", by); gsub(/^[ \t]+|[ \t]+$/, "", dec)
+      rows[++r] = by "\t" dec
+    }
+    END {
+      hit = 0; superseded = 0
+      for (i = 1; i <= r; i++) {
+        split(rows[i], p, "\t")
+        if (p[1] ~ ("receipt=" want "([;)]|$)")) hit = i
+        if (hit && i > hit) {
+          if (p[2] == "approved") superseded = 1
+          if (p[1] !~ /^pw-review/ && p[2] != "in-review") superseded = 1
+        }
+      }
+      exit (hit && !superseded) ? 0 : 1
+    }'
+}
 _repair_entry_present() { # <review-file> [receipt]
   local f="$1" receipt="${2:-}" decision actor
   decision="$(_signoff_latest_decision "$f" 2>/dev/null || true)"
   actor="$(_signoff_latest_actor "$f" 2>/dev/null || true)"
-  [ "$decision" = "changes-requested" ] || return 1
-  case "$actor" in "pw-review (repair"*) ;; *) return 1 ;; esac
-  [ -z "$receipt" ] || { case "$actor" in *"receipt=$receipt"*) return 0 ;; *) return 1 ;; esac; }
-  return 0
+  if [ "$decision" = "changes-requested" ] && [ "${actor#pw-review (repair}" != "$actor" ]; then
+    [ -z "$receipt" ] || { case "$actor" in *"receipt=$receipt"*) return 0 ;; *) return 1 ;; esac; }
+    return 0
+  fi
+  [ -n "$receipt" ] || return 1
+  _repair_lookup "$f" "$receipt"
+}
+
+# A file whose history carries a receipt-bearing admission must not be resolved unguarded: the
+# shared apply-feedback path must pass the same receipt. Legacy rows without a receipt stay
+# readable (no receipt exists to pass), and non-repair tracking files never match.
+_repair_receipt_required() { # <review-file>
+  grep -q 'pw-review (repair; receipt=' "$1"
 }
 
 cmd_repair_check() {
@@ -1534,8 +1575,8 @@ cmd_start() {
         esac ;;
       --confirm-earlier) confirm=1 ;;
       -h|--help) pw_usage ;;
-      -*) _pw_unknown "$a" "start --project <slug> --file <review-rel-path> [--phase <context|analysis|plan|task-plan|task-exec|ship|rfc|close>] [--pass <id>] [--provider <id>] [--model <id>] [--confirm-earlier]" ;;
-      *) _pw_positional "$a" "start --project <slug> --file <review-rel-path> [--phase <context|analysis|plan|task-plan|task-exec|ship|rfc|close>] [--pass <id>] [--provider <id>] [--model <id>] [--confirm-earlier]" ;;
+      -*) _pw_unknown "$a" "start --project <slug> --file <review-rel-path> [--phase <context|analysis|plan|task-plan|task-exec|ship|rfc|close>] [--pass <id>] [--provider <id>] [--model <id>] [--receipt <id>] [--confirm-earlier]" ;;
+      *) _pw_positional "$a" "start --project <slug> --file <review-rel-path> [--phase <context|analysis|plan|task-plan|task-exec|ship|rfc|close>] [--pass <id>] [--provider <id>] [--model <id>] [--receipt <id>] [--confirm-earlier]" ;;
     esac
   done
   [ -n "$slug" ] || die "start: --project is required → fix: start --project <slug> --file <review-rel-path> [--phase <phase>] [--pass <id>] [--provider <id>] [--model <id>] [--confirm-earlier]"
@@ -1565,12 +1606,10 @@ cmd_start() {
       ST_BY="pw-reviewer ($mode; provider=$prov; model=$mdl)"
     fi
   else
-    if [ -n "$receipt" ]; then
-      _pass_token_ok "$receipt" || die "invalid --receipt id '$receipt' → fix: 1-64 characters of A-Z a-z 0-9 . _ - (one id per apply-feedback invocation)"
-      ST_BY="pw-review (repair; receipt=$receipt)"
-    else
-      ST_BY="pw-review (repair)"
-    fi
+    [ -n "$receipt" ] \
+      || die "start: a repair pass needs --receipt <id> → fix: generate one id for this apply-feedback invocation and pass it to every start/resolve (omitting it would bypass repair admission)"
+    _pass_token_ok "$receipt" || die "invalid --receipt id '$receipt' → fix: 1-64 characters of A-Z a-z 0-9 . _ - (one id per apply-feedback invocation)"
+    ST_BY="pw-review (repair; receipt=$receipt)"
   fi
   local st; st="$(_dash_lane_state "$slug" "$rel")"
   [ "$st" = unknown ] && die "dashboard phase is missing or non-canonical — cannot judge consumed-phase safety → fix: repair the dashboard Status line (/pw-status --project $slug shows the current phase)"
@@ -2309,7 +2348,7 @@ PY
   echo "$slug: import — pass $pass ($m_surface · $m_artifact) verdict=$verdict"
   echo "  items:${applied_items:- none}${applied_qs:+ · questions:$applied_qs}${skipped_words:+ · skipped:$skipped_words}"
   echo "  report stored: review/ai/$pass/report.json   (external import — advisory only: no approval row, no repair)"
-  echo "  apply the recorded findings: repair the artifacts, then /pw-review start --project $slug --file $m_review"
+  echo "  apply the recorded findings: repair the artifacts, then /pw-review start --project $slug --file $m_review --receipt <receipt-id>"
   return 0
 }
 

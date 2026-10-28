@@ -36,11 +36,11 @@ pwtest_re 'Unapproved PLAN review' "status consumes the same approval predicate 
 pwtest_re 'blocked by unresolved work' "status distinguishes recorded approval from usable approval"
 pwtest_rc 1 "execution preflight refuses stale PLAN approval" "$FLOW_PREFLIGHT" execute --project "$FLOW"
 pwtest_fix "execution stale approval refusal has recovery guidance"
-pwtest_rc 2 "repair of consumed PLAN needs confirmation" "$FLOW_REVIEW" start --project "$FLOW" --file "$FLOW_PLAN"
-pwtest_rc 0 "explicit confirmation starts PLAN repair" "$FLOW_REVIEW" start --project "$FLOW" --file "$FLOW_PLAN" --confirm-earlier
+pwtest_rc 2 "repair of consumed PLAN needs confirmation" "$FLOW_REVIEW" start --project "$FLOW" --file "$FLOW_PLAN" --receipt rr1
+pwtest_rc 0 "explicit confirmation starts PLAN repair" "$FLOW_REVIEW" start --project "$FLOW" --file "$FLOW_PLAN" --receipt rr1 --confirm-earlier
 pwtest_eq "started repair uses operational decision" "$(_signoff_latest_decision "$FLOW_DIR/$FLOW_PLAN")" changes-requested
-pwtest_eq "started repair has agent attribution" "$(_signoff_latest_actor "$FLOW_DIR/$FLOW_PLAN")" 'pw-review (repair)'
-pwtest_rc 0 "resolve the real PLAN request" "$FLOW_REVIEW" resolve --project "$FLOW" --file "$FLOW_PLAN" --item R1 --reply 'Dependency order checked and corrected in the plan.'
+pwtest_eq "started repair has agent attribution" "$(_signoff_latest_actor "$FLOW_DIR/$FLOW_PLAN")" 'pw-review (repair; receipt=rr1)'
+pwtest_rc 0 "resolve the real PLAN request" "$FLOW_REVIEW" resolve --project "$FLOW" --file "$FLOW_PLAN" --item R1 --reply 'Dependency order checked and corrected in the plan.' --repair-receipt rr1
 pwtest_rc 1 "resolved repair still awaits approval" "$FLOW_REVIEW" gate --project "$FLOW" --file "$FLOW_PLAN"
 pwtest_rc 0 "human explicitly reapproves PLAN" "$FLOW_REVIEW" signoff --project "$FLOW" --file "$FLOW_PLAN" --decision approved --by reviewer-owner
 pwtest_rc 0 "clean latest human approval unblocks PLAN" "$FLOW_REVIEW" gate --project "$FLOW" --file "$FLOW_PLAN"

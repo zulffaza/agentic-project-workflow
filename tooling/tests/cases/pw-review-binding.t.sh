@@ -19,7 +19,7 @@ pwtest_rc 0 "PLAN policy stays advisory" "$B_CFG" set --project "$B_PROJECT" --k
 pwtest_rc 2 "task-plan auto cannot approve PLAN under its different policy" "$B_REVIEW" auto-signoff --project "$B_PROJECT" --file task/review/PLAN.review.md --phase task-plan --confirm-earlier
 pwtest_rc 0 "fixture enters normal task-result review" "$(pwtest_script pw-status.sh)" status --project "$B_PROJECT" --phase review
 pwtest_rc 0 "task-result feedback is recorded during review" "$B_REVIEW" add-item --project "$B_PROJECT" --file task/review/T04.review.md --section '§4' --text 'Recheck this task result.'
-pwtest_rc 0 "current task result needs no earlier-gate confirmation" "$B_REVIEW" start --project "$B_PROJECT" --file task/review/T04.review.md
+pwtest_rc 0 "current task result needs no earlier-gate confirmation" "$B_REVIEW" start --project "$B_PROJECT" --file task/review/T04.review.md --receipt rr1
 rm -rf "$PW_PROJECTS_DIR/$B_PROJECT"
 
 # A callback runs inside a conditional transaction, where errexit cannot protect it.

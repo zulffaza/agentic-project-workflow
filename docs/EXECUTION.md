@@ -281,6 +281,18 @@ explicit configured binding is honored exactly or refused; it is never silently 
 nearby variant, and a missing capability is never treated as support. Requested and confirmed
 bindings are recorded separately in spawn evidence.
 
+A role's model and tuning are one binding. Setting a new model without tuning flags resets that
+role's variant/reasoning/effort (a control that was valid for the old model may be invalid for the
+new one); clearing the role clears its tuning too. Read the complete binding with
+`get --project <slug> --key ai-model --json`, and let the driver resolve the provider's argument
+array with `spawn-args --project <slug> --role <role>` (add `--json` for machine reading). It
+canonicalizes the id through `model-resolve` and exits non-zero when the model is unavailable or the
+selected route cannot express the stored tuning, so the spawn stops instead of dropping a control.
+
+Creating a project validates the resolved global snapshot first: a removed, mistyped, forbidden,
+or unverifiable model binding refuses creation instead of entering every new dashboard. Existing
+projects are never revalidated or backfilled by that gate.
+
 ## Model allowlist (optional — a cost guard, not a routing mechanism)
 
 There's no fixed, pre-approved model list in this bundle — an agent (during `/pw-breakdown`) or

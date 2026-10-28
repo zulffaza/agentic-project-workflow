@@ -290,20 +290,27 @@ never loops environmental failures) and the driver auto-flips clean tasks to `ac
 (`--acceptance` overrides per run; `--then-ship` additionally runs row 7). Everything else about the
 nine rows — PLAN gate, human confirmation for outward pushes, leftover reporting — is unchanged.
 
-**Lanes bind model via the dashboard (`AI Models`), not the task file.** The driver reads the row
-before each spawn (and runs the same §availability gate on it — `model-resolve` — before spawning);
-claude per-spawn model is direct, kilo's route is a map pin or a headless
-`kilo run --auto -m <canonical-id> [--dir <repo/path>]` session over the same work order — the
-canonical id is what `pw-config.sh model-resolve` prints (the catalog line, e.g.
-`kilo/alibaba-token-plan/<m>`, never the raw row text);
-cursor's is the seeded def's `model:` or the same headless route via `cursor_headless()`
-(`agent -p --force --model <id>` over the work order — `--model` binds per-run, not per-spawn);
+**Lanes bind model via the dashboard (`AI Models`), not the task file.** The driver reads the
+complete binding before each spawn with
+`pw-config.sh get --project <slug> --key ai-model --json` (model + provider + variant/reasoning/
+effort — never a display string), then resolve the provider-native argument array with
+`pw-config.sh spawn-args --project <slug> --role <role>` (add `--json` for machine reading). It
+runs the §availability gate and canonicalizes the id through `model-resolve`, maps
+variant/reasoning/effort to the route, or exits non-zero when the model is unavailable or the route
+cannot bind the requested tuning. Never drop a control, choose a "nearest" value, or substitute a model — stop and
+report the capability gap. Then: claude per-spawn model is direct (`--model`, `--effort`), kilo's
+route is a map pin or a headless `kilo run --auto -m <canonical-id> [--variant <v>]`
+session over the same work order — the canonical id is what `pw-config.sh model-resolve` prints
+(the catalog line, e.g. `kilo/alibaba-token-plan/<m>`, never the raw row text); cursor's is the
+seeded def's `model:` or the same headless route via `cursor_headless()`
+(`agent -p --force --model <id>` over the work order, with supported bracket parameters);
 codex has NO in-process spawn at all — every lane/bulk row there is the headless route via
-`codex_headless()` (`codex exec -m <slug>`, prompt on stdin) even from a codex driver; the
-spawn records `Model used:` so the ledger shows *actual*, never folklore; a row that can't fire is
-visible, not assumed. Where the executor would otherwise run "generic with named model", it runs the
-provider's **default agent** (Option A: no generic implementer def ships; `pw-executor` is the one
-executor concept for task breakdowns; ad-hoc non-pw code work belongs to the main session).
+`codex_headless()` (`codex exec -m <slug> -c model_reasoning_effort=<v>`, prompt on stdin) even
+from a codex driver; the spawn records `Model used:` so the ledger shows *actual*, never folklore;
+a row that can't fire is visible, not assumed. Where the executor would otherwise run "generic with
+named model", it runs the provider's **default agent** (Option A: no generic implementer def ships;
+`pw-executor` is the one executor concept for task breakdowns; ad-hoc non-pw code work belongs to
+the main session).
 
 ## Create a worktree
 

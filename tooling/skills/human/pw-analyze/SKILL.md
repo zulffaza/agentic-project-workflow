@@ -49,8 +49,10 @@ unverifiable, spawn `pw-researcher` (Mode B) on the dropped inputs to get a grou
 seed BEFORE you reason from scratch; for the drafting itself, `pw-analyst` gets the seed + scope
 and **you pre-flight the seed covers the full scope** (a gap → back to the researcher, cheap) and
 **exit-check its draft against your scope list** (a drop → targeted re-read from a seed pointer, not
-a re-analysis); record your lane-model row from `- **AI Models:**` (unset = provider default) and
-log each spawn (`session=<id> · seed=…`) so a fix later **resumes** that session instead of
+a re-analysis); record your complete lane binding from `- **AI Models:**`
+(`pw-config.sh get --project <slug> --key ai-model --json`; unset = provider default) and resolve
+the spawn arguments with `pw-config.sh spawn-args --project <slug> --role <role>` (stop if the
+route cannot bind the tuning); log each spawn (`session=<id> · seed=…`) so a fix later **resumes** that session instead of
 cold-re-spawning. Every lane stays read-mostly per its `tooling/agents/<name>.md` def; the
 decisions (options not converged, Q0 rules, the final doc) stay yours.
 
@@ -95,8 +97,9 @@ decisions (options not converged, Q0 rules, the final doc) stay yours.
      me to paste the content, grant access, or re-run with the flag.
 2. **Draft via `pw-analyst` when a sub-agent is available** (same provider) — hand it the seed +   the doc path; it returns a draft following the rules below; **you review, edit, and own the
    final doc** (decisions: options laid out without convergence, the pick stays yours, §4 rules).
-   Record lane model resolution per dashboard `AI Models: analyst=…` (unset = provider default) and
-   log the spawn (`pw-status.sh log --project <slug> --actor analyst --message "drafted analysis/<topic>.md · session=<id> …"`).
+   Record the complete analyst binding per dashboard `AI Models:`
+   (`pw-config.sh get --project <slug> --key ai-model --json`; unset = provider default), resolve
+   its arguments with `pw-config.sh spawn-args --project <slug> --role analyst`, and log the spawn (`pw-status.sh log --project <slug> --actor analyst --message "drafted analysis/<topic>.md · session=<id> …"`).
    Otherwise (or on a thin project where drafting inline is cheaper), write it yourself under the
    same rules. Either way the shape is enforced by this file:
    Write an analysis to `<project>/analysis/` using `{{PW_HOME}}/template/analysis/_TEMPLATE.md`:

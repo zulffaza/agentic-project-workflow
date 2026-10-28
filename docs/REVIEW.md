@@ -133,7 +133,7 @@ author in the `By` column:
 |---|---|---|
 | `you` (or a named human) | An explicit sign-off you asked to record | `in-review` · `changes-requested` · `approved` |
 | `pw-review (feedback)` | Your first new item or answer queues a review cycle; a previous `approved` stops being the live decision | `in-review` |
-| `pw-review (repair)` | A `/pw-review` pass starts on real actionable work in that file | `changes-requested` |
+| `pw-review (repair; receipt=<id>)` | A `/pw-review` pass starts on real actionable work in that file (legacy rows without a receipt stay readable) | `changes-requested` |
 | `pw-reviewer (advisory; provider=…, model=…)` | A legacy or uncorrelated AI pass filed real findings | `changes-requested` |
 | `pw-reviewer (advisory; provider=…, model=…; pass=…)` | A managed pass recorded its assessment entry, then its findings transition | `in-review` · `changes-requested` |
 | `pw-reviewer (auto; provider=…, model=…; pass=…)` | Same, plus the guarded `auto`-mode approval bound to that pass | `in-review` · `changes-requested` · `approved` |
@@ -394,8 +394,14 @@ an approach.
 
 When applying review feedback, the repair pass is admitted before edits and verified at completion.
 The canonical command passes one receipt id to `start` and to each guarded `resolve`, then runs
-`repair-check` per file. A non-approved gate is normal input to this flow; a missing repair row at
+`repair-check` per file. A repair-mode `start` (no `--phase`) without a receipt is refused, so a pass
+cannot be opened unguarded; AI pass entries (`--phase`) keep their own identity/attestation path. A non-approved gate is normal input to this flow; a missing repair row at
 completion is a real failure, and the workflow never backdates or fabricates one.
+
+A file whose history carries a receipt-bearing repair admission refuses an unguarded `resolve`, so
+omitting the flag cannot silently bypass admission. Ordinary feedback added inside the same admitted
+pass does not invalidate the receipt; a later human or approval decision supersedes it. MR-tracking
+and independent-assessment resolutions never start a repair pass and stay exempt.
 
 ## 3. AI-assisted review (optional; advisory + manual by default)
 
@@ -504,7 +510,7 @@ binding marker under `## Sign-off` when the reviewer actually begins, before ass
 and question writes carry the same `--pass <id>`, and the same call records the
 `changes-requested` transition once real findings exist. Retries are idempotent; a fresh pass id
 supersedes the previous entry; a superseded pass, or one interrupted by a human Sign-off
-decision, refuses further writes without changing the file. Fix-cycle rows (`pw-review (repair)`,
+decision, refuses further writes without changing the file. Fix-cycle rows (`pw-review (repair; receipt=<id>)` (or the legacy receipt-less form),
 feedback, reopen) never break a current pass — the correlated entry, not the newest row alone,
 decides who may still write. While a correlation is current, a phase-bearing reviewer transition
 or an approval WITHOUT `--pass` is refused — an uncorrelated late reviewer cannot bypass the
@@ -541,7 +547,7 @@ state back. A clean `advisory` pass keeps its entry and stops — you still sign
 `changes-requested` row. An uncorrelated pass (no `--pass`) keeps the legacy behavior: it records
 `changes-requested` only when it persisted findings and adds no row otherwise. A normal repair
 pass (`/pw-review` without `ai`) records
-`pw-review (repair)` `changes-requested` only when the selected file genuinely has eligible work to
+`pw-review (repair; receipt=<id>)` `changes-requested` only when the selected file genuinely has eligible work to
 process: a no-op call over stubs, resolved items, or a question merely waiting for your answer adds
 no row and is reported as skipped.
 
