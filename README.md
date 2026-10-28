@@ -43,10 +43,13 @@ supported before choosing a value:
 ```
 
 `model-check` lists supported controls and validates a requested combination without spending a
-model request. Unsupported or unverified tuning is refused, never silently dropped.
+model request. Unsupported or unverified tuning is refused, never silently dropped. Replacing a
+role's model without new tuning flags resets that role's variant/reasoning/effort; clearing the role
+clears them too. A new project validates its resolved defaults before creation, so an unavailable
+model refuses creation instead of entering the dashboard.
 
 Once installed, run a workflow entry in your agent session. Claude Code, Cursor, and Codex install
-the 19 `pw-*` entries as explicit-only skills (select one, or type its `$pw-*` form on Codex).
+the 21 `pw-*` entries as explicit-only skills (select one, or type its `$pw-*` form on Codex).
 KiloCode and OpenCode install the same entries as `/pw-*` commands. Both groups also get the shared
 `pw-guide-*` / `pw-orchestration` skills. Examples use the shared `/pw-*` names throughout these
 guides.
