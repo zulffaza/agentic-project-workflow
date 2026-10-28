@@ -43,7 +43,7 @@ static_t0() {
   local f code hits re label excl
 
   # 1) syntax — every shell file in tooling/ (incl. the scripts/ layout) and the suite itself
-  for f in "$TOOL"/*.sh "$TOOL"/scripts/*/*.sh "$TOOL"/tests/pw_test*.sh "$TOOL"/tests/static.sh "$TOOL"/tests/battery.sh "$TOOL"/tests/corpus.sh "$TOOL"/tests/mutate.sh "$TOOL"/tests/bin/gh; do
+  for f in "$TOOL"/*.sh "$TOOL"/scripts/*/*.sh "$TOOL"/tests/pw_test*.sh "$TOOL"/tests/static.sh "$TOOL"/tests/battery.sh "$TOOL"/tests/corpus.sh "$TOOL"/tests/mutate.sh "$TOOL"/tests/change_record.sh "$TOOL"/tests/instruction_register.sh "$TOOL"/tests/bin/gh; do
     [ -f "$f" ] && { bash -n "$f" && pwtest_ok "bash -n ${f#$TOOL/}" || pwtest_bad "bash -n ${f#$TOOL/}" "syntax error"; }
   done
 
@@ -836,5 +836,19 @@ PYD
     && grep -qF '_pwtest_record_case_duration' "$TOOL/tests/pw_test_lib.sh" \
     && pwtest_ok "T4 canary: sweep watchdog follows the measured case cost and re-measures a killed row" \
     || pwtest_bad "T4 canary: sweep watchdog" "the sweep must derive a per-row watchdog from the measured case durations and re-run a row that hit the watchdog"
+
+  # (v) the bounded instruction-consistency register: every owner section still exists,
+  #     the required contract text is present, and no retired instruction reappeared.
+  if "$TOOL/tests/instruction_register.sh" check >"$ROOT/instr.out" 2>&1; then
+    pwtest_ok "T4: instruction-consistency register has no contradiction"
+  else
+    pwtest_bad "T4: instruction-consistency register" "$(grep -v '^instruction-register: ok' "$ROOT/instr.out" | head -2 | cut -c1-150 | tr '\n' '|')"
+  fi
+  grep -qF '## Change records' "$TOOL/docs/testing.md" \
+    && grep -qF '## Instruction-consistency register' "$TOOL/docs/testing.md" \
+    && grep -qF 'change_record.sh' "$TOOL/docs/testing.md" \
+    && grep -qF 'instructions.tsv' "$TOOL/docs/testing.md" \
+    && pwtest_ok "T4: change-record and instruction-register protocols are documented" \
+    || pwtest_bad "T4: maintainer protocol docs" "docs/testing.md lost the change-record or instruction-register section, or its checker/register paths"
 
 }

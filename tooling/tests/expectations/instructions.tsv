@@ -1,0 +1,13 @@
+# instruction-register v1
+# instructions.tsv — bounded instruction-consistency register.
+# Columns (TAB): id, owner, section, surfaces, required, retired.
+# owner/surfaces are tooling-relative. `section` is an exact heading in the owner,
+# or - for the whole file. `required` is a literal that must remain in that section.
+# `retired` is an ERE that must not appear in any surface (owner included).
+# A row catches a known retirement; semantic reconciliation is still a review duty.
+# Checker: tooling/tests/instruction_register.sh; protocol: tooling/docs/testing.md.
+I1	skills/human/pw-sync/SKILL.md	Delegated conflict repair (conflict-only)	skills/model/pw-guide-workflow/references/execution-and-routing.md	delegate each conflicted branch to	With it, reconcile that conflict during this invocation
+I2	skills/human/pw-sync/SKILL.md	Delegated conflict repair (conflict-only)	skills/model/pw-guide-workflow/references/execution-and-routing.md	delegate each conflicted branch to	follow the loaded reference, then continue at its verification/publication steps
+I3	skills/model/pw-guide-workflow/references/mr-comments.md	-	-	the MR fixer — the delegated worker	right after this push
+I4	skills/human/pw-breakdown/SKILL.md	-	skills/human/pw-analyze/SKILL.md,skills/human/pw-verify/SKILL.md,skills/model/pw-guide-workflow/references/mr-comments.md,skills/model/pw-guide-workflow/references/execution-and-routing.md	spawn-args --project <slug> --role <role>	-
+I5	scripts/entities/pw-review.sh	-	-	a repair pass needs --receipt <id>	-

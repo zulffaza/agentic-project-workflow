@@ -7,6 +7,10 @@ not a restatement — open the doc for the load-bearing wording.
 1. **Edit the source** under `tooling/` (or `template/`) — never a generated provider copy. If you
    fixed a live copy under `~/.claude` / `~/.cursor` / `~/.config/kilo`, move the fix into the
    source first, then regenerate (sources-only doctrine).
+   For a cross-layer change, start one requirement/evidence record
+   ([`testing.md`](../../../docs/testing.md) §Change records) and keep it updated. Do not copy the
+   checklist into several documents; validate the actual record with `change_record.sh --mode complete`
+   before reporting completion.
 2. **Run the harness.** `bash tooling/tests/pw_test.sh` is the commit gate (default tiers
    T0,T1,T2,T4). While editing, narrow it: `--tier T0` (~2 s canaries), `--tier T4` (~6 s doctrine
    canaries), or `--tier T1 --only <script>` (one script's selftests). Fixtures build only when the
@@ -18,6 +22,9 @@ not a restatement — open the doc for the load-bearing wording.
    row mutates a disposable bundle copy) belongs at the ship gate. Authoring rules →
    [`testing.md`](../../../docs/testing.md) §"Writing a mutation row". Check the register's "Next free"
    ID against draft-plan reservations before minting.
+   Changed an operative instruction? Update
+   `tooling/tests/expectations/instructions.tsv` (owner section, required contract, retired
+   patterns) and run `tooling/tests/instruction_register.sh check`.
 4. **Sync the generators.** After any `commands/` / `agents/` / `skill/` / `template/` edit, run
    `tooling/scripts/toolchain/pw-doctor.sh` and expect **All synced**; `--fix` regenerates drifted
    provider copies from source. (`skill-internal/` — where this skill lives — is not generated and

@@ -13,7 +13,11 @@ bash tooling/tests/pw_test.sh --tier T1 --only doc-lint   # one script's unit ca
 ```
 
 Exit `0` only when everything selected passed; the final `pwtest: P pass, F fail, S skip` line is
-CI-greppable. `--only <pattern>` filters T1 case files. Fixtures are **generated from `template/`**
+CI-greppable. `--only <regex>` filters T1 case files. The runner resolves that selection once,
+prints `TEST T1 selected: N case(s): …`, and uses the same list for fixture scanning and execution.
+An explicit filter that matches no T1 case, or an invalid pattern, exits `2` before any case runs.
+When T1 is not selected, the runner prints that `--only` does not apply; it is not an assertion
+filter for T0/T2/T3/T4. Fixtures are **generated from `template/`**
 into a temp root, and only the ones the selected tiers/cases actually consume are built:
 a `--tier T0`/`--tier T4` run builds **nothing**, `--only <script>` builds just the fixture its
 case clones, and `--mutation` children copy fixtures from a shared pristine cache. Nothing on disk
@@ -27,7 +31,7 @@ there; mutations sandbox by construction). Every run prints `TEST fixtures built
 | **T1** unit | per-script cases in `tests/cases/*.t.sh` (happy + negative + idempotency) against F1 scaffold / F2 mid-lifecycle / F3 hostile fixtures, plus the two-owner MR-URL parity case and the per-entity `--selftest` entries invoked from a foreign cwd | ~30 s |
 | **T2** battery | golden matrices `expectations/battery.tsv` + `gates.tsv`: every read-only invocation and every preflight gate on every fixture, rc pinned, **`→ fix:` remediation asserted on every non-zero**, script-crash detector, and a **mode-completeness** rule (every advertised mode appears in a pinned row) | ~1 min |
 | **T3** corpus | read-only battery over real projects when `--corpus-dir DIR` (or `PW_CORPUS_DIR`) is given; crash-vs-clean-failure classification with `→ fix:` contract; pre-baseline projects are clean failures advising "refresh local templates"; a current-baseline project is the golden gate; personal data issues waived via `~/.pw/test-issues.tsv` | opt-in |
-| **T4** consistency | `pw-doctor` synced (run with the fixture env stripped; regen is `pw-doctor --fix` — never edit installed provider copies), registry symmetry (14 files ⇄ index ⇄ command/agent/skill wiring, allowlist `expectations/unwired.ok`), info-boundary greps, doctrine canaries (sources-only rule, FIELD-BULLET rule, phase-machine token line) | ~6 s (no fixtures) |
+| **T4** consistency | `pw-doctor` synced (run with the fixture env stripped; regen is `pw-doctor --fix` — never edit installed provider copies), registry symmetry (14 files ⇄ index ⇄ command/agent/skill wiring, allowlist `expectations/unwired.ok`), info-boundary greps, the instruction-consistency register, doctrine canaries (sources-only rule, FIELD-BULLET rule, phase-machine token line) | ~6 s (no fixtures) |
 
 `pw-doctor.sh --test` delegates to `pw_test.sh` (default tiers).
 
@@ -59,6 +63,62 @@ Sweep mechanics (fixture cache, watchdog/HUNG, parallel workers on disposable co
 §Inside the harness below. One rule worth stating at the top: **a mutation catcher must never
 depend on the mutation changing fixture BYTES** — catchers test runtime readers on
 template-derived data, which is what lets every sweep child share one warm cache.
+
+## Change records
+
+A cross-layer change keeps one requirement/evidence record beside its task, plan or result.
+Use it instead of copying a checklist into several documents. Small changes use a few rows;
+they do not need a new schema or a full project scaffold.
+
+Format: `# change-record v1`, then one TAB-separated row per requirement.
+
+| Column | Meaning and allowed values |
+|---|---|
+| `id` | `R1`, `R2`, … Contiguous from `R1`; no duplicates or gaps. |
+| `requirement` | The agreed behavior or obligation. Non-empty. |
+| `implementation` | `pending`, `delivered`, `partial`, `not-delivered`. |
+| `verification` | `pending`, `passed`, `failed`, `blocked`, `not-run`, `not-applicable`. |
+| `evidence` | `-` or comma-separated `E<n>` ids from the evidence index. |
+| `scope` | `accepted`, `narrowed`, `dropped`. |
+| `note` | Reason for a failed/blocked/not-run/not-applicable check, or for narrowed/dropped scope. |
+
+Evidence indexes use `# evidence-record v1`, then
+`E<n>  command  identity  selection  result  exit`. `identity` records the source commit plus
+working-diff identity; `selection` names the selected tiers, cases or mutation rows. An unrun
+check uses result `pending` and exit `-`; a passed requirement cannot reference pending evidence.
+
+```bash
+tooling/tests/change_record.sh check --mode draft --record <file> [--evidence <file>]
+tooling/tests/change_record.sh check --mode complete --record <file> --evidence <file>
+```
+
+`draft` allows pending states while work is in progress. `complete` refuses pending
+implementation or verification. `passed` requires an evidence id; `failed`, `blocked`, `not-run`
+and `not-applicable` require a note; `narrowed` and `dropped` require the decision note.
+
+The default suite validates the checker and its fixtures only. It does not read an assumed hub
+path or an ignored local record: pass `--record` explicitly. A valid record proves structure, not
+approval or semantic completeness. The completion audit still compares it with the agreed source
+requirements and the actual diff.
+
+## Instruction-consistency register
+
+`tooling/tests/expectations/instructions.tsv` pins a bounded set of instruction contracts.
+`tooling/tests/instruction_register.sh check` runs in T4 and reports every broken row.
+
+| Column | Meaning |
+|---|---|
+| `id` | Stable local id (`I1`, `I2`, …). |
+| `owner` | Tooling-relative file that owns the canonical contract. |
+| `section` | Exact heading text in the owner (without `#`), or `-` for the whole file. A renamed or empty section fails. |
+| `surfaces` | `-`, or comma-separated tooling-relative files scanned whole for the retired pattern. |
+| `required` | Literal text that must remain in the owner section, or `-`. |
+| `retired` | Extended regular expression that must be absent from every surface, or `-`. |
+
+The register catches known retirements; it cannot detect paraphrases or prove semantic
+consistency. Do not replace the required contract with one exact phrase, and do not use the
+register to exempt history or examples by blanket rule. Contract reconciliation and scenario
+verification remain manual review duties.
 
 ## Inside the harness (read this before editing tests/ or writing mutation rows)
 

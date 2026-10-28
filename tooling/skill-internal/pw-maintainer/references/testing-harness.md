@@ -14,6 +14,14 @@ This page routes; the doc owns the detail.
 protocol (change type → minimum tiers)". The default `pw_test.sh` run is T0,T1,T2,T4 — the commit
 gate. Narrow while editing with `--tier T0` / `--tier T4` / `--tier T1 --only <script>`.
 
+**T1 selection** resolves once per run: the runner prints the selected case names and refuses a
+`--only` filter that matches no T1 case. `--only` does not apply when T1 is not selected.
+
+**Change records and the instruction register** are T4/T1 facts, not new tiers:
+`tests/change_record.sh check` validates a requirement/evidence record;
+`tests/instruction_register.sh check` validates `expectations/instructions.tsv`. Formats and limits:
+[`testing.md`](../../../docs/testing.md) §Change records and §Instruction-consistency register.
+
 **Before editing `tests/` or writing a mutation row** → read
 [`testing.md`](../../../docs/testing.md) §"Inside the harness": the fixture scan/materialize flow, the
 cache **recipe rule**, the watchdog, and fixture-pollution etiquette (**clone `$F2`, never mutate
