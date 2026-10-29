@@ -17,7 +17,7 @@ _pwtest_namedarg_scan() {
   local all R1 R1A R2 R3 R4 R5 R6 R7 R8 R8A
   all="$(cat)"
   R1='(^|[`$>:])/pw-(new|analyze|breakdown|close|sync|execute|status|ship|config|context|adopt|rfc|doctor|review) +[a-z0-9][a-z0-9-]*'
-  R1A='pw-review (init|init-all|item|answer|signoff|prepare|import|ai|config|reopen|archive|passes|read|gate|count|has-open|resolve|reindex)\b|pw-(status|ship) (rewind|comments|request-review|stack|stack-adopt|update|draft|ready)\b|pw-config (global|model-check|model-resolve|show|get|set|ensure|ai-model|ai-review|review-trigger|review-repair|review-rounds|agent-model)\b|pw-context (adopt|add-input|add-repo|fetch|prepare|req-init|scan)\b|pw-rfc (init|target|state|comment-seen|dashboard|comments|milestone|deploy)\b|pw-adopt\b|/pw-[a-z-]+ (to|for|and|or|the|an|will|can|is|runs|works|already|side-loop|command|commands|before|after|twice|again|now|still|only|users?|sessions?|without|with)\b'
+  R1A='pw-review (init|init-all|item|answer|signoff|prepare|import|ai|config|reopen|archive|passes|read|gate|count|has-open|resolve|reindex)\b|pw-(status|ship) (rewind|comments|request-review|stack|stack-adopt|update|draft|ready)\b|pw-config (global|model-check|model-resolve|models|agent-model|agent-model-set|agent-model-unset|agent-models|spawn-args|show|get|set|ensure|ai-model|ai-review|review-trigger|review-repair|review-rounds)\b|pw-context (adopt|add-input|add-repo|fetch|prepare|req-init|scan)\b|pw-rfc (init|target|state|comment-seen|dashboard|comments|milestone|deploy)\b|pw-adopt\b|/pw-[a-z-]+ (to|for|and|or|the|an|will|can|is|runs|works|already|side-loop|command|commands|before|after|twice|again|now|still|only|users?|sessions?|without|with)\b'
   R2='--project +[^ ]+ +(item|answer|signoff|prepare|import|ai|comments|request-review|rewind|set|ensure|global|adopt|milestone)\b'
   R3='pw-config(\.sh)? +(project|ai-review|ai-model|review-trigger|review-repair|review-rounds) +[a-z0-9<-]'
   R4='/(pw-review) +(item|answer) +([^ -][^ ]*/|<[a-z-]+>)'
@@ -569,9 +569,9 @@ PY
   local hcount mcount missing_entry bad_entry rendered
   hcount="$(ls -d "$TOOL/skills/human"/*/ 2>/dev/null | wc -l | tr -d ' ')"
   mcount="$(ls -d "$TOOL/skills/model"/*/ 2>/dev/null | wc -l | tr -d ' ')"
-  [ "$hcount" = 21 ] && [ "$mcount" = 4 ] \
-    && pwtest_ok "T4 canary: 19 human entries and 4 shared skills (plan 29)" \
-    || pwtest_bad "T4 canary: skill inventory" "expected 21 human + 4 shared; got $hcount + $mcount"
+  [ "$hcount" = 22 ] && [ "$mcount" = 4 ] \
+    && pwtest_ok "T4 canary: 22 entry sources and 4 shared skills" \
+    || pwtest_bad "T4 canary: skill inventory" "expected 22 entry sources + 4 shared; got $hcount + $mcount"
   missing_entry="$(grep -L '`pw-orchestration`' "$TOOL"/skills/human/*/SKILL.md 2>/dev/null | tr '\n' ' ')"
   [ -z "$missing_entry" ] \
     && pwtest_ok "T4 canary: every human entry loads the shared orchestration rules" \
@@ -580,10 +580,10 @@ PY
     && [ -f "$TOOL/skills/model/pw-orchestration/references/execution.md" ] \
     && grep -qF 'no custom primary agent' "$TOOL/skills/model/pw-orchestration/SKILL.md" \
     && ! ls "$TOOL/agents/pw-orchestrator.md" >/dev/null 2>&1 \
-    && [ "$(ls "$TOOL"/agents/pw-*.md | wc -l | tr -d ' ')" = 6 ] \
+    && [ "$(ls "$TOOL"/agents/pw-*.md | wc -l | tr -d ' ')" = 7 ] \
     && [ -f "$TOOL/agents/pw-ship-comment-analyst.md" ] \
-    && pwtest_ok "T4 canary: normal-session orchestration with six workers and no primary agent" \
-    || pwtest_bad "T4 canary: orchestration inventory" "orchestration references/declaration missing, or the agent set is not exactly six workers"
+    && pwtest_ok "T4 canary: normal-session orchestration with seven workers and no primary agent" \
+    || pwtest_bad "T4 canary: orchestration inventory" "orchestration references/declaration missing, or the agent set is not exactly seven workers"
   # 9a) /pw-ship comments analysis prerequisite: ONE read-only analyst gates every MR fixer;
   # groups inside an MR stay sequential, and independent MRs share the max-parallel ceiling.
   grep -qF 'Comment analysis prerequisite' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
@@ -591,7 +591,7 @@ PY
     && grep -qF 'groups never run as parallel writers' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
     && grep -qF 'the single analysis artifact is complete and validated.' "$TOOL/skills/human/pw-ship/SKILL.md" \
     && grep -qF 'Read-only; never fixes' "$TOOL/agents/pw-ship-comment-analyst.md" \
-    && grep -qF 'Six worker sub-agents ship' "$TOOL/skills/model/pw-guide-workflow/references/execution-and-routing.md" \
+    && grep -qF 'Seven worker sub-agents ship' "$TOOL/skills/model/pw-guide-workflow/references/execution-and-routing.md" \
     && grep -qF '**Load `references/mr-comments.md` from the `pw-guide-workflow` skill**' "$TOOL/skills/human/pw-ship/SKILL.md" \
     && grep -qF 'Concurrency is required, not optional.' "$TOOL/skills/human/pw-ship/SKILL.md" \
     && grep -qF '**do not process them one after another**' "$TOOL/skills/model/pw-guide-workflow/references/mr-comments.md" \
@@ -679,16 +679,16 @@ PYD
   "$TOOL/scripts/toolchain/gen-commands.sh" --outdir "$rendered" claude cursor codex kilo opencode >/dev/null 2>&1
   bad_entry=""
   for _pf in claude cursor; do
-    [ "$(ls -d "$rendered/$_pf"/*/ 2>/dev/null | wc -l | tr -d ' ')" = 21 ] || bad_entry="$bad_entry $_pf:skill-count"
+    [ "$(ls -d "$rendered/$_pf"/*/ 2>/dev/null | wc -l | tr -d ' ')" = 22 ] || bad_entry="$bad_entry $_pf:skill-count"
     grep -qF 'disable-model-invocation: true' "$rendered/$_pf/pw-execute/SKILL.md" 2>/dev/null || bad_entry="$bad_entry $_pf:explicit-only"
     ls "$rendered/$_pf"/*.md >/dev/null 2>&1 && bad_entry="$bad_entry $_pf:command-files"
   done
-  [ "$(ls -d "$rendered/codex"/*/ 2>/dev/null | wc -l | tr -d ' ')" = 21 ] || bad_entry="$bad_entry codex:skill-count"
+  [ "$(ls -d "$rendered/codex"/*/ 2>/dev/null | wc -l | tr -d ' ')" = 22 ] || bad_entry="$bad_entry codex:skill-count"
   grep -qF 'allow_implicit_invocation: false' "$rendered/codex/pw-execute/agents/openai.yaml" 2>/dev/null || bad_entry="$bad_entry codex:policy"
   grep -qF '<arguments>' "$rendered/codex/pw-execute/SKILL.md" 2>/dev/null || bad_entry="$bad_entry codex:args-token"
   grep -qF '$ARGUMENTS' "$rendered/codex/pw-execute/SKILL.md" 2>/dev/null && bad_entry="$bad_entry codex:claude-token"
   for _pf in kilo opencode; do
-    [ "$(ls "$rendered/$_pf"/*.md 2>/dev/null | wc -l | tr -d ' ')" = 21 ] || bad_entry="$bad_entry $_pf:command-count"
+    [ "$(ls "$rendered/$_pf"/*.md 2>/dev/null | wc -l | tr -d ' ')" = 22 ] || bad_entry="$bad_entry $_pf:command-count"
     ls -d "$rendered/$_pf"/pw-*/ >/dev/null 2>&1 && bad_entry="$bad_entry $_pf:entry-skills"
   done
   [ -z "$bad_entry" ] \

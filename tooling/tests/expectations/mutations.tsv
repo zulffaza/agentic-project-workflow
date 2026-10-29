@@ -462,7 +462,7 @@ C363-batch-readiness-dropped	skills/human/pw-batch/SKILL.md	| `/pw-ship ready` /
 C364-unresolved-attempt-overwritten	pw-shiplib.sh	                if prior.get('status') != 'done':	                if False:	T1	^pw-ship-readiness\.t\.sh$
 C365-comment-analysis-barrier-dropped	skills/model/pw-guide-workflow/references/mr-comments.md	No source edit begins until its artifact is complete and	Source edits may begin before the artifact is complete or	T4	-
 C366-parallel-group-writers-allowed	skills/model/pw-guide-workflow/references/mr-comments.md	groups never run as parallel writers	groups may run as parallel writers	T4	-
-C367-comment-analyst-role-unregistered	pw-config.sh	AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier ship-comment-analyst"	AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier"	T1	^pw-config\.t\.sh$
+C367-comment-analyst-role-unregistered	pw-config.sh	AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier ship-comment-analyst explorer"	AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier explorer"	T1	^pw-config\.t\.sh$
 C368-comment-analyst-may-fix	agents/pw-ship-comment-analyst.md	Read-only; never fixes	Read-only; may fix	T4	-
 C369-comment-reference-owner-dropped	skills/human/pw-ship/SKILL.md	**Load `references/mr-comments.md` from the `pw-guide-workflow` skill**	**Load `references/mr-comments.md`**	T4	-
 C370-independent-mrs-may-run-serially	skills/human/pw-ship/SKILL.md	**Concurrency is required, not optional.**	Concurrency is optional.	T4	-
@@ -486,7 +486,7 @@ C397-compose-boundary-recovery-dropped	pw-shiplib.sh	body, _recovered = recover_
 C398-repair-receipt-lookup-latest-only	pw-review.sh	  _repair_lookup "$f" "$receipt"	  return 1	T1	^pw-project-defaults\.t\.sh$
 C399-doctor-draft-lint-ready-stage	pw-project-doctor.sh	lint --kind all --project "$SLUG" --stage reviewable	lint --kind all --project "$SLUG"	T1	^pw-project-doctor\.t\.sh$
 C400-repair-start-receipt-optional	pw-review.sh	      || die "start: a repair pass needs --receipt <id> → fix: generate one id for this apply-feedback invocation and pass it to every start/resolve (omitting it would bypass repair admission)"	      || true	T1	^pw-project-defaults\.t\.sh$
-C401-spawn-args-canonical-id-dropped	pw-config.sh	_resolved="$(cmd_model_resolve --provider "$prov" --model "$model" 2>/dev/null)" || _rrc=$?	_resolved="$model" || _rrc=$?	T1	^pw-project-defaults\.t\.sh$
+C401-spawn-args-canonical-id-dropped	pw-config.sh	_resolved="$(cmd_model_resolve --provider "$prov" --model "$_base" 2>/dev/null)" || _rrc=$?	_resolved="$_base" || _rrc=0	T1	^pw-project-defaults\.t\.sh$
 C402-global-stale-read-recheck-dropped	pw-config.sh	|| { rm -f "$tmp"; die "global: $f changed during this transaction — refusing to overwrite the external edit → fix: re-run the command on the current file"; }	|| true	T1	^pw-project-defaults\.t\.sh$
 C403-breakdown-role-list-stale	skills/human/pw-breakdown/SKILL.md	researcher/analyst/writer-task/reviewer/verifier/ship-comment-analyst;	researcher/analyst/writer-task/reviewer/verifier;	T4	-
 C404-global-write-lock-dropped	pw-config.sh	while ! mkdir "$lock" 2>/dev/null; do	while false; do	T1	^pw-project-defaults\.t\.sh$
@@ -498,3 +498,15 @@ C409-instruction-register-missing-section-allowed	tests/instruction_register.sh	
 C410-instruction-register-retired-scan-dropped	tests/instruction_register.sh	        if (match(stxt, retired[i]) > 0) {	        if (0) {	T1	^pw-instruction-register\.t\.sh$
 C411-t1-no-match-guard-dropped	tests/pw_test.sh	  if [ -n "$ONLY" ] && [ "$_t1_count" -eq 0 ]; then	  if false; then	T1	^pw-test-harness\.t\.sh$
 C412-change-record-pending-evidence-allowed	tests/change_record.sh	      if (ver == "passed" && (evs[i] in pending_ev)) {	      if (0) {	T1	^pw-change-record\.t\.sh$
+C413-worker-provider-prefix-mismatch-allowed	pw-config.sh	[ "$prefix" = "$prov" ]	true	T1	^pw-config\.t\.sh$
+C414-worker-permission-check-dropped	pw-config.sh	_model_permission_check "$prov" "$W_MODEL" >/dev/null	true	T1	^pw-config\.t\.sh$
+C415-worker-availability-check-dropped	pw-config.sh	resolved="$(cmd_model_resolve --provider "$prov" --model "$W_MODEL" 2>/dev/null)" || rrc=$?	resolved="$W_MODEL" || rrc=0	T1	^pw-config\.t\.sh$
+C416-spawn-args-worker-fallback-dropped	pw-config.sh	binding="$(pw_agent_default_spec "$prov_hint" "$_worker")"	binding="—"	T1	^pw-project-defaults\.t\.sh$
+C417-project-binding-precedence-dropped	pw-config.sh	if [ "$binding" != "—" ] && [ "$binding" != "-" ]; then	if false; then	T1	^pw-project-defaults\.t\.sh$
+C418-models-unsupported-axis-allowed	pw-config.sh	|| die "models: --api-provider applies only to kilo/opencode, and no selected provider has that axis"	|| true	T1	^pw-config\.t\.sh$
+C419-scan-ignore-glob-dropped	pw-context.sh	case "$file" in $ig) skip=1; break ;; esac	:	T1	^pw-context\.t\.sh$
+C420-scan-traversal-area-allowed	pw-context.sh	/*|../*|*/../*|*/..|..) die "scan: --area must be a repo-relative path without '..' (got '$area')" ;;	*) : ;;	T1	^pw-context\.t\.sh$
+C421-research-path-traversal-allowed	pw-doc.sh	''|*..*|*[!A-Za-z0-9._-]*) die "research-path: invalid topic	'') die "research-path: invalid topic	T1	^pw-doc\.t\.sh$
+C422-generation-worker-model-dropped	gen-agents.sh	wspec="$(pw_agent_default_spec "$prov" "$agentname")"	wspec=""	T1	^pw-config\.t\.sh$
+C423-spawn-args-worker-source-mislabeled	pw-config.sh	          source="worker"	          source="default"	T1	^pw-project-defaults\.t\.sh$
+C424-batch-agent-model-exclusion-dropped	skills/human/pw-batch/SKILL.md	`models`, `agent-model`,	`model-resolve`,	T1	^pw-batch\.t\.sh$

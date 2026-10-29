@@ -65,6 +65,11 @@ Two steps of phase 2 may be **delegated** (both read-mostly; the human-dropped `
 `context/INDEX.md` stay the inputs of record — a spawn never replaces the ground truth, it grounds
 it):
 
+- **`pw-explorer` — optional orientation prepass.** When the scope is large or unfamiliar, run one
+  bounded `pw-context.sh scan` and have the explorer map candidate files, entrypoints,
+  dependencies, and tests with coverage gaps. Reuse an adequate supplied map; do not launch an
+  explorer before the cross-MR comment analyst (it already explores its own scope). A map is not
+  evidence: the researcher still validates claims.
 - **`pw-researcher` Mode B — the grounding pre-step.** When context is thin or not
   ground-truthable from the inputs alone (and always as the continuation pass on `/pw-adopt`): it
   fetches the bare-URL INDEX rows at the precedence above, checks each repo actually on its base

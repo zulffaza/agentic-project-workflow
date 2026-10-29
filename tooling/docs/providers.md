@@ -229,6 +229,26 @@ right CLI flag by provider:
 - Omit `Effort:`/`Thinking:` to use each CLI's default. Values are validated at execution — an
   unknown effort/variant for a given provider is reported, not silently dropped.
 
+## Provider-specific worker defaults
+
+A generated worker definition can carry a different model per provider, because catalogs and
+tuning controls differ. The cell key is the provider plus the canonical filename:
+`PW_CURSOR_AGENT_MODELS_PW_RESEARCHER`, `PW_KILO_AGENT_MODELS_PW_EXPLORER`, and so on.
+
+```bash
+$PW_HOME/tooling/scripts/entities/pw-config.sh models --provider cursor          # bounded discovery
+$PW_HOME/tooling/scripts/entities/pw-config.sh agent-model-set --provider cursor \
+  --agent pw-researcher --value 'claude-opus-5-thinking-xhigh'
+$PW_HOME/tooling/scripts/entities/pw-config.sh spawn-args --project <slug> \
+  --role researcher --provider cursor --json
+```
+
+The write validates the optional provider prefix, model availability, the allowlist, and the
+provider's tuning capability before one managed assignment is published. Generation renders only
+fields the definition format supports; other parameterization stays an invocation-time binding.
+A worker default does not override a project role row or a task pin. Codex has no seeded agent
+definitions, so it has no worker cells. Fixer procedure entries are not workers.
+
 ## Choosing a model — no fixed roster, model-agnostic by default
 
 There's deliberately no fixed "blessed models" list, and no static model→provider catalog either

@@ -24,7 +24,7 @@ The example config enables Claude only.
 
 ### Defaults for new projects
 
-Set reusable project defaults once with `/pw-config global set`. A new project copies those values
+Set reusable project defaults once with `/pw-config global set`. A new project copies those values. Provider-specific worker models use `/pw-config models` and `/pw-config global set --key agent-model`.
 into its dashboard; an existing project keeps its captured values, so changing a default never
 rewrites work in progress. Review modes, role models, routing, execution limit, and maximum
 parallelism are supported.

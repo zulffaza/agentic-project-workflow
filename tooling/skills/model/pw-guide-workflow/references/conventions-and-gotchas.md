@@ -118,7 +118,7 @@ Don't hand-edit the Status line or LOG.md — use the helper `agentic-project-wo
   plus `--variant/--reasoning/--effort` for exactly one `ai-model` role; see `docs/EXECUTION.md` for
   what they bind). Read `ai-model` with `--json` for the complete binding and resolve dispatch with
   `spawn-args --role <role>`. `ai-model` lanes =
-  researcher / analyst / writer-task / reviewer / verifier / ship-comment-analyst (NOT executor —
+  researcher / analyst / writer-task / reviewer / verifier / ship-comment-analyst / explorer (NOT executor —
   that pin is the task file). A bare model name or an executor lane is refused.
 - **Spawn bookkeeping (the §8.5 ledger):** every delegated spawn logs one line through
   `pw-status.sh log`, carrying `· session=<id> · seed=<ref> · out=<artifact>` so a later
@@ -178,9 +178,9 @@ The command files are **generated build artifacts** — the single source is
 `~/.config/kilo/command/`, cursor → `~/.cursor/commands/`, codex → `~/.codex/skills/<name>/SKILL.md`
 — codex has NO native command surface (custom prompts removed upstream in codex-cli 0.117.0), so
 its commands are generated explicit-only skill dirs sharing the skills namespace; a bundle skill
-colliding with a command name is skipped at install and the command-skill owns the name); the six worker sub-agents
+colliding with a command name is skipped at install and the command-skill owns the name); the seven worker sub-agents
 (`pw-executor`, `pw-reviewer`, `pw-researcher`, `pw-analyst`, `pw-writer-task`,
-`pw-ship-comment-analyst`) are seeded the same way from `tooling/agents/` by `gen-agents.sh`. To change a
+`pw-ship-comment-analyst`, `pw-explorer`) are seeded the same way from `tooling/agents/` by `gen-agents.sh`. To change a
 command's prompt or an agent, edit the canonical file and re-run the generator — never hand-edit the
 per-provider copies.
 

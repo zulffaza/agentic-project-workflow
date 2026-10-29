@@ -51,6 +51,13 @@
 #       pw-adopt-scope markers), and set the dashboard Adopted: pointer.
 #       (was pw-lib.sh adopt — the context-doc entity owns these tables per S1a)
 #
+#   pw-context.sh scan --repo <path> [--area <path>] [--query <term>]… [--changed <base>]
+#                      [--ignore <glob>]… [--limit <n>] [--tree-depth <n>]
+#                      [--show-content <n>] [--format markdown|tsv]
+#       Bounded, read-only orientation scan for the explorer lane. Lists tracked files,
+#       query matches, likely surfaces, and explicit coverage/truncation. Never fetches,
+#       installs, or writes. Zero matches is a valid result; unsafe paths/refs refuse.
+#
 # Named-argument grammar: operation words first, every value named; --project
 # selects the project in every project form. Scalar values are ONE token (quote
 # spaces); prose values run until the next --flag token. A literal value that
@@ -688,6 +695,202 @@ _pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v u="$uid" -v b
   echo "$slug: adopted $uid ($key) — base $base, MR $mr  [$count unit(s)]"
 }
 
+# ---------------------------------------------------------------- scan (explorer orientation)
+# Read-only bounded scan. All selectors are data: Git and grep receive them after `--`.
+cmd_scan() {
+  local repo="" area="" changed="" limit=40 depth=2 show=0 format=markdown a v
+  local -a queries; queries=()
+  local -a ignores; ignores=()
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --repo=*) v="${a#*=}"; a="--repo" ;;
+      --area=*) v="${a#*=}"; a="--area" ;;
+      --query=*) v="${a#*=}"; a="--query" ;;
+      --changed=*) v="${a#*=}"; a="--changed" ;;
+      --ignore=*) v="${a#*=}"; a="--ignore" ;;
+      --limit=*) v="${a#*=}"; a="--limit" ;;
+      --tree-depth=*) v="${a#*=}"; a="--tree-depth" ;;
+      --show-content=*) v="${a#*=}"; a="--show-content" ;;
+      --format=*) v="${a#*=}"; a="--format" ;;
+    esac
+    case "$a" in
+      --repo|--area|--query|--changed|--ignore|--limit|--tree-depth|--show-content|--format)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --repo) repo="$v" ;; --area) area="$v" ;; --query) queries+=("$v") ;;
+          --changed) changed="$v" ;; --ignore) ignores+=("$v") ;;
+          --limit) limit="$v" ;; --tree-depth) depth="$v" ;;
+          --show-content) show="$v" ;; --format) format="$v" ;;
+        esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "scan --repo <path> [--area <path>] [--query <term>]… [--changed <base>] [--ignore <glob>]… [--limit <n>] [--tree-depth <n>] [--show-content <n>] [--format markdown|tsv]" ;;
+      *) _pw_positional "$a" "scan --repo <path> [--area <path>] [--query <term>]… [--changed <base>] [--format markdown|tsv]" ;;
+    esac
+  done
+  [ -n "$repo" ] || die "scan: --repo is required → fix: scan --repo <path> [--area <path>] [--query <term>]…"
+  [ -d "$repo" ] || die "scan: repo path '$repo' is not a directory → fix: pass a repository checkout"
+  case "$format" in markdown|tsv) ;; *) die "scan: --format expects markdown|tsv, got '$format'" ;; esac
+  _require_scan_int() { case "$2" in ''|*[!0-9]*) die "scan: $1 expects an integer ($3..$4), got '$2'" ;; esac; [ "$2" -ge "$3" ] && [ "$2" -le "$4" ] || die "scan: $1 expects $3..$4, got $2"; }
+  _require_scan_int limit "$limit" 1 500
+  _require_scan_int tree-depth "$depth" 0 12
+  _require_scan_int show-content "$show" 0 20
+  case "$area" in
+    ""|.) area="" ;;
+    /*|../*|*/../*|*/..|..) die "scan: --area must be a repo-relative path without '..' (got '$area')" ;;
+  esac
+  [ -z "$area" ] || [ -e "$repo/$area" ] || die "scan: --area '$area' does not exist under $repo"
+  local root sha ref
+  root="$(cd "$repo" && pwd -P)" || die "scan: cannot resolve repo path"
+  sha="$(git -C "$root" rev-parse --short HEAD 2>/dev/null)" || die "scan: '$repo' is not a Git repository → fix: pass a checkout"
+  if [ -n "$changed" ]; then
+    git -C "$root" rev-parse --verify --quiet "$changed^{commit}" >/dev/null 2>&1 \
+      || die "scan: --changed '$changed' is not a valid commit-ish → fix: name a branch, tag, or SHA"
+    ref="changed:$changed"
+  else
+    ref="tracked"
+  fi
+
+  local file scanned=0 ignored=0 truncated=0
+  local -a files; files=()
+  local -a matches; matches=()
+  local -a surfaces; surfaces=()
+  local match_limit=200
+  local scan_list=""
+  if [ -n "$changed" ]; then
+    if [ -n "$area" ]; then scan_list="$(git -C "$root" diff --name-only "$changed" -- "$area" 2>/dev/null || true)"
+    else scan_list="$(git -C "$root" diff --name-only "$changed" 2>/dev/null || true)"; fi
+  else
+    if [ -n "$area" ]; then scan_list="$(git -C "$root" ls-files -- "$area" 2>/dev/null || true)"
+    else scan_list="$(git -C "$root" ls-files 2>/dev/null || true)"; fi
+  fi
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    scanned=$((scanned+1))
+    if [ "$scanned" -gt 4000 ]; then truncated=1; break; fi
+    local skip=0 ig
+    if [ ${#ignores[@]} -gt 0 ]; then
+      for ig in "${ignores[@]}"; do
+        case "$file" in $ig) skip=1; break ;; esac
+      done
+    fi
+    if [ "$skip" = 1 ]; then ignored=$((ignored+1)); continue; fi
+    files+=("$file")
+  done <<EOF
+$scan_list
+EOF
+
+  local -a matches_by_query; matches_by_query=()
+  local q total=0 out f
+  if [ ${#queries[@]} -gt 0 ]; then
+    for q in "${queries[@]}"; do
+      total=0
+      out=""
+      if [ ${#files[@]} -gt 0 ]; then
+        for file in "${files[@]}"; do
+          [ "$total" -ge "$match_limit" ] && { truncated=1; break; }
+          while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            total=$((total+1))
+            if [ "$total" -le "$match_limit" ]; then
+              matches+=("$q"$'\t'"$file"$'\t'"$line")
+              out="$out$file"$'\n'
+            fi
+          done <<EOF
+$(grep -F -n -I -e "$q" -- "$root/$file" 2>/dev/null | head -n "$match_limit" || true)
+EOF
+        done
+      fi
+      matches_by_query+=("$q"$'\t'"$total")
+      if [ -n "$out" ]; then
+        while IFS= read -r file; do
+          [ -n "$file" ] || continue
+          local seen=0 s
+          if [ ${#surfaces[@]} -gt 0 ]; then
+            for s in "${surfaces[@]}"; do [ "$s" = "$file" ] && seen=1; done
+          fi
+          if [ "$seen" = 0 ]; then
+            if [ ${#surfaces[@]} -ge "$limit" ]; then truncated=1
+            else surfaces+=("$file"); fi
+          fi
+        done <<EOF
+$(printf '%s' "$out" | awk 'NF' | sort -u)
+EOF
+      fi
+    done
+  fi
+
+  if [ "$format" = tsv ]; then
+    printf 'kind\tpath\tline\ttext\n'
+    local m q2 f2 l2 t2
+    if [ ${#matches[@]} -gt 0 ]; then
+      for m in "${matches[@]}"; do
+        IFS=$'\t' read -r q2 f2 l2 <<EOF
+$m
+EOF
+        t2="${l2#*:}"; l2="${l2%%:*}"
+        printf 'match\t%s\t%s\t%s\n' "$f2" "$l2" "$(printf '%s' "$t2" | tr '\t' ' ')"
+      done
+    fi
+    if [ ${#surfaces[@]} -gt 0 ]; then
+      for f2 in "${surfaces[@]}"; do printf 'surface\t%s\t\t\n' "$f2"; done
+    fi
+    printf 'coverage\t\t\t%s\n' "scanned=$scanned ignored=$ignored truncated=$([ "$truncated" = 1 ] && echo yes || echo no)"
+    return 0
+  fi
+
+  printf 'Repo context\n'
+  printf -- '- repo: %s\n' "$root"
+  printf -- '- ref: %s (%s)\n' "$sha" "$ref"
+  printf -- '- area: %s\n' "${area:-.}"
+  printf -- '- mode: %s\n' "$([ -n "$changed" ] && echo changed-since || echo tracked-files)"
+  if [ "$depth" -gt 0 ] && [ -n "$scan_list" ]; then
+    local tree_dirs
+    tree_dirs="$(printf '%s\n' "$scan_list" | awk -F/ -v d="$depth" '
+      NF>1 { p=""; for (i=1; i<NF && i<=d; i++) { p=p (i>1?"/":"") $i; print p } }' | sort -u | head -n 20 | paste -sd, -)"
+    [ -n "$tree_dirs" ] && printf -- '- tree (depth %s): %s\n' "$depth" "$tree_dirs"
+  fi
+  printf '\nQuery findings\n'
+  if [ ${#queries[@]} -eq 0 ]; then
+    printf -- '- (no queries supplied — file inventory only)\n'
+  else
+    local pair pq pc
+    for pair in "${matches_by_query[@]}"; do
+      IFS=$'\t' read -r pq pc <<EOF
+$pair
+EOF
+      printf -- '- `%s`: %s match(es)\n' "$pq" "$pc"
+    done
+  fi
+  printf '\nLikely surfaces\n'
+  if [ ${#surfaces[@]} -eq 0 ]; then
+    printf -- '- none (no query matches in the scanned set)\n'
+  else
+    for f in "${surfaces[@]}"; do
+      printf -- '- `%s`\n' "$f"
+      if [ "$show" -gt 0 ] && [ ${#matches[@]} -gt 0 ]; then
+        local k=0 q3 f3 l3 text m
+        for m in "${matches[@]}"; do
+          IFS=$'\t' read -r q3 f3 l3 <<EOF
+$m
+EOF
+          [ "$f3" = "$f" ] || continue
+          [ "$k" -ge "$show" ] && break
+          k=$((k+1))
+          text="${l3#*:}"; l3="${l3%%:*}"
+          printf -- '  - L%s: %s\n' "$l3" "$(printf '%s' "$text" | cut -c1-200)"
+        done
+      fi
+    done
+  fi
+  printf '\nCoverage\n'
+  printf -- '- scanned: %s tracked file(s)\n' "$scanned"
+  printf -- '- candidates: %s (limit %s)\n' "${#surfaces[@]}" "$limit"
+  printf -- '- ignored: %s\n' "$ignored"
+  printf -- '- truncated: %s\n' "$([ "$truncated" = 1 ] && echo yes || echo no)"
+  printf -- '- note: candidate files and unsearched areas are not evidence of absence\n'
+}
+
 # ---------------------------------------------------------------- dispatch
 [ $# -ge 1 ] || pw_usage
 case "$1" in -h|--help) pw_usage ;; esac
@@ -701,6 +904,7 @@ case "$OP" in
   adopt-snapshot) cmd_adopt_snapshot "$@" ;;
   adopt)          cmd_adopt "$@" ;;
   add-repo)  cmd_add_repo "$@" ;;
+  scan)      cmd_scan "$@" ;;
   -h|--help) pw_usage ;;
-  *) die "unknown operator: $OP → fix: see --help (req-init, add-input, ensure-input, add-repo, ensure-repo, fetch, adopt-snapshot, adopt)" ;;
+  *) die "unknown operator: $OP → fix: see --help (req-init, add-input, ensure-input, add-repo, ensure-repo, fetch, adopt-snapshot, adopt, scan)" ;;
 esac

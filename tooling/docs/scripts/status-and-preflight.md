@@ -163,7 +163,11 @@ $PW_HOME/tooling/scripts/entities/pw-config.sh show   --project <slug> [--json] 
 $PW_HOME/tooling/scripts/entities/pw-config.sh get    --project <slug> --key <key>
 $PW_HOME/tooling/scripts/entities/pw-config.sh set    --project <slug> --key <key> [--value <v> | --set <member=value>]…
 $PW_HOME/tooling/scripts/entities/pw-config.sh ensure --project <slug>            # insert missing explicit dashboard config lines
-$PW_HOME/tooling/scripts/entities/pw-config.sh global   show                      # effective machine floors — read-only (no 'global set' on purpose)
+/pw-config global show                      # effective machine floors + inherited project/worker defaults
+/pw-config global set|get|unset …          # ONE managed block in pw.config.sh (creation defaults / worker cells)
+/pw-config models …                        # bounded catalog discovery (live/fixed/unavailable source)
+/pw-config agent-model-set …              # provider-by-worker model cell
+/pw-config spawn-args …                   # resolved provider argv (role or named worker)
 $PW_HOME/tooling/scripts/entities/pw-config.sh model-check  --provider <p> --model <m>     # PERMISSION axis (allowlist guard) — global verb, slug-less
 $PW_HOME/tooling/scripts/entities/pw-config.sh model-resolve --provider <p> --model <m>    # AVAILABILITY axis (below) — global verb, slug-less
 ```

@@ -63,6 +63,28 @@ for prov in "${PROVIDERS[@]}"; do
     role="$(fm "$f" role)"
     claude_tools="$(fm "$f" claude_tools)"
     model="$(fm "$f" model)"
+    # Provider-specific worker default (machine config, not a project default). It outranks a
+    # canonical `model:` fallback. Render only fields the provider's definition format supports;
+    # parameterized settings the definition cannot express stay invocation-time bindings.
+    wspec="$(pw_agent_default_spec "$prov" "$agentname")"
+    if [ -n "$wspec" ]; then
+      wdecl="$(pw_worker_spec_provider "$wspec")"
+      if [ -n "$wdecl" ] && [ "$wdecl" != "$prov" ]; then
+        echo "  $prov/$agentname: worker default declares provider '$wdecl' — ignoring it (fix: set a $prov spec or unset that cell)" >&2
+      elif { case "$wspec" in *'['*']'*) false ;; *'['*|*']'*) true ;; *) false ;; esac; }; then
+        echo "  $prov/$agentname: malformed worker spec '$wspec' — ignoring it (fix: /pw-config agent-model-set)" >&2
+      else
+        wmodel="$(pw_worker_spec_model "$wspec")"
+        wparams="$(pw_worker_spec_params "$wspec")"
+        case "$prov" in
+          cursor) model="$(pw_worker_spec_effective "$prov" "$wspec")" ;;
+          *) model="$wmodel"
+             if [ -n "$wparams" ]; then
+               echo "  $prov/$agentname: worker parameters '$wparams' cannot be rendered into a $prov agent definition — bind them at invocation time" >&2
+             fi ;;
+        esac
+      fi
+    fi
     bodytext="$(body "$f")"
     # stamp real absolute paths into the build artifact
     bodytext="${bodytext//\{\{PW_HOME\}\}/$PW_HOME}"

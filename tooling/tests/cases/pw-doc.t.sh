@@ -270,3 +270,15 @@ done
 grep -qF "copies each task file's Status" "$TOOL/docs/scripts/document-automation.md" \
   && pwtest_ok "E: sync contract documented (--plan-only)" || pwtest_bad "E: sync contract documented" "document-automation.md lost the PLAN-table clause"
 rm -rf "$PW_PROJECTS_DIR/sync-plan-a" "$PW_PROJECTS_DIR/sync-plan-b" "$PW_PROJECTS_DIR/sync-plan-c" "$PW_PROJECTS_DIR/sync-plan-d"
+
+# --- research-path: canonical artifact family (plan 17) -----------------------------------
+DOC="$(pwtest_script pw-doc.sh)"
+pwtest_eq "research-path exploration" "analysis/research/topic.exploration.md" "$("$DOC" research-path --project "$S2" --topic topic --kind exploration)"
+pwtest_eq "research-path ground-truth" "analysis/research/topic.ground-truth.md" "$("$DOC" research-path --project "$S2" --topic topic --kind ground-truth)"
+pwtest_eq "research-path seed" "analysis/research/topic.seed.md" "$("$DOC" research-path --project "$S2" --topic topic --kind seed)"
+pwtest_eq "research-path answer" "analysis/research/v1.2_topic.answer.md" "$("$DOC" research-path --project "$S2" --topic v1.2_topic --kind answer)"
+pwtest_rc 2 "research-path refuses traversal" "$DOC" research-path --project "$S2" --topic ../escape --kind seed
+pwtest_rc 2 "research-path refuses separators" "$DOC" research-path --project "$S2" --topic 'a/b' --kind seed
+pwtest_rc 2 "research-path refuses unknown kind" "$DOC" research-path --project "$S2" --topic topic --kind notes
+pwtest_rc 2 "research-path refuses unknown project" "$DOC" research-path --project nope-xyz --topic topic --kind seed
+[ ! -e "$PWTEST_F2/analysis/research" ] && pwtest_ok "research-path creates nothing" || pwtest_bad "research-path side effect" "directory was created"
