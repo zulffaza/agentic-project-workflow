@@ -293,6 +293,22 @@ handles every "agent handles" row (the Lark + WebFetch tail of the analysis fetc
 
 **When to use:** step zero of analysis, before any agent reads `context/`.
 
+## pw-context.sh scan
+
+Read-only bounded orientation for the optional explorer lane. It lists tracked files, query
+matches, likely surfaces, and explicit coverage/truncation. It never fetches, installs, writes, or
+grades evidence.
+
+```bash
+$PW_HOME/tooling/scripts/entities/pw-context.sh scan --repo <path> [--area <path>] [--query <term>]… \
+  [--changed <base>] [--ignore <glob>]… [--limit <n>] [--tree-depth <n>] [--show-content <n>] \
+  [--format markdown|tsv]
+```
+
+Defaults: 40 candidate surfaces, 200 matches, 4000 tracked files, tree depth 2, no content
+snippets. Zero matches is a valid result. Unsafe areas, invalid refs, and non-repositories refuse
+with exit 2. Candidate lists are not evidence of absence; unsearched areas stay unknown.
+
 ## pw-context.sh adopt-snapshot
 
 For `/pw-adopt` on a repo that already has in-flight branches: snapshots the git state and

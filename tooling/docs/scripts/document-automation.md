@@ -82,6 +82,22 @@ Tasks: 1 todo, 2 in-progress, 3 done, 0 accepted
 Fields that can't be found print `(not set)` — that's a doc problem to fix with the writer
 command, not a script failure. Exit `2` only for usage errors / missing project or doc file.
 
+## pw-doc.sh research-path
+
+Read-only path resolution for persisted exploration and research artifacts. It creates no
+directory or file. New producers use this family; older `analysis/_research/` paths stay readable
+until an explicit, verified migration.
+
+```bash
+$PW_HOME/tooling/scripts/entities/pw-doc.sh research-path --project <slug> --topic <topic> \
+  --kind exploration|ground-truth|seed|answer
+# -> analysis/research/<topic>.<kind>.md
+```
+
+Topics start with a letter or digit and may contain letters, digits, dot, underscore, and hyphen.
+`..`, path separators, and control characters are refused. The comment analyst's operational
+manifest and readiness journals are not part of this family.
+
 ## pw-doc.sh sync
 
 Re-derives every derived document from on-disk truth (task files + PLAN) — the repair tool when

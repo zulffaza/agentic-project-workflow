@@ -62,8 +62,8 @@ The dashboard's role settings never override this task contract.
 ### Project roles
 
 The dashboard's `AI Models` row selects models for these project roles:
-`researcher`, `analyst`, `writer-task`, `reviewer`, `verifier`, and `ship-comment-analyst`.
-There is no executor row; executors use their task settings.
+`researcher`, `analyst`, `writer-task`, `reviewer`, `verifier`, `ship-comment-analyst`, and
+`explorer`. There is no executor row; executors use their task settings.
 Inspect or change role choices through `/pw-config show --project <slug>`.
 
 ### Model precedence for project roles
@@ -74,9 +74,27 @@ The first available setting wins:
 
 2. **Project role setting:** the corresponding role on the dashboard's `AI Models` row.
 
-3. **Registered agent definition:** the model in that agent's definition. Claude uses per-agent definitions; Kilo and Cursor use their registered model fields. This rung is absent for Codex, which has no seeded definitions.
+3. **Provider-specific worker default:** the machine default for that named subagent on the selected provider (`/pw-config global set --key agent-model …`). It configures generated definitions and dispatch when the project role row is unbound. A project role setting always wins.
 
-4. **Provider or session default:** the model selected by the provider when the earlier settings do not apply.
+4. **Registered agent definition:** the model in that agent's definition. Claude uses per-agent definitions; Kilo and Cursor use their registered model fields. This rung is absent for Codex, which has no seeded definitions.
+
+5. **Provider or session default:** the model selected by the provider when the earlier settings do not apply.
+
+### Provider-specific worker defaults
+
+Providers expose different model catalogs and tuning controls, so a worker default is stored per
+provider and per canonical agent definition. Inspect what the machine offers with
+`/pw-config models --provider <provider>` and configure one cell with
+`/pw-config global set --key agent-model --provider <provider> --agent <pw-name> --value '<model>[key=value,…]'`.
+The key is derived from the canonical filename, for example
+`PW_KILO_AGENT_MODELS_PW_RESEARCHER` for the canonical `pw-researcher` definition.
+
+Writes validate the provider prefix, model availability, allowlist, and tuning capability before
+one managed assignment is published. Clearing a cell with `—` reveals the canonical definition or
+provider default. The agent generator renders supported definition fields; settings a definition
+format cannot express stay invocation-time bindings and are reported, never silently dropped.
+`pw-ship-comment-fixer` and `pw-sync-conflict-fixer` are executor procedures, not worker
+definitions, so they have no model cell.
 
 | Provider | Default model source |
 |---|---|
@@ -285,9 +303,12 @@ A role's model and tuning are one binding. Setting a new model without tuning fl
 role's variant/reasoning/effort (a control that was valid for the old model may be invalid for the
 new one); clearing the role clears its tuning too. Read the complete binding with
 `get --project <slug> --key ai-model --json`, and let the driver resolve the provider's argument
-array with `spawn-args --project <slug> --role <role>` (add `--json` for machine reading). It
-canonicalizes the id through `model-resolve` and exits non-zero when the model is unavailable or the
-selected route cannot express the stored tuning, so the spawn stops instead of dropping a control.
+array with `spawn-args --project <slug> --role <role> [--provider <p>]` (add `--json` for machine
+reading). With an unbound project row and `--provider`, it falls through to that provider's worker
+default. A named worker can also be resolved directly with
+`spawn-args --provider <p> --agent <pw-name>`. It canonicalizes the id through `model-resolve` and
+exits non-zero when the model is unavailable or the selected route cannot express the stored
+tuning, so the spawn stops instead of dropping a control.
 
 Creating a project validates the resolved global snapshot first: a removed, mistyped, forbidden,
 or unverifiable model binding refuses creation instead of entering every new dashboard. Existing
@@ -361,6 +382,9 @@ So routing a task resolves to exactly one of:
 Not every phase step needs the orchestrator slot: analysis grounding, analysis drafting, and task
 authoring are lane spawns from whichever driver is running the phase (rows 2/4 of the workflow table):
 
+- **`pw-explorer`** maps where relevant code and documents live inside a bounded budget —
+  candidate paths, entrypoints, dependencies, and test surfaces, with coverage gaps. It is optional
+  orientation, not evidence-grounded research: it never decides and never replaces the researcher.
 - **`pw-researcher`** answers a scoped question with `file:line` evidence (Mode A) or grounds a
   scope of human-dropped inputs — a `context/` pack, fetched links, repo state on their base
   branches — into a **ground-truth pack + seed** (Mode B, the analysis pre-step). It gathers

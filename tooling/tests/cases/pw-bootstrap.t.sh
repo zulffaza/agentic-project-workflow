@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # cases/pw-bootstrap.t.sh — plan 29: the installer round-trip in an isolated HOME.
 # Covers the exclusive provider format (skills for claude, commands for kilo), the four shared
-# model skills, the six worker sub-agents (no primary orchestrator), doctor in-sync, and
+# model skills, the seven worker sub-agents (no primary orchestrator), doctor in-sync, and
 # offboard --yes removing exactly what bootstrap installed. Never touches real provider dirs.
 BOOTDIR="$(mktemp -d "${TMPDIR:-/tmp}/pwboot.XXXXXX")"
 REAL="$TOOL/.."
@@ -26,8 +26,8 @@ printf '#!/bin/sh\nexit 0\n' > "$BIN/kilo"; chmod +x "$BIN/kilo"
 
 pwtest_rc 0 "bootstrap installs into an isolated HOME" \
   env -u PW_PROJECTS_DIR -u PW_REPOS -u PW_PROJECTS HOME="$FH" PATH="$BIN:$PATH" bash "$PW/bootstrap.sh"
-pwtest_eq "claude gets 21 entry skills + 4 shared skills" \
-  "$(ls -d "$FH/.claude/skills"/*/ 2>/dev/null | wc -l | tr -d ' ')" "25"
+pwtest_eq "claude gets 22 entry skills + 4 shared skills" \
+  "$(ls -d "$FH/.claude/skills"/*/ 2>/dev/null | wc -l | tr -d ' ')" "26"
 [ -d "$FH/.claude/skills/pw-execute" ] && [ ! -d "$FH/.claude/skills/pw-execute/agents" ] \
   && pwtest_ok "claude human entry is a skill dir" \
   || pwtest_bad "claude entry format" "pw-execute is not an installed skill dir"
@@ -51,13 +51,13 @@ done
 if grep -rqE '\{\{PW_[A-Z_]+\}\}' "$FH/.claude/skills/pw-guide-workflow"; then
   pwtest_bad "rendered skill has no unresolved path tokens" "a token survived rendering"
 else pwtest_ok "rendered skill has no unresolved path tokens"; fi
-pwtest_eq "kilo gets 21 command files and no entry skill" \
-  "$(ls "$FH/.config/kilo/command"/*.md 2>/dev/null | wc -l | tr -d ' '):$(ls -d "$FH/.kilocode/skills/pw-execute" 2>/dev/null | wc -l | tr -d ' ')" "21:0"
+pwtest_eq "kilo gets 22 command files and no entry skill" \
+  "$(ls "$FH/.config/kilo/command"/*.md 2>/dev/null | wc -l | tr -d ' '):$(ls -d "$FH/.kilocode/skills/pw-execute" 2>/dev/null | wc -l | tr -d ' ')" "22:0"
 [ -f "$FH/.config/kilo/command/pw-execute.md" ] \
   && pwtest_ok "kilo human entry is a command file" \
   || pwtest_bad "kilo entry format" "pw-execute.md missing"
-pwtest_eq "six worker sub-agents, no primary orchestrator" \
-  "$(ls "$FH/.claude/agents"/*.md 2>/dev/null | wc -l | tr -d ' '):$(ls "$FH/.claude/agents/pw-orchestrator.md" 2>/dev/null | wc -l | tr -d ' ')" "6:0"
+pwtest_eq "seven worker sub-agents, no primary orchestrator" \
+  "$(ls "$FH/.claude/agents"/*.md 2>/dev/null | wc -l | tr -d ' '):$(ls "$FH/.claude/agents/pw-orchestrator.md" 2>/dev/null | wc -l | tr -d ' ')" "7:0"
 [ -f "$FH/.claude/agents/pw-ship-comment-analyst.md" ] \
   && pwtest_ok "the comments-analysis worker is seeded like every other lane" \
   || pwtest_bad "comments-analysis worker seeded" "pw-ship-comment-analyst.md missing from the agent dir"

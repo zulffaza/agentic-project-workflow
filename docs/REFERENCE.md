@@ -171,13 +171,24 @@ See `/pw-help command --name pw-batch` for the current forms and examples.
 | `pin` | `T01=provider:model` or `T01=—` pairs | Executor model in both task and PLAN. Pins are intentionally untuned: the task's `Effort:`/`Thinking:` (and supported Cursor bracket ids) carry executor tuning; role-style tuning is refused rather than silently accepted |
 | `rfc-target` | A document reference or URL | RFC destination |
 
+### Machine-scoped model operations (`/pw-config`)
+
+| Operation | Accepted values | Changes |
+|---|---|---|
+| `models` | `--provider`, `--api-provider`, `--search`, `--limit`, `--all`, `--details`, `--format table\|tsv` | Bounded catalog discovery. Reports source and status honestly: live CLI catalog, Claude's fixed alias set, unavailable CLI, empty result, or no catalog surface. No live model request unless a provider probe is explicitly requested elsewhere |
+| `agent-model` | `--provider <p> --agent <pw-name>` | Read one provider-specific worker default (model, bracket parameters, source) |
+| `agent-model-set` | `--provider <p> --agent <pw-name> --value '<model>[key=value,…]'` or `—` | Validate and write one worker cell into the managed block; `—` reveals the canonical/provider default |
+| `agent-model-unset` | `--provider <p> --agent <pw-name>` | Remove that worker cell |
+| `spawn-args` | `--project <slug> --role <role> [--provider <p>]` or `--provider <p> --agent <pw-name>` | Resolve the complete binding and provider argv. An unbound project row falls through to the worker default when `--provider` is given; source is reported |
+| `global get/set/unset --key agent-model` | `--provider <p> --agent <pw-name> [--value <spec>]` | The same worker-cell operations through the global operator family |
+
 Review surfaces: `context`, `analysis`, `plan`, `task-plan`, `task-exec`, `ship`, `rfc`, `close`.
 Review outcome modes: `advisory`, `auto`. Default is `advisory` (nothing starts by itself —
 `review-trigger` is `manual`).
 For the three per-surface axes, `all=<value>` sets every surface and explicitly named surfaces
 override the baseline regardless of argument order. `off` writes are refused with the replacement
 named (`off` was the pre-migration outcome value — reads normalize it to `advisory`).
-Model roles: `researcher`, `analyst`, `writer-task`, `reviewer`, `verifier`, `ship-comment-analyst`.
+Model roles: `researcher`, `analyst`, `writer-task`, `reviewer`, `verifier`, `ship-comment-analyst`, `explorer`.
 
 Global project defaults live in `pw.config.sh`, not a second file. They are copied into a new
 project's dashboard and never re-applied to an existing project. Routing, execution limit, and

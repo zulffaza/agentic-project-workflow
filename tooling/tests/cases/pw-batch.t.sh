@@ -129,3 +129,11 @@ _seen=0
 for _p in claude cursor codex; do [ -e "$GEN/$_p/pw-batch/SKILL.md" ] && _seen=$((_seen+1)); [ -e "$GEN/$_p/pw-batch.md" ] && _seen=$((_seen+1)); done
 for _p in kilo opencode; do [ -e "$GEN/$_p/pw-batch.md" ] && _seen=$((_seen+1)); [ -e "$GEN/$_p/pw-batch/SKILL.md" ] && _seen=$((_seen+1)); done
 pwtest_eq "each provider exposes the batch entry exactly once" "5" "$_seen"
+
+# --- plan 17 exclusions: new model operations stay standalone until admitted ---------------
+grep -qF '`models`, `agent-model`' "$TOOL/skills/human/pw-batch/SKILL.md" \
+  && pwtest_ok "batch refused-forms names models/agent-model" \
+  || pwtest_bad "batch model exclusions" "worker-default operations are not explicitly refused"
+grep -qF 'global --key agent-model' "$TOOL/skills/model/pw-guide-workflow/references/batch.md" \
+  && pwtest_ok "batch reference documents the agent-model exclusion" \
+  || pwtest_bad "batch reference exclusion" "agent-model exclusion missing"

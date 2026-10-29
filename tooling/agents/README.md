@@ -38,6 +38,15 @@ tooling/agents/
 provider's `render_<name>_agent` hook wraps the body in that provider's frontmatter (see
 `../pw-common.sh`).
 
+## Provider-specific worker defaults
+
+A worker default configures one generated definition for one provider, because catalogs differ:
+`PW_<PROVIDER>_AGENT_MODELS_<AGENT>` (for example `PW_KILO_AGENT_MODELS_PW_RESEARCHER`). Manage it
+through `/pw-config global set --key agent-model --provider <p> --agent <pw-name> --value
+'<model>[key=value,…]'`. The generator renders fields the definition format supports; settings it
+cannot express stay invocation-time bindings and are reported on stderr. A worker default never
+overrides a project role row or a task pin.
+
 ## The three facts about Kilo registration these files keep tripping on
 1. **Kilo registers on *two* surfaces at once.** `gen-agents.sh` writes `~/.config/kilo/agent/<name>.md`
    (generator-owned build output — what `mode:`/`permission:` register from), and the user *may* also

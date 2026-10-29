@@ -79,14 +79,14 @@ pl_config_selftest() {
   # its task file, never here (§5.1). The row IS advisory on kilo at Task-spawn time (a headless
   # session carries it instead, §8c) — recorded in the result, never silently ignored.
   local got_m; got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" get --project demo2 --key ai-model 2>/dev/null)"
-  [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=—" ] \
+  [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=— explorer=—" ] \
     || die "selftest FAIL: ai-model default line wrong: '$got_m'"
   # write-time validation (permission + availability + provider membership) rides the shim
   # catalog + noscope fixture config: only rows that can actually bind are accepted.
   PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" \
     "$(pwtest_script pw-config.sh)" set --project demo2 --key ai-model --set researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 >/dev/null 2>&1 || die "selftest FAIL: project set ai-model refused a resolvable in-scope row"
   got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" get --project demo2 --key ai-model 2>/dev/null)"
-  [ "$got_m" = "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=—" ] \
+  [ "$got_m" = "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=— explorer=—" ] \
     || die "selftest FAIL: ai-model set not isolated to researcher: '$got_m'"
   # a catalog miss is refused AT WRITE TIME (not discovered at spawn), leaving the line intact:
   if PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" \
@@ -99,11 +99,11 @@ pl_config_selftest() {
     die "selftest FAIL: project set ai-model accepted a provider that is not enabled"
   fi
   got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" get --project demo2 --key ai-model 2>/dev/null)"
-  [ "$got_m" = "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=—" ] \
+  [ "$got_m" = "researcher=kilo:command_code/MiniMaxAI/MiniMax-M3 analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=— explorer=—" ] \
     || die "selftest FAIL: refused ai-model sets still mutated the line: '$got_m'"
   PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model --project demo2 --set researcher=— >/dev/null 2>&1
   got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model --project demo2)"
-  [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=—" ] \
+  [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=— explorer=—" ] \
     || die "selftest FAIL: ai-model clear-to-default failed: '$got_m'"
   if PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" ai-model --project demo2 --set executor=claude:sonnet >/dev/null 2>&1; then
     die "selftest FAIL: ai-model accepted the executor lane (the task file binds the executor)"
@@ -119,13 +119,13 @@ pl_config_selftest() {
     "$(pwtest_script pw-config.sh)" set --project demo2 --key ai-model --set ship-comment-analyst=kilo:command_code/MiniMaxAI/MiniMax-M3 >/dev/null 2>&1 \
     || die "selftest FAIL: project set ai-model refused ship-comment-analyst"
   got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" get --project demo2 --key ai-model 2>/dev/null)"
-  [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=kilo:command_code/MiniMaxAI/MiniMax-M3" ] \
+  [ "$got_m" = "researcher=— analyst=— writer-task=— reviewer=— verifier=— ship-comment-analyst=kilo:command_code/MiniMaxAI/MiniMax-M3 explorer=—" ] \
     || die "selftest FAIL: ship-comment-analyst binding leaked into another lane: '$got_m'"
   PW_PROJECTS_DIR="$tmp" PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.noscope.sh" \
     "$(pwtest_script pw-config.sh)" set --project demo2 --key ai-model --set analyst=kilo:command_code/MiniMaxAI/MiniMax-M3 >/dev/null 2>&1 \
     || die "selftest FAIL: analyst set refused after ship-comment-analyst"
   got_m="$(PW_PROJECTS_DIR="$tmp" "$(pwtest_script pw-config.sh)" get --project demo2 --key ai-model 2>/dev/null)"
-  [ "$got_m" = "researcher=— analyst=kilo:command_code/MiniMaxAI/MiniMax-M3 writer-task=— reviewer=— verifier=— ship-comment-analyst=kilo:command_code/MiniMaxAI/MiniMax-M3" ] \
+  [ "$got_m" = "researcher=— analyst=kilo:command_code/MiniMaxAI/MiniMax-M3 writer-task=— reviewer=— verifier=— ship-comment-analyst=kilo:command_code/MiniMaxAI/MiniMax-M3 explorer=—" ] \
     || die "selftest FAIL: ship-comment-analyst and analyst are not independent lanes: '$got_m'"
   rm -rf "$tmp"
 }
@@ -509,3 +509,101 @@ mrx="$(PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider codex --model c
 PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider codex --model codex-test-reserve >/dev/null 2>&1 \
   && pwtest_bad "model-resolve codex hidden slug" "resolved a visibility:hide slug (it would run silently)" \
   || pwtest_ok "model-resolve codex: hidden-visibility slug refused (positive exit 1)"
+
+# --- provider-by-worker model defaults (plan 17) -------------------------------------------
+WD="$ROOT/worker-defaults"; rm -rf "$WD"; mkdir -p "$WD"
+WCFG="$WD/pw.config.sh"
+printf '%s\n' '# worker-default fixture' 'PW_PROVIDERS=(kilo claude cursor)' 'PW_KILO_API_PROVIDERS=()' 'PW_MODEL_ALLOWLIST_KILO="command_code/*"' > "$WCFG"
+wdc() { PW_CONFIG_FILE="$WCFG" "$(pwtest_script pw-config.sh)" "$@"; }
+
+pwtest_rc 0 "agent-model-set writes one worker cell" wdc agent-model-set --provider kilo --agent pw-researcher --value 'command_code/MiniMaxAI/MiniMax-M3[variant=high]'
+grep -q '^PW_KILO_AGENT_MODELS_PW_RESEARCHER="command_code/MiniMaxAI/MiniMax-M3\[variant=high\]"$' "$WCFG" \
+  && pwtest_ok "worker cell is one safely quoted managed assignment" \
+  || pwtest_bad "worker cell serialization" "missing/incorrect managed assignment: $(grep 'AGENT_MODELS' "$WCFG" || true)"
+bash -n "$WCFG" && pwtest_ok "worker config remains valid shell" || pwtest_bad "worker config validity" "bash -n failed"
+pwtest_eq "agent-model read keeps model" "command_code/MiniMaxAI/MiniMax-M3" "$(wdc agent-model --provider kilo --agent pw-researcher 2>/dev/null | sed -n '1p' | sed 's/\[.*//')"
+wdc agent-model --provider kilo --agent pw-researcher --json > "$PWTEST_OUT.worker"
+python3 - "$PWTEST_OUT.worker" <<'PY' && pwtest_ok "agent-model json carries params/source/support" || pwtest_bad "agent-model json" "$(cat "$PWTEST_OUT.worker")"
+import json,sys
+d=json.load(open(sys.argv[1]))
+assert d["provider"]=="kilo" and d["agent"]=="pw-researcher"
+assert d["model"]=="command_code/MiniMaxAI/MiniMax-M3" and d["params"]=="variant=high"
+assert d["source"]=="managed" and d["supported"]=="true", d
+PY
+pwtest_eq "global get agent-model reaches the same cell" "command_code/MiniMaxAI/MiniMax-M3[variant=high]" "$(wdc global get --key agent-model --provider kilo --agent pw-researcher 2>/dev/null | sed -n '1p')"
+
+before_wd="$(shasum -a 256 "$WCFG" | awk '{print $1}')"
+if wdc agent-model-set --provider claude --agent pw-researcher --value 'kilo:command_code/MiniMaxAI/MiniMax-M3' >/dev/null 2>&1; then
+  pwtest_bad "mismatched provider prefix refused" "accepted kilo: under claude"
+else pwtest_ok "mismatched provider prefix refused"; fi
+if wdc agent-model-set --provider kilo --agent pw-executor --value 'command_code/gone-xyz' >/dev/null 2>&1; then
+  pwtest_bad "catalog miss refused" "accepted a model absent from the live catalog"
+else pwtest_ok "catalog miss refused"; fi
+if wdc agent-model-set --provider kilo --agent not-a-worker --value 'command_code/MiniMaxAI/MiniMax-M3' >/dev/null 2>&1; then
+  pwtest_bad "unknown worker refused" "accepted an unregistered worker name"
+else pwtest_ok "unknown worker refused"; fi
+if wdc agent-model-set --provider kilo --agent pw-analyst --value 'alibaba-token-plan/test-model' >/dev/null 2>&1; then
+  pwtest_bad "worker allowlist guard" "accepted a model outside PW_MODEL_ALLOWLIST_KILO"
+else pwtest_ok "worker allowlist guard"; fi
+if wdc agent-model-set --provider kilo --agent pw-researcher --value 'command_code/MiniMaxAI/MiniMax-M3[reasoning=max]' >/dev/null 2>&1; then
+  pwtest_bad "unverified worker control refused" "accepted kilo reasoning"
+else pwtest_ok "unverified worker control refused"; fi
+if wdc agent-model-set --provider claude --agent pw-researcher --value 'opus[context=2m]' >/dev/null 2>&1; then
+  pwtest_bad "unsupported worker parameter refused" "accepted claude context"
+else pwtest_ok "unsupported worker parameter refused"; fi
+pwtest_eq "refused worker writes leave bytes unchanged" "$before_wd" "$(shasum -a 256 "$WCFG" | awk '{print $1}')"
+
+if wdc agent-model-set --provider kilo --agent pw-researcher --value 'command_code/MiniMaxAI/MiniMax-M3;rm -rf /' >/dev/null 2>&1; then
+  pwtest_bad "hostile worker spec refused" "accepted shell syntax"
+else pwtest_ok "hostile worker spec refused"; fi
+pwtest_eq "hostile worker spec leaves bytes unchanged" "$before_wd" "$(shasum -a 256 "$WCFG" | awk '{print $1}')"
+
+# models: honest source reporting, bounded output, local API-prefix filtering.
+wdc models --provider claude --limit 10 > "$PWTEST_OUT.models"
+grep -q 'fixed' "$PWTEST_OUT.models" && grep -q 'opus' "$PWTEST_OUT.models" \
+  && pwtest_ok "models reports Claude's fixed source" || pwtest_bad "models claude" "$(cat "$PWTEST_OUT.models")"
+wdc models --provider kilo --api-provider command_code --limit 10 > "$PWTEST_OUT.models"
+grep -q 'command_code/MiniMaxAI/MiniMax-M3' "$PWTEST_OUT.models" \
+  && ! grep -q 'kilo/alibaba-token-plan' "$PWTEST_OUT.models" \
+  && pwtest_ok "models filters a nested API-provider prefix locally" \
+  || pwtest_bad "models api-prefix filter" "$(cat "$PWTEST_OUT.models")"
+pwtest_rc 2 "models requires an axis provider for --api-provider" wdc models --provider claude --api-provider foo
+pwtest_err 'no selected provider has that axis' "models names the unsupported axis"
+wdc models --provider claude --format tsv > "$PWTEST_OUT.models"
+grep -q '^provider	source	model$' "$PWTEST_OUT.models" && pwtest_ok "models tsv header" || pwtest_bad "models tsv header" "$(cat "$PWTEST_OUT.models")"
+
+# Generation renders a supported provider field; unsupported parameterization is reported.
+AGOUT="$WD/agents"; rm -rf "$AGOUT"
+PW_CONFIG_FILE="$WCFG" "$(pwtest_script gen-agents.sh)" --outdir "$AGOUT" kilo >/dev/null 2>"$PWTEST_OUT.gen"
+grep -q '^model: command_code/MiniMaxAI/MiniMax-M3$' "$AGOUT/kilo/pw-researcher.md" \
+  && pwtest_ok "gen-agents renders the provider-specific worker model" \
+  || pwtest_bad "gen-agents worker model" "$(grep '^model:' "$AGOUT/kilo/pw-researcher.md" || true)"
+if grep -q '^model:' "$AGOUT/kilo/pw-analyst.md"; then
+  pwtest_bad "gen-agents isolation" "pw-analyst gained an unexpected model: $(grep -H '^model:' "$AGOUT"/kilo/*.md 2>/dev/null | tr '\n' ' ')"
+else pwtest_ok "generation leaves unrelated workers unbound"; fi
+grep -q 'cannot be rendered into a kilo agent definition' "$PWTEST_OUT.gen" \
+  && pwtest_ok "generation reports definition-unsupported parameters" \
+  || pwtest_bad "gen-agents parameter report" "$(cat "$PWTEST_OUT.gen")"
+
+pwtest_rc 0 "cursor worker with bracket parameters" wdc agent-model-set --provider cursor --agent pw-explorer --value 'cursor-test-high[reasoning=high]'
+PW_CONFIG_FILE="$WCFG" "$(pwtest_script gen-agents.sh)" --outdir "$AGOUT" cursor >/dev/null 2>&1
+grep -q '^model: cursor-test-high\[reasoning=high\]$' "$AGOUT/cursor/pw-explorer.md" \
+  && pwtest_ok "gen-agents preserves Cursor bracket parameters" \
+  || pwtest_bad "gen-agents cursor rendering" "$(grep '^model:' "$AGOUT/cursor/pw-explorer.md" || true)"
+
+wdc global show --json > "$PWTEST_OUT.workers"
+python3 - "$PWTEST_OUT.workers" <<'PY' && pwtest_ok "global show json exposes the worker matrix" || pwtest_bad "global show worker matrix" "$(head -c 300 "$PWTEST_OUT.workers")"
+import json,sys
+d=json.load(open(sys.argv[1]))
+w=d["worker_defaults"]
+assert len(w)==21, len(w)
+row=next(r for r in w if r["provider"]=="kilo" and r["agent"]=="pw-researcher")
+assert row["model"]=="command_code/MiniMaxAI/MiniMax-M3" and row["params"]=="variant=high" and row["source"]=="managed", row
+PY
+wdc global show 2>/dev/null | grep -q 'Worker defaults' && pwtest_ok "global show text adds the worker matrix" || pwtest_bad "global show text" "no worker section"
+pwtest_rc 0 "global unset agent-model" wdc global unset --key agent-model --provider kilo --agent pw-researcher
+pwtest_eq "unset reveals the default" "(unset — provider/canonical default)" "$(wdc agent-model --provider kilo --agent pw-researcher 2>/dev/null | sed -n '1p')"
+grep -q 'AGENT_MODELS_PW_RESEARCHER' "$WCFG" \
+  && pwtest_bad "unset removes the managed cell" "assignment survived" \
+  || pwtest_ok "unset removes the managed cell"
+rm -rf "$WD"

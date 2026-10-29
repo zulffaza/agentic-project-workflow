@@ -13,6 +13,12 @@ Analysis **describes and reasons** — it does not yet cut work into tasks. It a
 This is the cheapest place to catch a misunderstanding, so iterate here with the human until
 approved **before** any task breakdown. Files starting with `_` are templates, not analyses.
 
+Persisted exploration and research artifacts live under `research/`:
+`<topic>.exploration.md` (bounded orientation map), `<topic>.ground-truth.md` (source-grounded
+pack), `<topic>.seed.md` (handoff seed), and `<topic>.answer.md` (scoped answer). Resolve the
+path with the docs entity's `research-path` operator for the project, topic, and kind; it creates
+nothing. Older `_research/` paths remain readable.
+
 **Review:** feedback lives in `review/<topic>.review.md` (a `review/` subdir here, from
 `../_REVIEW.template.md`), not inline — the agent rewrites this doc when applying fixes. The agent
 reads the review file first, replies with `↳ agent:` and flips `[OPEN]`→`[RESOLVED]`, and never edits your comment

@@ -1,10 +1,10 @@
 ---
 name: pw-config
 description: The one configuration surface — validated per-project knobs, creation-time global project defaults in pw.config.sh, and model permission/capability checks
-args: "[show | get | set | ensure | materialize] --project <project-slug> … | global [show | get | set | unset] … | model-check --provider <provider> --model <model-id> [--variant <v>] [--reasoning <v>] [--effort <v>] [--json]"
+args: "[show | get | set | ensure | materialize] --project <project-slug> … | global [show | get | set | unset] … | models [--provider <provider>]… | agent-model --provider <provider> --agent <name> | model-check --provider <provider> --model <model-id> [--variant <v>] [--reasoning <v>] [--effort <v>] [--json]"
 scope: mixed
-scope-forms: "global=global, default=project, show=project, get=project, set=project, ensure=project, materialize=project, global show=global, global get=global, global set=global, global unset=global, model-check=global, model-resolve=global, ai-model=project, ai-review=project, review-trigger=project, review-repair=project, review-rounds=project"
-args-global: "global show [--json] | global get --key <key> [--json] | global set --key <key> [--value <v> | --set <member=value>]… | global unset --key <key> | model-check --provider <provider> --model <model-id> [--tuning] [--json]"
+scope-forms: "global=global, default=project, show=project, get=project, set=project, ensure=project, materialize=project, global show=global, global get=global, global set=global, global unset=global, models=global, agent-model=global, agent-model-set=global, agent-model-unset=global, agent-models=global, spawn-args=global, model-check=global, model-resolve=global, ai-model=project, ai-review=project, review-trigger=project, review-repair=project, review-rounds=project"
+args-global: "global show [--json] | global get --key <key> [--provider <p> --agent <name>] [--json] | global set --key <key> [--value <v> | --set <member=value>]… | global unset --key <key> [--provider <p> --agent <name>] | models [--provider <p>]… [--search <term>] [--limit <n>] | agent-model --provider <p> --agent <name> | agent-model-set --provider <p> --agent <name> --value <spec> | agent-models | spawn-args --provider <p> --agent <name> | model-check --provider <provider> --model <model-id> [--tuning] [--json]"
 args-project: "show --project <project-slug> [--json] | get --project <project-slug> --key <key> [--json] | set --project <project-slug> --key <key> [--value <v> | --set <member=value>]… [--variant <v> --reasoning <v> --effort <v>] | ensure --project <project-slug> | materialize --project <project-slug>"
 ---
 
@@ -37,7 +37,7 @@ The keys you can `set`, and their legal values (the same list `show` prints as i
 | `review-trigger` | `<surface>=<value>` pairs or `all=<value>`; values `manual|completion` | WHEN a pass starts: `manual` (only an explicit `/pw-review … ai`, default) or `completion` (also after a succeeded producing command's verification); `completion` never disables explicit requests |
 | `review-repair` | `<surface>=<value>` pairs or `all=<value>`; values `manual`·`bounded` | whether a completion review may run the bounded repair cycle (`review → repair → verify → fresh review`); `manual` = findings stop for me (default) |
 | `review-rounds` | integer `1..3` | total reviewer passes in a bounded cycle (default `3` — at most two intervening verified repairs) |
-| `ai-model` | `<role>=<provider>:<model>` or `<role>=—` pairs; roles `researcher`·`analyst`·`writer-task`·`reviewer`·`verifier`·`ship-comment-analyst`; optional `--variant`/`--reasoning`/`--effort` on a ONE-role write | spawn-lane model rows; `—` = provider/session default; model is validated live (allowlist + catalog + scope), tuning against the provider capability table. Unsupported or unverified tuning is refused, never silently dropped. Tuning is read with `get --key ai-model --json`; plain `get` stays `role=model` compatible |
+| `ai-model` | `<role>=<provider>:<model>` or `<role>=—` pairs; roles `researcher`·`analyst`·`writer-task`·`reviewer`·`verifier`·`ship-comment-analyst`·`explorer`; optional `--variant`/`--reasoning`/`--effort` on a ONE-role write | spawn-lane model rows; `—` = provider/session default; model is validated live (allowlist + catalog + scope), tuning against the provider capability table. Unsupported or unverified tuning is refused, never silently dropped. Tuning is read with `get --key ai-model --json`; plain `get` stays `role=model` compatible |
 | `pin` | `<T0n>=<provider>:<model>` or `<T0n>=—` pairs | per-task executor pins; written to **both holders** (task-file `Execute with:` + PLAN cell) by one propagator, so gate/audit never see drift; same live validation at write time |
 | `rfc-target` | a doc ref/URL | where `/pw-rfc` publishes |
 
@@ -60,7 +60,7 @@ The operators (operator words first; every value named — `--project <slug>` se
   expands over every surface with named overrides winning regardless of argument order) ·
   `review-trigger` / `review-repair` = `surface=value` pairs (same `all=` expansion; trigger
   values `manual|completion`, repair values `manual|bounded`) ·
-  `review-rounds` = one integer `1..3` · `ai-model` = `role=value` pairs (roles `researcher|analyst|writer-task|reviewer|verifier|ship-comment-analyst`, value `provider:model` or `—`) ·
+  `review-rounds` = one integer `1..3` · `ai-model` = `role=value` pairs (roles `researcher|analyst|writer-task|reviewer|verifier|ship-comment-analyst|explorer`, value `provider:model` or `—`) ·
   `pin` = `T0n=value` pairs (value `provider:model` or `—` to clear; each pin lands in BOTH
   holders — task-file `Execute with:` and the PLAN cell — via the single propagator) ·
   `rfc-target` = a doc ref. Scalar keys take **`--value <v>`**; the pair-taking keys take repeated
@@ -92,6 +92,18 @@ The operators (operator words first; every value named — `--project <slug>` se
   the staged file is `bash -n` checked before an atomic replace.
 - **`/pw-config global unset --key <key>`** → removes that override, revealing the previous
   assignment or built-in fallback.
+- **`/pw-config models [--provider <p>]… [--api-provider <prefix>]… [--search <term>] [--limit <n>] [--all] [--details] [--format table|tsv]`** →
+  `…/pw-config.sh models …` — bounded model discovery per provider. Reports the source honestly
+  (live catalog, Claude's fixed aliases, unavailable CLI, empty result, unsupported surface) and
+  applies API-provider prefix filters locally. No live model request by default.
+- **`/pw-config agent-model --provider <p> --agent <name>`** → `…/pw-config.sh agent-model …` —
+  read one provider-specific worker default. `agent-model-set` writes one validated cell
+  (`--value '<model>[key=value,…]'`, `—` clears), and `agent-model-unset` clears it. These are the
+  same operations as `global get/set/unset --key agent-model`. A write validates provider
+  membership, the provider prefix, catalog availability, the allowlist, and the tuning capability;
+  invalid input leaves the configuration byte-identical.
+- **`/pw-config agent-models`** → `…/pw-config.sh agent-models [--provider <p>]… [--json]` — the
+  complete provider × canonical-worker matrix with model, parameters, and source.
 - **`…/pw-config.sh materialize --project <slug>`** → internal breakdown step: copies the dashboard
   `Project Defaults` seed into a newly created PLAN once. Explicit PLAN values win; the seed is
   never re-read.

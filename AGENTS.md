@@ -27,7 +27,7 @@ review → close**, driven by `/pw-*` slash commands. Work happens in scaffolded
 | Phase | Command | Produces | Gate before moving on |
 |---|---|---|---|
 | Context | `/pw-new` (fresh) · `/pw-adopt` (continuation) · `/pw-context` (prepare a draft, or edit `INDEX.md` rows / `REQUIREMENTS.md`) | `context/` inputs + `INDEX.md` | — |
-| Analysis | `/pw-analyze` → `/pw-review` | `analysis/<topic>.md` | you approve the analysis |
+| Analysis | `/pw-analyze` → `/pw-review` (optional `/pw-explore` orientation prepass) | `analysis/<topic>.md` | you approve the analysis |
 | Breakdown | `/pw-breakdown` → `/pw-review` | `task/PLAN.md` + `T0n.md` | **PLAN approved — the only hard gate** |
 | Execution | `/pw-execute` | commits in `worktree/*` (committed **+ verified**) | per-task Definition of Done |
 | Ship | `/pw-ship` | pushed branches + MRs | you confirm the push |

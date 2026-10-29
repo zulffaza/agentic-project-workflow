@@ -95,8 +95,11 @@ Examples:
 Repeated `--file` on `init` and same-key `--set` on a config item stay one item each.
 
 Refused forms include `prepare`, `import`, `ai`, ship `comments` / `--resolve`, `auto-signoff`,
-`materialize`, `model-resolve`, status `update`/`rewind`, doctor `--fix`/`--apply`, ship
-`stack adopt`, readiness `--apply` without a token or resume, and every unlisted command or flag.
+`materialize`, `model-resolve`, `models`, `agent-model`, `agent-model-set`, `agent-model-unset`,
+`agent-models`, `spawn-args`, `global --key agent-model`, status `update`/`rewind`, doctor
+`--fix`/`--apply`, ship `stack adopt`, readiness `--apply` without a token or resume, and every
+unlisted command or flag. New worker-default operations stay standalone until a later allowlist
+change admits them with their own tests.
 
 Not batch items: `pw-new`, `pw-adopt`, `pw-research`, `pw-analyze`, `pw-breakdown`, `pw-execute`,
 `pw-verify`, `pw-sync`, `pw-rfc`, `pw-close`, and `pw-independent-review`.

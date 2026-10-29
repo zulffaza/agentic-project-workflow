@@ -205,3 +205,40 @@ pwtest_err 'prepare --project <slug>' "missing-index hint names the prepare oper
 pwtest_err 'req-init' "missing-index hint offers the manual path"
 if grep -qF 'pw-context <slug>' "$PWTEST_ERR"; then pwtest_bad "missing-index hint free of the legacy slot" "legacy form present"; else pwtest_ok "missing-index hint free of the legacy slot"; fi
 rm -rf "$PW_PROJECTS_DIR/$CM"
+
+# --- scan: bounded explorer orientation (plan 17) ------------------------------------------
+SR="$ROOT/scan-repo"; rm -rf "$SR"; mkdir -p "$SR/src" "$SR/tests" "$SR/vendor"
+printf 'alpha\nneedle one\n' > "$SR/src/a.txt"
+printf 'needle two\n' > "$SR/tests/a-test.txt"
+printf 'needle vendor\n' > "$SR/vendor/v.txt"
+printf 'nothing\n' > "$SR/src/empty.txt"
+git -C "$SR" init -q
+git -C "$SR" add . && git -C "$SR" -c user.email=t@t -c user.name=t commit -qm init
+SCAN="$(pwtest_script pw-context.sh)"
+pwtest_rc 0 "scan tracked queries" "$SCAN" scan --repo "$SR" --query needle --ignore 'vendor/*'
+pwtest_re '`needle`: 2 match' "scan counts query matches"
+pwtest_re 'src/a\.txt' "scan lists a likely surface"
+pwtest_re 'tests/a-test\.txt' "scan lists the test surface"
+pwtest_re 'ignored: 1' "scan reports ignored files"
+if grep -q 'vendor/v.txt' "$PWTEST_OUT"; then pwtest_bad "scan ignore glob" "vendor path leaked"; else pwtest_ok "scan ignore glob"; fi
+pwtest_rc 0 "scan area filter" "$SCAN" scan --repo "$SR" --area tests --query needle
+pwtest_re 'tests/a-test\.txt' "area scan keeps the in-area hit"
+if grep -q 'src/a.txt' "$PWTEST_OUT"; then pwtest_bad "scan area filter" "out-of-area path leaked"; else pwtest_ok "scan area filter excludes siblings"; fi
+pwtest_rc 0 "scan zero matches is a valid result" "$SCAN" scan --repo "$SR" --query absent-token
+pwtest_re '0 match' "zero-match scan reports zero"
+pwtest_re 'truncated: no' "zero-match scan reports coverage"
+pwtest_rc 0 "scan tsv" "$SCAN" scan --repo "$SR" --query needle --format tsv
+pwtest_re '^kind	path	line	text$' "scan tsv header"
+mkdir -p "$ROOT/outside"; printf 'needle outside\n' > "$ROOT/outside/secret.txt"
+pwtest_rc 2 "scan refuses traversal area" "$SCAN" scan --repo "$SR" --area '../outside' --query needle
+pwtest_rc 2 "scan refuses invalid ref" "$SCAN" scan --repo "$SR" --changed not-a-ref-xyz
+pwtest_rc 2 "scan refuses non-repo" "$SCAN" scan --repo "$ROOT"
+pwtest_rc 2 "scan refuses non-integer limit" "$SCAN" scan --repo "$SR" --limit many
+pwtest_rc 0 "scan limit truncates" "$SCAN" scan --repo "$SR" --query needle --limit 1
+pwtest_re 'truncated: yes' "scan reports truncation"
+# changed-since mode sees the working tree, not only tracked history
+printf 'needle three\n' > "$SR/src/new.txt"
+git -C "$SR" add src/new.txt
+pwtest_rc 0 "scan changed-since" "$SCAN" scan --repo "$SR" --changed HEAD --query needle
+pwtest_re 'src/new\.txt' "changed-since includes staged new files"
+rm -rf "$SR"

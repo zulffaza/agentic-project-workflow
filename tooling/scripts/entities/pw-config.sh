@@ -18,7 +18,7 @@
 #       (headless = strict binding); ai-review surfaces context|analysis|plan|task-plan|
 #       task-exec|ship|rfc|close with modes advisory|auto; review-trigger values
 #       manual|completion; review-repair values manual|bounded; ai-model roles
-#       researcher|analyst|writer-task|reviewer|verifier|ship-comment-analyst.
+#       researcher|analyst|writer-task|reviewer|verifier|ship-comment-analyst|explorer.
 #       ai-review/ai-model/review-trigger/review-repair accept BATCH
 #       --set pairs (`--set plan=auto --set ship=advisory`) and an
 #       `--set all=<value>` baseline that expands over every supported surface,
@@ -107,6 +107,23 @@
 #       resolved / 1 not in catalog / 2 matched but out of configured scope. Providers with no
 #       queryable catalog (claude) or no catalog reachable (CLI off PATH) exit 0 "unverified" —
 #       never a false dead.
+#   pw-config.sh models [--provider <p>]… [--api-provider <prefix>]… [--search <term>]
+#                      [--limit <n>] [--all] [--details] [--format table|tsv] [--json]
+#       Bounded catalog discovery. Reports the source honestly (live CLI catalog, Claude's fixed
+#       alias set, unavailable CLI, empty result, unsupported surface). API-provider filters apply
+#       locally and only to providers with that axis. No live model request.
+#   pw-config.sh agent-model --provider <p> --agent <pw-name> [--json]
+#   pw-config.sh agent-model-set --provider <p> --agent <pw-name> --value '<model>[k=v,…]'|—
+#   pw-config.sh agent-model-unset --provider <p> --agent <pw-name>
+#       Read, set, or clear one provider-by-worker model cell. The key derives from the canonical
+#       filename (PW_<PROVIDER>_AGENT_MODELS_<AGENT>). A write validates prefix, permission,
+#       availability, and tuning capability, then publishes ONE quoted managed assignment.
+#   pw-config.sh agent-models [--provider <p>]… [--json]
+#       The complete provider × canonical-worker matrix with model, parameters, and source.
+#   pw-config.sh spawn-args [--project <slug>] (--role <role> | --agent <pw-name>) [--provider <p>] [--json]
+#       Resolve the complete binding and provider argv. Project role > provider worker default >
+#       canonical/provider default; task pins remain the executor's authority. --provider is
+#       required for a named worker and for role fallback.
 #
 # Named-argument grammar: operation words stay first and positional; every value is
 # named. Scalar values are ONE token (quote spaces); --flag=value carries one literal
@@ -141,7 +158,7 @@ proj_dir() { local d; d="$(pw_proj_dir "$1")" || die "no such project: $1 ($PROJ
 # (kilo's Task-tool spawn has no model arg), the driver runs the row as a **headless session** of
 # that model over the same work order, and records what actually ran — a pin that can't fire says
 # so in the result, instead of silently running the floor model while the row claims a pin.
-AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier ship-comment-analyst"
+AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier ship-comment-analyst explorer"
 
 # Remove one member from a k=v config line (no-op when absent); other members survive.
 _line_pairs_drop() { # <file> <line-label> <member>…
@@ -1526,13 +1543,25 @@ _global_safe_value() { # <text> — managed block accepts literal single-token v
   return 0
 }
 
+# Worker specs legitimately carry bracket parameters and `=`/`,` inside them. Accept only the
+# parsed model-spec alphabet; the caller has already validated the grammar (prefix, params,
+# capability). Quotes, expansion, redirection, command separators, globs, and whitespace stay
+# refused, so a spec can never become shell program text.
+_global_worker_value_ok() { # <spec>
+  case "$1" in
+    "" ) return 1 ;;
+    *$'\n'*|*' '*|*$'\t'*|*'"'*|*"'"*|*'`'*|*'\'*|*'$'*|*';'*|*'&'*|*'|'*|*'<'*|*'>'*|*'('*|*')'*|*'{'*|*'}'*|*'*'*|*'?'*|*'~'*|*'#'*) return 1 ;;
+  esac
+  return 0
+}
+
 _global_block_vars() { # -> one VAR=value per managed assignment (empty when no block)
   local f; f="$(_global_cfg_file)"
   [ -f "$f" ] || return 0
   awk -v b="$_GLOBAL_BEGIN" -v e="$_GLOBAL_END" '
     $0 == b { inb = 1; next }
     $0 == e { inb = 0; next }
-    inb && /^PW_PROJECT_DEFAULT_[A-Z0-9_]+=/ { print }' "$f"
+    inb && /^(PW_PROJECT_DEFAULT_[A-Z0-9_]+|PW_[A-Z0-9_]+_AGENT_MODELS_[A-Z0-9_]+)=/ { print }' "$f"
 }
 
 # --- write transaction: lock, stale-read detection, symlink refusal, portable mode ----------
@@ -1647,6 +1676,14 @@ _global_write_block() { # <VAR=value>… — rewrite the managed block, preservi
         done
       done
     done
+    # Provider-by-worker model defaults: one managed assignment per provider/agent cell.
+    # Print in managed-block order (not shell-expanded), so unrelated future assignments survive.
+    for line in "$@"; do
+      var="${line%%=*}"
+      case "$var" in PW_[A-Z0-9_]*_AGENT_MODELS_[A-Z0-9_]*) ;; *) continue ;; esac
+      v="${line#*=}"; v="${v#\"}"; v="${v%\"}"
+      printf '%s="%s"\n' "$var" "$v"
+    done
     printf '%s\n' "$_GLOBAL_END"
   } > "$tmp" || { rm -f "$tmp"; die "global: failed to compose $f"; }
   bash -n "$tmp" || { rm -f "$tmp"; die "global: staged configuration failed 'bash -n'; nothing written"; }
@@ -1664,11 +1701,16 @@ _global_write_block() { # <VAR=value>… — rewrite the managed block, preservi
   return 0
 }
 
-_global_set_var() { # <VAR> <value> — update/append one managed assignment
-  local var="$1" val="$2" line found=0
+_global_set_var() { # <VAR> <value> [worker] — update/append one managed assignment
+  local var="$1" val="$2" kind="${3:-}" line found=0
   local -a lines; lines=()
-  _global_safe_value "$val" \
-    || die "global: value for $var contains unsupported characters → fix: use letters, digits, and _ , . = : + / @ -"
+  if [ "$kind" = worker ]; then
+    _global_worker_value_ok "$val" \
+      || die "global: value for $var is not a supported model spec → fix: use <model-id>[key=value,…] (no quotes, spaces, or shell syntax)"
+  else
+    _global_safe_value "$val" \
+      || die "global: value for $var contains unsupported characters → fix: use letters, digits, and _ , . = : + / @ -"
+  fi
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     if [ "${line%%=*}" = "$var" ]; then
@@ -1692,6 +1734,375 @@ _global_unset_var() { # <VAR>
   done < <(_global_block_vars)
   [ "$removed" = 1 ] || return 0
   _global_write_block "${lines[@]+"${lines[@]}"}"
+}
+
+# --- provider-by-worker model defaults -------------------------------------------------------
+# A worker default is machine-scoped provider configuration for one canonical subagent
+# definition, not a copied project default and not a task pin. The cell key is derived from the
+# provider and the full canonical filename (see pw_common's pw_agent_key_var).
+_worker_provider_enabled() { # <provider>
+  local p
+  for p in "${PW_PROVIDERS[@]}"; do [ "$p" = "$1" ] && return 0; done
+  return 1
+}
+
+_worker_agent_known() { # <canonical-agent>
+  local a
+  for a in $(pw_canonical_agent_names); do [ "$a" = "$1" ] && return 0; done
+  return 1
+}
+
+# Parse one worker model specification into W_MODEL/W_PARAMS/W_VARIANT/W_REASONING/W_EFFORT.
+# Dies on anything the provider cannot express. The optional `<provider>:` prefix must match.
+_worker_spec_parse() { # <context> <provider> <spec>
+  local ctx="$1" prov="$2" spec="$3" prefix base params item k v seen=" "
+  local -a items; items=()
+  W_MODEL=""; W_PARAMS=""; W_VARIANT=""; W_REASONING=""; W_EFFORT=""
+  [ -n "$spec" ] || die "$ctx: empty model specification → fix: set a model id or — to clear"
+  prefix="$(pw_worker_spec_provider "$spec")"
+  if [ -n "$prefix" ]; then
+    [ "$prefix" = "$prov" ] \
+      || die "$ctx: provider prefix '$prefix' does not match selected provider '$prov' → fix: use '$prov:<model>' or omit the prefix"
+    spec="${spec#*:}"
+  fi
+  case "$spec" in
+    *'['*']') base="${spec%%\[*}"; params="${spec#*\[}"; params="${params%\]}" ;;
+    *'['*|*']'*) die "$ctx: malformed bracket parameters in '$spec' → fix: use <model>[key=value,…]" ;;
+    *) base="$spec" ;;
+  esac
+  [ -n "$base" ] || die "$ctx: empty model id → fix: name a model"
+  case "$base" in *[!A-Za-z0-9._/@+-]*) die "$ctx: invalid model id '$base' → fix: letters, digits, and . _ / @ + - only" ;; esac
+  W_MODEL="$base"
+  if [ -n "$params" ]; then
+    IFS=',' read -ra items <<< "$params"
+    for item in "${items[@]}"; do
+      case "$item" in *=*) k="${item%%=*}"; v="${item#*=}" ;; *) die "$ctx: malformed parameter '$item' → fix: key=value pairs separated by commas" ;; esac
+      case "$k" in ''|*[!A-Za-z0-9_]*) die "$ctx: invalid parameter name '$k'" ;; esac
+      case " $seen " in *" $k "*) die "$ctx: duplicate parameter '$k'" ;; esac
+      seen="$seen$k "
+      case "$v" in ''|*[!A-Za-z0-9._:-]*) die "$ctx: invalid value for '$k' → fix: letters, digits, and . _ : - only" ;; esac
+      case "$prov:$k" in
+        cursor:reasoning|cursor:effort|cursor:context|cursor:fast) ;;
+        cursor:*) die "$ctx: Cursor worker parameters are reasoning|effort|context|fast (got '$k')" ;;
+        *:variant|*:reasoning|*:effort) ;;
+        *) die "$ctx: provider '$prov' has no verified worker parameter '$k' → fix: use variant|reasoning|effort where supported" ;;
+      esac
+      case "$k" in
+        variant) W_VARIANT="$v" ;;
+        reasoning) W_REASONING="$v" ;;
+        effort) W_EFFORT="$v" ;;
+      esac
+    done
+    W_PARAMS="$params"
+  fi
+}
+
+# Validate a parsed worker spec against permission, availability, and tuning capability, then
+# print the normalized stored form (canonical model id plus any bracket parameters).
+_worker_spec_normalize() { # <context> <provider> <spec>
+  local ctx="$1" prov="$2" spec="$3" resolved rrc=0 effective upper
+  _worker_provider_enabled "$prov" \
+    || die "$ctx: provider '$prov' is not an enabled Agent Provider (PW_PROVIDERS: ${PW_PROVIDERS[*]})"
+  _worker_spec_parse "$ctx" "$prov" "$spec"
+  _model_permission_check "$prov" "$W_MODEL" >/dev/null
+  resolved="$(cmd_model_resolve --provider "$prov" --model "$W_MODEL" 2>/dev/null)" || rrc=$?
+  upper="$(printf '%s' "$prov" | tr '[:lower:]' '[:upper:]')"
+  [ "$rrc" = 0 ] \
+    || die "$ctx: $prov:$W_MODEL is not available on this machine (model-resolve exit $rrc) → fix: choose a catalog-listed model or adjust PW_${upper}_API_PROVIDERS"
+  case "$resolved" in ''|*' '*) ;; *) W_MODEL="$resolved" ;; esac
+  _model_tuning_validate "$ctx" "$prov" "$W_MODEL" "$W_VARIANT" "$W_REASONING" "$W_EFFORT"
+  if [ -n "$W_PARAMS" ]; then printf '%s[%s]' "$W_MODEL" "$W_PARAMS"; else printf '%s' "$W_MODEL"; fi
+}
+
+_worker_source() { # <provider> <agent>
+  local var val
+  var="$(pw_agent_key_var "$1" "$2")" || { printf 'default'; return 0; }
+  declare -p "$var" >/dev/null 2>&1 && [ -n "${!var:-}" ] && { printf 'managed'; return 0; }
+  _global_fallback_assignment "$var" >/dev/null 2>&1 && { printf 'literal'; return 0; }
+  printf 'default'
+}
+
+_worker_desc() { # <provider> <agent> -> "<model>|<params>|<source>" (model empty when default)
+  local prov="$1" agent="$2" spec model params
+  spec="$(pw_agent_default_spec "$prov" "$agent")"
+  if [ -z "$spec" ]; then
+    printf '||%s' "$(_worker_source "$prov" "$agent")"
+    return 0
+  fi
+  model="$(pw_worker_spec_model "$spec")"
+  params="$(pw_worker_spec_params "$spec")"
+  printf '%s|%s|%s' "$model" "$params" "$(_worker_source "$prov" "$agent")"
+}
+
+cmd_agent_model() { # --provider <p> --agent <name> [--json]
+  local prov="" agent="" json=0 a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --provider=*) v="${a#*=}"; a="--provider" ;; --agent=*) v="${a#*=}"; a="--agent" ;; esac
+    case "$a" in
+      --provider|--agent)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --provider) prov="$v" ;; --agent) agent="$v" ;; esac ;;
+      --json) json=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "agent-model --provider <p> --agent <name> [--json]" ;;
+      *) _pw_positional "$a" "agent-model --provider <p> --agent <name> [--json]" ;;
+    esac
+  done
+  [ -n "$prov" ] || die "agent-model: --provider is required → fix: agent-model --provider <p> --agent <name>"
+  [ -n "$agent" ] || die "agent-model: --agent is required → fix: agent-model --provider <p> --agent <name>"
+  _worker_provider_enabled "$prov" || die "agent-model: provider '$prov' is not enabled (${PW_PROVIDERS[*]})"
+  _worker_agent_known "$agent" || die "agent-model: unknown canonical worker '$agent' → fix: use one of: $(pw_canonical_agent_names | tr '\n' ' ')"
+  local spec model params source
+  spec="$(pw_agent_default_spec "$prov" "$agent")"
+  model="$(pw_worker_spec_model "$spec")"
+  params="$(pw_worker_spec_params "$spec")"
+  source="$(_worker_source "$prov" "$agent")"
+  if [ "$json" = 1 ]; then
+    printf '{"schema_version":1,"provider":"%s","agent":"%s","model":"%s","params":"%s","source":"%s","supported":"%s"}\n' \
+      "$(_json_escape "$prov")" "$(_json_escape "$agent")" "$(_json_escape "$model")" "$(_json_escape "$params")" "$source" \
+      "$([ "$source" = default ] && echo false || echo true)"
+    return 0
+  fi
+  if [ -z "$model" ]; then
+    printf '(unset — provider/canonical default)\n'
+  else
+    [ -n "$params" ] && printf '%s[%s]\n' "$model" "$params" || printf '%s\n' "$model"
+  fi
+  printf 'source: %s\n' "$source" >&2
+}
+
+cmd_agent_model_set() { # --provider <p> --agent <name> --value <spec|—>
+  local prov="" agent="" val="" hasval=0 a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --provider=*) v="${a#*=}"; a="--provider" ;; --agent=*) v="${a#*=}"; a="--agent" ;; --value=*) v="${a#*=}"; a="--value" ;; esac
+    case "$a" in
+      --provider|--agent|--value)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --provider) prov="$v" ;; --agent) agent="$v" ;; --value) val="$v"; hasval=1 ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "agent-model-set --provider <p> --agent <name> --value <spec|—>" ;;
+      *) _pw_positional "$a" "agent-model-set --provider <p> --agent <name> --value <spec|—>" ;;
+    esac
+  done
+  [ -n "$prov" ] || die "agent-model-set: --provider is required → fix: agent-model-set --provider <p> --agent <name> --value <spec|—>"
+  [ -n "$agent" ] || die "agent-model-set: --agent is required → fix: agent-model-set --provider <p> --agent <name> --value <spec|—>"
+  [ "$hasval" = 1 ] || die "agent-model-set: --value is required → fix: agent-model-set --provider <p> --agent <name> --value <spec|—>"
+  _worker_provider_enabled "$prov" || die "agent-model-set: provider '$prov' is not enabled (${PW_PROVIDERS[*]})"
+  _worker_agent_known "$agent" || die "agent-model-set: unknown canonical worker '$agent' → fix: use one of: $(pw_canonical_agent_names | tr '\n' ' ')"
+  local var; var="$(pw_agent_key_var "$prov" "$agent")" || die "agent-model-set: provider/agent token rejected (letters, digits, hyphen only)"
+  _global_lock_begin
+  if [ "$val" = "—" ] || [ "$val" = "-" ]; then
+    _global_unset_var "$var"
+    _global_reapply_fallback "$var" || true
+  else
+    val="$(_worker_spec_normalize "agent-model '$prov/$agent'" "$prov" "$val")"
+    _global_set_var "$var" "$val" worker
+  fi
+  _global_lock_end
+  printf 'agent-model: %s/%s -> %s\n' "$prov" "$agent" "$( [ -n "$(pw_agent_default_spec "$prov" "$agent")" ] && pw_agent_default_spec "$prov" "$agent" || printf '—')"
+  printf '  source: %s\n' "$(_worker_source "$prov" "$agent")"
+}
+
+cmd_agent_model_unset() { # --provider <p> --agent <name>
+  local prov="" agent="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --provider=*) v="${a#*=}"; a="--provider" ;; --agent=*) v="${a#*=}"; a="--agent" ;; esac
+    case "$a" in
+      --provider|--agent)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --provider) prov="$v" ;; --agent) agent="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "agent-model-unset --provider <p> --agent <name>" ;;
+      *) _pw_positional "$a" "agent-model-unset --provider <p> --agent <name>" ;;
+    esac
+  done
+  [ -n "$prov" ] || die "agent-model-unset: --provider is required"
+  [ -n "$agent" ] || die "agent-model-unset: --agent is required"
+  _worker_provider_enabled "$prov" || die "agent-model-unset: provider '$prov' is not enabled (${PW_PROVIDERS[*]})"
+  _worker_agent_known "$agent" || die "agent-model-unset: unknown canonical worker '$agent'"
+  local var; var="$(pw_agent_key_var "$prov" "$agent")" || die "agent-model-unset: provider/agent token rejected"
+  _global_lock_begin
+  _global_unset_var "$var"
+  _global_reapply_fallback "$var" || true
+  _global_lock_end
+  printf 'agent-model: %s/%s unset -> %s\n' "$prov" "$agent" "$(_worker_source "$prov" "$agent")"
+}
+
+cmd_agent_models() { # [--provider <p>]… [--json]
+  local json=0 a v
+  local -a provs; provs=()
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in --provider=*) v="${a#*=}"; a="--provider" ;; esac
+    case "$a" in
+      --provider) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --provider; v="$1"; shift; }; provs+=("$v") ;;
+      --json) json=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "agent-models [--provider <p>]… [--json]" ;;
+      *) _pw_positional "$a" "agent-models [--provider <p>]… [--json]" ;;
+    esac
+  done
+  [ ${#provs[@]} -gt 0 ] || provs=("${PW_PROVIDERS[@]}")
+  local p agents a2 desc model params source first=1
+  agents="$(pw_canonical_agent_names)"
+  if [ "$json" = 1 ]; then
+    printf '{"schema_version":1,"worker_defaults":['
+    for p in "${provs[@]}"; do
+      _worker_provider_enabled "$p" || die "agent-models: provider '$p' is not enabled (${PW_PROVIDERS[*]})"
+      for a2 in $agents; do
+        desc="$(_worker_desc "$p" "$a2")"
+        model="${desc%%|*}"; desc="${desc#*|}"; params="${desc%%|*}"; source="${desc#*|}"
+        [ "$first" = 1 ] || printf ','
+        first=0
+        printf '{"provider":"%s","agent":"%s","model":"%s","params":"%s","source":"%s"}' \
+          "$(_json_escape "$p")" "$(_json_escape "$a2")" "$(_json_escape "$model")" "$(_json_escape "$params")" "$source"
+      done
+    done
+    printf ']}\n'
+    return 0
+  fi
+  printf '  %-10s %-24s %-40s %s\n' PROVIDER AGENT MODEL SOURCE
+  for p in "${provs[@]}"; do
+    _worker_provider_enabled "$p" || die "agent-models: provider '$p' is not enabled (${PW_PROVIDERS[*]})"
+    for a2 in $agents; do
+      desc="$(_worker_desc "$p" "$a2")"
+      model="${desc%%|*}"; desc="${desc#*|}"; params="${desc%%|*}"; source="${desc#*|}"
+      [ -n "$model" ] || model="—"
+      [ -n "$params" ] && model="$model[$params]"
+      printf '  %-10s %-24s %-40s %s\n' "$p" "$a2" "$model" "$source"
+    done
+  done
+}
+
+# Bounded model discovery. Sources are reported honestly: live CLI catalogs, Claude's fixed
+# alias set, an unavailable CLI, a reachable-but-empty catalog, or no catalog surface.
+cmd_models() {
+  local a v json=0 details=0 all=0 limit=20 format=table search="" explicit=0
+  local -a provs; provs=()
+  local -a apis; apis=()
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --provider=*) v="${a#*=}"; a="--provider" ;;
+      --api-provider=*) v="${a#*=}"; a="--api-provider" ;;
+      --search=*) v="${a#*=}"; a="--search" ;;
+      --limit=*) v="${a#*=}"; a="--limit" ;;
+      --format=*) v="${a#*=}"; a="--format" ;;
+    esac
+    case "$a" in
+      --provider|--api-provider|--search|--limit|--format)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --provider) provs+=("$v"); explicit=1 ;; --api-provider) apis+=("$v") ;;
+          --search) search="$v" ;; --limit) limit="$v" ;; --format) format="$v" ;;
+        esac ;;
+      --all) all=1 ;;
+      --details) details=1 ;;
+      --json) json=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "models [--provider <p>]… [--api-provider <prefix>]… [--search <term>] [--limit <n>] [--all] [--details] [--format table|tsv] [--json]" ;;
+      *) _pw_positional "$a" "models [--provider <p>]… [--api-provider <prefix>]… [--search <term>] [--limit <n>] [--all] [--details] [--format table|tsv] [--json]" ;;
+    esac
+  done
+  case "$format" in table|tsv) ;; *) die "models: --format expects table|tsv, got '$format'" ;; esac
+  _require_int models "$limit" 1 1000
+  [ ${#provs[@]} -gt 0 ] || provs=("${PW_PROVIDERS[@]}")
+  if [ ${#apis[@]} -gt 0 ]; then
+    local -a axis_provs; axis_provs=()
+    for p in "${provs[@]}"; do
+      case "$p" in kilo|opencode) axis_provs+=("$p") ;; esac
+    done
+    [ ${#axis_provs[@]} -gt 0 ] \
+      || die "models: --api-provider applies only to kilo/opencode, and no selected provider has that axis"
+    provs=("${axis_provs[@]}")
+  fi
+  local p kind catalog ids n truncated fail=0 partial=0
+  local -a rows; rows=()
+  for p in "${provs[@]}"; do
+    _worker_provider_enabled "$p" || die "models: provider '$p' is not enabled (${PW_PROVIDERS[*]})"
+    kind="$(pw_catalog_kind "$p")"
+    case "$kind" in
+      fixed) ids="$(pw_claude_models)" ;;
+      live|empty)
+        catalog="$(pw_api_catalog "$p")"
+        if [ ${#apis[@]} -gt 0 ]; then
+          ids=""
+          local prefix line
+          for prefix in "${apis[@]}"; do
+            while IFS= read -r line; do
+              case "$line" in "$prefix"*) ids="$ids$line
+" ;; esac
+            done <<EOF
+$catalog
+EOF
+          done
+          ids="${ids%$'\n'}"
+        else
+          ids="$(printf '%s\n' "$catalog" | pw_api_filter "$p")"
+        fi ;;
+      unavailable|unsupported|*) ids="" ;;
+    esac
+    if [ -n "$search" ]; then
+      ids="$(printf '%s\n' "$ids" | grep -F -i -- "$search" || true)"
+    fi
+    n=0; truncated=0
+    local line shown=0
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      n=$((n+1))
+      if [ "$all" = 0 ] && [ "$shown" -ge "$limit" ]; then truncated=1; continue; fi
+      shown=$((shown+1))
+      rows+=("$p"$'\t'"$kind"$'\t'"$line")
+    done <<EOF
+$ids
+EOF
+    case "$kind" in
+      unavailable|empty|unsupported)
+        fail=1; partial=1
+        printf 'pw-config: %s: catalog %s → %s\n' "$p" "$kind" \
+          "$([ "$kind" = unavailable ] && echo 'CLI not on PATH' || echo 'no models returned (auth, network, or unsupported surface)')" >&2 ;;
+    esac
+    [ "$truncated" = 1 ] && printf 'pw-config: %s: showing %s of %s matching models (use --all or a higher --limit)\n' "$p" "$shown" "$n" >&2
+  done
+  if [ "$json" = 1 ]; then
+    printf '{"schema_version":1,"partial":%s,"models":[' "$([ "$partial" = 1 ] && echo true || echo false)"
+    local first=1 k m s
+    for k in "${rows[@]+"${rows[@]}"}"; do
+      IFS=$'\t' read -r p s m _ <<EOF
+$k
+EOF
+      [ "$first" = 1 ] || printf ','
+      first=0
+      printf '{"provider":"%s","source":"%s","model":"%s"}' "$(_json_escape "$p")" "$s" "$(_json_escape "$m")"
+    done
+    printf ']}\n'
+  elif [ "$format" = tsv ]; then
+    printf 'provider\tsource\tmodel\n'
+    local k p2 s2 m2 st2
+    for k in "${rows[@]+"${rows[@]}"}"; do
+      IFS=$'\t' read -r p2 s2 m2 st2 <<EOF
+$k
+EOF
+      printf '%s\t%s\t%s\n' "$p2" "$s2" "$m2"
+    done
+  else
+    printf '  %-10s %-12s %s\n' PROVIDER SOURCE MODEL
+    local k p2 s2 m2 st2
+    for k in "${rows[@]+"${rows[@]}"}"; do
+      IFS=$'\t' read -r p2 s2 m2 st2 <<EOF
+$k
+EOF
+      printf '  %-10s %-12s %s\n' "$p2" "$s2" "$m2"
+    done
+    [ "$details" = 1 ] && printf '  (source: live CLI catalog | fixed = provider alias set; availability checked by model-resolve)\n'
+  fi
+  if [ "$fail" = 1 ] && [ "$explicit" = 1 ]; then
+    die "models: one or more selected provider catalogs are unavailable (see diagnostics above)"
+  fi
+  return 0
 }
 
 _global_effective() { # <key> -> effective configured/fallback string
@@ -1770,7 +2181,7 @@ cmd_global_show() { # [--json]
   local json=0 a
   for a in "$@"; do case "$a" in --json) json=1 ;; *) die "usage: global show [--json]" ;; esac; done
   if [ "$json" = 1 ]; then
-    local first=1 k eff src inh
+    local first=1 k eff src inh p agent desc model params wsrc
     printf '{"schema_version":1,"project_defaults":['
     for k in $GLOBAL_PROJECT_KEYS; do
       eff="$(_global_effective "$k")"; src="$(_global_source "$k")"
@@ -1778,6 +2189,19 @@ cmd_global_show() { # [--json]
       [ "$first" = 1 ] || printf ','
       first=0
       printf '{"key":"%s","inherited":"%s","effective":"%s","source":"%s"}' "$k" "$inh" "$eff" "$src"
+    done
+    printf '],"worker_defaults":['
+    first=1
+    for p in "${PW_PROVIDERS[@]}"; do
+      case "$p" in *[!A-Za-z0-9_-]*) continue ;; esac
+      for agent in $(pw_canonical_agent_names); do
+        desc="$(_worker_desc "$p" "$agent")"
+        model="${desc%%|*}"; desc="${desc#*|}"; params="${desc%%|*}"; wsrc="${desc#*|}"
+        [ "$first" = 1 ] || printf ','
+        first=0
+        printf '{"provider":"%s","agent":"%s","model":"%s","params":"%s","source":"%s"}' \
+          "$(_json_escape "$p")" "$(_json_escape "$agent")" "$(_json_escape "$model")" "$(_json_escape "$params")" "$wsrc"
+      done
     done
     printf ']}\n'
     return 0
@@ -1816,23 +2240,46 @@ cmd_global_show() { # [--json]
     printf '  %-18s %-10s %-42s %s\n' "$k" "yes" "$eff" "$src"
   done
   echo "  destination      : dashboard config lines; routing/execution-limit/max-parallel seed the dashboard until PLAN owns them"
+  echo ""
+  echo "Worker defaults (provider-specific agent definitions; empty = provider/canonical default)"
+  printf '  %-10s %-24s %-40s %s\n' PROVIDER AGENT MODEL SOURCE
+  local wp wa wdesc wmodel wparams wsource
+  for wp in "${PW_PROVIDERS[@]}"; do
+    case "$wp" in *[!A-Za-z0-9_-]*) continue ;; esac
+    for wa in $(pw_canonical_agent_names); do
+      wdesc="$(_worker_desc "$wp" "$wa")"
+      wmodel="${wdesc%%|*}"; wdesc="${wdesc#*|}"; wparams="${wdesc%%|*}"; wsource="${wdesc#*|}"
+      [ -n "$wmodel" ] || wmodel="—"
+      [ -n "$wparams" ] && wmodel="$wmodel[$wparams]"
+      printf '  %-10s %-24s %-40s %s\n' "$wp" "$wa" "$wmodel" "$wsource"
+    done
+  done
 }
 
-cmd_global_get() { # --key <k> [--json]
-  local key="" json=0 a v
+cmd_global_get() { # --key <k> [--provider <p> --agent <name>] [--json]
+  local key="" json=0 a v prov="" agent=""
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
-    case "$a" in --key=*) v="${a#*=}"; a="--key" ;; esac
+    case "$a" in --key=*) v="${a#*=}"; a="--key" ;; --provider=*) v="${a#*=}"; a="--provider" ;; --agent=*) v="${a#*=}"; a="--agent" ;; esac
     case "$a" in
-      --key) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --key; v="$1"; shift; }; key="$v" ;;
+      --key|--provider|--agent)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --key) key="$v" ;; --provider) prov="$v" ;; --agent) agent="$v" ;; esac ;;
       --json) json=1 ;;
       -h|--help) pw_usage ;;
-      -*) _pw_unknown "$a" "global get --key <key> [--json]   (keys: $GLOBAL_PROJECT_KEYS)" ;;
-      *) _pw_positional "$a" "global get --key <key> [--json]   (keys: $GLOBAL_PROJECT_KEYS)" ;;
+      -*) _pw_unknown "$a" "global get --key <key> [--provider <p> --agent <name>] [--json]   (keys: $GLOBAL_PROJECT_KEYS or agent-model)" ;;
+      *) _pw_positional "$a" "global get --key <key> [--provider <p> --agent <name>] [--json]   (keys: $GLOBAL_PROJECT_KEYS or agent-model)" ;;
     esac
   done
-  [ -n "$key" ] || die "global get: --key is required → fix: global get --key <key>   (keys: $GLOBAL_PROJECT_KEYS)"
-  case " $GLOBAL_PROJECT_KEYS " in *" $key "*) ;; *) die "global get: unknown key '$key' (keys: $GLOBAL_PROJECT_KEYS)" ;; esac
+  [ -n "$key" ] || die "global get: --key is required → fix: global get --key <key>   (keys: $GLOBAL_PROJECT_KEYS or agent-model)"
+  if [ "$key" = agent-model ]; then
+    [ -n "$prov" ] && [ -n "$agent" ] \
+      || die "global get agent-model: --provider and --agent are required → fix: global get --key agent-model --provider <p> --agent <pw-name>"
+    if [ "$json" = 1 ]; then cmd_agent_model --provider "$prov" --agent "$agent" --json
+    else cmd_agent_model --provider "$prov" --agent "$agent"; fi
+    return 0
+  fi
+  case " $GLOBAL_PROJECT_KEYS " in *" $key "*) ;; *) die "global get: unknown key '$key' (keys: $GLOBAL_PROJECT_KEYS or agent-model)" ;; esac
   local eff src
   eff="$(_global_effective "$key")"; src="$(_global_source "$key")"
   if [ "$json" = 1 ]; then
@@ -1844,7 +2291,7 @@ cmd_global_get() { # --key <k> [--json]
 }
 
 cmd_global_set() { # --key <k> [--value <v> | --set <member=value>]… [--variant/--reasoning/--effort]
-  local key="" val="" hasval=0 a v variant="" reasoning="" effort="" tuning_given=0
+  local key="" val="" hasval=0 a v variant="" reasoning="" effort="" tuning_given=0 prov="" agent=""
   local -a sets; sets=()
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
@@ -1852,26 +2299,38 @@ cmd_global_set() { # --key <k> [--value <v> | --set <member=value>]… [--varian
       --key=*) v="${a#*=}"; a="--key" ;;
       --value=*) v="${a#*=}"; a="--value" ;;
       --set=*) v="${a#*=}"; a="--set" ;;
+      --provider=*) v="${a#*=}"; a="--provider" ;;
+      --agent=*) v="${a#*=}"; a="--agent" ;;
       --variant=*) v="${a#*=}"; a="--variant" ;;
       --reasoning=*) v="${a#*=}"; a="--reasoning" ;;
       --effort=*) v="${a#*=}"; a="--effort" ;;
     esac
     case "$a" in
-      --key|--value|--set|--variant|--reasoning|--effort)
+      --key|--value|--set|--provider|--agent|--variant|--reasoning|--effort)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
         case "$a" in
           --key) key="$v" ;; --value) val="$v"; hasval=1 ;; --set) sets+=("$v") ;;
+          --provider) prov="$v" ;; --agent) agent="$v" ;;
           --variant) variant="$v"; tuning_given=1 ;;
           --reasoning) reasoning="$v"; tuning_given=1 ;;
           --effort) effort="$v"; tuning_given=1 ;;
         esac ;;
       -h|--help) pw_usage ;;
-      -*) _pw_unknown "$a" "global set --key <key> [--value <v> | --set <member=value>]…   (keys: $GLOBAL_PROJECT_KEYS)" ;;
+      -*) _pw_unknown "$a" "global set --key <key> [--value <v> | --set <member=value>]…   (keys: $GLOBAL_PROJECT_KEYS or agent-model)" ;;
       *) _pw_positional "$a" "global set --key <key> [--value <v> | --set <member=value>]…" ;;
     esac
   done
-  [ -n "$key" ] || die "global set: --key is required → fix: global set --key <key> [--value <v> | --set <member=value>]…   (keys: $GLOBAL_PROJECT_KEYS)"
-  case " $GLOBAL_PROJECT_KEYS " in *" $key "*) ;; *) die "global set: unknown key '$key' (keys: $GLOBAL_PROJECT_KEYS)" ;; esac
+  [ -n "$key" ] || die "global set: --key is required → fix: global set --key <key> [--value <v> | --set <member=value>]…   (keys: $GLOBAL_PROJECT_KEYS or agent-model)"
+  if [ "$key" = agent-model ]; then
+    [ -n "$prov" ] && [ -n "$agent" ] \
+      || die "global set agent-model: --provider and --agent are required → fix: global set --key agent-model --provider <p> --agent <pw-name> --value <spec|—>"
+    [ "$hasval" = 1 ] || die "global set agent-model: --value is required → fix: global set --key agent-model --provider <p> --agent <pw-name> --value <spec|—>"
+    [ ${#sets[@]} -eq 0 ] || die "global set agent-model: takes --value <spec>, not --set pairs"
+    [ "$tuning_given" = 0 ] || die "global set agent-model: tuning rides inside the bracket spec (e.g. model[effort=high]), not --variant/--reasoning/--effort"
+    cmd_agent_model_set --provider "$prov" --agent "$agent" --value "$val"
+    return 0
+  fi
+  case " $GLOBAL_PROJECT_KEYS " in *" $key "*) ;; *) die "global set: unknown key '$key' (keys: $GLOBAL_PROJECT_KEYS or agent-model)" ;; esac
   local var
   case "$key" in
     ai-model|ai-review|review-trigger|review-repair)
@@ -1948,20 +2407,28 @@ cmd_global_set() { # --key <k> [--value <v> | --set <member=value>]… [--varian
   echo "  applies to NEW projects only; existing projects keep captured values (/pw-config set --project <slug> changes one project)."
 }
 
-cmd_global_unset() { # --key <k>
-  local key="" a v
+cmd_global_unset() { # --key <k> [--provider <p> --agent <name>]
+  local key="" prov="" agent="" a v
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
-    case "$a" in --key=*) v="${a#*=}"; a="--key" ;; esac
+    case "$a" in --key=*) v="${a#*=}"; a="--key" ;; --provider=*) v="${a#*=}"; a="--provider" ;; --agent=*) v="${a#*=}"; a="--agent" ;; esac
     case "$a" in
-      --key) [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --key; v="$1"; shift; }; key="$v" ;;
+      --key|--provider|--agent)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --key) key="$v" ;; --provider) prov="$v" ;; --agent) agent="$v" ;; esac ;;
       -h|--help) pw_usage ;;
-      -*) _pw_unknown "$a" "global unset --key <key>   (keys: $GLOBAL_PROJECT_KEYS)" ;;
-      *) _pw_positional "$a" "global unset --key <key>   (keys: $GLOBAL_PROJECT_KEYS)" ;;
+      -*) _pw_unknown "$a" "global unset --key <key> [--provider <p> --agent <name>]   (keys: $GLOBAL_PROJECT_KEYS or agent-model)" ;;
+      *) _pw_positional "$a" "global unset --key <key> [--provider <p> --agent <name>]   (keys: $GLOBAL_PROJECT_KEYS or agent-model)" ;;
     esac
   done
-  [ -n "$key" ] || die "global unset: --key is required → fix: global unset --key <key>"
-  case " $GLOBAL_PROJECT_KEYS " in *" $key "*) ;; *) die "global unset: unknown key '$key' (keys: $GLOBAL_PROJECT_KEYS)" ;; esac
+  [ -n "$key" ] || die "global unset: --key is required → fix: global unset --key <key> [--provider <p> --agent <name>]"
+  if [ "$key" = agent-model ]; then
+    [ -n "$prov" ] && [ -n "$agent" ] \
+      || die "global unset agent-model: --provider and --agent are required → fix: global unset --key agent-model --provider <p> --agent <pw-name>"
+    cmd_agent_model_unset --provider "$prov" --agent "$agent"
+    return 0
+  fi
+  case " $GLOBAL_PROJECT_KEYS " in *" $key "*) ;; *) die "global unset: unknown key '$key' (keys: $GLOBAL_PROJECT_KEYS or agent-model)" ;; esac
   local r var restored=0
   _global_lock_begin
   if [ "$key" = ai-model ]; then
@@ -2037,57 +2504,100 @@ _json_array() { # <arg>…
   printf '[%s]' "$out"
 }
 
-cmd_spawn_args() { # --project <slug> --role <role> [--json]
-  local slug="" role="" a v json=0
+cmd_spawn_args() { # [--project <slug>] (--role <role> | --agent <pw-name>) [--provider <p>] [--json]
+  local slug="" role="" agent="" prov_hint="" a v json=0
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
     case "$a" in
       --project=*) v="${a#*=}"; a="--project" ;;
       --role=*)    v="${a#*=}"; a="--role" ;;
+      --agent=*)   v="${a#*=}"; a="--agent" ;;
+      --provider=*) v="${a#*=}"; a="--provider" ;;
     esac
     case "$a" in
-      --project|--role)
+      --project|--role|--agent|--provider)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
-        case "$a" in --project) slug="$v" ;; --role) role="$v" ;; esac ;;
+        case "$a" in
+          --project) slug="$v" ;; --role) role="$v" ;;
+          --agent) agent="$v" ;; --provider) prov_hint="$v" ;;
+        esac ;;
       --json) json=1 ;;
       -h|--help) pw_usage ;;
-      -*) _pw_unknown "$a" "spawn-args --project <slug> --role <role> [--json]   (roles: $AI_MODEL_ROLES)" ;;
-      *) _pw_positional "$a" "spawn-args --project <slug> --role <role> [--json]" ;;
+      -*) _pw_unknown "$a" "spawn-args [--project <slug>] (--role <role> | --agent <name>) [--provider <p>] [--json]   (roles: $AI_MODEL_ROLES)" ;;
+      *) _pw_positional "$a" "spawn-args [--project <slug>] (--role <role> | --agent <name>) [--provider <p>] [--json]" ;;
     esac
   done
-  [ -n "$slug" ] || die "spawn-args: --project is required → fix: spawn-args --project <slug> --role <role>"
-  [ -n "$role" ] || die "spawn-args: --role is required → fix: spawn-args --project <slug> --role <role>   (roles: $AI_MODEL_ROLES)"
-  case " $AI_MODEL_ROLES " in *" $role "*) ;; *) die "spawn-args: invalid role '$role' (allowed: $AI_MODEL_ROLES)" ;; esac
-  local f; f="$(proj_dir "$slug")/README.md"
-  [ -f "$f" ] || die "spawn-args: no README.md in project $slug"
-  local line tune binding tuning prov model variant reasoning effort kv
-  line="$(grep -m1 '^- \*\*AI Models:\*\*' "$f" 2>/dev/null | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//' || true)"
-  tune="$(grep -m1 '^- \*\*AI Model Tuning:\*\*' "$f" 2>/dev/null | sed 's/^- \*\*AI Model Tuning:\*\*[[:space:]]*//' || true)"
-  binding="—"
-  for kv in $line; do [ "${kv%%=*}" = "$role" ] && binding="${kv#*=}"; done
-  tuning=""
-  for kv in $tune; do [ "${kv%%=*}" = "$role" ] && tuning="${kv#*=}"; done
-  prov=""; model=""
-  if [ "$binding" != "—" ] && [ "$binding" != "-" ]; then
-    case "$binding" in *:*) prov="${binding%%:*}"; model="${binding#*:}" ;; *) die "spawn-args: malformed stored binding '$binding' → fix: /pw-config set --project $slug --key ai-model --set $role=<provider:model>" ;; esac
+  [ -n "$role" ] || [ -n "$agent" ] || die "spawn-args: --role or --agent is required → fix: spawn-args --project <slug> --role <role> | spawn-args --provider <p> --agent <pw-name>   (roles: $AI_MODEL_ROLES)"
+  if [ -n "$role" ] && [ -n "$agent" ]; then die "spawn-args: --role and --agent are mutually exclusive"; fi
+  local f="" line="" tune="" binding="—" tuning="" prov="" model="" variant="" reasoning="" effort="" kv source="default"
+  if [ -n "$agent" ]; then
+    _worker_agent_known "$agent" || die "spawn-args: unknown canonical worker '$agent' → fix: use one of: $(pw_canonical_agent_names | tr '\n' ' ')"
+    [ -n "$prov_hint" ] || die "spawn-args: --provider is required with --agent (worker defaults are provider-specific)"
+    _worker_provider_enabled "$prov_hint" || die "spawn-args: provider '$prov_hint' is not enabled (${PW_PROVIDERS[*]})"
+    binding="$(pw_agent_default_spec "$prov_hint" "$agent")"
+    if [ -n "$binding" ]; then
+      source="worker"
+      _worker_spec_parse "spawn-args '$prov_hint/$agent'" "$prov_hint" "$binding"
+      prov="$prov_hint"; model="$W_MODEL"; variant="$W_VARIANT"; reasoning="$W_REASONING"; effort="$W_EFFORT"
+      if [ -n "$W_PARAMS" ] && [ "$prov_hint" = cursor ]; then model="$W_MODEL[$W_PARAMS]"; preset_cursor=1; fi
+    else
+      binding="—"; prov="$prov_hint"
+    fi
+  else
+    case " $AI_MODEL_ROLES " in *" $role "*) ;; *) die "spawn-args: invalid role '$role' (allowed: $AI_MODEL_ROLES)" ;; esac
+    [ -n "$slug" ] || die "spawn-args: --project is required with --role → fix: spawn-args --project <slug> --role <role>"
+    f="$(proj_dir "$slug")/README.md"
+    [ -f "$f" ] || die "spawn-args: no README.md in project $slug"
+    line="$(grep -m1 '^- \*\*AI Models:\*\*' "$f" 2>/dev/null | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//' || true)"
+    tune="$(grep -m1 '^- \*\*AI Model Tuning:\*\*' "$f" 2>/dev/null | sed 's/^- \*\*AI Model Tuning:\*\*[[:space:]]*//' || true)"
+    binding="—"
+    for kv in $line; do [ "${kv%%=*}" = "$role" ] && binding="${kv#*=}"; done
+    tuning=""
+    for kv in $tune; do [ "${kv%%=*}" = "$role" ] && tuning="${kv#*=}"; done
+    if [ "$binding" != "—" ] && [ "$binding" != "-" ]; then
+      case "$binding" in *:*) prov="${binding%%:*}"; model="${binding#*:}" ;; *) die "spawn-args: malformed stored binding '$binding' → fix: /pw-config set --project $slug --key ai-model --set $role=<provider:model>" ;; esac
+      source="project"
+      variant="$(_tuning_field "$tuning" variant)"
+      reasoning="$(_tuning_field "$tuning" reasoning)"
+      effort="$(_tuning_field "$tuning" effort)"
+    else
+      # No project pin: an authorized provider hint may select the worker default for this role.
+      prov="$prov_hint"
+      local _worker=""
+      _worker="$(pw_role_worker "$role")" || _worker=""
+      if [ -n "$prov_hint" ] && [ -n "$_worker" ]; then
+        _worker_provider_enabled "$prov_hint" || die "spawn-args: provider '$prov_hint' is not enabled (${PW_PROVIDERS[*]})"
+        binding="$(pw_agent_default_spec "$prov_hint" "$_worker")"
+        if [ -n "$binding" ]; then
+          source="worker"
+          _worker_spec_parse "spawn-args '$prov_hint/$_worker'" "$prov_hint" "$binding"
+          model="$W_MODEL"; variant="$W_VARIANT"; reasoning="$W_REASONING"; effort="$W_EFFORT"
+          if [ -n "$W_PARAMS" ] && [ "$prov_hint" = cursor ]; then model="$W_MODEL[$W_PARAMS]"; preset_cursor=1; fi
+        fi
+      fi
+      [ -n "$model" ] || binding="—"
+    fi
   fi
-  variant="$(_tuning_field "$tuning" variant)"
-  reasoning="$(_tuning_field "$tuning" reasoning)"
-  effort="$(_tuning_field "$tuning" effort)"
   # Canonicalize the exact id the provider CLI must receive (the same availability gate the driver
   # runs before spawning). "unverified" prose is not a canonical id, so the stored value stays.
-  if [ -n "$prov" ]; then
+  if [ -n "$prov" ] && [ -n "$model" ]; then
     local _enabled=0 _p
     for _p in "${PW_PROVIDERS[@]}"; do [ "$_p" = "$prov" ] && _enabled=1; done
     [ "$_enabled" = 1 ] \
       || die "spawn-args: provider '$prov' is not an enabled Agent Provider (PW_PROVIDERS: ${PW_PROVIDERS[*]}) → fix: enable it in pw.config.sh or re-pin role '$role'"
-    local _resolved _rrc=0
-    _resolved="$(cmd_model_resolve --provider "$prov" --model "$model" 2>/dev/null)" || _rrc=$?
+    local _resolved _rrc=0 _base
+    case "$prov" in cursor) _base="${model%%\[*}" ;; *) _base="$model" ;; esac
+    _resolved="$(cmd_model_resolve --provider "$prov" --model "$_base" 2>/dev/null)" || _rrc=$?
     [ "$_rrc" = 0 ] || die "spawn-args: $prov:$model is not available on this route (model-resolve exit $_rrc) → fix: re-pin the role with /pw-config set --project $slug --key ai-model --set $role=<provider:model>"
-    case "$_resolved" in ''|*' '*) ;; *) model="$_resolved" ;; esac
+    case "$_resolved" in ''|*' '*) ;; *)
+      case "$prov" in
+        cursor) model="$_resolved${model#"$_base"}" ;;
+        *) model="$_resolved" ;;
+      esac ;;
+    esac
   fi
   local -a args; args=()
-  local supported=1 reason="" route="native" effective_prov="$prov" effective_model="$model"
+  local supported=1 reason="" route="native" effective_prov="$prov" effective_model="$model" preset_cursor=0
   if [ -z "$prov" ]; then
     supported=1; reason="unbound: provider/session default"
   else
@@ -2101,12 +2611,16 @@ cmd_spawn_args() { # --project <slug> --role <role> [--json]
         if [ -n "$effort" ]; then args+=(--effort "$effort"); fi
         if [ -n "$variant" ] || [ -n "$reasoning" ]; then supported=0; reason="claude role route supports effort only (unsupported: variant/reasoning)"; fi ;;
       cursor)
-        effective_model="$model"
-        [ -n "$variant" ] && effective_model="${model}-${variant}"
-        local bracket=""
-        [ -n "$reasoning" ] && bracket="reasoning=$reasoning"
-        [ -n "$effort" ] && bracket="${bracket:+$bracket,}effort=$effort"
-        [ -n "$bracket" ] && effective_model="${effective_model}[${bracket}]"
+        if [ "$preset_cursor" = 1 ]; then
+          effective_model="$model"
+        else
+          effective_model="$model"
+          [ -n "$variant" ] && effective_model="${model}-${variant}"
+          local bracket=""
+          [ -n "$reasoning" ] && bracket="reasoning=$reasoning"
+          [ -n "$effort" ] && bracket="${bracket:+$bracket,}effort=$effort"
+          [ -n "$bracket" ] && effective_model="${effective_model}[${bracket}]"
+        fi
         args=(--model "$effective_model") ;;
       codex)
         args=(-m "$model")
@@ -2121,13 +2635,13 @@ cmd_spawn_args() { # --project <slug> --role <role> [--json]
     esac
   fi
   if [ "$json" = 1 ]; then
-    printf '{"role":"%s","provider":"%s","model":"%s","variant":"%s","reasoning":"%s","effort":"%s","route":"%s","supported":%s,"reason":"%s","args":%s}\n' \
-      "$(_json_escape "$role")" "$(_json_escape "$effective_prov")" "$(_json_escape "$effective_model")" \
-      "$(_json_escape "$variant")" "$(_json_escape "$reasoning")" "$(_json_escape "$effort")" "$route" \
+    printf '{"role":"%s","agent":"%s","provider":"%s","model":"%s","variant":"%s","reasoning":"%s","effort":"%s","route":"%s","source":"%s","supported":%s,"reason":"%s","args":%s}\n' \
+      "$(_json_escape "$role")" "$(_json_escape "$agent")" "$(_json_escape "$effective_prov")" "$(_json_escape "$effective_model")" \
+      "$(_json_escape "$variant")" "$(_json_escape "$reasoning")" "$(_json_escape "$effort")" "$route" "$source" \
       "$([ "$supported" = 1 ] && echo true || echo false)" "$(_json_escape "$reason")" "$(_json_array ${args[@]+"${args[@]}"})"
   else
-    printf 'role: %s\nprovider: %s\nmodel: %s\nvariant: %s\nreasoning: %s\neffort: %s\nsupported: %s\nreason: %s\n' \
-      "$role" "$effective_prov" "$effective_model" "$variant" "$reasoning" "$effort" "$([ "$supported" = 1 ] && echo yes || echo no)" "${reason:-exact binding}"
+    printf 'role: %s\nagent: %s\nprovider: %s\nmodel: %s\nvariant: %s\nreasoning: %s\neffort: %s\nsource: %s\nsupported: %s\nreason: %s\n' \
+      "$role" "$agent" "$effective_prov" "$effective_model" "$variant" "$reasoning" "$effort" "$source" "$([ "$supported" = 1 ] && echo yes || echo no)" "${reason:-exact binding}"
     local arg
     for arg in ${args[@]+"${args[@]}"}; do printf 'arg: %s\n' "$arg"; done
   fi
@@ -2158,6 +2672,11 @@ case "${1:-}" in
   spawn-args)    shift; cmd_spawn_args "$@" ;;
   model-check)   shift; cmd_model_check "$@" ;;
   model-resolve) shift; cmd_model_resolve "$@" ;;
+  models)        shift; cmd_models "$@" ;;
+  agent-model)   shift; cmd_agent_model "$@" ;;
+  agent-model-set) shift; cmd_agent_model_set "$@" ;;
+  agent-model-unset) shift; cmd_agent_model_unset "$@" ;;
+  agent-models)  shift; cmd_agent_models "$@" ;;
   ai-model)      shift; _dep_note ai-model "set --project <slug> --key ai-model --set <role=value>…"; cmd_ai_model "$@" ;;
   ai-review)     shift; _dep_note ai-review "set --project <slug> --key ai-review --set <surface>=<mode>…"; cmd_ai_review "$@" ;;
   review-trigger) shift; _dep_note review-trigger "set --project <slug> --key review-trigger --set <surface>=<value>…"; cmd_review_trigger "$@" ;;
@@ -2165,5 +2684,5 @@ case "${1:-}" in
   review-rounds)  shift; _dep_note review-rounds "set --project <slug> --key review-rounds --value <n>"; cmd_review_rounds "$@" ;;
   project) die "the 'project' operator was flattened → fix: use show|get|set|ensure --project <slug> (see --help)" ;;
   -h|--help) pw_usage ;;
-  *) die "usage: pw-config.sh <show|get|set|ensure|materialize|global|validate-defaults|spawn-args|model-check|model-resolve|ai-model|ai-review|review-trigger|review-repair|review-rounds> … (see --help)" ;;
+  *) die "usage: pw-config.sh <show|get|set|ensure|materialize|global|validate-defaults|spawn-args|model-check|model-resolve|models|agent-model|agent-model-set|agent-model-unset|agent-models|ai-model|ai-review|review-trigger|review-repair|review-rounds> … (see --help)" ;;
 esac

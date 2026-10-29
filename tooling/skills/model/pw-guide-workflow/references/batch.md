@@ -62,6 +62,7 @@ Structural validation covers the whole list and happens before any helper runs:
 4. Project inheritance is consistent; global forms carry no injected project.
 5. A literal payload satisfies section 2.
 6. The form has no excluded flag or mode: `--fix`, `stack adopt`, ship `comments`/`--resolve`,
+   `models`, `agent-model*`, `spawn-args`, `global --key agent-model`,
    status `update` or `rewind`, `auto-signoff`, `materialize`, `model-resolve`, `prepare`, `import`,
    `ai`, or an apply-comments flow. A `/pw-ship ready|draft` item may carry `--apply` only with its
    own `--expect <token>` or `--resume <attempt-id>`; every other item-level `--apply` is refused.
@@ -102,7 +103,7 @@ Use the owning command's mapping. These are the concrete helpers behind the allo
 | `/pw-config set` | `pw-config.sh set --project <slug> --key <key> [--value <v> \| --set <member=value>]…` |
 | `/pw-config ensure` | `pw-config.sh ensure --project <slug>` |
 | `/pw-config model-check` | `pw-config.sh model-check --provider <p> --model <m> [--variant <v>] [--reasoning <v>] [--effort <v>] [--json]` |
-| `/pw-config global show`, `get`, `set`, `unset` | `pw-config.sh global (show/get/set/unset) …` — `show [--json]`, `get --key <key>`, `set --key <key> …`, `unset --key <key>` |
+| `/pw-config global show`, `get`, `set`, `unset` | `pw-config.sh global (show/get/set/unset) …` — `show [--json]`, `get --key <key>`, `set --key <key> …`, `unset --key <key>`; `--key agent-model` and `--provider/--agent` are NOT admitted |
 | `/pw-status` | `pw-status.sh --project <slug> [--skip-cli-check]` |
 | `/pw-status --all` | `pw-status.sh --all [--attention] [--phase <phase>] [--json]` |
 | `/pw-help …` | `pw-help.sh <form> …` exactly as the standalone form |

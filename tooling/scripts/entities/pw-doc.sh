@@ -11,6 +11,11 @@
 #       Extract the structured summary an agent would otherwise re-read for.
 #   pw-doc.sh sync --project <slug> [--dashboard-only|--plan-only|--tasks-only]
 #       Reconcile dashboard/task docs from the authoritative files (idempotent).
+#   pw-doc.sh research-path --project <slug> --topic <topic>
+#                           --kind <exploration|ground-truth|seed|answer>
+#       Print the canonical project-relative path for a persisted exploration/research
+#       artifact. Read-only: creates no directory or file. Explicit --out paths stay
+#       caller-owned exceptions; operational comment manifests are not in this family.
 #
 # Named-argument grammar: operation words first, every value named; --project
 # selects the project. Scalar values are ONE token (quote spaces).
@@ -744,10 +749,46 @@ echo "Document sync complete"
 
 }
 
+# Canonical research/exploration artifact path. Read-only path resolution: it never creates the
+# directory or the file. New producers use this family; existing paths stay valid until an
+# explicit, verified migration.
+cmd_research_path() {
+  local slug="" topic="" kind="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --topic=*) v="${a#*=}"; a="--topic" ;;
+      --kind=*) v="${a#*=}"; a="--kind" ;;
+    esac
+    case "$a" in
+      --project|--topic|--kind)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --topic) topic="$v" ;; --kind) kind="$v" ;; esac ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "research-path --project <slug> --topic <topic> --kind <exploration|ground-truth|seed|answer>" ;;
+      *) _pw_positional "$a" "research-path --project <slug> --topic <topic> --kind <exploration|ground-truth|seed|answer>" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "research-path: --project is required → fix: research-path --project <slug> --topic <topic> --kind <kind>"
+  [ -n "$topic" ] || die "research-path: --topic is required → fix: research-path --project <slug> --topic <topic> --kind <kind>"
+  [ -n "$kind" ] || die "research-path: --kind is required → fix: --kind exploration|ground-truth|seed|answer"
+  case "$kind" in
+    exploration|ground-truth|seed|answer) ;;
+    *) die "research-path: unknown kind '$kind' → fix: exploration|ground-truth|seed|answer" ;;
+  esac
+  case "$topic" in
+    ''|*..*|*[!A-Za-z0-9._-]*) die "research-path: invalid topic '$topic' → fix: start with a letter or digit; use letters, digits, dot, underscore, hyphen (no '..' or path separators)" ;;
+  esac
+  proj_dir "$slug" >/dev/null
+  printf 'analysis/research/%s.%s.md\n' "$topic" "$kind"
+}
+
 case "${1:-}" in
   lint)    shift; cmd_lint "$@" ;;
   summary) shift; cmd_summary "$@" ;;
   sync)    shift; cmd_sync "$@" ;;
+  research-path) shift; cmd_research_path "$@" ;;
   -h|--help) pw_usage ;;
-  *) die "usage: pw-doc.sh <lint|summary|sync> … (see --help)" ;;
+  *) die "usage: pw-doc.sh <lint|summary|sync|research-path> … (see --help)" ;;
 esac

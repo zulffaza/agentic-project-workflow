@@ -65,7 +65,7 @@ declare -p PW_FORGE_HOSTS >/dev/null 2>&1 || PW_FORGE_HOSTS=()
 
 # Role model defaults + optional tuning. Tuning is stored per role so a binding keeps its
 # variant/reasoning/effort when it is copied into a project.
-PW_PROJECT_AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier ship-comment-analyst"
+PW_PROJECT_AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier ship-comment-analyst explorer"
 for _pw_role in $PW_PROJECT_AI_MODEL_ROLES; do
   _pw_ru="$(printf '%s' "$_pw_role" | tr '[:lower:]-' '[:upper:]_')"
   for _pw_axis in MODEL VARIANT REASONING EFFORT; do
@@ -107,6 +107,111 @@ pw_project_default_tuning() {
   done
   printf '%s' "$out"
 }
+
+# --- worker (canonical subagent) registry and provider-specific model defaults ---------------
+# A worker default configures an INSTALLED agent definition for one provider. It is not a
+# project default (never copied into a project) and not a task pin. The canonical filename is
+# the identity: tooling/agents/pw-researcher.md -> PW_<PROVIDER>_AGENT_MODELS_PW_RESEARCHER.
+# Fixer procedure entries are executor-only skills, not canonical agents, so they have no cell.
+pw_canonical_agent_names() {
+  local f
+  for f in "$PW_HOME"/tooling/agents/pw-*.md; do
+    [ -f "$f" ] || continue
+    basename "$f" .md
+  done
+}
+
+# role -> canonical worker (empty when the role has no standalone worker definition).
+pw_role_worker() {
+  case "$1" in
+    researcher)           printf 'pw-researcher' ;;
+    analyst)              printf 'pw-analyst' ;;
+    writer-task)          printf 'pw-writer-task' ;;
+    reviewer)             printf 'pw-reviewer' ;;
+    ship-comment-analyst) printf 'pw-ship-comment-analyst' ;;
+    explorer)             printf 'pw-explorer' ;;
+    *) return 1 ;;
+  esac
+}
+
+# pw_agent_key_var <provider> <canonical-agent> -> managed assignment variable name, or empty.
+# Charset-gated because the result becomes a variable name at the sink.
+pw_agent_key_var() {
+  local prov="$1" agent="$2" up ag
+  case "$prov" in ''|*[!A-Za-z0-9_-]*) return 1 ;; esac
+  case "$agent" in pw-*) ;; *) return 1 ;; esac
+  case "$agent" in *[!a-z0-9-]*) return 1 ;; esac
+  up="$(printf '%s' "$prov" | tr '[:lower:]' '[:upper:]')"
+  ag="$(printf '%s' "$agent" | tr '[:lower:]-' '[:upper:]_')"
+  printf 'PW_%s_AGENT_MODELS_%s' "$up" "$ag"
+}
+
+pw_agent_default_spec() { # <provider> <canonical-agent> -> stored worker spec (empty when unset)
+  local var
+  var="$(pw_agent_key_var "$1" "$2")" || return 0
+  declare -p "$var" >/dev/null 2>&1 || return 0
+  printf '%s' "${!var:-}"
+}
+
+# Worker model-spec parsing. Grammar: <model-id> or <model-id>[<key>=<value>,...] with an
+# optional `<provider>:` prefix that must match the selected provider. Parsing is shared by
+# config writes, generation, and dispatch so all three read one shape.
+# pw_worker_spec_provider <spec> -> declared prefix (empty when absent)
+pw_worker_spec_provider() {
+  local spec="$1" prefix
+  case "$spec" in *:*) ;; *) return 0 ;; esac
+  prefix="${spec%%:*}"
+  case "$prefix" in *'['*|*']'*) return 0 ;; esac
+  printf '%s' "$prefix"
+}
+# pw_worker_spec_model <spec> -> base model id (no provider prefix, no bracket parameters)
+pw_worker_spec_model() {
+  local spec="$1" base
+  case "$spec" in *:*)
+    case "${spec%%:*}" in *'['*|*']'*) ;; *) spec="${spec#*:}" ;; esac ;;
+  esac
+  base="${spec%%\[*}"
+  printf '%s' "$base"
+}
+# pw_worker_spec_params <spec> -> inner parameter text (empty when absent)
+pw_worker_spec_params() {
+  local spec="$1" params
+  case "$spec" in
+    *'['*']') params="${spec#*\[}"; params="${params%\]}"; printf '%s' "$params" ;;
+  esac
+}
+# pw_worker_spec_effective <provider> <spec> -> model id plus any suffix the CLI must receive
+# (Cursor keeps bracket parameters; other providers bind them as invocation flags).
+pw_worker_spec_effective() {
+  local prov="$1" spec="$2" model params
+  model="$(pw_worker_spec_model "$spec")"
+  params="$(pw_worker_spec_params "$spec")"
+  if [ "$prov" = cursor ] && [ -n "$params" ]; then
+    printf '%s[%s]' "$model" "$params"
+  else
+    printf '%s' "$model"
+  fi
+}
+
+# --- provider catalog status (honest source reporting for `pw-config models`) ----------------
+# pw_api_catalog intentionally returns empty on every failure for backward compatibility. This
+# sibling distinguishes a supported live catalog, Claude's fixed alias set, an unavailable CLI,
+# a reachable-but-empty result, and a provider with no catalog surface.
+pw_catalog_kind() { # <provider> -> live|fixed|unavailable|empty|unsupported
+  local prov="$1" bin catalog
+  case "$prov" in
+    claude) printf 'fixed'; return 0 ;;
+    kilo|opencode|cursor|codex) ;;
+    *) printf 'unsupported'; return 0 ;;
+  esac
+  bin="$(pw_api_bin "$prov")"
+  command -v "$bin" >/dev/null 2>&1 || { printf 'unavailable'; return 0; }
+  catalog="$(pw_api_catalog "$prov")"
+  if [ -n "$catalog" ]; then printf 'live'; else printf 'empty'; fi
+}
+
+# Claude Code ships a fixed alias set; no queryable catalog exists (docs/EXECUTION.md).
+pw_claude_models() { printf '%s\n' opus sonnet haiku fable; }
 
 # Model allowlist (see docs/EXECUTION.md's "Model allowlist" section) — one optional scalar per
 # Agent Provider, a comma-separated list of glob patterns. THE RULE: empty/unset = ALL models
