@@ -31,7 +31,7 @@ there; mutations sandbox by construction). Every run prints `TEST fixtures built
 | **T1** unit | per-script cases in `tests/cases/*.t.sh` (happy + negative + idempotency) against F1 scaffold / F2 mid-lifecycle / F3 hostile fixtures, plus the two-owner MR-URL parity case and the per-entity `--selftest` entries invoked from a foreign cwd | ~30 s |
 | **T2** battery | golden matrices `expectations/battery.tsv` + `gates.tsv`: every read-only invocation and every preflight gate on every fixture, rc pinned, **`→ fix:` remediation asserted on every non-zero**, script-crash detector, and a **mode-completeness** rule (every advertised mode appears in a pinned row) | ~1 min |
 | **T3** corpus | read-only battery over real projects when `--corpus-dir DIR` (or `PW_CORPUS_DIR`) is given; crash-vs-clean-failure classification with `→ fix:` contract; pre-baseline projects are clean failures advising "refresh local templates"; a current-baseline project is the golden gate; personal data issues waived via `~/.pw/test-issues.tsv` | opt-in |
-| **T4** consistency | `pw-doctor` synced (run with the fixture env stripped; regen is `pw-doctor --fix` — never edit installed provider copies), registry symmetry (14 files ⇄ index ⇄ command/agent/skill wiring, allowlist `expectations/unwired.ok`), info-boundary greps, the instruction-consistency register, doctrine canaries (sources-only rule, FIELD-BULLET rule, phase-machine token line) | ~6 s (no fixtures) |
+| **T4** consistency | `pw-doctor` synced (run with the fixture env stripped; regen is `pw-doctor --fix` — never edit installed provider copies), registry symmetry (14 files ⇄ index ⇄ command/agent/skill wiring, allowlist `expectations/unwired.ok`), info-boundary greps, the instruction-consistency register, the prompt-surface coverage ledger, doctrine canaries (sources-only rule, FIELD-BULLET rule, phase-machine token line) | ~6 s (no fixtures) |
 
 `pw-doctor.sh --test` delegates to `pw_test.sh` (default tiers).
 
@@ -119,6 +119,31 @@ The register catches known retirements; it cannot detect paraphrases or prove se
 consistency. Do not replace the required contract with one exact phrase, and do not use the
 register to exempt history or examples by blanket rule. Contract reconciliation and scenario
 verification remain manual review duties.
+
+## Surface coverage ledger
+
+`tooling/tests/expectations/coverage.tsv` maps every prompt surface — human entry, worker
+definition, shared model skill, and skill reference — to the instruction text it must keep and
+the harness entries that exercise it. `tooling/tests/surface_coverage.sh check` runs in T4.
+The task of the ledger is drift detection: a new surface, a lost canary, or a dropped required
+line fails instead of quietly widening the unverified area.
+
+| Column | Meaning |
+|---|---|
+| `kind` | `entry`, `worker`, `model-skill`, or `reference`; it must match the owner's path. |
+| `owner` | Tooling-relative file. |
+| `required` | `-`, or literals separated by `;;` that must remain in the owner. |
+| `harness` | `-` is not allowed: `T1:<case>` (the case must exist), `T4:<literal>` (the literal must appear in `tests/static.sh`, so a deleted canary fails), or `gap`. |
+| `note` | Free text; a `gap` row must explain the residual risk. |
+
+The header declares `gaps=<n>` and the checker fails when the actual gap rows differ. Adding a
+surface therefore forces one of three visible decisions: give it executable coverage, record a
+gap and raise the header count, or delete the surface. The ledger proves structure only: a
+mapped case is not proof that its assertions match the surface's contract, and a `gap` row is a
+recorded risk, not coverage. Review the mapping when you move instruction text.
+
+New or renamed surfaces need their row in the same change; `docs/conventions.md` carries that
+duty in the capability checklist.
 
 ## Inside the harness (read this before editing tests/ or writing mutation rows)
 

@@ -105,7 +105,10 @@ is normative.
   UIs collapse tool output, so a comment like "see the output above" is silence to the user —
   paste the script's stdout as a fenced code block (fences preserve the column alignment
   ASCII renderers depend on). Beautifying is allowed *additive*: you may add a short plain
-  summary after the block, never instead of it.
+  summary after the block, never instead of it. A long operator mapping may live in the owning
+  skill's reference to keep the always-loaded entry small; the command then keeps the dispatch
+  rule plus an exact owning-skill pointer (`references/<file>.md` from `<skill>`), never a bare
+  filename, and the mapping itself must still be pinned by a canary or case in its new home.
 - **C4 — doctrine-restricted operators** (e.g. `review signoff` — "only a human clears a gate")
   are labeled **"human-triggered only, never on agent initiative"** in the command file, and a T0
   anti-idiom static test asserts no agent file mentions them. C4 restricts the human **approval**
@@ -297,6 +300,12 @@ detail — two audiences, one page, neither served.
    Route it by **D2** — user symptom → `docs/TROUBLESHOOTING.md`; unfixed defect →
    `docs/known-issues.md` (maintainer backlog); settled → dated record in the mechanism-owning
    doc. Never a user-facing known-issues page (D4).
+6b. New, renamed, or removed prompt surface (human entry, worker definition, shared model skill,
+   or skill reference)? → add, move, or delete its row in `tests/expectations/coverage.tsv` in the
+   same commit, with the text the surface must keep and a resolving harness selector. A surface
+   with no executable coverage is a `gap` row with its residual risk written down; widening the
+   gap count needs an explicit decision, because the T4 check fails when the header and the rows
+   disagree.
 7. Tests before ship: T1 selftest cases + battery rows + mutation-register catchers — see
    [`testing.md`](./testing.md). Register rows: OLD byte-exact **and unique**, catcher must not
    depend on the mutation changing fixture BYTES (recipe-hash cache rule), check next-free ID
