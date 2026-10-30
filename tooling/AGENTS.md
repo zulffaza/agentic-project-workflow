@@ -64,9 +64,9 @@ tooling/
 │   └── testing.md · forges.md · rfc.md · rfc-backends.md · providers.md · memory.md
 └── tests/                                 ← the change-testing harness (see docs/testing.md)
     ├── pw_test.sh (runner) · pw_test_lib.sh · static.sh · battery.sh · corpus.sh · mutate.sh
-    ├── change_record.sh · instruction_register.sh  ← requirement/evidence + contract checkers
+    ├── change_record.sh · instruction_register.sh · surface_coverage.sh  ← requirement/evidence + contract/coverage checkers
     ├── cases/*.t.sh · selftest_entry.sh · bin/{glab,gh} (offline forge shims)
-    └── expectations/{battery,gates,mutations,instructions}.tsv · unwired.ok   ← pins/registers
+    └── expectations/{battery,gates,mutations,instructions,coverage}.tsv · unwired.ok   ← pins/registers
 template/          ← scaffold source (FIELD-BULLET RULE banner = machine fields are value-only)
 ```
 
@@ -97,9 +97,13 @@ verification state → evidence) beside the task, plan or result, and validate i
 `tooling/tests/change_record.sh check --mode complete --record <file> --evidence <file>` before
 reporting completion. Add or update a row in
 `tooling/tests/expectations/instructions.tsv` when an operative instruction changes, and run
-`tooling/tests/instruction_register.sh check`. Both formats and limits are in
-[`docs/testing.md`](./docs/testing.md) §Change records and §Instruction-consistency register.
-A valid record or green register proves structure, not approval or semantic completeness.
+`tooling/tests/instruction_register.sh check`. Add or update the surface's row in
+`tooling/tests/expectations/coverage.tsv` when you add, rename, or remove an entry, worker, shared
+skill, or reference, or move instruction text between them; `tooling/tests/surface_coverage.sh check`
+runs in T4. Both formats and limits are in
+[`docs/testing.md`](./docs/testing.md) §Change records, §Instruction-consistency register, and
+§Surface coverage ledger.
+A valid record, green register, or complete coverage map proves structure, not approval or semantic completeness.
 
 ## Information boundary (what users must never learn here)
 

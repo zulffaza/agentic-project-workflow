@@ -49,7 +49,7 @@ clears them too. A new project validates its resolved defaults before creation, 
 model refuses creation instead of entering the dashboard.
 
 Once installed, run a workflow entry in your agent session. Claude Code, Cursor, and Codex install
-the 21 `pw-*` entries as explicit-only skills (select one, or type its `$pw-*` form on Codex).
+the 22 `pw-*` entries as explicit-only skills (select one, or type its `$pw-*` form on Codex).
 KiloCode and OpenCode install the same entries as `/pw-*` commands. Both groups also get the shared
 `pw-guide-*` / `pw-orchestration` skills. Examples use the shared `/pw-*` names throughout these
 guides.

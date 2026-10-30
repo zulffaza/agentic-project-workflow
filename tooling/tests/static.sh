@@ -43,7 +43,7 @@ static_t0() {
   local f code hits re label excl
 
   # 1) syntax — every shell file in tooling/ (incl. the scripts/ layout) and the suite itself
-  for f in "$TOOL"/*.sh "$TOOL"/scripts/*/*.sh "$TOOL"/tests/pw_test*.sh "$TOOL"/tests/static.sh "$TOOL"/tests/battery.sh "$TOOL"/tests/corpus.sh "$TOOL"/tests/mutate.sh "$TOOL"/tests/change_record.sh "$TOOL"/tests/instruction_register.sh "$TOOL"/tests/bin/gh; do
+  for f in "$TOOL"/*.sh "$TOOL"/scripts/*/*.sh "$TOOL"/tests/pw_test*.sh "$TOOL"/tests/static.sh "$TOOL"/tests/battery.sh "$TOOL"/tests/corpus.sh "$TOOL"/tests/mutate.sh "$TOOL"/tests/change_record.sh "$TOOL"/tests/instruction_register.sh "$TOOL"/tests/surface_coverage.sh "$TOOL"/tests/bin/gh; do
     [ -f "$f" ] && { bash -n "$f" && pwtest_ok "bash -n ${f#$TOOL/}" || pwtest_bad "bash -n ${f#$TOOL/}" "syntax error"; }
   done
 
@@ -844,11 +844,20 @@ PYD
   else
     pwtest_bad "T4: instruction-consistency register" "$(grep -v '^instruction-register: ok' "$ROOT/instr.out" | head -2 | cut -c1-150 | tr '\n' '|')"
   fi
+  # the coverage ledger maps every prompt surface to the text it must keep and the
+  # harness entry that exercises it; an unmapped surface or a dead canary phrase fails.
+  if "$TOOL/tests/surface_coverage.sh" check >"$ROOT/cov.out" 2>&1; then
+    pwtest_ok "T4: every prompt surface is covered by the ledger ($(sed -n 's/^surface-coverage: ok (\(.*\))$/\1/p' "$ROOT/cov.out"))"
+  else
+    pwtest_bad "T4: prompt-surface coverage ledger" "$(grep -v '^surface-coverage: ok' "$ROOT/cov.out" | head -2 | cut -c1-150 | tr '\n' '|')"
+  fi
   grep -qF '## Change records' "$TOOL/docs/testing.md" \
     && grep -qF '## Instruction-consistency register' "$TOOL/docs/testing.md" \
+    && grep -qF '## Surface coverage ledger' "$TOOL/docs/testing.md" \
     && grep -qF 'change_record.sh' "$TOOL/docs/testing.md" \
     && grep -qF 'instructions.tsv' "$TOOL/docs/testing.md" \
-    && pwtest_ok "T4: change-record and instruction-register protocols are documented" \
-    || pwtest_bad "T4: maintainer protocol docs" "docs/testing.md lost the change-record or instruction-register section, or its checker/register paths"
+    && grep -qF 'coverage.tsv' "$TOOL/docs/testing.md" \
+    && pwtest_ok "T4: change-record, instruction-register, and coverage protocols are documented" \
+    || pwtest_bad "T4: maintainer protocol docs" "docs/testing.md lost the change-record, instruction-register, or coverage section, or its checker/register paths"
 
 }

@@ -510,3 +510,5 @@ C421-research-path-traversal-allowed	pw-doc.sh	''|*..*|*[!A-Za-z0-9._-]*) die "r
 C422-generation-worker-model-dropped	gen-agents.sh	wspec="$(pw_agent_default_spec "$prov" "$agentname")"	wspec=""	T1	^pw-config\.t\.sh$
 C423-spawn-args-worker-source-mislabeled	pw-config.sh	          source="worker"	          source="default"	T1	^pw-project-defaults\.t\.sh$
 C424-batch-agent-model-exclusion-dropped	skills/human/pw-batch/SKILL.md	`models`, `agent-model`,	`model-resolve`,	T1	^pw-batch\.t\.sh$
+C425-coverage-canary-phrase-dropped	tests/expectations/coverage.tsv	T4:no custom primary agent	T4:no custom primary agent anywhere	T1	^pw-surface-coverage\.t\.sh$
+C426-coverage-gap-count-drift	tests/expectations/coverage.tsv	# surface-coverage v1 gaps=18	# surface-coverage v1 gaps=17	T1	^pw-surface-coverage\.t\.sh$
