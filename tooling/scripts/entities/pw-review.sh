@@ -127,7 +127,7 @@
 #       paths and rejected here; legacy rows with those labels stay readable.
 #   pw-review.sh add-item     --project <slug> --file <review-rel-path> --section <§anchor> (--text <ask…> | --stdin) [--actor <name>] [--pass <id>]
 #   pw-review.sh answer       --project <slug> --file <review-rel-path> --question <Qid> (--text <answer…> | --stdin)
-#   pw-review.sh add-question --project <slug> --file <review-rel-path> --section <§anchor> (--text <q…> | --stdin) [--actor <name>] [--pass <id>]
+#   pw-review.sh add-question --project <slug> --file <review-rel-path> --section <§anchor> (--text <q…> | --stdin) [--actor <name>] [--pass <id>] [--id <Qn>]
 #   pw-review.sh resolve      --project <slug> --file <review-rel-path> --item <Rid|Qid> (--reply <text…> | --stdin)
 #       Deterministic block editing: next Rn/Qn id, timestamps, pw-item-status
 #       markers, --- rules, auto-reindex. Free text per the A-rules (one
@@ -534,10 +534,10 @@ _next_id() {
 # --flag=value carries one literal value.
 # _parse_edit_flags <op> <text-flag> <extra-scalars-csv> <shape> <actor-default> <heading-guard 0|1> "$@"
 #   → MP_PROJECT MP_FILE MP_SECTION MP_ACTOR MP_QUESTION MP_ITEM MP_TEXT MP_TEXTSET MP_PASS
-MP_PROJECT="" MP_FILE="" MP_SECTION="" MP_ACTOR="" MP_QUESTION="" MP_ITEM="" MP_TEXT="" MP_TEXTSET=0 MP_PASS=""
+MP_PROJECT="" MP_FILE="" MP_SECTION="" MP_ACTOR="" MP_QUESTION="" MP_ITEM="" MP_TEXT="" MP_TEXTSET=0 MP_PASS="" MP_ID=""
 _parse_edit_flags() {
   local _op="$1" _tf="$2" _extra="$3" _shape="$4" _adef="$5" _hd="$6"; shift 6
-  MP_PROJECT=""; MP_FILE=""; MP_SECTION=""; MP_ACTOR="$_adef"; MP_QUESTION=""; MP_ITEM=""; MP_TEXT=""; MP_TEXTSET=0; MP_PASS=""
+  MP_PROJECT=""; MP_FILE=""; MP_SECTION=""; MP_ACTOR="$_adef"; MP_QUESTION=""; MP_ITEM=""; MP_TEXT=""; MP_TEXTSET=0; MP_PASS=""; MP_ID=""
   local a v
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
@@ -549,12 +549,13 @@ _parse_edit_flags() {
       --question=*) v="${a#*=}"; a="--question" ;;
       --item=*)     v="${a#*=}"; a="--item" ;;
       --pass=*)     v="${a#*=}"; a="--pass" ;;
+      --id=*)       v="${a#*=}"; a="--id" ;;
     esac
     case "$a" in
       --project|--file)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
         case "$a" in --project) MP_PROJECT="$v" ;; --file) MP_FILE="$v" ;; esac ;;
-      --section|--actor|--question|--item|--pass)
+      --section|--actor|--question|--item|--pass|--id)
         case ",$_extra," in *",$a,"*) ;; *) _pw_unknown "$a" "$_shape" ;; esac
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
         case "$a" in
@@ -563,6 +564,7 @@ _parse_edit_flags() {
           --question) MP_QUESTION="$v" ;;
           --item)     MP_ITEM="$v" ;;
           --pass)     MP_PASS="$v" ;;
+          --id)       MP_ID="$v" ;;
         esac ;;
       "$_tf"=*)
         [ "$MP_TEXTSET" = 0 ] || die "$_op: pass exactly one of $_tf or --stdin → fix: $_tf <text…> (runs until the next --flag) or --stdin (heredoc)"
@@ -810,7 +812,7 @@ cmd_answer() {
 }
 
 # ---------------------------------------------------------------- add-question
-AQ_SECTION=""; AQ_ACTOR=""; AQ_TEXT=""; AQ_PASS=""
+AQ_SECTION=""; AQ_ACTOR=""; AQ_TEXT=""; AQ_PASS=""; AQ_ID=""
 _add_question_body() {
   local f="$1"
   [ -z "$AQ_PASS" ] || _pass_guard_write "$f" "$AQ_PASS" "add-question" || return 1
@@ -820,7 +822,19 @@ _add_question_body() {
   local send
   send="$(awk -v s="$oq" 'NR>s && /^## / {print NR; exit} END{}' "$blanked" | head -1)"
   [ -n "$send" ] || send="$(wc -l < "$blanked" | tr -d ' ')"
-  local n; n="$(_next_id "$f" Q)"
+  local n
+  if [ -n "$AQ_ID" ]; then
+    # Explicit id path: /pw-analyze seeds the blocking decision as Q0, which the
+    # sequential allocator can never produce. An explicit id must be free — a live
+    # heading or an archived pointer both occupy it.
+    if _review_item_headings "$f" | grep -qE "^### Q${AQ_ID#Q} ·" \
+       || grep -q "pw-archived:Q${AQ_ID#Q}\b" "$f" 2>/dev/null; then
+      rm -f "$blanked"; echo "pw-review: id ${AQ_ID} is already used in $AQ_SECTION_REL → fix: omit --id to take the next free id, or pick an unused one" >&2; return 1
+    fi
+    n="${AQ_ID#Q}"
+  else
+    n="$(_next_id "$f" Q)"
+  fi
   local ts; ts="$(now_ts)" || return 1
   local heading="### Q$n · $AQ_SECTION — [PENDING] ($AQ_ACTOR, $ts) <!-- pw-item-status: open -->"
   local block; block="$(mktemp)"; _write_block "$block" "$heading" "$AQ_TEXT"
@@ -843,16 +857,23 @@ _add_question_body() {
 }
 
 cmd_add_question() {
-  _parse_edit_flags add-question --text "--section,--actor,--pass" "add-question --project <slug> --file <review-rel-path> --section <§anchor> (--text <q…> | --stdin) [--actor <name>] [--pass <id>]" agent 1 "$@"
+  _parse_edit_flags add-question --text "--section,--actor,--pass,--id" "add-question --project <slug> --file <review-rel-path> --section <§anchor> (--text <q…> | --stdin) [--actor <name>] [--pass <id>] [--id <Qn>]" agent 1 "$@"
   local slug="$MP_PROJECT" rel="$MP_FILE"
   local SECTION="$MP_SECTION" ACTOR="$MP_ACTOR" TEXT="$MP_TEXT"
+  AQ_ID=""
+  if [ -n "$MP_ID" ]; then
+    case "$MP_ID" in
+      Q[0-9]*) AQ_ID="$MP_ID" ;;
+      *) die "add-question: --id must look like Q0 or Q2 (got '$MP_ID') → fix: omit --id for the next free id" ;;
+    esac
+  fi
   [ -n "$SECTION" ] || die "add-question: --section <§anchor> is required"
   pw_meta_check "--section" "$SECTION" || die "--section must be a single-line anchor without tabs or pipes → fix: e.g. --section '§4 Approach'"
   pw_meta_check "--actor" "$ACTOR"     || die "--actor must be a single-line name without tabs or pipes"
   pw_heading_meta_check "--section" "$SECTION" || die "add-question: --section carries reserved review syntax → fix: keep status tags, HTML comments, machine markers, reply arrows, and <stub> tokens out of the anchor"
   pw_heading_meta_check "--actor" "$ACTOR"     || die "add-question: --actor carries reserved review syntax → fix: pass a plain name (the heading tag and marker are written by the tool, never injected)"
   local f; f="$(review_file "$slug" "$rel")" || return 2
-  AQ_SECTION="$SECTION" AQ_ACTOR="$ACTOR" AQ_TEXT="$TEXT" AQ_PASS="$MP_PASS"
+  AQ_SECTION="$SECTION" AQ_ACTOR="$ACTOR" AQ_TEXT="$TEXT" AQ_PASS="$MP_PASS" AQ_SECTION_REL="$rel"
   _AQ_IDFILE="$(mktemp)"
   staged_or_die "$f" _add_question_body
   local n; n="$(cat "$_AQ_IDFILE")"; rm -f "$_AQ_IDFILE"
@@ -862,7 +883,7 @@ cmd_add_question() {
 }
 
 # ---------------------------------------------------------------- resolve
-RS_TEXT="" RS_REL=""
+RS_TEXT="" RS_REL="" RS_WITHDRAW=0
 _resolve_body() {
   local f="$1" id="$2"
   local blanked; blanked="$(mktemp)"; _comment_blanked "$f" > "$blanked"
@@ -875,8 +896,21 @@ _resolve_body() {
   esac
   local bend; bend="$(_block_end "$blanked" "$hl")"
   if [ "${id#Q}" != "$id" ]; then
-    awk -v s="$hl" -v e="$bend" 'NR>=s && NR<=e' "$blanked" | grep -q '↳ \*\*you\*\*' \
-      || { rm -f "$blanked"; echo "pw-review: $id has no '↳ **you**' answer yet → fix: the human answers first (/pw-review answer --project <slug> --file <review-path> --question <Qid> --text <answer…>); the agent only folds + flips afterwards" >&2; return 1; }
+    local has_human=0
+    awk -v s="$hl" -v e="$bend" 'NR>=s && NR<=e' "$blanked" | grep -q '↳ \*\*you\*\*' && has_human=1
+    if [ "$has_human" = 0 ]; then
+      if [ "$RS_WITHDRAW" = 1 ]; then
+        # Withdrawal closes an AGENT-seeded question that never reached the human: a duplicate,
+        # a question the analysis itself answered, or one whose premise dissolved. A question
+        # that already carries a human answer is never withdrawn — that text stays and the normal
+        # answer → fold → flip path applies.
+        :
+      else
+        rm -f "$blanked"; echo "pw-review: $id has no '↳ **you**' answer yet → fix: the human answers first (/pw-review answer --project <slug> --file <review-path> --question <Qid> --text <answer…>); the agent only folds + flips afterwards — an agent-seeded question nobody needs to answer is closed with resolve --withdraw --reply <why>" >&2; return 1
+      fi
+    elif [ "$RS_WITHDRAW" = 1 ]; then
+      rm -f "$blanked"; echo "pw-review: $id already carries a human answer — a withdrawal would bury it → fix: fold the answer and resolve normally (resolve --item $id --reply …); never withdraw an answered question" >&2; return 1
+    fi
   fi
   local ts; ts="$(now_ts)" || { rm -f "$blanked"; return 1; }
   local hline newtag newmark
@@ -911,7 +945,7 @@ _resolve_body() {
 }
 
 cmd_resolve() {
-  local _receipt=""
+  local _receipt="" _withdraw=0
   # Scoped guard: callers in the apply-feedback repair flow pass the admission receipt. Callers
   # with other legitimate resolution purposes omit it, preserving their documented behavior.
   local -a _args; _args=()
@@ -919,11 +953,12 @@ cmd_resolve() {
     case "$1" in
       --repair-receipt=*) _receipt="${1#*=}" ;;
       --repair-receipt) shift; [ $# -gt 0 ] || die "resolve: --repair-receipt needs a value"; _receipt="$1" ;;
+      --withdraw) _withdraw=1 ;;
       *) _args+=("$1") ;;
     esac
     shift
   done
-  _parse_edit_flags resolve --reply "--item" "resolve --project <slug> --file <review-rel-path> --item <Rid|Qid> (--reply <text…> | --stdin) [--repair-receipt <id>]" "" 0 ${_args[@]+"${_args[@]}"}
+  _parse_edit_flags resolve --reply "--item" "resolve --project <slug> --file <review-rel-path> --item <Rid|Qid> (--reply <text…> | --stdin) [--withdraw] [--repair-receipt <id>]" "" 0 ${_args[@]+"${_args[@]}"}
   local slug="$MP_PROJECT" rel="$MP_FILE" id="$MP_ITEM" TEXT="$MP_TEXT"
   [ -n "$id" ] || die "resolve: --item is required → fix: resolve --project <slug> --file <review-rel-path> --item <Rid|Qid> (--reply <text…> | --stdin)"
   case "$id" in R[0-9]*|Q[0-9]*) ;; *) die "resolve: id must look like R3 or Q2 (got '$id')" ;; esac
@@ -935,12 +970,22 @@ cmd_resolve() {
     _repair_entry_present "$f" "$_receipt" \
       || die "resolve: no matching repair admission entry (receipt=$_receipt) on $rel — refusing to flip an item without recorded repair history → fix: run /pw-review start --receipt $_receipt before applying feedback; nothing was changed"
   fi
-  RS_TEXT="$TEXT" RS_REL="$rel"
+  if [ "$_withdraw" = 1 ]; then
+    case "$id" in
+      Q[0-9]*) ;;
+      *) die "resolve: --withdraw applies to questions only (got '$id') → fix: resolve items normally with --reply" ;;
+    esac
+  fi
+  RS_TEXT="$TEXT" RS_REL="$rel" RS_WITHDRAW="$_withdraw"
   # a fixer reply inside a pass is NOT a human-feedback cycle: no state transition here
   staged_or_die "$f" _resolve_body "$id"
   _reindex "$slug" "$rel"
   _log "$slug" agent "resolved $id in $rel"
-  echo "$slug: $rel → $id flipped to [$([ "${id#Q}" != "$id" ] && echo ANSWERED || echo RESOLVED)] in place, agent reply appended"
+  if [ "$_withdraw" = 1 ]; then
+    echo "$slug: $rel → $id withdrawn (agent-seeded, no human answer) and flipped to [ANSWERED] in place"
+  else
+    echo "$slug: $rel → $id flipped to [$([ "${id#Q}" != "$id" ] && echo ANSWERED || echo RESOLVED)] in place, agent reply appended"
+  fi
 }
 
 # --- lifecycle + gate reads ----------------------------------------------------

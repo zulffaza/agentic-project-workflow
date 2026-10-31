@@ -158,6 +158,39 @@ lint_task() {
     fi
   fi
   
+  # Naming cross-check: the worktree helper adopts these two fields verbatim, so a mismatch
+  # between them and the task id breaks the Verify `cd` path without any other symptom.
+  local _br _wt
+  _br="$(pw_field "$f" Branch 2>/dev/null || true)"; _br="${_br//\`/}"; _br="${_br%%[[:space:]]*}"
+  _wt="$(pw_field "$f" Worktree 2>/dev/null || true)"; _wt="${_wt//\`/}"; _wt="${_wt%%[[:space:]]*}"
+  # pw-worktree.sh create adopts these two fields verbatim, so a mismatch between them and the
+  # task id leaves the executor with a Verify `cd` path that will never exist. They must agree with
+  # each other on ONE descriptor and carry the task id; the exact descriptor is the task's choice.
+  local _want_br _want_wt _repo
+  _want_br="agent/$slug/$task_id-$slug"
+  _repo="$(pw_field "$f" Repo 2>/dev/null || true)"; _repo="${_repo//\`/}"; _repo="${_repo%%[[:space:]]*}"
+  _want_wt="worktree/${_repo:-<repo>}/$task_id-$slug/"
+  local _br_desc="" _wt_desc=""
+  case "$_br" in
+    ''|—) ;;
+    agent/*)
+      case "$_br" in
+        */"$task_id"-*) _br_desc="${_br##*/"$task_id"-}" ;;
+        *) add_error "$f: Branch '$_br' carries no $task_id-<descriptor>" "name it '${_want_br%-$slug}-<descriptor>' — the worktree helper adopts this field verbatim, so the branch must describe the same task as the checkout" ;;
+      esac ;;
+    *) ;;   # adopted branch: the project continues on it; /pw-adopt records its worktree
+  esac
+  # Only a project-relative path is judged here: an absolute path or an unexpanded scaffold token
+  # is the doctor's own C11 defect, and rendering one would otherwise turn a correct --fix into a
+  # lint failure for a field the renderer just rewrote.
+  case "$_wt" in
+    worktree/"${_repo:-__no_repo__}"/"$task_id"-*/) _wt_desc="$(basename "${_wt%/}")"; _wt_desc="${_wt_desc#"$task_id"-}" ;;
+    worktree/*) add_error "$f: Worktree '$_wt' is not worktree/${_repo:-<repo>}/$task_id-<descriptor>/" "use '$_want_wt' with the same descriptor as the Branch — the helper adopts it verbatim and the Verify cd depends on it" ;;
+  esac
+  if [ -n "$_br_desc" ] && [ -n "$_wt_desc" ] && [ "$_br_desc" != "$_wt_desc" ]; then
+    add_error "$f: Branch descriptor '$_br_desc' and Worktree descriptor '$_wt_desc' disagree" "give both the same descriptor so the branch and its checkout describe one task"
+  fi
+
   # Check ## Result is filled if Status is done or accepted
   STATUS="$(pw_field "$f" Status)"
   if [ "$STATUS" = "done" ] || [ "$STATUS" = "accepted" ]; then
@@ -166,6 +199,14 @@ lint_task() {
       if [ "$RESULT" -lt 2 ]; then
         add_error "$f: ## Result should be filled when Status is $STATUS" "the executor fills '## Result' when it completes — re-run: /pw-execute --project <slug> --task $task_id (or fill it by hand if the work is genuinely done)"
       fi
+      # The completion route reads machine bullets, not prose. A prose "### Verify" block or a
+      # "**Outcome:** done" line looks complete to a reader and is invisible to pw-status.sh.
+      local _res
+      _res="$(awk '/^## Result/{p=1; next} /^## /{p=0} p' "$f")"
+      printf '%s\n' "$_res" | grep -qE '^- \*\*Verify outcome:\*\*' \
+        || add_error "$f: ## Result has no '- **Verify outcome:**' bullet (Status: $STATUS)" "use the template's machine bullets — task acceptance reads them; a prose '### Verify' section is not read"
+      printf '%s\n' "$_res" | grep -qE '^- \*\*Commit\(s\):\*\*' \
+        || add_error "$f: ## Result has no '- **Commit(s):**' bullet (Status: $STATUS)" "record the commit sha(s) in the template's Result bullet so publishing and stacked work can resolve them"
     fi
   fi
 }

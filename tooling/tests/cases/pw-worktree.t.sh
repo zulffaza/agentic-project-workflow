@@ -29,6 +29,15 @@ rm -f "$WTBASE/T02-thing/DIRTY-UNCOMMITTED.txt" 2>/dev/null || true
 
 # --- plan 47 F04: reuse requires a real registered checkout on the expected branch -------------
 W47="wt47"; rm -rf "$PW_PROJECTS_DIR/$W47"; cp -a "$F2" "$PW_PROJECTS_DIR/$W47"
+# the helper adopts the task file's own Branch/Worktree, so pin them to this copy's identity
+python3 - "$PW_PROJECTS_DIR/$W47/task/T01.md" "$W47" <<'PY'
+import re, sys
+p, slug = sys.argv[1], sys.argv[2]
+src = open(p).read()
+src = re.sub(r'^- \*\*Branch:\*\*.*$', '- **Branch:** `agent/%s/T01-%s`' % (slug, slug), src, flags=re.M)
+src = re.sub(r'^- \*\*Worktree:\*\*.*$', '- **Worktree:** `worktree/api/T01-%s/`' % slug, src, flags=re.M)
+open(p, 'w').write(src)
+PY
 wp47="$PW_PROJECTS_DIR/$W47/worktree/api/T01-$W47"
 mkdir -p "$wp47"; printf 'stray\n' > "$wp47/STRAY.txt"
 pwtest_rc 2 "worktree create refuses a plain directory (not a registered checkout)" \

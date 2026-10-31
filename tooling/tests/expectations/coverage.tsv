@@ -7,20 +7,20 @@
 # The header gap count must equal the number of gap rows, so a new unmapped or
 # uncovered surface fails instead of silently widening the unverified area.
 # Checker: tooling/tests/surface_coverage.sh; protocol: tooling/docs/testing.md.
-entry	skills/human/pw-adopt/SKILL.md	pw-orchestration	gap	no executable case for the adopt entry; adoption paths are exercised only through fixture setup, so entry text changes there need manual review
-entry	skills/human/pw-analyze/SKILL.md	pw-orchestration	gap	analysis preparation has no dedicated T1 case; lane wiring is only checked indirectly by routing canaries
+entry	skills/human/pw-adopt/SKILL.md	pw-orchestration	gap	no executable case for the adopt entry; adoption paths are exercised only through fixture setup, so entry text changes there need manual review · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
+entry	skills/human/pw-analyze/SKILL.md	pw-orchestration	gap	analysis preparation has no dedicated T1 case; lane wiring is only checked indirectly by routing canaries · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
 entry	skills/human/pw-batch/SKILL.md	pw-orchestration	T1:pw-batch	
 entry	skills/human/pw-breakdown/SKILL.md	pw-orchestration	T4:researcher/analyst/writer-task/reviewer/verifier/ship-comment-analyst	
-entry	skills/human/pw-close/SKILL.md	pw-orchestration	gap	close has no T1 case; its scripted helpers are covered elsewhere, the entry procedure is not
+entry	skills/human/pw-close/SKILL.md	pw-orchestration	gap	close has no T1 case; its scripted helpers are covered elsewhere, the entry procedure is not · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
 entry	skills/human/pw-config/SKILL.md	pw-orchestration	T1:pw-config	
 entry	skills/human/pw-context/SKILL.md	pw-orchestration	T1:pw-context	
 entry	skills/human/pw-doctor/SKILL.md	pw-orchestration	T1:pw-doctor	
 entry	skills/human/pw-execute/SKILL.md	pw-orchestration	T4:model-resolve	
-entry	skills/human/pw-explore/SKILL.md	pw-orchestration	gap	exploration entry has no T1 case; its scan helper is covered, the entry routing is not
+entry	skills/human/pw-explore/SKILL.md	pw-orchestration	gap	exploration entry has no T1 case; its scan helper is covered, the entry routing is not · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
 entry	skills/human/pw-help/SKILL.md	pw-orchestration	T1:pw-help	
-entry	skills/human/pw-independent-review/SKILL.md	pw-orchestration	gap	independent review is a read-only reporting procedure with no executable case; report shape is checked by inspection only
+entry	skills/human/pw-independent-review/SKILL.md	pw-orchestration	gap	independent review is a read-only reporting procedure with no executable case; report shape is checked by inspection only · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
 entry	skills/human/pw-new/SKILL.md	pw-orchestration	T1:pw-bootstrap	
-entry	skills/human/pw-research/SKILL.md	pw-orchestration	gap	research entry has no T1 case; research-path resolution is covered, the entry procedure is not
+entry	skills/human/pw-research/SKILL.md	pw-orchestration	gap	research entry has no T1 case; research-path resolution is covered, the entry procedure is not · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
 entry	skills/human/pw-review/SKILL.md	pw-orchestration	T1:pw-review;;T4:HUMAN-TRIGGERED ONLY	
 entry	skills/human/pw-rfc/SKILL.md	pw-orchestration	T1:pw-rfc	
 entry	skills/human/pw-ship/SKILL.md	pw-orchestration	T1:pw-ship	
@@ -28,28 +28,28 @@ entry	skills/human/pw-ship-comment-fixer/SKILL.md	pw-orchestration	T4:worker-onl
 entry	skills/human/pw-status/SKILL.md	pw-orchestration	T1:pw-status	
 entry	skills/human/pw-sync/SKILL.md	pw-orchestration	T1:pw-sync	
 entry	skills/human/pw-sync-conflict-fixer/SKILL.md	pw-orchestration	T4:The driver already classified a real	
-entry	skills/human/pw-verify/SKILL.md	pw-orchestration	gap	verification lane has no dedicated case; binding wiring is canaried, the verification procedure is not
-worker	agents/pw-analyst.md	-	gap	analyst worker text is not asserted by any case or canary; role wiring is covered through lane readers
-worker	agents/pw-executor.md	-	gap	executor worker text is not asserted directly; execution behavior is covered through task fixtures
-worker	agents/pw-explorer.md	-	gap	explorer worker text is not asserted; bounded scan behavior is covered through the context case
-worker	agents/pw-researcher.md	-	gap	researcher worker text is not asserted by any case or canary
+entry	skills/human/pw-verify/SKILL.md	pw-orchestration	gap	verification lane has no dedicated case; binding wiring is canaried, the verification procedure is not · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
+worker	agents/pw-analyst.md	-	gap	analyst worker text is not asserted by any case or canary; role wiring is covered through lane readers · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
+worker	agents/pw-executor.md	-	gap	executor worker text is not asserted directly; execution behavior is covered through task fixtures · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
+worker	agents/pw-explorer.md	-	gap	explorer worker text is not asserted; bounded scan behavior is covered through the context case · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
+worker	agents/pw-researcher.md	-	gap	researcher worker text is not asserted by any case or canary · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
 worker	agents/pw-reviewer.md	-	T4:never substitute the configured model pin	
 worker	agents/pw-ship-comment-analyst.md	-	T4:Read-only; never fixes	
-worker	agents/pw-writer-task.md	-	gap	writer-task worker text is not asserted by any case or canary
-model-skill	skills/model/pw-guide-authoring/SKILL.md	-	gap	authoring guide has no case; document-output rules are checked by document tools instead
+worker	agents/pw-writer-task.md	-	gap	writer-task worker text is not asserted by any case or canary · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
+model-skill	skills/model/pw-guide-authoring/SKILL.md	-	gap	authoring guide has no case; document-output rules are checked by document tools instead · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
 model-skill	skills/model/pw-guide-review-method/SKILL.md	-	T4:comes before assessment	
 model-skill	skills/model/pw-guide-workflow/SKILL.md	-	T4:Agent-mediated operations	
 model-skill	skills/model/pw-orchestration/SKILL.md	-	T4:no custom primary agent	
-reference	skills/model/pw-guide-workflow/references/analysis.md	-	gap	analysis reference has no case; analysis output is reviewed by humans, not asserted
+reference	skills/model/pw-guide-workflow/references/analysis.md	-	gap	analysis reference has no case; analysis output is reviewed by humans, not asserted · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
 reference	skills/model/pw-guide-workflow/references/batch.md	-	T1:pw-batch	
-reference	skills/model/pw-guide-workflow/references/breakdown.md	-	gap	breakdown reference has no case; its command entry is canaried but the procedure is not
-reference	skills/model/pw-guide-workflow/references/close.md	-	gap	close reference has no case; close output is not asserted
+reference	skills/model/pw-guide-workflow/references/breakdown.md	-	gap	breakdown reference has no case; its command entry is canaried but the procedure is not · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
+reference	skills/model/pw-guide-workflow/references/close.md	-	gap	close reference has no case; close output is not asserted · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
 reference	skills/model/pw-guide-workflow/references/context.md	-	T4:Run the completion handoff exactly once after verification	
-reference	skills/model/pw-guide-workflow/references/conventions-and-gotchas.md	-	gap	catch-all reference has no case; it is the fallback surface for heterogeneous guidance
+reference	skills/model/pw-guide-workflow/references/conventions-and-gotchas.md	-	gap	catch-all reference has no case; it is the fallback surface for heterogeneous guidance · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
 reference	skills/model/pw-guide-workflow/references/execution-and-routing.md	-	T4:AVAILABILITY GATE first — on EVERY path, including resume:	
 reference	skills/model/pw-guide-workflow/references/mr-comments.md	-	T4:stack-cascade	
 reference	skills/model/pw-guide-workflow/references/review.md	-	T4:session-check	
 reference	skills/model/pw-guide-workflow/references/review-request.md	-	T4:Compare `observed heads`	
 reference	skills/model/pw-guide-workflow/references/sync-conflict-resolution.md	-	T4:sync-finish	
-reference	skills/model/pw-orchestration/references/common.md	-	gap	shared common rules have no case; their presence is canaried, their content is not asserted
+reference	skills/model/pw-orchestration/references/common.md	-	gap	shared common rules have no case; their presence is canaried, their content is not asserted · probe E18 (throwaway project, 2026-10-30): executed end-to-end, behavior confirmed, still no executable assertion
 reference	skills/model/pw-orchestration/references/execution.md	-	T4:The shared skill ladder owns	

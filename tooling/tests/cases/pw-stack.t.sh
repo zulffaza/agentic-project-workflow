@@ -268,7 +268,7 @@ pwtest_err 'no verified commit binding' "refusal names the missing binding"
 printf 'wt T01 verify\n' > "$ROOT/ev-wt-T01"
 pwtest_rc 0 "stack-verify T01 (binds its verified head)" "$(pwtest_script $SH)" stack-verify --project "$WT" --task T01 --evidence "$ROOT/ev-wt-T01"
 pwtest_rc 0 "worktree: create stacked child from parent's verified commit" "$(pwtest_script pw-worktree.sh)" create --project "$WT" --task T02 --repo stackrepo --base master
-CW="$WT_DIR/worktree/stackrepo/T02-$WT"
+CW="$WT_DIR/worktree/stackrepo/T02-thing"
 [ -d "$CW" ] && pwtest_ok "child worktree mounted" || pwtest_bad "child worktree" "not mounted"
 CHEAD="$(git -C "$PW_REPOS/stackrepo" rev-parse "agent/$WT/T02-$WT" 2>/dev/null || true)"
 pwtest_eq "child branch HEAD == parent verified SHA (exact local fork)" "$PHEAD" "$CHEAD"
@@ -700,7 +700,7 @@ stack_task "$WA_DIR" T02 warepo master "agent/$WA/T02-$WA" T01 T01 todo
 printf 'wa1\n' > "$ROOT/ev-wa-1"
 pwtest_rc 0 "P2 attach: verify T01" "$(pwtest_script $SH)" stack-verify --project "$WA" --task T01 --evidence "$ROOT/ev-wa-1"
 pwtest_rc 0 "P2 attach: create the child worktree" "$(pwtest_script pw-worktree.sh)" create --project "$WA" --task T02 --repo warepo --base master
-git -C "$PW_REPOS/warepo" worktree remove "$WA_DIR/worktree/warepo/T02-$WA" >/dev/null 2>&1 || true
+git -C "$PW_REPOS/warepo" worktree remove "$WA_DIR/worktree/warepo/T02-thing" >/dev/null 2>&1 || true
 # the parent advances and is re-verified; the child branch lacks the new tip -> deny
 _stack_advance warepo "agent/$WA/T01-$WA"
 printf 'wa1b\n' > "$ROOT/ev-wa-1b"

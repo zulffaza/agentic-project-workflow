@@ -64,7 +64,15 @@ Hard rules:
   Before committing, inspect newly added or modified comments in your task diff and remove any that
   teach a maintainer nothing beyond the surrounding code. The full policy is in
   `pw-guide-workflow/references/conventions-and-gotchas.md`.
-- Fill the task file's `## Result` (what changed, verify output, timing, `Actually used:`,
-  `Session:`, model) and hand back to the orchestrator. **`Verify outcome:`/`Notes:` are one
-  distinct fact per (sub-)bullet, never a single run-on paragraph** — see `_TEMPLATE-task.md`'s
-  `## Result` for the exact shape. Report faithfully — state failures and skips.
+- **Flip the task's `Status:` field before you hand back.** `todo`/`in-progress` → `done` when
+  `## Verify` passed (or carries a confirmed pre-existing/environmental failure), `verify-failed`
+  when your diff regressed something. The completion route (`pw-status.sh update --status
+  complete`) refuses a task whose Status still says `todo`, and the orchestrator cannot move the
+  DAG forward on a record that disagrees with reality.
+- Fill the task file's `## Result` using the TEMPLATE'S MACHINE BULLETS, one line each:
+  `Actually used:`, `Result produced by:`, `Session:`, `Time:`, `Log:`, `Commit(s):`, `MR:`,
+  `Build check:`, `Verify outcome:`, `Notes:`. These bullets are read by `pw-status.sh`,
+  `pw-ship.sh`, and the task lint; a prose `### Verify` block or an `**Outcome:** done` line is
+  invisible to all three and blocks acceptance. **`Verify outcome:`/`Notes:` are one distinct
+  fact per (sub-)bullet, never a single run-on paragraph** — see `_TEMPLATE-task.md`'s `## Result`
+  for the exact shape. Report faithfully — state failures and skips.

@@ -512,3 +512,7 @@ C423-spawn-args-worker-source-mislabeled	pw-config.sh	          source="worker"	
 C424-batch-agent-model-exclusion-dropped	skills/human/pw-batch/SKILL.md	`models`, `agent-model`,	`model-resolve`,	T1	^pw-batch\.t\.sh$
 C425-coverage-canary-phrase-dropped	tests/expectations/coverage.tsv	T4:no custom primary agent	T4:no custom primary agent anywhere	T1	^pw-surface-coverage\.t\.sh$
 C426-coverage-gap-count-drift	tests/expectations/coverage.tsv	# surface-coverage v1 gaps=18	# surface-coverage v1 gaps=17	T1	^pw-surface-coverage\.t\.sh$
+C427-gap-fix-explicit-question-id-dropped	scripts/entities/pw-review.sh	    n="${AQ_ID#Q}"	    n="$(_next_id "$f" Q)"	T1	^pw-gap-fixes\.t\.sh$
+C428-gap-fix-answered-question-withdrawable	scripts/entities/pw-review.sh	elif [ "$RS_WITHDRAW" = 1 ]; then	elif false; then	T1	^pw-gap-fixes\.t\.sh$
+C429-gap-fix-task-naming-mismatch-unchecked	scripts/entities/pw-doc.sh	  if [ -n "$_br_desc" ] && [ -n "$_wt_desc" ] && [ "$_br_desc" != "$_wt_desc" ]; then	  if false; then	T1	^pw-gap-fixes\.t\.sh$
+C430-gap-fix-result-verify-outcome-unchecked	scripts/entities/pw-doc.sh	      printf '%s\n' "$_res" | grep -qE '^- \*\*Verify outcome:\*\*' \	      true \	T1	^pw-gap-fixes\.t\.sh$

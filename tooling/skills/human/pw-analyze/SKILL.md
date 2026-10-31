@@ -153,6 +153,15 @@ decisions (options not converged, Q0 rules, the final doc) stay yours.
    - **If §4 has 2+ options, ALSO auto-seed a `Q0`** — "which approach should we proceed with?",
      anchored to §4, always treated as blocking (breakdown structurally can't proceed without it —
      see `/pw-breakdown`'s gate). Skip Q0 only when §4 concluded there's genuinely one approach.
+     Seed it with the explicit id, because the allocator only hands out Q1 and up:
+     ```
+     {{PW_HOME}}/tooling/scripts/entities/pw-review.sh add-question --project <slug> \
+       --file analysis/review/<topic>.review.md --id Q0 --section "§4 Approach" \
+       --text "which approach should we proceed with? (see §4)"
+     ```
+     `--id` must be free. That single call writes the exact `### Q0 · §4 …` heading that
+     `pw-doc.sh lint --stage reviewable` requires; hand-editing the review file to add it stays
+     forbidden.
 4. Record the analysis author's provider in the doc (`**Provider:** <this agent's CLI>`) so
    breakdown can default execution to the same agent (no mid-workflow switching).
 5. **Create the review file (idempotent — do this even if you think one may already exist).**

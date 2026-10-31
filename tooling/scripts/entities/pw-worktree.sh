@@ -69,8 +69,32 @@ REPO_DIR="$REPOS_DIR/$REPO"
 pw_dir_within "$REPOS_DIR" "$REPO_DIR" || die "create: repo path resolves outside $REPOS_DIR: $REPO_DIR → fix: check the --repo name"
 
 # Construct branch name
+# The task file is the source of truth for its own branch and worktree path; the derived
+# `<T0n>-<project>` names are only the fallback when a field is absent. Every project in this
+# harness declares the descriptor form (`T0n-thing`), and breakdown writes whichever descriptor it
+# was given — deriving here instead is what left a lint-clean task file pointing its Verify `cd` at
+# a directory the helper never created. Both fields are validated below.
+TASK_FILE="$D/task/$TASK_ID.md"
 BRANCH_NAME="agent/$SLUG/$TASK_ID-$SLUG"
 WORKTREE_PATH="$D/worktree/$REPO/$TASK_ID-$SLUG"
+if [ -f "$TASK_FILE" ]; then
+  _tf_branch="$(pw_field "$TASK_FILE" Branch 2>/dev/null || true)"
+  _tf_branch="${_tf_branch//\`/}"; _tf_branch="${_tf_branch%%[[:space:]]*}"
+  _tf_wt="$(pw_field "$TASK_FILE" Worktree 2>/dev/null || true)"
+  _tf_wt="${_tf_wt//\`/}"; _tf_wt="${_tf_wt%%[[:space:]]*}"
+  if [ -n "$_tf_branch" ] && [ "$_tf_branch" != "—" ]; then
+    pw_branch_ok "$_tf_branch" || die "create: task $TASK_ID declares an unsafe Branch: '$_tf_branch' → fix: correct the task file's Branch field"
+    BRANCH_NAME="$_tf_branch"
+  fi
+  if [ -n "$_tf_wt" ] && [ "$_tf_wt" != "—" ]; then
+    case "$_tf_wt" in *..*) die "create: task $TASK_ID declares a Worktree path containing '..' → fix: use a plain project-relative path" ;; esac
+    case "$_tf_wt" in
+      worktree/*/) ;;
+      *) die "create: task $TASK_ID declares Worktree '$_tf_wt', which is not worktree/<repo>/<dir>/ → fix: correct the task file's Worktree field" ;;
+    esac
+    WORKTREE_PATH="$D/${_tf_wt%/}"
+  fi
+fi
 mkdir -p "$(dirname "$WORKTREE_PATH")"
 
 # --- branch-inheritance parent (plan 35) ------------------------------------------------
