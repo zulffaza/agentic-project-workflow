@@ -8,17 +8,14 @@
 - **Status:** context
   <!-- 🤖 context → analysis → breakdown → executing → review → done. Each `/pw-*` command sets
        this as its last step — don't hand-edit except to match that vocabulary. -->
+- **Configuration schema:** <CONFIGURATION_SCHEMA_DEFAULT>
 - **One-liner:** <what this project is>
   <!-- 🤖 set by /pw-analyze. Leave the placeholder until analysis fills it. -->
 - **AI Models:** <AI_MODELS_DEFAULT>
-  <!-- 🤖 set via `/pw-config set --project {{PW_PROJECT_SLUG}} --key ai-model --set <role>=<provider:model>` — one row per spawn
-       lane (researcher/analyst/writer-task/reviewer/verifier/ship-comment-analyst/explorer); `—` = no row = the provider's own
-       default (kilo `small_model`/`subagent_model`; claude the session model; cursor the `auto`/
-       `selectedModel` floor; codex its own configured default). The EXECUTOR is not
-       a row — its pin is the task file's `Execute with:`/the PLAN's produced-by. Where a spawn
-       can't bind the row (Kilo's Task-tool has no model arg), the driver runs the row as a headless
-       session of that model over the same work order and the result says which actually ran.
-       See docs/EXECUTION.md §Spawning phase work; set rows with `/pw-config set --project {{PW_PROJECT_SLUG}} --key ai-model --set <role>=<provider:model>`. -->
+  <!-- 🤖 DERIVED COMPATIBILITY VIEW — do not edit. The Role models table below is the only
+       writable owner (schema 2). This line stays for readers that predate the table: one row per
+       spawn lane, `—` = native provider default, `multiple` = several provider cells are set.
+       Set cells with `/pw-config set --project {{PW_PROJECT_SLUG}} --key role-model --provider <p> --role <role> --model <model>`. -->
 - **AI Review:** <AI_REVIEW_DEFAULT>
   <!-- 🤖 set via `/pw-config set --project {{PW_PROJECT_SLUG}} --key ai-review --set <surface>=<mode>` — one OUTCOME mode per review
        surface (context/analysis/plan/task-plan/task-exec/ship/rfc/close). `advisory` = a fresh
@@ -37,11 +34,9 @@
        (review → repair → verify → fresh review) within the Review Budget. -->
 - **Review Budget:** <REVIEW_BUDGET_DEFAULT>
 - **AI Model Tuning:** <AI_MODEL_TUNING_DEFAULT>
-  <!-- 🤖 machine-owned companion to AI Models. Kept on its own line so older readers of the
-       role=model row keep working: `role=variant:x,reasoning:y,effort:z`. Empty = every lane uses
-       its provider/session default tuning. Set with
-       `/pw-config set --project {{PW_PROJECT_SLUG}} --key ai-model --set <role>=<provider:model> --variant <v> --reasoning <v> --effort <v>`.
-       A binding is either honored exactly or refused; it is never silently downgraded. -->
+  <!-- 🤖 DERIVED COMPATIBILITY VIEW — do not edit. Companion to the AI Models line; the Role
+       models table owns the values. Empty = native tuning. A binding is honored exactly or
+       refused; it is never silently downgraded. -->
 - **Project Defaults:** <PROJECT_DEFAULTS_DEFAULT>
   <!-- 🤖 creation seed for PLAN-owned settings (`routing`, `execution-limit`, optional
        `max-parallel`). Captured when the project was created, so later global-default changes do
@@ -51,6 +46,45 @@
   <!-- 🤖 set via `/pw-config set --project {{PW_PROJECT_SLUG}} --key review-rounds --value <1..3>` — total reviewer passes in a
        bounded cycle; 3 allows at most two intervening verified repairs. -->
 
+
+## Project configuration
+
+Global initialization values were copied when this project was created. Later global edits do
+not change these tables. Use `/pw-config` for supported edits; a table is the canonical owner,
+and the two compatibility lines above are derived views.
+
+### Role models
+
+Empty model means the selected agent/provider's native default. The provider column is the
+Agent Provider; a role cell cannot redirect work to another provider. Roles:
+researcher, analyst, writer-task, reviewer, verifier, ship-comment-analyst, explorer.
+
+| Provider | Role | Target model | Variant | Reasoning | Effort |
+|---|---|---|---|---|---|
+<ROLE_MODELS_DEFAULT>
+
+### Execution suggestions
+
+Advice for breakdown only. These rows never authorize task dispatch. Breakdown writes one
+selected route per task; actual routes live in each task file.
+
+| Current provider | Execution provider | Target model | Target subagent | Variant | Reasoning | Effort | Thinking |
+|---|---|---|---|---|---|---|---|
+<EXECUTION_SUGGESTIONS_DEFAULT>
+
+### Effective configuration locations
+
+| Setting group | Current owner |
+|---|---|
+| Role models | README.md, Role models |
+| Execution suggestions | README.md, Execution suggestions |
+| Review policy | README.md review lines |
+| Execution policy | README.md until task/PLAN.md is created, then task/PLAN.md |
+| Actual task routes and tuning | task/Tnn.md, Execution routes |
+| RFC target | rfc/META.md when initialized; currently not configured |
+
+Task routes cannot be inferred from these suggestions or from `Produced by`. An executor
+invocation requires an explicit matching current-provider route in its task.
 
 ## Where things are
 - Context inputs → [`context/`](./context/INDEX.md)

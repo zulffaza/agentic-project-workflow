@@ -232,7 +232,17 @@ python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["supported
 
 # A hand-edited binding the route cannot express stops before spawn.
 cp "$R" "$R.bak61"
-sed -i '' -e 's|^- \*\*AI Model Tuning:\*\*.*|- **AI Model Tuning:** analyst=reasoning:low|' "$R"
+python3 - "$R" <<'PYMOD'
+import sys
+p=sys.argv[1]; out=[]
+for line in open(p):
+    if line.startswith("| kilo | analyst |"):
+        c=line.split("|")
+        c[5]=" low "
+        line="|".join(c)
+    out.append(line)
+open(p,'w').write("".join(out))
+PYMOD
 if gpd spawn-args --project demo-defaults --role analyst --json >/dev/null 2>&1; then
   pwtest_bad "unbindable tuning refuses dispatch" "kilo reasoning was silently dropped"
 else pwtest_ok "unbindable tuning refuses dispatch"; fi
@@ -381,13 +391,13 @@ pwtest_rc 0 "worker default set" gpd global set --key agent-model --provider kil
 gpd_re '^PW_KILO_AGENT_MODELS_PW_RESEARCHER="command_code/model\[variant=high\]"$' "$(grep 'AGENT_MODELS' "$GPCFG")" "worker cell lands in the managed block"
 gpd_re 'researcher=—' "$(grep '^- \*\*AI Models:\*\*' "$R")" "worker default does not mutate an existing project dashboard"
 
-pwtest_rc 0 "spawn-args falls through to worker default" gpd spawn-args --project demo-defaults --role researcher --provider kilo --json
-python3 - "$PWTEST_OUT" <<'PY' && pwtest_ok "worker fallback reports source and complete binding" || pwtest_bad "worker fallback" "$(cat "$PWTEST_OUT")"
+pwtest_rc 0 "empty project cell ignores the worker default" gpd spawn-args --project demo-defaults --role researcher --provider kilo --json
+python3 - "$PWTEST_OUT" <<'PY' && pwtest_ok "worker default never becomes a project fallback" || pwtest_bad "worker default fallback" "$(cat "$PWTEST_OUT")"
 import json,sys
 d=json.load(open(sys.argv[1]))
-assert d["provider"]=="kilo" and d["model"]=="command_code/model" and d["variant"]=="high", d
-assert d["source"]=="worker" and d["supported"] is True, d
-assert d["args"]==["-m","command_code/model","--variant","high"], d
+assert d["provider"]=="kilo" and d["model"]=="" and d["variant"]=="", d
+assert d["source"]=="native-default" and d["supported"] is True, d
+assert d["args"]==[], d
 PY
 pwtest_rc 0 "spawn-args resolves a named worker" gpd spawn-args --provider kilo --agent pw-researcher --json
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["agent"]=="pw-researcher" and d["source"]=="worker" and d["model"]=="command_code/model"' "$PWTEST_OUT" \
@@ -398,7 +408,7 @@ gpd spawn-args --project demo-defaults --role researcher --provider kilo --json 
 python3 - "$PWTEST_OUT" <<'PY' && pwtest_ok "project role wins over the worker default" || pwtest_bad "project/worker precedence" "$(cat "$PWTEST_OUT")"
 import json,sys
 d=json.load(open(sys.argv[1]))
-assert d["source"]=="project" and d["model"]=="command_code/MiniMaxAI/MiniMax-M3" and d["variant"]=="", d
+assert d["source"]=="project-table" and d["model"]=="command_code/MiniMaxAI/MiniMax-M3" and d["variant"]=="", d
 PY
 
 # A worker default never replaces a task pin: the pin holders stay byte-identical.
@@ -408,5 +418,5 @@ gpd global set --key agent-model --provider kilo --agent pw-executor --value 'co
 pwtest_eq "worker default leaves task pins byte-identical" "$before_pin" "$(shasum -a 256 "$GPD/projects/demo-defaults/task/T01.md" | awk '{print $1}')"
 pwtest_rc 0 "worker default unset" gpd global unset --key agent-model --provider kilo --agent pw-researcher
 gpd spawn-args --project demo-defaults --role researcher --provider kilo --json > "$PWTEST_OUT"
-python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["source"]=="project"' "$PWTEST_OUT" \
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["source"]=="project-table"' "$PWTEST_OUT" \
   && pwtest_ok "unset worker cell leaves the project pin authoritative" || pwtest_bad "worker unset" "$(cat "$PWTEST_OUT")"

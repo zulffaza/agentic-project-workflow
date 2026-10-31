@@ -29,7 +29,7 @@ Project dir: `{{PW_PROJECTS}}/<slug>`.
 {{PW_HOME}}/tooling/scripts/entities/pw-doc.sh lint --kind task --project <slug> --all || exit 1
 ```
 **Reading the pre-flight:** `pw-preflight.sh execute` checks the PLAN `approved` sign-off, a
-phase execution is legal in, and every `Execute with:` row on both axes — *permission*
+phase execution is legal in, and every task's `## Execution routes` row on both axes — *permission*
 (allowlist) and *availability* (`model-resolve`: the model exists in the live catalog — for
 Cursor that means `agent models` PLUS `~/.cursor/cli-config.json` → `modelParameters` — and sits
 inside the configured api-provider prefix scope; a row pinning a since-removed provider is a
@@ -118,15 +118,20 @@ already exists the script attaches instead of dying; re-running is idempotent.
        **Serialize tasks that share a branch** (one worktree), but **parallelize across different
        adopted branches and all fresh tasks**. If git refuses because a branch is checked out in the
        main repo, tell me to switch that main checkout to another branch first.
-4. **How to run each task** — resolve `Execute with: <provider>:<model-or-agent>` **and the
-   task's optional `Route:` field** (ladder precedence: task `Route:` > PLAN `- Routing:` line >
+4. **How to run each task** — resolve the task's route for the **current provider** (the agent
+   running this operation) with
+   `pw-config.sh spawn-args --project <slug> --task <T0n> --current-provider <provider> --json`.
+   The row names the execution provider, a mandatory model, an optional subagent, and tuning. A
+   missing row for the current provider is a hard stop: never fall back to another row, a role
+   cell, a worker default, or `Produced by`. The derived `Execute with:` summary is not the route.
+   Then read the task's optional `Route:` field (ladder precedence: task `Route:` > PLAN `- Routing:` line >
    `PW_ROUTE_DEFAULT` > `auto`; values `auto|subagent|headless`) via the `pw-guide-workflow` skill's
    `references/execution-and-routing.md`. For a resolved cross-provider/headless route, read only
    the selected provider's headless-hook entry under `## How headless invocation actually works`
    in `{{PW_HOME}}/tooling/docs/providers.md`; read `## Effort / variant / thinking` only when the
-   task declares either field. Same-provider routes do not load the provider guide. Tasks default to
-   the plan's **Produced by** provider, so most
-   run under the agent you're already in. **Before invoking**, re-check the resolved model on both
+   task declares either field. Same-provider routes do not load the provider guide. Breakdown
+   normally writes each route for its own provider (PLAN `Produced by`), so most tasks run under
+   the agent you are already in; that history is not a fallback when a route is missing. **Before invoking**, re-check the resolved model on both
    axes — permission (allowlist; empty/unset = every model is allowed, the default) and
    availability (live catalog + api-provider prefix scope; catches a hand-edited task file AND a
    row pinning a provider that since left `PW_KILO_API_PROVIDERS`):
@@ -139,8 +144,8 @@ already exists the script attaches instead of dying; re-running is idempotent.
    matching is exact-first — the prefix-less row names the *direct* provider line when one
    exists, gateway only as an announced fallback), never the raw row text. If either refuses, STOP that task and
    tell me — don't substitute a different model yourself or run
-   it anyway. **The task file binds the model:** the resolved `Execute with:` (or the plan's
-   Produced-by default) is the *only* model the spawn runs under — pass it explicitly with the
+   it anyway. **The task route binds the model:** the resolved route for the current provider is
+   the *only* model the spawn runs under — pass it explicitly with the
    provider's bind flag (`kilo run -m`, `claude --model`, cursor `--model`, codex `codex exec -m`). Never let the
    spawner's own session tokens (your harness's `model=`/`variant=` values) ride along — that
    silently rebinds a task away from what breakdown approved.

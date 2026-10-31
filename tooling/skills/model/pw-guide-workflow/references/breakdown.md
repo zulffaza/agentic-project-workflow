@@ -17,7 +17,7 @@ PLAN + task set spanning every analysis doc — never one PLAN per doc:
    dependency DAG, and the task table. **This is what the executor reads first.**
 2b. **Writer lane (optional, seeded — refs/execution-and-routing.md §Spawn lanes).** When tasks are
    independent documents you may spawn `pw-writer-task` **once per task** with the caller's decisions
-   (repo/base, boundary, landing unit, `Execute with:`+Why, SP, Verify expectations) as its seed —
+   (repo/base, boundary, landing unit, one execution route+Why, SP, Verify expectations) as its seed —
    parallelizable because writers touch different files; **you** keep the decisions, the plan DAG,
    every gate and ledger line, and you exit-check each drafted file against its brief (gaps come
    back as a seed patch on the writer's logged id, not a re-draft). A writer must leave a

@@ -167,8 +167,11 @@ See `/pw-help command --name pw-batch` for the current forms and examples.
 | `review-trigger` | `surface=value` pairs or `all=value` | WHEN a pass starts — `manual` (default) or `completion` (also after a succeeded producing command's verification) |
 | `review-repair` | `surface=value` pairs or `all=value` | Whether a completion review may repair+re-review — `manual` (default) or `bounded` (within the budget) |
 | `review-rounds` | Integer `1..3` | Total reviewer passes in a bounded cycle (default `3`; at most two intervening repairs) |
-| `ai-model` | `role=provider:model` or `role=—` pairs; one role may add `--variant`, `--reasoning`, `--effort` | Model for a workflow role, optionally with provider-supported tuning. `—` clears the override; a replacement without tuning flags resets that role's tuning. Read the complete binding with `get --key ai-model --json` and resolve dispatch with `spawn-args --role <role>` |
-| `pin` | `T01=provider:model` or `T01=—` pairs | Executor model in both task and PLAN. Pins are intentionally untuned: the task's `Effort:`/`Thinking:` (and supported Cursor bracket ids) carry executor tuning; role-style tuning is refused rather than silently accepted |
+| `ai-model` | `role=provider:model` or `role=—` pairs; one role may add `--variant`, `--reasoning`, `--effort` | Deprecated compatibility alias in a schema-2 project: writes the matching provider/role cell. Prefer `role-model`; clearing needs an unambiguous provider |
+| `role-model` | `--provider <p> --role <role> --model <model>` + optional `--variant`/`--reasoning`/`--effort` | One cell in the project Role models table. `--model —` clears it to the native provider default. Tuning must be supported by the provider |
+| `execution-suggestion` | `--current-provider <c> --execution-provider <p> --model <model>` + optional `--subagent` and tuning | Breakdown advice only. This row is never a dispatch source and never edits a task |
+| `execution-route` | `--task <T0n> --current-provider <c> --execution-provider <p> --model <model>` + optional `--subagent` and tuning; `--preview` / `--apply <id>` | One route row in the task. The model is mandatory. A task without a row for the current provider blocks dispatch. The derived `Execute with:` summary is rewritten by the same writer |
+| `pin` | `T01=provider:model` or `T01=—` pairs | Deprecated in a schema-2 project: converts to one execution route keyed by `--current-provider` (or PLAN `Produced by`). Schema-1 projects keep the legacy dual-holder write |
 | `rfc-target` | A document reference or URL | RFC destination |
 
 ### Machine-scoped model operations (`/pw-config`)
@@ -179,7 +182,7 @@ See `/pw-help command --name pw-batch` for the current forms and examples.
 | `agent-model` | `--provider <p> --agent <pw-name>` | Read one provider-specific worker default (model, bracket parameters, source) |
 | `agent-model-set` | `--provider <p> --agent <pw-name> --value '<model>[key=value,…]'` or `—` | Validate and write one worker cell into the managed block; `—` reveals the canonical/provider default |
 | `agent-model-unset` | `--provider <p> --agent <pw-name>` | Remove that worker cell |
-| `spawn-args` | `--project <slug> --role <role> [--provider <p>]` or `--provider <p> --agent <pw-name>` | Resolve the complete binding and provider argv. An unbound project row falls through to the worker default when `--provider` is given; source is reported |
+| `spawn-args` | `--project <slug> --role <role> [--provider <p>]`, `--project <slug> --task <T0n> --current-provider <p>`, or `--provider <p> --agent <pw-name>` | Resolve the complete binding and provider argv. A schema-2 role cell is read directly; an empty cell reports `native-default` and emits no model argument. A task route is mandatory for dispatch. Source is reported |
 | `global get/set/unset --key agent-model` | `--provider <p> --agent <pw-name> [--value <spec>]` | The same worker-cell operations through the global operator family |
 
 Review surfaces: `context`, `analysis`, `plan`, `task-plan`, `task-exec`, `ship`, `rfc`, `close`.
@@ -194,6 +197,18 @@ Global project defaults live in `pw.config.sh`, not a second file. They are copi
 project's dashboard and never re-applied to an existing project. Routing, execution limit, and
 maximum parallelism wait in the dashboard `Project Defaults` line until `/pw-breakdown` creates
 PLAN; after that, PLAN is authoritative.
+
+Provider-by-role initialization cells use `PW_PROJECT_ROLE_<PROVIDER>_<ROLE>_{MODEL,VARIANT,
+REASONING,EFFORT}`. Execution suggestions use `PW_PROJECT_EXECUTION_SUGGESTION_<CURRENT>_
+{PROVIDER,MODEL,SUBAGENT,VARIANT,REASONING,EFFORT,THINKING}`. Both are snapshot seeds only.
+
+`/pw-config unset --project <slug> --key role-model|execution-suggestion|execution-route …`
+removes one schema-2 cell or row. `/pw-config suggest` previews a scope-aware batch
+(global, project, or explicit task/provider pairs), supports `--set` revisions and `--exclude`,
+and writes only on `--apply <id>`. A revision supersedes the prior unapplied proposal.
+`/pw-config migrate` performs the same preview/apply cycle for legacy role rows and task pins.
+`/pw-config sync-routes --project <slug> [--current-provider <p>]` converts a task's legacy
+`Execute with:` pin into that provider's route; it is idempotent and refuses ambiguous pins.
 
 For `ai-review`/`review-trigger`/`review-repair`, `ai-model`, and `pin`, a batch validates every
 pair before writing any value:

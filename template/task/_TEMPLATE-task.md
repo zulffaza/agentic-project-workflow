@@ -64,6 +64,20 @@
 > You can override the model/agent for this task when you kick off execution
 > (e.g. "run this with opus"); the orchestrator records what it used in **Actually used**.
 
+## Execution routes
+
+One row per provider that may run this task (the **current provider** column). The execution
+provider starts the worker; the target model is mandatory, the subagent is a separate optional
+procedure. A missing row for the current provider blocks dispatch; there is no default fallback.
+`Execute with:` above is a derived one-route summary for older readers.
+
+| Current provider | Execution provider | Target model | Target subagent | Variant | Reasoning | Effort | Thinking |
+|---|---|---|---|---|---|---|---|
+<!-- Example (uncomment and edit, or use:
+     /pw-config set --project {{PW_PROJECT_SLUG}} --key execution-route --task <T0n> --current-provider cursorus --execution-provider kilo --model <model> ):
+| cursor | kilo | <model> | — | — | — | — | — |
+-->
+
 ## Goal
 One or two sentences: what this task changes and why.
 

@@ -938,7 +938,43 @@ if [ -n "$rb_line" ]; then
     { [ "$rb_n" -ge 1 ] && [ "$rb_n" -le 3 ]; } || { bad "Review Budget rounds=$rb_n — outside 1..3"; c6bad=1; }
   fi
 fi
-if [ -z "$am_line" ]; then : # presence owned by C11
+if [ "$(pw_project_schema "$D")" = 2 ]; then
+  # Role models is canonical; the AI Models line is a derived compatibility view.
+  while IFS=$'\t' read -r _rp _rr _rm _rv _rr2 _re; do
+    [ -n "${_rr:-}" ] || continue
+    pw_provider_enabled "$_rp" || note "Role models row '$_rp/$_rr' — provider '$_rp' is not enabled now; the cell stays captured history"
+    pw_role_valid "$_rr" || { bad "Role models row '$_rp/$_rr' — unknown role"; c6bad=1; }
+    if ! pw_cell_empty "$_rm"; then
+      case "$_rm" in *'|'*|*$'\t'*) bad "Role models row '$_rp/$_rr' — malformed model cell"; c6bad=1 ;; esac
+    fi
+  done <<EOF
+$(pw_tbl_rows "$README" "Role models")
+EOF
+  while IFS=$'\t' read -r _sc _se _sm _ss _sv _sr _sx _st; do
+    [ -n "${_sc:-}" ] || continue
+    pw_provider_enabled "$_sc" || note "Execution suggestion '$_sc' — current provider not enabled now; suggestion stays history"
+    pw_cell_empty "$_sm" && { bad "Execution suggestion '$_sc' — target model is empty"; c6bad=1; }
+  done <<EOF
+$(pw_tbl_rows "$README" "Execution suggestions")
+EOF
+  if ls "$D"/task/T*.md >/dev/null 2>&1; then
+    for f in "$D"/task/T*.md; do
+      [ "$(pw_task_schema "$f")" = 2 ] || continue
+      tid="$(basename "$f" .md)"
+      if [ -z "$(pw_task_route_keys "$f" | awk 'NF')" ]; then
+        bad "$tid: '## Execution routes' has no row — dispatch is blocked"
+        echo "      → fix: /pw-config set --project $SLUG --key execution-route --task $tid --current-provider <p> --execution-provider <p> --model <model>"
+        c6bad=1
+      fi
+      while IFS=$'\t' read -r _rc _rp _rm _rs _rv _rr _re _rt; do
+        [ -n "${_rc:-}" ] || continue
+        pw_cell_empty "$_rm" && { bad "$tid: route '$_rc' has an empty model"; c6bad=1; }
+      done <<EOF
+$(pw_tbl_rows "$f" "Execution routes")
+EOF
+    done
+  fi
+elif [ -z "$am_line" ]; then : # presence owned by C11
 else
   for kv in $(printf '%s' "$am_line" | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//'); do
     case "$kv" in *=*) : ;; *) bad "AI Models row '$kv' — expected role=value"; c6bad=1; continue ;; esac

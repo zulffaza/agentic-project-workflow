@@ -57,11 +57,57 @@ review_budget_default_line="rounds=$review_rounds"
 AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier ship-comment-analyst explorer"
 ai_model_default_line=""
 ai_model_tuning_default_line=""
+# Schema-2 role tables: one row per enabled provider x non-execution role. A global role cell
+# wins; the legacy single-provider seed remains a creation fallback so existing pw.config.sh
+# files keep producing the same project values.
+role_model_rows=""
+execution_suggestion_rows=""
+for _p in "${PW_PROVIDERS[@]}"; do
+  for r in $AI_MODEL_ROLES; do
+    _m=""; _v=""; _rs=""; _e=""
+    if pw_global_role_cell "$_p" "$r"; then
+      _m="$PW_CELL_MODEL"; _v="$PW_CELL_VARIANT"; _rs="$PW_CELL_REASONING"; _e="$PW_CELL_EFFORT"
+    else
+      _legacy="$(pw_project_default_role "$r")"
+      case "$_legacy" in
+        "$_p":*) _m="${_legacy#*:}"
+                 _rt="$(pw_project_default_tuning "$r")"
+                 _v="$(_tuning_field "$_rt" variant)"; _rs="$(_tuning_field "$_rt" reasoning)"; _e="$(_tuning_field "$_rt" effort)" ;;
+        *) ;;
+      esac
+    fi
+    role_model_rows="$role_model_rows| $_p | $r | $(pw_cell_or_dash "$_m") | $(pw_cell_or_dash "$_v") | $(pw_cell_or_dash "$_rs") | $(pw_cell_or_dash "$_e") |
+"
+  done
+  if pw_global_suggestion "$_p"; then
+    execution_suggestion_rows="$execution_suggestion_rows| $_p | $PW_SUG_PROVIDER | $PW_SUG_MODEL | $(pw_cell_or_dash "$PW_SUG_SUBAGENT") | $(pw_cell_or_dash "$PW_SUG_VARIANT") | $(pw_cell_or_dash "$PW_SUG_REASONING") | $(pw_cell_or_dash "$PW_SUG_EFFORT") | $(pw_cell_or_dash "$PW_SUG_THINKING") |
+"
+  fi
+done
+# Legacy dashboard views stay as derived compatibility rows (one provider only).
 for r in $AI_MODEL_ROLES; do
-  rv_val="$(pw_project_default_role "$r")"
-  ai_model_default_line="$ai_model_default_line $r=$rv_val"
-  _rt="$(pw_project_default_tuning "$r")"
-  [ -n "$_rt" ] && ai_model_tuning_default_line="$ai_model_tuning_default_line $r=$_rt"
+  _single=""; _count=0
+  for _p in "${PW_PROVIDERS[@]}"; do
+    if pw_global_role_cell "$_p" "$r"; then _single="$_p:$PW_CELL_MODEL"; _count=$((_count+1))
+    else
+      _legacy="$(pw_project_default_role "$r")"
+      case "$_legacy" in "$_p":*) _single="$_legacy"; _count=$((_count+1)) ;; esac
+    fi
+  done
+  if [ "$_count" = 0 ]; then ai_model_default_line="$ai_model_default_line $r=—"
+  elif [ "$_count" -gt 1 ]; then ai_model_default_line="$ai_model_default_line $r=multiple"
+  else ai_model_default_line="$ai_model_default_line $r=$_single"
+       if pw_global_role_cell "${_single%%:*}" "$r"; then
+         _rt=""
+         [ -n "$PW_CELL_VARIANT" ] && _rt="variant:$PW_CELL_VARIANT"
+         [ -n "$PW_CELL_REASONING" ] && _rt="${_rt:+$_rt,}reasoning:$PW_CELL_REASONING"
+         [ -n "$PW_CELL_EFFORT" ] && _rt="${_rt:+$_rt,}effort:$PW_CELL_EFFORT"
+         [ -n "$_rt" ] && ai_model_tuning_default_line="$ai_model_tuning_default_line $r=$_rt"
+       else
+         _rt="$(pw_project_default_tuning "$r")"
+         [ -n "$_rt" ] && ai_model_tuning_default_line="$ai_model_tuning_default_line $r=$_rt"
+       fi
+  fi
 done
 ai_model_default_line="${ai_model_default_line# }"
 ai_model_tuning_default_line="${ai_model_tuning_default_line# }"
@@ -127,6 +173,9 @@ while IFS= read -r _rl || [ -n "$_rl" ]; do
   _rl="${_rl//<AI_MODELS_DEFAULT>/$ai_model_default_line}"
   _rl="${_rl//<AI_MODEL_TUNING_DEFAULT>/$ai_model_tuning_default_line}"
   _rl="${_rl//<PROJECT_DEFAULTS_DEFAULT>/$project_defaults_default_line}"
+  _rl="${_rl//<CONFIGURATION_SCHEMA_DEFAULT>/$PW_CONFIG_SCHEMA_CURRENT}"
+  _rl="${_rl//<ROLE_MODELS_DEFAULT>/$role_model_rows}"
+  _rl="${_rl//<EXECUTION_SUGGESTIONS_DEFAULT>/$execution_suggestion_rows}"
   printf '%s\n' "$_rl"
 done < "$TEMPLATE_DIR/PROJECT.template.md" > "$stage/README.md"
 

@@ -176,13 +176,32 @@ PW_AI_REVIEW_DEFAULT="advisory"
 #   PW_PROJECT_DEFAULT_REVIEW_REPAIR=""      # surface=manual|bounded pairs (unset = manual)
 #   PW_PROJECT_DEFAULT_REVIEW_ROUNDS=""      # 1..3 (unset = 3)
 #   PW_PROJECT_DEFAULT_AI_REVIEW=""          # surface=advisory|auto pairs (unset = PW_AI_REVIEW_DEFAULT)
-# Role model defaults + tuning. The MODEL value falls back to PW_AI_MODEL_DEFAULT_<ROLE>.
+# Legacy role seeds (compatibility only; /pw-config migrate converts them to provider cells).
 #   PW_PROJECT_DEFAULT_AI_MODEL_RESEARCHER_MODEL=""    # provider:model
 #   PW_PROJECT_DEFAULT_AI_MODEL_RESEARCHER_VARIANT=""  # provider-supported variant (see model-check)
 #   PW_PROJECT_DEFAULT_AI_MODEL_RESEARCHER_REASONING=""
 #   PW_PROJECT_DEFAULT_AI_MODEL_RESEARCHER_EFFORT=""
-# (analyst / writer-task / reviewer / verifier / ship-comment-analyst follow the same
+# (analyst / writer-task / reviewer / verifier / ship-comment-analyst / explorer follow the same
 #  four-variable pattern.)
+#
+# Provider-by-role initialization cells (schema 2; NEW projects only). One cell per enabled
+# provider and non-execution role. An empty cell means the provider's native default.
+#   PW_PROJECT_ROLE_KILO_RESEARCHER_MODEL="command_code/<model>"
+#   PW_PROJECT_ROLE_KILO_RESEARCHER_VARIANT="high"
+#   PW_PROJECT_ROLE_KILO_RESEARCHER_REASONING=""
+#   PW_PROJECT_ROLE_KILO_RESEARCHER_EFFORT=""
+#
+# Execution suggestions (schema 2; advice for breakdown ONLY — never a dispatch source).
+#   PW_PROJECT_EXECUTION_SUGGESTION_KILO_PROVIDER="kilo"
+#   PW_PROJECT_EXECUTION_SUGGESTION_KILO_MODEL="command_code/<model>"
+#   PW_PROJECT_EXECUTION_SUGGESTION_KILO_SUBAGENT=""     # e.g. pw-executor
+#   PW_PROJECT_EXECUTION_SUGGESTION_KILO_VARIANT=""
+#   PW_PROJECT_EXECUTION_SUGGESTION_KILO_REASONING=""
+#   PW_PROJECT_EXECUTION_SUGGESTION_KILO_EFFORT=""
+#   PW_PROJECT_EXECUTION_SUGGESTION_KILO_THINKING=""
+#
+# Manage both families with /pw-config global set --key role-model|execution-suggestion, and use
+# /pw-config suggest --scope global for a reviewed batch.
 
 # --- Review-request frame and generation prompts (OPTIONAL — defaults are seeded at install) --
 # /pw-ship request-review --project <slug> renders its copyable message through one editable Markdown

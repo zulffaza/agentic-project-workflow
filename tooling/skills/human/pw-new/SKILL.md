@@ -34,10 +34,12 @@ the project without reading the whole base guide. Cover, concisely:
 4. **How review + QnA works** — I comment in the phase's `review/` dir (never inline), the agent
    replies `↳ agent:` and flips `[OPEN]`→`[RESOLVED]`; if the agent has an open question it seeds a `Qn` row I
    answer with `↳ you:`; only I write the Sign-off (date-time to the minute) that clears a gate.
-5. **Execution routing** — tasks carry `Execute with: <provider>:<model>` — **always write the
-   explicit `<provider>:` prefix** (e.g. `claude:opus`, `kilo:command_code/...`,
-   `cursor:cursor-grok-4.5-high`, `codex:gpt-6.1-sol`) — there's no
-   static model→provider lookup to infer it from. As a rough mental model: Claude models tend to
+5. **Execution routing** — tasks carry one `## Execution routes` row per current provider, with
+   an execution provider, a mandatory model, and separate subagent/tuning columns. **Always write
+   the explicit provider and a concrete model** (e.g. `claude:opus`, `kilo:command_code/...`,
+   `cursor:cursor-grok-4.5-high`, `codex:gpt-6.1-sol`); there is no static model→provider lookup.
+   The dashboard `Execute with:` summary is derived, and a task with no route for the current
+   provider cannot dispatch. As a rough mental model: Claude models tend to
    run via Claude Code, open-weight/third-party ones via KiloCode; the exact mechanics are in
    `{{PW_HOME}}/tooling/docs/providers.md`. `/pw-execute` stops at committed + verified, and
    `/pw-ship` is the separate step that pushes + opens MRs (with my OK).

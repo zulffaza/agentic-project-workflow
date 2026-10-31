@@ -196,6 +196,13 @@ pwtest_fill_task() {
     -e "s|^- \*\*Verify outcome:\*\* <pass.*|- **Verify outcome:** pass|" \
     -e "s|^- \*\*Build check:\*\* <.*|- **Build check:** —|" \
     "$p/task/_TEMPLATE-task.md" > "$out"
+  # Schema-2 fixtures carry one explicit route per task so preflight has a real target.
+  if grep -q '^## Execution routes' "$out"; then
+    awk 'BEGIN{done=0}
+         { print }
+         !done && /^\|[[:space:]]*---/ { print "| kilotest | kilotest | test-model | — | — | — | — | — |"; done=1 }
+        ' "$out" > "$out.tmp" && mv "$out.tmp" "$out"
+  fi
 }
 
 # review files: approve = latest plain row in Sign-off = approved (gate col-3 read, C5)
