@@ -167,13 +167,22 @@ $PW_HOME/tooling/scripts/entities/pw-config.sh ensure --project <slug>          
 /pw-config global set|get|unset …          # ONE managed block in pw.config.sh (creation defaults / worker cells)
 /pw-config models …                        # bounded catalog discovery (live/fixed/unavailable source)
 /pw-config agent-model-set …              # provider-by-worker model cell
-/pw-config spawn-args …                   # resolved provider argv (role or named worker)
+/pw-config spawn-args …                   # resolved provider argv (role, task route, or named worker)
+/pw-config set --key role-model …         # one provider-by-role cell (schema 2)
+/pw-config set --key execution-suggestion … # breakdown advice; never dispatch
+/pw-config set --key execution-route …    # one task route keyed by current provider
+/pw-config unset --key role-model|execution-suggestion|execution-route …
+/pw-config suggest …                       # scope-aware batch preview; --apply <id> writes
+/pw-config migrate …                       # legacy role/pin conversion; --apply <id> writes
+/pw-config sync-routes …                   # backfill one route per task from Execute with
 $PW_HOME/tooling/scripts/entities/pw-config.sh model-check  --provider <p> --model <m>     # PERMISSION axis (allowlist guard) — global verb, slug-less
 $PW_HOME/tooling/scripts/entities/pw-config.sh model-resolve --provider <p> --model <m>    # AVAILABILITY axis (below) — global verb, slug-less
 ```
 
 Config keys: `routing | execution-limit | max-parallel | produced-by | ai-review | ai-model |
-pin | rfc-target | review-trigger | review-repair | review-rounds`. `state`/`data` keys (`status`,
+pin | rfc-target | review-trigger | review-repair | review-rounds | role-model |
+execution-suggestion | execution-route`. In a schema-2 project the last three own the canonical
+tables; `ai-model` and `pin` are compatibility aliases. `state`/`data` keys (`status`,
 `adopted`, `base-branches`, `landing-units`) appear in
 `show` but `get`/`set` **refuse** them — they're facts the owning flow derives. `set` validates
 before touching any file: bad enums (`routing ∈ auto|subagent|headless`; review outcomes
@@ -193,7 +202,11 @@ T02=…`, `—` clears) writes the per-task executor pin through the single prop
 (`_pin_propagate`): BOTH holders — the task file's `- **Execute with:**` field (the spawn bind)
 and the PLAN task-table `Execute with` cell (the gate/audit/resume-guard read) — so
 provider-audit's `mismatch` verdict can't arise from the config surface itself; `get pin` lists
-`T0n=value` pairs, `get pin.T0n` reads one. Bare `ai-model`/`ai-review` remain **deprecated
+`T0n=value` pairs, `get pin.T0n` reads one. In schema 2 the pin writes an execution route keyed by
+`--current-provider` (or PLAN `Produced by`) and the derived `Execute with:` summary.
+`execution-route` requires a concrete model and a row for the current provider before dispatch;
+`execution-suggestion` rows never dispatch and never edit a task. `suggest` and `migrate` are
+preview-only until `--apply <id>`; a revision supersedes the prior unapplied proposal. Bare `ai-model`/`ai-review` remain **deprecated
 shims** onto `set --key …` (same engine + stderr pointer) for pre-existing callers; the two new
 axes have no bare shims.
 `ensure` also persists the legacy-`off` → `advisory` migration and creates the

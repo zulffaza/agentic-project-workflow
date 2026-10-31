@@ -123,9 +123,10 @@ discovery bullet below).
    ancestors/descendants run parent-first, one task may run
    driver-inline — §The spawn ledger + the routing ladder); a warm resume is decided by
    `pw-session.sh session-check`, never by attempting the resume and reading error text; a lane's
-   `AI Models:` row binds its model (§Spawning phase work in docs/EXECUTION.md — headless
-   `--model` where the in-session spawn has no model arg, or `Route:` per the ladder). N review
-   items ≠ N spawns.
+   provider/role cell in the project Role models table binds its model (§Spawning phase work in
+   docs/EXECUTION.md — headless `--model` where the in-session spawn has no model arg, or `Route:`
+   per the ladder). An empty cell means the native provider default, not a global fallback. N
+   review items ≠ N spawns.
 - **Cross-provider execution:** if a task's provider ≠ the orchestrator's own, the orchestrator
   **shells out to that provider's CLI headlessly**, passing the task file as the work order (Claude
   Code ⇄ KiloCode, and any future provider). The discipline travels with the task (skill + task
@@ -291,11 +292,14 @@ never loops environmental failures) and the driver auto-flips clean tasks to `ac
 (`--acceptance` overrides per run; `--then-ship` additionally runs row 7). Everything else about the
 nine rows — PLAN gate, human confirmation for outward pushes, leftover reporting — is unchanged.
 
-**Lanes bind model via the dashboard (`AI Models`), not the task file.** The driver reads the
-complete binding before each spawn with
-`pw-config.sh get --project <slug> --key ai-model --json` (model + provider + variant/reasoning/
-effort — never a display string), then resolve the provider-native argument array with
-`pw-config.sh spawn-args --project <slug> --role <role>` (add `--json` for machine reading). It
+**Lanes bind model via the project Role models table, not the task file.** The driver reads the
+selected provider's cell before each spawn with
+`pw-config.sh get --project <slug> --key role-model --provider <p> --role <role>`,
+then resolves the provider-native argument array with
+`pw-config.sh spawn-args --project <slug> --role <role> --provider <p>` (add `--json` for machine
+reading). Task execution is different: read the task's own route for the current provider with
+`spawn-args --project <slug> --task <T0n> --current-provider <p>`; a missing row blocks dispatch —
+never fall back to a role cell, worker default, or `Produced by`. It
 runs the §availability gate and canonicalizes the id through `model-resolve`, maps
 variant/reasoning/effort to the route, or exits non-zero when the model is unavailable or the route
 cannot bind the requested tuning. Never drop a control, choose a "nearest" value, or substitute a model — stop and

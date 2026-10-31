@@ -56,29 +56,43 @@ Full operator semantics: `/pw-help command --name pw-execute`.
 ## Task executors and project roles
 ### Task executors
 
-Each task's `Execute with:` field selects its executor. The PLAN task table mirrors that choice.
-The dashboard's role settings never override this task contract.
+Each task carries an `## Execution routes` table keyed by the **current provider** (the agent
+running the workflow operation). The selected row names the execution provider, a mandatory
+target model, an optional subagent, and per-route tuning. The legacy `Execute with:` bullet stays
+as a derived one-route summary for older readers: it is written by the route owner, never edited
+as an independent source.
+
+A missing row for the current provider blocks dispatch. There is no fallback to another row, a
+worker default, `Produced by`, or a native model default. The PLAN task table mirrors the
+summary, not the routing decision. The dashboard's role settings never override a task route.
 
 ### Project roles
 
-The dashboard's `AI Models` row selects models for these project roles:
-`researcher`, `analyst`, `writer-task`, `reviewer`, `verifier`, `ship-comment-analyst`, and
-`explorer`. There is no executor row; executors use their task settings.
-Inspect or change role choices through `/pw-config show --project <slug>`.
+The project dashboard owns a **Role models** table with one row per enabled provider and
+non-execution role (`researcher`, `analyst`, `writer-task`, `reviewer`, `verifier`,
+`ship-comment-analyst`, `explorer`). A cell stores a model plus optional tuning. There is no
+executor row; executors use their task routes.
+
+Values are copied from the global initialization cells when the project is created. Later global
+edits do not change an existing project. An empty cell is a valid, intentional choice: it uses
+the selected agent/provider's own default and emits no model argument. Inspect or change cells
+with `/pw-config show --project <slug>` and
+`/pw-config set --project <slug> --key role-model --provider <p> --role <role> --model <model>`.
+
+Schema-1 projects keep the legacy `AI Models` row and are migrated explicitly with
+`/pw-config migrate --project <slug> --preview`.
 
 ### Model precedence for project roles
 
-The first available setting wins:
+For a schema-2 project, resolution is exactly:
 
-1. **Run-time override:** a model explicitly requested for this invocation.
+1. **Project role cell:** model and tuning from that provider's cell for the role.
 
-2. **Project role setting:** the corresponding role on the dashboard's `AI Models` row.
+2. **Native provider default:** when the cell's model is empty, no PW model or tuning override is
+   applied.
 
-3. **Provider-specific worker default:** the machine default for that named subagent on the selected provider (`/pw-config global set --key agent-model …`). It configures generated definitions and dispatch when the project role row is unbound. A project role setting always wins.
-
-4. **Registered agent definition:** the model in that agent's definition. Claude uses per-agent definitions; Kilo and Cursor use their registered model fields. This rung is absent for Codex, which has no seeded definitions.
-
-5. **Provider or session default:** the model selected by the provider when the earlier settings do not apply.
+The machine-scoped worker default (`PW_<PROVIDER>_AGENT_MODELS_<AGENT>`) configures generated
+agent definitions. It is not a runtime project fallback. A task route never falls back at all.
 
 ### Provider-specific worker defaults
 
@@ -91,7 +105,8 @@ The key is derived from the canonical filename, for example
 
 Writes validate the provider prefix, model availability, allowlist, and tuning capability before
 one managed assignment is published. Clearing a cell with `—` reveals the canonical definition or
-provider default. The agent generator renders supported definition fields; settings a definition
+provider default. These cells govern generated definitions only; they do not supply a project role
+model, which comes from the project's Role models table or the native default. The agent generator renders supported definition fields; settings a definition
 format cannot express stay invocation-time bindings and are reported, never silently dropped.
 `pw-ship-comment-fixer` and `pw-sync-conflict-fixer` are executor procedures, not worker
 definitions, so they have no model cell.
@@ -120,7 +135,8 @@ Each task records its execution choices before it runs:
 
 | Field | What it tells you |
 |---|---|
-| `Execute with:` | Provider and model or registered agent, such as `claude:opus` or `pw-executor` |
+| `## Execution routes` | One row per current provider: execution provider, mandatory model, optional subagent, and tuning |
+| `Execute with:` | Derived one-route summary (`provider:model`, or `multi`); older readers only |
 | `Effort:` / `Thinking:` | Optional reasoning settings supported by that provider |
 | `Why:` | Rationale for the execution choice |
 | `Story points:` | Estimated manual effort; the bundle uses 2 SP for one person-day |
@@ -128,9 +144,11 @@ Each task records its execution choices before it runs:
 
 Ask the agent to validate reasoning settings against the enabled provider before changing them.
 
-`PLAN.md`'s task table mirrors this in **Execute with** + **SP** columns. **By default a task runs
-under the same provider that produced the breakdown** (`PLAN.md → Produced by`), so you're not
-forced to switch agents mid-workflow — a task is routed elsewhere only with a stated `Why:`.
+`PLAN.md`'s task table mirrors the route in its **Execute with** + **SP** columns. **Breakdown
+normally writes each route for its own provider** (`PLAN.md → Produced by`), so you are not forced
+to switch agents mid-workflow. A task may carry routes for other providers, but dispatch uses only
+the key for the provider running the operation. That history is not a fallback: a missing key
+stops the task.
 
 | Task choice | Example syntax | Where the model comes from |
 |---|---|---|
@@ -279,8 +297,11 @@ that implies symmetry.
 
 ### Role-model tuning
 
-A role binding can carry a provider-supported variant, reasoning level, or effort level. Configure
-it with one role per invocation:
+A role cell or task route can carry a provider-supported variant, reasoning level, or effort
+level. Configure one cell per invocation with
+`/pw-config set --project <slug> --key role-model --provider <p> --role <role> --model <model> --variant <v>`
+(or `--key execution-route` for a task). Tuning is part of one binding: replacing the model without
+tuning flags resets that binding's controls.
 
 ```text
 /pw-config set --project delivery-note --key ai-model --set analyst=kilo:command_code/model --variant high
@@ -303,7 +324,8 @@ A role's model and tuning are one binding. Setting a new model without tuning fl
 role's variant/reasoning/effort (a control that was valid for the old model may be invalid for the
 new one); clearing the role clears its tuning too. Read the complete binding with
 `get --project <slug> --key ai-model --json`, and let the driver resolve the provider's argument
-array with `spawn-args --project <slug> --role <role> [--provider <p>]` (add `--json` for machine
+array with `spawn-args --project <slug> --role <role> [--provider <p>]`, or
+`spawn-args --project <slug> --task <T0n> --current-provider <p>` (add `--json` for machine
 reading). With an unbound project row and `--provider`, it falls through to that provider's worker
 default. A named worker can also be resolved directly with
 `spawn-args --provider <p> --agent <pw-name>`. It canonicalizes the id through `model-resolve` and
@@ -418,11 +440,11 @@ verifier / `dep-impact` items share that queue) get ONE batched fix pass, per-it
 — never one spawn per comment; who runs the pass (in-process fixer / supervised headless / the
 driver inline) is the routing ladder's call — §The per-spawn ledger below.
 
-**Model lanes vs executor pins are different axes.** A task's `Execute with:` binds the EXECUTOR
-per unit (above). A *lane* spawns on the provider default unless the project's
-`- **AI Models:** researcher=… analyst=… writer-task=… verifier=… reviewer=…` row binds it
-(`/pw-config set --project <slug> --key ai-model --set <lane>=<provider:model|—>`; unset = provider/session default;
-the `AI Models:` dashboard line — same anchored-line config idiom as `AI Review`). Per-provider honesty: **claude**
+**Model lanes vs executor routes are different axes.** A task's execution route binds the EXECUTOR
+per unit (above). A *lane* spawns on the selected provider's project Role models cell; an empty
+cell means that provider's native default
+(`/pw-config set --project <slug> --key role-model --provider <p> --role <lane> --model <model>`).
+In a schema-1 project the legacy `AI Models:` row still binds lanes. Per-provider honesty: **claude**
 can start a session per model and per-spawn override is real; **kilo**'s Task-tool has no model arg
 — its levers are a map-block pin (user's own config) or running the lane **headless**:
 `kilo run --auto -m <provider/model> [--dir <repo/path>]` with the task file/work order + skill

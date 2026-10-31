@@ -24,18 +24,30 @@ The example config enables Claude only.
 
 ### Defaults for new projects
 
-Set reusable project defaults once with `/pw-config global set`. A new project copies those values. Provider-specific worker models use `/pw-config models` and `/pw-config global set --key agent-model`.
+Set reusable project defaults once with `/pw-config global set`. A new project copies those values
 into its dashboard; an existing project keeps its captured values, so changing a default never
-rewrites work in progress. Review modes, role models, routing, execution limit, and maximum
-parallelism are supported.
+rewrites work in progress. Review modes, provider-by-role cells, execution suggestions, routing,
+execution limit, and maximum parallelism are supported. `/pw-config suggest` previews a whole
+scope at once; nothing is written until you apply the returned proposal.
 
 ```text
 /pw-config global show
 /pw-config global set --key review-trigger --set all=completion --set ship=manual
-/pw-config global set --key ai-model --set analyst=kilo:command_code/model --variant high
+/pw-config global set --key role-model --provider kilo --role analyst --model command_code/model --variant high
+/pw-config suggest --scope global
 ```
 
-Role models can carry a provider-supported variant, reasoning level, or effort level. Ask what is
+A project's Role models table is the canonical owner; the dashboard's `AI Models:` line is a
+derived compatibility view. Task execution uses an explicit route per current provider:
+
+```text
+/pw-config set --project checkout --key execution-route --task T01 --current-provider kilo \
+  --execution-provider kilo --model command_code/model
+```
+
+A missing route for the current provider blocks dispatch; there is no default fallback.
+
+Role cells can carry a provider-supported variant, reasoning level, or effort level. Ask what is
 supported before choosing a value:
 
 ```text

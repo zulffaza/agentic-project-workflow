@@ -114,8 +114,10 @@ measure them reliably; pull them from session telemetry afterward if you need th
   typically much faster and parallel — the actual agent `Time` per task is recorded above._
 
 ## Model & sub-agent selection
-Each task declares `Execute with:` (a **model or agent**, `<provider>:<model>` form) plus a `Why:`.
-The **provider** decides which CLI runs it — see the
+Each task declares an `## Execution routes` row per provider that may run it: execution provider,
+mandatory target model, optional subagent, and tuning. The `Execute with:` cell below is a derived
+summary (`provider:model`, or `multi` when several keys exist) for older readers. The **provider**
+decides which CLI runs it — see the
 [provider registry]({{PW_HOME}}/docs/TOOLING.md) (models are tied to a provider there, and
 cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
 

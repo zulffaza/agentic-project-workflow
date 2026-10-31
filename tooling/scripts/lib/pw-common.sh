@@ -20,6 +20,12 @@ fi
 # opencode, cursor, … — see "built-in vs enabled" below). Default when unset: claude only.
 declare -p PW_PROVIDERS >/dev/null 2>&1 || PW_PROVIDERS=(claude)
 
+# Provider-by-role cells, execution suggestions/routes, and table storage. Loaded here so every
+# entity, the scaffolder, and the generators resolve the same schema-2 contract.
+if [ -f "$PW_HOME/tooling/scripts/lib/pw-config-model.sh" ]; then
+  . "$PW_HOME/tooling/scripts/lib/pw-config-model.sh"
+fi
+
 # Forge host overrides (see tooling/docs/forges.md) — default to empty (pure auto-detect) so a
 # pw.config.sh that predates this var (or the example file) never trips `set -u` on `${#…[@]}`.
 declare -p PW_FORGE_HOSTS >/dev/null 2>&1 || PW_FORGE_HOSTS=()

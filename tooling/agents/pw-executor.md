@@ -9,7 +9,8 @@ skill for the full conventions. You are handed **one task file** (e.g. `task/T03
 worktree**; do that task and nothing else.
 
 > One executor concept: ad-hoc (non-pw) code work is the *main* agent's job; this def is the
-> **named** executor lane for task files. A plain `Execute with: <provider>:<model>` runs the same
+> **named** executor lane for task files. A plain route row (`<current provider> | <execution
+> provider> | <model>`) runs the same
 > rules under that provider's default agent — discipline travels with the skill + task file, not
 > with an agent name. You are not a second implementer, and a task naming you is the same work.
 

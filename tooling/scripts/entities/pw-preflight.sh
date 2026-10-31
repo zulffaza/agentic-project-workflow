@@ -168,6 +168,7 @@ case "$COMMAND" in
     # unknown provider), so a refusal here is a positive determination, safe to hard-stop on.
     while IFS= read -r EXEC_WITH; do
       EXEC_WITH="$(printf '%s' "$EXEC_WITH" | pw_trim)"
+      case "$EXEC_WITH" in multi|multiple) continue ;; esac
       if [ -n "$EXEC_WITH" ] && [ "$EXEC_WITH" != "—" ]; then
         # Model gates apply only to the `provider:model` cell shape (docs/EXECUTION.md);
         # an agent-name cell (e.g. `pw-executor`, or a providerless `repo/model` token)
@@ -188,6 +189,36 @@ case "$COMMAND" in
         fi
       fi
     done < <(pw_plan_execs "$D/task/PLAN.md")
+
+    # Schema-2 task routes: every task needs at least one explicit route; each populated row
+    # must name a concrete model, and the current provider (when known) must have its own key.
+    for _tf in "$D"/task/T*.md; do
+      [ -e "$_tf" ] || continue
+      [ "$(pw_task_schema "$_tf")" = 2 ] || continue
+      _tid="$(basename "$_tf" .md)"
+      _keys="$(pw_task_route_keys "$_tf" | awk 'NF')"
+      if [ -z "$_keys" ]; then
+        die_fix "task $_tid has no execution route" "add one: /pw-config set --project $SLUG --key execution-route --task $_tid --current-provider <p> --execution-provider <p> --model <model>"
+      fi
+      if [ -n "$(printf '%s\n' "$_keys" | sort | uniq -d)" ]; then
+        die_fix "task $_tid has duplicate current-provider route keys" "keep exactly one row per current provider in task/$_tid.md (## Execution routes)"
+      fi
+      while IFS=$'\t' read -r _rc _rp _rm _rs _rv _rr _re _rt; do
+        [ -n "${_rc:-}" ] || continue
+        [ -n "$_rp" ] && [ -n "$_rm" ] || die_fix "task $_tid route '$_rc' has no execution provider/model" "edit task/$_tid.md (## Execution routes): the model is mandatory"
+        case "$_rm" in —|-) die_fix "task $_tid route '$_rc' has an empty model" "set a concrete model — an execution route never falls back to a default" ;; esac
+        if ! "$HERE/pw-config.sh" model-check --provider "$_rp" --model "$_rm" >/dev/null 2>&1; then
+          die_fix "task $_tid route '$_rc' model '$_rp:$_rm' is not in the allowlist" "allow it in pw.config.sh or change the route"
+        fi
+        _rrc=0; _rerr="$("$HERE/pw-config.sh" model-resolve --provider "$_rp" --model "$_rm" 2>&1 >/dev/null)" || _rrc=$?
+        [ "$_rrc" = 0 ] || die_fix "task $_tid route '$_rc' model '$_rp:$_rm' is not available" "$(printf '%s' "$_rerr" | tr '\n' ' ' | sed -E 's/^(model-resolve| *→ fix:)+ *//')"
+      done <<EOF
+$(pw_tbl_rows "$_tf" "Execution routes")
+EOF
+      if [ -n "${PW_CURRENT_PROVIDER:-}" ] && ! printf '%s\n' "$_keys" | grep -Fxq -- "$PW_CURRENT_PROVIDER"; then
+        die_fix "task $_tid has no route for the current provider '$PW_CURRENT_PROVIDER'" "add that key, or run from a provider that has one"
+      fi
+    done
     ;;
 
   breakdown)

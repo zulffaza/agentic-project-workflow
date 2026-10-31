@@ -30,9 +30,10 @@ unapproved analysis. (`{{PW_HOME}}/tooling/docs/scripts/README.md`)
 independent ones batched in parallel (they write different files, so batching is capped by `- Max parallelism:`
 n at a time), each getting the task's decisions as a compact seed + the template. It cannot change
 what the step does; a spawn that goes beyond its decisions gets stopped (exit-check like every
-lane result). Read each lane's complete binding from `- **AI Models:**` with
-`pw-config.sh get --project <slug> --key ai-model --json` (no row = provider default); resolve the
-exact spawn arguments with `pw-config.sh spawn-args --project <slug> --role <role>` and stop when
+lane result). Read each lane's complete binding from the project Role models table with
+`pw-config.sh get --project <slug> --key role-model --provider <p> --role <lane> --json` (an empty
+cell = native provider default); resolve the
+exact spawn arguments with `pw-config.sh spawn-args --project <slug> --role <role> --provider <current-provider>` and stop when
 the route cannot bind the stored tuning. Log each spawn with its `session=<id>` for later
 repair/§review-batch resumption.
 
@@ -83,7 +84,9 @@ Then produce, from `{{PW_HOME}}/template/task/`:
    **`(repo, base branch)` pairs** (a repo may appear on **multiple rows** if tasks target different
    base branches, e.g. `master` and `spring3` — that's a normal case, not adoption-only), global
    rules, **breakdown rules / execution routing**, dependency DAG, and the task table
-   **including the Execute with column and clickable `[T0n](./T0n.md)` links**. Fill **Produced
+   **including the Execute with column and clickable `[T0n](./T0n.md)` links**. The column is a
+   derived summary of the task's routes (`multi` when several keys exist); the task file owns the
+   real rows. Fill **Produced
    by:** with the provider you (this breakdown agent) are running under — that becomes the
    **default execution provider** for every task (see routing).
 2. One `<project>/task/T01.md … Tnn.md` per task (from `_TEMPLATE-task.md`), each self-contained —   **drafted via `pw-writer-task` when a spawn is available** (per-task; parallelizable with the
@@ -96,19 +99,28 @@ Then produce, from `{{PW_HOME}}/template/task/`:
    - Replace every literal `PW_HOME`/`PW_PROJECTS`/`PW_REPOS` brace-token copied from the template
      with its real absolute path before saving (same render scaffold applies to copied files).
    - Machine fields (`Repo:`, `Base branch:`, `Branch:`, `Worktree:`, `depends_on:`, `Stacked on:`,
-     `Status:`, `Execute with:`) carry a single value only — no prose after it; the reasoning belongs in
+     `Status:`, derived `Execute with:`) carry a single value only — no prose after it; the reasoning belongs in
      `Why:` or an HTML comment. `Worktree:` stays project-relative exactly as the template shows
      (`worktree/<repo>/<T0n>-<slug>/`); absolute paths appear only inside `## Steps` commands.
    with its **`Repo:` + `Base branch:`** set (the base the task forks from — two tasks in the same
    repo may declare different bases, e.g. `master` vs `spring3`), a runnable `## Verify` block, an
-   `Execute with: <provider>:<model-or-agent>` + `Why:`, a **`Story points:`** estimate, optional
+   one `## Execution routes` row (`current provider | execution provider | model | subagent | tuning`)
+   + `Why:`, a **`Story points:`** estimate, optional
    **`Effort:`**/**`Thinking:`**/**`Route:`** (route = `auto|subagent|headless` spawn-routing per
    the ladder — only write it when the task needs strict binding (`headless`) or forced
    in-process (`subagent`); omit for `auto`), and an empty `## Result` block.
-      - **Per-lane model default on top of "Produced by":** the dashboard's `- **AI Models:**` line is        what the *next* run's lane spawns will use (`pw-config.sh get --project <slug> --key ai-model --json` reads the complete binding;
+      - **Task execution routes:** each generated task carries one `## Execution routes` row for the
+  provider running breakdown (from the project's execution suggestion or a task-specific choice),
+  with a mandatory model and separate subagent/tuning columns. The legacy `- **Execute with:**`
+  bullet is a derived summary written by the helper. A task with no route for the current provider
+  is not dispatchable — leave breakdown incomplete rather than emit a default model. After writing
+  the task files, materialize the routes for the provider that ran breakdown with
+  `/pw-config sync-routes --project <slug> --current-provider <produced-by>`; it converts each
+  legacy `Execute with:` pin into that provider's route and is idempotent.
+- **Per-lane model default on top of "Produced by":** the dashboard's Role models table is        what the *next* run's lane spawns will use (`pw-config.sh get --project <slug> --key ai-model --json` reads the complete binding;
         `pw-config.sh set --project <slug> --key ai-model --set <role>=<provider:model>` writes it —
         researcher/analyst/writer-task/reviewer/verifier/ship-comment-analyst; the **executor is never a
-        row**, a task's `Execute with:` is its only pin). Surface the current rows in your summary so I
+        row**, a task's execution route is its only pin). Surface the current rows in your summary so I
         can change one before I sign off (e.g. "writer-task=— → say the word to pin it cheap").
       - **Default the provider to "Produced by"** (this agent) so I don't have to switch agents;
      only route a task elsewhere when it genuinely needs a stronger/cheaper/open-weight model, and
@@ -136,7 +148,7 @@ Then produce, from `{{PW_HOME}}/template/task/`:
      `pw-config.sh model-resolve --provider <provider> --model <model-id>` before writing the row. Claude has no live
      catalog — its fixed alias set is
      already fully documented in `{{PW_HOME}}/tooling/docs/providers.md`.
-   - **Before finalizing each task's `Execute with:`**, check the chosen model against the
+   - **Before finalizing each task's execution route**, check the chosen model against the
      project's model allowlist (empty/unset = every model is allowed, the default — see
      `pw.config.sh`), and confirm it actually resolves right now (live catalog + api-provider
      prefix scope — a row pinning a model/provider that isn't available fails the execute gate

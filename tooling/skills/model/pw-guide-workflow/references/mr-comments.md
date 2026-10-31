@@ -282,7 +282,7 @@ One `pw-ship-comment-analyst` pass covers the whole selected scope before any fi
 read-only and uses the project `AI Models: ship-comment-analyst` row (provider/session default when
 unset). Read the complete binding with
 `pw-config.sh get --project <slug> --key ai-model --json` and resolve its spawn arguments with
-`pw-config.sh spawn-args --project <slug> --role ship-comment-analyst`; stop before spawning when
+`pw-config.sh spawn-args --project <slug> --role ship-comment-analyst --provider <current-provider>`; stop before spawning when
 that route cannot bind the stored tuning. Do not duplicate its investigation in the driver first, and
 do not launch one analyst per MR.
 

@@ -135,11 +135,32 @@ cmd_session_check() {
     pw_task_id_ok "$task" || die "session-check: invalid task id '$task' → fix: task ids look like T01"
     local tf; tf="$PROJECTS_DIR/$slug/task/$task.md"
     [ -f "$tf" ] || die "no task file: $slug/task/$task.md → fix: check the task id (or pass --provider <p> --session <id> directly)"
-    local sess exec_with
+    local sess exec_with _keys _cur
     sess="$(pw_field "$tf" Session || true)"
     case "${sess:-}" in ""|"—"|"<*") echo "session-check: $slug/$task — dead (no recorded Session: id)" >&2; return 1 ;; esac
-    exec_with="$(pw_field "$tf" "Execute with" || true)"
-    prov="${exec_with%%:*}"
+    if [ "$(pw_task_schema "$tf")" = 2 ]; then
+      _cur="${PW_CURRENT_PROVIDER:-}"
+      if [ -n "$_cur" ]; then
+        local _row; _row="$(pw_task_route_row "$tf" "$_cur" 2>/dev/null || true)"
+        if [ -z "$_row" ]; then
+          echo "session-check: $slug/$task — not resumable (no execution route for current provider '$_cur') → fix: add the route before resuming" >&2
+          return 1
+        fi
+        prov="${_row%%$'\t'*}"
+      else
+        _keys="$(pw_task_route_keys "$tf" | awk 'NF')"
+        if [ "$(printf '%s\n' "$_keys" | wc -l | tr -d ' ')" != 1 ]; then
+          echo "session-check: $slug/$task — not resumable (several current-provider routes; set PW_CURRENT_PROVIDER or pass --provider directly)" >&2
+          return 1
+        fi
+        _row="$(pw_task_route_row "$tf" "$_keys" 2>/dev/null || true)"
+        prov="${_row%%$'\t'*}"
+      fi
+      [ -n "$prov" ] || { echo "session-check: $slug/$task — not resumable (route has no execution provider)" >&2; return 1; }
+    else
+      exec_with="$(pw_field "$tf" "Execute with" || true)"
+      prov="${exec_with%%:*}"
+    fi
     id="$sess"
   else
     [ -n "$prov" ] || die "session-check: --provider is required → fix: session-check --provider <p> --session <id> | session-check --project <slug> --task <T0n>"

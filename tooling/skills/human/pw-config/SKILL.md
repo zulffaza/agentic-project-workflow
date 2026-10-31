@@ -1,11 +1,11 @@
 ---
 name: pw-config
 description: The one configuration surface — validated per-project knobs, creation-time global project defaults in pw.config.sh, and model permission/capability checks
-args: "[show | get | set | ensure | materialize] --project <project-slug> … | global [show | get | set | unset] … | models [--provider <provider>]… | agent-model --provider <provider> --agent <name> | model-check --provider <provider> --model <model-id> [--variant <v>] [--reasoning <v>] [--effort <v>] [--json]"
+args: "[show | get | set | unset | ensure | materialize | suggest | migrate | sync-routes] --project <project-slug> … | global [show | get | set | unset] … | suggest --scope global … | migrate --scope global … | models [--provider <provider>]… | agent-model --provider <provider> --agent <name> | model-check --provider <provider> --model <model-id> [--variant <v>] [--reasoning <v>] [--effort <v>] [--json]"
 scope: mixed
-scope-forms: "global=global, default=project, show=project, get=project, set=project, ensure=project, materialize=project, global show=global, global get=global, global set=global, global unset=global, models=global, agent-model=global, agent-model-set=global, agent-model-unset=global, agent-models=global, spawn-args=global, model-check=global, model-resolve=global, ai-model=project, ai-review=project, review-trigger=project, review-repair=project, review-rounds=project"
+scope-forms: "global=global, default=project, show=project, get=project, set=project, unset=project, ensure=project, materialize=project, suggest=project, migrate=project, sync-routes=project, global show=global, global get=global, global set=global, global unset=global, models=global, agent-model=global, agent-model-set=global, agent-model-unset=global, agent-models=global, spawn-args=global, model-check=global, model-resolve=global, ai-model=project, ai-review=project, review-trigger=project, review-repair=project, review-rounds=project"
 args-global: "global show [--json] | global get --key <key> [--provider <p> --agent <name>] [--json] | global set --key <key> [--value <v> | --set <member=value>]… | global unset --key <key> [--provider <p> --agent <name>] | models [--provider <p>]… [--search <term>] [--limit <n>] | agent-model --provider <p> --agent <name> | agent-model-set --provider <p> --agent <name> --value <spec> | agent-models | spawn-args --provider <p> --agent <name> | model-check --provider <provider> --model <model-id> [--tuning] [--json]"
-args-project: "show --project <project-slug> [--json] | get --project <project-slug> --key <key> [--json] | set --project <project-slug> --key <key> [--value <v> | --set <member=value>]… [--variant <v> --reasoning <v> --effort <v>] | ensure --project <project-slug> | materialize --project <project-slug>"
+args-project: "show --project <project-slug> [--json] | get --project <project-slug> --key <key> [--json] | set --project <project-slug> --key <key> [--value <v> | --set <member=value>]… [--variant <v> --reasoning <v> --effort <v>] | unset --project <project-slug> --key <key> … | suggest --project <project-slug> [--task <T0n> --current-provider <p>] … [--apply <id>] | migrate --project <project-slug> … [--apply <id>] | sync-routes --project <project-slug> [--current-provider <p>] [--preview] | ensure --project <project-slug> | materialize --project <project-slug>"
 ---
 
 **Load shared guidance first.** Read the `pw-orchestration` skill's common rules
@@ -37,8 +37,11 @@ The keys you can `set`, and their legal values (the same list `show` prints as i
 | `review-trigger` | `<surface>=<value>` pairs or `all=<value>`; values `manual|completion` | WHEN a pass starts: `manual` (only an explicit `/pw-review … ai`, default) or `completion` (also after a succeeded producing command's verification); `completion` never disables explicit requests |
 | `review-repair` | `<surface>=<value>` pairs or `all=<value>`; values `manual`·`bounded` | whether a completion review may run the bounded repair cycle (`review → repair → verify → fresh review`); `manual` = findings stop for me (default) |
 | `review-rounds` | integer `1..3` | total reviewer passes in a bounded cycle (default `3` — at most two intervening verified repairs) |
-| `ai-model` | `<role>=<provider>:<model>` or `<role>=—` pairs; roles `researcher`·`analyst`·`writer-task`·`reviewer`·`verifier`·`ship-comment-analyst`·`explorer`; optional `--variant`/`--reasoning`/`--effort` on a ONE-role write | spawn-lane model rows; `—` = provider/session default; model is validated live (allowlist + catalog + scope), tuning against the provider capability table. Unsupported or unverified tuning is refused, never silently dropped. Tuning is read with `get --key ai-model --json`; plain `get` stays `role=model` compatible |
-| `pin` | `<T0n>=<provider>:<model>` or `<T0n>=—` pairs | per-task executor pins; written to **both holders** (task-file `Execute with:` + PLAN cell) by one propagator, so gate/audit never see drift; same live validation at write time |
+| `ai-model` | `<role>=<provider>:<model>` or `<role>=—` pairs; optional tuning on a ONE-role write | Deprecated schema-2 alias that writes the matching provider/role cell. Prefer `role-model`; clearing needs an unambiguous provider |
+| `role-model` | `--provider <p> --role <role> --model <model>` + optional `--variant`/`--reasoning`/`--effort` | One provider-by-role cell in the project table; `—` clears it to the native provider default; tuning is validated against the provider capability table |
+| `execution-suggestion` | `--current-provider <c> --execution-provider <p> --model <model>` + optional `--subagent` and tuning | Breakdown advice only — never dispatch, never a task edit |
+| `execution-route` | `--task <T0n> --current-provider <c> --execution-provider <p> --model <model>` + optional `--subagent` and tuning; `--preview` / `--apply <id>` | One task route. Model is mandatory; a missing current-provider row blocks dispatch; the derived `Execute with:` summary is written by the same helper |
+| `pin` | `<T0n>=<provider>:<model>` or `<T0n>=—` pairs | Deprecated: in a schema-2 project one pin becomes an execution route keyed by `--current-provider` (or PLAN `Produced by`); schema-1 keeps the legacy dual-holder write |
 | `rfc-target` | a doc ref/URL | where `/pw-rfc` publishes |
 
 Keys that are **not settable** (facts the flows derive — `set` refuses them and names the owning
@@ -71,6 +74,16 @@ The operators (operator words first; every value named — `--project <slug>` se
   enabled, model not in the live catalog / out of the configured API-provider scope) is refused
   here, at write time — not discovered at spawn time. The removed `off`/`both` values are refused
   with the replacement (`off` → advisory + `review-trigger`; `both` → `completion`).
+- **`/pw-config unset --project <slug> --key role-model|execution-suggestion|execution-route …`** →
+  remove one schema-2 cell or route; clearing a role cell means the native provider default.
+- **`/pw-config suggest [--scope global | --project <slug> [--task <T0n> --current-provider <p>]] [--group <g>] [--provider <p>] [--set <selector>=<value>]… [--exclude <selector>] [--replace-existing] [--apply <id>] [--json]`** →
+  one reviewable batch: preview writes nothing, a revision supersedes the previous unapplied
+  proposal, unresolved rows stay needs-input, and only an explicit apply writes.
+- **`/pw-config sync-routes --project <slug> [--current-provider <p>] [--preview] [--json]`** →
+  materialize one route per task from the legacy `Execute with:` pin for the selected current
+  provider; idempotent, refuses a prose/ambiguous pin, never invents a model.
+- **`/pw-config migrate [--scope global | --project <slug> [--task <T0n> --current-provider <p>]] [--apply <id>] [--json]`** →
+  explicit preview/apply conversion of legacy role rows and task pins. Reads never migrate.
 - **`/pw-config ensure --project <slug>`** → `…/pw-config.sh ensure --project <slug>` — inserts any missing
   dashboard config lines (`AI Models:`, `AI Review:`, `Review Trigger:`, `Review Repair:`,
   `Review Budget:`) with explicit defaults, and persists the legacy-`off` → `advisory` migration

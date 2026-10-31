@@ -35,6 +35,26 @@
 #       With --key ai-model, one role assignment may also carry
 #       --variant/--reasoning/--effort; replacing a model without tuning
 #       resets that role's companion tuning instead of carrying it forward.
+#       Schema-2 keys (canonical project tables):
+#       role-model         --provider <p> --role <r> --model <m> [tuning]
+#       execution-suggestion --current-provider <c> --execution-provider <p>
+#                          --model <m> [--subagent <name>] [tuning]
+#       execution-route    --task <T0n> --current-provider <c>
+#                          --execution-provider <p> --model <m> [--subagent] [tuning]
+#                          [--preview | --apply <id>]  (the model is mandatory; a missing
+#                          route for the current provider blocks dispatch)
+#   pw-config.sh unset --project <slug> --key role-model|execution-suggestion|execution-route …
+#       Clear one schema-2 row/cell. Role-model unset means the native provider default.
+#   pw-config.sh suggest [--scope global | --project <slug> [--task T0n --current-provider <p>]]
+#                        [--group <g>] [--provider <p>] [--set <selector>=<value>]…
+#                        [--exclude <selector>] [--replace-existing] [--apply <id>] [--json]
+#       Scope-aware batch configuration. Preview writes nothing; a revision supersedes the
+#       previous unapplied proposal; only explicit apply writes. unresolved rows stay
+#       needs-input and are never applied implicitly.
+#   pw-config.sh migrate [--scope global | --project <slug> [--task T0n --current-provider <p>]]
+#                        [--apply <id>] [--json]
+#       Explicit preview/apply conversion of legacy single-provider role rows and task pins
+#       into schema-2 cells/routes. Reads never migrate.
 #   pw-config.sh ensure --project <slug>
 #       insert any missing explicit dashboard config lines
 #       (AI Models: / AI Review: / Review Trigger: /
@@ -385,15 +405,6 @@ _ai_model_json() { # <file> — complete per-role bindings, including companion 
       "$r" "$m" "$prov" "$vv" "$rv" "$ev" "$t"
   done
   printf '}}\n'
-}
-
-# One axis out of the stored `variant:x,reasoning:y,effort:z` token (empty when absent).
-_tuning_field() { # <token> <variant|reasoning|effort>
-  local kv
-  for kv in $(printf '%s' "${1:-}" | tr ',' ' '); do
-    [ "${kv%%:*}" = "$2" ] && { printf '%s' "${kv#*:}"; return 0; }
-  done
-  return 0
 }
 
 cmd_ai_model() {
@@ -1037,7 +1048,7 @@ cmd_model_resolve() {
 # Storage stays markdown (dashboard/PLAN/META — the single source of truth; no parallel .pwrc).
 # kind split (owner decision): config = a get/set knob; state/data = derived facts the owning flow
 # writes — show lists them, get/set refuses them.
-CONFIG_KEYS="routing execution-limit max-parallel produced-by ai-review ai-model pin rfc-target review-trigger review-repair review-rounds"
+CONFIG_KEYS="routing execution-limit max-parallel produced-by ai-review ai-model pin rfc-target review-trigger review-repair review-rounds role-model execution-suggestion execution-route"
 STATE_KEYS="status adopted base-branches landing-units"
 
 _dep_note() {
@@ -1086,6 +1097,988 @@ _require_int() { # <key> <value> <min> <max>
   [ "$2" -ge "$3" ] && [ "$2" -le "$4" ] || die "$1: expected $3..$4, got $2"
 }
 
+# --- schema 2: provider-by-role cells, suggestions, routes, suggest, migrate ----------------
+# Storage contract lives in tooling/scripts/lib/pw-config-model.sh. Writes here are the only
+# writers: they stage one file, publish with a rename, and log one line. Reads never migrate.
+
+_project_require_schema2() { # <project-dir> <operation>
+  local s
+  s="$(pw_project_schema "$1")"
+  case "$s" in
+    2) return 0 ;;
+    3) die "$2: unknown configuration schema marker in $1/README.md — fix: /pw-config migrate --project <slug> --preview" ;;
+    *) die "$2: project is still schema 1 (legacy role rows) — fix: convert explicitly with /pw-config migrate --project $(basename "$1") --preview, apply, then retry" ;;
+  esac
+}
+
+_line_set_value() { # <file> <bold-label> <value> [literal-anchor-line]
+  local f="$1" label="$2" value="$3" anchor="${4:-}"
+  if grep -q "^- \*\*${label}:\*\*" "$f"; then
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     awk -v pre="- **${label}:** " -v t="$value" '
+      index($0, pre) == 1 { print pre t; d=1; next } { print } END { if (!d) exit 3 }' "$f" > "$_pwstage" && mv "$_pwstage" "$f"
+    return $?
+  fi
+  [ -n "$anchor" ] || return 3
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   awk -v pre="- **${label}:** " -v t="$value" -v anchor="$anchor" '
+    { print } !d && index($0, anchor) == 1 { print pre t; d=1 } END { if (!d) exit 3 }' "$f" > "$_pwstage" \
+    && mv "$_pwstage" "$f"
+}
+
+_project_config_section_ensure() { # <readme>
+  local f="$1" rc=0
+  grep -q '^- \*\*Configuration schema:\*\*' "$f" \
+    || _line_set_value "$f" "Configuration schema" "$PW_CONFIG_SCHEMA_CURRENT" '- **Status:**'
+  grep -qE '^##[[:space:]]+Project configuration[[:space:]]*$' "$f" && return 0
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;   rc=0
+  awk '
+    { print }
+    !d && /^##[[:space:]]+Where things are[[:space:]]*$/ {
+      print ""; print "## Project configuration"; print ""
+      print "Global initialization values were copied when this project was created."
+      print "Later global edits do not change these tables. Use /pw-config for supported edits."
+      print ""
+      d=1
+    }
+    END { if (!d) exit 3 }' "$f" > "$_pwstage" || rc=$?
+  if [ "$rc" = 0 ]; then mv "$_pwstage" "$f"; else rm -f "$_pwstage"; fi
+  if [ "$rc" = 3 ]; then
+    # no "Where things are" section (hostile/legacy README): append at EOF
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || return 1;     { cat "$f"; printf '\n%s\n\n%s\n' "## Project configuration" "Global initialization values were copied when this project was created."; } > "$_pwstage" \
+      && mv "$_pwstage" "$f"
+  fi
+}
+
+# Rebuild the legacy one-line views from the canonical role table. They stay so older readers
+# and docs keep working; the table is the only writable owner in schema 2.
+_project_sync_legacy_lines() { # <readme>
+  local f="$1" rows models="" tuning="" r p role model variant reasoning effort
+  local prov="" pcount=0 tparts=""
+  rows="$(pw_tbl_rows "$f" "Role models")"
+  for r in $AI_MODEL_ROLES; do
+    prov=""; model=""; variant=""; reasoning=""; effort=""; pcount=0
+    while IFS=$'\t' read -r p role model variant reasoning effort; do
+      [ -n "${role:-}" ] || continue
+      [ "$role" = "$r" ] || continue
+      pw_cell_empty "${model:-}" && continue
+      pcount=$((pcount+1)); prov="$p"
+    done <<EOF
+$rows
+EOF
+    if [ "$pcount" = 0 ]; then models="$models $r=—"; continue; fi
+    if [ "$pcount" -gt 1 ]; then models="$models $r=multiple"; continue; fi
+    # re-read the single populated row for its model and tuning
+    while IFS=$'\t' read -r p role model variant reasoning effort; do
+      [ "$role" = "$r" ] || continue
+      pw_cell_empty "${model:-}" && continue
+      models="$models $r=$p:$model"
+      tparts=""
+      ! pw_cell_empty "${variant:-}" && tparts="variant:$variant"
+      ! pw_cell_empty "${reasoning:-}" && tparts="${tparts:+$tparts,}reasoning:$reasoning"
+      ! pw_cell_empty "${effort:-}" && tparts="${tparts:+$tparts,}effort:$effort"
+      [ -n "$tparts" ] && tuning="$tuning $r=$tparts"
+    done <<EOF
+$rows
+EOF
+  done
+  models="${models# }"; tuning="${tuning# }"
+  _line_set_value "$f" "AI Models" "$models" '- **One-liner:**' || true
+  if [ -n "$tuning" ]; then
+    _line_set_value "$f" "AI Model Tuning" "$tuning" '- **AI Models:**' || true
+  else
+    _line_drop "$f" "AI Model Tuning" || true
+  fi
+}
+
+# Parse "<model>[variant=high,reasoning=low,effort=high,subagent=pw-executor]".
+# Fills SPEC_MODEL SPEC_VARIANT SPEC_REASONING SPEC_EFFORT SPEC_SUBAGENT.
+_parse_value_spec() { # <context> <value>
+  local ctx="$1" value="$2" params="" kv k v
+  SPEC_MODEL=""; SPEC_VARIANT=""; SPEC_REASONING=""; SPEC_EFFORT=""; SPEC_SUBAGENT=""; SPEC_THINKING=""
+  case "$value" in
+    *'['*']') SPEC_MODEL="${value%%\[*}"; params="${value#*\[}"; params="${params%\]}" ;;
+    *'['*|*']'*) die "$ctx: malformed parameter list in '$value' → fix: model[key=value,…]" ;;
+    *) SPEC_MODEL="$value" ;;
+  esac
+  [ -n "$SPEC_MODEL" ] || die "$ctx: a model is required → fix: <provider>:<model> (or a bare model with the provider selected separately)"
+  for kv in $(printf '%s' "$params" | tr ',' ' '); do
+    [ -n "$kv" ] || continue
+    k="${kv%%=*}"; v="${kv#*=}"
+    case "$k" in
+      variant) SPEC_VARIANT="$v" ;;
+      reasoning) SPEC_REASONING="$v" ;;
+      effort) SPEC_EFFORT="$v" ;;
+      thinking) SPEC_THINKING="$v" ;;
+      subagent) SPEC_SUBAGENT="$v" ;;
+      *) die "$ctx: unknown parameter '$k' → fix: variant/reasoning/effort/thinking/subagent" ;;
+    esac
+  done
+}
+
+# Add or replace one role-model row. <provider> is the provider column.
+_project_role_apply() { # <slug> <provider> <role> <spec-model> <variant> <reasoning> <effort>
+  local slug="$1" prov="$2" role="$3" model="$4" variant="$5" reasoning="$6" effort="$7"
+  local d readme var
+  d="$(proj_dir "$slug")"; readme="$d/README.md"
+  _project_require_schema2 "$d" "role-model"
+  pw_provider_enabled "$prov" || die "role-model: provider '$prov' is not enabled (PW_PROVIDERS: ${PW_PROVIDERS[*]})"
+  pw_role_valid "$role" || die "role-model: unknown role '$role' (allowed: $(pw_role_names | tr '\n' ' '))"
+  for var in "$model" "$variant" "$reasoning" "$effort"; do
+    pw_tbl_value_ok "$var" || die "role-model: value carries '|', TAB, newline, or backslash"
+  done
+  if ! pw_cell_empty "$model"; then
+    _model_pin_validate "role-model $prov/$role" "$prov:$model"
+    _model_tuning_validate "role-model $prov/$role" "$prov" "$model" "$variant" "$reasoning" "$effort"
+  elif [ -n "$variant$reasoning$effort" ]; then
+    die "role-model: tuning needs a concrete model (clear the model first, or give one)"
+  fi
+  _project_config_section_ensure "$readme"
+_pwstage="$(pw_tmpfile "$d")" || return 1;   pw_tbl_set2 "$readme" "$_pwstage" "Role models" "$PW_ROLE_MODEL_HEADER" 1 "$(pw_cfg_lc "$prov")" 2 "$role" \
+    "$(pw_cfg_lc "$prov")" "$role" "$(pw_cell_or_dash "$model")" "$(pw_cell_or_dash "$variant")" \
+    "$(pw_cell_or_dash "$reasoning")" "$(pw_cell_or_dash "$effort")" || { rm -f "$_pwstage"; die "role-model: table write failed"; }
+  mv "$_pwstage" "$readme"
+  _project_sync_legacy_lines "$readme"
+  echo "$slug: role-model $prov/$role -> $(pw_cell_or_dash "$model")"
+}
+
+_project_role_unset() { # <slug> <provider> <role>
+  local slug="$1" prov="$2" role="$3" d readme
+  d="$(proj_dir "$slug")"; readme="$d/README.md"
+  _project_require_schema2 "$d" "role-model unset"
+  _project_role_apply "$slug" "$prov" "$role" "—" "" "" ""
+}
+
+_project_suggestion_apply() { # <slug> <current> <exec-provider> <model> <subagent> <variant> <reasoning> <effort> <thinking>
+  local slug="$1" cur="$2" eprov="$3" model="$4" subagent="$5" variant="$6" reasoning="$7" effort="$8" thinking="$9"
+  local d readme var
+  d="$(proj_dir "$slug")"; readme="$d/README.md"
+  _project_require_schema2 "$d" "execution-suggestion"
+  pw_provider_enabled "$cur" || die "execution-suggestion: current provider '$cur' is not enabled"
+  pw_provider_enabled "$eprov" || die "execution-suggestion: execution provider '$eprov' is not enabled"
+  for var in "$model" "$subagent" "$variant" "$reasoning" "$effort" "$thinking"; do
+    pw_tbl_value_ok "$var" || die "execution-suggestion: value carries '|', TAB, newline, or backslash"
+  done
+  if pw_cell_empty "$model"; then
+    die "execution-suggestion: target model is required (use unset to remove the row)"
+  fi
+  _model_pin_validate "execution-suggestion $cur" "$eprov:$model"
+  if ! pw_cell_empty "$subagent"; then
+    pw_canonical_agent_names | grep -Fx -- "$subagent" >/dev/null \
+      || die "execution-suggestion: '$subagent' is not a canonical worker ($(pw_canonical_agent_names | tr '\n' ' '))"
+  fi
+  _model_tuning_validate "execution-suggestion $cur" "$eprov" "$model" "$variant" "$reasoning" "$effort"
+  _project_config_section_ensure "$readme"
+_pwstage="$(pw_tmpfile "$d")" || return 1;   pw_tbl_set "$readme" "$_pwstage" "Execution suggestions" "$PW_EXECUTION_HEADER" 1 "$(pw_cfg_lc "$cur")" \
+    "$(pw_cfg_lc "$cur")" "$eprov" "$model" "$(pw_cell_or_dash "$subagent")" "$(pw_cell_or_dash "$variant")" \
+    "$(pw_cell_or_dash "$reasoning")" "$(pw_cell_or_dash "$effort")" "$(pw_cell_or_dash "$thinking")" \
+    || { rm -f "$_pwstage"; die "execution-suggestion: table write failed"; }
+  mv "$_pwstage" "$readme"
+  echo "$slug: execution-suggestion $cur -> $eprov:$model"
+}
+
+_project_suggestion_unset() { # <slug> <current>
+  local slug="$1" cur="$2" d readme
+  d="$(proj_dir "$slug")"; readme="$d/README.md"
+  _project_require_schema2 "$d" "execution-suggestion unset"
+_pwstage="$(pw_tmpfile "$d")" || return 1;   pw_tbl_del "$readme" "$_pwstage" "Execution suggestions" 1 "$(pw_cfg_lc "$cur")" \
+    || { rm -f "$_pwstage"; die "execution-suggestion: table write failed"; }
+  mv "$_pwstage" "$readme"
+  echo "$slug: execution-suggestion $cur removed"
+}
+
+# Task route write: the ONLY writer for a task's route row and its derived summary.
+_project_route_apply() { # <slug> <task> <current> <exec-provider> <model> <subagent> <variant> <reasoning> <effort> <thinking>
+  local slug="$1" tid="$2" cur="$3" eprov="$4" model="$5" subagent="$6" variant="$7" reasoning="$8" effort="$9" thinking="${10}"
+  local d tf plan var keys summary
+  d="$(proj_dir "$slug")"; tf="$d/task/$tid.md"; plan="$d/task/PLAN.md"
+  pw_task_id_ok "$tid" || die "execution-route: '$tid' is not a task id (T01, T02, …)"
+  [ -f "$tf" ] || die "execution-route: no task file task/$tid.md — /pw-breakdown owns task creation"
+  pw_provider_enabled "$cur" || die "execution-route: current provider '$cur' is not enabled"
+  pw_provider_enabled "$eprov" || die "execution-route: execution provider '$eprov' is not enabled"
+  for var in "$model" "$subagent" "$variant" "$reasoning" "$effort" "$thinking"; do
+    pw_tbl_value_ok "$var" || die "execution-route: value carries '|', TAB, newline, or backslash"
+  done
+  pw_cell_empty "$model" && die "execution-route: target model is required — a route without a model cannot dispatch"
+  _model_pin_validate "execution-route $tid/$cur" "$eprov:$model"
+  if ! pw_cell_empty "$subagent"; then
+    pw_canonical_agent_names | grep -Fx -- "$subagent" >/dev/null \
+      || die "execution-route: '$subagent' is not a canonical worker ($(pw_canonical_agent_names | tr '\n' ' '))"
+  fi
+  _model_tuning_validate "execution-route $tid/$cur" "$eprov" "$model" "$variant" "$reasoning" "$effort"
+_pwstage="$(pw_tmpfile "$d/task")" || return 1;   pw_tbl_set "$tf" "$_pwstage" "Execution routes" "$PW_EXECUTION_HEADER" 1 "$(pw_cfg_lc "$cur")" \
+    "$(pw_cfg_lc "$cur")" "$eprov" "$model" "$(pw_cell_or_dash "$subagent")" "$(pw_cell_or_dash "$variant")" \
+    "$(pw_cell_or_dash "$reasoning")" "$(pw_cell_or_dash "$effort")" "$(pw_cell_or_dash "$thinking")" \
+    || { rm -f "$_pwstage"; die "execution-route: table write failed"; }
+  mv "$_pwstage" "$tf"
+  # Derived summary for older readers: one row is exact; several rows must not pretend to be one.
+  keys="$(pw_task_route_keys "$tf" | awk 'NF')"
+  if [ "$(printf '%s\n' "$keys" | awk 'NF' | wc -l | tr -d ' ')" = 1 ]; then summary="$eprov:$model"; else summary="multi"; fi
+  if grep -q '^- \*\*Execute with:\*\*' "$tf"; then
+    _line_set_value "$tf" "Execute with" "$summary" || true
+  else
+    _pwstage="$(pw_tmpfile "$d/task")" || return 1
+    awk -v v="$summary" '{ print } !d && /^##[[:space:]]+Execution routes/ { print "- **Execute with:** " v; d=1 }' "$tf" > "$_pwstage" && mv "$_pwstage" "$tf"
+  fi
+  if [ -f "$plan" ] && pw_plan_pairs "$plan" | awk -F'|' -v t="$tid" '$1 == t { f=1 } END { exit !f }'; then
+    _plan_cell_update "$plan" "$tid" executewith "$summary" || die "execution-route: PLAN cell write failed for $tid — repair the PLAN row"
+  fi
+  echo "$slug: execution-route $tid/$cur -> $eprov:$model"
+}
+
+_project_route_unset() { # <slug> <task> <current>
+  local slug="$1" tid="$2" cur="$3" d tf plan keys summary
+  d="$(proj_dir "$slug")"; tf="$d/task/$tid.md"; plan="$d/task/PLAN.md"
+  [ -f "$tf" ] || die "execution-route: no task file task/$tid.md"
+  pw_tbl_get "$tf" "Execution routes" 1 "$(pw_cfg_lc "$cur")" >/dev/null 2>&1 \
+    || die "execution-route: task/$tid.md has no route for current provider '$cur'"
+_pwstage="$(pw_tmpfile "$d/task")" || return 1;   pw_tbl_del "$tf" "$_pwstage" "Execution routes" 1 "$(pw_cfg_lc "$cur")" \
+    || { rm -f "$_pwstage"; die "execution-route: delete failed"; }
+  mv "$_pwstage" "$tf"
+  keys="$(pw_task_route_keys "$tf" | awk 'NF' || true)"
+  if [ -z "$keys" ]; then summary="—"
+  elif [ "$(printf '%s\n' "$keys" | wc -l | tr -d ' ')" = 1 ]; then
+    IFS=$'\t' read -r _ep _m _sub _v _r _e _t <<EOF
+$(pw_task_route_row "$tf" "$keys")
+EOF
+    summary="$_ep:$_m"
+  else summary="multi"; fi
+  grep -q '^- \*\*Execute with:\*\*' "$tf" && _line_set_value "$tf" "Execute with" "$summary" || true
+  if [ -f "$plan" ] && pw_plan_pairs "$plan" | awk -F'|' -v t="$tid" '$1 == t { f=1 } END { exit !f }'; then
+    _plan_cell_update "$plan" "$tid" executewith "$summary" || true
+  fi
+  echo "$slug: execution-route $tid/$cur removed"
+}
+
+# --- reads -------------------------------------------------------------------
+_role_models_json() { # <readme> [provider] [role]
+  local f="$1" want_p="${2:-}" want_r="${3:-}" rows p role model variant reasoning effort first=1
+  rows="$(pw_tbl_rows "$f" "Role models")"
+  printf '{"schema_version":2,"roles":['
+  while IFS=$'\t' read -r p role model variant reasoning effort; do
+    [ -n "${role:-}" ] || continue
+    [ -z "$want_p" ] || [ "$p" = "$want_p" ] || continue
+    [ -z "$want_r" ] || [ "$role" = "$want_r" ] || continue
+    [ "$first" = 1 ] || printf ','
+    first=0
+    printf '{"provider":"%s","role":"%s","model":"%s","variant":"%s","reasoning":"%s","effort":"%s","empty":%s}' \
+      "$(_json_escape "$p")" "$(_json_escape "$role")" "$(_json_escape "$model")" \
+      "$(_json_escape "$variant")" "$(_json_escape "$reasoning")" "$(_json_escape "$effort")" \
+      "$([ "$(pw_cell_or_dash "$model")" = "—" ] && echo true || echo false)"
+  done <<EOF
+$rows
+EOF
+  printf ']}\n'
+}
+
+_suggestions_json() { # <readme> [current]
+  local f="$1" want="${2:-}" rows cur eprov model sub v r e t first=1
+  rows="$(pw_tbl_rows "$f" "Execution suggestions")"
+  printf '{"schema_version":2,"suggestions":['
+  while IFS=$'\t' read -r cur eprov model sub v r e t; do
+    [ -n "${cur:-}" ] || continue
+    [ -z "$want" ] || [ "$cur" = "$want" ] || continue
+    [ "$first" = 1 ] || printf ','
+    first=0
+    printf '{"current_provider":"%s","execution_provider":"%s","model":"%s","subagent":"%s","variant":"%s","reasoning":"%s","effort":"%s","thinking":"%s"}' \
+      "$(_json_escape "$cur")" "$(_json_escape "$eprov")" "$(_json_escape "$model")" "$(_json_escape "$sub")" \
+      "$(_json_escape "$v")" "$(_json_escape "$r")" "$(_json_escape "$e")" "$(_json_escape "$t")"
+  done <<EOF
+$rows
+EOF
+  printf ']}\n'
+}
+
+_routes_json() { # <task-file> [current-provider]
+  local tf="$1" want="${2:-}" rows cur eprov model sub v r e t first=1
+  rows="$(pw_tbl_rows "$tf" "Execution routes")"
+  printf '{"routes":['
+  while IFS=$'\t' read -r cur eprov model sub v r e t; do
+    [ -n "${cur:-}" ] || continue
+    [ -z "$want" ] || [ "$cur" = "$want" ] || continue
+    [ "$first" = 1 ] || printf ','
+    first=0
+    printf '{"current_provider":"%s","execution_provider":"%s","model":"%s","subagent":"%s","variant":"%s","reasoning":"%s","effort":"%s","thinking":"%s"}' \
+      "$(_json_escape "$cur")" "$(_json_escape "$eprov")" "$(_json_escape "$model")" "$(_json_escape "$sub")" \
+      "$(_json_escape "$v")" "$(_json_escape "$r")" "$(_json_escape "$e")" "$(_json_escape "$t")"
+  done <<EOF
+$rows
+EOF
+  printf ']}\n'
+}
+
+# --- global initialization cells --------------------------------------------
+_global_role_apply() { # <provider> <role> <model> <variant> <reasoning> <effort>
+  local prov="$1" role="$2" model="$3" variant="$4" reasoning="$5" effort="$6" var
+  pw_provider_enabled "$prov" || die "global role-model: provider '$prov' is not enabled (PW_PROVIDERS: ${PW_PROVIDERS[*]})"
+  pw_role_valid "$role" || die "global role-model: unknown role '$role' (allowed: $(pw_role_names | tr '\n' ' '))"
+  if ! pw_cell_empty "$model"; then
+    _model_pin_validate "global role-model $prov/$role" "$prov:$model"
+    _model_tuning_validate "global role-model $prov/$role" "$prov" "$model" "$variant" "$reasoning" "$effort"
+  elif [ -n "$variant$reasoning$effort" ]; then
+    die "global role-model: tuning needs a concrete model"
+  fi
+  _global_lock_begin
+  var="$(pw_role_cell_var "$prov" "$role" MODEL)"
+  if pw_cell_empty "$model"; then
+    _global_unset_var "$var"; unset "$var" 2>/dev/null || true
+  else
+    _global_set_var "$var" "$model"
+  fi
+  local f fv axis
+  for f in VARIANT REASONING EFFORT; do
+    case "$f" in VARIANT) fv="$variant" ;; REASONING) fv="$reasoning" ;; EFFORT) fv="$effort" ;; esac
+    axis="$(pw_role_cell_var "$prov" "$role" "$f")"
+    if [ -n "$fv" ] && ! pw_cell_empty "$model"; then
+      _global_set_var "$axis" "$fv"
+    else
+      _global_unset_var "$axis"; unset "$axis" 2>/dev/null || true
+    fi
+  done
+  _global_lock_end
+  echo "global: role-model $prov/$role -> $(pw_cell_or_dash "$model")"
+  if pw_cell_empty "$model"; then
+    _global_residual_note "$(pw_role_cell_var "$prov" "$role" MODEL)" "$(pw_role_cell_var "$prov" "$role" VARIANT)" "$(pw_role_cell_var "$prov" "$role" REASONING)" "$(pw_role_cell_var "$prov" "$role" EFFORT)"
+  fi
+}
+
+_global_suggestion_apply() { # <current> <exec-provider> <model> <subagent> <variant> <reasoning> <effort> <thinking>
+  local cur="$1" eprov="$2" model="$3" subagent="$4" variant="$5" reasoning="$6" effort="$7" thinking="$8" var
+  pw_provider_enabled "$cur" || die "global execution-suggestion: current provider '$cur' is not enabled"
+  pw_provider_enabled "$eprov" || die "global execution-suggestion: execution provider '$eprov' is not enabled"
+  pw_cell_empty "$model" && die "global execution-suggestion: target model is required"
+  _model_pin_validate "global execution-suggestion $cur" "$eprov:$model"
+  if ! pw_cell_empty "$subagent"; then
+    pw_canonical_agent_names | grep -Fx -- "$subagent" >/dev/null \
+      || die "global execution-suggestion: '$subagent' is not a canonical worker"
+  fi
+  _model_tuning_validate "global execution-suggestion $cur" "$eprov" "$model" "$variant" "$reasoning" "$effort"
+  _global_lock_begin
+  for var in PROVIDER MODEL SUBAGENT VARIANT REASONING EFFORT THINKING; do
+    local v
+    case "$var" in
+      PROVIDER) v="$eprov" ;; MODEL) v="$model" ;; SUBAGENT) v="$subagent" ;;
+      VARIANT) v="$variant" ;; REASONING) v="$reasoning" ;; EFFORT) v="$effort" ;; THINKING) v="$thinking" ;;
+    esac
+    local av; av="$(pw_global_suggestion_var "$cur" "$var")"
+    if [ -n "$v" ] && ! pw_cell_empty "$v"; then _global_set_var "$av" "$v"
+    else _global_unset_var "$av"; unset "$av" 2>/dev/null || true; fi
+  done
+  _global_lock_end
+  echo "global: execution-suggestion $cur -> $eprov:$model"
+}
+
+_global_residual_note() { # <VAR>…
+  local var line
+  for var in "$@"; do
+    if line="$(_global_fallback_assignment "$var")"; then
+      echo "  note: an earlier pw.config.sh assignment for $var="$line" remains effective — move it into /pw-config global or delete that line" >&2
+    fi
+  done
+}
+
+_global_suggestion_unset() { # <current>
+  local cur="$1" var
+  local -a vars=()
+  _global_lock_begin
+  for var in PROVIDER MODEL SUBAGENT VARIANT REASONING EFFORT THINKING; do
+    var="$(pw_global_suggestion_var "$cur" "$var")"
+    vars+=("$var")
+    _global_unset_var "$var"; unset "$var" 2>/dev/null || true
+  done
+  _global_lock_end
+  echo "global: execution-suggestion $cur removed"
+  _global_residual_note "${vars[@]}"
+}
+
+# --- proposal scope digest + apply ------------------------------------------
+_proposal_scope_digest() { # <scope: global | project slug>
+  local scope="$1" f
+  if [ "$scope" = global ]; then
+    f="$(_global_cfg_file)"; [ -f "$f" ] && shasum -a 256 "$f" | awk '{print $1}' || printf 'missing'
+  else
+    f="$(proj_dir "$scope")/README.md"
+    if [ -f "$f" ]; then
+      { cat "$f"; for _dt in "$(proj_dir "$scope")"/task/T*.md; do [ -e "$_dt" ] || continue; cat "$_dt"; done; }         | shasum -a 256 | awk '{print $1}'
+    else printf 'missing'; fi
+  fi
+}
+
+_apply_one_change() { # <scope> <key> <new>
+  local scope="$1" key="$2" new="$3" prov role cur eprov sub _vp
+  case "$key" in
+    role-model:*)
+      IFS=: read -r _ prov role <<EOF
+$key
+EOF
+      _parse_value_spec "apply $key" "$new"
+      case "$SPEC_MODEL" in
+        *:*) _vp="${SPEC_MODEL%%:*}"; SPEC_MODEL="${SPEC_MODEL#*:}"
+             [ "$_vp" = "$prov" ] || die "apply $key: value provider '$_vp' does not match the role column '$prov'" ;;
+      esac
+      if [ "$scope" = global ]; then
+        _global_role_apply "$prov" "$role" "$SPEC_MODEL" "$SPEC_VARIANT" "$SPEC_REASONING" "$SPEC_EFFORT"
+      else
+        _project_role_apply "$scope" "$prov" "$role" "$SPEC_MODEL" "$SPEC_VARIANT" "$SPEC_REASONING" "$SPEC_EFFORT"
+      fi ;;
+    execution-suggestion:*)
+      cur="${key#execution-suggestion:}"
+      _parse_value_spec "apply $key" "$new"
+      case "$SPEC_MODEL" in *:*) eprov="${SPEC_MODEL%%:*}"; SPEC_MODEL="${SPEC_MODEL#*:}" ;; *) die "apply $key: expected <execution-provider>:<model>" ;; esac
+      if [ "$scope" = global ]; then
+        _global_suggestion_apply "$cur" "$eprov" "$SPEC_MODEL" "$SPEC_SUBAGENT" "$SPEC_VARIANT" "$SPEC_REASONING" "$SPEC_EFFORT" "$SPEC_THINKING"
+      else
+        _project_suggestion_apply "$scope" "$cur" "$eprov" "$SPEC_MODEL" "$SPEC_SUBAGENT" "$SPEC_VARIANT" "$SPEC_REASONING" "$SPEC_EFFORT" "$SPEC_THINKING"
+      fi ;;
+    execution-route:*)
+      key="${key#execution-route:}"
+      IFS=: read -r _ cur <<EOF
+$key
+EOF
+      local tid="${key%%:*}"
+      if [ "$key" = "$tid" ]; then die "apply execution-route: missing current-provider key"; fi
+      _parse_value_spec "apply execution-route" "$new"
+      case "$SPEC_MODEL" in *:*) eprov="${SPEC_MODEL%%:*}"; SPEC_MODEL="${SPEC_MODEL#*:}" ;; *) die "apply execution-route: expected <execution-provider>:<model>" ;; esac
+      _project_route_apply "$scope" "$tid" "$cur" "$eprov" "$SPEC_MODEL" "$SPEC_SUBAGENT" "$SPEC_VARIANT" "$SPEC_REASONING" "$SPEC_EFFORT" "$SPEC_THINKING" ;;
+    schema:project)
+      _project_config_section_ensure "$(proj_dir "$scope")/README.md" ;;
+    *) die "apply: unsupported change key '$key'" ;;
+  esac
+}
+
+_proposal_apply() { # <id>
+  local id="$1" dir scope kind want got key owner old new action reason applied=0
+  pw_proposal_exists "$id" || die "apply: unknown or incomplete proposal '$id' → fix: re-run the preview"
+  [ "$(pw_proposal_field "$id" state 2>/dev/null || true)" = applied ] && { echo "proposal $id was already applied"; return 0; }
+  [ "$(pw_proposal_field "$id" state 2>/dev/null || true)" = superseded ] && die "apply: proposal $id was superseded by a newer preview → fix: apply the newest proposal (or re-run the preview)"
+  kind="$(pw_proposal_field "$id" kind)"; scope="$(pw_proposal_field "$id" scope)"
+  want="$(pw_proposal_field "$id" digest)"
+  got="$(_proposal_scope_digest "$scope")"
+  [ "$want" = "$got" ] || die "apply: proposal $id is stale (owners changed since preview) → fix: re-run the preview"
+  dir="$(pw_proposal_path "$id")"
+  # validate every row before writing anything
+  while IFS=$'\t' read -r key owner old new action reason; do
+    [ -n "$key" ] || continue
+    case "$action" in
+      add|replace) ;;
+      keep|needs-input|blocked) continue ;;
+      *) die "apply: proposal has unsupported action '$action' for $key" ;;
+    esac
+  done < "$dir/changes"
+  # Schema/structure changes first: role cells require the schema-2 marker and section.
+  while IFS=$'\t' read -r key owner old new action reason; do
+    [ -n "$key" ] || continue
+    case "$key" in schema:*) case "$action" in add|replace) _apply_one_change "$scope" "$key" "$new"; applied=$((applied+1)) ;; esac ;; esac
+  done < "$dir/changes"
+  while IFS=$'\t' read -r key owner old new action reason; do
+    [ -n "$key" ] || continue
+    case "$key" in schema:*) continue ;; esac
+    case "$action" in
+      add|replace)
+        if ! _apply_one_change "$scope" "$key" "$new"; then
+          pw_proposal_mark "$id" state partial
+          pw_proposal_mark "$id" applied_count "$applied"
+          die "apply: proposal $id stopped at '$key' after $applied change(s) — nothing later was written; fix the cause and re-apply the same proposal (writes are idempotent)"
+        fi
+        applied=$((applied+1)) ;;
+    esac
+  done < "$dir/changes"
+  pw_proposal_mark "$id" state applied
+  pw_proposal_mark "$id" applied_at "$(date +%s)"
+  echo "applied proposal $id — $applied change(s)"
+}
+
+# --- suggest -----------------------------------------------------------------
+_suggest_parse_set() { # <value> -> fills SUG_KEY SUG_VALUE
+  case "$1" in *=*) SUG_KEY="${1%%=*}"; SUG_VALUE="${1#*=}" ;; *) die "suggest --set expects <selector>=<value>, got '$1'" ;; esac
+}
+
+_suggest_role_value_from_global() { # <provider> <role>
+  pw_global_role_cell "$1" "$2" || return 1
+  local v
+  v="$1:$PW_CELL_MODEL"
+  [ -n "$PW_CELL_VARIANT" ] && v="$v[variant=$PW_CELL_VARIANT"
+  case "$v" in *\[*) v="$v]" ;; esac
+  printf '%s' "$v"
+}
+
+_suggest_role_value_from_worker() { # <provider> <role>
+  local worker spec
+  worker="$(pw_role_worker "$2")" || return 1
+  spec="$(pw_agent_default_spec "$1" "$worker")"
+  [ -n "$spec" ] || return 1
+  local model params out
+  model="$(pw_worker_spec_model "$spec")"
+  params="$(pw_worker_spec_params "$spec")"
+  [ -n "$model" ] || return 1
+  out="$1:$model"
+  [ -n "$params" ] && out="$out[$params]"
+  printf '%s' "$out"
+}
+
+cmd_suggest() {
+  local scope="" slug="" json=0 replace=0 apply_id="" a v
+  local -a tasks=() curs=() groups=() providers=() overrides=() excludes=()
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --scope=*) v="${a#*=}"; a="--scope" ;;
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*) v="${a#*=}"; a="--task" ;;
+      --current-provider=*) v="${a#*=}"; a="--current-provider" ;;
+      --group=*) v="${a#*=}"; a="--group" ;;
+      --provider=*) v="${a#*=}"; a="--provider" ;;
+      --set=*) v="${a#*=}"; a="--set" ;;
+      --exclude=*) v="${a#*=}"; a="--exclude" ;;
+      --apply=*) v="${a#*=}"; a="--apply" ;;
+    esac
+    case "$a" in
+      --scope|--project|--task|--current-provider|--group|--provider|--set|--exclude|--apply)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --scope) scope="$v" ;; --project) slug="$v" ;; --task) tasks+=("$v") ;;
+          --current-provider) curs+=("$v") ;; --group) groups+=("$v") ;;
+          --provider) providers+=("$v") ;; --set) overrides+=("$v") ;;
+          --exclude) excludes+=("$v") ;; --apply) apply_id="$v" ;;
+        esac ;;
+      --replace-existing) replace=1 ;;
+      --json) json=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "suggest [--scope global | --project <slug> [--task T0n --current-provider <p>]] [--group g] [--provider p] [--set selector=value] [--exclude selector] [--replace-existing] [--apply <id>] [--json]" ;;
+      *) _pw_positional "$a" "suggest [--scope global | --project <slug> …] [--apply <id>]" ;;
+    esac
+  done
+  if [ -n "$apply_id" ]; then _proposal_apply "$apply_id"; return 0; fi
+  [ -n "$scope" ] || [ -n "$slug" ] || die "suggest: --scope global or --project <slug> is required"
+  [ -z "$scope" ] || [ "$scope" = global ] || die "suggest: unknown --scope '$scope' (global)"
+  [ -n "$scope" ] && [ -n "$slug" ] && die "suggest: choose --scope global or --project <slug>"
+  # Task scope is project scope narrowed to explicit task/provider pairs.
+  [ ${#tasks[@]} -gt 0 ] && [ -z "$slug" ] && die "suggest: --task requires --project"
+  [ ${#curs[@]} -gt 0 ] && [ ${#tasks[@]} -eq 0 ] && die "suggest: --current-provider requires at least one --task"
+  local tmp changes; local d; d="${TMPDIR:-/tmp}"
+  tmp="$(mktemp "$d/pwsuggest.XXXXXX")" || die "suggest: cannot create a proposal file"
+  : > "$tmp"
+  local p r model old new action reason keys cur eprov sub var
+  local -a provs=()
+  if [ ${#providers[@]} -gt 0 ]; then provs=("${providers[@]}"); else provs=("${PW_PROVIDERS[@]}"); fi
+  for p in "${provs[@]}"; do
+    if [ -n "$scope" ]; then
+      :
+    else
+      pw_provider_enabled "$p" || die "suggest: provider '$p' is not enabled (PW_PROVIDERS: ${PW_PROVIDERS[*]})"
+    fi
+  done
+  local want_group g ok
+  _group_selected() { # <name>
+    [ ${#groups[@]} -eq 0 ] && return 0
+    for g in "${groups[@]}"; do [ "$g" = "$1" ] && return 0; done
+    return 1
+  }
+  _excluded() { # <selector>
+    local e
+    for e in ${excludes[@]+"${excludes[@]}"}; do
+      case "$e" in
+        group:*) [ "${e#group:}" = "$1" ] && return 0 ;;
+        *) case "$2" in "$e"*) return 0 ;; esac ;;
+      esac
+    done
+    return 1
+  }
+  local override="" found=0
+
+  if [ -z "$scope" ]; then
+    local readme; readme="$(proj_dir "$slug")/README.md"
+    local schema; schema="$(pw_project_schema "$(proj_dir "$slug")")"
+    [ "$schema" = 2 ] || die "suggest: project $slug is schema 1 — run /pw-config migrate --project $slug --preview first"
+    # Role models per provider (project scope; task selectors narrow to routes only).
+    if _group_selected role-models && [ ${#tasks[@]} -eq 0 ]; then
+      for p in "${provs[@]}"; do
+        for r in $AI_MODEL_ROLES; do
+          _excluded role-models "role-model:$p:$r" && continue
+          old="—"; new=""; action="needs-input"; reason="no model configured for $p/$r"
+          local row; row="$(pw_project_role_row "$(proj_dir "$slug")" "$p" "$r" 2>/dev/null || true)"
+          if [ -n "$row" ]; then
+            IFS=$'\t' read -r old var var var <<EOF
+$row
+EOF
+          fi
+          if ! pw_cell_empty "$old" && [ "$replace" = 0 ]; then
+            action="keep"; new="$old"; reason="existing project cell preserved"
+          else
+            # overrides win
+            for override in ${overrides[@]+"${overrides[@]}"}; do
+              _suggest_parse_set "$override"
+              [ "$SUG_KEY" = "role-model.$p.$r" ] || [ "$SUG_KEY" = "role-model:$p:$r" ] || continue
+              new="$SUG_VALUE"; action="$([ "$(pw_cell_or_dash "$old")" = "—" ] && echo add || echo replace)"
+              reason="explicit suggestion override"; found=1
+            done
+            if [ "$found" = 0 ]; then
+              if new="$(_suggest_role_value_from_worker "$p" "$r")"; then
+                action="$([ "$(pw_cell_or_dash "$old")" = "—" ] && echo add || echo replace)"
+                reason="derived from the installed worker default for $p"
+              elif new="$(_suggest_role_value_from_global "$p" "$r")"; then
+                action="$([ "$(pw_cell_or_dash "$old")" = "—" ] && echo add || echo replace)"
+                reason="global initialization cell for $p/$r"
+              else
+                new="—"; action="needs-input"; reason="no verified source; choose a model explicitly"
+              fi
+            fi
+            found=0
+          fi
+          printf '%s\t%s\t%s\t%s\t%s\t%s\n' "role-model:$p:$r" "README.md:Role models" "$old" "$new" "$action" "$reason" >> "$tmp"
+        done
+      done
+    fi
+    # Execution suggestions.
+    if _group_selected execution-suggestions && [ ${#tasks[@]} -eq 0 ]; then
+      local sr
+      for p in "${provs[@]}"; do
+        _excluded execution-suggestions "execution-suggestion:$p" && continue
+        sr="$(pw_project_suggestion_row "$(proj_dir "$slug")" "$p" 2>/dev/null || true)"
+        old="—"; new=""
+        if [ -n "$sr" ]; then old="$(pw_tbl_col "$sr" 2)":$(pw_tbl_col "$sr" 3); fi
+        for override in ${overrides[@]+"${overrides[@]}"}; do
+          _suggest_parse_set "$override"
+          [ "$SUG_KEY" = "execution-suggestion.$p" ] || [ "$SUG_KEY" = "execution-suggestion:$p" ] || continue
+          new="$SUG_VALUE"; found=1
+        done
+        if [ "$found" = 0 ]; then
+          if pw_global_suggestion "$p"; then
+            new="$PW_SUG_PROVIDER:$PW_SUG_MODEL"
+            [ -n "$PW_SUG_SUBAGENT" ] && new="$new[subagent=$PW_SUG_SUBAGENT]"
+          else
+            new="—"; reason="no global suggestion for current provider $p"
+          fi
+        else reason="explicit suggestion override"; fi
+        if [ "$(pw_cell_or_dash "$old")" != "—" ] && [ "$replace" = 0 ]; then
+          action="keep"; [ "$found" = 1 ] && { action="replace"; } || new="$old"
+        elif [ "$(pw_cell_or_dash "$old")" = "—" ] && [ "$new" != "—" ]; then action="add"
+        elif [ "$new" = "—" ]; then action="needs-input"
+        else action="replace"; fi
+        printf '%s\t%s\t%s\t%s\t%s\t%s\n' "execution-suggestion:$p" "README.md:Execution suggestions" "$old" "$new" "$action" "${reason:-execution suggestion}" >> "$tmp"
+        found=0
+      done
+    fi
+    # Task routes: explicit task/current-provider pairs only.
+    if [ ${#tasks[@]} -gt 0 ] && _group_selected execution-routes; then
+      local t
+      for t in "${tasks[@]}"; do
+        pw_task_id_ok "$t" || die "suggest: invalid task id '$t'"
+        [ -f "$(proj_dir "$slug")/task/$t.md" ] || die "suggest: no task file task/$t.md"
+        for cur in "${curs[@]}"; do
+          _excluded execution-routes "execution-route:$t:$cur" && continue
+          local rr; rr="$(pw_task_route_row "$(proj_dir "$slug")/task/$t.md" "$cur" 2>/dev/null || true)"
+          old="—"; new=""
+          if [ -n "$rr" ]; then
+            IFS=$'\t' read -r eprov model sub var var var var <<EOF
+$rr
+EOF
+            old="$eprov:$model"
+          fi
+          for override in ${overrides[@]+"${overrides[@]}"}; do
+            _suggest_parse_set "$override"
+            [ "$SUG_KEY" = "execution-route.$t.$cur" ] || [ "$SUG_KEY" = "execution-route:$t:$cur" ] || continue
+            new="$SUG_VALUE"; found=1
+          done
+          if [ "$found" = 0 ]; then
+            if [ -n "$rr" ]; then
+              action="keep"; new="$old"; reason="existing task route preserved"
+            else
+              new="—"; action="needs-input"; reason="no route; breakdown or an explicit value must choose one"
+            fi
+          else
+            action="$([ "$(pw_cell_or_dash "$old")" = "—" ] && echo add || echo replace)"; reason="explicit suggestion override"
+          fi
+          printf '%s\t%s\t%s\t%s\t%s\t%s\n' "execution-route:$t:$cur" "task/$t.md:Execution routes" "$old" "$new" "$action" "$reason" >> "$tmp"
+          found=0
+        done
+      done
+    fi
+  else
+    # Global initialization cells.
+    if _group_selected role-models; then
+    for p in "${provs[@]}"; do
+      for r in $AI_MODEL_ROLES; do
+        _excluded role-models "role-model:$p:$r" && continue
+        old="—"; new=""
+        if pw_global_role_cell "$p" "$r"; then old="$p:$PW_CELL_MODEL"; fi
+        for override in ${overrides[@]+"${overrides[@]}"}; do
+          _suggest_parse_set "$override"
+          [ "$SUG_KEY" = "role-model.$p.$r" ] || [ "$SUG_KEY" = "role-model:$p:$r" ] || continue
+          new="$SUG_VALUE"; found=1
+        done
+        if [ "$found" = 0 ]; then
+          if legacy="$(pw_project_default_role "$r")" && [ "$legacy" != "—" ]; then
+            case "$legacy" in
+              "$p":*) new="$legacy"; reason="legacy global role seed (migration candidate)" ;;
+              *) new="—"; reason="legacy seed targets another provider; needs input" ;;
+            esac
+          else
+            new="—"; reason="no initialization cell; needs input"
+          fi
+        else reason="explicit suggestion override"; fi
+        if [ "$old" != "—" ] && [ "$replace" = 0 ]; then action="keep"; new="$old"
+        elif [ "$new" = "—" ] || [ -z "$new" ]; then action="needs-input"
+        elif [ "$old" = "—" ]; then action="add"
+        else action="replace"; fi
+        printf '%s\t%s\t%s\t%s\t%s\t%s\n' "role-model:$p:$r" "pw.config.sh managed global" "$old" "$new" "$action" "$reason" >> "$tmp"
+        found=0
+      done
+    done
+    fi
+    if _group_selected execution-suggestions; then
+    for p in "${provs[@]}"; do
+      _excluded execution-suggestions "execution-suggestion:$p" && continue
+      old="—"; new=""
+      if pw_global_suggestion "$p"; then old="$PW_SUG_PROVIDER:$PW_SUG_MODEL"; fi
+      for override in ${overrides[@]+"${overrides[@]}"}; do
+        _suggest_parse_set "$override"
+        [ "$SUG_KEY" = "execution-suggestion.$p" ] || [ "$SUG_KEY" = "execution-suggestion:$p" ] || continue
+        new="$SUG_VALUE"; found=1
+      done
+      if [ "$found" = 0 ] && [ "$old" = "—" ]; then new="—"; reason="no global suggestion; needs input"
+      elif [ "$found" = 0 ]; then new="$old"; reason="existing suggestion preserved"; fi
+      if [ "$old" != "—" ] && [ "$replace" = 0 ]; then action="keep"; new="$old"
+      elif [ "$new" = "—" ] || [ -z "$new" ]; then action="needs-input"
+      elif [ "$old" = "—" ]; then action="add"
+      else action="replace"; fi
+      printf '%s\t%s\t%s\t%s\t%s\t%s\n' "execution-suggestion:$p" "pw.config.sh managed global" "$old" "$new" "$action" "${reason:-explicit suggestion override}" >> "$tmp"
+      found=0
+    done
+    fi
+  fi
+
+  [ -s "$tmp" ] || die "suggest: no configuration rows selected — check --group/--provider/--exclude"
+  local scope_label
+  scope_label="$([ -n "$scope" ] && echo global || echo "$slug")"
+  local id; id="$(pw_proposal_create suggest "$scope_label" "$tmp")" || { rm -f "$tmp"; die "suggest: cannot create the proposal"; }
+  local digest; digest="$(_proposal_scope_digest "$scope_label")"
+  pw_proposal_mark "$id" digest "$digest"
+  rm -f "$tmp"
+
+  if [ "$json" = 1 ]; then
+    printf '{"proposal":"%s","scope":"%s","changes":[' "$id" "$(_json_escape "$scope_label")"
+    local first=1
+    while IFS=$'\t' read -r key owner old new action reason; do
+      [ -n "$key" ] || continue
+      [ "$first" = 1 ] || printf ','
+      first=0
+      printf '{"key":"%s","owner":"%s","old":"%s","new":"%s","action":"%s","reason":"%s"}' \
+        "$(_json_escape "$key")" "$(_json_escape "$owner")" "$(_json_escape "$old")" "$(_json_escape "$new")" \
+        "$(_json_escape "$action")" "$(_json_escape "$reason")"
+    done < "$(pw_proposal_path "$id")/changes"
+    printf ']}\n'
+    return 0
+  fi
+  printf 'pw-config suggest — %s   proposal %s\n' "$scope_label" "$id"
+  printf '  %-10s %-34s %-24s %-24s %s\n' ACTION KEY CURRENT PROPOSED WHY
+  while IFS=$'\t' read -r key owner old new action reason; do
+    [ -n "$key" ] || continue
+    printf '  %-10s %-34s %-24s %-24s %s\n' "$action" "$key" "$old" "$new" "$reason"
+  done < "$(pw_proposal_path "$id")/changes"
+  printf '  apply: /pw-config suggest --apply %s   (re-run to revise; a revision supersedes this proposal)\n' "$id"
+  printf '  preview writes nothing in the project. needs-input rows are never applied.\n'
+}
+
+# --- migrate -----------------------------------------------------------------
+cmd_migrate() {
+  local scope="" slug="" json=0 apply_id="" a v
+  local -a tasks=() curs=()
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --scope=*) v="${a#*=}"; a="--scope" ;;
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --task=*) v="${a#*=}"; a="--task" ;;
+      --current-provider=*) v="${a#*=}"; a="--current-provider" ;;
+      --apply=*) v="${a#*=}"; a="--apply" ;;
+    esac
+    case "$a" in
+      --scope|--project|--task|--current-provider|--apply)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --scope) scope="$v" ;; --project) slug="$v" ;; --task) tasks+=("$v") ;;
+          --current-provider) curs+=("$v") ;; --apply) apply_id="$v" ;; esac ;;
+      --json) json=1 ;;
+      -h|--help) pw_usage ;;
+      -*) _pw_unknown "$a" "migrate [--scope global | --project <slug> [--task T0n --current-provider <p>]] [--apply <id>] [--json]" ;;
+      *) _pw_positional "$a" "migrate [--scope global | --project <slug> …] [--apply <id>]" ;;
+    esac
+  done
+  if [ -n "$apply_id" ]; then _proposal_apply "$apply_id"; return 0; fi
+  [ -n "$scope" ] || [ -n "$slug" ] || die "migrate: --scope global or --project <slug> is required"
+  [ -z "$scope" ] || [ "$scope" = global ] || die "migrate: unknown --scope '$scope' (global)"
+  [ -n "$scope" ] && [ -n "$slug" ] && die "migrate: choose --scope global or --project <slug>"
+  local tmp; tmp="$(mktemp "${TMPDIR:-/tmp}/pwmigrate.XXXXXX")" || die "migrate: cannot create a proposal file"
+  : > "$tmp"
+  local r val prov role old tune variant reasoning effort p
+  if [ -n "$scope" ]; then
+    # Global legacy single-provider seeds -> provider columns.
+    for r in $AI_MODEL_ROLES; do
+      val="$(pw_project_default_role "$r")"
+      [ "$val" = "—" ] && continue
+      case "$val" in
+        *:*) prov="${val%%:*}"; local m="${val#*:}" ;;
+        *) continue ;;
+      esac
+      tune="$(pw_project_default_tuning "$r")"
+      variant="$(_tuning_field "$tune" variant)"; reasoning="$(_tuning_field "$tune" reasoning)"; effort="$(_tuning_field "$tune" effort)"
+      old="—"; if pw_global_role_cell "$prov" "$r"; then old="$prov:$PW_CELL_MODEL"; fi
+      # keep bracket assembly simple and unambiguous
+      local params=""
+      [ -n "$variant" ] && params="variant=$variant"
+      [ -n "$reasoning" ] && params="${params:+$params,}reasoning=$reasoning"
+      [ -n "$effort" ] && params="${params:+$params,}effort=$effort"
+      new="$prov:$m"; [ -n "$params" ] && new="$new[$params]"
+      if [ "$old" != "—" ] && [ "$old" != "$prov:$m" ]; then
+        printf '%s\t%s\t%s\t%s\t%s\t%s\n' "role-model:$prov:$r" "pw.config.sh managed global" "$old" "$new" "blocked" "existing global cell conflicts; choose explicitly" >> "$tmp"
+      elif [ "$old" = "$prov:$m" ]; then
+        printf '%s\t%s\t%s\t%s\t%s\t%s\n' "role-model:$prov:$r" "pw.config.sh managed global" "$old" "$new" "keep" "already migrated" >> "$tmp"
+      else
+        printf '%s\t%s\t%s\t%s\t%s\t%s\n' "role-model:$prov:$r" "pw.config.sh managed global" "—" "$new" "add" "legacy global role seed" >> "$tmp"
+      fi
+    done
+  else
+    local d; d="$(proj_dir "$slug")"
+    local schema; schema="$(pw_project_schema "$d")"
+    case "$schema" in
+      2) echo "$slug: already schema 2 (nothing to migrate)" ;;
+      3) die "migrate: unknown schema marker in $slug/README.md — fix it by hand, then retry" ;;
+      *)
+        local line tune_line
+        line="$(grep -m1 '^- \*\*AI Models:\*\*' "$d/README.md" | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//' || true)"
+        tune_line="$(grep -m1 '^- \*\*AI Model Tuning:\*\*' "$d/README.md" | sed 's/^- \*\*AI Model Tuning:\*\*[[:space:]]*//' || true)"
+        for r in $AI_MODEL_ROLES; do
+          val="—"
+          for kv in $line; do [ "${kv%%=*}" = "$r" ] && val="${kv#*=}"; done
+          case "$val" in —|-|''|multiple) continue ;; esac
+          case "$val" in *:*) prov="${val%%:*}"; m="${val#*:}" ;; *) continue ;; esac
+          tune=""
+          for kv in $tune_line; do [ "${kv%%=*}" = "$r" ] && tune="${kv#*=}"; done
+          variant="$(_tuning_field "$tune" variant)"; reasoning="$(_tuning_field "$tune" reasoning)"; effort="$(_tuning_field "$tune" effort)"
+          params=""
+          [ -n "$variant" ] && params="variant=$variant"
+          [ -n "$reasoning" ] && params="${params:+$params,}reasoning=$reasoning"
+          [ -n "$effort" ] && params="${params:+$params,}effort=$effort"
+          new="$prov:$m"; [ -n "$params" ] && new="$new[$params]"
+          printf '%s\t%s\t%s\t%s\t%s\t%s\n' "role-model:$prov:$r" "README.md:Role models" "—" "$new" "add" "legacy project role row" >> "$tmp"
+        done
+        printf '%s\t%s\t%s\t%s\t%s\t%s\n' "schema:project" "README.md" "1" "2" "add" "add the schema marker and configuration section" >> "$tmp"
+        # Legacy task pins -> explicit task routes, only for the selected providers.
+        local t cur tf pin eprov m2 keys
+        if [ ${#tasks[@]} -gt 0 ]; then
+          for t in "${tasks[@]}"; do
+            pw_task_id_ok "$t" || die "migrate: invalid task id '$t'"
+            tf="$d/task/$t.md"
+            [ -f "$tf" ] || die "migrate: no task file task/$t.md"
+            if [ "$(pw_task_schema "$tf")" = 2 ]; then continue; fi
+            pin="$(pw_field "$tf" "Execute with" || true)"
+            case "$pin" in
+              *:*) eprov="${pin%%:*}"; m2="${pin#*:}" ;;
+              *) eprov=""; m2="" ;;
+            esac
+            for cur in "${curs[@]}"; do
+              if [ -z "$m2" ]; then
+                printf '%s\t%s\t%s\t%s\t%s\t%s\n' "execution-route:$t:$cur" "task/$t.md:Execution routes" "—" "—" "blocked" "legacy pin has no concrete provider:model; choose a target" >> "$tmp"
+              else
+                printf '%s\t%s\t%s\t%s\t%s\t%s\n' "execution-route:$t:$cur" "task/$t.md:Execution routes" "—" "$eprov:$m2" "add" "legacy task pin" >> "$tmp"
+              fi
+            done
+          done
+        elif ls "$d"/task/T*.md >/dev/null 2>&1; then
+          printf '%s\t%s\t%s\t%s\t%s\t%s\n' "note:task-routes" "task/" "—" "—" "needs-input" "select --task and --current-provider to migrate legacy task pins" >> "$tmp"
+        fi ;;
+    esac
+  fi
+  [ -s "$tmp" ] || die "migrate: nothing to convert"
+  local label; label="$([ -n "$scope" ] && echo global || echo "$slug")"
+  local id; id="$(pw_proposal_create migrate "$label" "$tmp")" || { rm -f "$tmp"; die "migrate: cannot create the proposal"; }
+  pw_proposal_mark "$id" digest "$(_proposal_scope_digest "$label")"
+  rm -f "$tmp"
+  if [ "$json" = 1 ]; then
+    printf '{"proposal":"%s","scope":"%s","changes":[' "$id" "$(_json_escape "$label")"
+    local first=1
+    while IFS=$'\t' read -r key owner old new action reason; do
+      [ -n "$key" ] || continue
+      [ "$first" = 1 ] || printf ','
+      first=0
+      printf '{"key":"%s","old":"%s","new":"%s","action":"%s","reason":"%s"}' \
+        "$(_json_escape "$key")" "$(_json_escape "$old")" "$(_json_escape "$new")" "$(_json_escape "$action")" "$(_json_escape "$reason")"
+    done < "$(pw_proposal_path "$id")/changes"
+    printf ']}\n'; return 0
+  fi
+  printf 'pw-config migrate — %s   proposal %s\n' "$label" "$id"
+  printf '  %-10s %-38s %-18s %-28s %s\n' ACTION KEY CURRENT PROPOSED WHY
+  while IFS=$'\t' read -r key owner old new action reason; do
+    [ -n "$key" ] || continue
+    printf '  %-10s %-38s %-18s %-28s %s\n' "$action" "$key" "$old" "$new" "$reason"
+  done < "$(pw_proposal_path "$id")/changes"
+  printf '  apply: /pw-config migrate --apply %s\n' "$id"
+}
+
+# Materialize a route for the current provider on tasks that only carry the legacy scalar pin.
+# Idempotent: a task that already has that key is skipped. Never invents a model.
+cmd_sync_routes() {
+  local slug="" cur="" preview=0 json=0 a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --current-provider=*) v="${a#*=}"; a="--current-provider" ;;
+    esac
+    case "$a" in
+      --project|--current-provider)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --current-provider) cur="$v" ;; esac ;;
+      --preview) preview=1 ;;
+      --json) json=1 ;;
+      -h|--help) pw_usage ;;
+      *) die "sync-routes: unknown argument '$a' → fix: sync-routes --project <slug> [--current-provider <p>] [--preview] [--json]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "sync-routes: --project is required"
+  local d; d="$(proj_dir "$slug")"
+  _project_require_schema2 "$d" "sync-routes"
+  [ -n "$cur" ] || cur="$(_plan_value "$d/task/PLAN.md" "Produced by" 2>/dev/null || true)"
+  if [ -z "$cur" ] && [ "${#PW_PROVIDERS[@]}" = 1 ]; then cur="${PW_PROVIDERS[0]}"; fi
+  [ -n "$cur" ] || die "sync-routes: --current-provider is required (PLAN has no '- **Produced by:**')"
+  pw_provider_enabled "$cur" || die "sync-routes: current provider '$cur' is not enabled"
+  local tf tid pin ep em action applied=0 skipped=0 blocked=0
+  for tf in "$d"/task/T*.md; do
+    [ -e "$tf" ] || continue
+    tid="$(basename "$tf" .md)"
+    if pw_tbl_get "$tf" "Execution routes" 1 "$(pw_cfg_lc "$cur")" >/dev/null 2>&1; then
+      skipped=$((skipped+1)); continue
+    fi
+    pin="$(pw_field "$tf" "Execute with" 2>/dev/null || true)"
+    case "$pin" in
+      *:*:*) die "sync-routes: $tid 'Execute with' is '$pin' — a prose pin cannot become a route; pick one provider:model" ;;
+      *:*)
+        ep="${pin%%:*}"; em="${pin#*:}"
+        if [ "$ep" = "multi" ] || [ -z "$ep" ] || [ -z "$em" ]; then
+          action="blocked"
+        else action="add"; fi ;;
+      *) action="blocked" ;;
+    esac
+    if [ "$action" = "blocked" ]; then
+      blocked=$((blocked+1))
+      printf '%s %s — blocked: no concrete provider:model in Execute with\n' "$tid" "$cur" >&2
+      continue
+    fi
+    if [ "$preview" = 1 ]; then
+      printf '%s %s -> %s:%s (preview)\n' "$tid" "$cur" "$ep" "$em"
+    else
+      _project_route_apply "$slug" "$tid" "$cur" "$ep" "$em" "" "" "" "" "" >/dev/null
+      applied=$((applied+1))
+    fi
+  done
+  if [ "$json" = 1 ]; then
+    printf '{"project":"%s","current_provider":"%s","applied":%s,"skipped":%s,"blocked":%s}\n' \
+      "$(_json_escape "$slug")" "$(_json_escape "$cur")" "$applied" "$skipped" "$blocked"
+  else
+    printf '%s: sync-routes %s — %s applied, %s already present, %s blocked\n' "$slug" "$cur" "$applied" "$skipped" "$blocked"
+  fi
+  [ "$blocked" = 0 ] || return 1
+}
+
+
 cmd_show() {
   local slug="" json=0 a v
   while [ $# -gt 0 ]; do
@@ -1119,8 +2112,25 @@ cmd_show() {
     if [ "$v" != "—" ]; then
       for kv in $tune; do [ "${kv%%=*}" = "$r" ] && v="$v ($(printf '%s' "${kv#*=}" | tr ',' ' '))"; done
     fi
-    _row "ai-model.$r" config "$v" "README.md:AI Models" "provider/session default"
+    _row "ai-model.$r" config "$v" "README.md:AI Models (derived)" "provider/session default"
   done
+  local _schema; _schema="$(pw_project_schema "$d")"
+  if [ "$_schema" = 2 ]; then
+    local _p _rr _m _v1 _v2 _v3
+    while IFS=$'\t' read -r _p _rr _m _v1 _v2 _v3; do
+      [ -n "${_rr:-}" ] || continue
+      _row "role-model.$_p.$_rr" config "$(pw_cell_or_dash "$_m")" "README.md:Role models" "native provider default"
+    done <<EOF
+$(pw_tbl_rows "$readme" "Role models")
+EOF
+    local _c _e2 _m2 _s2 _x1 _x2 _x3 _x4
+    while IFS=$'\t' read -r _c _e2 _m2 _s2 _x1 _x2 _x3 _x4; do
+      [ -n "${_c:-}" ] || continue
+      _row "execution-suggestion.$_c" config "$_e2:$_m2" "README.md:Execution suggestions" "suggestion only — never dispatch"
+    done <<EOF
+$(pw_tbl_rows "$readme" "Execution suggestions")
+EOF
+  fi
   line="$(grep -m1 '^- \*\*AI Review:\*\*' "$readme" | sed 's/^- \*\*AI Review:\*\*[[:space:]]*//' || true)"
   for p in $AI_REVIEW_PHASES; do
     v="—"
@@ -1166,7 +2176,16 @@ cmd_show() {
       [ -e "$f" ] || continue
       t="$(basename "$f" .md)"
       v="$(pw_field "$f" "Execute with")"; [ -n "$v" ] || v="—"
-      _row "pin.$t" config "$v" "task/$t.md:Execute with" "—"
+      _row "pin.$t" config "$v" "task/$t.md:Execute with (derived)" "—"
+      if [ "$(pw_task_schema "$f")" = 2 ]; then
+        local _rc _re _rm
+        while IFS=$'\t' read -r _rc _re _rm _v _v _v _v; do
+          [ -n "${_rc:-}" ] || continue
+          _row "execution-route.$t.$_rc" config "$_re:$_rm" "task/$t.md:Execution routes" "required — no fallback"
+        done <<EOF
+$(pw_tbl_rows "$f" "Execution routes")
+EOF
+      fi
       v="$(pw_field "$f" Effort)"; [ -n "$v" ] && _row "effort.$t" config "$v" "task/$t.md:Effort" "provider/session default"
       v="$(pw_field "$f" Thinking)"; [ -n "$v" ] && _row "thinking.$t" config "$v" "task/$t.md:Thinking" "provider/session default"
       v="$(pw_field "$f" Route)"; [ -n "$v" ] && _row "route.$t" config "$v" "task/$t.md:Route" "PLAN/env"
@@ -1187,7 +2206,14 @@ cmd_show() {
       first=0
       printf '{"key":"%s","kind":"%s","stored":"%s","source":"%s","effective":"%s"}' "$k" "$p" "$v" "$s" "$e"
     done <<< "$rows"
-    printf '],"ai_model":%s}\n' "$(_ai_model_json "$readme" | tr -d '\n')"
+    if [ "$(pw_project_schema "$d")" = 2 ]; then
+      printf '],"ai_model":%s,"role_models":%s,"execution_suggestions":%s}\n' \
+        "$(_ai_model_json "$readme" | tr -d '\n')" \
+        "$(_role_models_json "$readme" | tr -d '\n')" \
+        "$(_suggestions_json "$readme" | tr -d '\n')"
+    else
+      printf '],"ai_model":%s}\n' "$(_ai_model_json "$readme" | tr -d '\n')"
+    fi
     return 0
   fi
   printf 'pw-config show — %s   (config = get/set knob · state/data = derived fact, show-only)\n' "$slug"
@@ -1196,7 +2222,7 @@ cmd_show() {
     [ -n "$k" ] || continue
     printf '  %-24s %-6s %-28s %-26s %s\n' "$k" "$p" "$v" "$s" "$e"
   done <<< "$rows"
-  printf '  settable keys: routing[auto|subagent|headless] execution-limit[int 0..99] max-parallel[int 1..99] produced-by[from PW_PROVIDERS] ai-review[surface=advisory|auto|all=…] ai-model[role=provider:model|—] pin[T0n=provider:model|—] rfc-target[ref] review-trigger[surface=manual|completion|all=…] review-repair[surface=manual|bounded|all=…] review-rounds[int 1..3]\n'
+  printf '  settable keys: routing[auto|subagent|headless] execution-limit[int 0..99] max-parallel[int 1..99] produced-by[from PW_PROVIDERS] ai-review[surface=advisory|auto|all=…] ai-model[role=provider:model|—] pin[T0n=provider:model|—] rfc-target[ref] review-trigger[surface=manual|completion|all=…] review-repair[surface=manual|bounded|all=…] review-rounds[int 1..3] role-model[provider+role+model] execution-suggestion[current-provider+execution-provider+model] execution-route[task+current-provider]\n'
   printf '  show-only (flows derive them; set refuses): status · adopted · base-branches · landing-units\n'
   if [ "$legacy_off" = 1 ]; then
     printf '  note: legacy AI Review off row(s) read as effective advisory — persist with: /pw-config ensure --project %s\n' "$slug"
@@ -1204,7 +2230,7 @@ cmd_show() {
   return 0
 }
 
-cmd_get() {
+_cmd_get_legacy() {
   local slug="" key="" a v json=0
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
@@ -1293,8 +2319,8 @@ _pwstage="$(pw_tmpfile "$(dirname "$tf")")" || return 1;   awk -v v="$val" '!w &
     || die "pin: PLAN 'Execute with' cell write failed for $tid (see above) — the PLAN task-table row must exist; repair the PLAN doc, then re-run"
 }
 
-cmd_set() {
-  local slug="" key="" val="" hasval=0 a v s
+_cmd_set_legacy() {
+  local slug="" key="" val="" hasval=0 a v s cur_hint=""
   local variant="" reasoning="" effort="" tuning_given=0
   local -a sets; sets=()
   while [ $# -gt 0 ]; do
@@ -1307,8 +2333,12 @@ cmd_set() {
       --variant=*) v="${a#*=}"; a="--variant" ;;
       --reasoning=*) v="${a#*=}"; a="--reasoning" ;;
       --effort=*)  v="${a#*=}"; a="--effort" ;;
+      --current-provider=*) v="${a#*=}"; a="--current-provider" ;;
     esac
     case "$a" in
+      --current-provider)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing --current-provider; v="$1"; shift; }
+        cur_hint="$v" ;;
       --project|--key|--value)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
         case "$a" in
@@ -1359,7 +2389,12 @@ cmd_set() {
   [ -n "$effort" ] && tuneflags+=(--effort "$effort")
   case "$key" in
     ai-review)      cmd_ai_review    --project "$slug" ${setflags[@]+"${setflags[@]}"} ;;
-    ai-model)       cmd_ai_model     --project "$slug" ${setflags[@]+"${setflags[@]}"} ${tuneflags[@]+"${tuneflags[@]}"} ;;
+    ai-model)
+      if [ "$(pw_project_schema "$d")" = 2 ]; then
+        _legacy_ai_model_apply "$slug" "$variant" "$reasoning" "$effort" "${sets[@]}"
+      else
+        cmd_ai_model --project "$slug" ${setflags[@]+"${setflags[@]}"} ${tuneflags[@]+"${tuneflags[@]}"}
+      fi ;;
     review-trigger) cmd_review_trigger --project "$slug" ${setflags[@]+"${setflags[@]}"} ;;
     review-repair)  cmd_review_repair  --project "$slug" ${setflags[@]+"${setflags[@]}"} ;;
     review-rounds)  cmd_review_rounds  --project "$slug" --value "$val" ;;
@@ -1377,9 +2412,29 @@ cmd_set() {
                    || die "pin: no PLAN task-table row for $_tid — repair the PLAN doc first (rows are /pw-breakdown's)"
                  _model_pin_validate "pin '$_tid=$_val'" "$_val"
                done
-               for _pair in "${sets[@]}"; do
-                 _pin_propagate "$d" "$plan" "${_pair%%=*}" "${_pair#*=}"
-               done
+               if [ "$(pw_project_schema "$d")" = 2 ]; then
+                 local _curp="$cur_hint"
+                 [ -n "$_curp" ] || _curp="$(_plan_value "$plan" "Produced by")"
+                 if [ -z "$_curp" ] && [ "${#PW_PROVIDERS[@]}" = 1 ]; then _curp="${PW_PROVIDERS[0]}"; fi
+                 [ -n "$_curp" ] || die "pin: schema-2 project needs --current-provider (or PLAN '- **Produced by:**') to key the execution route"
+                 pw_provider_enabled "$_curp" || die "pin: current provider '$_curp' is not enabled"
+                 local _v _ep _em
+                 for _pair in "${sets[@]}"; do
+                   _tid="${_pair%%=*}"; _v="${_pair#*=}"
+                   if [ "$_v" = "—" ] || [ "$_v" = "-" ]; then
+                     _project_route_unset "$slug" "$_tid" "$_curp"
+                   elif case "$_v" in *:*) false ;; *) true ;; esac; then
+                     die "pin: schema-2 task routes need a concrete <provider:model> (got '$_v') → fix: /pw-config set --project $slug --key execution-route --task $_tid --current-provider $_curp --execution-provider <p> --model <model>"
+                   else
+                     _ep="${_v%%:*}"; _em="${_v#*:}"
+                     _project_route_apply "$slug" "$_tid" "$_curp" "$_ep" "$_em" "" "" "" "" ""
+                   fi
+                 done
+               else
+                 for _pair in "${sets[@]}"; do
+                   _pin_propagate "$d" "$plan" "${_pair%%=*}" "${_pair#*=}"
+                 done
+               fi
                if [ ${#sets[@]} -eq 1 ]; then
                  "$ST" log --project "$slug" --actor "config" --message "pin ${sets[0]%%=*} -> ${sets[0]#*=} (task file + PLAN cell)"
                  echo "$slug: pin ${sets[0]%%=*} -> ${sets[0]#*=}"
@@ -1424,6 +2479,283 @@ cmd_set() {
   case "$key" in
     ai-review|ai-model|pin|rfc-target|review-trigger|review-repair|review-rounds) : ;;   # those writers log their own change line
     *) "$ST" log --project "$slug" --actor "config" --message "$key -> $val" ;;
+  esac
+}
+
+
+# Legacy `ai-model` compatibility on schema-2 projects: write the provider-by-role cells.
+# The alias clears by inferring the single populated provider; ambiguity is refused.
+_legacy_ai_model_apply() { # <slug> <variant> <reasoning> <effort> <role=value>…
+  local slug="$1" variant="$2" reasoning="$3" effort="$4"; shift 4
+  local d s role value prov n rows
+  d="$(proj_dir "$slug")"
+  for s in "$@"; do
+    case "$s" in *=*) ;; *) die "ai-model: --set expects <role>=<provider:model|—>, got '$s'" ;; esac
+    role="${s%%=*}"; value="${s#*=}"
+    pw_role_valid "$role" || die "ai-model: unknown role '$role' (allowed: $(pw_role_names | tr '\n' ' '))"
+    if [ "$value" = "—" ] || [ "$value" = "-" ]; then
+      local -a provs=()
+      rows="$(pw_tbl_rows "$d/README.md" "Role models")"
+      while IFS=$'\t' read -r prov role2 value2 _ _ _; do
+        [ -n "${role2:-}" ] || continue
+        [ "$role2" = "$role" ] || continue
+        pw_cell_empty "$value2" && continue
+        provs+=("$prov")
+      done <<EOF
+$rows
+EOF
+      n=${#provs[@]}
+      if [ "$n" -eq 0 ]; then echo "$slug: role-model $role already empty"; continue; fi
+      [ "$n" -eq 1 ] || die "ai-model: role '$role' is set for several providers (${provs[*]}) — clear one explicitly with /pw-config unset --project $slug --key role-model --provider <p> --role $role"
+      _project_role_apply "$slug" "${provs[0]}" "$role" "—" "" "" ""
+    else
+      case "$value" in *:*) prov="${value%%:*}"; value="${value#*:}" ;; *) die "ai-model: expected <provider:model>, got '$s'" ;; esac
+      _project_role_apply "$slug" "$prov" "$role" "$value" "$variant" "$reasoning" "$effort"
+    fi
+  done
+}
+
+# --- public wrappers for the schema-2 keys -----------------------------------
+# The legacy handlers above keep their exact grammar. These wrappers route the new
+# keys to the table writers and leave every legacy key untouched.
+_key_of_args() { # <args…> -> value of --key (no consumption)
+  local a prev=""
+  for a in "$@"; do
+    case "$a" in --key=*) printf '%s' "${a#*=}"; return 0 ;; esac
+    [ "$prev" = --key ] && { printf '%s' "$a"; return 0; }
+    prev="$a"
+  done
+  return 0
+}
+
+cmd_get() {
+  local key; key="$(_key_of_args "$@")"
+  case "$key" in
+    role-model|execution-suggestion|execution-route) ;;
+    *) _cmd_get_legacy "$@"; return $? ;;
+  esac
+  local slug="" prov="" role="" cur="" task="" json=0 a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --provider=*) v="${a#*=}"; a="--provider" ;;
+      --role=*) v="${a#*=}"; a="--role" ;;
+      --current-provider=*) v="${a#*=}"; a="--current-provider" ;;
+      --task=*) v="${a#*=}"; a="--task" ;;
+    esac
+    case "$a" in
+      --project|--provider|--role|--current-provider|--task)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --provider) prov="$v" ;; --role) role="$v" ;;
+          --current-provider) cur="$v" ;; --task) task="$v" ;; esac ;;
+      --key) [ $# -ge 1 ] && shift ;;
+      --json) json=1 ;;
+      -h|--help) pw_usage ;;
+      *) die "get: unknown argument '$a' → fix: get --project <slug> --key $key [selectors] [--json]" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "get: --project is required"
+  local d; d="$(proj_dir "$slug")"; local readme="$d/README.md"
+  [ -f "$readme" ] || die "get: no README.md in project $slug"
+  case "$key" in
+    role-model)
+      _project_require_schema2 "$d" "get role-model"
+      [ -n "$prov" ] && ! pw_provider_enabled "$prov" && die "get role-model: provider '$prov' is not enabled"
+      [ -n "$role" ] && ! pw_role_valid "$role" && die "get role-model: unknown role '$role'"
+      if [ "$json" = 1 ]; then _role_models_json "$readme" "$(pw_cfg_lc "$prov")" "$role"; return 0; fi
+      local rows p r model var var2 var3 found=0
+      rows="$(pw_tbl_rows "$readme" "Role models")"
+      while IFS=$'\t' read -r p r model var var2 var3; do
+        [ -n "${r:-}" ] || continue
+        [ -z "$prov" ] || [ "$p" = "$(pw_cfg_lc "$prov")" ] || continue
+        [ -z "$role" ] || [ "$r" = "$role" ] || continue
+        found=1
+        if [ -z "$prov" ] && [ -z "$role" ]; then
+          printf '%s %s %s\n' "$p" "$r" "$(pw_cell_or_dash "$model")"
+        else
+          printf '%s' "$(pw_cell_or_dash "$model")"
+          [ "$(pw_cell_or_dash "$model")" = "—" ] || {
+            case "$var" in —|'') ;; *) printf ' variant:%s' "$var" ;; esac
+            case "$var2" in —|'') ;; *) printf ' reasoning:%s' "$var2" ;; esac
+            case "$var3" in —|'') ;; *) printf ' effort:%s' "$var3" ;; esac
+          }
+          printf '\n'
+        fi
+      done <<EOF
+$rows
+EOF
+      [ "$found" = 1 ] || printf '(no matching role-model row — native provider default)\n'
+      ;;
+    execution-suggestion)
+      _project_require_schema2 "$d" "get execution-suggestion"
+      if [ "$json" = 1 ]; then _suggestions_json "$readme" "$(pw_cfg_lc "$cur")"; return 0; fi
+      local rows c e m s v1 v2 v3 t found=0
+      rows="$(pw_tbl_rows "$readme" "Execution suggestions")"
+      while IFS=$'\t' read -r c e m s v1 v2 v3 t; do
+        [ -n "${c:-}" ] || continue
+        [ -z "$cur" ] || [ "$c" = "$(pw_cfg_lc "$cur")" ] || continue
+        found=1
+        if [ -z "$cur" ]; then printf '%s %s:%s\n' "$c" "$e" "$m"
+        else printf '%s:%s\n' "$e" "$m"; fi
+      done <<EOF
+$rows
+EOF
+      [ "$found" = 1 ] || printf '(no execution suggestion%s — suggestion only, never dispatch)\n' "${cur:+ for $cur}"
+      ;;
+    execution-route)
+      [ -n "$task" ] || die "get execution-route: --task is required → fix: get --project <slug> --key execution-route --task T01 [--current-provider <p>] [--json]"
+      pw_task_id_ok "$task" || die "get execution-route: invalid task id '$task'"
+      local tf="$d/task/$task.md"
+      [ -f "$tf" ] || die "get execution-route: no task file task/$task.md"
+      if [ "$json" = 1 ]; then _routes_json "$tf" "$(pw_cfg_lc "$cur")"; return 0; fi
+      local rr c2 e2 m2 s2 x1 x2 x3 t2 found=0
+      rr="$(pw_tbl_rows "$tf" "Execution routes")"
+      while IFS=$'\t' read -r c2 e2 m2 s2 x1 x2 x3 t2; do
+        [ -n "${c2:-}" ] || continue
+        [ -z "$cur" ] || [ "$c2" = "$(pw_cfg_lc "$cur")" ] || continue
+        found=1
+        if [ -z "$cur" ]; then printf '%s %s:%s\n' "$c2" "$e2" "$m2"
+        else printf '%s:%s\n' "$e2" "$m2"; fi
+      done <<EOF
+$rr
+EOF
+      [ "$found" = 1 ] || printf '(no route for provider %s — dispatch is blocked)\n' "${cur:-<any>}"
+      ;;
+  esac
+}
+
+cmd_set() {
+  local key; key="$(_key_of_args "$@")"
+  case "$key" in
+    role-model|execution-suggestion|execution-route) ;;
+    *) _cmd_set_legacy "$@"; return $? ;;
+  esac
+  local slug="" prov="" role="" cur="" eprov="" model="" subagent="" task="" variant="" reasoning="" effort="" thinking=""
+  local apply_id="" preview=0 tuning_given=0 a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --provider=*) v="${a#*=}"; a="--provider" ;;
+      --role=*) v="${a#*=}"; a="--role" ;;
+      --current-provider=*) v="${a#*=}"; a="--current-provider" ;;
+      --execution-provider=*) v="${a#*=}"; a="--execution-provider" ;;
+      --model=*) v="${a#*=}"; a="--model" ;;
+      --subagent=*) v="${a#*=}"; a="--subagent" ;;
+      --task=*) v="${a#*=}"; a="--task" ;;
+      --variant=*) v="${a#*=}"; a="--variant" ;;
+      --reasoning=*) v="${a#*=}"; a="--reasoning" ;;
+      --effort=*) v="${a#*=}"; a="--effort" ;;
+      --thinking=*) v="${a#*=}"; a="--thinking" ;;
+      --apply=*) v="${a#*=}"; a="--apply" ;;
+    esac
+    case "$a" in
+      --project|--provider|--role|--current-provider|--execution-provider|--model|--subagent|--task|--apply)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in
+          --project) slug="$v" ;; --provider) prov="$v" ;; --role) role="$v" ;;
+          --current-provider) cur="$v" ;; --execution-provider) eprov="$v" ;;
+          --model) model="$v" ;; --subagent) subagent="$v" ;; --task) task="$v" ;; --apply) apply_id="$v" ;;
+        esac ;;
+      --variant|--reasoning|--effort|--thinking)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --variant) variant="$v" ;; --reasoning) reasoning="$v" ;; --effort) effort="$v" ;; --thinking) thinking="$v" ;; esac
+        tuning_given=1 ;;
+      --key) [ $# -ge 1 ] && shift ;;
+      --preview) preview=1 ;;
+      -h|--help) pw_usage ;;
+      *) die "set: unknown argument '$a' → fix: set --project <slug> --key $key …" ;;
+    esac
+  done
+  if [ -n "$apply_id" ]; then
+    [ -z "$slug" ] || : # the proposal carries its own scope
+    _proposal_apply "$apply_id"; return 0
+  fi
+  [ -n "$slug" ] || die "set: --project is required"
+  case "$key" in
+    role-model)
+      [ -n "$prov" ] || die "set role-model: --provider is required"
+      [ -n "$role" ] || die "set role-model: --role is required"
+      [ -n "$model" ] || die "set role-model: --model is required (use '—' to clear)"
+      if [ "$preview" = 1 ]; then
+        local tmp; tmp="$(mktemp "${TMPDIR:-/tmp}/pwroute.XXXXXX")"
+        local pv="$prov:$model" pparams=""
+        [ -n "$variant" ] && pparams="variant=$variant"
+        [ -n "$reasoning" ] && pparams="${pparams:+$pparams,}reasoning=$reasoning"
+        [ -n "$effort" ] && pparams="${pparams:+$pparams,}effort=$effort"
+        [ -n "$pparams" ] && pv="$pv[$pparams]"
+        printf '%s\t%s\t%s\t%s\t%s\t%s\n' "role-model:$prov:$role" "README.md:Role models" "—" "$pv" "add" "preview" > "$tmp"
+        local id; id="$(pw_proposal_create route "$slug" "$tmp")"; rm -f "$tmp"
+        pw_proposal_mark "$id" digest "$(_proposal_scope_digest "$slug")"
+        printf 'proposal %s — apply: /pw-config set --project %s --key role-model --apply %s\n' "$id" "$slug" "$id"
+        return 0
+      fi
+      _project_role_apply "$slug" "$prov" "$role" "$model" "$variant" "$reasoning" "$effort" ;;
+    execution-suggestion)
+      [ -n "$cur" ] || die "set execution-suggestion: --current-provider is required"
+      [ -n "$eprov" ] || die "set execution-suggestion: --execution-provider is required"
+      [ -n "$model" ] || die "set execution-suggestion: --model is required"
+      _project_suggestion_apply "$slug" "$cur" "$eprov" "$model" "$subagent" "$variant" "$reasoning" "$effort" "$thinking" ;;
+    execution-route)
+      [ -n "$task" ] || die "set execution-route: --task is required"
+      [ -n "$cur" ] || die "set execution-route: --current-provider is required"
+      [ -n "$eprov" ] || die "set execution-route: --execution-provider is required"
+      [ -n "$model" ] || die "set execution-route: --model is required"
+      if [ "$preview" = 1 ]; then
+        local tmp; tmp="$(mktemp "${TMPDIR:-/tmp}/pwroute.XXXXXX")"
+        local pv="$eprov:$model" pparams=""
+        [ -n "$subagent" ] && pparams="subagent=$subagent"
+        [ -n "$variant" ] && pparams="${pparams:+$pparams,}variant=$variant"
+        [ -n "$reasoning" ] && pparams="${pparams:+$pparams,}reasoning=$reasoning"
+        [ -n "$effort" ] && pparams="${pparams:+$pparams,}effort=$effort"
+        [ -n "$thinking" ] && pparams="${pparams:+$pparams,}thinking=$thinking"
+        [ -n "$pparams" ] && pv="$pv[$pparams]"
+        printf '%s\t%s\t%s\t%s\t%s\t%s\n' "execution-route:$task:$cur" "task/$task.md:Execution routes" "—" "$pv" "add" "preview" > "$tmp"
+        local id; id="$(pw_proposal_create route "$slug" "$tmp")"; rm -f "$tmp"
+        pw_proposal_mark "$id" digest "$(_proposal_scope_digest "$slug")"
+        printf 'proposal %s — apply: /pw-config set --project %s --key execution-route --apply %s\n' "$id" "$slug" "$id"
+        return 0
+      fi
+      _project_route_apply "$slug" "$task" "$cur" "$eprov" "$model" "$subagent" "$variant" "$reasoning" "$effort" "$thinking" ;;
+  esac
+}
+
+cmd_unset() {
+  local key; key="$(_key_of_args "$@")"
+  case "$key" in role-model|execution-suggestion|execution-route) ;; *)
+    die "unset: only role-model, execution-suggestion, and execution-route support project unset (got '${key:-<none>}') → fix: legacy review axes are cleared with their set forms" ;; esac
+  local slug="" prov="" role="" cur="" task="" a v
+  while [ $# -gt 0 ]; do
+    a="$1"; shift; v=""
+    case "$a" in
+      --project=*) v="${a#*=}"; a="--project" ;;
+      --provider=*) v="${a#*=}"; a="--provider" ;;
+      --role=*) v="${a#*=}"; a="--role" ;;
+      --current-provider=*) v="${a#*=}"; a="--current-provider" ;;
+      --task=*) v="${a#*=}"; a="--task" ;;
+    esac
+    case "$a" in
+      --project|--provider|--role|--current-provider|--task)
+        [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
+        case "$a" in --project) slug="$v" ;; --provider) prov="$v" ;; --role) role="$v" ;;
+          --current-provider) cur="$v" ;; --task) task="$v" ;; esac ;;
+      --key) [ $# -ge 1 ] && shift ;;
+      -h|--help) pw_usage ;;
+      *) die "unset: unknown argument '$a'" ;;
+    esac
+  done
+  [ -n "$slug" ] || die "unset: --project is required"
+  case "$key" in
+    role-model)
+      [ -n "$prov" ] && [ -n "$role" ] || die "unset role-model: --provider and --role are required"
+      _project_role_unset "$slug" "$prov" "$role" ;;
+    execution-suggestion)
+      [ -n "$cur" ] || die "unset execution-suggestion: --current-provider is required"
+      _project_suggestion_unset "$slug" "$cur" ;;
+    execution-route)
+      [ -n "$task" ] && [ -n "$cur" ] || die "unset execution-route: --task and --current-provider are required"
+      _project_route_unset "$slug" "$task" "$cur" ;;
   esac
 }
 
@@ -1511,7 +2843,7 @@ cmd_ensure() {
 # One `global` operator family. Machine floors stay read-only here beyond the reusable project
 # defaults below; the latter live in one bounded, managed assignment block at the end of the same
 # pw.config.sh, so there is no second config file and no live inheritance for existing projects.
-GLOBAL_PROJECT_KEYS="ai-model ai-review review-trigger review-repair review-rounds routing execution-limit max-parallel"
+GLOBAL_PROJECT_KEYS="ai-model ai-review review-trigger review-repair review-rounds routing execution-limit max-parallel role-model execution-suggestion"
 _GLOBAL_BEGIN='# >>> pw global project defaults (managed by /pw-config global; do not hand-edit) >>>'
 _GLOBAL_END='# <<< pw global project defaults <<<'
 
@@ -1561,7 +2893,7 @@ _global_block_vars() { # -> one VAR=value per managed assignment (empty when no 
   awk -v b="$_GLOBAL_BEGIN" -v e="$_GLOBAL_END" '
     $0 == b { inb = 1; next }
     $0 == e { inb = 0; next }
-    inb && /^(PW_PROJECT_DEFAULT_[A-Z0-9_]+|PW_[A-Z0-9_]+_AGENT_MODELS_[A-Z0-9_]+)=/ { print }' "$f"
+    inb && /^(PW_PROJECT_DEFAULT_[A-Z0-9_]+|PW_PROJECT_ROLE_[A-Z0-9_]+|PW_PROJECT_EXECUTION_SUGGESTION_[A-Z0-9_]+|PW_[A-Z0-9_]+_AGENT_MODELS_[A-Z0-9_]+)=/ { print }' "$f"
 }
 
 # --- write transaction: lock, stale-read detection, symlink refusal, portable mode ----------
@@ -1676,11 +3008,14 @@ _global_write_block() { # <VAR=value>… — rewrite the managed block, preservi
         done
       done
     done
-    # Provider-by-worker model defaults: one managed assignment per provider/agent cell.
-    # Print in managed-block order (not shell-expanded), so unrelated future assignments survive.
+    # Provider-by-role cells, execution suggestions, and provider-by-worker cells:
+    # print in managed-block order (not shell-expanded), so future assignments survive.
     for line in "$@"; do
       var="${line%%=*}"
-      case "$var" in PW_[A-Z0-9_]*_AGENT_MODELS_[A-Z0-9_]*) ;; *) continue ;; esac
+      case "$var" in
+        PW_PROJECT_ROLE_[A-Z0-9_]*|PW_PROJECT_EXECUTION_SUGGESTION_[A-Z0-9_]*|PW_[A-Z0-9_]*_AGENT_MODELS_[A-Z0-9_]*) ;;
+        *) continue ;;
+      esac
       v="${line#*=}"; v="${v#\"}"; v="${v%\"}"
       printf '%s="%s"\n' "$var" "$v"
     done
@@ -2133,12 +3468,45 @@ _global_effective() { # <key> -> effective configured/fallback string
         [ -n "$axis" ] && out="$out ($axis)"
       done
       printf '%s' "$out" ;;
+    role-model)
+      out=""
+      local _rp
+      for _rp in "${PW_PROVIDERS[@]}"; do
+        for r in $(pw_role_names); do
+          if pw_global_role_cell "$_rp" "$r"; then out="$out${out:+, }$_rp/$r=$PW_CELL_MODEL"
+          else out="$out${out:+, }$_rp/$r=—"; fi
+        done
+      done
+      printf '%s' "$out" ;;
+    execution-suggestion)
+      out=""
+      local _cp
+      for _cp in "${PW_PROVIDERS[@]}"; do
+        if pw_global_suggestion "$_cp"; then out="$out${out:+, }$_cp=$PW_SUG_PROVIDER:$PW_SUG_MODEL"
+        else out="$out${out:+, }$_cp=—"; fi
+      done
+      printf '%s' "$out" ;;
     *) return 1 ;;
   esac
 }
 
 _global_source() { # <key>
-  local var; var="$(_global_key_var "$1" 2>/dev/null || true)"
+  local var
+  case "$1" in
+    role-model)
+      local _p _r _v
+      for _p in "${PW_PROVIDERS[@]}"; do for _r in $(pw_role_names); do
+        _v="$(pw_role_cell_var "$_p" "$_r" MODEL)"
+        if [ -n "${!_v:-}" ]; then printf 'pw.config.sh managed global'; return 0; fi
+      done; done
+      printf 'built-in (empty cells = native provider default)'; return 0 ;;
+    execution-suggestion)
+      for _p in "${PW_PROVIDERS[@]}"; do
+        if pw_global_suggestion "$_p"; then printf 'pw.config.sh managed global'; return 0; fi
+      done
+      printf 'built-in (no suggestion)'; return 0 ;;
+  esac
+  var="$(_global_key_var "$1" 2>/dev/null || true)"
   if [ -n "$var" ] && [ -n "${!var:-}" ]; then printf 'pw.config.sh managed global'; else printf 'built-in / legacy fallback'; fi
 }
 
@@ -2256,19 +3624,21 @@ cmd_global_show() { # [--json]
   done
 }
 
-cmd_global_get() { # --key <k> [--provider <p> --agent <name>] [--json]
-  local key="" json=0 a v prov="" agent=""
+cmd_global_get() { # --key <k> [--provider <p>] [--agent <name>] [--role <r>] [--current-provider <p>] [--json]
+  local key="" json=0 a v prov="" agent="" role="" cur=""
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
-    case "$a" in --key=*) v="${a#*=}"; a="--key" ;; --provider=*) v="${a#*=}"; a="--provider" ;; --agent=*) v="${a#*=}"; a="--agent" ;; esac
+    case "$a" in --key=*) v="${a#*=}"; a="--key" ;; --provider=*) v="${a#*=}"; a="--provider" ;; --agent=*) v="${a#*=}"; a="--agent" ;;
+      --role=*) v="${a#*=}"; a="--role" ;; --current-provider=*) v="${a#*=}"; a="--current-provider" ;; esac
     case "$a" in
-      --key|--provider|--agent)
+      --key|--provider|--agent|--role|--current-provider)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
-        case "$a" in --key) key="$v" ;; --provider) prov="$v" ;; --agent) agent="$v" ;; esac ;;
+        case "$a" in --key) key="$v" ;; --provider) prov="$v" ;; --agent) agent="$v" ;;
+          --role) role="$v" ;; --current-provider) cur="$v" ;; esac ;;
       --json) json=1 ;;
       -h|--help) pw_usage ;;
-      -*) _pw_unknown "$a" "global get --key <key> [--provider <p> --agent <name>] [--json]   (keys: $GLOBAL_PROJECT_KEYS or agent-model)" ;;
-      *) _pw_positional "$a" "global get --key <key> [--provider <p> --agent <name>] [--json]   (keys: $GLOBAL_PROJECT_KEYS or agent-model)" ;;
+      -*) _pw_unknown "$a" "global get --key <key> [--provider <p> --agent <name>] [--role <r>] [--current-provider <p>] [--json]   (keys: $GLOBAL_PROJECT_KEYS or agent-model)" ;;
+      *) _pw_positional "$a" "global get --key <key> [--provider <p> --agent <name>] [--role <r>] [--current-provider <p>] [--json]" ;;
     esac
   done
   [ -n "$key" ] || die "global get: --key is required → fix: global get --key <key>   (keys: $GLOBAL_PROJECT_KEYS or agent-model)"
@@ -2277,6 +3647,36 @@ cmd_global_get() { # --key <k> [--provider <p> --agent <name>] [--json]
       || die "global get agent-model: --provider and --agent are required → fix: global get --key agent-model --provider <p> --agent <pw-name>"
     if [ "$json" = 1 ]; then cmd_agent_model --provider "$prov" --agent "$agent" --json
     else cmd_agent_model --provider "$prov" --agent "$agent"; fi
+    return 0
+  fi
+  if [ "$key" = role-model ]; then
+    local p0 r0 any=0
+    if [ -n "$prov" ] && [ -n "$role" ]; then
+      if pw_global_role_cell "$prov" "$role"; then printf '%s:%s\n' "$(pw_cfg_lc "$prov")" "$PW_CELL_MODEL"
+      else printf '(unset — native provider default)\n'; fi
+      return 0
+    fi
+    for p0 in "${PW_PROVIDERS[@]}"; do
+      for r0 in $AI_MODEL_ROLES; do
+        [ -z "$prov" ] || [ "$p0" = "$prov" ] || continue
+        [ -z "$role" ] || [ "$r0" = "$role" ] || continue
+        any=1
+        if pw_global_role_cell "$p0" "$r0"; then printf '%s %s %s\n' "$p0" "$r0" "$PW_CELL_MODEL"
+        else printf '%s %s —\n' "$p0" "$r0"; fi
+      done
+    done
+    [ "$any" = 1 ] || printf '(no matching provider/role)\n'
+    return 0
+  fi
+  if [ "$key" = execution-suggestion ]; then
+    local p1 any=0
+    for p1 in "${PW_PROVIDERS[@]}"; do
+      [ -z "$cur" ] || [ "$p1" = "$cur" ] || continue
+      any=1
+      if pw_global_suggestion "$p1"; then printf '%s %s:%s\n' "$p1" "$PW_SUG_PROVIDER" "$PW_SUG_MODEL"
+      else printf '%s —\n' "$p1"; fi
+    done
+    [ "$any" = 1 ] || printf '(no matching current provider)\n'
     return 0
   fi
   case " $GLOBAL_PROJECT_KEYS " in *" $key "*) ;; *) die "global get: unknown key '$key' (keys: $GLOBAL_PROJECT_KEYS or agent-model)" ;; esac
@@ -2291,7 +3691,7 @@ cmd_global_get() { # --key <k> [--provider <p> --agent <name>] [--json]
 }
 
 cmd_global_set() { # --key <k> [--value <v> | --set <member=value>]… [--variant/--reasoning/--effort]
-  local key="" val="" hasval=0 a v variant="" reasoning="" effort="" tuning_given=0 prov="" agent=""
+  local key="" val="" hasval=0 a v variant="" reasoning="" effort="" thinking="" tuning_given=0 prov="" agent="" role="" cur="" eprov="" model="" subagent=""
   local -a sets; sets=()
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
@@ -2304,9 +3704,15 @@ cmd_global_set() { # --key <k> [--value <v> | --set <member=value>]… [--varian
       --variant=*) v="${a#*=}"; a="--variant" ;;
       --reasoning=*) v="${a#*=}"; a="--reasoning" ;;
       --effort=*) v="${a#*=}"; a="--effort" ;;
+      --thinking=*) v="${a#*=}"; a="--thinking" ;;
+      --role=*) v="${a#*=}"; a="--role" ;;
+      --current-provider=*) v="${a#*=}"; a="--current-provider" ;;
+      --execution-provider=*) v="${a#*=}"; a="--execution-provider" ;;
+      --model=*) v="${a#*=}"; a="--model" ;;
+      --subagent=*) v="${a#*=}"; a="--subagent" ;;
     esac
     case "$a" in
-      --key|--value|--set|--provider|--agent|--variant|--reasoning|--effort)
+      --key|--value|--set|--provider|--agent|--variant|--reasoning|--effort|--thinking|--role|--current-provider|--execution-provider|--model|--subagent)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
         case "$a" in
           --key) key="$v" ;; --value) val="$v"; hasval=1 ;; --set) sets+=("$v") ;;
@@ -2314,6 +3720,9 @@ cmd_global_set() { # --key <k> [--value <v> | --set <member=value>]… [--varian
           --variant) variant="$v"; tuning_given=1 ;;
           --reasoning) reasoning="$v"; tuning_given=1 ;;
           --effort) effort="$v"; tuning_given=1 ;;
+          --thinking) thinking="$v"; tuning_given=1 ;;
+          --role) role="$v" ;; --current-provider) cur="$v" ;; --execution-provider) eprov="$v" ;;
+          --model) model="$v" ;; --subagent) subagent="$v" ;;
         esac ;;
       -h|--help) pw_usage ;;
       -*) _pw_unknown "$a" "global set --key <key> [--value <v> | --set <member=value>]…   (keys: $GLOBAL_PROJECT_KEYS or agent-model)" ;;
@@ -2321,6 +3730,22 @@ cmd_global_set() { # --key <k> [--value <v> | --set <member=value>]… [--varian
     esac
   done
   [ -n "$key" ] || die "global set: --key is required → fix: global set --key <key> [--value <v> | --set <member=value>]…   (keys: $GLOBAL_PROJECT_KEYS or agent-model)"
+  if [ "$key" = role-model ]; then
+    [ -n "$prov" ] && [ -n "$role" ] && [ -n "$model" ] \
+      || die "global set role-model: --provider, --role, and --model are required → fix: global set --key role-model --provider <p> --role <role> --model <model|—> [--variant …]"
+    [ ${#sets[@]} -eq 0 ] || die "global set role-model: takes selectors, not --set pairs"
+    [ "$hasval" = 0 ] || die "global set role-model: takes --model, not --value"
+    _global_role_apply "$prov" "$role" "$model" "$variant" "$reasoning" "$effort"
+    return 0
+  fi
+  if [ "$key" = execution-suggestion ]; then
+    [ -n "$cur" ] && [ -n "$eprov" ] && [ -n "$model" ] \
+      || die "global set execution-suggestion: --current-provider, --execution-provider, and --model are required"
+    [ ${#sets[@]} -eq 0 ] || die "global set execution-suggestion: takes selectors, not --set pairs"
+    [ "$hasval" = 0 ] || die "global set execution-suggestion: takes --model, not --value"
+    _global_suggestion_apply "$cur" "$eprov" "$model" "$subagent" "$variant" "$reasoning" "$effort" "$thinking"
+    return 0
+  fi
   if [ "$key" = agent-model ]; then
     [ -n "$prov" ] && [ -n "$agent" ] \
       || die "global set agent-model: --provider and --agent are required → fix: global set --key agent-model --provider <p> --agent <pw-name> --value <spec|—>"
@@ -2407,21 +3832,34 @@ cmd_global_set() { # --key <k> [--value <v> | --set <member=value>]… [--varian
   echo "  applies to NEW projects only; existing projects keep captured values (/pw-config set --project <slug> changes one project)."
 }
 
-cmd_global_unset() { # --key <k> [--provider <p> --agent <name>]
-  local key="" prov="" agent="" a v
+cmd_global_unset() { # --key <k> [--provider <p>] [--agent <name>] [--role <r>] [--current-provider <p>]
+  local key="" prov="" agent="" role="" cur="" a v
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
-    case "$a" in --key=*) v="${a#*=}"; a="--key" ;; --provider=*) v="${a#*=}"; a="--provider" ;; --agent=*) v="${a#*=}"; a="--agent" ;; esac
+    case "$a" in --key=*) v="${a#*=}"; a="--key" ;; --provider=*) v="${a#*=}"; a="--provider" ;;
+      --agent=*) v="${a#*=}"; a="--agent" ;; --role=*) v="${a#*=}"; a="--role" ;;
+      --current-provider=*) v="${a#*=}"; a="--current-provider" ;; esac
     case "$a" in
-      --key|--provider|--agent)
+      --key|--provider|--agent|--role|--current-provider)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
-        case "$a" in --key) key="$v" ;; --provider) prov="$v" ;; --agent) agent="$v" ;; esac ;;
+        case "$a" in --key) key="$v" ;; --provider) prov="$v" ;; --agent) agent="$v" ;;
+          --role) role="$v" ;; --current-provider) cur="$v" ;; esac ;;
       -h|--help) pw_usage ;;
       -*) _pw_unknown "$a" "global unset --key <key> [--provider <p> --agent <name>]   (keys: $GLOBAL_PROJECT_KEYS or agent-model)" ;;
       *) _pw_positional "$a" "global unset --key <key> [--provider <p> --agent <name>]   (keys: $GLOBAL_PROJECT_KEYS or agent-model)" ;;
     esac
   done
-  [ -n "$key" ] || die "global unset: --key is required → fix: global unset --key <key> [--provider <p> --agent <name>]"
+  [ -n "$key" ] || die "global unset: --key is required → fix: global unset --key <key> [selectors]"
+  if [ "$key" = role-model ]; then
+    [ -n "$prov" ] && [ -n "$role" ] || die "global unset role-model: --provider and --role are required"
+    _global_role_apply "$prov" "$role" "—" "" "" ""
+    return 0
+  fi
+  if [ "$key" = execution-suggestion ]; then
+    [ -n "$cur" ] || die "global unset execution-suggestion: --current-provider is required"
+    _global_suggestion_unset "$cur"
+    return 0
+  fi
   if [ "$key" = agent-model ]; then
     [ -n "$prov" ] && [ -n "$agent" ] \
       || die "global unset agent-model: --provider and --agent are required → fix: global unset --key agent-model --provider <p> --agent <pw-name>"
@@ -2504,8 +3942,8 @@ _json_array() { # <arg>…
   printf '[%s]' "$out"
 }
 
-cmd_spawn_args() { # [--project <slug>] (--role <role> | --agent <pw-name>) [--provider <p>] [--json]
-  local slug="" role="" agent="" prov_hint="" a v json=0
+cmd_spawn_args() { # (--role <role> | --agent <pw-name> | --task <T0n>) [--project <slug>] [--provider <p>] [--current-provider <p>] [--json]
+  local slug="" role="" agent="" prov_hint="" cur_hint="" task="" a v json=0 route_subagent="" route_thinking=""
   while [ $# -gt 0 ]; do
     a="$1"; shift; v=""
     case "$a" in
@@ -2513,24 +3951,50 @@ cmd_spawn_args() { # [--project <slug>] (--role <role> | --agent <pw-name>) [--p
       --role=*)    v="${a#*=}"; a="--role" ;;
       --agent=*)   v="${a#*=}"; a="--agent" ;;
       --provider=*) v="${a#*=}"; a="--provider" ;;
+      --current-provider=*) v="${a#*=}"; a="--current-provider" ;;
+      --task=*)    v="${a#*=}"; a="--task" ;;
     esac
     case "$a" in
-      --project|--role|--agent|--provider)
+      --project|--role|--agent|--provider|--current-provider|--task)
         [ -n "$v" ] || { [ $# -ge 1 ] || _pw_missing "$a"; v="$1"; shift; }
         case "$a" in
           --project) slug="$v" ;; --role) role="$v" ;;
           --agent) agent="$v" ;; --provider) prov_hint="$v" ;;
+          --current-provider) cur_hint="$v" ;; --task) task="$v" ;;
         esac ;;
       --json) json=1 ;;
       -h|--help) pw_usage ;;
-      -*) _pw_unknown "$a" "spawn-args [--project <slug>] (--role <role> | --agent <name>) [--provider <p>] [--json]   (roles: $AI_MODEL_ROLES)" ;;
-      *) _pw_positional "$a" "spawn-args [--project <slug>] (--role <role> | --agent <name>) [--provider <p>] [--json]" ;;
+      -*) _pw_unknown "$a" "spawn-args (--role <role> | --agent <name> | --task <T0n>) [--project <slug>] [--provider <p>] [--current-provider <p>] [--json]   (roles: $AI_MODEL_ROLES)" ;;
+      *) _pw_positional "$a" "spawn-args (--role <role> | --agent <name> | --task <T0n>) [--project <slug>] [--provider <p>] [--current-provider <p>] [--json]" ;;
     esac
   done
-  [ -n "$role" ] || [ -n "$agent" ] || die "spawn-args: --role or --agent is required → fix: spawn-args --project <slug> --role <role> | spawn-args --provider <p> --agent <pw-name>   (roles: $AI_MODEL_ROLES)"
-  if [ -n "$role" ] && [ -n "$agent" ]; then die "spawn-args: --role and --agent are mutually exclusive"; fi
+  [ -n "$role" ] || [ -n "$agent" ] || [ -n "$task" ] || die "spawn-args: --role, --agent, or --task is required → fix: spawn-args --project <slug> --role <role> | spawn-args --project <slug> --task T01 --current-provider <p>"
+  local _sel=0; [ -n "$role" ] && _sel=$((_sel+1)); [ -n "$agent" ] && _sel=$((_sel+1)); [ -n "$task" ] && _sel=$((_sel+1))
+  [ "$_sel" = 1 ] || die "spawn-args: choose exactly one of --role, --agent, --task"
   local f="" line="" tune="" binding="—" tuning="" prov="" model="" variant="" reasoning="" effort="" kv source="default"
-  if [ -n "$agent" ]; then
+  if [ -n "$task" ]; then
+    [ -n "$slug" ] || die "spawn-args: --project is required with --task"
+    [ -n "$cur_hint" ] || die "spawn-args: --current-provider is required with --task (the route is keyed by the provider running this operation)"
+    pw_task_id_ok "$task" || die "spawn-args: invalid task id '$task'"
+    local _tf; _tf="$(proj_dir "$slug")/task/$task.md"
+    [ -f "$_tf" ] || die "spawn-args: no task file task/$task.md"
+    local _route; _route="$(pw_task_route_row "$_tf" "$cur_hint" 2>/dev/null || true)"
+    if [ -z "$_route" ]; then
+      if [ "$(pw_task_schema "$_tf")" = 2 ] || [ "$(pw_project_schema "$(proj_dir "$slug")")" = 2 ]; then
+        die "spawn-args: task $task has no execution route for current provider '$cur_hint' → dispatch blocked (add one with /pw-config set --project $slug --key execution-route --task $task --current-provider $cur_hint …)"
+      fi
+      die "spawn-args: task $task has no '## Execution routes' section → fix: migrate it (schema 1 project) or add a route"
+    fi
+    IFS=$'\t' read -r prov model route_subagent variant reasoning effort route_thinking <<EOF
+$_route
+EOF
+    if pw_cell_empty "$route_subagent"; then route_subagent=""; fi
+    if pw_cell_empty "$variant"; then variant=""; fi
+    if pw_cell_empty "$reasoning"; then reasoning=""; fi
+    if pw_cell_empty "$effort"; then effort=""; fi
+    [ -n "$prov" ] && [ -n "$model" ] || die "spawn-args: task route for $task/$cur_hint has no execution provider/model → dispatch blocked"
+    source="task-route"
+  elif [ -n "$agent" ]; then
     _worker_agent_known "$agent" || die "spawn-args: unknown canonical worker '$agent' → fix: use one of: $(pw_canonical_agent_names | tr '\n' ' ')"
     [ -n "$prov_hint" ] || die "spawn-args: --provider is required with --agent (worker defaults are provider-specific)"
     _worker_provider_enabled "$prov_hint" || die "spawn-args: provider '$prov_hint' is not enabled (${PW_PROVIDERS[*]})"
@@ -2548,6 +4012,31 @@ cmd_spawn_args() { # [--project <slug>] (--role <role> | --agent <pw-name>) [--p
     [ -n "$slug" ] || die "spawn-args: --project is required with --role → fix: spawn-args --project <slug> --role <role>"
     f="$(proj_dir "$slug")/README.md"
     [ -f "$f" ] || die "spawn-args: no README.md in project $slug"
+    if [ "$(pw_project_schema "$(proj_dir "$slug")")" = 2 ]; then
+      local _curp="$prov_hint"; [ -n "$_curp" ] || _curp="$cur_hint"
+      [ -n "$_curp" ] || [ -n "${PW_CURRENT_PROVIDER:-}" ] && [ -z "$_curp" ] && _curp="$PW_CURRENT_PROVIDER"
+      if [ -z "$_curp" ]; then
+        if [ "${#PW_PROVIDERS[@]}" = 1 ]; then _curp="${PW_PROVIDERS[0]}"
+        else die "spawn-args: schema-2 project needs --provider (or --current-provider) to select the role column (PW_PROVIDERS: ${PW_PROVIDERS[*]})"; fi
+      fi
+      pw_provider_enabled "$_curp" || die "spawn-args: provider '$_curp' is not enabled (PW_PROVIDERS: ${PW_PROVIDERS[*]})"
+      local _rr; _rr="$(pw_project_role_row "$(proj_dir "$slug")" "$_curp" "$role" 2>/dev/null || true)"
+      prov="$_curp"; model=""; variant=""; reasoning=""; effort=""
+      if [ -n "$_rr" ]; then
+        IFS=$'\t' read -r model variant reasoning effort <<EOF
+$_rr
+EOF
+        if pw_cell_empty "$variant"; then variant=""; fi
+        if pw_cell_empty "$reasoning"; then reasoning=""; fi
+        if pw_cell_empty "$effort"; then effort=""; fi
+        if pw_cell_empty "$model"; then model=""; variant=""; reasoning=""; effort=""; source="native-default"
+        else source="project-table"; fi
+      else
+        source="project-table-missing"
+      fi
+      binding="—"
+      [ -n "$model" ] && binding="$prov:$model"
+    else
     line="$(grep -m1 '^- \*\*AI Models:\*\*' "$f" 2>/dev/null | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//' || true)"
     tune="$(grep -m1 '^- \*\*AI Model Tuning:\*\*' "$f" 2>/dev/null | sed 's/^- \*\*AI Model Tuning:\*\*[[:space:]]*//' || true)"
     binding="—"
@@ -2577,6 +4066,7 @@ cmd_spawn_args() { # [--project <slug>] (--role <role> | --agent <pw-name>) [--p
       fi
       [ -n "$model" ] || binding="—"
     fi
+    fi
   fi
   # Canonicalize the exact id the provider CLI must receive (the same availability gate the driver
   # runs before spawning). "unverified" prose is not a canonical id, so the stored value stays.
@@ -2598,7 +4088,9 @@ cmd_spawn_args() { # [--project <slug>] (--role <role> | --agent <pw-name>) [--p
   fi
   local -a args; args=()
   local supported=1 reason="" route="native" effective_prov="$prov" effective_model="$model" preset_cursor=0
-  if [ -z "$prov" ]; then
+  if [ -n "$prov" ] && [ -z "$model" ] && [ "$source" = "native-default" ]; then
+    supported=1; reason="empty project cell: native provider default (no model argument)"
+  elif [ -z "$prov" ]; then
     supported=1; reason="unbound: provider/session default"
   else
     case "$prov" in
@@ -2635,13 +4127,13 @@ cmd_spawn_args() { # [--project <slug>] (--role <role> | --agent <pw-name>) [--p
     esac
   fi
   if [ "$json" = 1 ]; then
-    printf '{"role":"%s","agent":"%s","provider":"%s","model":"%s","variant":"%s","reasoning":"%s","effort":"%s","route":"%s","source":"%s","supported":%s,"reason":"%s","args":%s}\n' \
-      "$(_json_escape "$role")" "$(_json_escape "$agent")" "$(_json_escape "$effective_prov")" "$(_json_escape "$effective_model")" \
+    printf '{"role":"%s","agent":"%s","task":"%s","subagent":"%s","provider":"%s","model":"%s","variant":"%s","reasoning":"%s","effort":"%s","route":"%s","source":"%s","supported":%s,"reason":"%s","args":%s}\n' \
+      "$(_json_escape "$role")" "$(_json_escape "$agent")" "$(_json_escape "$task")" "$(_json_escape "$route_subagent")" "$(_json_escape "$effective_prov")" "$(_json_escape "$effective_model")" \
       "$(_json_escape "$variant")" "$(_json_escape "$reasoning")" "$(_json_escape "$effort")" "$route" "$source" \
       "$([ "$supported" = 1 ] && echo true || echo false)" "$(_json_escape "$reason")" "$(_json_array ${args[@]+"${args[@]}"})"
   else
-    printf 'role: %s\nagent: %s\nprovider: %s\nmodel: %s\nvariant: %s\nreasoning: %s\neffort: %s\nsource: %s\nsupported: %s\nreason: %s\n' \
-      "$role" "$agent" "$effective_prov" "$effective_model" "$variant" "$reasoning" "$effort" "$source" "$([ "$supported" = 1 ] && echo yes || echo no)" "${reason:-exact binding}"
+    printf 'role: %s\nagent: %s\ntask: %s\nsubagent: %s\nprovider: %s\nmodel: %s\nvariant: %s\nreasoning: %s\neffort: %s\nsource: %s\nsupported: %s\nreason: %s\n' \
+      "$role" "$agent" "$task" "$route_subagent" "$effective_prov" "$effective_model" "$variant" "$reasoning" "$effort" "$source" "$([ "$supported" = 1 ] && echo yes || echo no)" "${reason:-exact binding}"
     local arg
     for arg in ${args[@]+"${args[@]}"}; do printf 'arg: %s\n' "$arg"; done
   fi
@@ -2665,6 +4157,10 @@ case "${1:-}" in
   show)          shift; cmd_show "$@" ;;
   get)           shift; cmd_get "$@" ;;
   set)           shift; cmd_set "$@" ;;
+  unset)         shift; cmd_unset "$@" ;;
+  suggest)       shift; cmd_suggest "$@" ;;
+  migrate)       shift; cmd_migrate "$@" ;;
+  sync-routes)   shift; cmd_sync_routes "$@" ;;
   ensure)        shift; cmd_ensure "$@" ;;
   materialize)   shift; cmd_materialize "$@" ;;
   global)        shift; cmd_global "$@" ;;
@@ -2677,12 +4173,41 @@ case "${1:-}" in
   agent-model-set) shift; cmd_agent_model_set "$@" ;;
   agent-model-unset) shift; cmd_agent_model_unset "$@" ;;
   agent-models)  shift; cmd_agent_models "$@" ;;
-  ai-model)      shift; _dep_note ai-model "set --project <slug> --key ai-model --set <role=value>…"; cmd_ai_model "$@" ;;
+  ai-model)
+    shift; _dep_note ai-model "set --project <slug> --key ai-model --set <role=value>…"
+    _am_slug=""; _am_variant=""; _am_reasoning=""; _am_effort=""; _am_sets=()
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --project=*) _am_slug="${1#*=}"; shift ;;
+        --project) _am_slug="$2"; shift 2 ;;
+        --variant=*) _am_variant="${1#*=}"; shift ;;
+        --variant) _am_variant="$2"; shift 2 ;;
+        --reasoning=*) _am_reasoning="${1#*=}"; shift ;;
+        --reasoning) _am_reasoning="$2"; shift 2 ;;
+        --effort=*) _am_effort="${1#*=}"; shift ;;
+        --effort) _am_effort="$2"; shift 2 ;;
+        --set=*) _am_sets+=("${1#*=}"); shift ;;
+        --set) _am_sets+=("$2"); shift 2 ;;
+        --json) shift ;;
+        *) break ;;
+      esac
+    done
+    if [ -n "$_am_slug" ] && [ ${#_am_sets[@]} -gt 0 ] && [ "$(pw_project_schema "$(proj_dir "$_am_slug")")" = 2 ]; then
+      _legacy_ai_model_apply "$_am_slug" "$_am_variant" "$_am_reasoning" "$_am_effort" "${_am_sets[@]}"
+    else
+      _am_args=()
+      [ -n "$_am_slug" ] && _am_args+=(--project "$_am_slug")
+      [ -n "$_am_variant" ] && _am_args+=(--variant "$_am_variant")
+      [ -n "$_am_reasoning" ] && _am_args+=(--reasoning "$_am_reasoning")
+      [ -n "$_am_effort" ] && _am_args+=(--effort "$_am_effort")
+      for _am_s in ${_am_sets[@]+"${_am_sets[@]}"}; do _am_args+=(--set "$_am_s"); done
+      cmd_ai_model "${_am_args[@]}"
+    fi ;;
   ai-review)     shift; _dep_note ai-review "set --project <slug> --key ai-review --set <surface>=<mode>…"; cmd_ai_review "$@" ;;
   review-trigger) shift; _dep_note review-trigger "set --project <slug> --key review-trigger --set <surface>=<value>…"; cmd_review_trigger "$@" ;;
   review-repair)  shift; _dep_note review-repair "set --project <slug> --key review-repair --set <surface>=<value>…"; cmd_review_repair "$@" ;;
   review-rounds)  shift; _dep_note review-rounds "set --project <slug> --key review-rounds --value <n>"; cmd_review_rounds "$@" ;;
   project) die "the 'project' operator was flattened → fix: use show|get|set|ensure --project <slug> (see --help)" ;;
   -h|--help) pw_usage ;;
-  *) die "usage: pw-config.sh <show|get|set|ensure|materialize|global|validate-defaults|spawn-args|model-check|model-resolve|models|agent-model|agent-model-set|agent-model-unset|agent-models|ai-model|ai-review|review-trigger|review-repair|review-rounds> … (see --help)" ;;
+  *) die "usage: pw-config.sh <show|get|set|unset|ensure|materialize|global|validate-defaults|spawn-args|model-check|model-resolve|models|agent-model|agent-model-set|agent-model-unset|agent-models|suggest|migrate|sync-routes|ai-model|ai-review|review-trigger|review-repair|review-rounds> … (see --help)" ;;
 esac

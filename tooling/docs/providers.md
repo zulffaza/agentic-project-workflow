@@ -164,7 +164,8 @@ sync by whoever maintains the bundle, not something you edit here to change beha
     order** on a `<canonical-catalog-id>`, never a sub-agent name. Two related kilo facts from the
     same probe session (`kilo agent list` / `kilo debug agent <name>`): an `agent/*.md` file with
     `mode:` + `options:` registers on its own (no map block needed), and a `model:` line *in that md*
-    binds — outranking a `kilo.jsonc` map block if both set it. So a dashboard `- **AI Models:**` row
+    binds — outranking a `kilo.jsonc` map block if both set it. So a project Role models cell in the
+kilo column
     can reach kilo's md path without any user-config edit once `render_kilo_agent` prints a canonical
     `model:`. `<canonical-catalog-id>` is the exact line `kilo models` prints — resolve a row's model
     to it with `pw-config.sh model-resolve --provider kilo --model <model-id>` (it also enforces the
@@ -246,7 +247,18 @@ $PW_HOME/tooling/scripts/entities/pw-config.sh spawn-args --project <slug> \
 The write validates the optional provider prefix, model availability, the allowlist, and the
 provider's tuning capability before one managed assignment is published. Generation renders only
 fields the definition format supports; other parameterization stays an invocation-time binding.
-A worker default does not override a project role row or a task pin. Codex has no seeded agent
+A worker default does not override a schema-2 project role cell or a task execution route. It
+governs generated definitions only.
+
+Task execution is keyed by the provider running the operation. Resolve the route before spawning:
+
+```bash
+$PW_HOME/tooling/scripts/entities/pw-config.sh spawn-args --project <slug> \
+  --task T01 --current-provider cursor --json
+```
+
+A missing row for the current provider is a refusal, not a fallback. The route names the execution
+provider and a mandatory model; `Execute with:` is only a derived summary. Codex has no seeded agent
 definitions, so it has no worker cells. Fixer procedure entries are not workers.
 
 ## Choosing a model — no fixed roster, model-agnostic by default
