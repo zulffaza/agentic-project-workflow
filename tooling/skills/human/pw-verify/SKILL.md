@@ -21,11 +21,18 @@ a note (a prose flag — it runs until the next `--flag` token).
 
 You are handed **one target of verification**, **one
 question to answer** (does this change actually do what its verify block / commit claim, against
-real state — build/test/lint/behavior where runnable), and the model row for the `verifier` lane
-(`pw-config.sh get --project <slug> --key ai-model --json` if a dashboard exists — use its complete
-provider/model/tuning binding, and `pw-config.sh spawn-args --project <slug> --role verifier` for the
-provider's argument array; unset = provider default; stop when the route cannot bind the tuning; record
-`Model used:` where your provider can report it).
+real state — build/test/lint/behavior where runnable), and the model row for the `verifier` lane.
+When a project dashboard exists, read the cell for the provider running this verification with
+`pw-config.sh get --project <slug> --key role-model --provider <current-provider> --role verifier --json`,
+then resolve the provider-native arguments with
+`pw-config.sh spawn-args --project <slug> --role verifier --provider <current-provider>`. Stop when
+the route cannot bind the stored tuning. With no dashboard, use the provider's native default and
+do not invent a model row. Record `Model used:` where your provider can report it.
+
+Task-associated verification uses the task's `## Execution routes` row for the current provider
+(`spawn-args --project <slug> --task <T0n> --current-provider <current-provider>`), while keeping a
+fresh context. Standalone verification has no task identity: it requires an explicit verification
+target from this operation and must never borrow or invent a task route.
 
 Rules (this is the stand-alone lane, *not* an executor's self-check):
 - **Fresh context is the point.** You received a seed (scope + pointers), not the producer's chat.

@@ -26,7 +26,8 @@ completion contract.
 
 - Invocation/attempt id, project, task, repository, branch, owned worktree, effective target branch.
 - Pinned start/task/target SHAs and the recorded conflict manifest.
-- Execution pin and model/tuning binding; exclusive ownership.
+- Task route for the actual current provider (execution provider, model, subagent, tuning) resolved
+  before dispatch — no fallback to another row, role cell, or `Produced by`; exclusive ownership.
 - Authorization: plain push allowed, owner decisions already obtained, CI policy.
 - Repair receipt and remaining allowance; prior publication/reconciliation state.
 

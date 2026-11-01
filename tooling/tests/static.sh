@@ -523,7 +523,7 @@ static_t4() {
   local lane_missing="" lane
   for lane in skills/human/pw-analyze/SKILL.md skills/human/pw-breakdown/SKILL.md \
               skills/human/pw-verify/SKILL.md skills/model/pw-guide-workflow/references/mr-comments.md; do
-    grep -q 'get --project <slug> --key ai-model --json' "$TOOL/$lane" \
+    grep -q 'get --project <slug> --key role-model' "$TOOL/$lane" \
       && grep -q 'spawn-args' "$TOOL/$lane" || lane_missing="$lane_missing $lane"
   done
   [ -z "$lane_missing" ] && pwtest_ok "T4: lane consumers use structured binding + spawn-args" \

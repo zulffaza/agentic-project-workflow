@@ -209,9 +209,11 @@ Values: auto | subagent | headless.
    NO  → headless session of the other provider's CLI, on the CANONICAL id model-resolve
          printed (`-m` gets the exact catalog line, never the raw row text — the `kilo/` prefix
          on it marks the GATEWAY-nested line vs a direct provider's `alibaba-token-plan/<m>`);
-         RESUME first iff a recorded `Session:` id exists AND
-         `pw-session.sh session-check --provider <provider> --session <id>` exits 0 ("live" is script-decided, never
-         agent-guessed; exit 2 reads as not-resumable) AND the row is unchanged since recorded.
+          RESUME first iff a recorded `Session:` id exists AND
+          `pw-session.sh session-check --provider <provider> --session <id>` exits 0 ("live" is script-decided, never
+          agent-guessed; exit 2 reads as not-resumable) AND the recorded attempt identity matches
+          the resolved route (provider, canonical model, tuning, procedure). A schema-2 task with
+          no `Actually used:` identity is not resumable even when a provider session file exists.
 2. Route overrides:
    subagent — force in-process; error if row provider ≠ orchestrator provider; model-degraded
               recorded when applicable.

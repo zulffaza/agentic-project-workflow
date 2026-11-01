@@ -99,8 +99,9 @@ pw_project_default_value() {
 pw_project_default_role() {
   local u; u="$(printf '%s' "$1" | tr '[:lower:]-' '[:upper:]_')"
   local v="PW_PROJECT_DEFAULT_AI_MODEL_${u}_MODEL"
-  local legacy="PW_AI_MODEL_DEFAULT_${u}"
-  if [ -n "${!v:-}" ]; then printf '%s' "${!v}"; else printf '%s' "${!legacy:-—}"; fi
+  # The legacy PW_AI_MODEL_DEFAULT_<ROLE> fallback is retired: it is reported in migration
+  # diagnostics but never used at runtime or during creation.
+  printf '%s' "${!v:-—}"
 }
 pw_project_default_tuning() {
   local u; u="$(printf '%s' "$1" | tr '[:lower:]-' '[:upper:]_')"

@@ -29,7 +29,8 @@ Refuse to edit if any required item is missing or stale:
 - Invocation/attempt id, MR identity, contributing tasks, repository, branch, owned worktree.
 - Assigned comments with original text and feedback revisions; the validated analyst artifact.
 - Approved fix groups and their order; analysis prerequisite evidence.
-- Task execution pin, model/tuning binding, exclusive session/source ownership.
+- Task route for the actual current provider (execution provider, model, subagent, tuning) resolved
+  before dispatch — no fallback to another row, role cell, or `Produced by`; exclusive session/source ownership.
 - Authorization: push allowed or not, `--resolve` policy, `--skip-build-check`, description ownership.
 - Existing remote effects: posted reply ids, pending delivery, repair receipts and remaining budget.
 

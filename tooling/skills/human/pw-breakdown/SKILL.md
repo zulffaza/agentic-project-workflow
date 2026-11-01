@@ -117,8 +117,11 @@ Then produce, from `{{PW_HOME}}/template/task/`:
   the task files, materialize the routes for the provider that ran breakdown with
   `/pw-config sync-routes --project <slug> --current-provider <produced-by>`; it converts each
   legacy `Execute with:` pin into that provider's route and is idempotent.
-- **Per-lane model default on top of "Produced by":** the dashboard's Role models table is        what the *next* run's lane spawns will use (`pw-config.sh get --project <slug> --key ai-model --json` reads the complete binding;
-        `pw-config.sh set --project <slug> --key ai-model --set <role>=<provider:model>` writes it —
+  **On a breakdown rerun, preserve every existing `## Execution routes` row** — especially manually
+  added current-provider rows and reviewed targets. Never silently replace a reviewed route; add a
+  row only for the provider running this breakdown when that key is missing.
+- **Per-lane model default on top of "Produced by":** the dashboard's Role models table is        what the *next* run's lane spawns will use (`pw-config.sh get --project <slug> --key role-model --provider <current-provider> --json` reads the complete binding;
+        `pw-config.sh set --project <slug> --key role-model --provider <current-provider> --role <role> --model <model>` writes it —
         researcher/analyst/writer-task/reviewer/verifier/ship-comment-analyst; the **executor is never a
         row**, a task's execution route is its only pin). Surface the current rows in your summary so I
         can change one before I sign off (e.g. "writer-task=— → say the word to pin it cheap").

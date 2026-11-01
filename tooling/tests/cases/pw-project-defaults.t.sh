@@ -249,13 +249,16 @@ else pwtest_ok "unbindable tuning refuses dispatch"; fi
 mv "$R.bak61" "$R"
 
 # Creation validates one inherited snapshot before publishing; an unavailable binding refuses.
-gpd global set --key ai-model --set reviewer=kilo:definitely-not-a-model >/dev/null 2>&1 || true
+# The invalid value is planted directly as an initialization cell: the global writer now refuses
+# it, but a hand-edited config must still fail the creation gate.
+printf '%s\n' 'PW_PROJECT_ROLE_KILO_REVIEWER_MODEL="definitely-not-a-model"' >> "$GPCFG"
 if gpd_scaffold reject-invalid-default >/dev/null 2>&1; then
   pwtest_bad "creation refuses an unavailable inherited model" "scaffold published a project with a dead model"
 else pwtest_ok "creation refuses an unavailable inherited model"; fi
 [ ! -e "$GPD/projects/reject-invalid-default" ] \
   && pwtest_ok "refused creation leaves no destination" \
   || pwtest_bad "refused creation leaves no destination" "a partial project was published"
+sed -i.bak '/PW_PROJECT_ROLE_KILO_REVIEWER_MODEL/d' "$GPCFG"; rm -f "$GPCFG.bak"
 # A hand-edited global review axis is also part of the snapshot: creation refuses it.
 BADAXIS="$GPD/pw.config.badaxis.sh"
 printf '%s\n' 'PW_PROVIDERS=(kilo)' 'PW_PROJECT_DEFAULT_AI_REVIEW="analysis=maybe"' > "$BADAXIS"

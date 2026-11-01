@@ -219,18 +219,21 @@ Pin a task to an enabled provider and a model from its current catalog:
 This updates both the task and its PLAN row. A batch validates every pair before writing:
 
 ```text
-/pw-config set --project <slug> --key pin --set T01=<provider>:<model-id> --set T02=<provider>:<model-id>
+/pw-config set --project <slug> --key execution-route --task T01 --current-provider <current> --execution-provider <provider> --model <model-id>
+/pw-config set --project <slug> --key execution-route --task T02 --current-provider <current> --execution-provider <provider> --model <model-id>
 ```
 
-Executor pins apply to individual tasks. To choose a model for a project role instead:
+Execution routes apply to individual tasks and are keyed by the current provider. To choose a
+model for a project role instead:
 
 ```text
-/pw-config set --project <slug> --key ai-model --set reviewer=<provider>:<model-id>
+/pw-config set --project <slug> --key role-model --provider <provider> --role reviewer --model <model-id>
 ```
 
-Use an enabled provider and a valid model ID. Project roles are `researcher`, `analyst`, `writer-task`, `reviewer`, `verifier`, and `ship-comment-analyst`.
-There is no project executor role setting; use task pins for execution.
-Clear a task pin with `--key pin --set T02=—`, or a role override with `--key ai-model --set reviewer=—`.
+Use an enabled provider and a valid model ID. Project roles are `researcher`, `analyst`, `writer-task`, `reviewer`, `verifier`, `ship-comment-analyst`, and `explorer`.
+There is no project executor role setting; use task routes for execution.
+Clear a task route with `/pw-config unset --project <slug> --key execution-route --task T02 --current-provider <current>`
+(add `--preview` for a bound proposal), or clear a role cell with `--model —`.
 
 `model-check` checks permission against the allowlist. Setting a pin also checks availability and provider scope.
 See [config values](REFERENCE.md#what-you-can-update-per-project-pw-config) and [execution](EXECUTION.md) for routing details.

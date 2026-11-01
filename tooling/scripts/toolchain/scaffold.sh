@@ -57,9 +57,9 @@ review_budget_default_line="rounds=$review_rounds"
 AI_MODEL_ROLES="researcher analyst writer-task reviewer verifier ship-comment-analyst explorer"
 ai_model_default_line=""
 ai_model_tuning_default_line=""
-# Schema-2 role tables: one row per enabled provider x non-execution role. A global role cell
-# wins; the legacy single-provider seed remains a creation fallback so existing pw.config.sh
-# files keep producing the same project values.
+# Schema-2 role tables: one row per enabled provider x non-execution role. Only the global
+# provider/role initialization cells are creation sources; legacy single-provider seeds are
+# migration input, never a creation fallback.
 role_model_rows=""
 execution_suggestion_rows=""
 for _p in "${PW_PROVIDERS[@]}"; do
@@ -67,14 +67,6 @@ for _p in "${PW_PROVIDERS[@]}"; do
     _m=""; _v=""; _rs=""; _e=""
     if pw_global_role_cell "$_p" "$r"; then
       _m="$PW_CELL_MODEL"; _v="$PW_CELL_VARIANT"; _rs="$PW_CELL_REASONING"; _e="$PW_CELL_EFFORT"
-    else
-      _legacy="$(pw_project_default_role "$r")"
-      case "$_legacy" in
-        "$_p":*) _m="${_legacy#*:}"
-                 _rt="$(pw_project_default_tuning "$r")"
-                 _v="$(_tuning_field "$_rt" variant)"; _rs="$(_tuning_field "$_rt" reasoning)"; _e="$(_tuning_field "$_rt" effort)" ;;
-        *) ;;
-      esac
     fi
     role_model_rows="$role_model_rows| $_p | $r | $(pw_cell_or_dash "$_m") | $(pw_cell_or_dash "$_v") | $(pw_cell_or_dash "$_rs") | $(pw_cell_or_dash "$_e") |
 "
@@ -88,11 +80,7 @@ done
 for r in $AI_MODEL_ROLES; do
   _single=""; _count=0
   for _p in "${PW_PROVIDERS[@]}"; do
-    if pw_global_role_cell "$_p" "$r"; then _single="$_p:$PW_CELL_MODEL"; _count=$((_count+1))
-    else
-      _legacy="$(pw_project_default_role "$r")"
-      case "$_legacy" in "$_p":*) _single="$_legacy"; _count=$((_count+1)) ;; esac
-    fi
+    if pw_global_role_cell "$_p" "$r"; then _single="$_p:$PW_CELL_MODEL"; _count=$((_count+1)); fi
   done
   if [ "$_count" = 0 ]; then ai_model_default_line="$ai_model_default_line $r=—"
   elif [ "$_count" -gt 1 ]; then ai_model_default_line="$ai_model_default_line $r=multiple"
@@ -103,9 +91,6 @@ for r in $AI_MODEL_ROLES; do
          [ -n "$PW_CELL_REASONING" ] && _rt="${_rt:+$_rt,}reasoning:$PW_CELL_REASONING"
          [ -n "$PW_CELL_EFFORT" ] && _rt="${_rt:+$_rt,}effort:$PW_CELL_EFFORT"
          [ -n "$_rt" ] && ai_model_tuning_default_line="$ai_model_tuning_default_line $r=$_rt"
-       else
-         _rt="$(pw_project_default_tuning "$r")"
-         [ -n "$_rt" ] && ai_model_tuning_default_line="$ai_model_tuning_default_line $r=$_rt"
        fi
   fi
 done
@@ -115,11 +100,32 @@ ai_model_tuning_default_line="${ai_model_tuning_default_line# }"
 project_defaults_default_line="routing=$(pw_project_default_value routing) execution-limit=$(pw_project_default_value execution-limit)"
 [ -n "$(pw_project_default_value max-parallel)" ] && project_defaults_default_line="$project_defaults_default_line max-parallel=$(pw_project_default_value max-parallel)"
 
+# Readable review/execution-policy tables. They render the same creation values as the dashboard
+# lines; the lines stay the canonical writers and `pw-config ensure` regenerates these tables.
+_phase_value() { # <k=v line> <phase> <default>
+  local kv
+  for kv in $1; do [ "${kv%%=*}" = "$2" ] && { printf '%s' "${kv#*=}"; return 0; }; done
+  printf '%s' "$3"
+}
+review_policy_rows=""
+for _phase in $AI_REVIEW_PHASES; do
+  review_policy_rows="$review_policy_rows| $_phase | $(_phase_value "$ai_review_default_line" "$_phase" advisory) | $(_phase_value "$review_trigger_default_line" "$_phase" manual) | $(_phase_value "$review_repair_default_line" "$_phase" manual) |
+"
+done
+review_rounds_value="${review_budget_default_line#rounds=}"
+_exec_routing="$(pw_project_default_value routing)"
+_exec_limit="$(pw_project_default_value execution-limit)"
+_exec_parallel="$(pw_project_default_value max-parallel)"
+execution_policy_rows="| Transport routing | $_exec_routing | Must still honor every explicit execution target |
+| Executor repair limit | $_exec_limit | Existing executor self-repair allowance |
+| Maximum parallel workers | ${_exec_parallel:-—} | Shared worker ceiling; unset means the planner chooses |
+"
+
 # Creation gate: validate the ONE resolved snapshot (scalars + every non-empty role binding)
 # before staging. A removed, mistyped, forbidden, or unverifiable binding refuses creation; it is
 # never silently replaced. Existing-project adoption does not come through this path.
 "$HERE/../entities/pw-config.sh" validate-defaults \
-  || { echo "scaffold: refusing to create '$slug' — the resolved global project defaults carry an invalid or unavailable model binding (see the message above) → fix: /pw-config global set --key ai-model … or /pw-config global unset --key ai-model; existing projects are unaffected" >&2; exit 1; }
+  || { echo "scaffold: refusing to create '$slug' — the resolved global project defaults carry an invalid or unavailable model binding (see the message above) → fix: /pw-config global set --key role-model --provider <p> --role <role> --model <model> … or /pw-config global unset --key role-model --provider <p> --role <role>; existing projects are unaffected" >&2; exit 1; }
 
 
 slug=""
@@ -176,6 +182,9 @@ while IFS= read -r _rl || [ -n "$_rl" ]; do
   _rl="${_rl//<CONFIGURATION_SCHEMA_DEFAULT>/$PW_CONFIG_SCHEMA_CURRENT}"
   _rl="${_rl//<ROLE_MODELS_DEFAULT>/$role_model_rows}"
   _rl="${_rl//<EXECUTION_SUGGESTIONS_DEFAULT>/$execution_suggestion_rows}"
+  _rl="${_rl//<REVIEW_POLICY_ROWS>/$review_policy_rows}"
+  _rl="${_rl//<REVIEW_ROUNDS>/$review_rounds_value}"
+  _rl="${_rl//<EXECUTION_POLICY_ROWS>/$execution_policy_rows}"
   printf '%s\n' "$_rl"
 done < "$TEMPLATE_DIR/PROJECT.template.md" > "$stage/README.md"
 

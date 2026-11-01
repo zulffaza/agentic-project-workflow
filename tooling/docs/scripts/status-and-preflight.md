@@ -139,10 +139,13 @@ retired 2026-09-25 ([`../conventions.md`](../conventions.md) D-rules); the dashb
 companion record (placeholder-row fill) lives in
 [`review-and-context-editing.md`](./review-and-context-editing.md).
 
-**`provider-audit`** compares each task row's `Execute with:` (expected) against the LOG.md spawn
-ledger + the task's `Actually used:` (what ran), validates the row against the live catalog via
+**`provider-audit`** compares each task's expected binding against the LOG.md spawn
+ledger + the task's `Actually used:` (what ran), validates each target against the live catalog via
 `pw-config.sh model-resolve`, and prints one pipe row per task:
-`T0n|expected=…|used=<q[:model]|never-run>|via=…|route=…|verdict=ok|mismatch|stale-provider|unbound`.
+`T0n|expected=…|used=<q[:model]|never-run>|via=…|route=…|verdict=ok|mismatch|stale-provider|unbound|blocked`.
+A schema-2 task is audited from its canonical `## Execution routes` rows, never from the derived
+`Execute with:` cell (which reads `multi`); `expected` joins alternatives with `+` and `used`
+matches any one of them. An empty route map reports `blocked`.
 The ledger read takes the newest line whose text contains `spawned T0n (` and captures the first
 parenthesized group after the id — description text between the id and the group (fixer/repair
 lines like `spawned T06 fixer for X (kilotest:model)`) parses fine, and a colon-less model value

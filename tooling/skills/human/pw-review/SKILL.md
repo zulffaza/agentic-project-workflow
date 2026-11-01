@@ -203,7 +203,7 @@ half-heartedly from here: viewing/changing this project's AI-review outcome mode
 triggers, repair permission, review budget, and spawn-lane model rows lives on **`/pw-config`**
 now (`/pw-config show --project <slug>` to see all eight surfaces; `/pw-config set --project <slug>
 --key ai-review --set <surface>=<mode>` / `--key review-trigger --set <surface>=<value>` / `--key review-repair --set <surface>=<value>` /
-`--key review-rounds --value <1..3>` / `--key ai-model --set <role>=<provider:model>` to change one — validated
+`--key review-rounds --value <1..3>` / `--key role-model --provider <p> --role <role> --model <model>` to change one — validated
 writes; `--set all=<value>` sets every surface with named overrides winning; `—` is an explicit value,
 and the removed `off` outcome normalizes to advisory on read). If `/pw-config` is somehow
 unavailable in this install, say so and stop — do not run raw scripts at me. (The mode a surface

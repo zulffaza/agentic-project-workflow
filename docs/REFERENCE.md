@@ -162,15 +162,15 @@ See `/pw-help command --name pw-batch` for the current forms and examples.
 | `routing` | `auto`, `subagent`, `headless` | Default task route; headless requires strict model binding |
 | `execution-limit` | Integer `0..99`, subject to the machine floor | Self-repair budget |
 | `max-parallel` | Integer `1..99` | Concurrent executors at `/pw-execute` and concurrent MR comment fixers at `/pw-ship comments` |
-| `produced-by` | An enabled provider | Default provider for new executor pins |
+| `produced-by` | An enabled provider | Breakdown provenance only; never a dispatch fallback |
 | `ai-review` | `surface=mode` pairs or `all=mode` (+ named overrides) | Review OUTCOME per surface — `advisory` (default; a legacy `off` reads as advisory) or `auto` (guarded self-approval of a clean managed pass) |
 | `review-trigger` | `surface=value` pairs or `all=value` | WHEN a pass starts — `manual` (default) or `completion` (also after a succeeded producing command's verification) |
 | `review-repair` | `surface=value` pairs or `all=value` | Whether a completion review may repair+re-review — `manual` (default) or `bounded` (within the budget) |
 | `review-rounds` | Integer `1..3` | Total reviewer passes in a bounded cycle (default `3`; at most two intervening repairs) |
-| `ai-model` | `role=provider:model` or `role=—` pairs; one role may add `--variant`, `--reasoning`, `--effort` | Deprecated compatibility alias in a schema-2 project: writes the matching provider/role cell. Prefer `role-model`; clearing needs an unambiguous provider |
+| `ai-model` | `role=provider:model` or `role=—` pairs; one role may add `--variant`, `--reasoning`, `--effort` | Deprecated compatibility alias. A project write goes to the matching provider/role cell; a global write goes to the provider initialization cell. Prefer `role-model`; clearing needs an unambiguous provider |
 | `role-model` | `--provider <p> --role <role> --model <model>` + optional `--variant`/`--reasoning`/`--effort` | One cell in the project Role models table. `--model —` clears it to the native provider default. Tuning must be supported by the provider |
 | `execution-suggestion` | `--current-provider <c> --execution-provider <p> --model <model>` + optional `--subagent` and tuning | Breakdown advice only. This row is never a dispatch source and never edits a task |
-| `execution-route` | `--task <T0n> --current-provider <c> --execution-provider <p> --model <model>` + optional `--subagent` and tuning; `--preview` / `--apply <id>` | One route row in the task. The model is mandatory. A task without a row for the current provider blocks dispatch. The derived `Execute with:` summary is rewritten by the same writer |
+| `execution-route` | `--task <T0n> --current-provider <c> --execution-provider <p> --model <model>` + optional `--subagent`, `--variant`, `--reasoning`, `--effort`, `--thinking`; `--preview` / `--apply <id>` | One route row in the task. The model is mandatory. A task without a row for the current provider blocks dispatch. Thinking is emitted only where the provider supports it (`kilo --thinking`; Cursor requires a `-thinking-` model id) |
 | `pin` | `T01=provider:model` or `T01=—` pairs | Deprecated in a schema-2 project: converts to one execution route keyed by `--current-provider` (or PLAN `Produced by`). Schema-1 projects keep the legacy dual-holder write |
 | `rfc-target` | A document reference or URL | RFC destination |
 
@@ -201,14 +201,28 @@ PLAN; after that, PLAN is authoritative.
 Provider-by-role initialization cells use `PW_PROJECT_ROLE_<PROVIDER>_<ROLE>_{MODEL,VARIANT,
 REASONING,EFFORT}`. Execution suggestions use `PW_PROJECT_EXECUTION_SUGGESTION_<CURRENT>_
 {PROVIDER,MODEL,SUBAGENT,VARIANT,REASONING,EFFORT,THINKING}`. Both are snapshot seeds only.
+Global `ai-model` writes these role cells. `PW_PROJECT_DEFAULT_AI_MODEL_<ROLE>_*` and
+`PW_AI_MODEL_DEFAULT_<ROLE>` are migration input only: creation and runtime ignore them and report
+remaining assignments.
 
 `/pw-config unset --project <slug> --key role-model|execution-suggestion|execution-route …`
-removes one schema-2 cell or row. `/pw-config suggest` previews a scope-aware batch
-(global, project, or explicit task/provider pairs), supports `--set` revisions and `--exclude`,
-and writes only on `--apply <id>`. A revision supersedes the prior unapplied proposal.
+removes one schema-2 cell or row. Add `--preview` to get a bound proposal, then
+`/pw-config unset --project <slug> --key <key> --apply <id>`; an unset proposal is also applicable
+with `suggest --apply`. `/pw-config suggest` previews a scope-aware batch (global, project, or
+explicit task/provider pairs). Groups are `role-models`, `execution-suggestions`,
+`execution-routes`, `review-policy`, and `execution-policy`. It supports `--set` revisions and
+`--exclude`, and writes only on `--apply <id>`; `--rollback <id>` restores holders that have not
+changed since apply. A revision supersedes the prior unapplied proposal.
+Apply validates every selected mutation before writing, keeps a restorable preimage per affected
+holder, and records one `receipt.tsv`. A failure leaves a partial state with preimages and a
+rollback command instead of claiming success.
 `/pw-config migrate` performs the same preview/apply cycle for legacy role rows and task pins.
 `/pw-config sync-routes --project <slug> [--current-provider <p>]` converts a task's legacy
 `Execute with:` pin into that provider's route; it is idempotent and refuses ambiguous pins.
+
+Existing projects never take current global initialization values implicitly, including during
+`suggest`: an intentionally empty project cell stays empty (`keep`, native default) unless an
+explicit `--set` or `--replace-existing` request changes it.
 
 For `ai-review`/`review-trigger`/`review-repair`, `ai-model`, and `pin`, a batch validates every
 pair before writing any value:

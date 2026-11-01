@@ -117,8 +117,12 @@ cat > "$PA/task/PLAN.md" <<'PLAN'
 | [T04](./T04.md) | mismatch | api | — | G1 | kilo:alibaba-token-plan/test-model | 1 | done | — | — |
 | [T05](./T05.md) | degraded-ok | api | — | G1 | kilo:alibaba-token-plan/test-model | 1 | done | — | — |
 | [T06](./T06.md) | provider-gone | api | — | G1 | kilotest:test-model | 1 | done | — | — |
+| [T07](./T07.md) | multi-route | api | — | G1 | multi | 1 | done | — | — |
+| [T08](./T08.md) | no-route | api | — | G1 | multi | 1 | todo | — | — |
 PLAN
 printf -- '- **Route:** headless\n' > "$PA/task/T01.md"
+printf -- '- **Actually used:** kilo:alibaba-token-plan/test-model\n\n## Execution routes\n\n| Current provider | Execution provider | Target model | Target subagent | Variant | Reasoning | Effort | Thinking |\n|---|---|---|---|---|---|---|---|\n| kilo | kilo | alibaba-token-plan/test-model | — | — | — | — | — |\n| cursor | kilo | alibaba-token-plan/other-model | — | — | — | — | — |\n' > "$PA/task/T07.md"
+printf -- '## Execution routes\n\n| Current provider | Execution provider | Target model | Target subagent | Variant | Reasoning | Effort | Thinking |\n|---|---|---|---|---|---|---|---|\n' > "$PA/task/T08.md"
 cat > "$PA/LOG.md" <<'LOG'
 # Activity log — paaudit
 - **2026-09-23 10:00** · `exec` — spawned T01 (kilo:alibaba-token-plan/test-model) · via=subagent · session=— · seed=task/T01.md · out=worktree/T01.log · state=success
@@ -135,6 +139,14 @@ grep -qE '^T03\|.*verdict=stale-provider$' "$PWTEST_OUT" && pwtest_ok "out-of-sc
 grep -qE '^T04\|.*used=claude:opus\|via=headless.*verdict=mismatch$' "$PWTEST_OUT" && pwtest_ok "wrong provider used → mismatch" || pwtest_bad "mismatch" "$(grep '^T04' "$PWTEST_OUT")"
 grep -qE '^T05\|.*verdict=ok$' "$PWTEST_OUT" && pwtest_ok "recorded model-degrade is policy-blessed" || pwtest_bad "degrade ok" "$(grep '^T05' "$PWTEST_OUT")"
 grep -qE '^T06\|.*verdict=stale-provider$' "$PWTEST_OUT" && pwtest_ok "provider absent from PW_PROVIDERS → stale-provider" || pwtest_bad "provider stale" "$(grep '^T06' "$PWTEST_OUT")"
+# Schema-2 task routes are canonical: the derived `multi` cell must not read as drift.
+pwtest_rc 1 "provider-audit reads canonical routes" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit --project paaudit --task T07 --task T08
+grep -qE '^T07\|expected=kilo:alibaba-token-plan/test-model\+kilo:alibaba-token-plan/other-model\|used=kilo:alibaba-token-plan/test-model\|.*verdict=ok$' "$PWTEST_OUT" \
+  && pwtest_ok "multi-route task matches one canonical route" \
+  || pwtest_bad "multi-route audit" "$(grep '^T07' "$PWTEST_OUT")"
+grep -qE '^T08\|expected=\(no route\)\|.*verdict=blocked$' "$PWTEST_OUT" \
+  && pwtest_ok "empty route map reports blocked, not drift" \
+  || pwtest_bad "empty route audit" "$(grep '^T08' "$PWTEST_OUT")"
 # ledger-tolerant (pre-ladder lines lack via= → '—') + task-id filter + all-ok subset exits 0:
 cat >> "$PA/LOG.md" <<'LOG'
 - **2026-09-23 09:00** · `exec` — spawned T06 (kilotest:test-model) · session=— · seed=x · out=y

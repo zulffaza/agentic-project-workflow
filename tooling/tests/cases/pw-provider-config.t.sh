@@ -251,5 +251,80 @@ printf '%s\n' \
 pwtest_rc 0 "schema-1 project still resolves a legacy role row" pc spawn-args --project oldschool --role researcher --provider kilo
 pc_re '^model: command_code/model$' "$(cat "$PWTEST_OUT")" "schema-1 reads the legacy AI Models line"
 
+# --- route thinking ------------------------------------------------------------------------
+pc_mk_task demo T04
+pwtest_rc 0 "route stores thinking" pc set --project demo --key execution-route --task T04 --current-provider kilo \
+  --execution-provider kilo --model command_code/model --thinking on
+pc_re 'thinking:on' "$(pc get --project demo --key execution-route --task T04 2>/dev/null)" "route view shows thinking"
+pwtest_rc 0 "spawn-args emits kilo thinking" pc spawn-args --project demo --task T04 --current-provider kilo
+pc_re '^thinking: on$' "$(cat "$PWTEST_OUT")" "spawn-args reports thinking"
+grep -qx 'arg: --thinking' "$PWTEST_OUT" \
+  && pwtest_ok "spawn-args emits --thinking" \
+  || pwtest_bad "spawn-args emits --thinking" "$(grep '^arg:' "$PWTEST_OUT" | tr '\n' ' ')"
+if pc set --project demo --key execution-route --task T04 --current-provider cursor --execution-provider cursor \
+     --model cursor-test-high --thinking on >/dev/null 2>&1; then
+  pwtest_bad "cursor thinking needs an encoded model id" "accepted thinking=on on a non-thinking id"
+else pwtest_ok "cursor thinking needs an encoded model id"; fi
+
+# --- suggestions: intentional empties and no project global backfill -----------------------
+pc set --project demo --key role-model --provider cursor --role explorer --model '—' >/dev/null
+pc global set --key role-model --provider cursor --role explorer --model cursor-test-high >/dev/null
+pwtest_rc 0 "role preview for preservation" pc suggest --project demo --group role-models
+pc_re 'role-model:cursor:explorer.*intentional native-default cell preserved' "$(cat "$PWTEST_OUT")" "suggest preserves an intentional empty cell"
+if grep 'role-model:cursor:explorer' "$PWTEST_OUT" | grep -q 'global initialization cell'; then
+  pwtest_bad "no project global backfill" "suggest proposed the current global value"
+else pwtest_ok "no project global backfill"; fi
+# --replace-existing permits a replacement; it never invents one or clears a populated cell.
+pc set --project demo --key role-model --provider cursor --role researcher --model cursor-test-high >/dev/null
+pwtest_rc 0 "replace-existing preview" pc suggest --project demo --group role-models --replace-existing
+pc_re 'keep +role-model:cursor:researcher' "$(cat "$PWTEST_OUT")" "replace-existing preserves a populated cell without a verified source"
+# A missing row is not a licence to copy current globals either.
+grep -v '^| cursor | explorer |' "$R" > "$R.tmp" && mv "$R.tmp" "$R"
+pwtest_rc 0 "missing-row preview" pc suggest --project demo --group role-models
+pc_re 'needs-input +role-model:cursor:explorer' "$(cat "$PWTEST_OUT")" "missing row does not backfill globals"
+# ensure regenerates the derived compatibility line from the canonical table.
+grep -v '^- \*\*AI Models:\*\*' "$R" > "$R.tmp" && mv "$R.tmp" "$R"
+pwtest_rc 0 "ensure restores the derived mirror" pc ensure --project demo
+pc_re 'researcher=multiple' "$(grep '^- \*\*AI Models:\*\*' "$R")" "ensure rebuilds AI Models from the role table"
+pwtest_rc 0 "review-policy preview" pc suggest --project demo --group review-policy
+pc_re 'review:outcome:analysis' "$(cat "$PWTEST_OUT")" "review-policy group lists outcome rows"
+pwtest_rc 0 "execution-policy preview" pc suggest --project demo --group execution-policy
+pc_re 'execution:routing' "$(cat "$PWTEST_OUT")" "execution-policy group lists policy rows"
+
+# --- whole-batch validation, receipt, rollback, preview-bound unset ------------------------
+BD="$PC/projects/batchdemo"
+pc_scaffold batchdemo >/dev/null
+pc_mk_task batchdemo T01
+pc_mk_task batchdemo T02
+before_task="$(shasum -a 256 "$BD/task/T01.md" | awk '{print $1}')"
+pwtest_rc 0 "route preview for batch validation" pc set --project batchdemo --key execution-route --task T01 --current-provider kilo \
+  --execution-provider kilo --model command_code/model --preview
+BID="$(sed -n 's/.*--apply \([^ ]*\).*/\1/p' "$PWTEST_OUT" | head -1)"
+printf 'execution-route:T02:kilo\ttask/T02.md:Execution routes\t—\tkilo:no-such-model\tadd\ttest\n' >> "$PC/proposals/$BID/changes"
+if pc set --project batchdemo --key execution-route --apply "$BID" >/dev/null 2>&1; then
+  pwtest_bad "batch validation blocks an invalid row" "invalid proposal applied"
+else pwtest_ok "batch validation blocks an invalid row"; fi
+pwtest_eq "failed validation writes nothing" "$before_task" "$(shasum -a 256 "$BD/task/T01.md" | awk '{print $1}')"
+
+pwtest_rc 0 "role preview for apply" pc set --project batchdemo --key role-model --provider kilo --role explorer --model command_code/model --preview
+RID="$(sed -n 's/.*--apply \([^ ]*\).*/\1/p' "$PWTEST_OUT" | head -1)"
+pwtest_rc 0 "preview-bound role apply" pc set --project batchdemo --key role-model --apply "$RID"
+grep -q "role-model:kilo:explorer" "$PC/proposals/$RID/receipt.tsv" 2>/dev/null \
+  && pwtest_ok "apply writes a per-key batch receipt" \
+  || pwtest_bad "batch receipt" "receipt.tsv missing or incomplete"
+pc_re 'kilo explorer command_code/model' "$(pc get --project batchdemo --key role-model 2>/dev/null)" "preview-bound apply writes the cell"
+pwtest_rc 0 "rollback restores unchanged holders" pc suggest --rollback "$RID"
+if pc get --project batchdemo --key role-model --provider kilo --role explorer 2>/dev/null | grep -q 'command_code/model'; then
+  pwtest_bad "rollback restores the preimage" "role cell survived rollback"
+else pwtest_ok "rollback restores the preimage"; fi
+
+pc set --project batchdemo --key execution-route --task T01 --current-provider kilo \
+  --execution-provider kilo --model command_code/model >/dev/null
+pwtest_rc 0 "unset preview" pc unset --project batchdemo --key execution-route --task T01 --current-provider kilo --preview
+UNSET_ID="$(sed -n 's/.*--apply \([^ ]*\).*/\1/p' "$PWTEST_OUT" | head -1)"
+[ -n "$UNSET_ID" ] && pwtest_ok "unset supports a preview" || pwtest_bad "unset preview" "no proposal id"
+pwtest_rc 0 "unset preview applies" pc unset --project batchdemo --key execution-route --apply "$UNSET_ID"
+pc_re 'no route for provider' "$(pc get --project batchdemo --key execution-route --task T01 2>/dev/null)" "applied unset removes only the selected route"
+
 # --- documentation/help surface -----------------------------------------------------------
 pc_re 'role-model' "$(pc --help 2>&1 || true)" "help mentions the schema-2 keys"

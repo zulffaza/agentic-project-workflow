@@ -100,7 +100,7 @@ decisions (options not converged, Q0 rules, the final doc) stay yours.
 2. **Draft via `pw-analyst` when a sub-agent is available** (same provider) — hand it the seed +   the doc path; it returns a draft following the rules below; **you review, edit, and own the
    final doc** (decisions: options laid out without convergence, the pick stays yours, §4 rules).
    Record the complete analyst binding per Role models cell
-   (`pw-config.sh get --project <slug> --key ai-model --json`; unset = provider default), resolve
+   (`pw-config.sh get --project <slug> --key role-model --provider <current-provider> --role analyst --json`; empty = provider default), resolve
    its arguments with `pw-config.sh spawn-args --project <slug> --role analyst --provider <current-provider>`, and log the spawn (`pw-status.sh log --project <slug> --actor analyst --message "drafted analysis/<topic>.md · session=<id> …"`).
    Otherwise (or on a thin project where drafting inline is cheaper), write it yourself under the
    same rules. Either way the shape is enforced by this file:

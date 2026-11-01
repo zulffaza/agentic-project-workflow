@@ -58,7 +58,10 @@ Full operator semantics: `/pw-help command --name pw-execute`.
 
 Each task carries an `## Execution routes` table keyed by the **current provider** (the agent
 running the workflow operation). The selected row names the execution provider, a mandatory
-target model, an optional subagent, and per-route tuning. The legacy `Execute with:` bullet stays
+target model, an optional subagent, and per-route tuning (variant, reasoning, effort, thinking).
+Thinking is validated and emitted only where the provider supports it: Kilo maps `on` to
+`--thinking`, Cursor requires a `-thinking-` catalog id, and Claude/Codex refuse it. The legacy
+`Execute with:` bullet stays
 as a derived one-route summary for older readers: it is written by the route owner, never edited
 as an independent source.
 
@@ -297,15 +300,15 @@ that implies symmetry.
 
 ### Role-model tuning
 
-A role cell or task route can carry a provider-supported variant, reasoning level, or effort
-level. Configure one cell per invocation with
+A role cell or task route can carry a provider-supported variant, reasoning level, effort level, or
+thinking flag. Configure one cell per invocation with
 `/pw-config set --project <slug> --key role-model --provider <p> --role <role> --model <model> --variant <v>`
-(or `--key execution-route` for a task). Tuning is part of one binding: replacing the model without
-tuning flags resets that binding's controls.
+(or `--key execution-route` for a task; routes also accept `--thinking on|off`). Tuning is part of
+one binding: replacing the model without tuning flags resets that binding's controls.
 
 ```text
-/pw-config set --project delivery-note --key ai-model --set analyst=kilo:command_code/model --variant high
-/pw-config global set --key ai-model --set reviewer=cursor:model --reasoning high
+/pw-config set --project delivery-note --key role-model --provider kilo --role analyst --model command_code/model --variant high
+/pw-config global set --key role-model --provider cursor --role reviewer --model model --reasoning high
 ```
 
 Ask what the provider supports before choosing a value:
@@ -323,8 +326,8 @@ bindings are recorded separately in spawn evidence.
 A role's model and tuning are one binding. Setting a new model without tuning flags resets that
 role's variant/reasoning/effort (a control that was valid for the old model may be invalid for the
 new one); clearing the role clears its tuning too. Read the complete binding with
-`get --project <slug> --key ai-model --json`, and let the driver resolve the provider's argument
-array with `spawn-args --project <slug> --role <role> [--provider <p>]`, or
+`get --project <slug> --key role-model --provider <current-provider> --json`, and let the driver resolve the provider's argument
+array with `spawn-args --project <slug> --role <role> --provider <p>`, or
 `spawn-args --project <slug> --task <T0n> --current-provider <p>` (add `--json` for machine
 reading). With an unbound project row and `--provider`, it falls through to that provider's worker
 default. A named worker can also be resolved directly with
