@@ -764,10 +764,10 @@ EOF
             local _alt
             IFS='|' read -r -a _alts <<< "$_routes"
             for _alt in "${_alts[@]}"; do
-              case "$used" in "$_alt"|"$_alt "*) _match=1 ;; esac
+              case "$used" in "$_alt"|"$_alt "*|"$_alt,"*) _match=1 ;; esac
             done
           else
-            case "$used" in "$exec"|"$exec "*) _match=1 ;; esac
+            case "$used" in "$exec"|"$exec "*|"$exec,"*) _match=1 ;; esac
           fi
           if [ "$_match" = 0 ]; then
             printf '%s' "$lline" | grep -q 'model-degraded' || verdict="mismatch"

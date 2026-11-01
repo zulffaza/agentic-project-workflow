@@ -235,9 +235,61 @@ grep -q '^- \*\*Configuration schema:\*\* 2$' "$LM/README.md" \
 pc_re 'kilo researcher command_code/model' "$(pc get --project legacy --key role-model 2>/dev/null)" "migration preserves the model"
 pc_re 'command_code/model variant:high' "$(pc get --project legacy --key role-model --provider kilo --role researcher 2>/dev/null)" "migration preserves tuning"
 pc_re 'kilo kilo:command_code/model' "$(pc get --project legacy --key execution-route --task T01 2>/dev/null)" "migration writes the explicit route"
+for _h in "### Role models" "### Execution suggestions" "### Review policy" "### Reviewer budget" "### Execution policy initialization snapshot"; do
+  grep -q "^$_h$" "$LM/README.md" \
+    && pwtest_ok "migration materializes $_h" \
+    || pwtest_bad "migration materializes $_h" "section missing"
+done
+for _l in "Review Trigger" "Review Repair" "Review Budget"; do
+  grep -q "^- \*\*$_l:\*\*" "$LM/README.md" \
+    && pwtest_ok "migration materializes the $_l line" \
+    || pwtest_bad "migration materializes the $_l line" "line missing"
+done
+grep -q '^| Transport routing | auto |' "$LM/README.md" \
+  && pwtest_ok "migration materializes the execution policy snapshot" \
+  || pwtest_bad "migration materializes the execution policy snapshot" "snapshot missing"
 if pc migrate --project legacy >/dev/null 2>&1; then
   pwtest_bad "re-migration is a no-op" "schema-2 project offered another conversion"
 else pwtest_ok "re-migration is a no-op"; fi
+
+# Stale legacy pins are isolated as blocked rows; they never block the rest of the migration.
+ST="$PC/projects/legacy-stale"; mkdir -p "$ST/task"
+cat > "$ST/README.md" <<'STALE'
+# legacy-stale
+
+- **Status:** executing
+- **One-liner:** stale pin
+- **AI Models:** researcher=kilo:command_code/model analyst=— writer-task=— reviewer=— verifier=—
+
+## Where things are
+- nothing
+STALE
+cat > "$ST/task/T01.md" <<'STALETASK'
+# T01
+
+- **Status:** todo
+- **Execute with:** kilo:no-such-model
+- **Route:** auto
+
+## Goal
+Stale.
+STALETASK
+pwtest_rc 0 "stale-pin migration preview" pc migrate --project legacy-stale --task T01 --current-provider kilo
+pc_re 'blocked +execution-route:T01:kilo' "$(cat "$PWTEST_OUT")" "stale pin is blocked, not applied"
+SID="$(printf '%s\n' "$(cat "$PWTEST_OUT")" | sed -n 's/.*--apply \([^ ]*\).*/\1/p' | head -1)"
+pwtest_rc 0 "stale-pin migration applies the safe changes" pc migrate --apply "$SID"
+grep -q '^- \*\*Configuration schema:\*\* 2$' "$ST/README.md" \
+  && pwtest_ok "stale pin still migrates the schema" \
+  || pwtest_bad "stale pin still migrates the schema" "schema marker missing"
+if pc get --project legacy-stale --key execution-route --task T01 2>/dev/null | grep -q 'no route'; then
+  pwtest_ok "stale pin leaves the task route unresolved"
+else pwtest_bad "stale pin leaves the task route unresolved" "$(pc get --project legacy-stale --key execution-route --task T01 2>/dev/null)"; fi
+if pc spawn-args --project legacy-stale --task T01 --current-provider kilo >/dev/null 2>&1; then
+  pwtest_bad "stale pin blocks dispatch after migration" "legacy pin still dispatched"
+else pwtest_ok "stale pin blocks dispatch after migration"; fi
+grep -q '^## Execution routes$' "$ST/task/T01.md" \
+  && pwtest_ok "stale pin still converts the task schema" \
+  || pwtest_bad "stale pin still converts the task schema" "task route section missing"
 
 # --- schema-1 backward compatibility ------------------------------------------------------
 SC="$PC/projects/oldschool"

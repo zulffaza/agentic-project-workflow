@@ -119,15 +119,18 @@ cat > "$PA/task/PLAN.md" <<'PLAN'
 | [T06](./T06.md) | provider-gone | api | — | G1 | kilotest:test-model | 1 | done | — | — |
 | [T07](./T07.md) | multi-route | api | — | G1 | multi | 1 | done | — | — |
 | [T08](./T08.md) | no-route | api | — | G1 | multi | 1 | todo | — | — |
+| [T09](./T09.md) | suffix | api | — | G1 | kilo:alibaba-token-plan/test-model | 1 | done | — | — |
 PLAN
 printf -- '- **Route:** headless\n' > "$PA/task/T01.md"
 printf -- '- **Actually used:** kilo:alibaba-token-plan/test-model\n\n## Execution routes\n\n| Current provider | Execution provider | Target model | Target subagent | Variant | Reasoning | Effort | Thinking |\n|---|---|---|---|---|---|---|---|\n| kilo | kilo | alibaba-token-plan/test-model | — | — | — | — | — |\n| cursor | kilo | alibaba-token-plan/other-model | — | — | — | — | — |\n' > "$PA/task/T07.md"
 printf -- '## Execution routes\n\n| Current provider | Execution provider | Target model | Target subagent | Variant | Reasoning | Effort | Thinking |\n|---|---|---|---|---|---|---|---|\n' > "$PA/task/T08.md"
+printf -- '- **Actually used:** kilo:alibaba-token-plan/test-model, service_tier=priority\n\n## Execution routes\n\n| Current provider | Execution provider | Target model | Target subagent | Variant | Reasoning | Effort | Thinking |\n|---|---|---|---|---|---|---|---|\n| kilo | kilo | alibaba-token-plan/test-model | — | — | — | — | — |\n' > "$PA/task/T09.md"
 cat > "$PA/LOG.md" <<'LOG'
 # Activity log — paaudit
 - **2026-09-23 10:00** · `exec` — spawned T01 (kilo:alibaba-token-plan/test-model) · via=subagent · session=— · seed=task/T01.md · out=worktree/T01.log · state=success
 - **2026-09-23 10:10** · `exec` — spawned T04 (claude:opus) · via=headless · session=— · seed=x · out=y
 - **2026-09-23 10:20** · `exec` — spawned T05 (kilo:alibaba-token-plan/other-model) · via=subagent · model-degraded kilo:alibaba-token-plan/test-model→kilo:alibaba-token-plan/other-model · session=— · seed=x · out=y
+- **2026-09-23 10:30** · `exec` — spawned T09 (kilo:alibaba-token-plan/test-model, service_tier=priority) · via=headless · session=— · seed=x · out=y
 LOG
 PAE="$(pwtest_script pw-status.sh)"
 pwtest_rc 1 "provider-audit flags planted rows" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit --project paaudit
@@ -147,6 +150,10 @@ grep -qE '^T07\|expected=kilo:alibaba-token-plan/test-model\+kilo:alibaba-token-
 grep -qE '^T08\|expected=\(no route\)\|.*verdict=blocked$' "$PWTEST_OUT" \
   && pwtest_ok "empty route map reports blocked, not drift" \
   || pwtest_bad "empty route audit" "$(grep '^T08' "$PWTEST_OUT")"
+pwtest_rc 0 "comma-suffixed audit row" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit --project paaudit --task T09
+grep -qE '^T09\|expected=kilo:alibaba-token-plan/test-model\|used=kilo:alibaba-token-plan/test-model, service_tier=priority\|.*verdict=ok$' "$PWTEST_OUT" \
+  && pwtest_ok "comma-suffixed used model matches the route" \
+  || pwtest_bad "comma-suffixed used model" "$(grep '^T09' "$PWTEST_OUT")"
 # ledger-tolerant (pre-ladder lines lack via= → '—') + task-id filter + all-ok subset exits 0:
 cat >> "$PA/LOG.md" <<'LOG'
 - **2026-09-23 09:00** · `exec` — spawned T06 (kilotest:test-model) · session=— · seed=x · out=y

@@ -1222,8 +1222,82 @@ _pwstage="$(pw_tmpfile "$(dirname "$f")")" || { rm -f "$rows_file"; return 1; }
   rm -f "$rows_file"
 }
 
+_section_insert_after_config() { # <file> <heading> <header> <rows> <intro>
+  local f="$1" h="$2" header="$3" rows="$4" intro="$5" hdr="" sep="" cell rows_file
+  local -a heads=()
+  IFS='|' read -r -a heads <<< "$header"
+  for cell in "${heads[@]}"; do
+    cell="$(printf '%s' "$cell" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+    hdr="$hdr $cell |"; sep="$sep---|"
+  done
+  hdr="|${hdr}"; sep="|${sep}"
+  rows_file="$(pw_tmpfile "$(dirname "$f")")" || return 1
+  printf '%s\n' "$rows" > "$rows_file"
+_pwstage="$(pw_tmpfile "$(dirname "$f")")" || { rm -f "$rows_file"; return 1; }
+  awk -v h="$h" -v hdr="$hdr" -v sep="$sep" -v rf="$rows_file" -v intro="$intro" '
+    BEGIN { rn=0; while ((getline line < rf) > 0) rows[++rn]=line; close(rf) }
+    { lines[NR]=$0 }
+    END {
+      cin=0; for (r=1;r<=NR;r++) if (lines[r] == "## Project configuration") { cin=r; break }
+      end=NR+1
+      if (cin) for (r=cin+1;r<=NR;r++) if (lines[r] ~ /^##[ \t]/) { end=r; break }
+      for (r=1;r<end;r++) print lines[r]
+      print ""
+      print "### " h
+      print ""
+      if (intro != "") { print intro; print "" }
+      print hdr
+      print sep
+      for (i=1;i<=rn;i++) print rows[i]
+      for (r=end;r<=NR;r++) print lines[r]
+    }' "$f" > "$_pwstage" && mv "$_pwstage" "$f" || { rm -f "$_pwstage" "$rows_file"; return 1; }
+  rm -f "$rows_file"
+}
+
+_section_ensure() { # <file> <heading> <header> <rows> <intro>
+  local f="$1" h="$2"
+  if grep -qE "^##+[[:space:]]+${h}[[:space:]]*$" "$f"; then
+    _tbl_set_section "$f" "$h" "$3" "$4"
+  else
+    _section_insert_after_config "$f" "$h" "$3" "$4" "${5:-}"
+  fi
+}
+
 _project_sync_readable_tables() { # <readme>
-  local f="$1" rs axis mode tr rep rows rb
+  local f="$1" rs axis mode tr rep rows rb p r val model variant reasoning effort tune kv line tune_line
+  [ "$(pw_project_schema "$(dirname "$f")")" = 2 ] || return 0
+  _ai_models_line_ensure "$f" || true
+  _ai_review_line_ensure "$f" || true
+  _review_trigger_line_ensure "$f" || true
+  _review_repair_line_ensure "$f" || true
+  _review_budget_line_ensure "$f" || true
+  # Seed a missing Role models table from the legacy compatibility line only. This is the same
+  # one-way snapshot migration, never a runtime fallback.
+  if ! grep -qE '^##+[[:space:]]+Role models[[:space:]]*$' "$f"; then
+    line="$(grep -m1 '^- \*\*AI Models:\*\*' "$f" 2>/dev/null | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//' || true)"
+    tune_line="$(grep -m1 '^- \*\*AI Model Tuning:\*\*' "$f" 2>/dev/null | sed 's/^- \*\*AI Model Tuning:\*\*[[:space:]]*//' || true)"
+    rows=""
+    for p in "${PW_PROVIDERS[@]}"; do
+      for r in $(pw_role_names); do
+        val=""; for kv in $line; do [ "${kv%%=*}" = "$r" ] && val="${kv#*=}"; done
+        model="—"; variant="—"; reasoning="—"; effort="—"
+        case "$val" in
+          "$p":*) model="${val#*:}"
+                  tune=""; for kv in $tune_line; do [ "${kv%%=*}" = "$r" ] && tune="${kv#*=}"; done
+                  variant="$(_tuning_field "$tune" variant)"; reasoning="$(_tuning_field "$tune" reasoning)"; effort="$(_tuning_field "$tune" effort)"
+                  [ -n "$variant" ] || variant="—"; [ -n "$reasoning" ] || reasoning="—"; [ -n "$effort" ] || effort="—" ;;
+        esac
+        rows="$rows${rows:+$'\n'}| $p | $r | $model | $variant | $reasoning | $effort |"
+      done
+    done
+    _section_ensure "$f" "Role models" "$PW_ROLE_MODEL_HEADER" "$rows" \
+      "Canonical per-provider defaults for each non-execution role. An empty cell means the native provider default." || true
+  fi
+  _project_sync_legacy_lines "$f" || true
+  if ! grep -qE '^##+[[:space:]]+Execution suggestions[[:space:]]*$' "$f"; then
+    _section_ensure "$f" "Execution suggestions" "$PW_EXECUTION_HEADER" "" \
+      "Advice for breakdown only. These rows never authorize task dispatch." || true
+  fi
   rows=""
   for rs in $AI_REVIEW_PHASES; do
     mode="$(_project_review_value "$f" outcome "$rs")"
@@ -1231,10 +1305,12 @@ _project_sync_readable_tables() { # <readme>
     rep="$(_project_review_value "$f" repair "$rs")"
     rows="$rows${rows:+$'\n'}| $rs | $mode | $tr | $rep |"
   done
-  _tbl_set_section "$f" "Review policy" "Surface|Outcome mode|Trigger|Repair mode" "$rows" || true
+  _section_ensure "$f" "Review policy" "Surface|Outcome mode|Trigger|Repair mode" "$rows" \
+    "Readable view of the dashboard review lines. The lines stay canonical." || true
   rb="$(_project_review_rounds_value "$f")"
-  _tbl_set_section "$f" "Reviewer budget" "Setting|Value|Meaning" "| Reviewer passes | $rb | Total passes in one bounded review cycle |" || true
-  rows=""
+  _section_ensure "$f" "Reviewer budget" "Setting|Value|Meaning" \
+    "| Reviewer passes | $rb | Total passes in one bounded review cycle |" \
+    "Readable view of the review budget line." || true
   local _er _el _ep
   _er="$(_project_defaults_member "$f" routing)"; [ -n "$_er" ] || _er="$PW_ROUTE_DEFAULT"
   _el="$(_project_defaults_member "$f" execution-limit)"; [ -n "$_el" ] || _el="$PW_MAX_SELF_REPAIR"
@@ -1242,7 +1318,8 @@ _project_sync_readable_tables() { # <readme>
   rows="| Transport routing | $_er | Must still honor every explicit execution target |
 | Executor repair limit | $_el | Existing executor self-repair allowance |
 | Maximum parallel workers | ${_ep:-—} | Shared worker ceiling; unset means the planner chooses |"
-  _tbl_set_section "$f" "Execution policy initialization snapshot" "Setting|Value|Meaning" "$rows" || true
+  _section_ensure "$f" "Execution policy initialization snapshot" "Setting|Value|Meaning" "$rows" \
+    "Creation snapshot. Breakdown copies these values once into task/PLAN.md." || true
 }
 
 # Parse "<model>[variant=high,reasoning=low,effort=high,subagent=pw-executor]".
@@ -1716,6 +1793,17 @@ EOF
     schema:project)
       [ "${PW_APPLY_VALIDATE_ONLY:-0}" = 1 ] && return 0
       _project_config_section_ensure "$(proj_dir "$scope")/README.md" ;;
+    schema:task:*)
+      local _tid="${key#schema:task:}"
+      pw_task_id_ok "$_tid" || die "apply schema:task — invalid task id '$_tid'"
+      local _tf="$(proj_dir "$scope")/task/$_tid.md"
+      [ -f "$_tf" ] || die "apply schema:task — no task file task/$_tid.md"
+      [ "${PW_APPLY_VALIDATE_ONLY:-0}" = 1 ] && return 0
+      if ! grep -qE '^##+[[:space:]]+Execution routes[[:space:]]*$' "$_tf"; then
+        local _hdr="|$(printf '%s' "$PW_EXECUTION_HEADER" | sed 's/|/ | /g') |"
+        local _sep="|$(printf '%s' "$PW_EXECUTION_HEADER" | sed 's/[^|]*/---/g')|"
+        printf '\n## Execution routes\n\n%s\n%s\n' "$_hdr" "$_sep" >> "$_tf"
+      fi ;;
     review:outcome:*|review:trigger:*|review:repair:*)
       local _axis="${key#review:}"; _axis="${_axis%%:*}"
       local _surface="${key##*:}" _gkey
@@ -1822,6 +1910,11 @@ _proposal_apply() { # <id>
       *) printf '%s\t%s\t%s\tskipped\n' "$key" "$owner" "$action" >> "$dir/receipt.tsv" ;;
     esac
   done < "$dir/changes"
+  # A migrated project reaches schema 2 with only the tables its writes created. Materialize the
+  # rest of the readable configuration now, before the postimage records rollback evidence.
+  if [ "$scope" != global ]; then
+    _project_sync_readable_tables "$(proj_dir "$scope")/README.md" || true
+  fi
   _proposal_postimage_record "$id" "$scope"
   pw_proposal_mark "$id" state applied
   pw_proposal_mark "$id" applied_at "$(date +%s)"
@@ -2387,6 +2480,7 @@ cmd_migrate() {
             tf="$d/task/$t.md"
             [ -f "$tf" ] || die "migrate: no task file task/$t.md"
             if [ "$(pw_task_schema "$tf")" = 2 ]; then continue; fi
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "schema:task:$t" "task/$t.md:Execution routes" "1" "2" "add" "convert the task to explicit routes" >> "$tmp"
             pin="$(pw_field "$tf" "Execute with" || true)"
             case "$pin" in
               *:*) eprov="${pin%%:*}"; m2="${pin#*:}" ;;
@@ -2395,6 +2489,10 @@ cmd_migrate() {
             for cur in "${curs[@]}"; do
               if [ -z "$m2" ]; then
                 printf '%s\t%s\t%s\t%s\t%s\t%s\n' "execution-route:$t:$cur" "task/$t.md:Execution routes" "—" "—" "blocked" "legacy pin has no concrete provider:model; choose a target" >> "$tmp"
+              elif ! pw_provider_enabled "$eprov"; then
+                printf '%s\t%s\t%s\t%s\t%s\t%s\n' "execution-route:$t:$cur" "task/$t.md:Execution routes" "—" "$eprov:$m2" "blocked" "legacy pin names disabled provider '$eprov'; choose an enabled target" >> "$tmp"
+              elif ! "$HERE/pw-config.sh" model-resolve --provider "$eprov" --model "${m2%%\[*}" >/dev/null 2>&1; then
+                printf '%s\t%s\t%s\t%s\t%s\t%s\n' "execution-route:$t:$cur" "task/$t.md:Execution routes" "—" "$eprov:$m2" "blocked" "legacy pin model is unavailable in the live catalog; re-pin the task to a current id" >> "$tmp"
               else
                 printf '%s\t%s\t%s\t%s\t%s\t%s\n' "execution-route:$t:$cur" "task/$t.md:Execution routes" "—" "$eprov:$m2" "add" "legacy task pin" >> "$tmp"
               fi
