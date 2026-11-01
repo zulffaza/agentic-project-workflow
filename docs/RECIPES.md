@@ -238,6 +238,28 @@ Clear a task route with `/pw-config unset --project <slug> --key execution-route
 `model-check` checks permission against the allowlist. Setting a pin also checks availability and provider scope.
 See [config values](REFERENCE.md#what-you-can-update-per-project-pw-config) and [execution](EXECUTION.md) for routing details.
 
+## Migrate an existing project
+
+Preview the conversion of legacy role rows and task pins. Preview writes nothing:
+
+```text
+/pw-config migrate --project <slug> --task T01 --task T02 --current-provider <current>
+```
+
+Apply the proposal, then refresh and check the project:
+
+```text
+/pw-config migrate --apply <id>
+/pw-config ensure --project <slug>
+/pw-doctor --project <slug>
+```
+
+Apply adds the schema marker, the readable configuration tables and review lines, and one route
+per selected task. A pin whose model is no longer in the live catalog is reported as `blocked`; the
+task gets an empty route table so dispatch blocks. Re-pin that task with `execution-route` before
+you execute it again. Roll back with `/pw-config migrate --rollback <id>`; holders changed after
+apply are preserved.
+
 ## Use AI review with human approval
 
 Advisory is the default outcome, and nothing starts by itself (`review-trigger` is `manual`).

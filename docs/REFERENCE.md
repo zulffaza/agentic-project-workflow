@@ -217,6 +217,10 @@ Apply validates every selected mutation before writing, keeps a restorable preim
 holder, and records one `receipt.tsv`. A failure leaves a partial state with preimages and a
 rollback command instead of claiming success.
 `/pw-config migrate` performs the same preview/apply cycle for legacy role rows and task pins.
+Applying it materializes the readable configuration tables and review lines, and converts every
+selected task to an explicit route table. A pin whose model is no longer in the live catalog is
+reported as `blocked` and is not converted; the task gets an empty route table so dispatch blocks
+until the task is re-pinned.
 `/pw-config sync-routes --project <slug> [--current-provider <p>]` converts a task's legacy
 `Execute with:` pin into that provider's route; it is idempotent and refuses ambiguous pins.
 

@@ -89,7 +89,9 @@ The operators (operator words first; every value named — `--project <slug>` se
   materialize one route per task from the legacy `Execute with:` pin for the selected current
   provider; idempotent, refuses a prose/ambiguous pin, never invents a model.
 - **`/pw-config migrate [--scope global | --project <slug> [--task <T0n> --current-provider <p>]] [--apply <id>|--rollback <id>] [--json]`** →
-  explicit preview/apply conversion of legacy role rows and task pins. Reads never migrate.
+  explicit preview/apply conversion of legacy role rows and task pins. Apply materializes the
+  readable tables and review lines, converts every task to an explicit route table, and marks a pin
+  with a retired model `blocked` instead of failing the batch. Reads never migrate.
 - **`/pw-config ensure --project <slug>`** → `…/pw-config.sh ensure --project <slug>` — inserts any missing
   dashboard config lines (`AI Models:`, `AI Review:`, `Review Trigger:`, `Review Repair:`,
   `Review Budget:`) with explicit defaults, persists the legacy-`off` → `advisory` migration in
