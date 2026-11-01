@@ -32,15 +32,15 @@ The keys you can `set`, and their legal values (the same list `show` prints as i
 | `routing` | `auto` · `subagent` · `headless` | default route for every task; `headless` = **strict** model binding, no silent downgrade |
 | `execution-limit` | integer `0..99` | self-repair rounds per run (floor: `PW_MAX_SELF_REPAIR`) |
 | `max-parallel` | integer `1..99` | concurrent executors at `/pw-execute`, and concurrent MR comment fixers at `/pw-ship comments` |
-| `produced-by` | a provider from `PW_PROVIDERS` (see `global show`) | default executor provider for new task pins |
+| `produced-by` | a provider from `PW_PROVIDERS` (see `global show`) | breakdown provenance only; never a dispatch fallback |
 | `ai-review` | `<surface>=<mode>` pairs or `all=<mode>` (+ named overrides); surfaces `context`·`analysis`·`plan`·`task-plan`·`task-exec`·`ship`·`rfc`·`close`; modes `advisory|auto` | review OUTCOME per surface: `advisory` = findings + a human still signs off (default); `auto` may self-sign a genuinely clean managed pass (the removed `off` reads as advisory; persist with `ensure`) |
 | `review-trigger` | `<surface>=<value>` pairs or `all=<value>`; values `manual|completion` | WHEN a pass starts: `manual` (only an explicit `/pw-review … ai`, default) or `completion` (also after a succeeded producing command's verification); `completion` never disables explicit requests |
 | `review-repair` | `<surface>=<value>` pairs or `all=<value>`; values `manual`·`bounded` | whether a completion review may run the bounded repair cycle (`review → repair → verify → fresh review`); `manual` = findings stop for me (default) |
 | `review-rounds` | integer `1..3` | total reviewer passes in a bounded cycle (default `3` — at most two intervening verified repairs) |
-| `ai-model` | `<role>=<provider>:<model>` or `<role>=—` pairs; optional tuning on a ONE-role write | Deprecated schema-2 alias that writes the matching provider/role cell. Prefer `role-model`; clearing needs an unambiguous provider |
+| `ai-model` | `<role>=<provider>:<model>` or `<role>=—` pairs; optional tuning on a ONE-role write | Deprecated alias. A project write goes to the matching provider/role cell; a global write goes to the provider initialization cell. Prefer `role-model`. Legacy `PW_PROJECT_DEFAULT_AI_MODEL_*` / `PW_AI_MODEL_DEFAULT_*` seeds are reported but never used at creation or runtime |
 | `role-model` | `--provider <p> --role <role> --model <model>` + optional `--variant`/`--reasoning`/`--effort` | One provider-by-role cell in the project table; `—` clears it to the native provider default; tuning is validated against the provider capability table |
-| `execution-suggestion` | `--current-provider <c> --execution-provider <p> --model <model>` + optional `--subagent` and tuning | Breakdown advice only — never dispatch, never a task edit |
-| `execution-route` | `--task <T0n> --current-provider <c> --execution-provider <p> --model <model>` + optional `--subagent` and tuning; `--preview` / `--apply <id>` | One task route. Model is mandatory; a missing current-provider row blocks dispatch; the derived `Execute with:` summary is written by the same helper |
+| `execution-suggestion` | `--current-provider <c> --execution-provider <p> --model <model>` + optional `--subagent` and tuning (including `--thinking`) | Breakdown advice only — never dispatch, never a task edit |
+| `execution-route` | `--task <T0n> --current-provider <c> --execution-provider <p> --model <model>` + optional `--subagent` and tuning (including `--thinking`); `--preview` / `--apply <id>` | One task route. Model is mandatory; a missing current-provider row blocks dispatch; thinking is emitted only where supported (Kilo `--thinking`; Cursor encoded model id; Claude/Codex refuse); the derived `Execute with:` summary is written by the same helper |
 | `pin` | `<T0n>=<provider>:<model>` or `<T0n>=—` pairs | Deprecated: in a schema-2 project one pin becomes an execution route keyed by `--current-provider` (or PLAN `Produced by`); schema-1 keeps the legacy dual-holder write |
 | `rfc-target` | a doc ref/URL | where `/pw-rfc` publishes |
 
@@ -73,22 +73,30 @@ The operators (operator words first; every value named — `--project <slug>` se
   a good batch is one line-update + one LOG line. A value that can't bind (bad enum, provider not
   enabled, model not in the live catalog / out of the configured API-provider scope) is refused
   here, at write time — not discovered at spawn time. The removed `off`/`both` values are refused
-  with the replacement (`off` → advisory + `review-trigger`; `both` → `completion`).
-- **`/pw-config unset --project <slug> --key role-model|execution-suggestion|execution-route …`** →
+  with the replacement (`off` → advisory + `review-trigger`; `both` → `completion`). Schema-2 keys
+  are `role-model`, `execution-suggestion`, and `execution-route`; all three accept
+  `--preview` / `--apply <id>`.
+- **`/pw-config unset --project <slug> --key role-model|execution-suggestion|execution-route … [--preview | --apply <id>]`** →
   remove one schema-2 cell or route; clearing a role cell means the native provider default.
-- **`/pw-config suggest [--scope global | --project <slug> [--task <T0n> --current-provider <p>]] [--group <g>] [--provider <p>] [--set <selector>=<value>]… [--exclude <selector>] [--replace-existing] [--apply <id>] [--json]`** →
-  one reviewable batch: preview writes nothing, a revision supersedes the previous unapplied
-  proposal, unresolved rows stay needs-input, and only an explicit apply writes.
+  `--preview` returns a bound proposal instead of writing; apply it with the printed `--apply <id>`.
+- **`/pw-config suggest [--scope global | --project <slug> [--task <T0n> --current-provider <p>]] [--group role-models|execution-suggestions|execution-routes|review-policy|execution-policy] [--provider <p>] [--set <selector>=<value>]… [--exclude <selector>] [--replace-existing] [--apply <id>|--rollback <id>] [--json]`** →
+  one reviewable batch: preview writes nothing, an existing project never takes current global
+  values implicitly, an intentional empty cell stays empty, a revision supersedes the previous
+  unapplied proposal, unresolved rows stay needs-input, and only an explicit apply writes. Apply
+  validates the whole batch first, keeps a preimage per affected holder, and writes one per-key
+  `receipt.tsv`; `--rollback <id>` restores holders that did not change after apply.
 - **`/pw-config sync-routes --project <slug> [--current-provider <p>] [--preview] [--json]`** →
   materialize one route per task from the legacy `Execute with:` pin for the selected current
   provider; idempotent, refuses a prose/ambiguous pin, never invents a model.
-- **`/pw-config migrate [--scope global | --project <slug> [--task <T0n> --current-provider <p>]] [--apply <id>] [--json]`** →
+- **`/pw-config migrate [--scope global | --project <slug> [--task <T0n> --current-provider <p>]] [--apply <id>|--rollback <id>] [--json]`** →
   explicit preview/apply conversion of legacy role rows and task pins. Reads never migrate.
 - **`/pw-config ensure --project <slug>`** → `…/pw-config.sh ensure --project <slug>` — inserts any missing
   dashboard config lines (`AI Models:`, `AI Review:`, `Review Trigger:`, `Review Repair:`,
-  `Review Budget:`) with explicit defaults, and persists the legacy-`off` → `advisory` migration
-  in the AI Review line; idempotent. Reads never write: a `get` of an absent line shows the
-  effective defaults with a note — `ensure` (or any `--set`) is the door that persists it.
+  `Review Budget:`) with explicit defaults, persists the legacy-`off` → `advisory` migration in
+  the AI Review line, and regenerates the derived AI Models/AI Model Tuning lines plus the
+  readable Review policy and Execution policy snapshot tables; idempotent. Reads never write: a
+  `get` of an absent line shows the effective defaults with a note — `ensure` (or any `--set`) is
+  the door that persists it.
 - **`/pw-config global show`** → `…/pw-config.sh global show` — the effective machine floors
   (providers, API-provider scopes, model allowlists, route default, repair budgets, RFC backend,
   and the **request-review frame + generation prompts** — each effective path plus
