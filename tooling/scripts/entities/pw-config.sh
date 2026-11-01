@@ -3382,7 +3382,6 @@ cmd_ensure() {
   [ -f "$f" ] || die "no README.md in project $slug"
   local schema; schema="$(pw_project_schema "$(proj_dir "$slug")")"
   _ai_models_line_ensure "$f"
-  [ "$schema" = 2 ] && _project_sync_legacy_lines "$f"
   _ai_review_line_ensure "$f"
   local migrated=0
   _ai_review_line_migrate "$f" && migrated=1

@@ -528,7 +528,7 @@ C439-suggest-backfills-absent-row-from-global	scripts/entities/pw-config.sh	    
 C440-proposal-batch-validation-dropped	scripts/entities/pw-config.sh	        ( PW_APPLY_VALIDATE_ONLY=1; _apply_one_change "$scope" "$key" "$new" )	        ( true )	T1	^pw-provider-config\.t\.sh$
 C441-session-tuning-identity-dropped	scripts/entities/pw-session.sh	  [ "$v" = "$rv" ] || { echo "recorded variant '${v:-<none>}' does not match the route variant '${rv:-<none>}'"; return 1; }	  true || { echo "recorded variant '${v:-<none>}' does not match the route variant '${rv:-<none>}'"; return 1; }	T1	^pw-session\.t\.sh$
 C442-provider-audit-derived-cell	scripts/entities/pw-status.sh	    if [ -f "$_tf" ] && [ "$(pw_task_schema "$_tf")" = 2 ]; then	    if false; then	T1	^pw-status\.t\.sh$
-C443-ensure-mirror-sync-dropped	scripts/entities/pw-config.sh	  [ "$schema" = 2 ] && _project_sync_legacy_lines "$f"	  [ "$schema" = 2 ] && true	T1	^pw-provider-config\.t\.sh$
+C443-ensure-mirror-sync-dropped	scripts/entities/pw-config.sh	  _project_sync_legacy_lines "$f" || true	  true || true	T1	^pw-provider-config\.t\.sh$
 C444-global-ai-model-writes-legacy-seed	scripts/entities/pw-config.sh	          _global_set_var "$(pw_role_cell_var "$_rp" "$role" MODEL)" "${value#*:}"	          _global_set_var "$(_global_role_var "$role" MODEL)" "${value#*:}"	T1	^pw-project-defaults\.t\.sh$
 C445-unset-preview-writes-directly	scripts/entities/pw-config.sh	  if [ "$preview" = 1 ]; then	  if false; then	T1	^pw-provider-config\.t\.sh$
 C446-review-policy-group-dropped	scripts/entities/pw-config.sh	    if _group_selected review-policy && [ ${#tasks[@]} -eq 0 ]; then	    if false; then	T1	^pw-provider-config\.t\.sh$
