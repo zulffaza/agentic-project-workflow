@@ -105,7 +105,7 @@ phases, `--json` prints a machine-readable object. No slug; never writes.
   drained as **one batched fixer pass** (per-item replies unchanged) with a dependency's late fix
   fanning one capped re-verify/de-impact pass onto what already ran against the old state. Lanes
   bind their complete model/tuning from the dashboard's `- **AI Models:**` line
-  (`pw-config.sh get --project <slug> --key ai-model --json`, then `spawn-args --role <role>`);
+  (`pw-config.sh get --project <slug> --key role-model --provider <current-provider> --json`, then `spawn-args --role <role> --provider <current-provider>`);
   stop when the route cannot express the stored tuning. The executor is bound by the task's
   `Execute with:` plus its `Effort:`/`Thinking:` controls. Full rules: docs/EXECUTION.md +
   `references/execution-and-routing.md`.

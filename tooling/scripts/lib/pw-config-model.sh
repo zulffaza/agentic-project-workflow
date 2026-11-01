@@ -288,6 +288,67 @@ pw_project_suggestion_row() { # <project-dir> <current-provider>
   pw_tbl_get "$1/README.md" "Execution suggestions" 1 "$(pw_cfg_lc "$2")" 2>/dev/null
 }
 
+# Derived compatibility views for older readers. The Role models table is the only writer;
+# every owning writer regenerates these lines from it. Prints the full `role=value` string.
+pw_legacy_mirror_models() { # <readme>
+  local f="$1" rows r p role model variant reasoning effort prov pcount out=""
+  rows="$(pw_tbl_rows "$f" "Role models")"
+  for r in $(pw_role_names); do
+    prov=""; pcount=0
+    while IFS=$'\t' read -r p role model variant reasoning effort; do
+      [ -n "${role:-}" ] || continue
+      [ "$role" = "$r" ] || continue
+      pw_cell_empty "${model:-}" && continue
+      pcount=$((pcount+1)); prov="$p"
+    done <<EOF
+$rows
+EOF
+    if [ "$pcount" = 0 ]; then out="$out $r=—"
+    elif [ "$pcount" -gt 1 ]; then out="$out $r=multiple"
+    else
+      while IFS=$'\t' read -r p role model variant reasoning effort; do
+        [ "$role" = "$r" ] || continue
+        pw_cell_empty "${model:-}" && continue
+        out="$out $r=$p:$model"
+        break
+      done <<EOF
+$rows
+EOF
+    fi
+  done
+  printf '%s' "${out# }"
+}
+
+pw_legacy_mirror_tuning() { # <readme>
+  local f="$1" rows r p role model variant reasoning effort pcount prov out="" tparts
+  rows="$(pw_tbl_rows "$f" "Role models")"
+  for r in $(pw_role_names); do
+    pcount=0
+    while IFS=$'\t' read -r p role model variant reasoning effort; do
+      [ -n "${role:-}" ] || continue
+      [ "$role" = "$r" ] || continue
+      pw_cell_empty "${model:-}" && continue
+      pcount=$((pcount+1))
+    done <<EOF
+$rows
+EOF
+    [ "$pcount" = 1 ] || continue
+    while IFS=$'\t' read -r p role model variant reasoning effort; do
+      [ "$role" = "$r" ] || continue
+      pw_cell_empty "${model:-}" && continue
+      tparts=""
+      ! pw_cell_empty "${variant:-}" && tparts="variant:$variant"
+      ! pw_cell_empty "${reasoning:-}" && tparts="${tparts:+$tparts,}reasoning:$reasoning"
+      ! pw_cell_empty "${effort:-}" && tparts="${tparts:+$tparts,}effort:$effort"
+      [ -n "$tparts" ] && out="$out $r=$tparts"
+      break
+    done <<EOF
+$rows
+EOF
+  done
+  printf '%s' "${out# }"
+}
+
 # --- task execution routes ---------------------------------------------------
 # Prints "<execution-provider>\t<model>\t<subagent>\t<variant>\t<reasoning>\t<effort>\t<thinking>".
 pw_task_route_row() { # <task-file> <current-provider>

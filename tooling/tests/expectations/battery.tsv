@@ -48,7 +48,7 @@ rfc pwt-f2-mid	pw-rfc.sh	comments --project pwt-f2-mid	2	-
 adopt pwt-f2-mid	pw-context.sh	adopt-snapshot --project pwt-f2-mid --repo api --branch agent/pwt-f2-mid/T01-thing	0	-
 help project pwt-f2-mid	pw-help.sh	project --project pwt-f2-mid	0	-
 help project-review pwt-f2-mid	pw-help.sh	project --project pwt-f2-mid --name pw-review	0	-
-provider-audit pwt-f2-mid	pw-status.sh	provider-audit --project pwt-f2-mid	0	-
+provider-audit pwt-f2-mid	pw-status.sh	provider-audit --project pwt-f2-mid	1	-
 status pwt-f3-hostile	pw-status.sh	--project pwt-f3-hostile --skip-cli-check	0	-
 review-scan pwt-f3-hostile	pw-review.sh	scan --project pwt-f3-hostile	0	-
 lint-all pwt-f3-hostile	pw-doc.sh	lint --kind all --project pwt-f3-hostile	1	-
@@ -72,7 +72,7 @@ rfc pwt-f3-hostile	pw-rfc.sh	comments --project pwt-f3-hostile	2	-
 adopt pwt-f3-hostile	pw-context.sh	adopt-snapshot --project pwt-f3-hostile --repo api --branch agent/pwt-f3-hostile/T01-thing	0	-
 help project pwt-f3-hostile	pw-help.sh	project --project pwt-f3-hostile	0	-
 help project-review pwt-f3-hostile	pw-help.sh	project --project pwt-f3-hostile --name pw-review	0	-
-provider-audit pwt-f3-hostile	pw-status.sh	provider-audit --project pwt-f3-hostile	0	-
+provider-audit pwt-f3-hostile	pw-status.sh	provider-audit --project pwt-f3-hostile	1	-
 status-all fixtures	pw-status.sh	--all	1	-
 review-prepare pwt-f2-mid	pw-review.sh	prepare --project pwt-f2-mid --file task/PLAN.md --pass-id p-batt	0	-
 review-passes pwt-f2-mid	pw-review.sh	passes --project pwt-f2-mid	0	-

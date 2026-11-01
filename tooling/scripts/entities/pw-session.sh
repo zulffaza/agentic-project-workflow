@@ -42,6 +42,92 @@ PROJECTS_DIR="${PW_PROJECTS_DIR:-$(cd "$HERE/../../../.." && pwd)}"
 
 die() { echo "pw-session: $*" >&2; exit 2; }
 
+# --- recorded attempt identity -------------------------------------------------
+# Session liveness alone never authorizes a resume. The task's ## Result records what actually
+# ran; compare it with the resolved route before trusting the provider session file.
+_sc_canon_model() { # <provider> <model> -> canonical id, or the input when unavailable
+  local p="$1" m="$2" base out
+  base="${m%%\[*}"
+  out="$("$HERE/pw-config.sh" model-resolve --provider "$p" --model "$base" 2>/dev/null || true)"
+  case "$out" in ''|*' '*) printf '%s' "$base" ;; *) printf '%s' "$out" ;; esac
+}
+
+_sc_parse_identity() { # <actually-used> -> prints "<prov>\t<model>\t<variant>\t<reasoning>\t<effort>\t<thinking>"
+  local raw="$1" token params kv k v prov model model_part variant="" reasoning="" effort="" thinking=""
+  case "$raw" in ''|—|'<'*'>'*) return 1 ;; esac
+  token="$(printf '%s' "$raw" | awk '{print $1}')"
+  params="${raw#*\[}" ; [ "$params" = "$raw" ] && params=""
+  case "$token" in
+    *\[*\]) params="${token#*\[}"; params="${params%\]}"; model_part="${token%%\[*}" ;;
+    *\[*|*\]*) return 1 ;;
+    *) model_part="$token" ;;
+  esac
+  case "$model_part" in *:*) prov="${model_part%%:*}"; model="${model_part#*:}" ;; *) return 1 ;; esac
+  [ -n "$prov" ] && [ -n "$model" ] || return 1
+  for kv in $(printf '%s' "${params:-}" | tr ',' ' '); do
+    [ -n "$kv" ] || continue
+    k="${kv%%=*}"; v="${kv#*=}"
+    case "$k" in
+      variant) variant="$v" ;; reasoning) reasoning="$v" ;; effort) effort="$v" ;; thinking) thinking="$v" ;;
+    esac
+  done
+  # Flags recorded after the model id (executor's `Actually used:` style).
+  local flag val
+  # shellcheck disable=SC2086
+  set -- $raw
+  while [ $# -gt 0 ]; do
+    flag="$1"; shift
+    case "$flag" in
+      --variant) val="${1:-}"; [ $# -gt 0 ] && shift; variant="$val" ;;
+      --effort)  val="${1:-}"; [ $# -gt 0 ] && shift; effort="$val" ;;
+      --reasoning) val="${1:-}"; [ $# -gt 0 ] && shift; reasoning="$val" ;;
+      --thinking) case "${1:-}" in on|off) thinking="$1"; shift ;; *) thinking="on" ;; esac ;;
+      -c) val="${1:-}"; [ $# -gt 0 ] && shift
+          case "$val" in model_reasoning_effort=*) reasoning="${val#*=}" ;; esac ;;
+    esac
+  done
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$prov" "$model" "${variant:-—}" "${reasoning:-—}" "${effort:-—}" "${thinking:-—}"
+}
+
+_sc_recorded_identity() { # <task-file> -> identity row, rc 1 when absent/unusable
+  local tf="$1" raw tid
+  raw="$(pw_field "$tf" "Actually used" 2>/dev/null || true)"
+  case "${raw:-}" in ''|—|'<'*'>'*) raw=""; esac
+  if [ -z "$raw" ]; then
+    tid="$(basename "$tf" .md)"
+    raw="$(grep -E "spawned $tid( |\\()" "${tf%/*}/../LOG.md" 2>/dev/null | tail -1 \
+      | sed -nE "s/.*spawned $tid[^(]*\\(([^)]*)\\).*/\\1/p" || true)"
+  fi
+  case "${raw:-}" in ''|unknown|—) return 1 ;; esac
+  _sc_parse_identity "$raw"
+}
+
+_sc_identity_ok() { # <task-file> <route-row> -> 0 compatible, 1 not; prints the reason
+  local tf="$1" row="$2" rid rprov rmodel rv rr re rt rsub prov model v r e t proc produced m1 m2
+  rid="$(_sc_recorded_identity "$tf")" || { echo "no recorded attempt identity (Actually used:) — a live provider session alone cannot prove the binding"; return 1; }
+  IFS=$'\t' read -r prov model v r e t <<EOF
+$rid
+EOF
+  pw_cell_empty "$v" && v=""; pw_cell_empty "$r" && r=""; pw_cell_empty "$e" && e=""; pw_cell_empty "$t" && t=""
+  IFS=$'\t' read -r rprov rmodel rsub rv rr re rt <<EOF
+$row
+EOF
+  pw_cell_empty "$rv" && rv=""; pw_cell_empty "$rr" && rr=""; pw_cell_empty "$re" && re=""; pw_cell_empty "$rt" && rt=""
+  pw_cell_empty "$rsub" && rsub=""
+  [ "$prov" = "$rprov" ] || { echo "recorded provider '$prov' does not match the resolved route provider '$rprov'"; return 1; }
+  m1="$(_sc_canon_model "$prov" "$model")"; m2="$(_sc_canon_model "$rprov" "$rmodel")"
+  [ "$m1" = "$m2" ] || { echo "recorded model '$model' does not match the resolved route model '$rmodel'"; return 1; }
+  [ "$v" = "$rv" ] || { echo "recorded variant '${v:-<none>}' does not match the route variant '${rv:-<none>}'"; return 1; }
+  [ "$r" = "$rr" ] || { echo "recorded reasoning '${r:-<none>}' does not match the route reasoning '${rr:-<none>}'"; return 1; }
+  [ "$e" = "$re" ] || { echo "recorded effort '${e:-<none>}' does not match the route effort '${re:-<none>}'"; return 1; }
+  [ "$t" = "$rt" ] || { echo "recorded thinking '${t:-<none>}' does not match the route thinking '${rt:-<none>}'"; return 1; }
+  if [ -n "$rsub" ]; then
+    produced="$(pw_field "$tf" "Result produced by" 2>/dev/null || true)"
+    case "$produced" in *"$rsub"*) ;; *) echo "route names procedure '$rsub' but the recorded attempt did not use it"; return 1 ;; esac
+  fi
+  return 0
+}
+
 # _sc_kilo <id> — 0 live / 1 dead / 2 unverifiable
 _sc_kilo() {
   local id="$1" out
@@ -135,13 +221,13 @@ cmd_session_check() {
     pw_task_id_ok "$task" || die "session-check: invalid task id '$task' → fix: task ids look like T01"
     local tf; tf="$PROJECTS_DIR/$slug/task/$task.md"
     [ -f "$tf" ] || die "no task file: $slug/task/$task.md → fix: check the task id (or pass --provider <p> --session <id> directly)"
-    local sess exec_with _keys _cur
+    local sess exec_with _keys _cur route_row="" _row="" _why
     sess="$(pw_field "$tf" Session || true)"
     case "${sess:-}" in ""|"—"|"<*") echo "session-check: $slug/$task — dead (no recorded Session: id)" >&2; return 1 ;; esac
     if [ "$(pw_task_schema "$tf")" = 2 ]; then
       _cur="${PW_CURRENT_PROVIDER:-}"
       if [ -n "$_cur" ]; then
-        local _row; _row="$(pw_task_route_row "$tf" "$_cur" 2>/dev/null || true)"
+        _row="$(pw_task_route_row "$tf" "$_cur" 2>/dev/null || true)"
         if [ -z "$_row" ]; then
           echo "session-check: $slug/$task — not resumable (no execution route for current provider '$_cur') → fix: add the route before resuming" >&2
           return 1
@@ -157,6 +243,9 @@ cmd_session_check() {
         prov="${_row%%$'\t'*}"
       fi
       [ -n "$prov" ] || { echo "session-check: $slug/$task — not resumable (route has no execution provider)" >&2; return 1; }
+      route_row="$_row"
+      _why="$(_sc_identity_ok "$tf" "$route_row")" \
+        || { echo "session-check: $slug/$task — not resumable ($_why) → fix: start a new linked attempt; do not migrate a session across bindings" >&2; return 1; }
     else
       exec_with="$(pw_field "$tf" "Execute with" || true)"
       prov="${exec_with%%:*}"

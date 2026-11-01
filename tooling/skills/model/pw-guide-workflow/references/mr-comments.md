@@ -172,7 +172,7 @@ task IDs, sweep EVERY task that has an open MR** (`## Result → MR:` recorded, 
     **sequentially**; groups never run as parallel writers. For tasks sharing one MR, use the union of
     their comment-tracking tables, reply once per thread, and mirror the result/tracking into every
     contributing task.
-    If those tasks have incompatible execution pins, serialize bounded owner work orders under
+    If those tasks have incompatible execution routes for the current provider, serialize bounded owner work orders under
     their recorded pins; never edit the shared branch concurrently or invent a replacement pin.
     Aggregate all such passes under the same invocation/MR attempt.
     Fan-out per the ladder and the project `max-parallel`: **≥2 distinct MRs with open threads →
@@ -281,7 +281,7 @@ proves nothing. Never merge an MR as part of this command — merging is a human
 One `pw-ship-comment-analyst` pass covers the whole selected scope before any fixer starts. It is
 read-only and uses the project `AI Models: ship-comment-analyst` row (provider/session default when
 unset). Read the complete binding with
-`pw-config.sh get --project <slug> --key ai-model --json` and resolve its spawn arguments with
+`pw-config.sh get --project <slug> --key role-model --provider <current-provider> --role ship-comment-analyst --json` and resolve its spawn arguments with
 `pw-config.sh spawn-args --project <slug> --role ship-comment-analyst --provider <current-provider>`; stop before spawning when
 that route cannot bind the stored tuning. Do not duplicate its investigation in the driver first, and
 do not launch one analyst per MR.

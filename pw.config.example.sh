@@ -100,11 +100,9 @@ PW_KILO_API_PROVIDERS=(kilo)
 # scaffold.sh — a project can always flip them later via /pw-config set --project <slug> --key <key> …).
 #   PW_AI_REVIEW_DEFAULT=advisory                # advisory|auto — the per-surface starting OUTCOME
 #                                                # (legacy "off" here normalizes to "advisory")
-#   PW_AI_MODEL_DEFAULT_RESEARCHER=—             # e.g. kilo:command_code/MiniMaxAI/MiniMax-M3,
-#   PW_AI_MODEL_DEFAULT_ANALYST=—                #     claude:sonnet — `—` = provider default
-# (writer-task / reviewer / verifier / ship-comment-analyst follow the same
-#  PW_AI_MODEL_DEFAULT_<ROLE> pattern; the
-#  EXECUTOR is never a row — its pin is a task's `Execute with:`.)
+# Role models are provider/role initialization cells (see the schema-2 block at the end of this
+# file). The old PW_AI_MODEL_DEFAULT_<ROLE> assignments are retired: they are reported but never
+# used at runtime or during creation. Convert them with `/pw-config migrate --scope global`.
 
 # Back-compat: the old names PW_KILO_PROVIDERS (array) and PW_KILO_PROVIDER (singular) still
 # work and are folded into PW_KILO_API_PROVIDERS automatically (see tooling/scripts/lib/pw-common.sh).
@@ -176,7 +174,8 @@ PW_AI_REVIEW_DEFAULT="advisory"
 #   PW_PROJECT_DEFAULT_REVIEW_REPAIR=""      # surface=manual|bounded pairs (unset = manual)
 #   PW_PROJECT_DEFAULT_REVIEW_ROUNDS=""      # 1..3 (unset = 3)
 #   PW_PROJECT_DEFAULT_AI_REVIEW=""          # surface=advisory|auto pairs (unset = PW_AI_REVIEW_DEFAULT)
-# Legacy role seeds (compatibility only; /pw-config migrate converts them to provider cells).
+# Legacy role seeds (migration input only; creation and runtime ignore them). Convert with
+# `/pw-config migrate --scope global --preview`.
 #   PW_PROJECT_DEFAULT_AI_MODEL_RESEARCHER_MODEL=""    # provider:model
 #   PW_PROJECT_DEFAULT_AI_MODEL_RESEARCHER_VARIANT=""  # provider-supported variant (see model-check)
 #   PW_PROJECT_DEFAULT_AI_MODEL_RESEARCHER_REASONING=""

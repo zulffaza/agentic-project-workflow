@@ -950,6 +950,71 @@ if [ "$(pw_project_schema "$D")" = 2 ]; then
   done <<EOF
 $(pw_tbl_rows "$README" "Role models")
 EOF
+  # The two compatibility lines are derived views. A stale mirror is a consistency error,
+  # never a second writable owner.
+  _am_expected="$(pw_legacy_mirror_models "$README")"
+  _am_actual="$(printf '%s' "$am_line" | sed 's/^- \*\*AI Models:\*\*[[:space:]]*//')"
+  if [ "$_am_expected" != "$_am_actual" ]; then
+    bad "AI Models compatibility line is stale (expected: $_am_expected)"
+    echo "      → fix: /pw-config ensure --project $SLUG"
+    c6bad=1
+  fi
+  _at_line="$(grep '^- \*\*AI Model Tuning:\*\*' "$README" 2>/dev/null | head -1 || true)"
+  _at_expected="$(pw_legacy_mirror_tuning "$README")"
+  _at_actual="$(printf '%s' "$_at_line" | sed 's/^- \*\*AI Model Tuning:\*\*[[:space:]]*//')"
+  if [ "$_at_expected" != "$_at_actual" ]; then
+    bad "AI Model Tuning compatibility line is stale (expected: ${_at_expected:-<absent>})"
+    echo "      → fix: /pw-config ensure --project $SLUG"
+    c6bad=1
+  fi
+  # The readable review/execution tables are derived views. A stale row is a consistency error.
+  _doc_pair() { # <file> <label> <member>
+    local kv
+    for kv in $(grep -m1 "^- \*\*$2:\*\*" "$1" 2>/dev/null | sed "s|^- \*\*$2:\*\*[[:space:]]*||" || true); do
+      [ "${kv%%=*}" = "$3" ] && { printf '%s' "${kv#*=}"; return 0; }
+    done
+    return 0
+  }
+  _doc_mode() { case "${PW_AI_REVIEW_DEFAULT:-advisory}" in auto) printf auto ;; *) printf advisory ;; esac; }
+  if grep -q '^### Review policy' "$README"; then
+    while IFS=$'\t' read -r _rs _ro _rt2 _rrp; do
+      [ -n "${_rs:-}" ] || continue
+      [ "$_rs" = "Surface" ] && continue
+      _eo="$(_doc_pair "$README" "AI Review" "$_rs")"; [ -n "$_eo" ] || _eo="$(_doc_mode)"
+      case "$_eo" in off) _eo="advisory" ;; esac
+      _et="$(_doc_pair "$README" "Review Trigger" "$_rs")"; [ -n "$_et" ] || _et="manual"
+      _erp="$(_doc_pair "$README" "Review Repair" "$_rs")"; [ -n "$_erp" ] || _erp="manual"
+      if [ "$_ro" != "$_eo" ] || [ "$_rt2" != "$_et" ] || [ "$_rrp" != "$_erp" ]; then
+        bad "Review policy table row '$_rs' is stale (expected: $_eo | $_et | $_erp)"
+        echo "      → fix: /pw-config ensure --project $SLUG"
+        c6bad=1
+      fi
+    done <<EOF
+$(pw_tbl_rows "$README" "Review policy")
+EOF
+    _rbv="$(pw_tbl_rows "$README" "Reviewer budget" | awk -F'\t' '$1 == "Reviewer passes" {print $2}')"
+    _rbe="$(grep -m1 '^- \*\*Review Budget:\*\*' "$README" 2>/dev/null | sed -n 's/.*rounds=\([0-9][0-9]*\).*/\1/p' || true)"
+    [ -n "$_rbe" ] || _rbe=3
+    [ -z "$_rbv" ] || [ "$_rbv" = "$_rbe" ] || { bad "Reviewer budget table says '$_rbv', line says '$_rbe'"; echo "      → fix: /pw-config ensure --project $SLUG"; c6bad=1; }
+  fi
+  if grep -q '^### Execution policy initialization snapshot' "$README"; then
+    _exp_r="$(_doc_pair "$README" "Project Defaults" routing)"; [ -n "$_exp_r" ] || _exp_r="$PW_ROUTE_DEFAULT"
+    _exp_l="$(_doc_pair "$README" "Project Defaults" execution-limit)"; [ -n "$_exp_l" ] || _exp_l="$PW_MAX_SELF_REPAIR"
+    _exp_p="$(_doc_pair "$README" "Project Defaults" max-parallel)"; [ -n "$_exp_p" ] || _exp_p="—"
+    while IFS=$'\t' read -r _es _ev _em; do
+      [ -n "${_es:-}" ] || continue
+      [ "$_es" = "Setting" ] && continue
+      case "$_es" in
+        "Transport routing") _ex="$_exp_r" ;;
+        "Executor repair limit") _ex="$_exp_l" ;;
+        "Maximum parallel workers") _ex="$_exp_p" ;;
+        *) continue ;;
+      esac
+      [ "$_ev" = "$_ex" ] || { bad "Execution policy table row '$_es' is stale (expected: $_ex)"; echo "      → fix: /pw-config ensure --project $SLUG"; c6bad=1; }
+    done <<EOF
+$(pw_tbl_rows "$README" "Execution policy initialization snapshot")
+EOF
+  fi
   while IFS=$'\t' read -r _sc _se _sm _ss _sv _sr _sx _st; do
     [ -n "${_sc:-}" ] || continue
     pw_provider_enabled "$_sc" || note "Execution suggestion '$_sc' — current provider not enabled now; suggestion stays history"

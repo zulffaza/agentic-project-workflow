@@ -157,7 +157,9 @@ already exists the script attaches instead of dying; re-running is idempotent.
      Record the actual or degraded identity in the ledger and `Actually used:`.
    - **Preserve the spawn contract:** pass the task file as the work order; pipe prompts via stdin,
      never a long trailing argument. Log every spawn and write the same session id to `## Result →
-     Session:`; resume only after `pw-session.sh session-check` reports live. Follow the ladder's
+     Session:`; resume only after `pw-session.sh session-check` reports live **and** the recorded
+     attempt identity matches the resolved route (provider, canonical model, tuning, procedure).
+     Follow the ladder's
      `PW_HEADLESS_STALL`/`PW_HEADLESS_TIMEOUT` supervision rules. Unparsable output is failure;
      success requires real git artifacts and `## Verify`. Do not move to `/pw-ship` while a child
      is live. For cross-provider runs, use the selected hook entry only; use the effort table only

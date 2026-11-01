@@ -49,5 +49,25 @@ pwtest_rc 1 "task form: sentinel Session is dead (no id to try)" env HOME="$ROOT
 pwtest_rc 2 "task form: unknown task file refused" env HOME="$ROOT" PW_PROJECTS_DIR="$ROOT/projects" "$SES" session-check --project sessdemo --task T99
 pwtest_fix "unknown task carries a fix"
 
+# --- schema-2 identity: liveness alone never authorizes a resume ---------------------------
+TP2="$ROOT/projects/routed"; mkdir -p "$TP2/task"
+cat > "$TP2/task/T01.md" <<'TASK'
+- **Session:** ses_livetest0000000001
+- **Actually used:** kilo:alibaba-token-plan/test-model --variant high
+
+## Execution routes
+
+| Current provider | Execution provider | Target model | Target subagent | Variant | Reasoning | Effort | Thinking |
+|---|---|---|---|---|---|---|---|
+| kilo | kilo | alibaba-token-plan/test-model | — | high | — | — | — |
+TASK
+pwtest_rc 0 "recorded identity matches the resolved route" env HOME="$ROOT" PW_PROJECTS_DIR="$ROOT/projects" "$SES" session-check --project routed --task T01
+sed -i.bak -e 's/--variant high/--variant low/' "$TP2/task/T01.md"; rm -f "$TP2/task/T01.md.bak"
+pwtest_rc 1 "changed tuning blocks resume" env HOME="$ROOT" PW_PROJECTS_DIR="$ROOT/projects" "$SES" session-check --project routed --task T01
+grep -q 'variant' "$PWTEST_ERR" && pwtest_ok "changed-tuning refusal names the mismatch" || pwtest_bad "changed-tuning refusal" "$(head -c 160 "$PWTEST_ERR")"
+sed -i.bak -e 's/^- \*\*Actually used:\*\* .*/- **Actually used:** <filled by the orchestrator at run time>/' "$TP2/task/T01.md"; rm -f "$TP2/task/T01.md.bak"
+pwtest_rc 1 "missing recorded identity blocks resume" env HOME="$ROOT" PW_PROJECTS_DIR="$ROOT/projects" "$SES" session-check --project routed --task T01
+grep -q 'no recorded attempt identity' "$PWTEST_ERR" && pwtest_ok "missing-identity refusal is explicit" || pwtest_bad "missing-identity refusal" "$(head -c 160 "$PWTEST_ERR")"
+
 # --- --help / usage shape (registry duty) ---
 pwtest_rc 0 "session-check --help" "$SES" --help

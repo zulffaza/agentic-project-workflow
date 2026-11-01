@@ -72,13 +72,37 @@ selected route per task; actual routes live in each task file.
 |---|---|---|---|---|---|---|---|
 <EXECUTION_SUGGESTIONS_DEFAULT>
 
+### Review policy
+
+Readable view of the dashboard review lines above. The review lines remain the canonical
+writers; this table is regenerated from them.
+
+| Surface | Outcome mode | Trigger | Repair mode |
+|---|---|---|---|
+<REVIEW_POLICY_ROWS>
+
+#### Reviewer budget
+
+| Setting | Value | Meaning |
+|---|---|---|
+| Reviewer passes | <REVIEW_ROUNDS> | Total passes in one bounded review cycle |
+
+### Execution policy initialization snapshot
+
+Before `task/PLAN.md` exists, these values are editable project settings. Breakdown copies them
+once into PLAN. Afterward this table is creation history.
+
+| Setting | Value | Meaning |
+|---|---|---|
+<EXECUTION_POLICY_ROWS>
+
 ### Effective configuration locations
 
 | Setting group | Current owner |
 |---|---|
 | Role models | README.md, Role models |
 | Execution suggestions | README.md, Execution suggestions |
-| Review policy | README.md review lines |
+| Review policy | README.md review lines (rendered as Review policy) |
 | Execution policy | README.md until task/PLAN.md is created, then task/PLAN.md |
 | Actual task routes and tuning | task/Tnn.md, Execution routes |
 | RFC target | rfc/META.md when initialized; currently not configured |

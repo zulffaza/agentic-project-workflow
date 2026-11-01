@@ -691,35 +691,62 @@ cmd_provider_audit() {
       case " $ids " in *" $id "*) ;; *) continue ;; esac
     fi
     exec="$(printf '%s' "$exec" | pw_trim)"
-    [ -n "$exec" ] && [ "$exec" != "—" ] || continue
-    # provider = text before the first ':' (rows without a ':' bind no agent-provider)
-    case "$exec" in
-      *:*) prov="${exec%%:*}"; model="${exec#*:}" ;;
-      *)   prov=""; model="$exec" ;;
-    esac
-    expected="$exec"
-    route="—"
-    if [ -f "$d/task/$id.md" ]; then
-      au="$(pw_field "$d/task/$id.md" Route || true)"
-      [ -n "${au:-}" ] && route="$au"
-    fi
-    # availability: model-resolve is the shared oracle (exit 1 = not in catalog → unbound;
-    # exit 2 = out of configured api-provider scope → stale-provider; it fails open on
-    # "can't check", so a non-zero here is a positive determination).
+    expected=""
     verdict="ok"
-    if [ -n "$prov" ]; then
-      rc=0
-      mr_err="$("$HERE/pw-config.sh" model-resolve --provider "$prov" --model "$model" 2>&1 >/dev/null)" || rc=$?
-      case "$rc" in
-        1) verdict="unbound" ;;
-        2) verdict="stale-provider" ;;
-      esac
-      # provider itself gone from the enabled set (the migration case)
-      if [ "$verdict" = "ok" ]; then
+    local _tf="$d/task/$id.md" _routes="" _r1 _r2 _r3 _r4 _r5 _r6 _r7 _r8 _any_bad=0
+    if [ -f "$_tf" ] && [ "$(pw_task_schema "$_tf")" = 2 ]; then
+      # Canonical task routes, never the derived Execute with: cell (which reads `multi`).
+      while IFS=$'\t' read -r _r1 _r2 _r3 _r4 _r5 _r6 _r7 _r8; do
+        [ -n "${_r1:-}" ] || continue
+        _routes="${_routes}${_routes:+|}${_r2}:${_r3}"
+        rc=0
+        mr_err="$("$HERE/pw-config.sh" model-resolve --provider "$_r2" --model "$_r3" 2>&1 >/dev/null)" || rc=$?
+        case "$rc" in
+          1) verdict="unbound"; _any_bad=1 ;;
+          2) verdict="stale-provider"; _any_bad=1 ;;
+        esac
         _seen=0
-        for _p in "${PW_PROVIDERS[@]}"; do [ "$_p" = "$prov" ] && _seen=1; done
-        [ "$_seen" = 1 ] || verdict="stale-provider"
+        for _p in "${PW_PROVIDERS[@]}"; do [ "$_p" = "$_r2" ] && _seen=1; done
+        [ "$_seen" = 1 ] || { verdict="stale-provider"; _any_bad=1; }
+      done <<EOF
+$(pw_tbl_rows "$_tf" "Execution routes")
+EOF
+      if [ -z "$_routes" ]; then
+        expected="(no route)"; verdict="blocked"; bad=1
+        echo "      → fix: /pw-config set --project $slug --key execution-route --task $id --current-provider <p> --execution-provider <p> --model <model>" >&2
+      else
+        expected="${_routes//|/+}"
       fi
+    else
+      [ -n "$exec" ] && [ "$exec" != "—" ] || continue
+      # provider = text before the first ':' (rows without a ':' bind no agent-provider)
+      case "$exec" in
+        *:*) prov="${exec%%:*}"; model="${exec#*:}" ;;
+        *)   prov=""; model="$exec" ;;
+      esac
+      expected="$exec"
+      # availability: model-resolve is the shared oracle (exit 1 = not in catalog → unbound;
+      # exit 2 = out of configured api-provider scope → stale-provider; it fails open on
+      # "can't check", so a non-zero here is a positive determination).
+      if [ -n "$prov" ]; then
+        rc=0
+        mr_err="$("$HERE/pw-config.sh" model-resolve --provider "$prov" --model "$model" 2>&1 >/dev/null)" || rc=$?
+        case "$rc" in
+          1) verdict="unbound" ;;
+          2) verdict="stale-provider" ;;
+        esac
+        # provider itself gone from the enabled set (the migration case)
+        if [ "$verdict" = "ok" ]; then
+          _seen=0
+          for _p in "${PW_PROVIDERS[@]}"; do [ "$_p" = "$prov" ] && _seen=1; done
+          [ "$_seen" = 1 ] || verdict="stale-provider"
+        fi
+      fi
+    fi
+    route="—"
+    if [ -f "$_tf" ]; then
+      au="$(pw_field "$_tf" Route || true)"
+      [ -n "${au:-}" ] && route="$au"
     fi
     # what actually ran: newest ledger line for this task, else the task's Actually used:
     used="never-run"; via="—"
@@ -731,8 +758,20 @@ cmd_provider_audit() {
         via="$(printf '%s' "$lline" | sed -nE 's/.*via=([a-z]+).*/\1/p')"
         via="${via:-—}"
         # a recorded degrade is policy-blessed; anything else that differs is a mismatch
-        if [ "$verdict" = "ok" ] && [ "$used" != "$exec" ]; then
-          printf '%s' "$lline" | grep -q 'model-degraded' || verdict="mismatch"
+        if [ "$verdict" = "ok" ]; then
+          _match=0
+          if [ -n "$_routes" ]; then
+            local _alt
+            IFS='|' read -r -a _alts <<< "$_routes"
+            for _alt in "${_alts[@]}"; do
+              case "$used" in "$_alt"|"$_alt "*) _match=1 ;; esac
+            done
+          else
+            case "$used" in "$exec"|"$exec "*) _match=1 ;; esac
+          fi
+          if [ "$_match" = 0 ]; then
+            printf '%s' "$lline" | grep -q 'model-degraded' || verdict="mismatch"
+          fi
         fi
       fi
     fi

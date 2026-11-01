@@ -31,7 +31,7 @@ FIX=0
 case "${1:-}" in
   --fix) FIX=1 ;;
   --test) shift; exec "$HERE/../../tests/pw_test.sh" --tier "${PWTEST_TEST_TIERS:-T0,T1,T2,T4}" "$@" ;;
-  --project) shift; exec "$HERE/../entities/pw-project-doctor.sh" "$@" ;;
+  --project) exec "$HERE/../entities/pw-project-doctor.sh" "$@" ;;
   "" ) ;;
   -h|--help) grep '^#' "$0" | sed 's/^# \?//'; exit 0 ;;
   *) echo "unknown arg: $1 (try --help)" >&2; exit 1 ;;

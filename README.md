@@ -28,30 +28,45 @@ Set reusable project defaults once with `/pw-config global set`. A new project c
 into its dashboard; an existing project keeps its captured values, so changing a default never
 rewrites work in progress. Review modes, provider-by-role cells, execution suggestions, routing,
 execution limit, and maximum parallelism are supported. `/pw-config suggest` previews a whole
-scope at once; nothing is written until you apply the returned proposal.
+scope at once; nothing is written until you apply the returned proposal. Groups narrow a preview to
+`role-models`, `execution-suggestions`, `execution-routes`, `review-policy`, or `execution-policy`.
+An existing project never takes current global values implicitly: an empty role cell stays an
+intentional native-default choice unless you replace it with `--set` or `--replace-existing`.
 
 ```text
 /pw-config global show
 /pw-config global set --key review-trigger --set all=completion --set ship=manual
 /pw-config global set --key role-model --provider kilo --role analyst --model command_code/model --variant high
 /pw-config suggest --scope global
+/pw-config suggest --project checkout --group review-policy
 ```
 
 A project's Role models table is the canonical owner; the dashboard's `AI Models:` line is a
-derived compatibility view. Task execution uses an explicit route per current provider:
+derived compatibility view. The Review policy and Execution policy snapshot tables are readable
+views of the canonical review lines and project defaults. `pw-config ensure` regenerates derived
+views and the project doctor flags drift. Global `ai-model` writes role initialization cells; the
+older `PW_PROJECT_DEFAULT_AI_MODEL_*` and `PW_AI_MODEL_DEFAULT_*` seeds are reported but ignored at
+creation and runtime.
+
+Task execution uses an explicit route per current provider:
 
 ```text
 /pw-config set --project checkout --key execution-route --task T01 --current-provider kilo \
-  --execution-provider kilo --model command_code/model
+  --execution-provider kilo --model command_code/model --thinking on
 ```
 
 A missing route for the current provider blocks dispatch; there is no default fallback.
+`--thinking` is validated against the provider: Kilo emits `--thinking`, Cursor needs a model id
+that already encodes it, and Claude/Codex refuse it. Session resume also requires a recorded
+attempt identity that matches the resolved provider, model, tuning, and procedure; a live provider
+session alone is not enough.
 
 Role cells can carry a provider-supported variant, reasoning level, or effort level. Ask what is
 supported before choosing a value:
 
 ```text
 /pw-config model-check --provider kilo --model command_code/model
+/pw-config unset --project checkout --key role-model --provider kilo --role analyst --preview
 ```
 
 `model-check` lists supported controls and validates a requested combination without spending a
@@ -59,6 +74,11 @@ model request. Unsupported or unverified tuning is refused, never silently dropp
 role's model without new tuning flags resets that role's variant/reasoning/effort; clearing the role
 clears them too. A new project validates its resolved defaults before creation, so an unavailable
 model refuses creation instead of entering the dashboard.
+
+`unset --preview` returns a bound proposal; apply it with the printed `--apply <id>` command. Batch
+apply validates every selected change before writing, keeps restorable preimages, and writes a
+per-key receipt. `suggest --rollback <id>` or `migrate --rollback <id>` restores holders that did
+not change after apply and preserves later edits.
 
 Once installed, run a workflow entry in your agent session. Claude Code, Cursor, and Codex install
 the 22 `pw-*` entries as explicit-only skills (select one, or type its `$pw-*` form on Codex).

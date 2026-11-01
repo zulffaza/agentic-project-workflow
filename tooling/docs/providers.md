@@ -258,8 +258,10 @@ $PW_HOME/tooling/scripts/entities/pw-config.sh spawn-args --project <slug> \
 ```
 
 A missing row for the current provider is a refusal, not a fallback. The route names the execution
-provider and a mandatory model; `Execute with:` is only a derived summary. Codex has no seeded agent
-definitions, so it has no worker cells. Fixer procedure entries are not workers.
+provider and a mandatory model; `Execute with:` is only a derived summary. Per-route tuning includes
+`Thinking:`: Kilo emits `--thinking` for `on`; Cursor requires a model id that already contains
+`-thinking-`; Claude and Codex refuse the field because effort covers reasoning. Codex has no seeded
+agent definitions, so it has no worker cells. Fixer procedure entries are not workers.
 
 ## Choosing a model — no fixed roster, model-agnostic by default
 

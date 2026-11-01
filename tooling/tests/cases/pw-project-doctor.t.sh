@@ -24,6 +24,8 @@ PWOK="$PW_PROJECTS_DIR/pd-ok"
 PDPRE="$(pd_sha "$PW_PROJECTS_DIR/pd-ok")"
 pwtest_rc 0 "doctor F2 walk exits 0" env PW_CONFIG_FILE="$PDF2CFG" "$PDOCTOR" --project pd-ok
 pwtest_re 'project-doctor pd-ok: 0 ✗' "F2 summary line: zero ✗"
+PDWRAP="$TOOL/scripts/toolchain/pw-doctor.sh"
+pwtest_rc 0 "toolchain --project passes the named slug" env PW_CONFIG_FILE="$PDF2CFG" PW_PROJECTS_DIR="$PW_PROJECTS_DIR" "$PDWRAP" --project pd-ok
 PDPOST="$(pd_sha "$PW_PROJECTS_DIR/pd-ok")"
 [ "$PDPRE" = "$PDPOST" ] && pwtest_ok "doctor mutates nothing without --fix" || pwtest_bad "read-only contract" "project tree hash changed"
 
