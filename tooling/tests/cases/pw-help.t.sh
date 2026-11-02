@@ -415,6 +415,15 @@ d=json.load(open(sys.argv[1]))
 assert d and all(set(r)=={"surface","path","line","text"} and isinstance(r["line"], int) for r in d)
 assert all(not r["path"].endswith(".sh") for r in d)  # scripts are a maintainer surface (T3)
 PYF
+# find ordering: an exact command surface ranks first, and the capped view is stable
+# across runs (the 20-hit window must never depend on filesystem traversal order).
+pwtest_rc 0 "find exact command ranks first" "$C" find --term review
+head -1 "$PWTEST_OUT" | grep -qF 'skills/human/pw-review/SKILL.md' \
+  && pwtest_ok "find ranks the exact surface first" || pwtest_bad "find rank" "exact command not first"
+pwtest_rc 0 "find repeat run exits 0" "$C" find --term batch
+_det fnd
+pwtest_rc 0 "find second run exits 0" "$C" find --term batch
+_det_cmp fnd "find output is deterministic"
 pwtest_rc 2 "find without term refuses" "$C" find
 
 # 8g) scope declarations (plan 42): every command declares its scope, and the renderer's

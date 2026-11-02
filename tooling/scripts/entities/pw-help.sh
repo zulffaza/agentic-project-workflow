@@ -1318,18 +1318,25 @@ EF
   total="$(awk 'END{print NR+0}' "$hits")"
   # path normalization + snippet trim -> uniform records "surface PATH LINE TEXT"
   local norm; norm="$(mktemp)"
-  python3 - "$hits" "$PW_HOME" <<'PYNORM' > "$norm"
-import sys
-root, home = sys.argv[1], sys.argv[2] + "/"
+  python3 - "$hits" "$PW_HOME" "$phrase" <<'PYNORM' > "$norm"
+import os, sys
+root, home, phrase = sys.argv[1], sys.argv[2] + "/", sys.argv[3]
+key = "-".join(phrase.lower().split())
 out=[]
 for line in open(root, encoding='utf-8', errors='replace'):
     surf, _, rest = line.partition('@@')
     rest = rest.rstrip('\n')
     path, ln, text = rest.split(':', 2)
     if path.startswith(home): path = path[len(home):]
-    out.append((surf, path, ln, " ".join(text.split())))
-import json
-for surf, path, ln, text in out:
+    # Rank an exact surface name first, then containing surfaces, then the rest;
+    # order by path/line. The cap must not depend on grep's filesystem traversal
+    # order, which differs per checkout.
+    stem = os.path.basename(os.path.dirname(path)).lower().replace("_", "-")
+    if key and stem in (key, "pw-" + key): rank = 0
+    elif key and key in stem: rank = 1
+    else: rank = 2
+    out.append((rank, surf, path, int(ln), " ".join(text.split())))
+for rank, surf, path, ln, text in sorted(out, key=lambda r: (r[0], r[2], r[3])):
     print(f"{surf}\t{path}\t{ln}\t{text}")
 PYNORM
   local n=0
