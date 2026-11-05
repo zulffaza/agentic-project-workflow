@@ -130,6 +130,7 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
 | `command_code/<model>` | kilo | open-weight/third-party models — needs its own credential; `kilo models command_code` for the full list |
 | `cursor-grok-4.5-high` / `…-low-fast`, `claude-opus-5-thinking-xhigh` | cursor | Cursor's own single gateway — effort/thinking are catalog-id variants (or `[context=1m,effort=…]` bracket params); `agent models` for the list |
 | `codex:{{PW_PROJECT_SLUG}}` | codex | Codex's own single gateway (ChatGPT login) — ids are BARE slugs (`codex debug models`); effort + Fast tier are per-run overrides on the same slug, never id segments; no in-process spawn — every codex run is headless `codex exec` (prompt via stdin) |
+| `muse:muse-spark-1.3` | muse | Muse's on-disk model catalog (bare ids; hidden `-contributor` rows excluded) — effort is the per-run `--reasoning-effort` tier (`ultra` never offered); no in-process spawn — every muse run is headless `muse exec` (prompt via `--prompt-file`) |
 | a registered agent / a model | (its provider) | same-provider reuse only — e.g. `pw-executor`; a cross-provider task always routes as `provider:model` (a *sub-agent* name is unreachable from the other CLI's headless path; `--agent` accepts **primary** defs only, verified 2026-09-04) |
 | `pw-executor` / a custom role def | (its provider) | the shipped executor, or a custom role no existing agent covers |
 
@@ -138,7 +139,9 @@ cross-provider tasks are shelled out to that provider's CLI). Rules of thumb:
   `cursor:auto` routes by Cursor's own router — avoid it for risky tasks. Codex slugs from
   `codex debug models` are exact too — but hidden-visibility slugs still RUN if invoked, so the
   allowlist (`pw.config.sh`) is the real gate; record any requested Fast tier in `Model used:`
-  (requested-only — it is not verifiable from output).
+  (requested-only — it is not verifiable from output). Muse ids from the on-disk cache are exact
+  too — but hidden `-contributor` rows are excluded by the reader, so never pin one; record the
+  requested `--reasoning-effort` tier in `Model used:` (`ultra` is never offered).
 - **Phase lanes are separate pins:** the dashboard's `- **AI Models:**` line binds the *lane* agents
   the phases spawn (researcher/analyst/writer-task/reviewer/verifier/ship-comment-analyst), never this task table. The
   row is what the executor-side `Actually used:`/`Session:` ledger compares against — an unset row

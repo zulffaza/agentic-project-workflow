@@ -10,11 +10,11 @@
 # ============================================================================
 
 # --- Which Agent Providers to wire up ---------------------------------------
-# An "Agent Provider" is the AI-agent CLI you actually run (claude, kilo, opencode, cursor, …) — not
+# An "Agent Provider" is the AI-agent CLI you actually run (claude, kilo, opencode, cursor, codex, muse, …) — not
 # to be confused with an "API Provider" (see the KiloCode section below), which is a different,
 # narrower concept: which model BACKEND a given Agent Provider talks to underneath.
 #
-# Built-in (claude, kilo, opencode, cursor, codex) means the hooks already exist in
+# Built-in (claude, kilo, opencode, cursor, codex, muse) means the hooks already exist in
 # tooling/scripts/lib/pw-common.sh — you
 # never write bin/skilldir/commanddir/render_* functions for these. But "built-in" is NOT the
 # same as "enabled": you still list a provider's name here yourself for it to become active.
@@ -22,7 +22,10 @@
 # upstream in codex-cli 0.117.0 — so its /pw-* commands install AS SKILLS under ~/.codex/skills,
 # explicit-invocation-only, and the two bundle skills whose names collide with commands
 # (pw-review, pw-rfc) are skipped there by design. No sub-agents are seeded for it either —
-# it drives Flow B. Details: tooling/docs/providers.md.)
+# it drives Flow B. muse = Meta's Muse Code CLI. It likewise has NO native command surface and
+# NO agent-definition surface — its /pw-* commands install AS SKILLS under
+# ~/.config/muse/skills with disable-model-invocation: true and no sidecar file, and it drives
+# Flow B. Details: tooling/docs/providers.md.)
 # List ONLY the CLIs you actually use; others are ignored even if installed.
 # Example — someone who only uses KiloCode would set: PW_PROVIDERS=(kilo)
 PW_PROVIDERS=(claude)
@@ -152,11 +155,18 @@ PW_MEMORY_NOTES=""
 #                                    # RUN if invoked, so the allowlist is the real gate). The
 #                                    # "Fast" tier rides the SAME slug (service_tier flag, not an
 #                                    # id segment) — allowing a slug allows its Fast variant.
+#   PW_MODEL_ALLOWLIST_MUSE=""       # e.g. "muse-spark-*" — BARE ids from the on-disk cache
+#                                    # ~/.local/share/muse/model-catalog/*.json (visible rows
+#                                    # with non-null limits only; hidden -contributor rows are
+#                                    # excluded by the reader — never pin one). `ultra` is never
+#                                    # offered (the CLI warns and runs xhigh), so allowing a
+#                                    # listed id allows all its per-model tiers.
 PW_MODEL_ALLOWLIST_CLAUDE=""
 PW_MODEL_ALLOWLIST_KILO=""
 PW_MODEL_ALLOWLIST_OPENCODE=""
 PW_MODEL_ALLOWLIST_CURSOR=""
 PW_MODEL_ALLOWLIST_CODEX=""
+PW_MODEL_ALLOWLIST_MUSE=""
 
 # --- AI-assisted review (OPTIONAL — manual trigger + human sign-off by default) ---------------
 # Every scaffolded project gets four review config lines: AI Review (outcome: advisory|auto per
@@ -249,7 +259,7 @@ PW_RFC_LARK_SPACE=""
 PW_RFC_NOTES=""
 
 # --- Onboard a brand-new Agent Provider without touching the scripts --------
-# First check: is your CLI already claude, kilo, opencode, cursor, or codex? Those are built into
+# First check: is your CLI already claude, kilo, opencode, cursor, codex, or muse? Those are built into
 # tooling/scripts/lib/pw-common.sh — just add the name to PW_PROVIDERS above, nothing else. Everything
 # below is ONLY for a CLI that ISN'T on that list — don't redefine a built-in provider's hooks
 # here, since a function you define in this file always wins over the built-in default, and a
@@ -273,10 +283,10 @@ PW_RFC_NOTES=""
 #   }
 #
 # OPTIONAL — for a CLI with NO native command surface (its "slash commands" ARE skills — codex
-# is the built-in precedent): myprov_command_style() { echo skill; } makes gen-commands.sh write
+# is the first built-in precedent, muse the second): myprov_command_style() { echo skill; } makes gen-commands.sh write
 # <name>/SKILL.md dirs into commanddir instead of flat <name>.md files (render hook must emit the
-# skill frontmatter contract), plus an optional render_myprov_skill_policy() for the harness-side
-# policy file. Colliding bundle skills are skipped automatically (derived list). Full contract:
+# skill frontmatter contract — muse emits disable-model-invocation: true with no sidecar — plus an optional render_myprov_skill_policy() for the harness-side
+# policy file). Colliding bundle skills are skipped automatically (derived list). Full contract:
 # tooling/docs/providers.md §Registering.
 #
 # OPTIONAL — to also seed the sub-agents (pw-orchestrator, pw-executor, pw-reviewer) for it, add:
@@ -297,5 +307,6 @@ PW_RFC_NOTES=""
 #   }
 # Without this hook, the provider is still fully usable same-provider (spawning an in-process
 # sub-agent) — it just can't be a cross-provider execution TARGET. See
-# claude_headless/kilo_headless/opencode_headless/cursor_headless in tooling/scripts/lib/pw-common.sh for
-# real examples.
+# claude_headless/kilo_headless/opencode_headless/cursor_headless/codex_headless/muse_headless in tooling/scripts/lib/pw-common.sh for
+# real examples. Muse's recipe (prompt via --prompt-file, --session-id reuse, interactive-only
+# resume ruled out) is the newest precedent for a skill-only provider.

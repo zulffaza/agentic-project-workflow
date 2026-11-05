@@ -39,7 +39,7 @@ step here gets: (a) a seeded brief (pointer-list, no re-gathering), (b) your **p
 seed covers its scope, (c) a `LOG.md` spawn line with `· session=<id>` + `seed=` + `out=`, and
 (d) an **exit-check** against the brief — a thin result is fixed by resuming that id with a seed
 patch (kilo `kilo run -s <id>`, claude `--resume`, cursor `agent -p --force --resume <session_id>`,
-codex `codex exec resume <thread_id>` — cd to the worktree first),
+codex `codex exec resume <thread_id>`, muse `muse exec --session-id <uuid>` — cd to the worktree first),
 not by a cold respawn. Lane models come from
 the project Role models table (`role-model` with the provider column); the executor lane never
 does (tasks bind it per unit through execution routes).

@@ -160,9 +160,10 @@ PY
 
 # Live model catalog for one Agent Provider, one line per model id (provider-prefix included),
 # or nothing on any failure — every call site treats "nothing" as "can't check", never an
-# error. kilo/opencode/cursor/codex have a queryable catalog (`kilo models | opencode models |
+# error. kilo/opencode/cursor/codex/muse have a queryable catalog (`kilo models | opencode models |
 # agent models | codex debug models` — the codex reader lives in pw_api_catalog and prints bare
-# visible slugs); cursor's reader additionally merges ~/.cursor/cli-config.json →
+# visible slugs; muse has no models command — its reader parses the on-disk model-catalog cache,
+# probed 2026-11-05); cursor's reader additionally merges ~/.cursor/cli-config.json →
 # modelParameters because `agent models` omits desktop-only ids (verified 2026-10-22). claude
 # alone doesn't (fixed alias set — see docs/EXECUTION.md); callers check
 # that before ever reaching here. PW_<PROVIDER>_API_PROVIDERS entries are MODEL-ID PREFIX
@@ -661,6 +662,18 @@ if printf '%s\n' "${PW_PROVIDERS[@]:-}" | grep -qx cursor; then
     echo "      via Cursor's vendor compat read (e.g. ${_bleed[0]##*/}) — BLEED, not contract (informational:"
     echo "      cursor's own ~/.cursor install is complete and load-bearing; nothing in pw rides on these"
     echo "      claude-provider copies. Presence while the claude provider is configured is expected.)"
+  fi
+fi
+# Muse reads ~/.codex/skills as a foreign skill root (in addition to ~/.agents/skills): the
+# Codex command-skills installed there (pw-* SKILL.md dirs) share a namespace with nothing
+# of muse's — muse installs its own entries under ~/.config/muse/skills — but a same-named
+# foreign skill would shadow by vendor read order. The hub sets
+# context.foreign_personal_skills=false to stop that import; flag it here if the setting lapses.
+if printf '%s\n' "${PW_PROVIDERS[@]:-}" | grep -qx muse; then
+  if [ -d "$HOME/.codex/skills" ]; then
+    echo "    · provider-independence (D9) note: muse also reads the foreign ~/.codex/skills root"
+    echo "      (vendor behavior, never a pw dependency — muse installs only into ~/.config/muse/skills;"
+    echo "      keep the hub's context.foreign_personal_skills=false so Codex cmd-* wrappers cannot shadow)"
   fi
 fi
 

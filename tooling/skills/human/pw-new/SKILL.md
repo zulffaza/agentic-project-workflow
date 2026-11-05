@@ -37,7 +37,7 @@ the project without reading the whole base guide. Cover, concisely:
 5. **Execution routing** — tasks carry one `## Execution routes` row per current provider, with
    an execution provider, a mandatory model, and separate subagent/tuning columns. **Always write
    the explicit provider and a concrete model** (e.g. `claude:opus`, `kilo:command_code/...`,
-   `cursor:cursor-grok-4.5-high`, `codex:gpt-6.1-sol`); there is no static model→provider lookup.
+   `cursor:cursor-grok-4.5-high`, `codex:gpt-6.1-sol`, `muse:muse-spark-1.3`); there is no static model→provider lookup.
    The dashboard `Execute with:` summary is derived, and a task with no route for the current
    provider cannot dispatch. As a rough mental model: Claude models tend to
    run via Claude Code, open-weight/third-party ones via KiloCode; the exact mechanics are in

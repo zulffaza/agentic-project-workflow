@@ -26,6 +26,7 @@ An agent provider is the CLI that runs your workflow. Choose its config name fro
 | OpenCode | `opencode` | `opencode` |
 | Cursor CLI | `agent` | `cursor` |
 | Codex CLI | `codex` | `codex` |
+| Muse Code | `muse` | `muse` |
 
 These providers are built in. You must still enable the ones you use in `PW_PROVIDERS` during setup.
 For a different CLI, see [custom provider registration](#register-a-new-provider).
@@ -73,10 +74,11 @@ The example defaults to `PW_PROVIDERS=(claude)`.
 | KiloCode only | `PW_PROVIDERS=(kilo)` |
 | Cursor only | `PW_PROVIDERS=(cursor)` |
 | OpenCode only | `PW_PROVIDERS=(opencode)` |
+| Muse only | `PW_PROVIDERS=(muse)` |
 | Multiple CLIs | `PW_PROVIDERS=(claude codex)` |
 
 Save the file before continuing. This config is local and Git-ignored.
-Other defaults are enough for a first project; custom provider hooks are unnecessary for these five CLIs.
+Other defaults are enough for a first project; custom provider hooks are unnecessary for these six CLIs.
 
 ### 3. Install and load the paths
 
@@ -109,8 +111,11 @@ Loading `pw-env.sh` exposes the paths used in these guides. You can add its `sou
 Setup is ready when doctor reports your installed provider in sync and help lists the workflow commands.
 For a missing command, follow [installation recovery](#troubleshooting--pw-doctor).
 
-In Codex, select the installed `pw-*` skill corresponding to the command. The guides use `/pw-*` as shared workflow names.
+In Codex, select the installed `pw-*` skill corresponding to the command. In Muse, select the
+installed `pw-*` skill the same way (human-only skills; the model never invokes them itself).
+The guides use `/pw-*` as shared workflow names.
 The bundle installs Codex commands as explicit-invocation skills under `~/.codex/skills/`; it seeds no Codex sub-agents.
+The bundle installs Muse commands as explicit-invocation skills under `~/.config/muse/skills/`; it seeds no Muse sub-agents.
 
 Next, complete the [first-project walkthrough](docs/WALKTHROUGH.md).
 Use `/pw-help project --project <slug>` whenever you need the next command for an existing project.
@@ -262,7 +267,7 @@ See [memory setup and benefits](docs/MEMORY.md).
 
 ### Enable a built-in CLI
 
-For Claude, KiloCode, OpenCode, Cursor, or Codex, edit `PW_PROVIDERS` in `pw.config.sh` and re-run `./bootstrap.sh`.
+For Claude, KiloCode, OpenCode, Cursor, Codex, or Muse, edit `PW_PROVIDERS` in `pw.config.sh` and re-run `./bootstrap.sh`.
 Use the [provider selection table](#2-select-your-agent-providers). No custom hooks are required.
 
 ### Register a different CLI
@@ -285,7 +290,7 @@ An API provider is the model backend used by an agent CLI. This is separate from
 
 - KiloCode defaults to its built-in `kilo` gateway. Additional backends require their own configured credentials.
 - Set `PW_KILO_API_PROVIDERS` or `PW_OPENCODE_API_PROVIDERS` to restrict eligible model-ID prefixes for that CLI.
-- Claude uses its model aliases. Cursor and Codex use their own gateways and have no API-provider axis in this bundle.
+- Claude uses its model aliases. Cursor and Codex use their own gateways and have no API-provider axis in this bundle. Muse reads its on-disk model catalog and likewise has no API-provider axis.
 
 Prefix entries can contain slashes. A Kilo backend registered under the gateway uses a path such as `kilo/alibaba-token-plan`.
 Read [catalog lookup and connection names](docs/EXECUTION.md#check-the-model-catalog-before-pinning) before changing backend scope or model pins.

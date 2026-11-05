@@ -31,7 +31,7 @@
 - **Status:** todo | in-progress | verify-failed | done | accepted
 <!-- Execute with: e.g. `claude:sonnet`, `claude:claude-opus-4-8` (pinned),
      `kilo:command_code/<model>`, `cursor:gpt-5.6-sol-high`, `opencode:cpa/<model>`,
-     `codex:{{PW_PROJECT_SLUG}}` (bare catalog slug);
+     `codex:{{PW_PROJECT_SLUG}}` (bare catalog slug), `muse:muse-spark-1.3` (bare cache id);
      or the same-provider `pw-executor`
      def. A plain `provider:model` = that provider's default agent on this task file as its work
      order (portable across providers); a named sub-agent only resolves when the orchestrator
@@ -44,10 +44,11 @@
 <!-- Effort: reasoning effort. Maps to `--effort` (claude) / `--variant` (kilo) / nearest
      catalog-id variant or `[effort=…]` bracket param (cursor) / a per-run reasoning-effort
      override on the same slug (codex — its Fast tier is another per-run override, never an id
-     segment). Opencode has no effort control: use `Variant:` for a `#level` suffix instead.
+     segment) / a per-run `--reasoning-effort` tier on the same bare id (muse — `ultra` never
+     offered). Opencode has no effort control: use `Variant:` for a `#level` suffix instead.
      Omit the bullet for the CLI
      default. Thinking: kilo `--thinking`; cursor via a `-thinking-` id variant; opencode
-     `--thinking`; claude + codex:
+     `--thinking`; claude + codex + muse:
      omit (effort covers reasoning). -->
 - **Effort:** <low|medium|high|xhigh|max>
 - **Thinking:** <on|off>

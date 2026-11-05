@@ -339,6 +339,8 @@ _model_capability() { # <provider> <variant|reasoning|effort|thinking>
     opencode:variant)      printf 'model-variant-suffix' ;;
     opencode:thinking)      printf 'on,off' ;;
     opencode:reasoning|opencode:effort)     printf 'unknown' ;;
+    muse:reasoning|muse:effort)    printf 'minimal,low,medium,high,xhigh,max' ;;
+    muse:variant|muse:thinking)    printf 'unsupported' ;;
     *:*)                  printf 'unknown' ;;
   esac
 }
@@ -982,7 +984,7 @@ cmd_model_resolve() {
     claude)
       echo "model-resolve: $prov:$model — unverified (Claude Code has a fixed alias set, no queryable catalog; model-check governs)"
       return 0 ;;
-    kilo|opencode|cursor|codex) ;;
+    kilo|opencode|cursor|codex|muse) ;;
     *)
       echo "model-resolve: $prov:$model — unverified (no catalog surface for provider '$prov')"
       return 0 ;;
@@ -4795,6 +4797,15 @@ EOF
             *) supported=0; reason="opencode thinking must be on|off (got '$route_thinking')" ;;
           esac
         fi ;;
+      muse)
+        args=(--model "$model" --prompt-file)
+        if [ -n "$variant" ]; then supported=0; reason="muse has no verified variant control (supported: reasoning/effort)"; fi
+        if [ -n "$reasoning" ] && [ -n "$effort" ] && [ "$reasoning" != "$effort" ]; then
+          supported=0; reason="muse has one reasoning-effort control; conflicting reasoning/effort refused"
+        elif [ -n "$reasoning" ] || [ -n "$effort" ]; then
+          args+=(--reasoning-effort "${reasoning:-$effort}")
+        fi
+        if [ -n "$route_thinking" ]; then supported=0; reason="muse has no verified thinking control (effort covers reasoning)"; fi ;;
       *)
         args=(-m "$model")
         if [ -n "$variant$reasoning$effort$route_thinking" ]; then supported=0; reason="provider '$prov' has no verified role tuning mapping"; fi ;;

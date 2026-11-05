@@ -52,9 +52,10 @@ optional `Effort:` (`low`/`medium`/`high`/`xhigh`/`max` → claude `--effort`, k
 cursor nearest id-variant when the catalog lists it, otherwise a bracket param on the base id
 using the model's own parameter name (`glm-5p3-flash[reasoning=high]`), codex a per-run
 reasoning-effort override on the same bare slug — its Fast tier is a separate per-run override,
-never an id segment) +
+never an id segment, muse a per-run `--reasoning-effort` tier on the same bare catalog id
+(`ultra` never offered)) +
 `Thinking:` (kilo `--thinking`; cursor via `-thinking-` id segment or a reasoning/effort bracket
-param; codex n/a — effort covers it).
+param; opencode `--thinking`; codex/muse n/a — effort covers it).
 `PLAN.md` mirrors it in **Execute with** + **SP** columns.
 **Default the provider to the plan's "Produced by"** (the agent that did the breakdown) so a run
 doesn't force an agent switch; route a task to a different provider only with a stated `Why:`.
@@ -75,9 +76,10 @@ prefix-less row binds the direct line when one exists, reaching the gateway line
 announced fallback. List ids with `kilo models` (full catalog; filter locally — see the
 discovery bullet below).
 
-- **Discover real kilo/opencode/cursor/codex model ids by querying the live catalog — never recall/guess one
-  from memory** (`kilo models` / `opencode models` / `agent models` / `codex debug models` —
-  codex prints one-line JSON; pw's reader emits the bare visible slugs). There's no fixed roster to read off anymore; a plausible-looking id can simply
+- **Discover real kilo/opencode/cursor/codex/muse model ids by querying the live catalog — never recall/guess one
+  from memory** (`kilo models` / `opencode models` / `agent models` / `codex debug models` /
+  the muse on-disk cache `~/.local/share/muse/model-catalog/*.json` —
+  codex prints one-line JSON; pw's reader emits the bare visible slugs; the muse reader emits the bare visible ids). There's no fixed roster to read off anymore; a plausible-looking id can simply
   not exist, or a display name can differ from the real id (verified case: KiloCode's own `auth
   list` shows "Kilo Gateway," but the id it actually resolves under is `kilo`, not `kilo_gateway`
   — `kilo models kilo_gateway` errors). Cursor's `agent models` is incomplete: ids the desktop
@@ -105,7 +107,7 @@ discovery bullet below).
   registry and `docs/EXECUTION.md`'s table, so there's nothing to discover there.
 - **Cross-provider execution mechanism** = `agentic-project-workflow/tooling/docs/providers.md`:
   explains how the orchestrator reads a provider's `<name>_headless()` hook (built-in for claude/
-  kilo/opencode/cursor/codex; added or overridden in `pw.config.sh` — never edited in `tooling/` directly) to
+  kilo/opencode/cursor/codex/muse; added or overridden in `pw.config.sh` — never edited in `tooling/` directly) to
   invoke it non-interactively.
 - **Model allowlist — check before you write, and again before you run.** No model is off-limits
   by default; `PW_MODEL_ALLOWLIST_<PROVIDER>` in `pw.config.sh` is empty/unset for every provider
@@ -233,7 +235,8 @@ Values: auto | subagent | headless.
 
 **Headless supervision (never fire-and-forget):** launch as a tracked background child, prompt on
 stdin, `tee` to `worktree/<T0n>.log`, `--format json` where supported (kilo/cursor/opencode; codex `--json`
-= JSONL events, first one carries the resumable `thread_id`; opencode JSONL carries `sessionID` and errors arrive as `{"type":"error"}` with exit 0 — scan output, never trust `$?`); record the
+= JSONL events, first one carries the resumable `thread_id`; muse `--json` = JSONL events, first
+one carries the resumable `stream.id`; opencode JSONL carries `sessionID` and errors arrive as `{"type":"error"}` with exit 0 — scan output, never trust `$?`); record the
 pid + out= in the ledger. Poll at a fixed cadence: process alive, log growing, elapsed vs budgets
 (`PW_HEADLESS_STALL` min without growth, `PW_HEADLESS_TIMEOUT` hard cap — pw.config.sh).
 Terminal classes: `success` = exit 0/final JSON event **and** the git artifacts real (branch +
@@ -313,7 +316,9 @@ seeded def's `model:` or the same headless route via `cursor_headless()`
 (`agent -p --force --model <id>` over the work order, with supported bracket parameters);
 codex has NO in-process spawn at all — every lane/bulk row there is the headless route via
 `codex_headless()` (`codex exec -m <slug> -c model_reasoning_effort=<v>`, prompt on stdin) even
-from a codex driver; the spawn records `Model used:` so the ledger shows *actual*, never folklore;
+from a codex driver; muse likewise — every lane/bulk row there is the headless route via
+`muse_headless()` (`muse exec --model <id> --reasoning-effort <v> --prompt-file <file>`) even
+from a muse driver; the spawn records `Model used:` so the ledger shows *actual*, never folklore;
 a row that can't fire is visible, not assumed. Where the executor would otherwise run "generic with
 named model", it runs the provider's **default agent** (Option A: no generic implementer def ships;
 `pw-executor` is the one executor concept for task breakdowns; ad-hoc non-pw code work belongs to

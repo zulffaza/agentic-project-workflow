@@ -676,7 +676,7 @@ PYD
     && pwtest_ok "T4 canary: uniform fixer work orders for comments and sync conflicts" \
     || pwtest_bad "T4 canary: fixer work orders" "a worker skill, its procedure pointer, or the delegated contract is missing"
   rendered="$ROOT/plan29-entries"
-  "$TOOL/scripts/toolchain/gen-commands.sh" --outdir "$rendered" claude cursor codex kilo opencode >/dev/null 2>&1
+  "$TOOL/scripts/toolchain/gen-commands.sh" --outdir "$rendered" claude cursor codex muse kilo opencode >/dev/null 2>&1
   bad_entry=""
   for _pf in claude cursor; do
     [ "$(ls -d "$rendered/$_pf"/*/ 2>/dev/null | wc -l | tr -d ' ')" = 22 ] || bad_entry="$bad_entry $_pf:skill-count"
@@ -687,12 +687,20 @@ PYD
   grep -qF 'allow_implicit_invocation: false' "$rendered/codex/pw-execute/agents/openai.yaml" 2>/dev/null || bad_entry="$bad_entry codex:policy"
   grep -qF '<arguments>' "$rendered/codex/pw-execute/SKILL.md" 2>/dev/null || bad_entry="$bad_entry codex:args-token"
   grep -qF '$ARGUMENTS' "$rendered/codex/pw-execute/SKILL.md" 2>/dev/null && bad_entry="$bad_entry codex:claude-token"
+  # muse (plan 67): skill dirs with the human-only flag and invocation-text args, and — unlike
+  # codex — NO agents/openai.yaml sidecar (verified inert on muse 1.4.14, never emitted).
+  [ "$(ls -d "$rendered/muse"/*/ 2>/dev/null | wc -l | tr -d ' ')" = 22 ] || bad_entry="$bad_entry muse:skill-count"
+  grep -qF 'disable-model-invocation: true' "$rendered/muse/pw-execute/SKILL.md" 2>/dev/null || bad_entry="$bad_entry muse:explicit-only"
+  grep -qF '<arguments>' "$rendered/muse/pw-execute/SKILL.md" 2>/dev/null || bad_entry="$bad_entry muse:args-token"
+  grep -qF '$ARGUMENTS' "$rendered/muse/pw-execute/SKILL.md" 2>/dev/null && bad_entry="$bad_entry muse:unverified-token"
+  [ -e "$rendered/muse/pw-execute/agents/openai.yaml" ] && bad_entry="$bad_entry muse:sidecar"
+  ls "$rendered/muse"/*.md >/dev/null 2>&1 && bad_entry="$bad_entry muse:command-files"
   for _pf in kilo opencode; do
     [ "$(ls "$rendered/$_pf"/*.md 2>/dev/null | wc -l | tr -d ' ')" = 22 ] || bad_entry="$bad_entry $_pf:command-count"
     ls -d "$rendered/$_pf"/pw-*/ >/dev/null 2>&1 && bad_entry="$bad_entry $_pf:entry-skills"
   done
   [ -z "$bad_entry" ] \
-    && pwtest_ok "T4 canary: exclusive provider output (skills-only claude/cursor/codex, commands-only kilo/opencode)" \
+    && pwtest_ok "T4 canary: exclusive provider output (skills-only claude/cursor/codex/muse, commands-only kilo/opencode)" \
     || pwtest_bad "T4 canary: exclusive provider output" "unexpected artifacts:$bad_entry"
 
   # (g3) plan 59: one batch coordination entry over existing commands — a closed allowlist in
@@ -732,9 +740,21 @@ PYD
     && grep -qF 'codex_entry_format' "$TOOL/scripts/lib/pw-common.sh" \
     && grep -qF 'pw_skill_skips_for' "$TOOL/scripts/lib/pw-common.sh" \
     && grep -qF 'NEVER write ~/.codex/config.toml' "$TOOL/scripts/lib/pw-common.sh" \
-    && grep -qF 'KNOWN_PROVIDERS=(claude kilo opencode cursor codex)' "$TOOL/../offboard.sh" \
+    && grep -qF 'KNOWN_PROVIDERS=(claude kilo opencode cursor codex muse)' "$TOOL/../offboard.sh" \
     && pwtest_ok "T4 canary: codex skill-layout + D13 skips + config.toml hands-off + offboard list" \
     || pwtest_bad "T4 canary: codex provider doctrine" "a plan-28 anchor died: command_style hook (gen-commands.sh), codex hooks/skips/config.toml comment (pw-common.sh), or codex in offboard.sh KNOWN_PROVIDERS"
+
+  # (h2) muse provider doctrine (plan 67): muse is the SECOND built-in with no native command
+  # surface — entries are generated SKILL DIRS with disable-model-invocation and NO
+  # agents/openai.yaml sidecar (verified inert on muse 1.4.14). Frontmatter alone is the
+  # human-only contract (load-time enforcement, no settings-map entry), so the settings.json
+  # hands-off rule is unconditional — there is no activation-writer path to guard.
+  grep -qF 'muse_entry_format' "$TOOL/scripts/lib/pw-common.sh" \
+    && grep -qF 'disable-model-invocation is the whole human-only contract' "$TOOL/scripts/lib/pw-common.sh" \
+    && grep -qF 'NEVER write ~/.config/muse/settings.json' "$TOOL/scripts/lib/pw-common.sh" \
+    && grep -qF "commands ARE skills on muse" "$TOOL/scripts/lib/pw-common.sh" \
+    && pwtest_ok "T4 canary: muse skill-layout + frontmatter-only contract + settings.json hands-off" \
+    || pwtest_bad "T4 canary: muse provider doctrine" "a plan-67 anchor died: muse hooks, render flag, or the settings.json hands-off rule (pw-common.sh)"
 
   # (i) named-argument contract canary (plan 46): the migrated user + agent surfaces must not
   # carry pre-migration invocation shapes. Bounded regexes over real invocation contexts only;

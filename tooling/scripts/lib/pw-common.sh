@@ -217,7 +217,7 @@ pw_catalog_kind() { # <provider> -> live|fixed|unavailable|empty|unsupported
   local prov="$1" bin catalog
   case "$prov" in
     claude) printf 'fixed'; return 0 ;;
-    kilo|opencode|cursor|codex) ;;
+    kilo|opencode|cursor|codex|muse) ;;
     *) printf 'unsupported'; return 0 ;;
   esac
   bin="$(pw_api_bin "$prov")"
@@ -239,6 +239,7 @@ pw_claude_models() { printf '%s\n' opus sonnet haiku fable; }
 : "${PW_MODEL_ALLOWLIST_OPENCODE:=}"
 : "${PW_MODEL_ALLOWLIST_CURSOR:=}"
 : "${PW_MODEL_ALLOWLIST_CODEX:=}"
+: "${PW_MODEL_ALLOWLIST_MUSE:=}"
 
 # Cursor — its own single gateway (api2.cursor.sh); no PW_CURSOR_API_PROVIDERS axis (the
 # API-Provider concept doesn't apply to it). Model ids: `agent models` (200+ entries incl.
@@ -404,6 +405,46 @@ pw_api_catalog() {  # <agent-provider> -> live catalog lines (provider prefix in
         | sed 's/{"slug"/\n{"slug"/g' \
         | grep '"visibility":"list"' \
         | sed 's/.*"slug":"\([^"]*\)".*/\1/' || true ;;
+    muse)
+      # Muse has no `models` subcommand — the model catalog lives on disk at
+      # ~/.local/share/muse/model-catalog/*.json (schema 2, rows carry model_id,
+      # visibility, context/output limits, reasoning_effort_variants). Keep
+      # visibility:"visible" rows with non-null limits; print bare ids. Hidden
+      # -contributor rows carry a product-improvement data-use notice — the visible
+      # catalog + allowlist are the real gate. Fail open (no output) when the CLI,
+      # python3, or the cache is absent — every call site treats that as "can't check".
+      # PW_MUSE_CATALOG_DIR overrides the cache root (tests point it at a fixture).
+      # Probed 2026-11-05 on Muse Code 1.4.14.
+      bin="$(pw_api_bin "$prov")"
+      command -v "$bin" >/dev/null 2>&1 || return 0
+      command -v python3 >/dev/null 2>&1 || return 0
+      python3 - "${PW_MUSE_CATALOG_DIR:-$HOME/.local/share/muse/model-catalog}" <<'PY' 2>/dev/null || true
+import glob, json, os, sys
+seen = set()
+for f in sorted(glob.glob(os.path.join(sys.argv[1], "*.json"))):
+    try:
+        d = json.load(open(f))
+    except Exception:
+        continue
+    if not isinstance(d, dict) or d.get("schema_version") != 2:
+        continue
+    rows = d.get("rows")
+    if not isinstance(rows, list):
+        continue
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        mid = r.get("model_id")
+        if not mid or not isinstance(mid, str) or mid in seen:
+            continue
+        if r.get("visibility") != "visible":
+            continue
+        if r.get("context_limit") is None or r.get("output_limit") is None:
+            continue
+        seen.add(mid)
+        print(mid)
+PY
+      ;;
   esac
   return 0
 }
@@ -734,6 +775,61 @@ Session id for the ledger: --json first event {"type":"thread.started","thread_i
 Resume: cd <worktree> FIRST — `codex exec resume <thread_id>` has NO -C flag and runs in the
 invocation cwd: printf '%s' "$PROMPT" | codex exec resume <thread_id>
   --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -
+EOF
+}
+
+# --- Muse Code (Meta) — native surfaces verified against the installed build (muse 1.4.14,
+# 2026-11-05). SECOND PROVIDER WITH NO NATIVE COMMAND SURFACE: user commands live only as
+# skills (`~/.config/muse/commands` does not exist; `muse init` writes a project AGENTS.md
+# and nothing else), so /pw-* entries install as explicit-only skill dirs — like codex, but
+# WITHOUT the agents/openai.yaml sidecar (verified inert on muse: listed, no effect, no
+# error — never emit it). A directly-written SKILL.md carrying
+# `disable-model-invocation: true` reports `user-invocable-only` with no settings-map entry,
+# so the frontmatter alone is the human-only contract (probed 2026-11-05; model prompts never
+# list flagged skills and prompt-driven invocation refuses loudly). Muse has no user-facing
+# sub-agent surface either → no agentdir/render_agent hooks: agent seeding is skipped and
+# muse drives Flow B (main session orchestrates; inline lane personas).
+# Hooks/generators NEVER write ~/.config/muse/settings.json — user-owned config (the
+# generator-never-writes-user-config rule spans kilo.jsonc, cli-config.json, config.toml,
+# and settings.json). The hub's agent_sync owns exactly three muse regions (AGENTS.md block,
+# mcp_servers.everos, skills.activation.user for hub cmd-* wrappers) and never touches pw's
+# entry skills; pw owns only its own installed skill dirs.
+declare -f muse_bin        >/dev/null 2>&1 || muse_bin()        { echo muse; }
+declare -f muse_skilldir   >/dev/null 2>&1 || muse_skilldir()   { echo "$HOME/.config/muse/skills"; }
+declare -f muse_commanddir >/dev/null 2>&1 || muse_commanddir() { echo "$HOME/.config/muse/skills"; }  # commands ARE skills on muse
+declare -f muse_entry_format >/dev/null 2>&1 || muse_entry_format() { echo skill; }
+declare -f render_muse_entry_skill >/dev/null 2>&1 || render_muse_entry_skill() {
+  # Muse skills have no argument-expansion token: arguments arrive as the invocation text
+  # (same honest mapping as codex — never emit $ARGUMENTS, whose expansion is unverified
+  # on muse). disable-model-invocation is the whole human-only contract — the CLI enforces
+  # it at load time with no activation-map entry (probed 2026-11-05).
+  printf -- '---\nname: %s\ndescription: %s\n' "$name" "$(pw_yaml_quote "$desc")"
+  [ -n "$args" ] && printf -- 'argument-hint: %s\n' "$(pw_yaml_quote "$args")"
+  printf -- 'disable-model-invocation: true\n---\n%s' "${bodytext//\{\{ARGS\}\}/<arguments>}"
+}
+declare -f muse_headless >/dev/null 2>&1 || muse_headless() {
+  cat <<'EOF'
+printf '%s' "$PROMPT" > task-file; muse exec --model <canonical-id> --reasoning-effort <tier> --trust-workspace --disable-approval --disable-sandbox [--session-id <uuid>] [--workspace <worktree-path>] --prompt-file <task-file> [--json]
+Prompt via --prompt-file ONLY — an 11KB positional argument also survives, but the file is
+the documented channel (verified 2026-11-05). NOTE: the model flag is --model (there is
+no -m; `-m` is rejected as an unexpected argument).
+--trust-workspace --disable-approval --disable-sandbox is the documented default (network
+works under it — verified HTTP/2 200 in-session). The looser --yolo (adds async questions)
+also completes headless; use it only when the task needs interaction.
+--reasoning-effort selects the tier (per-model levels in the catalog cache; `ultra` is
+NEVER offered — the CLI warns and silently runs xhigh instead). Unknown model ids fail
+loud in TEXT (`agent loop failed: model … does not exist`) yet exit 0 — NEVER trust the
+exit code; scan output for errors and confirm the real git artifacts (same class as
+opencode's exit-0-means-nothing lesson, verified 2026-11-05).
+Model ids are BARE catalog ids (the on-disk model-catalog cache; resolve with
+`pw-config.sh model-resolve muse <id>`). Hidden -contributor rows are excluded by the
+reader — never pin one (product-improvement data-use notice).
+Session id for the ledger: --json first event stream.id on kind:session events (the
+exec.usage event confirms the model). Continue a session by reusing --session-id (context
+round-trips verbatim — verified 2026-11-05). `muse resume` is INTERACTIVE-ONLY (fails
+without a TTY even piped) — never the headless path. Reusing an unknown id starts a fresh
+session that honestly reports no context — so check liveness first (never blind-resume).
+Worktree: cd there FIRST, or pass --workspace (honored from a foreign cwd — verified).
 EOF
 }
 

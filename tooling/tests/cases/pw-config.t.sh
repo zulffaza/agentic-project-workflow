@@ -238,6 +238,66 @@ PW_CONFIG_FILE="$CFG_OPEN" PW_MODEL_ALLOWLIST_OPENCODE="testprov/test-model" "$M
 PW_CONFIG_FILE="$CFG_OPEN" PW_MODEL_ALLOWLIST_OPENCODE="other/*" "$MR" model-check --provider opencode --model 'testprov/test-model#low' >/dev/null 2>&1 \
   && pwtest_bad "model-check opencode refuse" "allowed a suffixed id outside the allowlist" \
   || pwtest_ok "model-check opencode: non-matching suffixed id refused"
+# --- muse: capability table, tuning validation, hermetic cache catalog, resolve + check ---
+# The fixture mirrors the real 1.4.14 cache shape (schema 2; visible/hidden/null-limits rows).
+MCAT="$ROOT/muse-catalog"; mkdir -p "$MCAT"
+cat > "$MCAT/cache.json" <<'JSON'
+{"schema_version": 2, "provider_id": "meta", "profile_id": "tbh", "rows": [
+{"model_id": "muse-test-flash", "visibility": "visible", "context_limit": 1007997, "output_limit": 128000, "reasoning_effort_variants": [{"tier": "low"}, {"tier": "max"}]},
+{"model_id": "muse-test-hidden", "visibility": "hidden", "context_limit": 1007997, "output_limit": 128000, "reasoning_effort_variants": [{"tier": "low"}]},
+{"model_id": "muse-test-nolimit", "visibility": "visible", "context_limit": null, "output_limit": 128000, "reasoning_effort_variants": []}
+]}
+JSON
+pwtest_eq "muse capability: effort lists the per-model tiers" \
+  "$(PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-check --provider muse --model muse-test-flash --effort max --json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["capabilities"]["effort"])')" \
+  "minimal,low,medium,high,xhigh,max"
+PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-check --provider muse --model muse-test-flash --effort max >/dev/null 2>&1 \
+  && pwtest_ok "model-check muse: listed effort tier binds" \
+  || pwtest_bad "model-check muse effort" "refused effort=max (listed tier)"
+if PW_CONFIG_FILE="$CFG_OPEN" PW_MUSE_CATALOG_DIR="$MCAT" "$MR" model-check --provider muse --model muse-test-flash --effort ultra >/dev/null 2>&1; then
+  pwtest_bad "model-check muse ultra refused" "ultra is not a listed tier (API falls back silently)"
+else pwtest_ok "model-check muse: ultra refused at write time"; fi
+if PW_CONFIG_FILE="$CFG_OPEN" PW_MUSE_CATALOG_DIR="$MCAT" "$MR" model-check --provider muse --model muse-test-flash --variant low >/dev/null 2>&1; then
+  pwtest_bad "model-check muse variant refused" "no verified variant control was accepted"
+else pwtest_ok "model-check muse: variant refused (unsupported)"; fi
+if PW_CONFIG_FILE="$CFG_OPEN" PW_MUSE_CATALOG_DIR="$MCAT" "$MR" model-check --provider muse --model muse-test-flash --thinking on >/dev/null 2>&1; then
+  pwtest_bad "model-check muse thinking refused" "no verified thinking control was accepted"
+else pwtest_ok "model-check muse: thinking refused (unsupported)"; fi
+# reasoning and effort share the single --reasoning-effort control (codex precedent): each
+# alone binds; a conflict refuses.
+PW_CONFIG_FILE="$CFG_OPEN" PW_MUSE_CATALOG_DIR="$MCAT" "$MR" model-check --provider muse --model muse-test-flash --reasoning high >/dev/null 2>&1 \
+  && pwtest_ok "model-check muse: reasoning alone binds the shared control" \
+  || pwtest_bad "model-check muse reasoning" "refused reasoning=high"
+# model-resolve muse: exact bare id resolves; hidden and null-limits rows are absent from
+# the reader so they miss (exit 1); a missing cache is unverifiable (exit 0), never an error.
+mr_mu="$(PW_CONFIG_FILE="$CFG_OPEN" PW_MUSE_CATALOG_DIR="$MCAT" "$MR" model-resolve --provider muse --model muse-test-flash 2>/dev/null)" \
+  && [ "$mr_mu" = "muse-test-flash" ] \
+  && pwtest_ok "model-resolve muse: exact bare id resolves" \
+  || pwtest_bad "model-resolve muse exact" "got '$mr_mu'"
+if PW_CONFIG_FILE="$CFG_OPEN" PW_MUSE_CATALOG_DIR="$MCAT" "$MR" model-resolve --provider muse --model muse-test-gone >/dev/null 2>"$ROOT/mr-mu-miss.err"; then
+  pwtest_bad "model-resolve muse miss refused" "bound an id absent from the cache"
+else
+  _mu_rc=$?
+  [ "$_mu_rc" = 1 ] && grep -q 'not in the live catalog' "$ROOT/mr-mu-miss.err" \
+  && pwtest_ok "model-resolve muse: catalog miss exits 1, actionable" \
+  || pwtest_bad "model-resolve muse miss" "rc=$_mu_rc; $(head -c 120 "$ROOT/mr-mu-miss.err")"
+fi
+if PW_CONFIG_FILE="$CFG_OPEN" PW_MUSE_CATALOG_DIR="$MCAT" "$MR" model-resolve --provider muse --model muse-test-hidden >/dev/null 2>"$ROOT/mr-mu-hidden.err"; then
+  pwtest_bad "model-resolve muse hidden refused" "bound a hidden contributor-row id"
+else pwtest_ok "model-resolve muse: hidden contributor id misses (filter is the gate)"; fi
+PW_CONFIG_FILE="$CFG_OPEN" PW_MUSE_CATALOG_DIR="$ROOT/muse-catalog-none" "$MR" model-resolve --provider muse --model muse-test-flash >/dev/null 2>"$ROOT/mr-mu-nostore.err" \
+  && grep -q 'unverified' "$ROOT/mr-mu-nostore.err" \
+  && pwtest_ok "model-resolve muse: missing cache is unverifiable, never an error" \
+  || pwtest_bad "model-resolve muse missing cache" "did not fail open to unverifiable"
+PW_CONFIG_FILE="$CFG_OPEN" PW_MUSE_CATALOG_DIR="$MCAT" "$MR" model-check --provider muse --model muse-test-flash >/dev/null 2>&1 \
+  && pwtest_ok "model-check muse: empty allowlist passes" \
+  || pwtest_bad "model-check muse empty allowlist" "refused with an empty allowlist"
+PW_CONFIG_FILE="$CFG_OPEN" PW_MUSE_CATALOG_DIR="$MCAT" PW_MODEL_ALLOWLIST_MUSE="muse-test-*" "$MR" model-check --provider muse --model muse-test-flash >/dev/null 2>&1 \
+  && pwtest_ok "model-check muse: glob pattern allows" \
+  || pwtest_bad "model-check muse glob allow" "refused a model matching the allowlist glob"
+if PW_CONFIG_FILE="$CFG_OPEN" PW_MUSE_CATALOG_DIR="$MCAT" PW_MODEL_ALLOWLIST_MUSE="other/*" "$MR" model-check --provider muse --model muse-test-flash >/dev/null 2>&1; then
+  pwtest_bad "model-check muse refuse" "allowed a model outside the allowlist"
+else pwtest_ok "model-check muse: non-matching id refused"; fi
 # The cursor axis with the REAL catalog shape ("agent models" lines carry a " - description"
 # tail — the 09-28 corpus case where every cursor pin read false-unbound): the resolver must
 # strip the tail, bind the bare id, and still refuse a true catalog miss. PW_CURSOR_CLI_CONFIG

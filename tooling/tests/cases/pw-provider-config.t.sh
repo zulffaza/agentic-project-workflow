@@ -99,6 +99,30 @@ else pwtest_ok "opencode reasoning refused at write"; fi
 if pco set --project demo --key role-model --provider opencode --role reviewer --model testprov/test-model --variant 'bad level!' >/dev/null 2>&1; then
   pwtest_bad "opencode malformed variant refused" "non-token variant was accepted"
 else pwtest_ok "opencode malformed variant refused"; fi
+# muse write path (probe-verified 2026-11-05): effort/reasoning accepted against the tier
+# list, variant/thinking refused as unsupported, ultra refused as unlisted. Dedicated
+# fixture: hermetic cache catalog (the reader's only surface) + muse enabled.
+MUCAT="$PC/muse-catalog"; mkdir -p "$MUCAT"
+cat > "$MUCAT/cache.json" <<'JSON'
+{"schema_version": 2, "provider_id": "meta", "rows": [
+{"model_id": "muse-test-flash", "visibility": "visible", "context_limit": 1007997, "output_limit": 128000, "reasoning_effort_variants": [{"tier": "low"}, {"tier": "max"}]}
+]}
+JSON
+CFG_MU="$PC/pw.config.mu.sh"
+printf '%s\n' 'PW_PROVIDERS=(kilo cursor muse)' > "$CFG_MU"
+pcm() { PW_PROJECTS_DIR="$PC/projects" PW_PROJECTS="$PC/projects" PW_REPOS="$PC/repos" \
+        PW_CONFIG_FILE="$CFG_MU" PW_MUSE_CATALOG_DIR="$MUCAT" PW_PROPOSAL_DIR="$PC/proposals" "$(pwtest_script pw-config.sh)" "$@"; }
+pwtest_rc 0 "muse role-model write with effort" pcm set --project demo --key role-model --provider muse --role analyst --model muse-test-flash --effort high
+pc_re 'muse analyst muse-test-flash' "$(pcm get --project demo --key role-model 2>/dev/null)" "muse role read lists the new cell"
+if pcm set --project demo --key role-model --provider muse --role reviewer --model muse-test-flash --effort ultra >/dev/null 2>&1; then
+  pwtest_bad "muse ultra refused at write" "unlisted tier was accepted (API falls back silently)"
+else pwtest_ok "muse ultra refused at write"; fi
+if pcm set --project demo --key role-model --provider muse --role reviewer --model muse-test-flash --variant low >/dev/null 2>&1; then
+  pwtest_bad "muse variant refused at write" "no verified variant control was accepted"
+else pwtest_ok "muse variant refused at write"; fi
+# NOTE: role-model cells carry no Thinking column by design (thinking lives on execution
+# routes, covered for muse by the spawn-args task-route refusal in pw-project-defaults.t.sh),
+# so a --thinking flag on a role-model write is ignored for every provider — no muse assert.
 pc_re 'kilo researcher command_code/model' "$(pc get --project demo --key role-model 2>/dev/null)" "composite key leaves the researcher row intact"
 pc_re '^\- \*\*AI Models:\*\*' "$(grep '^- \*\*AI Models:\*\*' "$R")" "derived compatibility line survives project writes"
 pwtest_rc 0 "spawn-args uses the project cell" pc spawn-args --project demo --role researcher --provider kilo
