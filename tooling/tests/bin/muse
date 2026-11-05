@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# tests/bin/muse — deterministic fake of the muse CLI surfaces the tooling reads.
+# Shapes mirror the REAL CLI verified 2026-11-05 on Muse Code 1.4.14:
+#   the model catalog lives on disk (model-catalog/*.json), NOT behind a CLI command,
+#   so this shim only proves the bin-gate: it exists and fails LOUD on everything else.
+# Unknown invocations fail LOUD — never a silent empty success.
+case "$1" in
+  --version|-V) printf 'Muse Code 1.4.14 (test shim)\n' ;;
+  --help|-h|help) printf 'muse-shim: no models command (catalog is the on-disk cache)\n' ;;
+  *) printf 'muse-shim: unsupported invocation: %s\n' "$*" >&2; exit 1 ;;
+esac

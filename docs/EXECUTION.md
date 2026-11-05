@@ -61,7 +61,7 @@ running the workflow operation). The selected row names the execution provider, 
 target model, an optional subagent, and per-route tuning (variant, reasoning, effort, thinking).
 Thinking is validated and emitted only where the provider supports it: Kilo maps `on` to
 `--thinking`, Cursor requires a `-thinking-` catalog id, OpenCode maps `on` to `--thinking`
-(display-only on 2.2.5), and Claude/Codex refuse it. The legacy
+(display-only on 2.2.5), and Claude/Codex/Muse refuse it. The legacy
 `Execute with:` bullet stays
 as a derived one-route summary for older readers: it is written by the route owner, never edited
 as an independent source.
@@ -122,6 +122,7 @@ definitions, so they have no model cell.
 | Cursor | `auto` routing or `selectedModel` in its CLI configuration |
 | Codex | Its configured default |
 | OpenCode | The `model` key in `opencode.json` (subagents inherit the invoking primary's model when their definition sets none) |
+| Muse | Its configured default (currently `muse-wonder-1.0`); pins stay explicit, never written as a default |
 
 ### When the role needs a headless session
 
@@ -129,6 +130,7 @@ A headless session runs the work order through the provider's CLI rather than an
 
 - Kilo and Cursor named spawns cannot carry a per-run model parameter. A project role pin uses a headless session to bind that model.
 - Codex workflow roles use headless `codex exec` sessions because this bundle has no in-process spawn surface there.
+- Muse workflow roles use headless `muse exec` sessions because this bundle has no in-process spawn surface there either (Flow B, like Codex).
 - The run ledger records what actually ran. If a requested model cannot bind, the ledger reports that limitation.
 
 See [provider settings](REFERENCE.md#inspect-configure-and-recover) or run `/pw-config global show`.
@@ -162,13 +164,15 @@ stops the task.
 | OpenCode model | `opencode:<catalog-id>` | OpenCode's configured backends |
 | Cursor model | `cursor:glm-5p3-flash[reasoning=high]` | Cursor's gateway catalog plus the CLI's own config (no desktop app needed) |
 | Codex model | `codex:<slug>` | Codex's gateway through your ChatGPT login |
+| Muse model | `muse:<catalog-id>` | Muse's on-disk model catalog (bare ids; hidden `-contributor` rows excluded) |
 | Registered agent | `pw-executor` | A definition available on the same provider |
 
 Use the exact model ID from your enabled provider. Aliases can follow newer versions; use a full ID when reproducibility matters.
 Cursor effort/thinking variants can be catalog IDs or bracket parameters. For a model with no
 catalog variants (for example `glm-5p3-flash`), use the parameter name its config entry stores:
 `cursor:glm-5p3-flash[reasoning=low]`, `[reasoning=high]`, and so on. Codex uses bare model slugs;
-effort and Fast are per-run settings.
+effort and Fast are per-run settings. Muse uses bare catalog ids; effort is the per-run
+`--reasoning-effort` tier (`ultra` never offered).
 
 Agent definitions are provider-specific. For cross-provider work, use an explicit model and the task file as the work order.
 A custom definition is useful for a recurring role with distinct instructions. See [agents and sub-agents](#agents-vs-sub-agents-and-why-the-difference-matters-across-providers).
@@ -184,6 +188,7 @@ Claude uses the configured alias set described above.
 | OpenCode | `opencode models` |
 | Cursor | `agent models` + `~/.cursor/cli-config.json` modelParameters |
 | Codex | `codex debug models` |
+| Muse | on-disk cache `~/.local/share/muse/model-catalog/*.json` (schema 2; visible rows with non-null limits) |
 
 Use the exact catalog ID when setting a pin. Display names can differ from usable IDs:
 for example, Kilo's credential label “Kilo Gateway” uses the ID `kilo`, not `kilo_gateway`.
@@ -294,6 +299,9 @@ workflow gates remain separate.
 - **Codex:** codex has no sub-agent surface, so a codex session plays the worker roles inline or
   runs a supervised headless `codex exec` session over the work order (prompt via stdin; the
   `thread_id` is the resume handle).
+- **Muse:** muse has no sub-agent surface either, so a muse session plays the worker roles inline or
+  runs a supervised headless `muse exec` session over the work order (prompt via `--prompt-file`; the
+  `stream.id` is the resume handle; `muse resume` is interactive-only, never headless).
 - **Spawn-less fallback:** if a spawn is unavailable or denied, the role defs remain readable
   prompt bodies — play the role yourself, or hand a session the task file as its work order.
 
@@ -344,8 +352,8 @@ projects are never revalidated or backfilled by that gate.
 ## Model allowlist (optional — a cost guard, not a routing mechanism)
 
 There's no fixed, pre-approved model list in this bundle — an agent (during `/pw-breakdown`) or
-you can pick any model any configured API Provider serves, for claude, kilo, opencode, cursor, or
-codex alike.
+you can pick any model any configured API Provider serves, for claude, kilo, opencode, cursor,
+codex, or muse alike.
 
 **If you want to rule some OUT** — typically to stop an agent reaching for an unexpectedly
 expensive model — set an allowlist per Agent Provider in `pw.config.sh`
@@ -384,7 +392,7 @@ These two words are **not** interchangeable — the distinction decides how a ta
 | | **Sub-agent** | **Agent** (primary / invocable) |
 |---|---|---|
 | What | spawned **in-process** by an orchestrator | a top-level agent invoked through a provider's **CLI** |
-| How | Claude's Task tool `subagent_type`; KiloCode `mode: subagent`; Cursor auto-delegation on def `description` (or explicit `/pw-<agent>` — and a **direct** cursor sub-agent can itself fan out one more level, verified 2026-09-09); OpenCode primary-agent invocation or `@`-mention of a `mode: subagent` def; **codex: this bundle uses inline lanes or headless sessions** (inline lane personas, or a headless `codex exec` session as the spawn) | that provider's CLI: `kilo run --agent <primary-agent>` / `claude -p` / cursor `agent -p --force --model <id>`+task file / opencode `opencode run --auto -m <id>`+task file via stdin (named `--agent <subagent>` honored headless, verified 2026-11-04) / codex `codex exec -m <slug>`+task file via stdin (a sub-agent def is NOT nameable from across the boundary, except opencode's `--agent` flag; cursor has no CLI primary-agent slot at all; codex has no agent defs at all) |
+| How | Claude's Task tool `subagent_type`; KiloCode `mode: subagent`; Cursor auto-delegation on def `description` (or explicit `/pw-<agent>` — and a **direct** cursor sub-agent can itself fan out one more level, verified 2026-09-09); OpenCode primary-agent invocation or `@`-mention of a `mode: subagent` def; **codex and muse: this bundle uses inline lanes or headless sessions** (inline lane personas, or a headless `codex exec` / `muse exec` session as the spawn) | that provider's CLI: `kilo run --agent <primary-agent>` / `claude -p` / cursor `agent -p --force --model <id>`+task file / opencode `opencode run --auto -m <id>`+task file via stdin (named `--agent <subagent>` honored headless, verified 2026-11-04) / codex `codex exec -m <slug>`+task file via stdin (a sub-agent def is NOT nameable from across the boundary, except opencode's `--agent` flag; cursor has no CLI primary-agent slot at all; codex has no agent defs at all) / muse `muse exec --model <id>`+task file via `--prompt-file` (no agent defs at all) |
 | Boundary | **same provider only** — a provider can spawn only its *own* sub-agents | the **only** unit that crosses a provider boundary |
 | Here | `pw-executor` | none shipped — the normal session drives via `pw-orchestration` |
 
@@ -441,7 +449,7 @@ pointers-as-menu, never raw dumps/credentials. After a draft, an **exit check**:
 brief's scope list; a gap means a **resume with a seed patch** (`kilo run -s <id>` / claude
 `--resume <id>` / cursor `agent -p --force --resume <session_id>` / opencode `opencode run --auto
 -m <id> --session <session-id>` / codex `codex exec resume
-<thread_id>` — cd to the worktree first, neither resume has a directory flag) — iff the liveness check reports
+<thread_id>` / muse `muse exec --session-id <uuid>` — cd to the worktree first; codex resume has no directory flag, muse takes `--workspace` instead — iff the liveness check reports
 that id resumable — not a cold re-spawn. N review items on ONE artifact (human / `pw-reviewer` /
 verifier / `dep-impact` items share that queue) get ONE batched fix pass, per-item replies intact
 — never one spawn per comment; who runs the pass (in-process fixer / supervised headless / the
@@ -469,8 +477,8 @@ carries `· via=subagent|headless · session=<id> · seed=<ref> · out=<artifact
 `## Result → Session:` records its run's id, and the executor writes `session <id>` as the first line
 of `worktree/<T0n>.log` when the provider exposes one — `-` if not). A Row-8 rejection, an MR-comment
 batch, or a late-fix dependent recheck (above) **resumes that id** (`kilo run -s <id>` / cursor
-`agent -p --force --resume <id>` / opencode `opencode run --auto -m <model> --session <id>` / codex `codex exec resume <id>`; ids are `ses_…` on kilo and opencode, plain
-UUIDs on cursor and codex — codex's is the `thread_id` from its JSONL event stream; opencode's is the `sessionID` from its JSONL events) *only when a
+`agent -p --force --resume <id>` / opencode `opencode run --auto -m <model> --session <id>` / codex `codex exec resume <id>` / muse `muse exec --session-id <uuid>`; ids are `ses_…` on kilo and opencode, plain
+UUIDs on cursor, codex, and muse — codex's is the `thread_id` from its JSONL event stream; opencode's is the `sessionID` from its JSONL events; muse's is the `stream.id` from its JSONL events) *only when a
 deterministic liveness check says it is still resumable* — the pipeline never blind-resumes an id
 and reads the error to find out it was dead; when the check says dead/unverifiable, it takes the
 ladder's cold path instead (spawn with the task file / recorded seed), because session stores are

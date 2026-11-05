@@ -119,7 +119,7 @@ need to know a script ran.
 
 `providers.md` documents the cross-provider execution mechanism — how the orchestrator invokes a
 *different* Agent Provider's CLI headlessly, reading that provider's `<name>_headless()` hook
-(built-in for claude/kilo/opencode/cursor/codex in `pw-common.sh`, added or overridden in
+(built-in for claude/kilo/opencode/cursor/codex/muse in `pw-common.sh`, added or overridden in
 `pw.config.sh` —
 never edited here). `forges.md` and `rfc-backends.md` are maintainer-owned the same way — the
 day-to-day settings you actually set (`PW_FORGE_HOSTS`, `PW_RFC_BACKEND`/`PW_RFC_LARK_*`) already
@@ -137,23 +137,23 @@ $PW_HOME/tooling/scripts/toolchain/gen-commands.sh
 $PW_HOME/tooling/scripts/toolchain/gen-skills.sh
 ```
 Outputs are EXCLUSIVE per provider (overwritten each run):
-- **Claude Code / Cursor / Codex** → `<name>/SKILL.md` invocable skills only, no command files.
-  Claude/Cursor carry `disable-model-invocation: true`; Codex carries `agents/openai.yaml`
+- **Claude Code / Cursor / Codex / Muse** → `<name>/SKILL.md` invocable skills only, no command files.
+  Claude/Cursor/Muse carry `disable-model-invocation: true`; Codex carries `agents/openai.yaml`
   `allow_implicit_invocation: false`.
 - **KiloCode / OpenCode** → `<name>.md` commands only, no matching entry skills.
 - Shared `skills/model/*` are linked into every provider by `bootstrap.sh`.
 
-`{{ARGS}}` becomes each provider's placeholder (`$ARGUMENTS`; `<arguments>` on Codex).
+`{{ARGS}}` becomes each provider's placeholder (`$ARGUMENTS`; `<arguments>` on Codex and Muse).
 
 ## Add / enable an Agent Provider
-Already `claude`, `kilo`, `opencode`, `cursor`, or `codex`? Those are **built in** — just add the name to
+Already `claude`, `kilo`, `opencode`, `cursor`, `codex`, or `muse`? Those are **built in** — just add the name to
 `PW_PROVIDERS=(…)` in `../pw.config.sh`, nothing else. For any other CLI, **you never edit these
 scripts** — everything else also goes in `../pw.config.sh`:
 1. Add its name to `PW_PROVIDERS=(…)`.
 2. Define `<name>_bin` / `<name>_skilldir` / `<name>_commanddir` / `render_<name>_command` (the
    scripts only supply defaults for the built-ins, so yours win — never redefine a built-in
    provider's hooks here, it'll silently replace the working default). Copy
-   `render_claude_command`/`render_kilo_command`/`render_opencode_command`/`render_cursor_command`/`render_codex_command`
+   `render_claude_command`/`render_kilo_command`/`render_opencode_command`/`render_cursor_command`/`render_codex_command`/`render_muse_entry_skill`
    from `pw-common.sh` as a starting point; full
    variable contract in [ONBOARDING.md](../ONBOARDING.md#register-a-new-provider). *(Optional)*
    define `<name>_entry_format` → `skill` (with `render_<name>_entry_skill` or the generic
@@ -161,7 +161,7 @@ scripts** — everything else also goes in `../pw.config.sh`:
    The two formats are exclusive. Without the hook, a custom provider inherits its legacy
    `command_style`. *(Optional)*
    to also seed the sub-agents for it, define `<name>_agentdir` + `render_<name>_agent`;
-   providers without those just skip agent-seeding (codex ships this way — no agent surface).
+   providers without those just skip agent-seeding (codex and muse ship this way — no agent surface).
 3. *(Optional)* define `<name>_headless()` — its exact non-interactive invocation template, so an
    orchestrator on a *different* provider can shell out to this one (cross-provider execution).
    Not needed for the CLI to work at all, same-provider-only. See `docs/providers.md`.
@@ -183,7 +183,7 @@ agent: <optional legacy field; no primary agent is shipped>
 
 > Sub-agents **are** generated — from [`agents/`](./agents/README.md), seeded into each provider's
 > agent dir by `gen-agents.sh` (kilo `~/.config/kilo/agent/`, Claude Code `~/.claude/agents/`,
-> OpenCode `~/.config/opencode/agents/`, Cursor `~/.cursor/agents/`; codex gets none — it has no agent-def surface). The
+> OpenCode `~/.config/opencode/agents/`, Cursor `~/.cursor/agents/`; codex and muse get none — neither has an agent-def surface). The
 > seven shipped worker roles: `pw-executor`, `pw-reviewer` (optional — every review
 > point defaults to human-only `advisory`; a pass only starts when scheduled for that phase), the spawn-lanes `pw-researcher` / `pw-analyst` / `pw-writer-task`, and the read-only `pw-ship-comment-analyst`; execution can
 > still reuse a registered agent (e.g. `pw-executor`) by naming it in a task's `Execute with:` —

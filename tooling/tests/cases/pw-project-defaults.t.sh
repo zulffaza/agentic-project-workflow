@@ -380,6 +380,58 @@ else
   grep -q 'already has a variant suffix' "$GPD/double-suffix.err" && pwtest_ok "opencode double variant refused" || pwtest_bad "opencode double variant refusal" "$(cat "$GPD/double-suffix.err")"
 fi
 
+# --- muse spawn-args (plan 67, probe-verified 2026-11-05): --model + --prompt-file with
+# --reasoning-effort for tuning; one shared control (codex precedent) so a reasoning/effort
+# conflict refuses, variant and thinking are unsupported. Hermetic catalog fixture; muse is
+# enabled in this block's own config (the shared GPCFG_SP predates the provider). ---
+MCATM="$GPD/muse-catalog"; mkdir -p "$MCATM"
+cat > "$MCATM/cache.json" <<'JSON'
+{"schema_version": 2, "provider_id": "meta", "rows": [
+{"model_id": "muse-test-flash", "visibility": "visible", "context_limit": 1007997, "output_limit": 128000, "reasoning_effort_variants": [{"tier": "low"}, {"tier": "max"}]}
+]}
+JSON
+MSM="$GPD/projects/spawn-muse"; mkdir -p "$MSM"
+cat > "$MSM/README.md" <<'MD'
+# spawn muse demo
+- **AI Models:** analyst=muse:muse-test-flash writer-task=muse:muse-test-flash reviewer=muse:muse-test-flash verifier=muse:muse-test-flash explorer=muse:muse-test-flash researcher=muse:muse-test-flash
+- **AI Model Tuning:** analyst=effort:high writer-task=reasoning:high reviewer=effort:high,reasoning:high verifier=effort:high,reasoning:low explorer=variant:low
+MD
+GPCFG_MUSE="$GPD/pw.config.muse.sh"
+printf '%s\n' 'PW_PROVIDERS=(muse)' > "$GPCFG_MUSE"
+gspm() { PW_PROJECTS_DIR="$GPD/projects" PW_PROJECTS="$GPD/projects" PW_REPOS="$GPD/repos" PW_CONFIG_FILE="$GPCFG_MUSE" PW_MUSE_CATALOG_DIR="$MCATM" "$(pwtest_script pw-config.sh)" "$@"; }
+for pair in analyst:museeffort writer-task:musereason reviewer:musesame; do
+  role="${pair%%:*}"; tag="${pair#*:}"
+  pwtest_rc 0 "spawn-args muse $role" gspm spawn-args --project spawn-muse --role "$role" --json
+  python3 - "$PWTEST_OUT" "$tag" <<'PY'
+import json,sys
+tag=sys.argv[2]; d=json.load(open(sys.argv[1]))
+want={
+ 'museeffort':['--model','muse-test-flash','--prompt-file','--reasoning-effort','high'],
+ 'musereason':['--model','muse-test-flash','--prompt-file','--reasoning-effort','high'],
+ 'musesame':['--model','muse-test-flash','--prompt-file','--reasoning-effort','high'],
+}[tag]
+assert d['supported'] is True and d['args']==want, (tag,d)
+PY
+  [ "$?" = 0 ] && pwtest_ok "spawn-args maps $tag exactly" || pwtest_bad "spawn-args maps $tag" "$(cat "$PWTEST_OUT")"
+done
+if gspm spawn-args --project spawn-muse --role verifier --json >"$GPD/muse-conflict.json" 2>/dev/null; then
+  pwtest_bad "muse conflicting reasoning/effort refused" "dispatch accepted two values for one control"
+else
+  grep -q 'conflicting reasoning/effort' "$GPD/muse-conflict.json" && pwtest_ok "muse conflicting reasoning/effort refused" || pwtest_bad "muse conflict refusal" "$(cat "$GPD/muse-conflict.json")"
+fi
+if gspm spawn-args --project spawn-muse --role explorer --json >/dev/null 2>&1; then
+  pwtest_bad "muse variant refused" "no verified variant control was accepted"
+else pwtest_ok "muse variant refuses dispatch"; fi
+# Thinking travels on the task execution route (not the Tuning line): a muse route with
+# thinking on refuses at dispatch.
+MSMT="$MSM/task"; mkdir -p "$MSMT"
+cp "$PWTEST_TEMPLATE_DIR/task/_TEMPLATE-task.md" "$MSMT/T01.md"
+sed -i.bak -e 's/<T0n>/T01/g' "$MSMT/T01.md" && rm -f "$MSMT/T01.md.bak"
+gspm set --project spawn-muse --key execution-route --task T01 --current-provider muse --execution-provider muse --model muse-test-flash --thinking on >/dev/null 2>&1
+if gspm spawn-args --project spawn-muse --task T01 --current-provider muse --json >/dev/null 2>&1; then
+  pwtest_bad "muse thinking refused" "no verified thinking control was accepted"
+else pwtest_ok "muse thinking refuses dispatch"; fi
+
 # A hand-edited binding naming a disabled provider also refuses before spawn.
 GHOST="$GPD/projects/spawn-ghost"; mkdir -p "$GHOST"
 printf '%s\n' '# ghost' '- **AI Models:** analyst=ghost:some-model' > "$GHOST/README.md"

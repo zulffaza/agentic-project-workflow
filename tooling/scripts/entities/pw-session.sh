@@ -30,6 +30,11 @@
 #              the `session list` surface is project-scoped and unsuitable here.
 #              Probe-verified 2026-11-04 on opencode 2.2.5. Exit 0 is meaningless on this
 #              CLI (errors also exit 0) — the reading comes from the output text.
+#   muse     — dir ~/.local/share/muse/sessions/YYYY/MM/DD/<uuid>/ with a non-empty
+#              session.jsonl (the id is set deterministically per run via
+#              `muse exec --session-id <uuid>` and reusing it continues context;
+#              `muse resume` is interactive-only, never the headless path).
+#              Empty/missing session.jsonl = dead. Probe-verified 2026-11-05 on muse 1.4.14.
 # ============================================================================
 set -euo pipefail
 
@@ -93,6 +98,7 @@ _sc_parse_identity() { # <actually-used> -> prints "<prov>\t<model>\t<variant>\t
     case "$flag" in
       --variant) val="${1:-}"; [ $# -gt 0 ] && shift; variant="$val" ;;
       --effort)  val="${1:-}"; [ $# -gt 0 ] && shift; effort="$val" ;;
+      --reasoning-effort) val="${1:-}"; [ $# -gt 0 ] && shift; effort="$val" ;;  # muse headless flag (effort covers reasoning; codex uses -c instead)
       --reasoning) val="${1:-}"; [ $# -gt 0 ] && shift; reasoning="$val" ;;
       --thinking) case "${1:-}" in on|off) thinking="$1"; shift ;; *) thinking="on" ;; esac ;;
       -c) val="${1:-}"; [ $# -gt 0 ] && shift
@@ -194,6 +200,27 @@ _sc_codex() {
   done
   if [ "$found" = 1 ]; then echo "session-check: codex:$id — dead (rollout present but empty) → fix: take the ladder's cold path (seed-patched re-spawn)" >&2; return 1; fi
   echo "session-check: codex:$id — dead (no rollout under ~/.codex/sessions) → fix: take the ladder's cold path (seed-patched re-spawn)" >&2
+  return 1
+}
+
+# _sc_muse <uuid> — session dir ~/.local/share/muse/sessions/<Y>/<M>/<D>/<id>/ carrying
+# a non-empty session.jsonl is live (the id is deterministic per run: `muse exec
+# --session-id <uuid>` sets it, and reusing it continues context — verified 2026-11-05).
+# A missing dir or an empty session.jsonl is dead. Anything else (no store root at all)
+# is unverifiable. `muse resume` is interactive-only and plays no part here; never
+# blind-resume — reusing an unknown id starts a FRESH session under it (verified: the
+# model honestly reports no context), so only a live reading earns a continuation.
+_sc_muse() {
+  local id="$1" d f found=0
+  [ -d "$HOME/.local/share/muse/sessions" ] || return 2
+  for d in "$HOME"/.local/share/muse/sessions/*/*/*/"$id"; do
+    [ -d "$d" ] || continue
+    found=1
+    f="$d/session.jsonl"
+    if [ -s "$f" ]; then echo "session-check: muse:$id — live ($f)"; return 0; fi
+  done
+  if [ "$found" = 1 ]; then echo "session-check: muse:$id — dead (session dir present but session.jsonl empty) → fix: take the ladder's cold path (seed-patched re-spawn)" >&2; return 1; fi
+  echo "session-check: muse:$id — dead (no session dir under ~/.local/share/muse/sessions) → fix: take the ladder's cold path (seed-patched re-spawn)" >&2
   return 1
 }
 
@@ -316,6 +343,7 @@ cmd_session_check() {
     cursor)   _sc_cursor "$id" ;;
     codex)    _sc_codex "$id"  ;;
     opencode) _sc_opencode "$id" ;;
+    muse)     _sc_muse "$id"     ;;
     *)        echo "session-check: $prov:$id — unverifiable (unknown provider '$prov') → fix: run --help for the supported providers" >&2; rc=2 ;;
   esac
   return $rc

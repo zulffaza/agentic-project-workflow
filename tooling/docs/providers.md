@@ -18,7 +18,7 @@ editing this file.
 > Provider.
 >
 > **Terminology:** an **Agent Provider** is the CLI itself (`claude`, `kilo`, `opencode`,
-> `cursor`, `codex`, …). An
+> `cursor`, `codex`, `muse`, …). An
 > **API Provider** is a narrower, different thing: which model *backend* a given Agent Provider
 > talks to underneath (e.g. `command_code`/`openrouter` inside KiloCode). One Agent Provider can
 > have several API Providers; don't conflate the two when reading this file.
@@ -33,8 +33,8 @@ editing this file.
 
 ## Registering a new Agent Provider (hook contract)
 
-The full mechanics of wiring a CLI that isn't one of the five built-ins (`claude`, `kilo`,
-`opencode`, `cursor`, `codex`) into the bundle — previously inline in `ONBOARDING.md`, moved here 2026-09-25
+The full mechanics of wiring a CLI that isn't one of the six built-ins (`claude`, `kilo`,
+`opencode`, `cursor`, `codex`, `muse`) into the bundle — previously inline in `ONBOARDING.md`, moved here 2026-09-25
 so the user layer carries only the behavior (ONBOARDING §"Register a new provider" keeps the facts;
 this section owns the contract). **You don't edit any script** — everything goes in
 **`pw.config.sh`** (created on first bootstrap; gitignored, so it stays yours):
@@ -42,7 +42,7 @@ this section owns the contract). **You don't edit any script** — everything go
 1. Add its name to `PW_PROVIDERS=(…)`.
 2. Define its **required** hooks in the same file (the scripts only supply defaults for the
    built-ins, so yours win — this is also why you should never redefine `claude_*`/`kilo_*`/
-   `opencode_*`/`cursor_*`/`codex_*` here: your version would silently replace the working built-in one):
+   `opencode_*`/`cursor_*`/`codex_*`/`muse_*` here: your version would silently replace the working built-in one):
    - `<name>_bin()` — the command to detect on `PATH`
    - `<name>_skilldir()` — where it reads skills (these are plain files/dirs, copied or
      symlinked as-is — no rendering involved)
@@ -81,8 +81,8 @@ this section owns the contract). **You don't edit any script** — everything go
      `$claude_tools`, `$model`, `$bodytext` — see
      `render_claude_agent`/`render_kilo_agent`/`render_opencode_agent`/`render_cursor_agent` in
      `tooling/scripts/lib/pw-common.sh`. Providers without these two hooks just skip agent-seeding —
-     the `/pw-*` entries still work (codex ships this way on purpose: it has no user-facing
-     agent-def surface, so it plays worker roles inline or through a supervised headless session).
+     the `/pw-*` entries still work (codex and muse ship this way on purpose: neither has a user-facing
+     agent-def surface, so each plays worker roles inline or through a supervised headless session).
   5. *(Optional)* `<name>_headless()` — makes the provider a cross-provider execution **target**;
      contract below in §"Adding cross-provider execution for a new Agent Provider". Without it the
      provider is fully usable same-provider.
@@ -144,7 +144,7 @@ is still fully usable same-provider; it just can't be a cross-provider **target*
 treatment as `agentdir`/`render_*_agent` for sub-agent seeding).
 
 **What the built-in hooks currently return** (source of truth is `tooling/scripts/lib/pw-common.sh`'s
-`claude_headless`/`kilo_headless`/`opencode_headless`/`cursor_headless`/`codex_headless` — the lines below are
+`claude_headless`/`kilo_headless`/`opencode_headless`/`cursor_headless`/`codex_headless`/`muse_headless` — the lines below are
 illustrative, kept in
 sync by whoever maintains the bundle, not something you edit here to change behavior):
 
@@ -221,17 +221,18 @@ kilo column
   `{"type":"thread.started","thread_id":"<uuid>"}`; resume with `printf '%s' "$PROMPT" | codex
   exec resume <thread_id> --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -` —
   **`resume` has no `-C` flag**: cd to the worktree first (runs in the invocation cwd).
+- **muse** — `printf '%s' "$PROMPT" > task-file; muse exec --model <canonical-id> --reasoning-effort <tier> --trust-workspace --disable-approval --disable-sandbox [--session-id <uuid>] [--workspace <worktree-path>] --prompt-file <task-file> [--json]`. **Prompt via `--prompt-file` only** (an 11 KB positional argument also survives on 1.4.14, but the file is the documented channel — verified 2026-11-05). NOTE: the model flag is `--model` (there is no `-m`; `-m` is rejected as an unexpected argument). `--trust-workspace --disable-approval --disable-sandbox` is the documented default (network works under it — verified HTTP/2 200 in-session); the looser `--yolo` also completes headless. `--reasoning-effort` selects the tier (per-model levels in the on-disk catalog cache; `ultra` is NEVER offered — the CLI warns and silently runs `xhigh` instead). Unknown model ids fail loud in text (`agent loop failed`) yet exit 0 — **never trust the exit code**; scan output and confirm git artifacts. Model ids are BARE catalog ids (the cache has no `models` command; hidden `-contributor` rows are excluded by the reader — never pin one). Session id = first `stream.id` on `kind: session` JSONL events; continue a session by reusing `--session-id` (context round-trips verbatim). **`muse resume` is interactive-only** (fails without a TTY even piped) — never the headless path. Reusing an unknown id starts a fresh session that honestly reports no context — check liveness first (never blind-resume). Worktree: cd there first, or pass `--workspace` (honored from a foreign cwd).
 
 ## Effort / variant / thinking (per-task tuning)
 A task may carry two optional fields alongside `Execute with:` — the orchestrator maps them to the
 right CLI flag by provider:
 
-| Task field | `claude` maps to | `kilo` maps to | `cursor` maps to | `codex` maps to | `opencode` maps to |
-|------------|------------------|----------------|----------------|----------------|-------------------|
-| `Effort:` (`low`/`medium`/`high`/`xhigh`/`max`) | `--effort <level>` | `--variant <level>` (provider-specific: `high`/`max`/`minimal`/…; nearest match) | `<id>-<level>[-fast]` when the catalog lists it (e.g. `claude-opus-5-thinking-xhigh`); otherwise a bracket param on the base id — `glm-5p3-flash[reasoning=high]` (name the parameter as cli-config `modelParameters` does: `reasoning`, `effort`, `context`, `fast`) | `-c model_reasoning_effort="<level>"` (headless) or TUI `/model` (in-session); levels are per-model in the catalog (`supported_reasoning_levels`) | use `Variant:` instead — opencode has no verified effort/reasoning control (refused) |
-| `Variant:` (per-model level token) | (n/a — unsupported) | `--variant <level>` | `<id>-<level>` when the catalog lists it | (n/a — unsupported) | `#<level>` suffix on the model id (e.g. `-m 'cpa/muse-spark-1.3-contributor#low'`); levels are per-model; unknown levels fail loud |
-| `Thinking:` (`on`/`off`) | (n/a — omit; effort covers reasoning) | `--thinking` when `on` | encoded in catalog ids (`-thinking-<level>` variants); parameterized ids use their reasoning/effort bracket param | (n/a — effort covers reasoning) | `--thinking` when `on` (display-only on 2.2.5; verified accepted) |
-| Fast tier (no task field — per-run/PLAN note) | n/a | n/a | `-fast` catalog-id variants, or `[fast=true]` on a parameterized id | `-c service_tier="priority"` on the same slug (requested-only; unverifiable from output) | n/a |
+| Task field | `claude` maps to | `kilo` maps to | `cursor` maps to | `codex` maps to | `opencode` maps to | `muse` maps to |
+|------------|------------------|----------------|----------------|----------------|-------------------|----------------|
+| `Effort:` (`low`/`medium`/`high`/`xhigh`/`max`) | `--effort <level>` | `--variant <level>` (provider-specific: `high`/`max`/`minimal`/…; nearest match) | `<id>-<level>[-fast]` when the catalog lists it (e.g. `claude-opus-5-thinking-xhigh`); otherwise a bracket param on the base id — `glm-5p3-flash[reasoning=high]` (name the parameter as cli-config `modelParameters` does: `reasoning`, `effort`, `context`, `fast`) | `-c model_reasoning_effort="<level>"` (headless) or TUI `/model` (in-session); levels are per-model in the catalog (`supported_reasoning_levels`) | use `Variant:` instead — opencode has no verified effort/reasoning control (refused) | `--reasoning-effort <level>` (headless `--reasoning-effort`, or TUI `/effort`); levels are per-model in the catalog cache (`minimal`–`max` on 1.3/wonder; `ultra` never offered) |
+| `Variant:` (per-model level token) | (n/a — unsupported) | `--variant <level>` | `<id>-<level>` when the catalog lists it | (n/a — unsupported) | `#<level>` suffix on the model id (e.g. `-m 'cpa/muse-spark-1.3-contributor#low'`); levels are per-model; unknown levels fail loud | (n/a — unsupported; use `Effort:`) |
+| `Thinking:` (`on`/`off`) | (n/a — omit; effort covers reasoning) | `--thinking` when `on` | encoded in catalog ids (`-thinking-<level>` variants); parameterized ids use their reasoning/effort bracket param | (n/a — effort covers reasoning) | `--thinking` when `on` (display-only on 2.2.5; verified accepted) | (n/a — unsupported; effort covers reasoning) |
+| Fast tier (no task field — per-run/PLAN note) | n/a | n/a | `-fast` catalog-id variants, or `[fast=true]` on a parameterized id | `-c service_tier="priority"` on the same slug (requested-only; unverifiable from output) | n/a | n/a |
 
 - **Version pinning (Claude):** `opus`/`sonnet`/`haiku`/`fable` resolve to the *latest* of that
   family. To pin, use the full name — `claude:claude-opus-4-8` vs `claude:claude-opus-5`,
@@ -275,7 +276,7 @@ agent definitions, so it has no worker cells. Fixer procedure entries are not wo
 ## Choosing a model — no fixed roster, model-agnostic by default
 
 There's deliberately no fixed "blessed models" list, and no static model→provider catalog either
-— any model any configured API Provider serves is fair game, for kilo, opencode, cursor, codex, or
+— any model any configured API Provider serves is fair game, for kilo, opencode, cursor, codex, muse, or
 claude alike.
 An agent (during `/pw-breakdown`) or you can pick whatever fits the task, but **always write the
 explicit `<provider>:` prefix** — this is exactly why: a static catalog goes stale (a display name
@@ -284,7 +285,7 @@ under the id `kilo`, not `kilo_gateway`), so there's nothing here to infer a pro
 
 **If you don't want that fully open** — e.g. to keep an agent from reaching for an unexpectedly
 expensive model — set an optional **model allowlist** per Agent Provider in `pw.config.sh`
-(`PW_MODEL_ALLOWLIST_CLAUDE` / `_KILO` / `_OPENCODE` / `_CURSOR` / `_CODEX`, comma-separated glob
+(`PW_MODEL_ALLOWLIST_CLAUDE` / `_KILO` / `_OPENCODE` / `_CURSOR` / `_CODEX` / `_MUSE`, comma-separated glob
   patterns). **The
 rule: empty/unset = ALL models allowed — the default.** Nothing is restricted unless you set a
 pattern yourself. `/pw-breakdown` checks a task's chosen model against it while filling `Execute
@@ -303,9 +304,12 @@ arguments — filter the output yourself), opencode's via `opencode models
 modelParameters` (the CLI list is incomplete — desktop-only ids appear only in the config;
 `model-resolve --probe` is the live check), codex's via `codex debug models` (one-line JSON;
 pw's reader prints the bare visible slugs — hidden-visibility rows still RUN if invoked, so the
-allowlist is the real gate), if you want to look yourself — but `/pw-doctor` is the one that actually validates your config.)
+allowlist is the real gate), muse's via the on-disk cache `~/.local/share/muse/model-catalog/*.json`
+(schema 2; pw's reader keeps `visibility: visible` rows with non-null limits and prints bare ids —
+hidden `-contributor` rows are excluded by design, never pin one; missing cache fails open to
+unverifiable), if you want to look yourself — but `/pw-doctor` is the one that actually validates your config.)
 
-## Verified agent/session facts (probed 2026-09-04 kilo/claude + 2026-09-09 and 2026-10-22 cursor + 2026-10-04 codex + 2026-11-04 opencode, this machine — re-run before trusting elsewhere)
+## Verified agent/session facts (probed 2026-09-04 kilo/claude + 2026-09-09 and 2026-10-22 cursor + 2026-10-04 codex + 2026-11-04 opencode + 2026-11-05 muse, this machine — re-run before trusting elsewhere)
 
 - **Registered set = ground truth via `kilo agent list`** (prints `name (mode)` + resolved
   permission JSON); `kilo debug agent <name>` prints the **effective config incl. the model a
@@ -417,6 +421,34 @@ allowlist is the real gate), if you want to look yourself — but `/pw-doctor` i
   - **Config hands-off:** `~/.codex/config.toml` is app-managed (ChatGPT desktop writes
     plugins/notify/desktop keys) — generators NEVER touch it (same rule as `kilo.jsonc` and
     cursor's `cli-config.json`). Model gating lives in `PW_MODEL_ALLOWLIST_CODEX` only.
+
+- **`muse` (Meta Muse CLI) surfaces — probed live 2026-11-05 on Muse Code 1.4.14**
+  (subscription device login; `muse-spark-1.3` at `--reasoning-effort max`):
+  - **No command surface and no agent-definition surface** — the second such provider after
+    codex. User commands live only as skills (`~/.config/muse/skills/<name>/SKILL.md`; there is
+    no commands dir — `muse init` writes a project AGENTS.md and nothing else). Entries install
+    as skill dirs with `disable-model-invocation: true` and NO `agents/openai.yaml` sidecar
+    (verified inert on muse: listed, no effect, no error — never emitted). Frontmatter alone is
+    the human-only contract: the CLI enforces it at load time with no activation-map entry, and
+    model prompts never list flagged skills.
+  - **Foreign roots:** muse also reads `~/.codex/skills` as a foreign skill root (in addition to
+    `~/.agents/skills`). Keep the hub's `context.foreign_personal_skills=false` so Codex
+    `cmd-*` wrappers cannot shadow muse entries; `pw-doctor` flags the root when muse is
+    enabled. Hooks/generators NEVER write `~/.config/muse/settings.json` (same rule as
+    `kilo.jsonc`, `cli-config.json`, `config.toml`) — the hub's agent_sync owns the three muse
+    regions (AGENTS.md block, `mcp_servers.everos`, `skills.activation.user`), never pw's entries.
+  - **Catalog reader:** no `models` subcommand. The on-disk cache
+    `~/.local/share/muse/model-catalog/*.json` (schema 2) carries `model_id`, `visibility`,
+    `is_default`, context/output limits, and per-model `reasoning_effort_variants`. The reader
+    keeps `visibility: visible` rows with non-null limits and prints bare ids (verified:
+    `muse-wonder-1.0`, `muse-spark-1.3`, `muse-spark-1.2`); hidden `-contributor` rows and the
+    null-limits image row are excluded by design. Missing cache or python3 fails open to
+    unverifiable. `ultra` is never offered (the CLI warns and silently runs `xhigh` instead).
+  - **Headless/recipe:** see the `muse` bullet under headless mechanics (above) — the probe
+    record is the only authority for template text. Session id = first `stream.id` on
+    `kind: session` JSONL events; `--session-id` reuse round-trips context verbatim.
+    `muse resume` is interactive-only (fails without a TTY even piped). Never blind-resume:
+    an unknown id starts a fresh session that honestly reports no context.
 
 ## Cross-provider execution (how the orchestrator routes)
 
@@ -571,3 +603,17 @@ id recreates with fresh context under the same id. Liveness = `session export --
 project-scoped `session list`). Named `--agent <subagent>` honored headless (exact reply);
 variant `#level` suffix accepted; `--thinking` accepted (display-only on 2.2.5). No
 `--attach`/`--variant`/`--command` flag on 2.2.5 despite upstream docs describing them.
+
+**Muse Code, verified 2026-11-05** (probes bundled with the muse onboarding; all runs
+pinned `muse-spark-1.3` at `--reasoning-effort max` on 1.4.14): `muse exec --model <id>
+--reasoning-effort <tier> --prompt-file <task>` writes headlessly; **prompt-file is the
+documented channel** (an 11 KB positional argument also survived, but the file stays the rule
+by defensive parity). `--trust-workspace --disable-approval --disable-sandbox` is the
+documented default (network verified: HTTP/2 200 in-session); `--yolo` also completes
+headless. `--session-id` reuse round-trips context verbatim (marker recall); unknown ids start
+a fresh session that honestly reports no context — liveness first, never blind-resume.
+`muse resume` is interactive-only (fails without a TTY even piped). **Exit 0 proves nothing**:
+bogus model ids and disabled-skill refusals exit 0 with loud text — supervision scans output
+and confirms git artifacts. `ultra` warns and silently runs `xhigh` — never offered. Catalog
+cache mtime moves across sessions; the reader documents staleness and fails open to
+unverifiable.

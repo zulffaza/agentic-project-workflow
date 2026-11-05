@@ -237,8 +237,12 @@ detail — two audiences, one page, neither served.
   user's workflow *depends on*, not for curiosity.
 - **D6 — human entries install in exactly ONE format per provider.** `<name>_entry_format`
   returns `skill` (invocable, explicit-only `<name>/SKILL.md`; no command file) or `command`
-  (native `<name>.md`; no entry skill). Built-ins: Claude Code, Cursor, and Codex install skills
-  only; KiloCode and OpenCode install commands only. Skills are the primary design. Shared
+  (native `<name>.md`; no entry skill). Built-ins: Claude Code, Cursor, Codex, and Muse install skills
+  only; KiloCode and OpenCode install commands only. Skills are the primary design. Muse entries carry
+  `disable-model-invocation: true` with NO sidecar file — frontmatter alone is the human-only
+  contract there (the CLI enforces it at load time with no activation-map entry; probed 2026-11-05),
+  so no settings activation writer ships and the generator-never-writes-settings rule holds with no
+  exception. Shared
   procedural skills (`tooling/skills/model/*`: `pw-guide-workflow`, `pw-guide-review-method`,
   `pw-guide-authoring`, `pw-orchestration`) install on every provider under distinct names, so
   the old same-name collision skip (`pw_skill_skips_for`) is retired. Generated entries and

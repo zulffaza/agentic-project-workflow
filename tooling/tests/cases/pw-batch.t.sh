@@ -109,8 +109,8 @@ grep -qF '/pw-batch preview --project' "$PWTEST_OUT" \
 
 # 6) provider delivery: exactly one artifact per provider, in its exclusive format
 GEN="$PWTEST_ROOT/batchgen"
-"$TOOLDIR/scripts/toolchain/gen-commands.sh" --outdir "$GEN" claude cursor codex kilo opencode >/dev/null 2>&1
-for _p in claude cursor codex; do
+"$TOOLDIR/scripts/toolchain/gen-commands.sh" --outdir "$GEN" claude cursor codex muse kilo opencode >/dev/null 2>&1
+for _p in claude cursor codex muse; do
   [ -f "$GEN/$_p/pw-batch/SKILL.md" ] && pwtest_ok "$_p installs pw-batch as a skill" || pwtest_bad "$_p batch entry" "skill dir missing"
   [ ! -e "$GEN/$_p/pw-batch.md" ] && pwtest_ok "$_p has no command-format duplicate" || pwtest_bad "$_p duplicate" "pw-batch.md also emitted"
   if [ "$_p" = codex ]; then
@@ -126,9 +126,9 @@ for _p in kilo opencode; do
   [ ! -d "$GEN/$_p/pw-batch" ] && pwtest_ok "$_p has no skill-format duplicate" || pwtest_bad "$_p duplicate" "skill dir also emitted"
 done
 _seen=0
-for _p in claude cursor codex; do [ -e "$GEN/$_p/pw-batch/SKILL.md" ] && _seen=$((_seen+1)); [ -e "$GEN/$_p/pw-batch.md" ] && _seen=$((_seen+1)); done
+for _p in claude cursor codex muse; do [ -e "$GEN/$_p/pw-batch/SKILL.md" ] && _seen=$((_seen+1)); [ -e "$GEN/$_p/pw-batch.md" ] && _seen=$((_seen+1)); done
 for _p in kilo opencode; do [ -e "$GEN/$_p/pw-batch.md" ] && _seen=$((_seen+1)); [ -e "$GEN/$_p/pw-batch/SKILL.md" ] && _seen=$((_seen+1)); done
-pwtest_eq "each provider exposes the batch entry exactly once" "5" "$_seen"
+pwtest_eq "each provider exposes the batch entry exactly once" "6" "$_seen"
 
 # --- plan 17 exclusions: new model operations stay standalone until admitted ---------------
 grep -qF '`models`, `agent-model`' "$TOOL/skills/human/pw-batch/SKILL.md" \

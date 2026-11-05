@@ -35,6 +35,30 @@ pwtest_rc 1 "codex empty rollout is dead" env HOME="$CX" "$SES" session-check --
 pwtest_rc 1 "codex absent id is dead" env HOME="$CX" "$SES" session-check --provider codex --session 99999999-0000-0000-0000-000000000000
 pwtest_rc 2 "codex with no sessions store is unverifiable" env HOME="$ROOT/home-missing" "$SES" session-check --provider codex --session 01a1076f-c2a2-7512-85bb-4edb1bb67e0a
 
+# --- muse: date-sharded store ~/.local/share/muse/sessions/<Y>/<M>/<D>/<uuid>/session.jsonl
+# (the id is deterministic per run via `muse exec --session-id`; reuse continues context;
+# `muse resume` is interactive-only — probe-verified 2026-11-05 on muse 1.4.14) ---
+MU="$ROOT/home-muse"; mkdir -p "$MU/.local/share/muse/sessions/2026/11/05/01a1ac1a-7f39-7621-b4bb-8f48bc6399bb"
+printf '{"kind":"session_init"}\n' > "$MU/.local/share/muse/sessions/2026/11/05/01a1ac1a-7f39-7621-b4bb-8f48bc6399bb/session.jsonl"
+mkdir -p "$MU/.local/share/muse/sessions/2026/11/05/02a1ac1a-7f39-7621-b4bb-8f48bc6399cc"
+: > "$MU/.local/share/muse/sessions/2026/11/05/02a1ac1a-7f39-7621-b4bb-8f48bc6399cc/session.jsonl"
+pwtest_rc 0 "muse live session.jsonl" env HOME="$MU" "$SES" session-check --provider muse --session 01a1ac1a-7f39-7621-b4bb-8f48bc6399bb
+grep -q live "$PWTEST_OUT" && pwtest_ok "muse live verdict named" || pwtest_bad "muse live verdict" "$(head -c 120 "$PWTEST_OUT")"
+pwtest_rc 1 "muse empty session.jsonl is dead" env HOME="$MU" "$SES" session-check --provider muse --session 02a1ac1a-7f39-7621-b4bb-8f48bc6399cc
+pwtest_rc 1 "muse absent id is dead" env HOME="$MU" "$SES" session-check --provider muse --session 99999999-0000-0000-0000-000000000000
+grep -q dead "$PWTEST_ERR" && pwtest_ok "muse dead verdict named" || pwtest_bad "muse dead verdict" "$(head -c 120 "$PWTEST_ERR")"
+pwtest_rc 2 "muse with no sessions store is unverifiable" env HOME="$ROOT/home-missing" "$SES" session-check --provider muse --session 01a1ac1a-7f39-7621-b4bb-8f48bc6399bb
+# --- muse task-file form: bare id (no suffix syntax), hermetic catalog fixture ---
+MUCAT="$ROOT/muse-catalog"; mkdir -p "$MUCAT"
+cat > "$MUCAT/cache.json" <<'JSON'
+{"schema_version": 2, "provider_id": "meta", "rows": [
+{"model_id": "muse-test-flash", "visibility": "visible", "context_limit": 1007997, "output_limit": 128000, "reasoning_effort_variants": [{"tier": "low"}]}
+]}
+JSON
+TPM="$ROOT/projects/sessmuse"; mkdir -p "$TPM/task"
+printf -- '- **Execute with:** muse:muse-test-flash\n- **Session:** 01a1ac1a-7f39-7621-b4bb-8f48bc6399bb\n' > "$TPM/task/T01.md"
+pwtest_rc 0 "task form reads the muse live id off the file" env HOME="$MU" PW_MUSE_CATALOG_DIR="$MUCAT" PW_PROJECTS_DIR="$ROOT/projects" "$SES" session-check --project sessmuse --task T01
+
 # --- opencode: `session export --sanitize <id>` (shim mirrors the real 2.2.5 shape: JSON on
 # stdout = live, "Session not found" on stderr = dead, exit 0 either way) ---
 pwtest_rc 0 "opencode live session" env HOME="$ROOT" "$SES" session-check --provider opencode --session ses_livetest0000000000000001
@@ -93,6 +117,25 @@ pwtest_rc 1 "opencode changed variant blocks resume" env HOME="$ROOT" PW_PROJECT
 grep -q 'variant' "$PWTEST_ERR" && pwtest_ok "opencode changed-variant refusal names the mismatch" || pwtest_bad "opencode changed-variant refusal" "$(head -c 160 "$PWTEST_ERR")"
 sed -i.bak -e 's/opencode:testprov\/test-model#high/opencode:testprov\/test-model#/' "$TP2/task/T02.md"; rm -f "$TP2/task/T02.md.bak"
 pwtest_rc 1 "opencode malformed suffix blocks resume" env HOME="$ROOT" PW_PROJECTS_DIR="$ROOT/projects" "$SES" session-check --project routed --task T02
+
+# --- muse schema-2 identity: the --reasoning-effort headless flag in Actually-used matches
+# the route's Effort column (plan 67: the parser's only muse-specific flag reading) ---
+cat > "$TP2/task/T03.md" <<'TASK'
+- **Execute with:** muse:muse-test-flash
+- **Effort:** max
+- **Session:** 01a1ac1a-7f39-7621-b4bb-8f48bc6399bb
+- **Actually used:** muse:muse-test-flash --reasoning-effort max
+
+## Execution routes
+
+| Current provider | Execution provider | Target model | Target subagent | Variant | Reasoning | Effort | Thinking |
+|---|---|---|---|---|---|---|---|
+| muse | muse | muse-test-flash | — | — | — | max | — |
+TASK
+pwtest_rc 0 "muse reasoning-effort identity matches the route effort" env HOME="$MU" PW_MUSE_CATALOG_DIR="$MUCAT" PW_PROJECTS_DIR="$ROOT/projects" "$SES" session-check --project routed --task T03
+sed -i.bak -e 's/--reasoning-effort max/--reasoning-effort low/' "$TP2/task/T03.md"; rm -f "$TP2/task/T03.md.bak"
+pwtest_rc 1 "muse changed effort blocks resume" env HOME="$MU" PW_MUSE_CATALOG_DIR="$MUCAT" PW_PROJECTS_DIR="$ROOT/projects" "$SES" session-check --project routed --task T03
+grep -q 'effort' "$PWTEST_ERR" && pwtest_ok "muse changed-effort refusal names the mismatch" || pwtest_bad "muse changed-effort refusal" "$(head -c 160 "$PWTEST_ERR")"
 
 # --- --help / usage shape (registry duty) ---
 pwtest_rc 0 "session-check --help" "$SES" --help

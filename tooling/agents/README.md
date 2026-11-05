@@ -111,8 +111,8 @@ agent's own provider → else (a
 built-in with no def here) the orchestrator's own provider. Then:
 - **Same provider as the orchestrator** → spawn the sub-agent in-process (the normal path).
 - **Different provider** → shell out to that CLI (`kilo run --auto -m <model> …`, `claude -p`,
-  `agent -p --force --model <id>` for cursor, `opencode run --auto -m <id>` for opencode, or `codex exec -m <slug>` for codex — prompt on
-  stdin) via its `<name>_headless()` template
+  `agent -p --force --model <id>` for cursor, `opencode run --auto -m <id>` for opencode, `codex exec -m <slug>` for codex, or `muse exec --model <id> --prompt-file <file>` for muse — prompt on
+  stdin, except muse which takes `--prompt-file`) via its `<name>_headless()` template
   passing the **task file + skill inline** to its default/primary agent. You **cannot** name the
   other provider's *sub-agent* across the boundary (opencode's `--agent` flag is the one
   exception, and even there the task file travels as the work order) — e.g. a Claude orchestrator delegating to kilo
@@ -127,7 +127,9 @@ Record the concrete `provider:model(+flags)` in the task's `Actually used:` — 
 `opencode run --auto -m <model> --session <ses_…>` — cd to the worktree first, no `--dir` flag,
 and never blind-resume a deleted id (it recreates with fresh context); codex
 `codex exec resume <thread_id>` — plain UUID from its `thread.started` JSONL event, cd to the
-worktree first: resume has no directory flag) instead of cold-spawning
+worktree first: resume has no directory flag; muse `muse exec --session-id <uuid>` — plain UUID
+from its `stream.id` JSONL event, cd to the worktree first or pass `--workspace` (unknown ids
+start a fresh session — never blind-resume; `muse resume` is interactive-only)) instead of cold-spawning
 when the id is live, and cold-spawns a plain-model session with the recorded seed only when it's
 dead. The session id is a machine-local pointer — never pushed into MR text or committed artifacts;
 the on-disk PLAN/dashboard/task state stays the durable cross-machine recovery.
@@ -181,6 +183,28 @@ never overrides a task file.
 - Models: bare visible slugs from `codex debug models`; effort = per-run reasoning-effort
   override; Fast = per-run `service_tier="priority"` on the SAME slug (requested-only — invalid
   values are silently ignored, so record what was requested). No `PW_CODEX_API_PROVIDERS` axis.
+
+## Muse-specifics (probed 2026-11-05 on 1.4.14)
+
+- No agent defs, no in-process spawn, no Flow C — a muse driver IS the orchestrator (Flow B) and
+  every delegated run is a supervised headless `muse exec` (prompt via `--prompt-file`; an 11 KB
+  positional argument survives but the file is the documented channel — artifact checks prove
+  runs, not exit codes, since bogus ids and disabled-skill refusals exit 0 with loud text).
+- Its `/pw-*` commands are generated **skill dirs** (`~/.config/muse/skills/<name>/SKILL.md`,
+  explicit-invocation-only via `disable-model-invocation: true` frontmatter) — muse has no native
+  command surface and no agent-definition surface. Unlike Codex there is NO
+  `agents/openai.yaml` sidecar (verified inert on muse: listed, no effect, no error — never
+  emitted). A flagged skill is absent from the model's available-skills listing by design.
+- Session/ledger: session id (UUID) from the `--json` first `stream.id` on `kind: session`
+  events; liveness = `pw-session.sh session-check --provider muse --session <id>` (date-sharded
+  store `~/.local/share/muse/sessions/<Y>/<M>/<D>/<uuid>/session.jsonl`); continue =
+  `muse exec --session-id <id>` (cd first, or pass `--workspace`; unknown ids start a fresh
+  session — never blind-resume). `muse resume` is interactive-only.
+- Models: bare visible ids from the on-disk model-catalog cache; effort = per-run
+  `--reasoning-effort` tier (per-model levels; `ultra` never offered — warns and runs `xhigh`).
+  Hidden `-contributor` rows are excluded by the reader — never pin one.
+- Foreign root: muse also reads `~/.codex/skills`. Keep
+  `context.foreign_personal_skills=false` so Codex `cmd-*` wrappers cannot shadow.
 
 ## What the *surfaces* actually do (probed 2026-09-04 kilo; `kilo agent list` / `kilo debug agent <name>`
 are the ground truth — reload the client before trusting either)

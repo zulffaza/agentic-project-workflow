@@ -230,10 +230,13 @@ prefix-filter-not-query-arg rule), and `kilo session list --format json -a` prin
 `ses_livetest…` id and `Session not found: <id>` on stderr otherwise (exit 0 either way —
 the real 2.2.5 CLI exits 0 on errors too); `codex` prints the REAL one-line JSON shape of `codex debug models`
 (compact `{"models":[{"slug":…,"visibility":"list"|"hide",…}]}` — the reader's split/filter
-asserts depend on that byte-shape, never a prettified one). Claude/cursor/codex liveness is
+asserts depend on that byte-shape, never a prettified one); `muse` proves only the bin-gate
+and fails LOUD on everything else — its catalog is the on-disk cache, covered by a fixture
+file mirroring the real cache shape (schema 2, one visible / one hidden / one null-limits row). Claude/cursor/codex/muse liveness is
 exercised through fake `$HOME` trees
 (`.claude/projects/*/<id>.jsonl`, `.cursor/chats/<hash>/<uuid>/`,
-`.codex/sessions/<Y>/<M>/<D>/rollout-<ts>-<thread-id>.jsonl`) — no shim needed. Scope is
+`.codex/sessions/<Y>/<M>/<D>/rollout-<ts>-<thread-id>.jsonl`,
+`.local/share/muse/sessions/<Y>/<M>/<D>/<uuid>/session.jsonl`) — no shim needed. Scope is
 controlled per-subprocess via `PW_CONFIG_FILE` pointing at `tests/pw.config.test.sh`
 (entries = `kilo/alibaba-token-plan`) or `tests/pw.config.test.noscope.sh` (empty = no
 filtering) — never the maintainer's real `pw.config.sh`, so availability/scope assertions are

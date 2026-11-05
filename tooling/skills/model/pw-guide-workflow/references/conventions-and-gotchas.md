@@ -176,9 +176,9 @@ The command files are **generated build artifacts** — the single source is
 `agentic-project-workflow/tooling/skills/human/*/SKILL.md`, emitted per provider by
 `gen-commands.sh` (in `tooling/scripts/toolchain/`; Claude → `~/.claude/commands/`, kilo →
 `~/.config/kilo/command/`, cursor → `~/.cursor/commands/`, opencode → `~/.config/opencode/commands/`,
-codex → `~/.codex/skills/<name>/SKILL.md`
-— codex has NO native command surface (custom prompts removed upstream in codex-cli 0.117.0), so
-its commands are generated explicit-only skill dirs sharing the skills namespace; a bundle skill
+codex → `~/.codex/skills/<name>/SKILL.md`, muse → `~/.config/muse/skills/<name>/SKILL.md`
+— codex and muse have NO native command surface (custom prompts removed upstream in codex-cli 0.117.0; muse never had one), so
+their commands are generated explicit-only skill dirs sharing the skills namespace (muse: `disable-model-invocation: true`, no sidecar); a bundle skill
 colliding with a command name is skipped at install and the command-skill owns the name); the seven worker sub-agents
 (`pw-executor`, `pw-reviewer`, `pw-researcher`, `pw-analyst`, `pw-writer-task`,
 `pw-ship-comment-analyst`, `pw-explorer`) are seeded the same way from `tooling/agents/` by `gen-agents.sh`. To change a

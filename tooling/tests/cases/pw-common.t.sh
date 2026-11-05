@@ -72,6 +72,67 @@ pwtest_eq "collision skip list retired (distinct guide names)" "$(pw_skill_skips
 pwtest_eq "no provider skips a shipped skill" "$(pw_skill_skips_for kilo)" ""
 pwtest_eq "codex catalog = visible slugs only, real one-line JSON shape" \
   "$(pw_api_catalog codex)" "$(printf 'codex-test-luna\ncodex-test-astra')"
+# --- muse provider surfaces (plan 67): SECOND command-less provider — entries are generated
+# SKILL DIRS in ~/.config/muse/skills with disable-model-invocation, NO agents/openai.yaml
+# sidecar (verified inert on muse 1.4.14: listed, no effect, no error — never emitted).
+# The catalog reader parses the on-disk model-catalog cache (schema 2); the fixture mirrors
+# the real 1.4.14 shape: a visible row, a hidden -contributor row (data-use notice), and a
+# null-limits image row. ---
+pwtest_eq "muse hooks resolve (bin/skilldir/commanddir)" \
+  "$(printf '%s %s %s' "$(muse_bin)" "$(muse_skilldir)" "$(muse_commanddir)")" \
+  "muse $HOME/.config/muse/skills $HOME/.config/muse/skills"
+pwtest_eq "claude/cursor/codex/muse entry_format = skill" "$(printf '%s %s %s %s' "$(pw_provider_entry_format claude)" "$(pw_provider_entry_format cursor)" "$(pw_provider_entry_format codex)" "$(pw_provider_entry_format muse)")" "skill skill skill skill"
+declare -f muse_entry_format >/dev/null 2>&1 \
+  && pwtest_ok "muse entry_format is an explicit hook (not fallback)" \
+  || pwtest_bad "muse entry_format explicit" "hook missing — format depends on fallback (C459-class)"
+MCAT="$PWTEST_ROOT/muse-catalog"; mkdir -p "$MCAT"
+cat > "$MCAT/6d657461__p746268.json" <<'JSON'
+{"schema_version": 2, "provider_id": "meta", "profile_id": "tbh", "source": "provider_catalog", "rows": [
+{"model_id": "muse-test-flash", "visibility": "visible", "context_limit": 1007997, "output_limit": 128000, "reasoning_effort_variants": [{"tier": "low"}, {"tier": "max"}]},
+{"model_id": "muse-test-hidden", "visibility": "hidden", "context_limit": 1007997, "output_limit": 128000, "reasoning_effort_variants": [{"tier": "low"}]},
+{"model_id": "muse-test-nolimit", "visibility": "visible", "context_limit": null, "output_limit": 128000, "reasoning_effort_variants": []}
+]}
+JSON
+printf '{"schema_version": 99, "rows": []}' > "$MCAT/bad-schema.json"
+pwtest_eq "muse catalog = visible ids with limits only (real 1.4.14 cache shape)" \
+  "$(PW_MUSE_CATALOG_DIR="$MCAT" pw_api_catalog muse)" "muse-test-flash"
+pwtest_eq "muse catalog missing dir is unverifiable (empty)" \
+  "$(PW_MUSE_CATALOG_DIR="$MCAT/none" pw_api_catalog muse)" ""
+pwtest_eq "muse catalog ignores the bad-schema file, keeps the good row" \
+  "$(PW_MUSE_CATALOG_DIR="$MCAT" pw_api_catalog muse)" "muse-test-flash"
+# Headless template pins (probe-verified 2026-11-05 on muse 1.4.14): --model (no -m),
+# --prompt-file channel, --session-id capture + reuse, exit-0 error rule, no resume subcommand.
+MU_TMPL="$(muse_headless)"
+printf '%s' "$MU_TMPL" | grep -q -- '--model <canonical-id>' \
+  && pwtest_ok "muse headless names --model (no -m)" \
+  || pwtest_bad "muse headless model flag" "template lost the --model rule"
+printf '%s' "$MU_TMPL" | grep -q -- '--prompt-file <task-file>' \
+  && pwtest_ok "muse headless mandates --prompt-file" \
+  || pwtest_bad "muse headless prompt channel" "template lost the prompt-file rule"
+printf '%s' "$MU_TMPL" | grep -q 'stream.id' \
+  && pwtest_ok "muse headless documents the session-id capture" \
+  || pwtest_bad "muse headless capture" "template lost the stream.id recipe"
+printf '%s' "$MU_TMPL" | grep -q 'INTERACTIVE-ONLY' \
+  && pwtest_ok "muse headless rules out the resume subcommand" \
+  || pwtest_bad "muse headless resume rule" "template lost the interactive-only rule"
+printf '%s' "$MU_TMPL" | grep -q 'NEVER trust the' \
+  && pwtest_ok "muse headless documents the exit-0 error rule" \
+  || pwtest_bad "muse headless exit-0 rule" "template lost the error-scan rule"
+# Entry-skill render: human-only flag, no sidecar token, invocation-text args token.
+MU_RENDER_OUT="$PWTEST_ROOT/muse-render"
+name="pw-render-probe" desc="probe render" args="[--project <slug>]" bodytext="Do it. Arguments: {{ARGS}}."
+render_muse_entry_skill > "$MU_RENDER_OUT"
+grep -qF 'disable-model-invocation: true' "$MU_RENDER_OUT" \
+  && pwtest_ok "muse entry skill is human-only" \
+  || pwtest_bad "muse entry render flag" "disable-model-invocation missing"
+grep -qF 'Arguments: <arguments>.' "$MU_RENDER_OUT" \
+  && pwtest_ok "muse entry skill maps args to invocation text" \
+  || pwtest_bad "muse entry render args" "{{ARGS}} did not become <arguments>"
+grep -qF '$ARGUMENTS' "$MU_RENDER_OUT" \
+  && pwtest_bad "muse entry render token" "unverified \$ARGUMENTS expansion emitted" \
+  || pwtest_ok "muse entry skill emits no unverified expansion token"
+pwtest_eq "codex catalog = visible slugs only, real one-line JSON shape" \
+  "$(pw_api_catalog codex)" "$(printf 'codex-test-luna\ncodex-test-astra')"
 # Cursor catalog = `agent models` PLUS cli-config modelParameters (desktop-only ids the CLI
 # omits — the glm-5p3-flash discrepancy, verified 2026-10-22). Dedup keeps a shared id once,
 # CLI order first; the fixture pins the source so a real ~/.cursor/cli-config.json never leaks.

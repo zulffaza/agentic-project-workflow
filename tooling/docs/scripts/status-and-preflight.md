@@ -327,7 +327,11 @@ FILENAME; empty rollout = dead);
 opencode `opencode session export --sanitize <id>` (JSON carrying the id = live; "Session not
 found" on stderr = dead; empty/unexpected output = unverifiable — the CLI exits 0 on errors
 too, so the reading comes from the text, never `$?`; export is cwd-independent unlike
-`session list`, which is project-scoped; verified 2026-11-04 on 2.2.5).
+`session list`, which is project-scoped; verified 2026-11-04 on 2.2.5);
+muse `~/.local/share/muse/sessions/<Y>/<M>/<D>/<uuid>/session.jsonl` (non-empty file = live;
+missing dir or empty file = dead; the id is set deterministically per run via
+`muse exec --session-id <uuid>` and reuse continues it — `muse resume` is interactive-only,
+never the headless path; verified 2026-11-05 on 1.4.14).
 Every lookup is a pure read — no model calls, no CLI resume attempt.
 
 ## pw-help.sh

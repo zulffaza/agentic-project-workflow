@@ -9,7 +9,7 @@
 #   ./offboard.sh --yes                  actually remove it
 #   ./offboard.sh --provider kilo        scope to one/more providers (comma-separated)
 #   ./offboard.sh --all-known            also sweep built-in providers (claude, kilo,
-#                                          opencode, cursor, codex) even
+#                                          opencode, cursor, codex, muse) even
 #                                        if no longer listed in PW_PROVIDERS — catches files
 #                                        orphaned by disabling a provider in pw.config.sh
 #
@@ -31,7 +31,7 @@
 # KNOWN LIMITATION: a fully custom provider whose hooks were later deleted entirely from
 # pw.config.sh can't have its install paths recomputed — there's nothing left to compute them
 # from. Best-effort only; not tracked by a separate install manifest. --all-known covers the
-# built-ins (claude, kilo, opencode, cursor, codex), which always have hooks available
+# built-ins (claude, kilo, opencode, cursor, codex, muse), which always have hooks available
 # regardless of PW_PROVIDERS.
 # ============================================================================
 set -euo pipefail
@@ -62,11 +62,11 @@ export PW_PROJECTS PW_REPOS
 
 # --- known built-ins (always have hooks, regardless of PW_PROVIDERS membership) ---
 # (opencode + cursor added 2026-09: this list had drifted since each went live; codex added
-# 2026-10. Sweep --all-known now covers ALL built-ins; removal stays byte-exact, and each
+# 2026-10, muse added 2026-11. Sweep --all-known now covers ALL built-ins; removal stays byte-exact, and each
 # provider's install surface is strictly its own dirs — offboard never touches another
 # provider's. Codex note: its commands live AS SKILL DIRS in the shared skills root — the
 # command removal below is layout-aware and only ever matches generated content byte-exactly.)
-KNOWN_PROVIDERS=(claude kilo opencode cursor codex)
+KNOWN_PROVIDERS=(claude kilo opencode cursor codex muse)
 
 echo "project-workflow offboard"
 echo "  PW_HOME     = $PW_HOME"
@@ -140,7 +140,7 @@ plan_provider() {
   done
 
   # --- commands: regenerate to a temp dir, only remove exact matches ---
-  # Layout-aware: flat providers = <name>.md files; skill-layout providers (codex) = <name>/
+  # Layout-aware: flat providers = <name>.md files; skill-layout providers (codex, muse) = <name>/
   # SKILL.md dirs inside the shared skills root — a dir is removed only when the WHOLE tree
   # matches the fresh generation byte-for-byte (diff -rq), so a foreign/hand-edited skill of the
   # same name is never touched.

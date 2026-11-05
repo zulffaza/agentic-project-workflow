@@ -130,7 +130,7 @@ Then produce, from `{{PW_HOME}}/template/task/`:
      justify it in `Why:`. Fold in any custom routing I gave ("run the mechanical bumps in
      KiloCode", "T03 → opus"). Resolve providers via `{{PW_HOME}}/tooling/docs/providers.md`. **Pin the
      Claude version** (full name like `claude-opus-4-8`) on risky tasks; raise `Effort:` for complex ones.
-    - **Picking a kilo, opencode, cursor, or codex model: query the live catalog, never recall/guess an
+    - **Picking a kilo, opencode, cursor, codex, or muse model: query the live catalog, never recall/guess an
       id from memory.** A plausible-looking id can simply not exist, or its display name can differ
       from the real id.
       ```bash
@@ -138,6 +138,9 @@ Then produce, from `{{PW_HOME}}/template/task/`:
       opencode models               #   prefix FILTERS over these lines (slashes allowed — a
       agent models                  #   nested BYOK appears as `kilo/alibaba-token-plan/<m>`),
       codex debug models            #   never as `kilo models <arg>` arguments (that errors).
+                                    #   muse has NO models command — read the on-disk cache
+                                    #   ~/.local/share/muse/model-catalog/*.json (schema 2;
+                                    #   keep visibility:visible rows with non-null limits)
                                     #   cursor: one gateway; effort/thinking are catalog-id variants
                                     #   (e.g. claude-opus-5-thinking-xhigh). `agent models` is
                                     #   INCOMPLETE — desktop-only ids (e.g. glm-5p3-flash) live in
