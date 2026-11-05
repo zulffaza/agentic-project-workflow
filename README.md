@@ -56,8 +56,9 @@ Task execution uses an explicit route per current provider:
 ```
 
 A missing route for the current provider blocks dispatch; there is no default fallback.
-`--thinking` is validated against the provider: Kilo emits `--thinking`, Cursor needs a model id
-that already encodes it, and Claude/Codex refuse it. Session resume also requires a recorded
+`--thinking` is validated against the provider: Kilo and OpenCode emit `--thinking`,
+Cursor needs a model id that already encodes it, and Claude/Codex refuse it. Session resume
+also requires a recorded
 attempt identity that matches the resolved provider, model, tuning, and procedure; a live provider
 session alone is not enough.
 
