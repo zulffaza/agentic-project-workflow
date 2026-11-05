@@ -343,8 +343,8 @@ C268-comment-seen-evidence-marker	scripts/entities/pw-ship.sh	[ -n "$feedback$re
 C269-comment-seen-evidence-guard-vacuous	scripts/entities/pw-ship.sh	case "$_tok" in *[!A-Za-z0-9._:-]*)	case "" in *[!A-Za-z0-9._:-]*)	T1	pw-ship.t.sh
 C270-ship-resolve-optin-doctrine	skills/human/pw-ship/SKILL.md	`--resolve` is a comment-mode-only switch	`--resolve` is a switch	T4	-
 C271-rfc-comments-refuses-resolve	scripts/entities/pw-rfc.sh	die "comments: $a is not supported → fix: RFC comments are externally read-only; reply to and resolve the external thread yourself (only MR review via '/pw-ship comments … --resolve' closes threads)"	:	T1	pw-rfc.t.sh
-C272-ship-comments-ref-pointer-lost	skills/human/pw-ship/SKILL.md	**Load `references/mr-comments.md`**	**Load the comments procedure**	T4	-
-C273-ship-request-review-ref-pointer-lost	skills/human/pw-ship/SKILL.md	**Load `references/review-request.md`**	**Load the request-review procedure**	T4	-
+C272-ship-comments-ref-pointer-lost	skills/human/pw-ship/SKILL.md	**Load `references/mr-comments.md` from the `pw-guide-workflow` skill**	**Load the comments procedure**	T4	-
+C273-ship-request-review-ref-pointer-lost	skills/human/pw-ship/SKILL.md	**Load `references/review-request.md` from the `pw-guide-workflow` skill**	**Load the request-review procedure**	T4	-
 C274-request-review-observed-heads-guard-lost	skills/model/pw-guide-workflow/references/review-request.md	Compare `observed heads`	Skip the observed-heads step	T4	-
 C275-mr-comments-inherited-round-lost	skills/model/pw-guide-workflow/references/mr-comments.md	inherited-update round	inherited-update pass	T4	-
 # C276–C282 minted by the context-review-and-repair plan: context apply preflight, default discovery,
@@ -452,7 +452,7 @@ C353-wrong-format-residue-unreported	pw-doctor.sh	  if [ -n "$wfmt" ]; then	  if
 C354-batch-approval-inferred	skills/human/pw-batch/SKILL.md	Never infer approval from resolved comments	Infer approval from resolved comments	T4	-
 C355-batch-continues-after-failure	skills/human/pw-batch/SKILL.md	On failure, refusal, or uncertainty, stop.	On failure, refusal, or uncertainty, continue.	T4	-
 C356-batch-preview-writes	skills/human/pw-batch/SKILL.md	- **Preview writes nothing.**	- **Preview may write.**	T4	-
-C357-batch-exclusions-dropped	skills/human/pw-batch/SKILL.md	Refused forms include `prepare`, `import`, `ai`, apply-comments, `auto-signoff`, `materialize`,	Accepted forms include `prepare`, `import`, `ai`, apply-comments, `auto-signoff`, `materialize`,	T4	-
+C357-batch-exclusions-dropped	skills/human/pw-batch/SKILL.md	Refused forms include `prepare`, `import`, `ai`, ship `comments` / `--resolve`, `auto-signoff`,	Accepted forms include `prepare`, `import`, `ai`, ship `comments` / `--resolve`, `auto-signoff`,	T4	-
 C358-draft-creation-flag-dropped	pw-ship.sh	  [ "$draft" = 1 ] && draft_args=(--draft)	  [ "$draft" = 1 ] && draft_args=()	T1	^pw-ship-readiness\.t\.sh$
 C359-readiness-terminal-mr-accepted	pw-shiplib.sh	    need(meta['state'] == 'open', url + ' is '	    need(meta['state'] in ('open', 'merged', 'closed'), url + ' is '	T1	^pw-ship-readiness\.t\.sh$
 C360-readiness-stale-token-accepted	pw-shiplib.sh	        need(args.expect == token, 'selection changed	        need(args.expect == token or True, 'selection changed	T1	^pw-ship-readiness\.t\.sh$
