@@ -25,9 +25,11 @@
 #              (the thread_id from `codex exec --json`'s thread.started event is embedded
 #              in the FILENAME; resume handle = `codex exec resume <thread-id>`).
 #              Probe-verified 2026-10-04 on codex-cli 0.160.0.
-#   opencode — no verified surface yet (CLI absent on the probe machine): always 2
-#              with the probe hint. Verified elsewhere? Implement it HERE, not in
-#              callers — the ladder asks this script, never a CLI, "is it live".
+#   opencode — `opencode session export --sanitize <id>` (JSON on stdout with the id =
+#              live; "Session not found" on stderr = dead). Export works from any cwd;
+#              the `session list` surface is project-scoped and unsuitable here.
+#              Probe-verified 2026-11-04 on opencode 2.2.5. Exit 0 is meaningless on this
+#              CLI (errors also exit 0) — the reading comes from the output text.
 # ============================================================================
 set -euo pipefail
 
@@ -47,7 +49,7 @@ die() { echo "pw-session: $*" >&2; exit 2; }
 # ran; compare it with the resolved route before trusting the provider session file.
 _sc_canon_model() { # <provider> <model> -> canonical id, or the input when unavailable
   local p="$1" m="$2" base out
-  base="${m%%\[*}"
+  base="${m%%\[*}"; base="${base%%#*}"
   out="$("$HERE/pw-config.sh" model-resolve --provider "$p" --model "$base" 2>/dev/null || true)"
   case "$out" in ''|*' '*) printf '%s' "$base" ;; *) printf '%s' "$out" ;; esac
 }
@@ -64,6 +66,17 @@ _sc_parse_identity() { # <actually-used> -> prints "<prov>\t<model>\t<variant>\t
   esac
   case "$model_part" in *:*) prov="${model_part%%:*}"; model="${model_part#*:}" ;; *) return 1 ;; esac
   [ -n "$prov" ] && [ -n "$model" ] || return 1
+  # OpenCode variant suffix: `opencode:testprov/test-model#low` records the level inline
+  # (same precedence idea as cursor brackets — the --variant flag below still overrides).
+  if [ "$prov" = opencode ]; then
+    case "$model" in
+      *'#'*)
+        variant="${model#*#}"
+        model="${model%%#*}"
+        [ -n "$model" ] && [ -n "$variant" ] || return 1
+        case "$variant" in *[!A-Za-z0-9._-]*) return 1 ;; esac ;;
+    esac
+  fi
   for kv in $(printf '%s' "${params:-}" | tr ',' ' '); do
     [ -n "$kv" ] || continue
     k="${kv%%=*}"; v="${kv#*=}"
@@ -184,6 +197,44 @@ _sc_codex() {
   return 1
 }
 
+# _sc_opencode <id> — `opencode session export --sanitize <id>`: stdout JSON carrying the id
+# is live; "Session not found" on stderr is dead; anything else (server down, unexpected
+# output) is unverifiable. Export is cwd-independent (unlike `session list`, which is
+# project-scoped). The CLI exits 0 on errors too, so the reading comes ONLY from the output
+# text — never from $?.
+_sc_opencode() {
+  local id="$1" out err bin errf
+  declare -f opencode_bin >/dev/null 2>&1 || return 2
+  bin="$(opencode_bin)"
+  command -v "$bin" >/dev/null 2>&1 || return 2
+  errf="$(mktemp -t pw-sc-opencode.XXXXXX 2>/dev/null)" || return 2
+  out="$("$bin" session export --sanitize "$id" 2>"$errf" || true)"
+  err="$(cat "$errf" 2>/dev/null || true)"
+  rm -f "$errf"
+  case "$err" in
+    *"Session not found"*)
+      echo "session-check: opencode:$id — dead (session export reports not found) → fix: take the ladder's cold path (seed-patched re-spawn)" >&2
+      return 1 ;;
+  esac
+  # Live = stdout carries an id field whose value is exactly our id. Fixed fragments match
+  # first (S20: no variable spliced into a pattern); grep -F then pins the exact id value.
+  # grep writes to /dev/null, never -q: a -q early exit SIGPIPEs printf under pipefail and the
+  # pipeline reports failure on a match (bundle lesson, same class as C90).
+  case "$out" in
+    *'"id": "'*|*'"id":"'*)
+      if printf '%s' "$out" | grep -F -- "\"id\": \"$id\"" >/dev/null 2>&1 || printf '%s' "$out" | grep -F -- "\"id\":\"$id\"" >/dev/null 2>&1; then
+        echo "session-check: opencode:$id — live (session export returns the session)"
+        return 0
+      fi ;;
+  esac
+  if [ -z "$out" ] && [ -z "$err" ]; then
+    echo "session-check: opencode:$id — unverifiable (session export produced no output — server down?) → fix: check \`opencode session list\` manually; until then treat as not-resumable" >&2
+    return 2
+  fi
+  echo "session-check: opencode:$id — unverifiable (unexpected session export output) → fix: check \`opencode session export --sanitize $id\` manually; until then treat as not-resumable" >&2
+  return 2
+}
+
 cmd_session_check() {
   local prov="" sid="" slug="" task="" id="" rc=0 a v
   while [ $# -gt 0 ]; do
@@ -264,7 +315,7 @@ cmd_session_check() {
     claude)   _sc_claude "$id" ;;
     cursor)   _sc_cursor "$id" ;;
     codex)    _sc_codex "$id"  ;;
-    opencode) echo "session-check: opencode:$id — unverifiable (no checked liveness surface) → fix: probe \`opencode\` on a machine that has it and implement the check here (session-check), not in callers; until then treat as not-resumable" >&2; rc=2 ;;
+    opencode) _sc_opencode "$id" ;;
     *)        echo "session-check: $prov:$id — unverifiable (unknown provider '$prov') → fix: run --help for the supported providers" >&2; rc=2 ;;
   esac
   return $rc

@@ -79,7 +79,7 @@ this section owns the contract). **You don't edit any script** — everything go
      Same idea as `render_<name>_command`, but `gen-agents.sh` sets a different variable set
      beforehand: `$agentname` (the file's basename), `$desc`, `$displayName`, `$role`,
      `$claude_tools`, `$model`, `$bodytext` — see
-     `render_claude_agent`/`render_kilo_agent`/`render_cursor_agent` in
+     `render_claude_agent`/`render_kilo_agent`/`render_opencode_agent`/`render_cursor_agent` in
      `tooling/scripts/lib/pw-common.sh`. Providers without these two hooks just skip agent-seeding —
      the `/pw-*` entries still work (codex ships this way on purpose: it has no user-facing
      agent-def surface, so it plays worker roles inline or through a supervised headless session).
@@ -175,10 +175,18 @@ kilo column
     Matching is **exact-first**: `alibaba-token-plan/<model>` as a row model names a *direct*
     provider line — a different connection than the gateway's `kilo/alibaba-token-plan/<model>` —
     and falls back to the gateway line only when no direct line exists, announced on stderr.
-- **opencode** — `opencode run --auto -m <canonical-catalog-id> "<prompt>" [--format json]
-  [--attach <url>]`. `--auto` is required headless. **Not yet run end-to-end in this bundle**
-  (unlike claude/kilo/cursor — see Verification notes); confirmed against OpenCode's own docs only.
+- **opencode** — `printf '%s' "$PROMPT" | opencode run --auto -m <canonical-catalog-id>[#variant]
+  [--thinking] [--agent <name>] [--format json] [--session <id>]`. **Pipe the prompt via stdin**
+  (verified 2026-11-04; a trailing argument also works but stdin is the documented channel).
+  `--auto` is required headless. `--format json` emits JSONL: session id = first `sessionID`
+  value; answer = last `text`-type part. **Never trust the exit code alone** — bogus models,
+  variants, and agent names emit `{"type":"error",...}` yet exit 0; scan for `"type":"error"`
+  and confirm real git artifacts. Resume via `--session <id>` (crosses directories), but there
+  is **no `--dir` flag on 2.2.5**: cd to the worktree first. **Never blind-resume**: `--session`
+  with a deleted id recreates it with fresh context (exit 0) — check liveness first.
   `PW_OPENCODE_API_PROVIDERS` (if set) uses the same prefix-filter semantics as the kilo axis.
+  No `--attach`/`--variant`/`--command` flag on 2.2.5 (upstream docs describe a newer release);
+  use the global `--server <url>` to attach to a running server.
 - **cursor** — `agent -p --force [--trust] --model <id> [--output-format json] [--resume
   <session_id>] [--workspace <path>]`. `--force` (alias `--yolo`) is **required headless** (no TTY
   for approvals; `--trust` clears the per-folder gate when needed). **Pipe the prompt via a plain
@@ -218,11 +226,12 @@ kilo column
 A task may carry two optional fields alongside `Execute with:` — the orchestrator maps them to the
 right CLI flag by provider:
 
-| Task field | `claude` maps to | `kilo` maps to | `cursor` maps to | `codex` maps to |
-|------------|------------------|----------------|----------------|----------------|
-| `Effort:` (`low`/`medium`/`high`/`xhigh`/`max`) | `--effort <level>` | `--variant <level>` (provider-specific: `high`/`max`/`minimal`/…; nearest match) | `<id>-<level>[-fast]` when the catalog lists it (e.g. `claude-opus-5-thinking-xhigh`); otherwise a bracket param on the base id — `glm-5p3-flash[reasoning=high]` (name the parameter as cli-config `modelParameters` does: `reasoning`, `effort`, `context`, `fast`) | `-c model_reasoning_effort="<level>"` (headless) or TUI `/model` (in-session); levels are per-model in the catalog (`supported_reasoning_levels`) |
-| `Thinking:` (`on`/`off`) | (n/a — omit; effort covers reasoning) | `--thinking` when `on` | encoded in catalog ids (`-thinking-<level>` variants); parameterized ids use their reasoning/effort bracket param | (n/a — effort covers reasoning) |
-| Fast tier (no task field — per-run/PLAN note) | n/a | n/a | `-fast` catalog-id variants, or `[fast=true]` on a parameterized id | `-c service_tier="priority"` on the same slug (requested-only; unverifiable from output) |
+| Task field | `claude` maps to | `kilo` maps to | `cursor` maps to | `codex` maps to | `opencode` maps to |
+|------------|------------------|----------------|----------------|----------------|-------------------|
+| `Effort:` (`low`/`medium`/`high`/`xhigh`/`max`) | `--effort <level>` | `--variant <level>` (provider-specific: `high`/`max`/`minimal`/…; nearest match) | `<id>-<level>[-fast]` when the catalog lists it (e.g. `claude-opus-5-thinking-xhigh`); otherwise a bracket param on the base id — `glm-5p3-flash[reasoning=high]` (name the parameter as cli-config `modelParameters` does: `reasoning`, `effort`, `context`, `fast`) | `-c model_reasoning_effort="<level>"` (headless) or TUI `/model` (in-session); levels are per-model in the catalog (`supported_reasoning_levels`) | use `Variant:` instead — opencode has no verified effort/reasoning control (refused) |
+| `Variant:` (per-model level token) | (n/a — unsupported) | `--variant <level>` | `<id>-<level>` when the catalog lists it | (n/a — unsupported) | `#<level>` suffix on the model id (e.g. `-m 'cpa/muse-spark-1.3-contributor#low'`); levels are per-model; unknown levels fail loud |
+| `Thinking:` (`on`/`off`) | (n/a — omit; effort covers reasoning) | `--thinking` when `on` | encoded in catalog ids (`-thinking-<level>` variants); parameterized ids use their reasoning/effort bracket param | (n/a — effort covers reasoning) | `--thinking` when `on` (display-only on 2.2.5; verified accepted) |
+| Fast tier (no task field — per-run/PLAN note) | n/a | n/a | `-fast` catalog-id variants, or `[fast=true]` on a parameterized id | `-c service_tier="priority"` on the same slug (requested-only; unverifiable from output) | n/a |
 
 - **Version pinning (Claude):** `opus`/`sonnet`/`haiku`/`fable` resolve to the *latest* of that
   family. To pin, use the full name — `claude:claude-opus-4-8` vs `claude:claude-opus-5`,
@@ -296,7 +305,7 @@ modelParameters` (the CLI list is incomplete — desktop-only ids appear only in
 pw's reader prints the bare visible slugs — hidden-visibility rows still RUN if invoked, so the
 allowlist is the real gate), if you want to look yourself — but `/pw-doctor` is the one that actually validates your config.)
 
-## Verified agent/session facts (probed 2026-09-04 kilo/claude + 2026-09-09 and 2026-10-22 cursor + 2026-10-04 codex, this machine — re-run before trusting elsewhere)
+## Verified agent/session facts (probed 2026-09-04 kilo/claude + 2026-09-09 and 2026-10-22 cursor + 2026-10-04 codex + 2026-11-04 opencode, this machine — re-run before trusting elsewhere)
 
 - **Registered set = ground truth via `kilo agent list`** (prints `name (mode)` + resolved
   permission JSON); `kilo debug agent <name>` prints the **effective config incl. the model a
@@ -547,3 +556,18 @@ command-skill ran its script end-to-end from a fresh session. Bogus model id: st
 invalid `service_tier`: silently ignored (requested-only honesty). Quarantine proof passed
 (claude+cursor pw surfaces hidden → codex unchanged, restored byte-identical). `pw-doctor` green
 on all four providers post-install; offboard dry-run byte-exact (18 codex artifacts).
+
+**OpenCode CLI, verified end-to-end 2026-11-04** (probes bundled with the opencode validation;
+all runs pinned `cpa/muse-spark-1.3-contributor` on opencode 2.2.5): `opencode run --auto`
+writes headlessly; **stdin is the documented prompt channel** (a 10 KB trailing argument also
+survived — no vanish bug at that size — but stdin stays the rule by defensive parity).
+`--format json` emits JSONL: `sessionID` + `text` parts + `step_finish`. **Exit 0 proves
+nothing**: bogus models, variants, agent names, and unknown flags all exit 0 (errors arrive as
+`{"type":"error",...}` events or help text) — supervision scans output and confirms git
+artifacts. `--session <id>` round-trips context across directories; invocation cwd controls the
+run directory (no `--dir` flag — cd to the worktree first). **Never blind-resume**: a deleted
+id recreates with fresh context under the same id. Liveness = `session export --sanitize <id>`
+(JSON = live, "Session not found" on stderr = dead; cwd-independent, unlike the
+project-scoped `session list`). Named `--agent <subagent>` honored headless (exact reply);
+variant `#level` suffix accepted; `--thinking` accepted (display-only on 2.2.5). No
+`--attach`/`--variant`/`--command` flag on 2.2.5 despite upstream docs describing them.

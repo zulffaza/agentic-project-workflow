@@ -82,6 +82,23 @@ pc_re '^\| kilo \| researcher \| command_code/model \| high \|' "$(cat "$R")" "e
 # --- project role cells -------------------------------------------------------------------
 pwtest_rc 0 "project role-model write" pc set --project demo --key role-model --provider kilo --role analyst --model command_code/model
 pc_re 'kilo analyst command_code/model' "$(pc get --project demo --key role-model 2>/dev/null)" "project role read lists the new cell"
+# opencode write path (probe-verified 2026-11-04): variant accepted as a #level token,
+# reasoning/effort refused as unverified. Dedicated fixture: the shared CFG disables opencode.
+CFG_OC="$PC/pw.config.oc.sh"
+printf '%s\n' 'PW_PROVIDERS=(kilo cursor opencode)' > "$CFG_OC"
+pco() { PW_PROJECTS_DIR="$PC/projects" PW_PROJECTS="$PC/projects" PW_REPOS="$PC/repos" \
+        PW_CONFIG_FILE="$CFG_OC" PW_PROPOSAL_DIR="$PC/proposals" "$(pwtest_script pw-config.sh)" "$@"; }
+pwtest_rc 0 "opencode role-model write with variant" pco set --project demo --key role-model --provider opencode --role analyst --model testprov/test-model --variant low
+pc_re 'opencode analyst testprov/test-model' "$(pco get --project demo --key role-model 2>/dev/null)" "opencode role read lists the new cell"
+if pco set --project demo --key role-model --provider opencode --role reviewer --model testprov/test-model --effort high >/dev/null 2>&1; then
+  pwtest_bad "opencode effort refused at write" "unverified effort was accepted"
+else pwtest_ok "opencode effort refused at write"; fi
+if pco set --project demo --key role-model --provider opencode --role reviewer --model testprov/test-model --reasoning high >/dev/null 2>&1; then
+  pwtest_bad "opencode reasoning refused at write" "unverified reasoning was accepted"
+else pwtest_ok "opencode reasoning refused at write"; fi
+if pco set --project demo --key role-model --provider opencode --role reviewer --model testprov/test-model --variant 'bad level!' >/dev/null 2>&1; then
+  pwtest_bad "opencode malformed variant refused" "non-token variant was accepted"
+else pwtest_ok "opencode malformed variant refused"; fi
 pc_re 'kilo researcher command_code/model' "$(pc get --project demo --key role-model 2>/dev/null)" "composite key leaves the researcher row intact"
 pc_re '^\- \*\*AI Models:\*\*' "$(grep '^- \*\*AI Models:\*\*' "$R")" "derived compatibility line survives project writes"
 pwtest_rc 0 "spawn-args uses the project cell" pc spawn-args --project demo --role researcher --provider kilo

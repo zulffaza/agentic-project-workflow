@@ -232,8 +232,8 @@ Values: auto | subagent | headless.
 ```
 
 **Headless supervision (never fire-and-forget):** launch as a tracked background child, prompt on
-stdin, `tee` to `worktree/<T0n>.log`, `--format json` where supported (kilo/cursor; codex `--json`
-= JSONL events, first one carries the resumable `thread_id`); record the
+stdin, `tee` to `worktree/<T0n>.log`, `--format json` where supported (kilo/cursor/opencode; codex `--json`
+= JSONL events, first one carries the resumable `thread_id`; opencode JSONL carries `sessionID` and errors arrive as `{"type":"error"}` with exit 0 — scan output, never trust `$?`); record the
 pid + out= in the ledger. Poll at a fixed cadence: process alive, log growing, elapsed vs budgets
 (`PW_HEADLESS_STALL` min without growth, `PW_HEADLESS_TIMEOUT` hard cap — pw.config.sh).
 Terminal classes: `success` = exit 0/final JSON event **and** the git artifacts real (branch +

@@ -120,6 +120,7 @@ cat > "$PA/task/PLAN.md" <<'PLAN'
 | [T07](./T07.md) | multi-route | api | — | G1 | multi | 1 | done | — | — |
 | [T08](./T08.md) | no-route | api | — | G1 | multi | 1 | todo | — | — |
 | [T09](./T09.md) | suffix | api | — | G1 | kilo:alibaba-token-plan/test-model | 1 | done | — | — |
+| [T10](./T10.md) | opencode-suffix | api | — | G1 | opencode:testprov/test-model | 1 | done | — | — |
 PLAN
 printf -- '- **Route:** headless\n' > "$PA/task/T01.md"
 printf -- '- **Actually used:** kilo:alibaba-token-plan/test-model\n\n## Execution routes\n\n| Current provider | Execution provider | Target model | Target subagent | Variant | Reasoning | Effort | Thinking |\n|---|---|---|---|---|---|---|---|\n| kilo | kilo | alibaba-token-plan/test-model | — | — | — | — | — |\n| cursor | kilo | alibaba-token-plan/other-model | — | — | — | — | — |\n' > "$PA/task/T07.md"
@@ -131,6 +132,7 @@ cat > "$PA/LOG.md" <<'LOG'
 - **2026-09-23 10:10** · `exec` — spawned T04 (claude:opus) · via=headless · session=— · seed=x · out=y
 - **2026-09-23 10:20** · `exec` — spawned T05 (kilo:alibaba-token-plan/other-model) · via=subagent · model-degraded kilo:alibaba-token-plan/test-model→kilo:alibaba-token-plan/other-model · session=— · seed=x · out=y
 - **2026-09-23 10:30** · `exec` — spawned T09 (kilo:alibaba-token-plan/test-model, service_tier=priority) · via=headless · session=— · seed=x · out=y
+- **2026-09-23 10:40** · `exec` — spawned T10 (opencode:testprov/test-model#low) · via=headless · session=— · seed=x · out=y
 LOG
 PAE="$(pwtest_script pw-status.sh)"
 pwtest_rc 1 "provider-audit flags planted rows" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.sh" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit --project paaudit
@@ -154,6 +156,15 @@ pwtest_rc 0 "comma-suffixed audit row" env PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.c
 grep -qE '^T09\|expected=kilo:alibaba-token-plan/test-model\|used=kilo:alibaba-token-plan/test-model, service_tier=priority\|.*verdict=ok$' "$PWTEST_OUT" \
   && pwtest_ok "comma-suffixed used model matches the route" \
   || pwtest_bad "comma-suffixed used model" "$(grep '^T09' "$PWTEST_OUT")"
+# opencode #suffixed `used` matches the bare route id (comparison strips the suffix; the
+# printed `used=` keeps the full recorded value). Own scratch config — the shared fixture
+# does not enable opencode, which would read as stale-provider instead.
+CFG_OC_AUDIT="$ROOT/pw.config.oc-audit.sh"
+printf '%s\n' 'PW_PROVIDERS=(kilo claude cursor opencode)' 'PW_KILO_API_PROVIDERS=(kilo/alibaba-token-plan)' > "$CFG_OC_AUDIT"
+pwtest_rc 0 "opencode-suffixed audit row" env PW_CONFIG_FILE="$CFG_OC_AUDIT" PW_PROJECTS_DIR="$ROOT/projects" "$PAE" provider-audit --project paaudit --task T10
+grep -qE '^T10\|expected=opencode:testprov/test-model\|used=opencode:testprov/test-model#low\|.*verdict=ok$' "$PWTEST_OUT" \
+  && pwtest_ok "opencode suffixed used model matches the bare route" \
+  || pwtest_bad "opencode suffixed used model" "$(grep '^T10' "$PWTEST_OUT")"
 # ledger-tolerant (pre-ladder lines lack via= → '—') + task-id filter + all-ok subset exits 0:
 cat >> "$PA/LOG.md" <<'LOG'
 - **2026-09-23 09:00** · `exec` — spawned T06 (kilotest:test-model) · session=— · seed=x · out=y

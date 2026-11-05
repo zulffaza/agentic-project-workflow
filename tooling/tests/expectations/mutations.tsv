@@ -540,3 +540,16 @@ C451-stale-pin-blocks-migration	scripts/entities/pw-config.sh	              elif
 C452-migration-skips-task-schema	scripts/entities/pw-config.sh	            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "schema:task:$t" "task/$t.md:Execution routes" "1" "2" "add" "convert the task to explicit routes" >> "$tmp"	            : >> "$tmp"	T1	^pw-provider-config\.t\.sh$
 C453-audit-rejects-comma-suffix	scripts/entities/pw-status.sh	              case "$used" in "$_alt"|"$_alt "*|"$_alt,"*) _match=1 ;; esac	              case "$used" in "$_alt"|"$_alt "*) _match=1 ;; esac	T1	^pw-status\.t\.sh$
 C454-find-ignores-exact-surface-rank	scripts/entities/pw-help.sh	    if key and stem in (key, "pw-" + key): rank = 0	    if False: rank = 0	T1	^pw-help\.t\.sh$
+C455-session-opencode-unverifiable	scripts/entities/pw-session.sh	    opencode) _sc_opencode "$id" ;;	    opencode) echo "session-check: opencode:$id — unverifiable" >&2; rc=2 ;;	T1	^pw-session\.t\.sh$
+C456-capability-opencode-variant-unknown	scripts/entities/pw-config.sh	    opencode:variant)      printf 'model-variant-suffix' ;;	    opencode:variant)      printf 'unknown' ;;	T1	^pw-provider-config\.t\.sh$
+C457-validate-opencode-variant-dropped	scripts/entities/pw-config.sh	      model-variant-suffix)	      model-variant-never)	T1	^pw-provider-config\.t\.sh$
+C458-spargs-opencode-variant-dropped	scripts/entities/pw-config.sh	        [ -n "$variant" ] && effective_model="${model}#${variant}"	        [ -n "$variant" ] && effective_model="${model}"	T1	^pw-project-defaults\.t\.sh$
+C459-entry-opencode-fallback	scripts/lib/pw-common.sh	declare -f opencode_entry_format >/dev/null 2>&1 || opencode_entry_format() { echo command; }	declare -f opencode_entry_format_legacy >/dev/null 2>&1 || opencode_entry_format_legacy() { echo command; }	T1	^pw-common\.t\.sh$
+# C460–C466 minted by plan 66 gap-fix (opencode #variant chain: resolve, permission, session identity, audit, worker render, spawn-args, models axis).
+C460-resolve-opencode-suffix-dropped	scripts/entities/pw-config.sh	model_suffix="#${model#*#}"	model_suffix=""	T1	^pw-config\.t\.sh$
+C461-permission-opencode-suffix-strip-dropped	scripts/entities/pw-config.sh	case "$match_model" in *'#'*) match_model="${match_model%%#*}" ;; esac	:	T1	^pw-config\.t\.sh$
+C462-session-opencode-variant-split-dropped	scripts/entities/pw-session.sh	variant="${model#*#}"	variant=""	T1	^pw-session\.t\.sh$
+C463-audit-opencode-suffix-normalize-dropped	scripts/entities/pw-status.sh	case "$_used_cmp" in opencode:*'#'*) _used_cmp="${_used_cmp%%#*}" ;; esac	:	T1	^pw-status\.t\.sh$
+C464-worker-opencode-suffix-render-dropped	scripts/lib/pw-common.sh	if [ -n "$variant" ]; then printf '%s#%s' "$model" "$variant"; else printf '%s' "$model"; fi	printf '%s' "$model"	T1	^pw-config\.t\.sh$
+C465-spargs-opencode-suffix-reattach-dropped	scripts/entities/pw-config.sh	opencode) model="$_resolved${model#"$_base"}" ;;	opencode) model="$_resolved" ;;	T1	^pw-project-defaults\.t\.sh$
+C466-models-opencode-axis-dropped	scripts/entities/pw-config.sh	case "$p" in kilo|opencode) axis_provs+=("$p") ;; esac	case "$p" in kilo) axis_provs+=("$p") ;; esac	T1	^pw-config\.t\.sh$

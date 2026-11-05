@@ -60,7 +60,8 @@ Each task carries an `## Execution routes` table keyed by the **current provider
 running the workflow operation). The selected row names the execution provider, a mandatory
 target model, an optional subagent, and per-route tuning (variant, reasoning, effort, thinking).
 Thinking is validated and emitted only where the provider supports it: Kilo maps `on` to
-`--thinking`, Cursor requires a `-thinking-` catalog id, and Claude/Codex refuse it. The legacy
+`--thinking`, Cursor requires a `-thinking-` catalog id, OpenCode maps `on` to `--thinking`
+(display-only on 2.2.5), and Claude/Codex refuse it. The legacy
 `Execute with:` bullet stays
 as a derived one-route summary for older readers: it is written by the route owner, never edited
 as an independent source.
@@ -120,6 +121,7 @@ definitions, so they have no model cell.
 | Claude | Session `/model` selection |
 | Cursor | `auto` routing or `selectedModel` in its CLI configuration |
 | Codex | Its configured default |
+| OpenCode | The `model` key in `opencode.json` (subagents inherit the invoking primary's model when their definition sets none) |
 
 ### When the role needs a headless session
 
@@ -350,7 +352,8 @@ expensive model — set an allowlist per Agent Provider in `pw.config.sh`
 (`PW_MODEL_ALLOWLIST_CLAUDE` / `_KILO` / `_OPENCODE` / `_CURSOR` / `_CODEX`), a comma-separated list of glob
 patterns
 matched against the model id (everything after the `<provider>:` prefix, e.g. `sonnet` or
-`command_code/deepseek/*`).
+`command_code/deepseek/*`). Per-provider tuning suffixes (a Cursor `[param=value]` bracket or
+an OpenCode `#level` suffix) are stripped before matching, so the allowlist names the base id.
 
 **The rule, stated plainly: empty or unset = ALL models allowed.** That's the default for every
 provider — nothing is restricted until you explicitly set a pattern. This is deliberately
@@ -381,7 +384,7 @@ These two words are **not** interchangeable — the distinction decides how a ta
 | | **Sub-agent** | **Agent** (primary / invocable) |
 |---|---|---|
 | What | spawned **in-process** by an orchestrator | a top-level agent invoked through a provider's **CLI** |
-| How | Claude's Task tool `subagent_type`; KiloCode `mode: subagent`; Cursor auto-delegation on def `description` (or explicit `/pw-<agent>` — and a **direct** cursor sub-agent can itself fan out one more level, verified 2026-09-09); **codex: this bundle uses inline lanes or headless sessions** (inline lane personas, or a headless `codex exec` session as the spawn) | that provider's CLI: `kilo run --agent <primary-agent>` / `claude -p` / cursor `agent -p --force --model <id>`+task file / codex `codex exec -m <slug>`+task file via stdin (a sub-agent def is NOT nameable from across the boundary; cursor has no CLI primary-agent slot at all; codex has no agent defs at all) |
+| How | Claude's Task tool `subagent_type`; KiloCode `mode: subagent`; Cursor auto-delegation on def `description` (or explicit `/pw-<agent>` — and a **direct** cursor sub-agent can itself fan out one more level, verified 2026-09-09); OpenCode primary-agent invocation or `@`-mention of a `mode: subagent` def; **codex: this bundle uses inline lanes or headless sessions** (inline lane personas, or a headless `codex exec` session as the spawn) | that provider's CLI: `kilo run --agent <primary-agent>` / `claude -p` / cursor `agent -p --force --model <id>`+task file / opencode `opencode run --auto -m <id>`+task file via stdin (named `--agent <subagent>` honored headless, verified 2026-11-04) / codex `codex exec -m <slug>`+task file via stdin (a sub-agent def is NOT nameable from across the boundary, except opencode's `--agent` flag; cursor has no CLI primary-agent slot at all; codex has no agent defs at all) |
 | Boundary | **same provider only** — a provider can spawn only its *own* sub-agents | the **only** unit that crosses a provider boundary |
 | Here | `pw-executor` | none shipped — the normal session drives via `pw-orchestration` |
 
@@ -436,8 +439,9 @@ execution-and-routing reference, §Seed contracts): a dense executive summary + 
 is fixed at the producer — a cheap researcher pass — never by spawning a floundering analyst),
 pointers-as-menu, never raw dumps/credentials. After a draft, an **exit check**: diff result vs the
 brief's scope list; a gap means a **resume with a seed patch** (`kilo run -s <id>` / claude
-`--resume <id>` / cursor `agent -p --force --resume <session_id>` / codex `codex exec resume
-<thread_id>` — cd to the worktree first, resume has no directory flag) — iff the liveness check reports
+`--resume <id>` / cursor `agent -p --force --resume <session_id>` / opencode `opencode run --auto
+-m <id> --session <session-id>` / codex `codex exec resume
+<thread_id>` — cd to the worktree first, neither resume has a directory flag) — iff the liveness check reports
 that id resumable — not a cold re-spawn. N review items on ONE artifact (human / `pw-reviewer` /
 verifier / `dep-impact` items share that queue) get ONE batched fix pass, per-item replies intact
 — never one spawn per comment; who runs the pass (in-process fixer / supervised headless / the
@@ -465,8 +469,8 @@ carries `· via=subagent|headless · session=<id> · seed=<ref> · out=<artifact
 `## Result → Session:` records its run's id, and the executor writes `session <id>` as the first line
 of `worktree/<T0n>.log` when the provider exposes one — `-` if not). A Row-8 rejection, an MR-comment
 batch, or a late-fix dependent recheck (above) **resumes that id** (`kilo run -s <id>` / cursor
-`agent -p --force --resume <id>` / codex `codex exec resume <id>`; ids are `ses_…` on kilo, plain
-UUIDs on cursor and codex — codex's is the `thread_id` from its JSONL event stream) *only when a
+`agent -p --force --resume <id>` / opencode `opencode run --auto -m <model> --session <id>` / codex `codex exec resume <id>`; ids are `ses_…` on kilo and opencode, plain
+UUIDs on cursor and codex — codex's is the `thread_id` from its JSONL event stream; opencode's is the `sessionID` from its JSONL events) *only when a
 deterministic liveness check says it is still resumable* — the pipeline never blind-resumes an id
 and reads the error to find out it was dead; when the check says dead/unverifiable, it takes the
 ladder's cold path instead (spawn with the task file / recorded seed), because session stores are

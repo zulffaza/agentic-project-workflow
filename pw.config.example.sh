@@ -80,6 +80,15 @@ PW_KILO_API_PROVIDERS=(kilo)
 # Nested-BYOK example (a sub-provider registered under the kilo gateway):
 #   PW_KILO_API_PROVIDERS=(kilo/alibaba-token-plan)
 
+# --- OpenCode API Providers (same shape as kilo — usually left empty) ----------------------
+# OpenCode (an Agent Provider) lists its models the same `<provider>/<model>` way, so the
+# PW_OPENCODE_API_PROVIDERS axis exists with the SAME semantics as the kilo block above:
+# entries are MODEL-ID PREFIX FILTERS scoping which catalog lines availability checks accept
+# (e.g. `testprov/nested` keeps only that subtree), and empty/unset means no filtering.
+# Most setups leave this unset — scope it only when one provider serves models you want the
+# tooling to refuse (the opencode block in `pw-config.sh model-resolve` names this variable).
+# PW_OPENCODE_API_PROVIDERS=()
+
 # --- Routing + headless supervision (spawn-ladder floors; per-task `Route:` and the PLAN's
 #     `- Routing:` bullet win over these) -------------------------------------------------------
 # Default route for spawns with no per-task/per-plan override: auto | subagent | headless.

@@ -41,6 +41,32 @@ pwtest_eq "Steps decoy NEVER resolves (C21)" "$(pw_task_mr_url "$F3/task/T05.md"
 pwtest_eq "codex command_style = skill" "$(pw_provider_command_style codex)" "skill"
 pwtest_eq "claude/cursor/codex entry_format = skill" "$(printf '%s %s %s' "$(pw_provider_entry_format claude)" "$(pw_provider_entry_format cursor)" "$(pw_provider_entry_format codex)")" "skill skill skill"
 pwtest_eq "kilo/opencode entry_format = command" "$(printf '%s %s' "$(pw_provider_entry_format kilo)" "$(pw_provider_entry_format opencode)")" "command command"
+declare -f opencode_entry_format >/dev/null 2>&1 \
+  && pwtest_ok "opencode entry_format is an explicit hook (not fallback)" \
+  || pwtest_bad "opencode entry_format explicit" "hook missing — format depends on fallback"
+pwtest_eq "opencode catalog = bare ids incl nested (real 2.2.5 shape)" \
+  "$(pw_api_catalog opencode)" "$(printf 'testprov/test-model\ntestprov/nested/deep-model')"
+# Headless template pins (probe-verified 2026-11-04 on opencode 2.2.5): stdin channel, JSON
+# capture, resume recipe, exit-0 rule — and NO --attach flag (absent from the installed CLI).
+OH_TMPL="$(opencode_headless)"
+printf '%s' "$OH_TMPL" | grep -q "printf '%s'" \
+  && pwtest_ok "opencode headless mandates stdin" \
+  || pwtest_bad "opencode headless stdin" "template lost the stdin rule"
+printf '%s' "$OH_TMPL" | grep -q '"sessionID"' \
+  && pwtest_ok "opencode headless documents the session-id capture" \
+  || pwtest_bad "opencode headless capture" "template lost the JSON recipe"
+printf '%s' "$OH_TMPL" | grep -q 'no --attach' \
+  && pwtest_ok "opencode headless documents the absent --attach flag" \
+  || pwtest_bad "opencode headless --attach note" "template lost the absent-flag warning"
+printf '%s' "$OH_TMPL" | grep -q '"type":"error"' \
+  && pwtest_ok "opencode headless documents the exit-0 error rule" \
+  || pwtest_bad "opencode headless exit-0 rule" "template lost the error-scan rule"
+pwtest_eq "worker effective id: opencode variant renders as #level" \
+  "$(pw_worker_spec_effective opencode 'testprov/test-model[variant=low]')" 'testprov/test-model#low'
+pwtest_eq "worker effective id: opencode bare spec stays bare" \
+  "$(pw_worker_spec_effective opencode 'testprov/test-model')" 'testprov/test-model'
+pwtest_eq "worker effective id: opencode without variant stays bare" \
+  "$(pw_worker_spec_effective opencode 'testprov/test-model[variant=]')" 'testprov/test-model'
 pwtest_eq "codex commanddir IS the skills root (entries are skills)" "$(codex_commanddir)" "$(codex_skilldir)"
 pwtest_eq "collision skip list retired (distinct guide names)" "$(pw_skill_skips_for codex)" ""
 pwtest_eq "no provider skips a shipped skill" "$(pw_skill_skips_for kilo)" ""

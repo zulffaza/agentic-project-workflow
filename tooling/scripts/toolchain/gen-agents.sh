@@ -78,6 +78,19 @@ for prov in "${PROVIDERS[@]}"; do
         wparams="$(pw_worker_spec_params "$wspec")"
         case "$prov" in
           cursor) model="$(pw_worker_spec_effective "$prov" "$wspec")" ;;
+          opencode)
+            model="$(pw_worker_spec_effective "$prov" "$wspec")"
+            # variant= renders as the #level suffix (drop it from the warn list); anything
+            # else in the brackets has no definition surface — warn-and-drop exactly like
+            # the '*' arm below.
+            _wrest=""; _wold="$IFS"; IFS=','
+            for _witem in $wparams; do
+              case "$_witem" in variant=*) ;; *) _wrest="${_wrest:+$_wrest,}$_witem" ;; esac
+            done
+            IFS="$_wold"
+            if [ -n "$_wrest" ]; then
+              echo "  $prov/$agentname: worker parameters '$wparams' cannot be rendered into a $prov agent definition — bind them at invocation time" >&2
+            fi ;;
           *) model="$wmodel"
              if [ -n "$wparams" ]; then
                echo "  $prov/$agentname: worker parameters '$wparams' cannot be rendered into a $prov agent definition — bind them at invocation time" >&2

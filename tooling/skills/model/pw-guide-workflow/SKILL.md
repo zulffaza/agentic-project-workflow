@@ -88,7 +88,8 @@ phases, `--json` prints a machine-readable object. No slug; never writes.
   Reference: [`tooling/docs/scripts/README.md`]({{PW_HOME}}/tooling/docs/scripts/README.md).
 - **Never hand-edit a generated command/agent file** (`~/.claude/commands`,
   `~/.config/kilo/command`, `~/.claude/agents`, `~/.config/kilo/agent`, `~/.cursor/commands`,
-  `~/.cursor/agents`, `~/.codex/skills/pw-*` — codex commands are generated skill dirs) — they're build output from
+  `~/.cursor/agents`, `~/.config/opencode/commands`, `~/.config/opencode/agents`,
+  `~/.codex/skills/pw-*` — codex commands are generated skill dirs) — they're build output from
   `tooling/skills/human/`/`tooling/agents/`. Edit the canonical source and re-run the generator
   (`gen-commands.sh`/`gen-agents.sh`, or `./bootstrap.sh`).
 - **Agent vs sub-agent, across providers — load-bearing, get it right.** A **sub-agent** is spawned

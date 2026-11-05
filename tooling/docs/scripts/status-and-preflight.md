@@ -324,8 +324,11 @@ json -a`; claude `~/.claude/projects/<cwd-encoded>/<id>.jsonl` (searched across 
 empty file = dead); cursor `~/.cursor/chats/<hash>/<id>/` (the `agent ls` TUI is not scriptable);
 codex `~/.codex/sessions/<Y>/<M>/<D>/rollout-<ts>-<thread-id>.jsonl` (the id is embedded in the
 FILENAME; empty rollout = dead);
-opencode has no verified surface yet → always `2` (implement it HERE when a machine with opencode
-shows up, never in callers). Every lookup is a pure read — no model calls, no CLI resume attempt.
+opencode `opencode session export --sanitize <id>` (JSON carrying the id = live; "Session not
+found" on stderr = dead; empty/unexpected output = unverifiable — the CLI exits 0 on errors
+too, so the reading comes from the text, never `$?`; export is cwd-independent unlike
+`session list`, which is project-scoped; verified 2026-11-04 on 2.2.5).
+Every lookup is a pure read — no model calls, no CLI resume attempt.
 
 ## pw-help.sh
 

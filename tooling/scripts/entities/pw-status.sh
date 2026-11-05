@@ -684,7 +684,7 @@ cmd_provider_audit() {
   local plan="$d/task/PLAN.md"
   [ -f "$plan" ] || die "no task/PLAN.md in $slug → fix: run /pw-breakdown --project $slug first"
   local logf="$d/LOG.md"
-  local bad=0 rc id exec prov model route expected used via verdict mr_err lline au _seen _p
+  local bad=0 rc id exec prov model route expected used via verdict mr_err lline au _seen _p _used_cmp
   while IFS='|' read -r id exec; do
     [ -n "$id" ] || continue
     if [ -n "$ids" ]; then
@@ -760,14 +760,19 @@ EOF
         # a recorded degrade is policy-blessed; anything else that differs is a mismatch
         if [ "$verdict" = "ok" ]; then
           _match=0
+          # an opencode record may carry the #level suffix the executor's -m received while
+          # the route rows carry bare ids (levels live in the Variant column) — strip it
+          # ONLY for the comparison; the printed `used=` keeps the full recorded value.
+          _used_cmp="$used"
+          case "$_used_cmp" in opencode:*'#'*) _used_cmp="${_used_cmp%%#*}" ;; esac
           if [ -n "$_routes" ]; then
             local _alt
             IFS='|' read -r -a _alts <<< "$_routes"
             for _alt in "${_alts[@]}"; do
-              case "$used" in "$_alt"|"$_alt "*|"$_alt,"*) _match=1 ;; esac
+              case "$_used_cmp" in "$_alt"|"$_alt "*|"$_alt,"*) _match=1 ;; esac
             done
           else
-            case "$used" in "$exec"|"$exec "*|"$exec,"*) _match=1 ;; esac
+            case "$_used_cmp" in "$exec"|"$exec "*|"$exec,"*) _match=1 ;; esac
           fi
           if [ "$_match" = 0 ]; then
             printf '%s' "$lline" | grep -q 'model-degraded' || verdict="mismatch"
