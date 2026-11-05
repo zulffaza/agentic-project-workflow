@@ -304,8 +304,8 @@ pwtest_eq "lock refusal leaves bytes unchanged" "$before_lock" "$(shasum -a 256 
 SP="$GPD/projects/spawn-demo"; mkdir -p "$SP"
 cat > "$SP/README.md" <<'MD'
 # spawn demo
-- **AI Models:** analyst=kilo:alibaba-token-plan/test-model writer-task=claude:sonnet reviewer=cursor:cursor-test-high verifier=codex:codex-test-luna researcher=opencode:testprov/test-model ship-comment-analyst=—
-- **AI Model Tuning:** analyst=variant:high writer-task=effort:high reviewer=effort:high verifier=reasoning:high
+- **AI Models:** analyst=kilo:alibaba-token-plan/test-model writer-task=claude:sonnet reviewer=cursor:cursor-test-high verifier=codex:codex-test-luna researcher=opencode:testprov/test-model explorer=opencode:testprov/test-model ship-comment-analyst=—
+- **AI Model Tuning:** analyst=variant:high writer-task=effort:high reviewer=effort:high verifier=reasoning:high explorer=variant:low
 MD
 GPCFG_SP="$GPD/pw.config.spawn.sh"
 cat > "$GPCFG_SP" <<'CFG'
@@ -313,7 +313,7 @@ PW_PROVIDERS=(kilo claude cursor codex opencode)
 CFG
 gsp() { PW_PROJECTS_DIR="$GPD/projects" PW_PROJECTS="$GPD/projects" PW_REPOS="$GPD/repos" PW_CONFIG_FILE="$GPCFG_SP" "$(pwtest_script pw-config.sh)" "$@"; }
 
-for pair in analyst:kilocanon writer-task:claudeeffort reviewer:cursorbracket verifier:codexreason researcher:opencodeplain; do
+for pair in analyst:kilocanon writer-task:claudeeffort reviewer:cursorbracket verifier:codexreason researcher:opencodeplain explorer:opencodevariant; do
   role="${pair%%:*}"; tag="${pair#*:}"
   pwtest_rc 0 "spawn-args $role" gsp spawn-args --project spawn-demo --role "$role" --json
   python3 - "$PWTEST_OUT" "$tag" <<'PY'
@@ -325,6 +325,7 @@ want={
  'cursorbracket':['--model','cursor-test-high[effort=high]'],
  'codexreason':['-m','codex-test-luna','-c','model_reasoning_effort=high'],
  'opencodeplain':['-m','testprov/test-model'],
+ 'opencodevariant':['-m','testprov/test-model#low'],
 }[tag]
 assert d['supported'] is True and d['args']==want, (tag,d)
 PY
@@ -353,6 +354,25 @@ printf '%s\n' '# unsupported' '- **AI Models:** ship-comment-analyst=opencode:te
 if gsp spawn-args --project spawn-unsupported --role ship-comment-analyst --json >/dev/null 2>&1; then
   pwtest_bad "unbindable route refuses dispatch" "opencode effort was dropped"
 else pwtest_ok "unbindable route refuses dispatch"; fi
+SU2="$GPD/projects/spawn-unsupported2"; mkdir -p "$SU2"
+printf '%s\n' '# unsupported2' '- **AI Models:** ship-comment-analyst=opencode:testprov/test-model' '- **AI Model Tuning:** ship-comment-analyst=reasoning:high' > "$SU2/README.md"
+if gsp spawn-args --project spawn-unsupported2 --role ship-comment-analyst --json >/dev/null 2>&1; then
+  pwtest_bad "unbindable reasoning refuses dispatch" "opencode reasoning was dropped"
+else pwtest_ok "unbindable reasoning refuses dispatch"; fi
+
+# A stored opencode #suffix survives canonicalization: the base resolves, the suffix is
+# reattached, and -m receives the whole string (no separate variant column involved).
+SS="$GPD/projects/spawn-stored-suffix"; mkdir -p "$SS"
+printf '%s\n' '# stored suffix' '- **AI Models:** researcher=opencode:testprov/test-model#low' > "$SS/README.md"
+pwtest_rc 0 "spawn-args stored opencode suffix" gsp spawn-args --project spawn-stored-suffix --role researcher --json
+python3 - "$PWTEST_OUT" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1]))
+assert d['supported'] is True, d
+assert d['model']=='testprov/test-model#low', d
+assert d['args']==['-m','testprov/test-model#low'], d
+PY
+[ "$?" = 0 ] && pwtest_ok "spawn-args preserves the stored #suffix end to end" || pwtest_bad "spawn-args stored suffix" "$(cat "$PWTEST_OUT")"
 
 # A hand-edited binding naming a disabled provider also refuses before spawn.
 GHOST="$GPD/projects/spawn-ghost"; mkdir -p "$GHOST"

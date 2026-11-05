@@ -336,7 +336,9 @@ _model_capability() { # <provider> <variant|reasoning|effort|thinking>
     cursor:effort)        printf 'low,medium,high' ;;
     cursor:variant)       printf 'catalog-id-suffix' ;;
     cursor:thinking)      printf 'on,off' ;;
-    opencode:*)           printf 'unknown' ;;
+    opencode:variant)      printf 'model-variant-suffix' ;;
+    opencode:thinking)      printf 'on,off' ;;
+    opencode:reasoning|opencode:effort)     printf 'unknown' ;;
     *:*)                  printf 'unknown' ;;
   esac
 }
@@ -373,6 +375,11 @@ _model_tuning_validate() { # <context> <provider> <model> <variant> <reasoning> 
         else
           die "$ctx — Cursor variant '$val' is not a catalog id for base '$model' → fix: use a catalog-listed variant id, or an inline '<id>[param=value]' form" 
         fi ;;
+      model-variant-suffix)
+        # OpenCode: variant is a per-model #level suffix (levels differ per model, so no
+        # static list exists). Accept a plain token; the CLI rejects unknown levels loudly
+        # ({"type":"error"} + loud message, verified 2026-11-04).
+        case "$val" in ''|*[!A-Za-z0-9._-]*) die "$ctx — invalid variant '$val' for $prov (expected a plain level token like low/high/max) → fix: choose a level the model lists" ;; esac ;;
       *)
         _model_is_one_of "$val" "$list" \
           || die "$ctx — invalid $c '$val' for $prov (allowed: $list) → fix: choose one of the documented values" ;;
@@ -857,6 +864,9 @@ _model_permission_check() { # <provider> <model> -> 0 allowed; dies on a positiv
   if [ "$prov" = cursor ]; then
     case "$match_model" in *'['*']') match_model="${match_model%%\[*}" ;; esac
   fi
+  if [ "$prov" = opencode ]; then
+    case "$match_model" in *'#'*) match_model="${match_model%%#*}" ;; esac
+  fi
   upper="$(printf '%s' "$prov" | tr '[:lower:]' '[:upper:]')"
   var="PW_MODEL_ALLOWLIST_${upper}"
   allow="${!var:-}"
@@ -1020,6 +1030,26 @@ cmd_model_resolve() {
       *'['*|*']'*)
         echo "model-resolve: $prov:$model — malformed parameter override; expected '<id>[<param>=<value>,…]' (exit 1)" >&2
         return 1 ;;
+    esac
+  fi
+  # OpenCode variant suffix: `testprov/test-model#low` (the `-m` suffix syntax) is a base
+  # model plus a per-model level, not a catalog id. Same shape as the cursor block above:
+  # validate the suffix, resolve the BASE against the catalogs, and print the canonical
+  # base WITH the suffix intact (the headless `-m` needs the whole string). The charset
+  # rejects a second '#' outright, so `a#b#c` refuses here.
+  if [ "$prov" = opencode ]; then
+    case "$model" in
+      *'#'*)
+        base="${model%%#*}"
+        model_suffix="#${model#*#}"
+        case "$base" in
+          '') echo "model-resolve: $prov:$model — malformed variant suffix; expected '<id>#<level>' (exit 1)" >&2; return 1 ;;
+        esac
+        case "${model#*#}" in
+          ''|*[!A-Za-z0-9._-]*)
+            echo "model-resolve: $prov:$model — malformed variant suffix; expected '<id>#<level>' (exit 1)" >&2
+            return 1 ;;
+        esac ;;
     esac
   fi
   # Cursor's merged catalog hides which source matched; keep the CLI-only list so a
@@ -4682,12 +4712,17 @@ EOF
     [ "$_enabled" = 1 ] \
       || die "spawn-args: provider '$prov' is not an enabled Agent Provider (PW_PROVIDERS: ${PW_PROVIDERS[*]}) → fix: enable it in pw.config.sh or re-pin role '$role'"
     local _resolved _rrc=0 _base
-    case "$prov" in cursor) _base="${model%%\[*}" ;; *) _base="$model" ;; esac
+    case "$prov" in
+      cursor) _base="${model%%\[*}" ;;
+      opencode) _base="${model%%#*}" ;;
+      *) _base="$model" ;;
+    esac
     _resolved="$(cmd_model_resolve --provider "$prov" --model "$_base" 2>/dev/null)" || _rrc=$?
     [ "$_rrc" = 0 ] || die "spawn-args: $prov:$model is not available on this route (model-resolve exit $_rrc) → fix: re-pin the role with /pw-config set --project $slug --key ai-model --set $role=<provider:model>"
     case "$_resolved" in ''|*' '*) ;; *)
       case "$prov" in
         cursor) model="$_resolved${model#"$_base"}" ;;
+        opencode) model="$_resolved${model#"$_base"}" ;;
         *) model="$_resolved" ;;
       esac ;;
     esac
@@ -4745,6 +4780,18 @@ EOF
           args+=(-c "model_reasoning_effort=${reasoning:-$effort}")
         fi
         if [ -n "$route_thinking" ]; then supported=0; reason="codex has no verified thinking control (effort covers reasoning)"; fi ;;
+      opencode)
+        effective_model="$model"
+        [ -n "$variant" ] && effective_model="${model}#${variant}"
+        args=(-m "$effective_model")
+        if [ -n "$reasoning" ] || [ -n "$effort" ]; then supported=0; reason="opencode has no verified reasoning/effort control (supported: variant #level, thinking)"; fi
+        if [ -n "$route_thinking" ]; then
+          case "$route_thinking" in
+            on) args+=(--thinking) ;;
+            off) : ;;
+            *) supported=0; reason="opencode thinking must be on|off (got '$route_thinking')" ;;
+          esac
+        fi ;;
       *)
         args=(-m "$model")
         if [ -n "$variant$reasoning$effort$route_thinking" ]; then supported=0; reason="provider '$prov' has no verified role tuning mapping"; fi ;;

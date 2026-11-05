@@ -197,6 +197,47 @@ PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider kilo --model command_c
 PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider opencode --model testprov/nested/deep-model >/dev/null 2>&1 \
   && pwtest_ok "opencode axis resolves (prefix semantics generic)" \
   || pwtest_bad "opencode axis" "refused an in-catalog id"
+# opencode miss → exit 1; out-of-scope → exit 2 naming the scope (probe-verified 2026-11-04).
+PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider opencode --model testprov/gone-xyz >/dev/null 2>"$ROOT/mr-oc1.err"
+[ "$?" = 1 ] && pwtest_ok "opencode miss exits 1" || pwtest_bad "opencode miss" "rc=$?"
+grep -qE 'not in the live catalog|→ fix:' "$ROOT/mr-oc1.err" \
+  && pwtest_ok "opencode miss is actionable" || pwtest_bad "opencode miss fix" "$(head -c 120 "$ROOT/mr-oc1.err")"
+CFG_OC_SCOPED="$ROOT/pw.config.oc-scoped.sh"
+printf '%s\n' 'PW_PROVIDERS=(opencode)' 'PW_OPENCODE_API_PROVIDERS=(testprov/nested)' > "$CFG_OC_SCOPED"
+PW_CONFIG_FILE="$CFG_OC_SCOPED" "$MR" model-resolve --provider opencode --model testprov/test-model >/dev/null 2>"$ROOT/mr-oc2.err"
+[ "$?" = 2 ] && pwtest_ok "opencode out-of-scope exits 2" || pwtest_bad "opencode scope" "rc=$?; $(head -c 120 "$ROOT/mr-oc2.err")"
+grep -q 'OUTSIDE the PW_OPENCODE_API_PROVIDERS scope' "$ROOT/mr-oc2.err" \
+  && pwtest_ok "opencode scope refusal names the scope" || pwtest_bad "opencode scope fix" "$(head -c 140 "$ROOT/mr-oc2.err")"
+PW_CONFIG_FILE="$CFG_OC_SCOPED" "$MR" model-resolve --provider opencode --model testprov/nested/deep-model >/dev/null 2>&1 \
+  && pwtest_ok "opencode in-scope nested id resolves" \
+  || pwtest_bad "opencode in-scope" "refused an in-scope id"
+# opencode #variant suffix (the `-m` suffix syntax, probe-verified 2026-11-04): the BASE
+# resolves against the catalog and the suffix rides intact in the output — the headless
+# `-m` needs the whole string. Malformed suffixes refuse with exit 1, never a silent bind.
+mr_oc="$(PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider opencode --model 'testprov/test-model#low' 2>/dev/null)" \
+  && [ "$mr_oc" = 'testprov/test-model#low' ] \
+  && pwtest_ok "opencode #variant suffix resolves with the suffix intact" \
+  || pwtest_bad "opencode #variant resolve" "got '$mr_oc'"
+for _oc_bad in 'testprov/test-model#' 'a#b#c' '#low' 'testprov/test-model#bad level!'; do
+  PW_CONFIG_FILE="$CFG_OPEN" "$MR" model-resolve --provider opencode --model "$_oc_bad" >/dev/null 2>"$ROOT/mr-oc-bad.err"; _oc_rc=$?
+  [ "$_oc_rc" = 1 ] && grep -q 'malformed variant suffix' "$ROOT/mr-oc-bad.err" \
+    && pwtest_ok "opencode malformed suffix refused ($_oc_bad)" \
+    || pwtest_bad "opencode malformed suffix ($_oc_bad)" "rc=$_oc_rc; $(head -c 120 "$ROOT/mr-oc-bad.err")"
+done
+# model-check opencode: empty allowlist passes, glob allows, non-match refuses — and a
+# #suffixed id matches against its BASE id (same rule as cursor bracket tuning).
+PW_CONFIG_FILE="$CFG_OPEN" PW_MODEL_ALLOWLIST_OPENCODE="" "$MR" model-check --provider opencode --model testprov/test-model >/dev/null 2>&1 \
+  && pwtest_ok "model-check opencode: empty allowlist passes" \
+  || pwtest_bad "model-check opencode empty allowlist" "refused with an empty allowlist"
+PW_CONFIG_FILE="$CFG_OPEN" PW_MODEL_ALLOWLIST_OPENCODE="testprov/*" "$MR" model-check --provider opencode --model testprov/test-model >/dev/null 2>&1 \
+  && pwtest_ok "model-check opencode: glob pattern allows" \
+  || pwtest_bad "model-check opencode glob allow" "refused a model matching the allowlist glob"
+PW_CONFIG_FILE="$CFG_OPEN" PW_MODEL_ALLOWLIST_OPENCODE="testprov/test-model" "$MR" model-check --provider opencode --model 'testprov/test-model#low' >/dev/null 2>&1 \
+  && pwtest_ok "model-check opencode: suffixed id matches the base allowlist entry" \
+  || pwtest_bad "model-check opencode suffix allow" "refused a suffixed form of an allowed base id"
+PW_CONFIG_FILE="$CFG_OPEN" PW_MODEL_ALLOWLIST_OPENCODE="other/*" "$MR" model-check --provider opencode --model 'testprov/test-model#low' >/dev/null 2>&1 \
+  && pwtest_bad "model-check opencode refuse" "allowed a suffixed id outside the allowlist" \
+  || pwtest_ok "model-check opencode: non-matching suffixed id refused"
 # The cursor axis with the REAL catalog shape ("agent models" lines carry a " - description"
 # tail — the 09-28 corpus case where every cursor pin read false-unbound): the resolver must
 # strip the tail, bind the bare id, and still refuse a true catalog miss. PW_CURSOR_CLI_CONFIG
@@ -567,6 +608,15 @@ grep -q 'command_code/MiniMaxAI/MiniMax-M3' "$PWTEST_OUT.models" \
   && ! grep -q 'kilo/alibaba-token-plan' "$PWTEST_OUT.models" \
   && pwtest_ok "models filters a nested API-provider prefix locally" \
   || pwtest_bad "models api-prefix filter" "$(cat "$PWTEST_OUT.models")"
+# the --api-provider axis is generic: opencode filters locally the same way (own scratch
+# config — the shared wdc fixture does not enable opencode).
+CFG_OC_MODELS="$WD/pw.config.oc-models.sh"
+printf '%s\n' 'PW_PROVIDERS=(opencode)' > "$CFG_OC_MODELS"
+PW_CONFIG_FILE="$CFG_OC_MODELS" "$(pwtest_script pw-config.sh)" models --provider opencode --api-provider testprov/nested --limit 10 > "$PWTEST_OUT.models-oc"
+grep -q 'testprov/nested/deep-model' "$PWTEST_OUT.models-oc" \
+  && ! grep -q 'testprov/test-model$' "$PWTEST_OUT.models-oc" \
+  && pwtest_ok "models filters an opencode API-provider prefix locally" \
+  || pwtest_bad "models opencode api-prefix filter" "$(cat "$PWTEST_OUT.models-oc")"
 pwtest_rc 2 "models requires an axis provider for --api-provider" wdc models --provider claude --api-provider foo
 pwtest_err 'no selected provider has that axis' "models names the unsupported axis"
 wdc models --provider claude --format tsv > "$PWTEST_OUT.models"
@@ -590,6 +640,29 @@ PW_CONFIG_FILE="$WCFG" "$(pwtest_script gen-agents.sh)" --outdir "$AGOUT" cursor
 grep -q '^model: cursor-test-high\[reasoning=high\]$' "$AGOUT/cursor/pw-explorer.md" \
   && pwtest_ok "gen-agents preserves Cursor bracket parameters" \
   || pwtest_bad "gen-agents cursor rendering" "$(grep '^model:' "$AGOUT/cursor/pw-explorer.md" || true)"
+
+# opencode worker: the stored form keeps brackets (`id[variant=low]`, the shared worker-spec
+# convention); only the RENDERED definition carries the `#level` suffix the CLI needs.
+# Own fixture — the shared WCFG omits opencode and its 21-row matrix assert pins that.
+WCFG_OC="$WD/pw.config.oc.sh"
+printf '%s\n' '# opencode worker fixture' 'PW_PROVIDERS=(opencode)' > "$WCFG_OC"
+wdo() { PW_CONFIG_FILE="$WCFG_OC" "$(pwtest_script pw-config.sh)" "$@"; }
+pwtest_rc 0 "opencode worker with variant" wdo agent-model-set --provider opencode --agent pw-researcher --value 'testprov/test-model[variant=low]'
+grep -q '^PW_OPENCODE_AGENT_MODELS_PW_RESEARCHER="testprov/test-model\[variant=low\]"$' "$WCFG_OC" \
+  && pwtest_ok "opencode worker cell stores the bracket form" \
+  || pwtest_bad "opencode worker cell" "$(grep 'AGENT_MODELS' "$WCFG_OC" || true)"
+PW_CONFIG_FILE="$WCFG_OC" "$(pwtest_script gen-agents.sh)" --outdir "$AGOUT" opencode >/dev/null 2>"$PWTEST_OUT.gen-oc"
+grep -q '^model: testprov/test-model#low$' "$AGOUT/opencode/pw-researcher.md" \
+  && pwtest_ok "gen-agents renders the opencode variant as #level" \
+  || pwtest_bad "gen-agents opencode rendering" "$(grep '^model:' "$AGOUT/opencode/pw-researcher.md" || true)"
+if grep -q 'cannot be rendered into a opencode agent definition' "$PWTEST_OUT.gen-oc"; then
+  pwtest_bad "opencode variant needs no warning" "$(cat "$PWTEST_OUT.gen-oc")"
+else pwtest_ok "opencode variant renders silently (no warn-and-drop)"; fi
+# a non-variant parameter has no definition surface: the write path refuses it, so it can
+# never reach a definition through agent-model-set.
+if wdo agent-model-set --provider opencode --agent pw-analyst --value 'testprov/test-model[effort=high]' >/dev/null 2>&1; then
+  pwtest_bad "opencode unverified worker control refused" "accepted effort=high"
+else pwtest_ok "opencode unverified worker control refused"; fi
 
 wdc global show --json > "$PWTEST_OUT.workers"
 python3 - "$PWTEST_OUT.workers" <<'PY' && pwtest_ok "global show json exposes the worker matrix" || pwtest_bad "global show worker matrix" "$(head -c 300 "$PWTEST_OUT.workers")"

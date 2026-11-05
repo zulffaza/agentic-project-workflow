@@ -153,7 +153,7 @@ scripts** — everything else also goes in `../pw.config.sh`:
 2. Define `<name>_bin` / `<name>_skilldir` / `<name>_commanddir` / `render_<name>_command` (the
    scripts only supply defaults for the built-ins, so yours win — never redefine a built-in
    provider's hooks here, it'll silently replace the working default). Copy
-   `render_claude_command`/`render_kilo_command`/`render_cursor_command`/`render_codex_command`
+   `render_claude_command`/`render_kilo_command`/`render_opencode_command`/`render_cursor_command`/`render_codex_command`
    from `pw-common.sh` as a starting point; full
    variable contract in [ONBOARDING.md](../ONBOARDING.md#register-a-new-provider). *(Optional)*
    define `<name>_entry_format` → `skill` (with `render_<name>_entry_skill` or the generic
@@ -183,7 +183,7 @@ agent: <optional legacy field; no primary agent is shipped>
 
 > Sub-agents **are** generated — from [`agents/`](./agents/README.md), seeded into each provider's
 > agent dir by `gen-agents.sh` (kilo `~/.config/kilo/agent/`, Claude Code `~/.claude/agents/`,
-> Cursor `~/.cursor/agents/`; codex gets none — it has no agent-def surface). The
+> OpenCode `~/.config/opencode/agents/`, Cursor `~/.cursor/agents/`; codex gets none — it has no agent-def surface). The
 > seven shipped worker roles: `pw-executor`, `pw-reviewer` (optional — every review
 > point defaults to human-only `advisory`; a pass only starts when scheduled for that phase), the spawn-lanes `pw-researcher` / `pw-analyst` / `pw-writer-task`, and the read-only `pw-ship-comment-analyst`; execution can
 > still reuse a registered agent (e.g. `pw-executor`) by naming it in a task's `Execute with:` —

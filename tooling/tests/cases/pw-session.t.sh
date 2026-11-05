@@ -35,9 +35,15 @@ pwtest_rc 1 "codex empty rollout is dead" env HOME="$CX" "$SES" session-check --
 pwtest_rc 1 "codex absent id is dead" env HOME="$CX" "$SES" session-check --provider codex --session 99999999-0000-0000-0000-000000000000
 pwtest_rc 2 "codex with no sessions store is unverifiable" env HOME="$ROOT/home-missing" "$SES" session-check --provider codex --session 01a1076f-c2a2-7512-85bb-4edb1bb67e0a
 
-# --- conservative readings: opencode (no verified surface yet) + unknown provider ---
-pwtest_rc 2 "opencode unverifiable (never a false live)" env HOME="$ROOT" "$SES" session-check --provider opencode --session ses_anything
-grep -qE 'unverifiable|probe' "$PWTEST_ERR" && pwtest_ok "opencode note names the probe path" || pwtest_bad "opencode note" "$(head -c 120 "$PWTEST_ERR")"
+# --- opencode: `session export --sanitize <id>` (shim mirrors the real 2.2.5 shape: JSON on
+# stdout = live, "Session not found" on stderr = dead, exit 0 either way) ---
+pwtest_rc 0 "opencode live session" env HOME="$ROOT" "$SES" session-check --provider opencode --session ses_livetest0000000000000001
+grep -q live "$PWTEST_OUT" && pwtest_ok "opencode live verdict named" || pwtest_bad "opencode live verdict" "$(head -c 120 "$PWTEST_OUT")"
+pwtest_rc 1 "opencode absent id is dead" env HOME="$ROOT" "$SES" session-check --provider opencode --session ses_dead00000000000000000000
+grep -q dead "$PWTEST_ERR" && pwtest_ok "opencode dead verdict named" || pwtest_bad "opencode dead verdict" "$(head -c 120 "$PWTEST_ERR")"
+pwtest_rc 2 "opencode with no CLI is unverifiable" env HOME="$ROOT" PATH=/usr/bin:/bin "$SES" session-check --provider opencode --session ses_livetest0000000000000001
+
+# --- conservative readings: unknown provider ---
 pwtest_rc 2 "unknown provider unverifiable" env HOME="$ROOT" "$SES" session-check --provider kilotest --session ses_anything
 
 # --- task-file form: provider + id come from the task, never transcribed ---
@@ -68,6 +74,25 @@ grep -q 'variant' "$PWTEST_ERR" && pwtest_ok "changed-tuning refusal names the m
 sed -i.bak -e 's/^- \*\*Actually used:\*\* .*/- **Actually used:** <filled by the orchestrator at run time>/' "$TP2/task/T01.md"; rm -f "$TP2/task/T01.md.bak"
 pwtest_rc 1 "missing recorded identity blocks resume" env HOME="$ROOT" PW_PROJECTS_DIR="$ROOT/projects" "$SES" session-check --project routed --task T01
 grep -q 'no recorded attempt identity' "$PWTEST_ERR" && pwtest_ok "missing-identity refusal is explicit" || pwtest_bad "missing-identity refusal" "$(head -c 160 "$PWTEST_ERR")"
+
+# --- opencode schema-2 identity: the #level suffix in Actually-used matches the route's
+# bare model + Variant column (the shim LIVE_ID is the opencode session shape) ---
+cat > "$TP2/task/T02.md" <<'TASK'
+- **Session:** ses_livetest0000000000000001
+- **Actually used:** opencode:testprov/test-model#low
+
+## Execution routes
+
+| Current provider | Execution provider | Target model | Target subagent | Variant | Reasoning | Effort | Thinking |
+|---|---|---|---|---|---|---|---|
+| opencode | opencode | testprov/test-model | — | low | — | — | — |
+TASK
+pwtest_rc 0 "opencode suffixed identity matches the bare route + variant" env HOME="$ROOT" PW_PROJECTS_DIR="$ROOT/projects" "$SES" session-check --project routed --task T02
+sed -i.bak -e 's/opencode:testprov\/test-model#low/opencode:testprov\/test-model#high/' "$TP2/task/T02.md"; rm -f "$TP2/task/T02.md.bak"
+pwtest_rc 1 "opencode changed variant blocks resume" env HOME="$ROOT" PW_PROJECTS_DIR="$ROOT/projects" "$SES" session-check --project routed --task T02
+grep -q 'variant' "$PWTEST_ERR" && pwtest_ok "opencode changed-variant refusal names the mismatch" || pwtest_bad "opencode changed-variant refusal" "$(head -c 160 "$PWTEST_ERR")"
+sed -i.bak -e 's/opencode:testprov\/test-model#high/opencode:testprov\/test-model#/' "$TP2/task/T02.md"; rm -f "$TP2/task/T02.md.bak"
+pwtest_rc 1 "opencode malformed suffix blocks resume" env HOME="$ROOT" PW_PROJECTS_DIR="$ROOT/projects" "$SES" session-check --project routed --task T02
 
 # --- --help / usage shape (registry duty) ---
 pwtest_rc 0 "session-check --help" "$SES" --help

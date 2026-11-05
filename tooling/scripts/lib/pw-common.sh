@@ -188,13 +188,22 @@ pw_worker_spec_params() {
   esac
 }
 # pw_worker_spec_effective <provider> <spec> -> model id plus any suffix the CLI must receive
-# (Cursor keeps bracket parameters; other providers bind them as invocation flags).
+# (Cursor keeps bracket parameters; OpenCode renders variant as the #level suffix; other
+# providers bind their tuning as invocation flags).
 pw_worker_spec_effective() {
   local prov="$1" spec="$2" model params
   model="$(pw_worker_spec_model "$spec")"
   params="$(pw_worker_spec_params "$spec")"
   if [ "$prov" = cursor ] && [ -n "$params" ]; then
     printf '%s[%s]' "$model" "$params"
+  elif [ "$prov" = opencode ] && [ -n "$params" ]; then
+    local item k v variant=""
+    IFS=',' read -ra _pwe_items <<< "$params"
+    for item in "${_pwe_items[@]}"; do
+      k="${item%%=*}"; v="${item#*=}"
+      [ "$k" = variant ] && [ -n "$v" ] && variant="$v"
+    done
+    if [ -n "$variant" ]; then printf '%s#%s' "$model" "$variant"; else printf '%s' "$model"; fi
   else
     printf '%s' "$model"
   fi
@@ -582,6 +591,7 @@ declare -f opencode_bin        >/dev/null 2>&1 || opencode_bin()        { echo o
 declare -f opencode_skilldir   >/dev/null 2>&1 || opencode_skilldir()   { echo "$HOME/.config/opencode/skills"; }
 declare -f opencode_commanddir >/dev/null 2>&1 || opencode_commanddir() { echo "$HOME/.config/opencode/commands"; }
 declare -f opencode_agentdir   >/dev/null 2>&1 || opencode_agentdir()   { echo "$HOME/.config/opencode/agents"; }
+declare -f opencode_entry_format >/dev/null 2>&1 || opencode_entry_format() { echo command; }
 declare -f render_opencode_command >/dev/null 2>&1 || render_opencode_command() {
   printf -- '---\ndescription: %s\n' "$(pw_yaml_quote "$desc")"
   [ -n "$agent" ] && printf -- 'agent: %s\n' "$agent"
@@ -592,21 +602,36 @@ declare -f render_opencode_agent >/dev/null 2>&1 || render_opencode_agent() {
   printf -- '---\ndescription: %s\nmode: subagent\n' "$(pw_yaml_quote "$desc")"
   [ -n "$model" ] && printf -- 'model: %s\n' "$model"
   # Same defensive stance as render_kilo_agent: never deny a worker its worktree edits.
-  # Unconfirmed whether OpenCode propagates session permissions to spawned sub-agents the way
-  # Kilo does, but a blanket allow here costs nothing and sidesteps the same bug if it does.
+  # Probed 2026-11-04: `opencode run --agent <name>` honors a named subagent headless (exact
+  # reply observed); whether session permissions propagate to spawned sub-agents the way Kilo's
+  # do is still unconfirmed, but a blanket allow here costs nothing and sidesteps the same bug
+  # if it does.
   printf -- 'permission:\n  edit: allow\n  bash: allow\n  read: allow\n'
   printf -- '---\n%s' "$bodytext"
 }
 declare -f opencode_headless >/dev/null 2>&1 || opencode_headless() {
   cat <<'EOF'
-opencode run --auto -m <canonical-catalog-id> "<prompt>" [--format json] [--attach <url>]
-NOTE: the prompt rides argv here (visible to `ps` on this host) — keep prompts free of
-secrets; the double-quoted single-argument form is still REQUIRED (word-splitting breaks it).
+printf '%s' "$PROMPT" | opencode run --auto -m <canonical-catalog-id>[#variant] [--thinking] [--agent <name>] [--format json] [--session <id>]
+Pipe the prompt via STDIN — printf '%s' "$PROMPT" | opencode run … (stdin carries task-shaped
+prompts; a trailing argument also works but stdin is the documented channel — verified 2026-11-04).
 --auto is REQUIRED headless — auto-approves permissions not explicitly denied.
---attach <url> connects to an already-running server, avoiding a cold-boot delay.
 -m receives the CANONICAL id `opencode models` prints (resolve with
 `pw-config.sh model-resolve --provider opencode --model <model-id>`); PW_OPENCODE_API_PROVIDERS entries, if set,
-are model-id prefix filters — same semantics as the kilo axis.
+are model-id prefix filters — same semantics as the kilo axis. Append #<level> for a listed
+model variant (e.g. -m 'cpa/muse-spark-1.3-contributor#low'); --thinking shows thinking blocks.
+--format json emits JSONL events: the session id is the first "sessionID" value; the final
+"text"-type part is the answer. NEVER trust the exit code alone — bogus models, variants, and
+agent names emit {"type":"error",...} yet exit 0; scan output for "type":"error" and confirm the
+real git artifacts (branch/commit/Verify), not just the self-report.
+Resume: opencode run --auto -m <id> --session <session-id> (stdin prompt) — resume crosses
+directories, but there is NO --dir flag (2.2.5): cd to the worktree first, the run executes in
+the invocation cwd. NEVER blind-resume: --session with a deleted id RECREATES it with the same
+id and fresh context (exit 0, looks like success) — check `session list --format json` from the
+project directory (or `pw-session.sh session-check`) first.
+`opencode session list --format json` is project-scoped by invocation cwd; `opencode session
+export --sanitize <id>` works from anywhere ("Session not found" on stderr = dead).
+There is no --attach/--variant/--command flag on 2.2.5 (upstream docs describe a newer release);
+to use a running server pass the global --server <url> instead.
 EOF
 }
 

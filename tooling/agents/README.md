@@ -27,6 +27,10 @@ tooling/agents/
   **no** tools/permission keys — spawn access is ambient on Cursor). Its vendor compat read of
   `~/.claude/agents` is out-of-contract bleed (AGENTS golden rule: provider independence) — the
   native dir is always seeded regardless.
+- **OpenCode** → `~/.config/opencode/agents/*.md` (frontmatter `description` + `mode: subagent` +
+  optional `model:` + `permission:` edit/bash/read allow). Unlike kilo, a named subagent IS
+  honored headless via `opencode run --agent <name>` (verified 2026-11-04) — but the bundle's
+  cross-provider rule still sends the task file as the work order, never a bare name.
 - **codex** → **nowhere — no defs are seeded by design.** Codex has no user-facing agent-def
   surface (`codex agents` browses sessions, not definitions), so it has no `<name>_agentdir`/
   `render_<name>_agent` hooks and gen-agents skips it. A codex driver runs Flow B (main session
@@ -107,10 +111,11 @@ agent's own provider → else (a
 built-in with no def here) the orchestrator's own provider. Then:
 - **Same provider as the orchestrator** → spawn the sub-agent in-process (the normal path).
 - **Different provider** → shell out to that CLI (`kilo run --auto -m <model> …`, `claude -p`,
-  `agent -p --force --model <id>` for cursor, or `codex exec -m <slug>` for codex — prompt on
+  `agent -p --force --model <id>` for cursor, `opencode run --auto -m <id>` for opencode, or `codex exec -m <slug>` for codex — prompt on
   stdin) via its `<name>_headless()` template
   passing the **task file + skill inline** to its default/primary agent. You **cannot** name the
-  other provider's *sub-agent* across the boundary — e.g. a Claude orchestrator delegating to kilo
+  other provider's *sub-agent* across the boundary (opencode's `--agent` flag is the one
+  exception, and even there the task file travels as the work order) — e.g. a Claude orchestrator delegating to kilo
   does NOT use kilo's `pw-executor`; kilo's default agent runs the task file instead. So each
   provider's `pw-executor` only helps when *that* provider is the orchestrator.
 
@@ -118,7 +123,9 @@ Record the concrete `provider:model(+flags)` in the task's `Actually used:` — 
 `LOG.md` line records, the provider's **session id** too (`pw-research` docs in
 `docs/EXECUTION.md` §Spawn ledger): a later fix/resume/re-review pass **resumes the same session**
 (`kilo run --session <ses_…>` / `-c`, `--fork`; claude `--resume`/`/resume`; cursor
-`agent -p --force --resume <session-id>` — plain UUID, not kilo's `ses_…`; codex
+`agent -p --force --resume <session-id>` — plain UUID, not kilo's `ses_…`; opencode
+`opencode run --auto -m <model> --session <ses_…>` — cd to the worktree first, no `--dir` flag,
+and never blind-resume a deleted id (it recreates with fresh context); codex
 `codex exec resume <thread_id>` — plain UUID from its `thread.started` JSONL event, cd to the
 worktree first: resume has no directory flag) instead of cold-spawning
 when the id is live, and cold-spawns a plain-model session with the recorded seed only when it's
@@ -143,6 +150,21 @@ never overrides a task file.
   **direct** sub-agent may itself spawn one more level (verified 2-level) — enough for one bounded
   wave; fast-tier ids are unreliable at it, so route executors to capable models (same doctrine as
   kilo's MiniMax-vs-flash-lite line in providers.md).
+
+## OpenCode-specifics (probed 2026-11-04 on 2.2.5)
+
+- Defs register from `~/.config/opencode/agents/*.md` with `description` + `mode: subagent`.
+  A named subagent is honored headless (`opencode run --agent <name>` runs the def; a bogus
+  name fails loud with `{"type":"error"}` yet exit 0 — scan output, never trust `$?`).
+- Prompt via stdin; `--format json` emits JSONL (`sessionID` + `text` parts + `step_finish`).
+  Bogus models and variants also emit `{"type":"error"}` with exit 0.
+- Session/ledger: `sessionID` (`ses_…`) from the JSONL events; liveness =
+  `pw-session.sh session-check --provider opencode --session <id>` (session export, works
+  from any cwd — unlike `session list`, which is project-scoped); resume =
+  `opencode run --session <id>` (cd to the worktree first — no `--dir` flag). Never
+  blind-resume: a deleted id recreates with fresh context under the same id.
+- Models: bare `provider/model` lines from `opencode models`; variant = `#level` suffix;
+  `--thinking` accepted (display-only on 2.2.5). No verified reasoning/effort control.
 
 ## Codex-specifics (probed 2026-10-04)
 - No agent defs, no in-process spawn, no Flow C — a codex driver IS the orchestrator (Flow B) and

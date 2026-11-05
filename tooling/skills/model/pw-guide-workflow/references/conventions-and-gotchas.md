@@ -175,7 +175,8 @@ analysis/plan content to an RFC doc, any configured backend or none; see `toolin
 The command files are **generated build artifacts** — the single source is
 `agentic-project-workflow/tooling/skills/human/*/SKILL.md`, emitted per provider by
 `gen-commands.sh` (in `tooling/scripts/toolchain/`; Claude → `~/.claude/commands/`, kilo →
-`~/.config/kilo/command/`, cursor → `~/.cursor/commands/`, codex → `~/.codex/skills/<name>/SKILL.md`
+`~/.config/kilo/command/`, cursor → `~/.cursor/commands/`, opencode → `~/.config/opencode/commands/`,
+codex → `~/.codex/skills/<name>/SKILL.md`
 — codex has NO native command surface (custom prompts removed upstream in codex-cli 0.117.0), so
 its commands are generated explicit-only skill dirs sharing the skills namespace; a bundle skill
 colliding with a command name is skipped at install and the command-skill owns the name); the seven worker sub-agents

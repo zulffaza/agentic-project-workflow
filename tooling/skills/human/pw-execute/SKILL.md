@@ -146,7 +146,7 @@ already exists the script attaches instead of dying; re-running is idempotent.
    tell me — don't substitute a different model yourself or run
    it anyway. **The task route binds the model:** the resolved route for the current provider is
    the *only* model the spawn runs under — pass it explicitly with the
-   provider's bind flag (`kilo run -m`, `claude --model`, cursor `--model`, codex `codex exec -m`). Never let the
+   provider's bind flag (`kilo run -m`, `claude --model`, cursor `--model`, opencode `-m`, codex `codex exec -m`). Never let the
    spawner's own session tokens (your harness's `model=`/`variant=` values) ride along — that
    silently rebinds a task away from what breakdown approved.
    - **Use the existing route and provider references; do not re-derive routing.** Follow the

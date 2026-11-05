@@ -1,14 +1,32 @@
 #!/usr/bin/env bash
-# tests/bin/opencode — deterministic fake of `opencode models` (the catalog surface the
-# availability gate + doctor read). Line shape mirrors the real CLI: `<provider>/<model>`,
-# including a nested multi-slash id to prove prefix-filter semantics are axis-generic.
+# tests/bin/opencode — deterministic fake of the opencode CLI surfaces the tooling reads.
+# Shapes mirror the REAL CLI verified 2026-11-04 on opencode 2.2.5:
+#   `opencode models` → bare `<provider>/<model>` lines (no description tail, no filter arg)
+#     including a nested multi-slash id to prove prefix-filter semantics are axis-generic.
+#   `opencode session export --sanitize <id>` → session JSON on stdout (live), or
+#     "Session not found: <id>" on stderr (dead). Exit 0 EITHER WAY — the real CLI exits
+#     0 on errors too, so callers must read the output text, never $?.
+# Unknown invocations fail LOUD — never a silent empty success.
+LIVE_ID="ses_livetest0000000000000001"
 case "$1" in
   models)
     printf '%s\n' \
       'testprov/test-model' \
       'testprov/nested/deep-model' ;;
+  session)
+    case "${2:-}" in
+      export)
+        sid="${@: -1}"
+        if [ "$sid" = "$LIVE_ID" ]; then
+          printf '{\n  "info": {\n    "id": "%s",\n    "projectID": "pwtest-project",\n    "outcome": "succeeded"\n  },\n  "messages": []\n}\n' "$sid"
+        else
+          printf 'Session not found: %s\n' "$sid" >&2
+        fi
+        exit 0 ;;
+      *) printf 'opencode-shim: unsupported session subcommand: %s\n' "$*" >&2; exit 1 ;;
+    esac ;;
   --help|-h|help)
-    printf 'opencode-shim: models\n' ;;
+    printf 'opencode-shim: models | session export\n' ;;
   *)
     printf 'opencode-shim: unsupported invocation: %s\n' "$*" >&2; exit 1 ;;
 esac

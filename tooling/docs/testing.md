@@ -226,7 +226,9 @@ CLIs (`kilo`, `opencode`, `agent`) that the suite's PATH prepends before the mac
 ones: `models` prints a deterministic catalog (including the nested-BYOK shape
 `kilo/alibaba-token-plan/<m>` — and `kilo models <slash-path>` errors, pinning the
 prefix-filter-not-query-arg rule), and `kilo session list --format json -a` prints one live
-`ses_livetest…` id; `codex` prints the REAL one-line JSON shape of `codex debug models`
+`ses_livetest…` id; `opencode session export --sanitize <id>` prints session JSON for one live
+`ses_livetest…` id and `Session not found: <id>` on stderr otherwise (exit 0 either way —
+the real 2.2.5 CLI exits 0 on errors too); `codex` prints the REAL one-line JSON shape of `codex debug models`
 (compact `{"models":[{"slug":…,"visibility":"list"|"hide",…}]}` — the reader's split/filter
 asserts depend on that byte-shape, never a prettified one). Claude/cursor/codex liveness is
 exercised through fake `$HOME` trees

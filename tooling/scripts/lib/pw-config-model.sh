@@ -377,37 +377,10 @@ _tuning_field() { # <token> <variant|reasoning|effort>
 pw_cell_empty() { case "${1:-}" in ''|'—'|'-') return 0 ;; *) return 1 ;; esac; }
 pw_cell_or_dash() { if pw_cell_empty "${1:-}"; then printf '—'; else printf '%s' "$1"; fi; }
 
-# Validate optional tuning against the local capability table. Prints nothing on
-# success; writes the reason on stderr and returns 1 otherwise.
-pw_role_tuning_check() { # <provider> <variant> <reasoning> <effort>
-  local p="$1" v="$2" r="$3" e="$4" conf=""
-  [ -n "$v$r$e" ] || return 0
-  case "$p" in
-    kilo)   [ -z "$r$e" ] || { echo "kilo supports variant only (got reasoning/effort)" >&2; return 1; } ;;
-    claude) [ -z "$v$r" ] || { echo "claude supports effort only (got variant/reasoning)" >&2; return 1; } ;;
-    cursor|codex|opencode) ;;
-    *) echo "provider '$p' has no verified tuning mapping" >&2; return 1 ;;
-  esac
-  conf="$(pw_model_capability "$p" variant 2>/dev/null || true)"
-  case "$conf" in
-    unsupported) [ -z "$v" ] || { echo "$p does not support variant" >&2; return 1; } ;;
-    unknown) : ;;
-    *) [ -z "$v" ] || pw_model_is_one_of "$v" "$conf" || { echo "variant '$v' is not listed for $p" >&2; return 1; } ;;
-  esac
-  conf="$(pw_model_capability "$p" reasoning 2>/dev/null || true)"
-  case "$conf" in
-    unsupported) [ -z "$r" ] || { echo "$p does not support reasoning" >&2; return 1; } ;;
-    unknown) : ;;
-    *) [ -z "$r" ] || pw_model_is_one_of "$r" "$conf" || { echo "reasoning '$r' is not listed for $p" >&2; return 1; } ;;
-  esac
-  conf="$(pw_model_capability "$p" effort 2>/dev/null || true)"
-  case "$conf" in
-    unsupported) [ -z "$e" ] || { echo "$p does not support effort" >&2; return 1; } ;;
-    unknown) : ;;
-    *) [ -z "$e" ] || pw_model_is_one_of "$e" "$conf" || { echo "effort '$e' is not listed for $p" >&2; return 1; } ;;
-  esac
-  return 0
-}
+# Tuning validation lives in ONE place: `_model_tuning_validate` in
+# tooling/scripts/entities/pw-config.sh, backed by the `_model_capability` table there.
+# (A previous `pw_role_tuning_check` helper in this file had no callers and referenced
+# capability functions that were never defined; removed 2026-11-04 rather than fixed.)
 
 # --- proposals ---------------------------------------------------------------
 # Proposal = directory with `meta` (key=value) and `changes` (TSV:
