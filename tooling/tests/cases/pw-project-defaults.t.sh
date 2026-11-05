@@ -373,6 +373,12 @@ assert d['model']=='testprov/test-model#low', d
 assert d['args']==['-m','testprov/test-model#low'], d
 PY
 [ "$?" = 0 ] && pwtest_ok "spawn-args preserves the stored #suffix end to end" || pwtest_bad "spawn-args stored suffix" "$(cat "$PWTEST_OUT")"
+printf '%s\n' '- **AI Model Tuning:** researcher=variant:high' >> "$SS/README.md"
+if gsp spawn-args --project spawn-stored-suffix --role researcher --json >/dev/null 2>"$GPD/double-suffix.err"; then
+  pwtest_bad "opencode double variant refused" "dispatch accepted both suffix and separate variant"
+else
+  grep -q 'already has a variant suffix' "$GPD/double-suffix.err" && pwtest_ok "opencode double variant refused" || pwtest_bad "opencode double variant refusal" "$(cat "$GPD/double-suffix.err")"
+fi
 
 # A hand-edited binding naming a disabled provider also refuses before spawn.
 GHOST="$GPD/projects/spawn-ghost"; mkdir -p "$GHOST"

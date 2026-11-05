@@ -4782,6 +4782,9 @@ EOF
         if [ -n "$route_thinking" ]; then supported=0; reason="codex has no verified thinking control (effort covers reasoning)"; fi ;;
       opencode)
         effective_model="$model"
+        case "$model" in
+          *'#'*) [ -z "$variant" ] || die "spawn-args: opencode model '$model' already has a variant suffix; remove the separate variant to avoid an ambiguous binding" ;;
+        esac
         [ -n "$variant" ] && effective_model="${model}#${variant}"
         args=(-m "$effective_model")
         if [ -n "$reasoning" ] || [ -n "$effort" ]; then supported=0; reason="opencode has no verified reasoning/effort control (supported: variant #level, thinking)"; fi
