@@ -121,14 +121,9 @@ execution_policy_rows="| Transport routing | $_exec_routing | Must still honor e
 | Maximum parallel workers | ${_exec_parallel:-—} | Shared worker ceiling; unset means the planner chooses |
 "
 
-# Creation gate: validate the ONE resolved snapshot (scalars + every non-empty role binding)
-# before staging. A removed, mistyped, forbidden, or unverifiable binding refuses creation; it is
-# never silently replaced. Existing-project adoption does not come through this path.
-"$HERE/../entities/pw-config.sh" validate-defaults \
-  || { echo "scaffold: refusing to create '$slug' — the resolved global project defaults carry an invalid or unavailable model binding (see the message above) → fix: /pw-config global set --key role-model --provider <p> --role <role> --model <model> … or /pw-config global unset --key role-model --provider <p> --role <role>; existing projects are unaffected" >&2; exit 1; }
-
-
-slug=""
+# Creation gate inputs are global-only; it runs after slug parsing so the refusal names
+# the project (under `set -u` an unbound $slug would mask the real error — regression
+# caught by the harness F2 path, 2026-11-06).
 while [ $# -gt 0 ]; do
   a="$1"; shift; v=""
   case "$a" in --project=*) v="${a#*=}"; a="--project" ;; esac
@@ -152,6 +147,12 @@ if [[ -e "$dest" ]]; then
   echo "Error: $dest already exists." >&2
   exit 1
 fi
+
+# Creation gate: validate the ONE resolved snapshot (scalars + every non-empty role binding)
+# before staging. A removed, mistyped, forbidden, or unverifiable binding refuses creation; it is
+# never silently replaced. Existing-project adoption does not come through this path.
+"$HERE/../entities/pw-config.sh" validate-defaults \
+  || { echo "scaffold: refusing to create '$slug' — the resolved global project defaults carry an invalid or unavailable model binding (see the message above) → fix: /pw-config global set --key role-model --provider <p> --role <role> --model <model> … or /pw-config global unset --key role-model --provider <p> --role <role>; existing projects are unaffected" >&2; exit 1; }
 
 # Format before creating anything; Created and LOG describe the same event.
 created="$(pw_now_wib)" || { echo "scaffold: cannot format event timestamp → fix: check the date command and retry" >&2; exit 1; }
