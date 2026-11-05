@@ -12,7 +12,7 @@ args-project: "--project <project-slug> [--fix | --guidance [--apply]]"
 (`references/common.md`) before acting: authorization, operation scope, helper ownership, and
 reporting. Load only the phase-specific references this operation needs. A read-only operation
 must not run execution or mutation procedures.
-Arguments: {{ARGS}}.
+Arguments: {{ARGS}}
 
 `/pw-doctor` has two sides with the same "validate, print ✓/✗ + fix, repair on `--fix`" idiom,
 but different scopes:

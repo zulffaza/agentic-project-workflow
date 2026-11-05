@@ -11,7 +11,7 @@ args-project: "preview --project <project-slug> | apply --project <project-slug>
 **Load shared guidance first.** Read the `pw-orchestration` skill's common rules
 (`references/common.md`) before acting: authorization, operation scope, helper ownership, and
 reporting. Load only the phase-specific references this operation needs.
-Arguments: {{ARGS}}.
+Arguments: {{ARGS}}
 
 **Load `references/batch.md`** from the `pw-guide-workflow` skill before previewing or applying a
 list. It owns the input framing, literal-payload rules, dispatch order, and recovery procedure.

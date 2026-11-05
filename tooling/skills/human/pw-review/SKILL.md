@@ -9,7 +9,7 @@ scope: project
 (`references/common.md`) before acting: authorization, operation scope, helper ownership, and
 reporting. Load only the phase-specific references this operation needs. A read-only operation
 must not run execution or mutation procedures.
-Invoke the `pw-guide-workflow` skill (review rules). Arguments: {{ARGS}}.
+Invoke the `pw-guide-workflow` skill (review rules). Arguments: {{ARGS}}
 
 **Named-argument grammar (uniform across every /pw-* command).** The first word is the
 operator; every value is a named argument. The project is always `--project <slug>`. Scalar

@@ -12,7 +12,7 @@ args-project: "--project <project-slug> [--skip-cli-check] | rewind --project <p
 (`references/common.md`) before acting: authorization, operation scope, helper ownership, and
 reporting. Load only the phase-specific references this operation needs. A read-only operation
 must not run execution or mutation procedures.
-Arguments: {{ARGS}}. Named-argument grammar: operator words first, every value named; the
+Arguments: {{ARGS}} — Named-argument grammar: operator words first, every value named; the
 project is always `--project <slug>`. Project dir: `{{PW_PROJECTS}}/<slug>`.
 
 **Default flow — the status report:**

@@ -9,7 +9,7 @@ scope: project
 (`references/common.md`) before acting: authorization, operation scope, helper ownership, and
 reporting. Load only the phase-specific references this operation needs. A read-only operation
 must not run execution or mutation procedures.
-Follow the `pw-guide-workflow` skill. Arguments: {{ARGS}}. The first word selects the mode:
+Follow the `pw-guide-workflow` skill. Arguments: {{ARGS}} — The first word selects the mode:
 `comments` = MR-comment mode (below); `request-review` = read-only request-message mode (below);
 `stack` = stacked-MR surface (below); `draft` / `ready` = MR readiness (below); anything else = ship
 mode (default). Every value is named: `--project <slug>` is required, and

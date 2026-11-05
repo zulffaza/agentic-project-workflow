@@ -12,7 +12,7 @@ args-project: "show --project <project-slug> [--json] | get --project <project-s
 (`references/common.md`) before acting: authorization, operation scope, helper ownership, and
 reporting. Load only the phase-specific references this operation needs. A read-only operation
 must not run execution or mutation procedures.
-Arguments: {{ARGS}}. Project dir: `{{PW_PROJECTS}}/<slug>`.
+Arguments: {{ARGS}} — Project dir: `{{PW_PROJECTS}}/<slug>`.
 
 **This command is a mechanical mapping (C3): parse my words into one script call below, run it,
 and show its output.** Configuration lives in the project's own docs (dashboard/PLAN/task files/
