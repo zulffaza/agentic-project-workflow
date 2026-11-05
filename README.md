@@ -15,7 +15,7 @@ Context → Analysis → Plan → Execute → Ship → Close
 
 ## Quick start
 
-1. [Install the workflow](ONBOARDING.md). It supports Claude Code, KiloCode, OpenCode, Cursor CLI, and Codex CLI.
+1. [Install the workflow](ONBOARDING.md). It supports Claude Code, KiloCode, OpenCode, Cursor CLI, Codex CLI, and Muse Code.
 2. Follow the [first-project walkthrough](docs/WALKTHROUGH.md). It includes context, feedback, approval, and acceptance commands or requests.
 3. Use [command recipes](docs/RECIPES.md) when you return to an existing project.
 
@@ -57,7 +57,7 @@ Task execution uses an explicit route per current provider:
 
 A missing route for the current provider blocks dispatch; there is no default fallback.
 `--thinking` is validated against the provider: Kilo and OpenCode emit `--thinking`,
-Cursor needs a model id that already encodes it, and Claude/Codex refuse it. Session resume
+Cursor needs a model id that already encodes it, and Claude/Codex/Muse refuse it. Session resume
 also requires a recorded
 attempt identity that matches the resolved provider, model, tuning, and procedure; a live provider
 session alone is not enough.
@@ -81,7 +81,7 @@ apply validates every selected change before writing, keeps restorable preimages
 per-key receipt. `suggest --rollback <id>` or `migrate --rollback <id>` restores holders that did
 not change after apply and preserves later edits.
 
-Once installed, run a workflow entry in your agent session. Claude Code, Cursor, and Codex install
+Once installed, run a workflow entry in your agent session. Claude Code, Cursor, Codex, and Muse install
 the 22 `pw-*` entries as explicit-only skills (select one, or type its `$pw-*` form on Codex).
 KiloCode and OpenCode install the same entries as `/pw-*` commands. Both groups also get the shared
 `pw-guide-*` / `pw-orchestration` skills. Examples use the shared `/pw-*` names throughout these
