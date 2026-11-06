@@ -240,7 +240,13 @@ exercised through fake `$HOME` trees
 controlled per-subprocess via `PW_CONFIG_FILE` pointing at `tests/pw.config.test.sh`
 (entries = `kilo/alibaba-token-plan`) or `tests/pw.config.test.noscope.sh` (empty = no
 filtering) — never the maintainer's real `pw.config.sh`, so availability/scope assertions are
-machine-independent. New shims must fail LOUD on unknown invocations (a silent empty success
+machine-independent. `pwtest_env_init` enforces this by default: when the caller has not
+exported `PW_CONFIG_FILE`, it points at `tests/pw.config.test.clean.sh` (assigns nothing —
+sourcing it equals a missing config, so scaffold's creation gate validates an empty snapshot
+instead of refusing live global cells the fixture shims cannot resolve). Cases pinning a
+fixture config keep it (explicit export wins); the T3 corpus opts back out to ambient because
+it reads real projects under their real config; the bootstrap case unsets the var outright
+because it builds its own isolated bundle config. New shims must fail LOUD on unknown invocations (a silent empty success
 reads as "can't check" and hides regressions).
 
 **Env knobs:** `PWTEST_MUT_JOBS` (parallelism; `1` = serial live-tree), `PWTEST_MUT_TIMEOUT`

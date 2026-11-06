@@ -27,9 +27,12 @@ pwtest_corpus_rows() {
 corpus_t3() {
   echo "== T3 real corpus (read-only) ==" >&2
   local dir="$1"
-  if [ -z "$dir" ] || [ ! -d "$dir" ]; then pwtest_skip "T3 corpus" "pass --corpus-dir (or PW_CORPUS_DIR) — skipping"; return 0; fi
+  if [ -z "$dir" ] || [ ! -d "$dir" ]; then pwtest_skip "T3 corpus" "pass --corpus-dir (or PW_CORPUS_DIR) — skipping"; [ -n "$_corpus_cfg" ] && export PW_CONFIG_FILE="$_corpus_cfg"; return 0; fi
   local p slug label rows script args rc waiver hits=0 goldens=0
   local wf="${PWTEST_WAIVERS:-$HOME/.pw/test-issues.tsv}"
+  # T3 reads REAL projects under their REAL config: opt out of the harness hermetic
+  # default (clean.sh) for the duration of the corpus walk, then restore it.
+  local _corpus_cfg="${PW_CONFIG_FILE:-}"; unset PW_CONFIG_FILE
   for p in "$dir"/*/; do
     slug="$(basename "$p")"
     [ -d "$p/task" ] || [ -d "$p/analysis" ] || continue
@@ -70,5 +73,6 @@ $(pwtest_corpus_rows "$slug")
 EOF
   done
   [ "$goldens" = 0 ] && printf '  info  T3: no projects yet on the current template baseline; golden-gate trivially satisfied\n'
+  [ -n "$_corpus_cfg" ] && export PW_CONFIG_FILE="$_corpus_cfg"
   return "$hits"
 }

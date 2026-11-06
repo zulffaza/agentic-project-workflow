@@ -25,7 +25,7 @@ CFG
 printf '#!/bin/sh\nexit 0\n' > "$BIN/kilo"; chmod +x "$BIN/kilo"
 
 pwtest_rc 0 "bootstrap installs into an isolated HOME" \
-  env -u PW_PROJECTS_DIR -u PW_REPOS -u PW_PROJECTS HOME="$FH" PATH="$BIN:$PATH" bash "$PW/bootstrap.sh"
+  env -u PW_PROJECTS_DIR -u PW_REPOS -u PW_PROJECTS -u PW_CONFIG_FILE HOME="$FH" PATH="$BIN:$PATH" bash "$PW/bootstrap.sh"
 pwtest_eq "claude gets 22 entry skills + 4 shared skills" \
   "$(ls -d "$FH/.claude/skills"/*/ 2>/dev/null | wc -l | tr -d ' ')" "26"
 [ -d "$FH/.claude/skills/pw-execute" ] && [ ! -d "$FH/.claude/skills/pw-execute/agents" ] \
@@ -62,12 +62,12 @@ pwtest_eq "seven worker sub-agents, no primary orchestrator" \
   && pwtest_ok "the comments-analysis worker is seeded like every other lane" \
   || pwtest_bad "comments-analysis worker seeded" "pw-ship-comment-analyst.md missing from the agent dir"
 pwtest_rc 0 "doctor reports the isolated install in sync" \
-  env -u PW_PROJECTS_DIR -u PW_REPOS -u PW_PROJECTS HOME="$FH" PATH="$BIN:$PATH" bash "$PW/tooling/scripts/toolchain/pw-doctor.sh"
+  env -u PW_PROJECTS_DIR -u PW_REPOS -u PW_PROJECTS -u PW_CONFIG_FILE HOME="$FH" PATH="$BIN:$PATH" bash "$PW/tooling/scripts/toolchain/pw-doctor.sh"
 grep -q 'All synced' "$PWTEST_BOTH" \
   && pwtest_ok "doctor prints All synced" \
   || pwtest_bad "doctor verdict" "$(grep -E '✗|OUT OF SYNC' "$PWTEST_BOTH" | head -2 | tr '\n' ' ')"
 pwtest_rc 0 "offboard removes the isolated install" \
-  env -u PW_PROJECTS_DIR -u PW_REPOS -u PW_PROJECTS HOME="$FH" PATH="$BIN:$PATH" bash "$PW/offboard.sh" --yes
+  env -u PW_PROJECTS_DIR -u PW_REPOS -u PW_PROJECTS -u PW_CONFIG_FILE HOME="$FH" PATH="$BIN:$PATH" bash "$PW/offboard.sh" --yes
 pwtest_eq "no pw artifacts remain under the fake HOME" \
   "$(find "$FH/.claude" "$FH/.config" "$FH/.kilocode" -name 'pw-*' 2>/dev/null | wc -l | tr -d ' ')" "0"
 rm -rf "$BOOTDIR"

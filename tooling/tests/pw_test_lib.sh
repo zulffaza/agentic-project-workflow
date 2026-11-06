@@ -115,6 +115,15 @@ pwtest_env_init() {
   export PWTEST_FORGE_STATE_FILE="$PWTEST_ROOT/forge-state"
   : > "$PWTEST_FORGE_STATE_FILE"
   export PWTEST_FORGE_LOG="$PWTEST_ROOT/forge.log"; : > "$PWTEST_FORGE_LOG"
+  # Hermetic global config (machine-independence rule): fixture builds and case runs
+  # must never read the maintainer's real pw.config.sh — live global cells (e.g. cpa/*
+  # role pins) need not resolve against the fixture shim catalogs, and scaffold's
+  # creation gate would otherwise refuse every fixture build. An explicitly exported
+  # PW_CONFIG_FILE still wins (cases pinning a fixture config keep it); the T3 corpus
+  # opts back out to ambient because it reads real projects under their real config.
+  if [ -z "${PW_CONFIG_FILE:-}" ]; then
+    export PW_CONFIG_FILE="$PWTEST_TESTSDIR/pw.config.test.clean.sh"
+  fi
   PWTEST_ORIG_PATH="$PATH"; export PWTEST_ORIG_PATH
   export PATH="$PWTEST_TESTSDIR/bin:$PATH"     # fake CLIs win over the machine's
   # request-review frame: model a healthy install with a temp user file (never the bundle tree).
